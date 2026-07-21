@@ -63,6 +63,35 @@
 <a href="#" class="button">
 広告を見る
 </a>
+<p id="location">現在地はまだ取得していません。</p>
 
+<button onclick="getLocation()">
+現在地を取得する
+</button>
+
+<script>
+function getLocation() {
+
+    if (!navigator.geolocation) {
+        document.getElementById("location").innerHTML =
+        "このブラウザでは位置情報が使えません。";
+        return;
+    }
+
+    navigator.geolocation.getCurrentPosition(function(position){
+
+        document.getElementById("location").innerHTML =
+        "緯度：" + position.coords.latitude +
+        "<br>経度：" + position.coords.longitude;
+
+    }, function(){
+
+        document.getElementById("location").innerHTML =
+        "位置情報を取得できませんでした。";
+
+    });
+
+}
+</script>
 </body>
 </html>
