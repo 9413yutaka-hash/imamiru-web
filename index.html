@@ -1,51 +1,66 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>イマミル</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>イマミル</title>
 
-  <style>
-    body{
-      margin:0;
-      font-family: "Yu Gothic", sans-serif;
-      background:#0b132b;
-      color:white;
-      text-align:center;
-    }
+<style>
+body{
+    margin:0;
+    font-family:"Yu Gothic",sans-serif;
+    background:#0b132b;
+    color:white;
+    text-align:center;
+}
 
-    header{
-      background:#0077b6;
-      padding:25px;
-      font-size:36px;
-      font-weight:bold;
-    }
+header{
+    background:#0077b6;
+    padding:25px;
+    font-size:36px;
+    font-weight:bold;
+}
 
-    h2{
-      margin-top:50px;
-      font-size:28px;
-    }
+h2{
+    margin-top:60px;
+    font-size:36px;
+}
 
-    p{
-      font-size:20px;
-      line-height:1.8;
-    }
+p{
+    font-size:22px;
+    line-height:1.8;
+}
 
-    .button{
-      display:inline-block;
-      margin-top:40px;
-      padding:15px 35px;
-      background:#00b4d8;
-      color:white;
-      text-decoration:none;
-      border-radius:10px;
-      font-size:22px;
-    }
+.button{
+    display:inline-block;
+    margin-top:30px;
+    padding:16px 36px;
+    background:#00b4d8;
+    color:white;
+    text-decoration:none;
+    border-radius:10px;
+    font-size:22px;
+    border:none;
+    cursor:pointer;
+    transition:.3s;
+}
 
-    .button:hover{
-      background:#0096c7;
-    }
-  </style>
+.button:hover{
+    background:#0096c7;
+}
+
+#location{
+    margin-top:30px;
+    font-size:24px;
+}
+
+footer{
+    margin-top:80px;
+    color:#aaa;
+    font-size:16px;
+}
+</style>
+
 </head>
 
 <body>
@@ -54,7 +69,9 @@
 イマミル
 </header>
 
-<h2>今、何が起きているかを見つけよう。</h2>
+<h2>
+今、何が起きているかを見つけよう。
+</h2>
 
 <p>
 旅人に寄り添うリアルタイム観光コンシェルジュ
@@ -63,35 +80,82 @@
 <a href="#" class="button">
 広告を見る
 </a>
-<p id="location">現在地はまだ取得していません。</p>
 
-<button onclick="getLocation()">
+<br>
+
+<button class="button" onclick="getLocation()">
 現在地を取得する
 </button>
 
-<script>
-function getLocation() {
+<div id="location">
+現在地はまだ取得していません。
+</div>
 
-    if (!navigator.geolocation) {
+<br>
+
+<a
+id="mapLink"
+class="button"
+href="#"
+target="_blank"
+style="display:none;">
+📍現在地をGoogleマップで見る
+</a>
+
+<script>
+
+function getLocation(){
+
+    if(!navigator.geolocation){
+
         document.getElementById("location").innerHTML =
-        "このブラウザでは位置情報が使えません。";
+        "このブラウザではGPSが利用できません。";
+
         return;
     }
 
-    navigator.geolocation.getCurrentPosition(function(position){
+    navigator.geolocation.getCurrentPosition(
 
-        document.getElementById("location").innerHTML =
-        "緯度：" + position.coords.latitude +
-        "<br>経度：" + position.coords.longitude;
+        function(position){
 
-    }, function(){
+            const latitude = position.coords.latitude;
+            const longitude = position.coords.longitude;
 
-        document.getElementById("location").innerHTML =
-        "位置情報を取得できませんでした。";
+            document.getElementById("location").innerHTML =
+            "📍現在地を取得しました。<br><br>" +
+            "緯度：" + latitude.toFixed(6) +
+            "<br>" +
+            "経度：" + longitude.toFixed(6);
 
-    });
+            const mapLink =
+            document.getElementById("mapLink");
+
+            mapLink.href =
+            "https://www.google.com/maps?q=" +
+            latitude + "," + longitude;
+
+            mapLink.style.display = "inline-block";
+
+        },
+
+        function(){
+
+            document.getElementById("location").innerHTML =
+            "位置情報を取得できませんでした。";
+
+        }
+
+    );
 
 }
+
 </script>
+
+<footer>
+
+イマミル Web Version 1 MVP
+
+</footer>
+
 </body>
 </html>
