@@ -1,161 +1,764 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>イマミル</title>
+  <meta charset="UTF-8">
 
-<style>
-body{
-    margin:0;
-    font-family:"Yu Gothic",sans-serif;
-    background:#0b132b;
-    color:white;
-    text-align:center;
-}
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
 
-header{
-    background:#0077b6;
-    padding:25px;
-    font-size:36px;
-    font-weight:bold;
-}
+  <title>イマミル</title>
 
-h2{
-    margin-top:60px;
-    font-size:36px;
-}
+  <style>
+    * {
+      box-sizing: border-box;
+    }
 
-p{
-    font-size:22px;
-    line-height:1.8;
-}
+    html {
+      scroll-behavior: smooth;
+    }
 
-.button{
-    display:inline-block;
-    margin-top:30px;
-    padding:16px 36px;
-    background:#00b4d8;
-    color:white;
-    text-decoration:none;
-    border-radius:10px;
-    font-size:22px;
-    border:none;
-    cursor:pointer;
-    transition:.3s;
-}
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family:
+        "Yu Gothic",
+        "Hiragino Kaku Gothic ProN",
+        sans-serif;
+      background: #07152d;
+      color: #ffffff;
+    }
 
-.button:hover{
-    background:#0096c7;
-}
+    button,
+    a {
+      font-family: inherit;
+    }
 
-#location{
-    margin-top:30px;
-    font-size:24px;
-}
+    header {
+      background: linear-gradient(
+        135deg,
+        #0878bd,
+        #00a8cc
+      );
+      padding: 22px 20px;
+      text-align: center;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.18);
+    }
 
-footer{
-    margin-top:80px;
-    color:#aaa;
-    font-size:16px;
-}
-</style>
+    .logo {
+      margin: 0;
+      font-size: 36px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+    }
 
+    .header-subtitle {
+      margin: 6px 0 0;
+      font-size: 14px;
+      opacity: 0.92;
+    }
+
+    main {
+      width: min(100%, 760px);
+      margin: 0 auto;
+      padding: 40px 18px 80px;
+    }
+
+    .hero {
+      text-align: center;
+      padding: 20px 0 32px;
+    }
+
+    .hero h1 {
+      margin: 0;
+      font-size: clamp(28px, 6vw, 42px);
+      line-height: 1.4;
+    }
+
+    .hero p {
+      margin: 18px 0 0;
+      color: #d5e8f7;
+      font-size: 17px;
+      line-height: 1.8;
+    }
+
+    .location-panel {
+      margin-top: 20px;
+      padding: 24px 18px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.07);
+      text-align: center;
+      box-shadow: 0 12px 35px rgba(0, 0, 0, 0.22);
+    }
+
+    .location-title {
+      margin: 0 0 12px;
+      font-size: 22px;
+    }
+
+    #locationMessage {
+      min-height: 58px;
+      margin: 0;
+      color: #dceef9;
+      font-size: 16px;
+      line-height: 1.8;
+    }
+
+    .main-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: min(100%, 360px);
+      min-height: 54px;
+      margin-top: 18px;
+      padding: 14px 22px;
+      border: none;
+      border-radius: 14px;
+      background: #00afd0;
+      color: #ffffff;
+      font-size: 18px;
+      font-weight: 700;
+      text-decoration: none;
+      cursor: pointer;
+      box-shadow: 0 8px 22px rgba(0, 175, 208, 0.25);
+      transition:
+        transform 0.2s,
+        background 0.2s;
+    }
+
+    .main-button:hover {
+      background: #0099bb;
+      transform: translateY(-2px);
+    }
+
+    .main-button:disabled {
+      cursor: wait;
+      opacity: 0.65;
+      transform: none;
+    }
+
+    #currentMapLink {
+      display: none;
+      margin-top: 12px;
+      background: #1769aa;
+    }
+
+    .section {
+      margin-top: 52px;
+    }
+
+    .section-heading {
+      margin-bottom: 18px;
+    }
+
+    .section-heading h2 {
+      margin: 0;
+      font-size: 28px;
+    }
+
+    .section-heading p {
+      margin: 8px 0 0;
+      color: #a9c6da;
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    .sample-label {
+      display: inline-block;
+      margin-top: 10px;
+      padding: 6px 11px;
+      border-radius: 999px;
+      background: #f7c948;
+      color: #302500;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    #shopsList {
+      display: grid;
+      gap: 18px;
+    }
+
+    .shop-card {
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 22px;
+      background: #ffffff;
+      color: #152238;
+      box-shadow: 0 13px 35px rgba(0, 0, 0, 0.25);
+    }
+
+    .shop-image {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 150px;
+      background: linear-gradient(
+        135deg,
+        #dff7ff,
+        #f6fbff
+      );
+      font-size: 72px;
+    }
+
+    .shop-content {
+      padding: 20px;
+    }
+
+    .shop-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .shop-name {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.4;
+    }
+
+    .open-badge {
+      flex-shrink: 0;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: #d9f8e7;
+      color: #08743c;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .shop-category {
+      margin: 6px 0 0;
+      color: #667085;
+      font-size: 14px;
+    }
+
+    .shop-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .meta-item {
+      padding: 7px 10px;
+      border-radius: 10px;
+      background: #edf6fa;
+      color: #28516b;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .shop-message {
+      margin: 16px 0 0;
+      padding: 14px;
+      border-left: 4px solid #00a9c7;
+      border-radius: 8px;
+      background: #f4fbfd;
+      color: #344054;
+      font-size: 15px;
+      line-height: 1.7;
+    }
+
+    .shop-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .shop-button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 46px;
+      padding: 10px 12px;
+      border: none;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 700;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .detail-button {
+      background: #00a9c7;
+      color: #ffffff;
+    }
+
+    .map-button {
+      background: #e8f0fe;
+      color: #1a5db1;
+    }
+
+    .notice {
+      margin-top: 22px;
+      padding: 16px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.07);
+      color: #b9d1e1;
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    footer {
+      padding: 30px 15px;
+      background: #040e21;
+      color: #8aa6ba;
+      text-align: center;
+      font-size: 13px;
+    }
+
+    @media (max-width: 520px) {
+      main {
+        padding-top: 25px;
+      }
+
+      .location-panel {
+        padding: 22px 14px;
+      }
+
+      .shop-image {
+        height: 125px;
+      }
+
+      .shop-buttons {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
 </head>
 
 <body>
 
-<header>
-イマミル
-</header>
+  <header>
+    <div class="logo">イマミル</div>
 
-<h2>
-今、何が起きているかを見つけよう。
-</h2>
+    <p class="header-subtitle">
+      今日という一日を、最高の旅へ。
+    </p>
+  </header>
 
-<p>
-旅人に寄り添うリアルタイム観光コンシェルジュ
-</p>
+  <main>
 
-<a href="#" class="button">
-広告を見る
-</a>
+    <section class="hero">
+      <h1>
+        今、何が起きているかを<br>
+        見つけよう。
+      </h1>
 
-<br>
+      <p>
+        旅人に寄り添う<br>
+        リアルタイム観光コンシェルジュ
+      </p>
+    </section>
 
-<button class="button" onclick="getLocation()">
-現在地を取得する
-</button>
+    <section class="location-panel">
+      <h2 class="location-title">
+        📍 あなたの現在地
+      </h2>
 
-<div id="location">
-現在地はまだ取得していません。
-</div>
+      <p id="locationMessage">
+        現在地はまだ取得していません。<br>
+        下のボタンを押してください。
+      </p>
 
-<br>
+      <button
+        id="locationButton"
+        class="main-button"
+        type="button"
+        onclick="getLocation()"
+      >
+        現在地を取得する
+      </button>
 
-<a
-id="mapLink"
-class="button"
-href="#"
-target="_blank"
-style="display:none;">
-📍現在地をGoogleマップで見る
-</a>
+      <br>
 
-<script>
+      <a
+        id="currentMapLink"
+        class="main-button"
+        href="#"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        現在地をGoogleマップで見る
+      </a>
+    </section>
 
-function getLocation(){
+    <section class="section">
+      <div class="section-heading">
+        <h2>今日、近くで楽しめる場所</h2>
 
-    if(!navigator.geolocation){
+        <p>
+          現在地を取得すると、距離が近い順に並びます。
+        </p>
 
-        document.getElementById("location").innerHTML =
-        "このブラウザではGPSが利用できません。";
+        <span class="sample-label">
+          Firebase接続前のサンプル情報
+        </span>
+      </div>
 
-        return;
+      <div id="shopsList"></div>
+
+      <div class="notice">
+        現在表示している店舗名・営業情報・限定情報は、
+        動作確認用のサンプルです。
+        次のFirebase接続で、実際に投稿された情報へ
+        入れ替えられる設計になっています。
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    イマミル Web Version 1 MVP
+  </footer>
+
+  <script>
+    const shops = [
+      {
+        id: 1,
+        name: "沖縄そば イマミル食堂",
+        category: "沖縄料理・沖縄そば",
+        emoji: "🍜",
+        rating: 4.8,
+        status: "営業中",
+        message: "本日限定の三枚肉そばがあります。売り切れ次第終了です！",
+        latitude: 26.2124,
+        longitude: 127.6809
+      },
+      {
+        id: 2,
+        name: "Cafe Blue Okinawa",
+        category: "カフェ・スイーツ",
+        emoji: "🥭",
+        rating: 4.6,
+        status: "営業中",
+        message: "沖縄県産マンゴーのスムージーが、本日おすすめです。",
+        latitude: 26.2167,
+        longitude: 127.6873
+      },
+      {
+        id: 3,
+        name: "島酒場 ゆんたく",
+        category: "沖縄居酒屋",
+        emoji: "🍺",
+        rating: 4.9,
+        status: "営業中",
+        message: "19時から三線ライブを開催します。予約なしでも参加できます。",
+        latitude: 26.2078,
+        longitude: 127.6765
+      }
+    ];
+
+    let userLatitude = null;
+    let userLongitude = null;
+
+    function escapeHtml(text) {
+      return String(text)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
     }
 
-    navigator.geolocation.getCurrentPosition(
+    function degreesToRadians(degrees) {
+      return degrees * Math.PI / 180;
+    }
 
-        function(position){
+    function calculateDistance(
+      latitude1,
+      longitude1,
+      latitude2,
+      longitude2
+    ) {
+      const earthRadiusKm = 6371;
 
-            const latitude = position.coords.latitude;
-            const longitude = position.coords.longitude;
+      const latitudeDifference =
+        degreesToRadians(latitude2 - latitude1);
 
-            document.getElementById("location").innerHTML =
-            "📍現在地を取得しました。<br><br>" +
-            "緯度：" + latitude.toFixed(6) +
-            "<br>" +
-            "経度：" + longitude.toFixed(6);
+      const longitudeDifference =
+        degreesToRadians(longitude2 - longitude1);
 
-            const mapLink =
-            document.getElementById("mapLink");
+      const firstLatitude =
+        degreesToRadians(latitude1);
 
-            mapLink.href =
-            "https://www.google.com/maps?q=" +
-            latitude + "," + longitude;
+      const secondLatitude =
+        degreesToRadians(latitude2);
 
-            mapLink.style.display = "inline-block";
+      const calculation =
+        Math.sin(latitudeDifference / 2) ** 2 +
+        Math.cos(firstLatitude) *
+        Math.cos(secondLatitude) *
+        Math.sin(longitudeDifference / 2) ** 2;
 
+      const angle =
+        2 * Math.atan2(
+          Math.sqrt(calculation),
+          Math.sqrt(1 - calculation)
+        );
+
+      return earthRadiusKm * angle;
+    }
+
+    function formatDistance(distanceKm) {
+      if (distanceKm === null) {
+        return "現在地取得後に表示";
+      }
+
+      if (distanceKm < 1) {
+        return Math.round(distanceKm * 1000) + "m";
+      }
+
+      return distanceKm.toFixed(1) + "km";
+    }
+
+    function estimateWalkingTime(distanceKm) {
+      if (distanceKm === null) {
+        return "徒歩時間を計算";
+      }
+
+      const walkingMinutes =
+        Math.max(1, Math.round(distanceKm / 0.08));
+
+      if (walkingMinutes >= 120) {
+        return "距離が離れています";
+      }
+
+      return "徒歩 約" + walkingMinutes + "分";
+    }
+
+    function createGoogleMapUrl(latitude, longitude) {
+      return (
+        "https://www.google.com/maps/search/?api=1&query=" +
+        latitude +
+        "," +
+        longitude
+      );
+    }
+
+    function renderShops() {
+      const shopsList =
+        document.getElementById("shopsList");
+
+      const shopsWithDistance =
+        shops.map(function(shop) {
+          let distanceKm = null;
+
+          if (
+            userLatitude !== null &&
+            userLongitude !== null
+          ) {
+            distanceKm = calculateDistance(
+              userLatitude,
+              userLongitude,
+              shop.latitude,
+              shop.longitude
+            );
+          }
+
+          return {
+            ...shop,
+            distanceKm: distanceKm
+          };
+        });
+
+      if (
+        userLatitude !== null &&
+        userLongitude !== null
+      ) {
+        shopsWithDistance.sort(function(first, second) {
+          return first.distanceKm - second.distanceKm;
+        });
+      }
+
+      shopsList.innerHTML =
+        shopsWithDistance.map(function(shop) {
+          const mapUrl =
+            createGoogleMapUrl(
+              shop.latitude,
+              shop.longitude
+            );
+
+          return `
+            <article class="shop-card">
+              <div class="shop-image">
+                ${escapeHtml(shop.emoji)}
+              </div>
+
+              <div class="shop-content">
+                <div class="shop-top">
+                  <div>
+                    <h3 class="shop-name">
+                      ${escapeHtml(shop.name)}
+                    </h3>
+
+                    <p class="shop-category">
+                      ${escapeHtml(shop.category)}
+                    </p>
+                  </div>
+
+                  <span class="open-badge">
+                    ${escapeHtml(shop.status)}
+                  </span>
+                </div>
+
+                <div class="shop-meta">
+                  <span class="meta-item">
+                    ⭐ ${shop.rating}
+                  </span>
+
+                  <span class="meta-item">
+                    📍 ${formatDistance(shop.distanceKm)}
+                  </span>
+
+                  <span class="meta-item">
+                    🚶 ${estimateWalkingTime(shop.distanceKm)}
+                  </span>
+                </div>
+
+                <p class="shop-message">
+                  📢 ${escapeHtml(shop.message)}
+                </p>
+
+                <div class="shop-buttons">
+                  <button
+                    class="shop-button detail-button"
+                    type="button"
+                    onclick="showShopDetail(${shop.id})"
+                  >
+                    今日の情報を見る
+                  </button>
+
+                  <a
+                    class="shop-button map-button"
+                    href="${mapUrl}"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Googleマップ
+                  </a>
+                </div>
+              </div>
+            </article>
+          `;
+        }).join("");
+    }
+
+    function showShopDetail(shopId) {
+      const selectedShop =
+        shops.find(function(shop) {
+          return shop.id === shopId;
+        });
+
+      if (!selectedShop) {
+        return;
+      }
+
+      alert(
+        selectedShop.name +
+        "\n\n" +
+        selectedShop.message +
+        "\n\n※現在はサンプル情報です。"
+      );
+    }
+
+    function getLocation() {
+      const locationButton =
+        document.getElementById("locationButton");
+
+      const locationMessage =
+        document.getElementById("locationMessage");
+
+      const currentMapLink =
+        document.getElementById("currentMapLink");
+
+      if (!navigator.geolocation) {
+        locationMessage.innerHTML =
+          "このブラウザでは位置情報を利用できません。";
+
+        return;
+      }
+
+      locationButton.disabled = true;
+      locationButton.textContent =
+        "現在地を確認しています…";
+
+      locationMessage.innerHTML =
+        "GPSから現在地を取得しています。<br>" +
+        "少しお待ちください。";
+
+      navigator.geolocation.getCurrentPosition(
+        function(position) {
+          userLatitude =
+            position.coords.latitude;
+
+          userLongitude =
+            position.coords.longitude;
+
+          locationMessage.innerHTML =
+            "✅ 現在地を取得しました。<br>" +
+            "近い場所から順に表示しています。";
+
+          currentMapLink.href =
+            createGoogleMapUrl(
+              userLatitude,
+              userLongitude
+            );
+
+          currentMapLink.style.display =
+            "inline-flex";
+
+          locationButton.disabled = false;
+          locationButton.textContent =
+            "現在地を更新する";
+
+          renderShops();
         },
 
-        function(){
-
-            document.getElementById("location").innerHTML =
+        function(error) {
+          let message =
             "位置情報を取得できませんでした。";
 
+          if (error.code === 1) {
+            message =
+              "位置情報の利用が許可されていません。<br>" +
+              "ブラウザの位置情報設定を許可してください。";
+          }
+
+          if (error.code === 2) {
+            message =
+              "現在地を確認できませんでした。<br>" +
+              "通信状態を確認して、もう一度お試しください。";
+          }
+
+          if (error.code === 3) {
+            message =
+              "位置情報の取得に時間がかかりました。<br>" +
+              "もう一度お試しください。";
+          }
+
+          locationMessage.innerHTML = message;
+
+          locationButton.disabled = false;
+          locationButton.textContent =
+            "もう一度、現在地を取得する";
+        },
+
+        {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 60000
         }
+      );
+    }
 
-    );
-
-}
-
-</script>
-
-<footer>
-
-イマミル Web Version 1 MVP
-
-</footer>
+    renderShops();
+  </script>
 
 </body>
 </html>
