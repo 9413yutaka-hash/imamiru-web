@@ -8,9 +8,32 @@
     content="width=device-width, initial-scale=1.0"
   >
 
-  <title>イマミル</title>
+  <meta
+    name="theme-color"
+    content="#0788c9"
+  >
+
+  <title>イマミル｜今、何が起きているかを見つけよう</title>
 
   <style>
+    :root {
+      --navy: #071a33;
+      --navy-light: #0d294a;
+      --blue: #0788c9;
+      --cyan: #04b7d7;
+      --sky: #dff7ff;
+      --yellow: #ffd85a;
+      --orange: #ff9e45;
+      --green: #19a96b;
+      --red: #f05a5a;
+      --white: #ffffff;
+      --text: #15233a;
+      --subtext: #697386;
+      --border: #e7edf3;
+      --background: #f4f8fb;
+      --shadow: 0 16px 45px rgba(20, 52, 82, 0.12);
+    }
+
     * {
       box-sizing: border-box;
     }
@@ -21,312 +44,943 @@
 
     body {
       margin: 0;
-      min-height: 100vh;
+      padding-bottom: 92px;
       font-family:
         "Yu Gothic",
         "Hiragino Kaku Gothic ProN",
+        "Meiryo",
         sans-serif;
-      background: #07152d;
-      color: #ffffff;
+      background: var(--background);
+      color: var(--text);
     }
 
     button,
+    input,
     a {
       font-family: inherit;
     }
 
-    header {
+    button {
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .top-bar {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(12, 54, 87, 0.08);
+    }
+
+    .top-bar-inner {
+      width: min(100%, 920px);
+      margin: 0 auto;
+      padding: 13px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .brand-area {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-icon {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      border-radius: 14px;
       background: linear-gradient(
         135deg,
-        #0878bd,
-        #00a8cc
+        var(--blue),
+        var(--cyan)
       );
-      padding: 22px 20px;
-      text-align: center;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.18);
+      color: var(--white);
+      font-size: 21px;
+      box-shadow: 0 8px 20px rgba(4, 158, 199, 0.25);
     }
 
-    .logo {
+    .brand-name {
       margin: 0;
-      font-size: 36px;
-      font-weight: 800;
+      font-size: 22px;
+      font-weight: 900;
       letter-spacing: 0.08em;
+      color: var(--navy);
     }
 
-    .header-subtitle {
-      margin: 6px 0 0;
-      font-size: 14px;
-      opacity: 0.92;
+    .brand-caption {
+      margin: 1px 0 0;
+      color: var(--subtext);
+      font-size: 10px;
+      font-weight: 700;
     }
 
-    main {
-      width: min(100%, 760px);
-      margin: 0 auto;
-      padding: 40px 18px 80px;
+    .live-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: #fff1f1;
+      color: #c73e3e;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .live-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--red);
+      animation: pulse 1.8s infinite;
+    }
+
+    @keyframes pulse {
+      0% {
+        box-shadow: 0 0 0 0 rgba(240, 90, 90, 0.45);
+      }
+
+      70% {
+        box-shadow: 0 0 0 8px rgba(240, 90, 90, 0);
+      }
+
+      100% {
+        box-shadow: 0 0 0 0 rgba(240, 90, 90, 0);
+      }
     }
 
     .hero {
-      text-align: center;
-      padding: 20px 0 32px;
+      position: relative;
+      overflow: hidden;
+      background:
+        radial-gradient(
+          circle at 85% 15%,
+          rgba(255, 255, 255, 0.22),
+          transparent 25%
+        ),
+        linear-gradient(
+          145deg,
+          #067bb8,
+          #03b5cf 55%,
+          #5bd4d0
+        );
+      color: var(--white);
+    }
+
+    .hero::before {
+      content: "";
+      position: absolute;
+      width: 230px;
+      height: 230px;
+      right: -80px;
+      bottom: -100px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.13);
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      width: 120px;
+      height: 120px;
+      left: -55px;
+      top: 35px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .hero-inner {
+      position: relative;
+      z-index: 2;
+      width: min(100%, 920px);
+      margin: 0 auto;
+      padding: 42px 18px 50px;
+    }
+
+    .hero-kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 16px;
+      padding: 8px 13px;
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.13);
+      font-size: 12px;
+      font-weight: 800;
     }
 
     .hero h1 {
+      max-width: 650px;
       margin: 0;
-      font-size: clamp(28px, 6vw, 42px);
-      line-height: 1.4;
+      font-size: clamp(32px, 7vw, 54px);
+      line-height: 1.25;
+      letter-spacing: -0.03em;
     }
 
-    .hero p {
+    .hero h1 span {
+      color: #fff2a6;
+    }
+
+    .hero-description {
+      max-width: 570px;
       margin: 18px 0 0;
-      color: #d5e8f7;
-      font-size: 17px;
-      line-height: 1.8;
-    }
-
-    .location-panel {
-      margin-top: 20px;
-      padding: 24px 18px;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 22px;
-      background: rgba(255, 255, 255, 0.07);
-      text-align: center;
-      box-shadow: 0 12px 35px rgba(0, 0, 0, 0.22);
-    }
-
-    .location-title {
-      margin: 0 0 12px;
-      font-size: 22px;
-    }
-
-    #locationMessage {
-      min-height: 58px;
-      margin: 0;
-      color: #dceef9;
+      color: rgba(255, 255, 255, 0.9);
       font-size: 16px;
-      line-height: 1.8;
+      line-height: 1.85;
+      font-weight: 600;
     }
 
-    .main-button {
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 11px;
+      margin-top: 26px;
+    }
+
+    .hero-button {
+      min-height: 52px;
+      padding: 13px 20px;
+      border: none;
+      border-radius: 15px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: min(100%, 360px);
-      min-height: 54px;
-      margin-top: 18px;
-      padding: 14px 22px;
-      border: none;
-      border-radius: 14px;
-      background: #00afd0;
-      color: #ffffff;
-      font-size: 18px;
-      font-weight: 700;
-      text-decoration: none;
+      gap: 8px;
+      font-size: 15px;
+      font-weight: 900;
       cursor: pointer;
-      box-shadow: 0 8px 22px rgba(0, 175, 208, 0.25);
       transition:
         transform 0.2s,
-        background 0.2s;
+        box-shadow 0.2s;
     }
 
-    .main-button:hover {
-      background: #0099bb;
+    .hero-button:hover {
       transform: translateY(-2px);
     }
 
-    .main-button:disabled {
-      cursor: wait;
+    .primary-button {
+      background: var(--white);
+      color: #0579b2;
+      box-shadow: 0 12px 28px rgba(3, 77, 121, 0.22);
+    }
+
+    .secondary-button {
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      background: rgba(255, 255, 255, 0.12);
+      color: var(--white);
+    }
+
+    .hero-mini-info {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 28px;
+    }
+
+    .mini-info {
+      min-width: 130px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: rgba(4, 64, 105, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+    }
+
+    .mini-info-label {
+      display: block;
+      font-size: 10px;
+      opacity: 0.78;
+      font-weight: 700;
+    }
+
+    .mini-info-value {
+      display: block;
+      margin-top: 4px;
+      font-size: 14px;
+      font-weight: 900;
+    }
+
+    main {
+      width: min(100%, 920px);
+      margin: 0 auto;
+      padding: 24px 18px 40px;
+    }
+
+    .location-card {
+      margin-top: -48px;
+      position: relative;
+      z-index: 5;
+      padding: 18px;
+      border-radius: 22px;
+      background: var(--white);
+      box-shadow: var(--shadow);
+      border: 1px solid rgba(23, 74, 110, 0.08);
+    }
+
+    .location-card-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .location-heading {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .location-icon {
+      width: 46px;
+      height: 46px;
+      display: grid;
+      place-items: center;
+      border-radius: 15px;
+      background: #e6f8fd;
+      font-size: 22px;
+    }
+
+    .location-heading h2 {
+      margin: 0;
+      font-size: 17px;
+    }
+
+    #locationMessage {
+      margin: 4px 0 0;
+      color: var(--subtext);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .location-button {
+      flex-shrink: 0;
+      min-height: 43px;
+      padding: 10px 15px;
+      border: none;
+      border-radius: 13px;
+      background: linear-gradient(
+        135deg,
+        var(--blue),
+        var(--cyan)
+      );
+      color: var(--white);
+      font-size: 13px;
+      font-weight: 900;
+      cursor: pointer;
+      box-shadow: 0 8px 20px rgba(5, 144, 194, 0.22);
+    }
+
+    .location-button:disabled {
       opacity: 0.65;
-      transform: none;
+      cursor: wait;
     }
 
     #currentMapLink {
       display: none;
-      margin-top: 12px;
-      background: #1769aa;
+      margin-top: 13px;
+      padding: 11px 14px;
+      border-radius: 12px;
+      background: #edf5ff;
+      color: #2465af;
+      font-size: 12px;
+      font-weight: 800;
+      text-align: center;
+    }
+
+    .flash-banner {
+      position: relative;
+      overflow: hidden;
+      margin-top: 24px;
+      padding: 20px;
+      border-radius: 22px;
+      background:
+        linear-gradient(
+          135deg,
+          #ff7a54,
+          #ffad45
+        );
+      color: var(--white);
+      box-shadow: 0 14px 35px rgba(232, 108, 45, 0.22);
+    }
+
+    .flash-banner::after {
+      content: "⚡";
+      position: absolute;
+      right: 18px;
+      bottom: -12px;
+      font-size: 88px;
+      opacity: 0.14;
+      transform: rotate(-12deg);
+    }
+
+    .flash-label {
+      display: inline-block;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.22);
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .flash-banner h2 {
+      margin: 11px 0 0;
+      font-size: 22px;
+      line-height: 1.45;
+    }
+
+    .flash-banner p {
+      margin: 8px 0 0;
+      font-size: 13px;
+      line-height: 1.7;
+      opacity: 0.92;
     }
 
     .section {
-      margin-top: 52px;
+      margin-top: 34px;
     }
 
-    .section-heading {
-      margin-bottom: 18px;
+    .section-header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 15px;
     }
 
-    .section-heading h2 {
+    .section-title-area h2 {
       margin: 0;
-      font-size: 28px;
+      font-size: 24px;
+      color: var(--navy);
     }
 
-    .section-heading p {
-      margin: 8px 0 0;
-      color: #a9c6da;
-      font-size: 14px;
-      line-height: 1.7;
-    }
-
-    .sample-label {
-      display: inline-block;
-      margin-top: 10px;
-      padding: 6px 11px;
-      border-radius: 999px;
-      background: #f7c948;
-      color: #302500;
+    .section-title-area p {
+      margin: 6px 0 0;
+      color: var(--subtext);
       font-size: 12px;
-      font-weight: 700;
+      line-height: 1.6;
+    }
+
+    .section-link {
+      flex-shrink: 0;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .category-scroll {
+      display: flex;
+      gap: 9px;
+      overflow-x: auto;
+      padding: 2px 1px 10px;
+      scrollbar-width: none;
+    }
+
+    .category-scroll::-webkit-scrollbar {
+      display: none;
+    }
+
+    .category-button {
+      flex-shrink: 0;
+      min-height: 41px;
+      padding: 9px 15px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--white);
+      color: #516072;
+      font-size: 13px;
+      font-weight: 800;
+      cursor: pointer;
+      transition:
+        background 0.2s,
+        color 0.2s,
+        transform 0.2s;
+    }
+
+    .category-button.active {
+      border-color: transparent;
+      background: var(--navy);
+      color: var(--white);
+      box-shadow: 0 8px 18px rgba(7, 26, 51, 0.16);
+    }
+
+    .category-button:hover {
+      transform: translateY(-1px);
     }
 
     #shopsList {
       display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 18px;
     }
 
     .shop-card {
       overflow: hidden;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 22px;
-      background: #ffffff;
-      color: #152238;
-      box-shadow: 0 13px 35px rgba(0, 0, 0, 0.25);
+      border-radius: 23px;
+      background: var(--white);
+      border: 1px solid rgba(18, 65, 101, 0.08);
+      box-shadow: 0 12px 34px rgba(25, 63, 95, 0.09);
+      transition:
+        transform 0.22s,
+        box-shadow 0.22s;
     }
 
-    .shop-image {
+    .shop-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 18px 40px rgba(25, 63, 95, 0.14);
+    }
+
+    .shop-visual {
+      position: relative;
+      height: 190px;
       display: flex;
       align-items: center;
       justify-content: center;
+      overflow: hidden;
+    }
+
+    .shop-visual::before,
+    .shop-visual::after {
+      content: "";
+      position: absolute;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.18);
+    }
+
+    .shop-visual::before {
+      width: 150px;
       height: 150px;
-      background: linear-gradient(
-        135deg,
-        #dff7ff,
-        #f6fbff
-      );
-      font-size: 72px;
+      right: -50px;
+      top: -55px;
     }
 
-    .shop-content {
-      padding: 20px;
+    .shop-visual::after {
+      width: 85px;
+      height: 85px;
+      left: -30px;
+      bottom: -35px;
     }
 
-    .shop-top {
+    .visual-food {
+      background:
+        linear-gradient(
+          135deg,
+          #ffd876,
+          #ff9c5a
+        );
+    }
+
+    .visual-cafe {
+      background:
+        linear-gradient(
+          135deg,
+          #8fe1dd,
+          #4bbfcf
+        );
+    }
+
+    .visual-bar {
+      background:
+        linear-gradient(
+          135deg,
+          #7884dd,
+          #4c5bb1
+        );
+    }
+
+    .visual-event {
+      background:
+        linear-gradient(
+          135deg,
+          #ff9db8,
+          #ee668d
+        );
+    }
+
+    .shop-emoji {
+      position: relative;
+      z-index: 2;
+      font-size: 78px;
+      filter: drop-shadow(0 12px 12px rgba(0, 0, 0, 0.12));
+    }
+
+    .shop-badges {
+      position: absolute;
+      z-index: 3;
+      top: 13px;
+      left: 13px;
+      right: 13px;
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
-      gap: 12px;
+      gap: 8px;
     }
 
-    .shop-name {
-      margin: 0;
-      font-size: 22px;
-      line-height: 1.4;
-    }
-
-    .open-badge {
-      flex-shrink: 0;
-      padding: 6px 10px;
+    .event-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 7px 10px;
       border-radius: 999px;
-      background: #d9f8e7;
-      color: #08743c;
-      font-size: 12px;
-      font-weight: 700;
+      background: rgba(255, 255, 255, 0.94);
+      color: #d14a3e;
+      font-size: 11px;
+      font-weight: 900;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    }
+
+    .favorite-button {
+      width: 37px;
+      height: 37px;
+      display: grid;
+      place-items: center;
+      border: none;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.94);
+      color: #9ca7b6;
+      font-size: 18px;
+      cursor: pointer;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    }
+
+    .favorite-button.active {
+      color: #ef5470;
+    }
+
+    .shop-body {
+      padding: 18px;
     }
 
     .shop-category {
-      margin: 6px 0 0;
-      color: #667085;
-      font-size: 14px;
-    }
-
-    .shop-meta {
       display: flex;
-      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
       gap: 8px;
-      margin-top: 14px;
+      color: var(--blue);
+      font-size: 11px;
+      font-weight: 900;
     }
 
-    .meta-item {
-      padding: 7px 10px;
-      border-radius: 10px;
-      background: #edf6fa;
-      color: #28516b;
+    .open-status {
+      color: var(--green);
+    }
+
+    .shop-name {
+      margin: 7px 0 0;
+      font-size: 20px;
+      line-height: 1.4;
+      color: var(--navy);
+    }
+
+    .shop-description {
+      margin: 9px 0 0;
+      min-height: 45px;
+      color: var(--subtext);
       font-size: 13px;
-      font-weight: 700;
-    }
-
-    .shop-message {
-      margin: 16px 0 0;
-      padding: 14px;
-      border-left: 4px solid #00a9c7;
-      border-radius: 8px;
-      background: #f4fbfd;
-      color: #344054;
-      font-size: 15px;
       line-height: 1.7;
     }
 
-    .shop-buttons {
+    .shop-info-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-top: 14px;
+    }
+
+    .info-chip {
+      padding: 7px 9px;
+      border-radius: 9px;
+      background: #f0f6f9;
+      color: #446071;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .time-limit {
+      margin-top: 13px;
+      padding: 11px 12px;
+      border-left: 4px solid var(--orange);
+      border-radius: 9px;
+      background: #fff7ed;
+      color: #8b5525;
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.6;
+    }
+
+    .shop-actions {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      margin-top: 18px;
+      grid-template-columns: 1.25fr 1fr;
+      gap: 9px;
+      margin-top: 15px;
     }
 
     .shop-button {
+      min-height: 45px;
+      border: none;
+      border-radius: 12px;
       display: flex;
       align-items: center;
       justify-content: center;
-      min-height: 46px;
-      padding: 10px 12px;
-      border: none;
-      border-radius: 12px;
-      font-size: 14px;
-      font-weight: 700;
-      text-decoration: none;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 900;
       cursor: pointer;
     }
 
     .detail-button {
-      background: #00a9c7;
-      color: #ffffff;
+      background: linear-gradient(
+        135deg,
+        var(--blue),
+        var(--cyan)
+      );
+      color: var(--white);
+      box-shadow: 0 8px 18px rgba(5, 144, 194, 0.18);
     }
 
     .map-button {
-      background: #e8f0fe;
-      color: #1a5db1;
+      background: #edf4ff;
+      color: #2f68ad;
     }
 
-    .notice {
+    .sample-notice {
       margin-top: 22px;
-      padding: 16px;
-      border-radius: 14px;
-      background: rgba(255, 255, 255, 0.07);
-      color: #b9d1e1;
-      font-size: 13px;
+      padding: 15px;
+      border-radius: 15px;
+      background: #eaf4f8;
+      color: #587080;
+      font-size: 11px;
       line-height: 1.7;
+      text-align: center;
+    }
+
+    .bottom-navigation {
+      position: fixed;
+      z-index: 80;
+      left: 50%;
+      bottom: 14px;
+      transform: translateX(-50%);
+      width: min(calc(100% - 24px), 540px);
+      padding: 9px 12px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 4px;
+      border: 1px solid rgba(14, 52, 80, 0.09);
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.96);
+      backdrop-filter: blur(18px);
+      box-shadow: 0 15px 45px rgba(10, 38, 63, 0.2);
+    }
+
+    .nav-button {
+      border: none;
+      background: transparent;
+      color: #8a98a9;
+      padding: 6px 4px;
+      display: grid;
+      place-items: center;
+      gap: 3px;
+      font-size: 10px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .nav-icon {
+      font-size: 20px;
+    }
+
+    .nav-button.active {
+      color: var(--blue);
+    }
+
+    .modal-overlay {
+      position: fixed;
+      z-index: 100;
+      inset: 0;
+      display: none;
+      align-items: flex-end;
+      justify-content: center;
+      padding: 18px;
+      background: rgba(3, 20, 37, 0.62);
+      backdrop-filter: blur(5px);
+    }
+
+    .modal-overlay.visible {
+      display: flex;
+    }
+
+    .modal-card {
+      width: min(100%, 560px);
+      max-height: 88vh;
+      overflow-y: auto;
+      border-radius: 26px 26px 18px 18px;
+      background: var(--white);
+      box-shadow: 0 30px 70px rgba(0, 0, 0, 0.3);
+      animation: slideUp 0.25s ease;
+    }
+
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(35px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .modal-visual {
+      height: 175px;
+      display: grid;
+      place-items: center;
+      border-radius: 26px 26px 0 0;
+      font-size: 78px;
+    }
+
+    .modal-content {
+      padding: 22px;
+    }
+
+    .modal-close {
+      float: right;
+      width: 38px;
+      height: 38px;
+      border: none;
+      border-radius: 50%;
+      background: #edf2f5;
+      font-size: 17px;
+      cursor: pointer;
+    }
+
+    .modal-category {
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .modal-title {
+      margin: 8px 0 0;
+      padding-right: 45px;
+      font-size: 25px;
+      color: var(--navy);
+    }
+
+    .modal-message {
+      margin: 16px 0 0;
+      padding: 15px;
+      border-radius: 13px;
+      background: #f2f8fb;
+      color: #425b6b;
+      font-size: 14px;
+      line-height: 1.8;
+    }
+
+    .modal-map-button {
+      margin-top: 18px;
+      min-height: 50px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(
+        135deg,
+        var(--blue),
+        var(--cyan)
+      );
+      color: var(--white);
+      font-size: 14px;
+      font-weight: 900;
     }
 
     footer {
-      padding: 30px 15px;
-      background: #040e21;
-      color: #8aa6ba;
+      padding: 35px 18px 105px;
+      color: #8897a6;
       text-align: center;
-      font-size: 13px;
+      font-size: 11px;
+    }
+
+    @media (max-width: 700px) {
+      #shopsList {
+        grid-template-columns: 1fr;
+      }
+
+      .shop-visual {
+        height: 178px;
+      }
     }
 
     @media (max-width: 520px) {
+      .top-bar-inner {
+        padding: 11px 14px;
+      }
+
+      .brand-icon {
+        width: 38px;
+        height: 38px;
+      }
+
+      .brand-name {
+        font-size: 19px;
+      }
+
+      .live-chip {
+        padding: 7px 10px;
+        font-size: 10px;
+      }
+
+      .hero-inner {
+        padding: 36px 16px 66px;
+      }
+
       main {
-        padding-top: 25px;
+        padding-left: 14px;
+        padding-right: 14px;
       }
 
-      .location-panel {
-        padding: 22px 14px;
+      .location-card {
+        margin-top: -56px;
       }
 
-      .shop-image {
-        height: 125px;
+      .location-card-top {
+        align-items: flex-start;
+        flex-direction: column;
       }
 
-      .shop-buttons {
+      .location-button {
+        width: 100%;
+      }
+
+      .hero-actions {
+        display: grid;
         grid-template-columns: 1fr;
+      }
+
+      .hero-button {
+        width: 100%;
+      }
+
+      .hero-mini-info {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .mini-info {
+        min-width: 0;
+      }
+
+      .shop-actions {
+        grid-template-columns: 1fr 1fr;
       }
     }
   </style>
@@ -334,128 +988,411 @@
 
 <body>
 
-  <header>
-    <div class="logo">イマミル</div>
+  <header class="top-bar">
+    <div class="top-bar-inner">
 
-    <p class="header-subtitle">
-      今日という一日を、最高の旅へ。
-    </p>
+      <div class="brand-area">
+        <div class="brand-icon">🌺</div>
+
+        <div>
+          <p class="brand-name">イマミル</p>
+
+          <p class="brand-caption">
+            リアルタイム観光コンシェルジュ
+          </p>
+        </div>
+      </div>
+
+      <div class="live-chip">
+        <span class="live-dot"></span>
+        今を配信中
+      </div>
+
+    </div>
   </header>
+
+  <section class="hero">
+    <div class="hero-inner">
+
+      <div class="hero-kicker">
+        🌴 沖縄の「今」を楽しもう
+      </div>
+
+      <h1>
+        旅先の<span>偶然</span>を、<br>
+        もっと楽しく。
+      </h1>
+
+      <p class="hero-description">
+        近くのお店、限定イベント、タイムセール。
+        その場所で今だけ楽しめる情報を見つけよう。
+      </p>
+
+      <div class="hero-actions">
+        <button
+          class="hero-button primary-button"
+          type="button"
+          onclick="scrollToShops()"
+        >
+          🔍 近くの情報を見る
+        </button>
+
+        <button
+          class="hero-button secondary-button"
+          type="button"
+          onclick="getLocation()"
+        >
+          📍 現在地を使う
+        </button>
+      </div>
+
+      <div class="hero-mini-info">
+        <div class="mini-info">
+          <span class="mini-info-label">
+            今日の掲載情報
+          </span>
+
+          <span class="mini-info-value">
+            4件
+          </span>
+        </div>
+
+        <div class="mini-info">
+          <span class="mini-info-label">
+            限定情報
+          </span>
+
+          <span class="mini-info-value">
+            3件
+          </span>
+        </div>
+
+        <div class="mini-info">
+          <span class="mini-info-label">
+            対応エリア
+          </span>
+
+          <span class="mini-info-value">
+            沖縄・那覇
+          </span>
+        </div>
+      </div>
+
+    </div>
+  </section>
 
   <main>
 
-    <section class="hero">
-      <h1>
-        今、何が起きているかを<br>
-        見つけよう。
-      </h1>
+    <section class="location-card">
+      <div class="location-card-top">
 
-      <p>
-        旅人に寄り添う<br>
-        リアルタイム観光コンシェルジュ
-      </p>
-    </section>
+        <div class="location-heading">
+          <div class="location-icon">📍</div>
 
-    <section class="location-panel">
-      <h2 class="location-title">
-        📍 あなたの現在地
-      </h2>
+          <div>
+            <h2>あなたの現在地</h2>
 
-      <p id="locationMessage">
-        現在地はまだ取得していません。<br>
-        下のボタンを押してください。
-      </p>
+            <p id="locationMessage">
+              現在地を取得すると、近い順に表示します。
+            </p>
+          </div>
+        </div>
 
-      <button
-        id="locationButton"
-        class="main-button"
-        type="button"
-        onclick="getLocation()"
-      >
-        現在地を取得する
-      </button>
+        <button
+          id="locationButton"
+          class="location-button"
+          type="button"
+          onclick="getLocation()"
+        >
+          現在地を取得
+        </button>
 
-      <br>
+      </div>
 
       <a
         id="currentMapLink"
-        class="main-button"
         href="#"
         target="_blank"
         rel="noopener noreferrer"
       >
-        現在地をGoogleマップで見る
+        🗺️ 現在地をGoogleマップで開く
       </a>
     </section>
 
-    <section class="section">
-      <div class="section-heading">
-        <h2>今日、近くで楽しめる場所</h2>
+    <section class="flash-banner">
+      <span class="flash-label">
+        ⚡ ゲリラ情報
+      </span>
 
-        <p>
-          現在地を取得すると、距離が近い順に並びます。
-        </p>
+      <h2>
+        今日だけの沖縄を、見逃さない。
+      </h2>
 
-        <span class="sample-label">
-          Firebase接続前のサンプル情報
+      <p>
+        タイムセールや限定イベントなど、
+        今しか出会えない情報を配信します。
+      </p>
+    </section>
+
+    <section
+      id="shopsSection"
+      class="section"
+    >
+      <div class="section-header">
+
+        <div class="section-title-area">
+          <h2>今、近くで楽しめる場所</h2>
+
+          <p>
+            気になるカテゴリーを選んでください。
+          </p>
+        </div>
+
+        <span class="section-link">
+          現在地順
         </span>
+
+      </div>
+
+      <div class="category-scroll">
+
+        <button
+          class="category-button active"
+          type="button"
+          data-category="すべて"
+          onclick="selectCategory('すべて', this)"
+        >
+          ✨ すべて
+        </button>
+
+        <button
+          class="category-button"
+          type="button"
+          data-category="グルメ"
+          onclick="selectCategory('グルメ', this)"
+        >
+          🍜 グルメ
+        </button>
+
+        <button
+          class="category-button"
+          type="button"
+          data-category="カフェ"
+          onclick="selectCategory('カフェ', this)"
+        >
+          🥭 カフェ
+        </button>
+
+        <button
+          class="category-button"
+          type="button"
+          data-category="居酒屋"
+          onclick="selectCategory('居酒屋', this)"
+        >
+          🍺 居酒屋
+        </button>
+
+        <button
+          class="category-button"
+          type="button"
+          data-category="イベント"
+          onclick="selectCategory('イベント', this)"
+        >
+          🎵 イベント
+        </button>
+
       </div>
 
       <div id="shopsList"></div>
 
-      <div class="notice">
-        現在表示している店舗名・営業情報・限定情報は、
-        動作確認用のサンプルです。
-        次のFirebase接続で、実際に投稿された情報へ
-        入れ替えられる設計になっています。
+      <div class="sample-notice">
+        現在表示されている店舗やイベントは、
+        Firebase接続前の動作確認用サンプルです。
       </div>
     </section>
 
   </main>
 
   <footer>
-    イマミル Web Version 1 MVP
+    イマミル Web Version 1 MVP<br>
+    今、何が起きているかを見つけよう。
   </footer>
+
+  <nav class="bottom-navigation">
+
+    <button
+      class="nav-button active"
+      type="button"
+      onclick="scrollToTopPage()"
+    >
+      <span class="nav-icon">🏠</span>
+      ホーム
+    </button>
+
+    <button
+      class="nav-button"
+      type="button"
+      onclick="scrollToShops()"
+    >
+      <span class="nav-icon">🔍</span>
+      見つける
+    </button>
+
+    <button
+      class="nav-button"
+      type="button"
+      onclick="getLocation()"
+    >
+      <span class="nav-icon">📍</span>
+      現在地
+    </button>
+
+    <button
+      class="nav-button"
+      type="button"
+      onclick="showComingSoon()"
+    >
+      <span class="nav-icon">👤</span>
+      マイページ
+    </button>
+
+  </nav>
+
+  <div
+    id="shopModal"
+    class="modal-overlay"
+    onclick="closeModalOutside(event)"
+  >
+    <div class="modal-card">
+
+      <div
+        id="modalVisual"
+        class="modal-visual visual-food"
+      >
+        <span id="modalEmoji">🍜</span>
+      </div>
+
+      <div class="modal-content">
+
+        <button
+          class="modal-close"
+          type="button"
+          onclick="closeShopModal()"
+        >
+          ✕
+        </button>
+
+        <div
+          id="modalCategory"
+          class="modal-category"
+        >
+          グルメ
+        </div>
+
+        <h2
+          id="modalTitle"
+          class="modal-title"
+        >
+          店舗名
+        </h2>
+
+        <div
+          id="modalMessage"
+          class="modal-message"
+        >
+          店舗情報
+        </div>
+
+        <a
+          id="modalMapButton"
+          class="modal-map-button"
+          href="#"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          📍 Googleマップで場所を見る
+        </a>
+
+      </div>
+    </div>
+  </div>
 
   <script>
     const shops = [
       {
         id: 1,
         name: "沖縄そば イマミル食堂",
-        category: "沖縄料理・沖縄そば",
+        category: "グルメ",
+        categoryText: "沖縄料理・沖縄そば",
         emoji: "🍜",
+        visualClass: "visual-food",
         rating: 4.8,
         status: "営業中",
-        message: "本日限定の三枚肉そばがあります。売り切れ次第終了です！",
+        badge: "本日限定",
+        message:
+          "本日限定の三枚肉そばがあります。売り切れ次第終了です！",
+        timeMessage:
+          "⏰ 限定20食・なくなり次第終了",
         latitude: 26.2124,
         longitude: 127.6809
       },
       {
         id: 2,
         name: "Cafe Blue Okinawa",
-        category: "カフェ・スイーツ",
+        category: "カフェ",
+        categoryText: "カフェ・スイーツ",
         emoji: "🥭",
+        visualClass: "visual-cafe",
         rating: 4.6,
         status: "営業中",
-        message: "沖縄県産マンゴーのスムージーが、本日おすすめです。",
+        badge: "旅人おすすめ",
+        message:
+          "沖縄県産マンゴーを使ったスムージーが、今日のおすすめです。",
+        timeMessage:
+          "🥭 本日のマンゴーがなくなり次第終了",
         latitude: 26.2167,
         longitude: 127.6873
       },
       {
         id: 3,
         name: "島酒場 ゆんたく",
-        category: "沖縄居酒屋",
+        category: "居酒屋",
+        categoryText: "沖縄居酒屋",
         emoji: "🍺",
+        visualClass: "visual-bar",
         rating: 4.9,
         status: "営業中",
-        message: "19時から三線ライブを開催します。予約なしでも参加できます。",
+        badge: "今夜開催",
+        message:
+          "19時から三線ライブを開催します。予約なしでも参加できます。",
+        timeMessage:
+          "🎵 三線ライブ 19:00スタート",
         latitude: 26.2078,
         longitude: 127.6765
+      },
+      {
+        id: 4,
+        name: "国際通り 島唄ナイト",
+        category: "イベント",
+        categoryText: "音楽・文化イベント",
+        emoji: "🎤",
+        visualClass: "visual-event",
+        rating: 4.7,
+        status: "受付中",
+        badge: "参加無料",
+        message:
+          "沖縄の島唄を気軽に楽しめる、旅行者向けのミニライブです。",
+        timeMessage:
+          "🌙 本日20:00から開催",
+        latitude: 26.2149,
+        longitude: 127.6842
       }
     ];
 
     let userLatitude = null;
     let userLongitude = null;
+    let selectedCategory = "すべて";
+    const favoriteShopIds = new Set();
 
     function escapeHtml(text) {
       return String(text)
@@ -507,7 +1444,7 @@
 
     function formatDistance(distanceKm) {
       if (distanceKm === null) {
-        return "現在地取得後に表示";
+        return "距離を確認";
       }
 
       if (distanceKm < 1) {
@@ -519,20 +1456,26 @@
 
     function estimateWalkingTime(distanceKm) {
       if (distanceKm === null) {
-        return "徒歩時間を計算";
+        return "徒歩時間";
       }
 
       const walkingMinutes =
-        Math.max(1, Math.round(distanceKm / 0.08));
+        Math.max(
+          1,
+          Math.round(distanceKm / 0.08)
+        );
 
       if (walkingMinutes >= 120) {
-        return "距離が離れています";
+        return "車での移動推奨";
       }
 
       return "徒歩 約" + walkingMinutes + "分";
     }
 
-    function createGoogleMapUrl(latitude, longitude) {
+    function createGoogleMapUrl(
+      latitude,
+      longitude
+    ) {
       return (
         "https://www.google.com/maps/search/?api=1&query=" +
         latitude +
@@ -541,24 +1484,30 @@
       );
     }
 
-    function renderShops() {
-      const shopsList =
-        document.getElementById("shopsList");
+    function getVisibleShops() {
+      let visibleShops =
+        shops.filter(function(shop) {
+          return (
+            selectedCategory === "すべて" ||
+            shop.category === selectedCategory
+          );
+        });
 
-      const shopsWithDistance =
-        shops.map(function(shop) {
+      visibleShops =
+        visibleShops.map(function(shop) {
           let distanceKm = null;
 
           if (
             userLatitude !== null &&
             userLongitude !== null
           ) {
-            distanceKm = calculateDistance(
-              userLatitude,
-              userLongitude,
-              shop.latitude,
-              shop.longitude
-            );
+            distanceKm =
+              calculateDistance(
+                userLatitude,
+                userLongitude,
+                shop.latitude,
+                shop.longitude
+              );
           }
 
           return {
@@ -571,67 +1520,126 @@
         userLatitude !== null &&
         userLongitude !== null
       ) {
-        shopsWithDistance.sort(function(first, second) {
-          return first.distanceKm - second.distanceKm;
+        visibleShops.sort(function(first, second) {
+          return (
+            first.distanceKm -
+            second.distanceKm
+          );
         });
       }
 
+      return visibleShops;
+    }
+
+    function renderShops() {
+      const shopsList =
+        document.getElementById("shopsList");
+
+      const visibleShops =
+        getVisibleShops();
+
+      if (visibleShops.length === 0) {
+        shopsList.innerHTML = `
+          <div class="sample-notice">
+            このカテゴリーの情報は、
+            まだ登録されていません。
+          </div>
+        `;
+
+        return;
+      }
+
       shopsList.innerHTML =
-        shopsWithDistance.map(function(shop) {
+        visibleShops.map(function(shop) {
           const mapUrl =
             createGoogleMapUrl(
               shop.latitude,
               shop.longitude
             );
 
+          const isFavorite =
+            favoriteShopIds.has(shop.id);
+
           return `
             <article class="shop-card">
-              <div class="shop-image">
-                ${escapeHtml(shop.emoji)}
+
+              <div class="shop-visual ${shop.visualClass}">
+
+                <div class="shop-badges">
+
+                  <span class="event-badge">
+                    ⚡ ${escapeHtml(shop.badge)}
+                  </span>
+
+                  <button
+                    class="favorite-button ${
+                      isFavorite ? "active" : ""
+                    }"
+                    type="button"
+                    aria-label="お気に入り"
+                    onclick="toggleFavorite(${shop.id})"
+                  >
+                    ${
+                      isFavorite ? "♥" : "♡"
+                    }
+                  </button>
+
+                </div>
+
+                <span class="shop-emoji">
+                  ${escapeHtml(shop.emoji)}
+                </span>
+
               </div>
 
-              <div class="shop-content">
-                <div class="shop-top">
-                  <div>
-                    <h3 class="shop-name">
-                      ${escapeHtml(shop.name)}
-                    </h3>
+              <div class="shop-body">
 
-                    <p class="shop-category">
-                      ${escapeHtml(shop.category)}
-                    </p>
-                  </div>
+                <div class="shop-category">
+                  <span>
+                    ${escapeHtml(shop.categoryText)}
+                  </span>
 
-                  <span class="open-badge">
-                    ${escapeHtml(shop.status)}
+                  <span class="open-status">
+                    ● ${escapeHtml(shop.status)}
                   </span>
                 </div>
 
-                <div class="shop-meta">
-                  <span class="meta-item">
+                <h3 class="shop-name">
+                  ${escapeHtml(shop.name)}
+                </h3>
+
+                <p class="shop-description">
+                  ${escapeHtml(shop.message)}
+                </p>
+
+                <div class="shop-info-row">
+
+                  <span class="info-chip">
                     ⭐ ${shop.rating}
                   </span>
 
-                  <span class="meta-item">
+                  <span class="info-chip">
                     📍 ${formatDistance(shop.distanceKm)}
                   </span>
 
-                  <span class="meta-item">
+                  <span class="info-chip">
                     🚶 ${estimateWalkingTime(shop.distanceKm)}
                   </span>
+
                 </div>
 
-                <p class="shop-message">
-                  📢 ${escapeHtml(shop.message)}
-                </p>
+                <div class="time-limit">
+                  ${escapeHtml(shop.timeMessage)}
+                </div>
 
-                <div class="shop-buttons">
+                <div class="shop-actions">
+
                   <button
                     class="shop-button detail-button"
                     type="button"
-                    onclick="showShopDetail(${shop.id})"
+                    onclick="openShopModal(${shop.id})"
                   >
-                    今日の情報を見る
+                    今の情報を見る
                   </button>
 
                   <a
@@ -640,16 +1648,45 @@
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    Googleマップ
+                    📍 地図
                   </a>
+
                 </div>
+
               </div>
             </article>
           `;
         }).join("");
     }
 
-    function showShopDetail(shopId) {
+    function selectCategory(
+      category,
+      button
+    ) {
+      selectedCategory = category;
+
+      document
+        .querySelectorAll(".category-button")
+        .forEach(function(categoryButton) {
+          categoryButton.classList.remove("active");
+        });
+
+      button.classList.add("active");
+
+      renderShops();
+    }
+
+    function toggleFavorite(shopId) {
+      if (favoriteShopIds.has(shopId)) {
+        favoriteShopIds.delete(shopId);
+      } else {
+        favoriteShopIds.add(shopId);
+      }
+
+      renderShops();
+    }
+
+    function openShopModal(shopId) {
       const selectedShop =
         shops.find(function(shop) {
           return shop.id === shopId;
@@ -659,26 +1696,89 @@
         return;
       }
 
-      alert(
-        selectedShop.name +
-        "\n\n" +
-        selectedShop.message +
-        "\n\n※現在はサンプル情報です。"
-      );
+      const modal =
+        document.getElementById("shopModal");
+
+      const modalVisual =
+        document.getElementById("modalVisual");
+
+      modalVisual.className =
+        "modal-visual " +
+        selectedShop.visualClass;
+
+      document.getElementById(
+        "modalEmoji"
+      ).textContent =
+        selectedShop.emoji;
+
+      document.getElementById(
+        "modalCategory"
+      ).textContent =
+        selectedShop.categoryText +
+        "・" +
+        selectedShop.status;
+
+      document.getElementById(
+        "modalTitle"
+      ).textContent =
+        selectedShop.name;
+
+      document.getElementById(
+        "modalMessage"
+      ).innerHTML =
+        "📢 " +
+        escapeHtml(selectedShop.message) +
+        "<br><br>" +
+        escapeHtml(selectedShop.timeMessage);
+
+      document.getElementById(
+        "modalMapButton"
+      ).href =
+        createGoogleMapUrl(
+          selectedShop.latitude,
+          selectedShop.longitude
+        );
+
+      modal.classList.add("visible");
+
+      document.body.style.overflow =
+        "hidden";
+    }
+
+    function closeShopModal() {
+      document
+        .getElementById("shopModal")
+        .classList.remove("visible");
+
+      document.body.style.overflow = "";
+    }
+
+    function closeModalOutside(event) {
+      if (
+        event.target.id === "shopModal"
+      ) {
+        closeShopModal();
+      }
     }
 
     function getLocation() {
       const locationButton =
-        document.getElementById("locationButton");
+        document.getElementById(
+          "locationButton"
+        );
 
       const locationMessage =
-        document.getElementById("locationMessage");
+        document.getElementById(
+          "locationMessage"
+        );
 
       const currentMapLink =
-        document.getElementById("currentMapLink");
+        document.getElementById(
+          "currentMapLink"
+        );
 
       if (!navigator.geolocation) {
-        locationMessage.innerHTML =
+        locationMessage.textContent =
           "このブラウザでは位置情報を利用できません。";
 
         return;
@@ -686,11 +1786,10 @@
 
       locationButton.disabled = true;
       locationButton.textContent =
-        "現在地を確認しています…";
+        "確認しています…";
 
-      locationMessage.innerHTML =
-        "GPSから現在地を取得しています。<br>" +
-        "少しお待ちください。";
+      locationMessage.textContent =
+        "GPSから現在地を取得しています。";
 
       navigator.geolocation.getCurrentPosition(
         function(position) {
@@ -700,9 +1799,8 @@
           userLongitude =
             position.coords.longitude;
 
-          locationMessage.innerHTML =
-            "✅ 現在地を取得しました。<br>" +
-            "近い場所から順に表示しています。";
+          locationMessage.textContent =
+            "現在地を取得しました。近い順に表示しています。";
 
           currentMapLink.href =
             createGoogleMapUrl(
@@ -711,11 +1809,11 @@
             );
 
           currentMapLink.style.display =
-            "inline-flex";
+            "block";
 
           locationButton.disabled = false;
           locationButton.textContent =
-            "現在地を更新する";
+            "現在地を更新";
 
           renderShops();
         },
@@ -726,27 +1824,25 @@
 
           if (error.code === 1) {
             message =
-              "位置情報の利用が許可されていません。<br>" +
-              "ブラウザの位置情報設定を許可してください。";
+              "ブラウザで位置情報を許可してください。";
           }
 
           if (error.code === 2) {
             message =
-              "現在地を確認できませんでした。<br>" +
-              "通信状態を確認して、もう一度お試しください。";
+              "現在地を確認できませんでした。";
           }
 
           if (error.code === 3) {
             message =
-              "位置情報の取得に時間がかかりました。<br>" +
-              "もう一度お試しください。";
+              "取得に時間がかかりました。もう一度お試しください。";
           }
 
-          locationMessage.innerHTML = message;
+          locationMessage.textContent =
+            message;
 
           locationButton.disabled = false;
           locationButton.textContent =
-            "もう一度、現在地を取得する";
+            "もう一度試す";
         },
 
         {
@@ -756,6 +1852,36 @@
         }
       );
     }
+
+    function scrollToShops() {
+      document
+        .getElementById("shopsSection")
+        .scrollIntoView({
+          behavior: "smooth"
+        });
+    }
+
+    function scrollToTopPage() {
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth"
+      });
+    }
+
+    function showComingSoon() {
+      alert(
+        "マイページは今後追加予定です。"
+      );
+    }
+
+    document.addEventListener(
+      "keydown",
+      function(event) {
+        if (event.key === "Escape") {
+          closeShopModal();
+        }
+      }
+    );
 
     renderShops();
   </script>
