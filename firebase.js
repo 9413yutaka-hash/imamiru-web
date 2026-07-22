@@ -1,6 +1,3 @@
-// Firebase接続用ファイル
-// 次の工程で、Firebase設定とFirestore読み込み処理をここに追加します。
-// 現在は空のままで問題ありません。
 const firebaseConfig = {
   apiKey: "AIzaSyBZZn0BjfJ2338f4WW6iQB7iOIKwhplkLE",
   authDomain: "chikashoku-app.firebaseapp.com",
@@ -10,11 +7,20 @@ const firebaseConfig = {
   appId: "1:1091035515947:web:7aa99024a5fef0acf4ee6e"
 };
 
-const firebaseApp = firebase.initializeApp(firebaseConfig);
+try {
+  const firebaseApp = firebase.apps.length
+    ? firebase.app()
+    : firebase.initializeApp(firebaseConfig);
 
-const db = firebase.firestore();
+  const firestoreDb = firebase.firestore(firebaseApp);
 
-window.imamiruFirebaseApp = firebaseApp;
-window.imamiruDb = db;
+  window.imamiruFirebaseApp = firebaseApp;
+  window.imamiruDb = firestoreDb;
 
-console.log("✅ イマミルとFirebaseの接続に成功しました");
+  console.log("✅ イマミルとFirebaseの接続に成功しました");
+} catch (error) {
+  console.error("❌ Firebaseの初期化に失敗しました", error);
+
+  window.imamiruFirebaseApp = null;
+  window.imamiruDb = null;
+}
