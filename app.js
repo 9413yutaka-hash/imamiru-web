@@ -6,6 +6,9 @@ let selectedCategory = "すべて";
 
 const favoriteShopIds = new Set();
 
+let currentModalImages = [];
+let currentModalImageIndex = 0;
+
 function escapeHtml(text) {
   return String(text ?? "")
     .replaceAll("&", "&amp;")
@@ -307,6 +310,232 @@ function getNumberValue(
   return null;
 }
 
+function getSafeImageUrl(
+  value
+) {
+  if (
+    typeof value !== "string" ||
+    value.trim() === ""
+  ) {
+    return "";
+  }
+
+  const imageUrl =
+    value.trim();
+
+  if (
+    !imageUrl.startsWith(
+      "https://"
+    )
+  ) {
+    return "";
+  }
+
+  return imageUrl;
+}
+
+function getSubmissionImageUrls(
+  data
+) {
+  const imageUrls = [];
+
+  if (
+    Array.isArray(
+      data.imageUrls
+    )
+  ) {
+    data.imageUrls.forEach(
+      function(imageUrl) {
+        const safeImageUrl =
+          getSafeImageUrl(
+            imageUrl
+          );
+
+        if (safeImageUrl) {
+          imageUrls.push(
+            safeImageUrl
+          );
+        }
+      }
+    );
+  }
+
+  if (
+    Array.isArray(
+      data.images
+    )
+  ) {
+    data.images.forEach(
+      function(imageData) {
+        const safeImageUrl =
+          getSafeImageUrl(
+            imageData &&
+            imageData.url
+          );
+
+        if (safeImageUrl) {
+          imageUrls.push(
+            safeImageUrl
+          );
+        }
+      }
+    );
+  }
+
+  return Array.from(
+    new Set(
+      imageUrls
+    )
+  ).slice(0, 5);
+}
+
+function getCardVisualHtml(
+  shop
+) {
+  const firstImageUrl =
+    shop.imageUrls &&
+    shop.imageUrls.length > 0
+      ? shop.imageUrls[0]
+      : "";
+
+  if (!firstImageUrl) {
+    return `
+      <span class="shop-emoji">
+        ${escapeHtml(
+          shop.emoji
+        )}
+      </span>
+    `;
+  }
+
+  return `
+    <img
+      src="${escapeHtml(
+        firstImageUrl
+      )}"
+      alt="${escapeHtml(
+        shop.name
+      )}の掲載写真"
+      loading="lazy"
+      style="
+        position:absolute;
+        inset:0;
+        width:100%;
+        height:100%;
+        object-fit:cover;
+        z-index:1;
+      "
+    >
+  `;
+}
+
+function showModalImage(
+  imageIndex
+) {
+  const modalVisual =
+    document.getElementById(
+      "modalVisual"
+    );
+
+  const modalEmoji =
+    document.getElementById(
+      "modalEmoji"
+    );
+
+  let modalImageCounter =
+    document.getElementById(
+      "modalImageCounter"
+    );
+
+  if (
+    !modalVisual ||
+    !modalEmoji ||
+    currentModalImages.length === 0
+  ) {
+    return;
+  }
+
+  currentModalImageIndex =
+    (
+      imageIndex +
+      currentModalImages.length
+    ) %
+    currentModalImages.length;
+
+  modalVisual.style.backgroundImage =
+    "url(\"" +
+    currentModalImages[
+      currentModalImageIndex
+    ].replaceAll(
+      "\"",
+      "%22"
+    ) +
+    "\")";
+
+  modalVisual.style.backgroundSize =
+    "cover";
+
+  modalVisual.style.backgroundPosition =
+    "center";
+
+  modalEmoji.style.display =
+    "none";
+
+  if (!modalImageCounter) {
+    modalImageCounter =
+      document.createElement(
+        "div"
+      );
+
+    modalImageCounter.id =
+      "modalImageCounter";
+
+    modalImageCounter.style.position =
+      "absolute";
+
+    modalImageCounter.style.right =
+      "14px";
+
+    modalImageCounter.style.bottom =
+      "12px";
+
+    modalImageCounter.style.zIndex =
+      "5";
+
+    modalImageCounter.style.padding =
+      "6px 10px";
+
+    modalImageCounter.style.borderRadius =
+      "999px";
+
+    modalImageCounter.style.background =
+      "rgba(7, 26, 51, 0.78)";
+
+    modalImageCounter.style.color =
+      "#ffffff";
+
+    modalImageCounter.style.fontSize =
+      "11px";
+
+    modalImageCounter.style.fontWeight =
+      "900";
+
+    modalVisual.appendChild(
+      modalImageCounter
+    );
+  }
+
+  modalImageCounter.textContent =
+    (currentModalImageIndex + 1) +
+    " / " +
+    currentModalImages.length +
+    (
+      currentModalImages.length > 1
+        ? "　画像をクリックで次へ"
+        : ""
+    );
+}
+
 function convertSubmissionToShop(
   documentSnapshot,
   index
@@ -440,6 +669,11 @@ function convertSubmissionToShop(
 
     longitude:
       longitude,
+
+    imageUrls:
+      getSubmissionImageUrls(
+        data
+      ),
 
     createdAt:
       data.createdAt ||
@@ -706,11 +940,9 @@ function renderShops() {
 
                 </div>
 
-                <span class="shop-emoji">
-                  ${escapeHtml(
-                    shop.emoji
-                  )}
-                </span>
+                ${getCardVisualHtml(
+                  shop
+                )}
 
               </div>
 
@@ -938,8 +1170,70 @@ function openShopModal(
     "modal-visual " +
     selectedShop.visualClass;
 
-  modalEmoji.textContent =
-    selectedShop.emoji;
+  modalVisual.style.position =
+    "relative";
+
+  modalVisual.style.cursor =
+    "default";
+
+  modalVisual.style.backgroundImage =
+    "";
+
+  modalVisual.style.backgroundSize =
+    "";
+
+  modalVisual.style.backgroundPosition =
+    "";
+
+  modalVisual.onclick =
+    null;
+
+  const oldModalImageCounter =
+    document.getElementById(
+      "modalImageCounter"
+    );
+
+  if (oldModalImageCounter) {
+    oldModalImageCounter.remove();
+  }
+
+  currentModalImages =
+    Array.isArray(
+      selectedShop.imageUrls
+    )
+      ? selectedShop.imageUrls
+      : [];
+
+  currentModalImageIndex =
+    0;
+
+  if (
+    currentModalImages.length > 0
+  ) {
+    modalVisual.style.cursor =
+      currentModalImages.length > 1
+        ? "pointer"
+        : "default";
+
+    modalVisual.onclick =
+      function() {
+        if (
+          currentModalImages.length > 1
+        ) {
+          showModalImage(
+            currentModalImageIndex + 1
+          );
+        }
+      };
+
+    showModalImage(0);
+  } else {
+    modalEmoji.style.display =
+      "";
+
+    modalEmoji.textContent =
+      selectedShop.emoji;
+  }
 
   modalCategory.textContent =
     selectedShop.categoryText +
