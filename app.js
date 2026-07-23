@@ -1,13 +1,10 @@
+let shops = [];
+
 let userLatitude = null;
 let userLongitude = null;
 let selectedCategory = "すべて";
 
 const favoriteShopIds = new Set();
-
-/*
-  data.jsで作られているshops配列へ、
-  Firestoreの掲載中広告を入れ直します。
-*/
 
 function escapeHtml(text) {
   return String(text ?? "")
@@ -71,17 +68,21 @@ function formatDistance(distanceKm) {
     distanceKm === null ||
     !Number.isFinite(distanceKm)
   ) {
-    return "場所を確認中";
+    return "現在地を取得";
   }
 
   if (distanceKm < 1) {
     return (
-      Math.round(distanceKm * 1000) +
-      "m"
+      Math.round(
+        distanceKm * 1000
+      ) + "m"
     );
   }
 
-  return distanceKm.toFixed(1) + "km";
+  return (
+    distanceKm.toFixed(1) +
+    "km"
+  );
 }
 
 function estimateWalkingTime(
@@ -91,7 +92,7 @@ function estimateWalkingTime(
     distanceKm === null ||
     !Number.isFinite(distanceKm)
   ) {
-    return "徒歩時間を確認";
+    return "距離を確認";
   }
 
   const walkingMinutes =
@@ -115,35 +116,50 @@ function estimateWalkingTime(
 
 function createGoogleMapUrl(
   latitude,
-  longitude
+  longitude,
+  address,
+  shopName
 ) {
   if (
-    !Number.isFinite(latitude) ||
-    !Number.isFinite(longitude)
+    Number.isFinite(latitude) &&
+    Number.isFinite(longitude)
   ) {
     return (
       "https://www.google.com/maps/search/" +
-      "?api=1&query=沖縄"
+      "?api=1&query=" +
+      encodeURIComponent(
+        latitude +
+        "," +
+        longitude
+      )
     );
   }
+
+  const searchText =
+    address ||
+    shopName ||
+    "沖縄";
 
   return (
     "https://www.google.com/maps/search/" +
     "?api=1&query=" +
-    latitude +
-    "," +
-    longitude
+    encodeURIComponent(
+      searchText
+    )
   );
 }
 
 function getCategoryDisplay(
   category
 ) {
-  const settings = {
+  const categorySettings = {
     グルメ: {
       categoryText:
         "グルメ・飲食店",
-      emoji: "🍜",
+
+      emoji:
+        "🍜",
+
       visualClass:
         "visual-food"
     },
@@ -151,7 +167,10 @@ function getCategoryDisplay(
     カフェ: {
       categoryText:
         "カフェ・スイーツ",
-      emoji: "🥭",
+
+      emoji:
+        "🥭",
+
       visualClass:
         "visual-cafe"
     },
@@ -159,7 +178,10 @@ function getCategoryDisplay(
     居酒屋: {
       categoryText:
         "居酒屋・夜の沖縄",
-      emoji: "🍺",
+
+      emoji:
+        "🍺",
+
       visualClass:
         "visual-bar"
     },
@@ -167,22 +189,122 @@ function getCategoryDisplay(
     イベント: {
       categoryText:
         "イベント・体験",
-      emoji: "🎵",
+
+      emoji:
+        "🎵",
+
       visualClass:
         "visual-event"
     }
   };
 
   return (
-    settings[category] ||
+    categorySettings[category] ||
     {
       categoryText:
-        category || "沖縄情報",
-      emoji: "🌺",
+        category ||
+        "沖縄の今",
+
+      emoji:
+        "🌺",
+
       visualClass:
         "visual-event"
     }
   );
+}
+
+function getDateValue(
+  timestamp
+) {
+  if (!timestamp) {
+    return 0;
+  }
+
+  if (
+    typeof timestamp.toMillis ===
+    "function"
+  ) {
+    return timestamp.toMillis();
+  }
+
+  if (
+    timestamp.seconds !==
+    undefined
+  ) {
+    return (
+      Number(timestamp.seconds) *
+      1000
+    );
+  }
+
+  const parsedDate =
+    new Date(timestamp);
+
+  if (
+    Number.isNaN(
+      parsedDate.getTime()
+    )
+  ) {
+    return 0;
+  }
+
+  return parsedDate.getTime();
+}
+
+function getFirstText(
+  values,
+  fallbackText
+) {
+  for (
+    let index = 0;
+    index < values.length;
+    index += 1
+  ) {
+    const value =
+      values[index];
+
+    if (
+      typeof value ===
+        "string" &&
+      value.trim() !== ""
+    ) {
+      return value.trim();
+    }
+  }
+
+  return fallbackText;
+}
+
+function getNumberValue(
+  value
+) {
+  if (
+    typeof value ===
+      "number" &&
+    Number.isFinite(value)
+  ) {
+    return value;
+  }
+
+  if (
+    typeof value ===
+      "string" &&
+    value.trim() !== ""
+  ) {
+    const convertedNumber =
+      Number(value);
+
+    if (
+      Number.isFinite(
+        convertedNumber
+      )
+    ) {
+      return convertedNumber;
+    }
+  }
+
+  return null;
 }
 
 function convertSubmissionToShop(
@@ -190,82 +312,140 @@ function convertSubmissionToShop(
   index
 ) {
   const data =
-    documentSnapshot.data();
+    documentSnapshot.data() ||
+    {};
 
-  const categorySetting =
-    getCategoryDisplay(
-      data.category
+  const category =
+    getFirstText(
+      [
+        data.category,
+        data.genre
+      ],
+      "グルメ"
     );
 
-  /*
-    現段階の投稿フォームには、
-    緯度・経度の入力がありません。
+  const categoryDisplay =
+    getCategoryDisplay(
+      category
+    );
 
-    そのためVer1では那覇中心部を
-    仮の位置として使います。
-    後で住所・地図機能を追加します。
-  */
+  const shopName =
+    getFirstText(
+      [
+        data.shopName,
+        data.storeName,
+        data.name,
+        data.businessName
+      ],
+      "店舗名未登録"
+    );
 
-  const defaultLatitude =
-    26.2124;
+  const title =
+    getFirstText(
+      [
+        data.title,
+        data.adTitle,
+        data.headline
+      ],
+      "今だけの情報"
+    );
 
-  const defaultLongitude =
-    127.6809;
+  const content =
+    getFirstText(
+      [
+        data.content,
+        data.message,
+        data.description,
+        data.details
+      ],
+      "詳しい情報は店舗へご確認ください。"
+    );
+
+  const address =
+    getFirstText(
+      [
+        data.address,
+        data.shopAddress,
+        data.location
+      ],
+      ""
+    );
+
+  const latitude =
+    getNumberValue(
+      data.latitude
+    );
+
+  const longitude =
+    getNumberValue(
+      data.longitude
+    );
+
+  const timeMessage =
+    getFirstText(
+      [
+        data.timeMessage,
+        data.period,
+        data.eventTime,
+        data.openingHours
+      ],
+      "⚡ イマミル掲載中"
+    );
 
   return {
-    id: index + 1,
+    id:
+      index + 1,
 
     firestoreId:
       documentSnapshot.id,
 
     name:
-      data.shopName ||
-      "店舗名未登録",
+      shopName,
+
+    title:
+      title,
 
     category:
-      data.category ||
-      "グルメ",
+      category,
 
     categoryText:
-      categorySetting.categoryText,
+      categoryDisplay
+        .categoryText,
 
     emoji:
-      categorySetting.emoji,
+      categoryDisplay
+        .emoji,
 
     visualClass:
-      categorySetting.visualClass,
+      categoryDisplay
+        .visualClass,
 
-    rating: "NEW",
-
-    status: "掲載中",
+    status:
+      "掲載中",
 
     badge:
-      data.title ||
-      "今だけ情報",
+      title,
 
     message:
-      data.content ||
-      "詳しい情報は店舗へご確認ください。",
+      content,
 
     timeMessage:
-      "⚡ イマミル掲載中",
+      timeMessage,
+
+    address:
+      address,
 
     latitude:
-      Number.isFinite(
-        data.latitude
-      )
-        ? data.latitude
-        : defaultLatitude,
+      latitude,
 
     longitude:
-      Number.isFinite(
-        data.longitude
-      )
-        ? data.longitude
-        : defaultLongitude,
+      longitude,
 
     createdAt:
-      data.createdAt || null
+      data.createdAt ||
+      data.submittedAt ||
+      data.updatedAt ||
+      null
   };
 }
 
@@ -285,11 +465,18 @@ function getVisibleShops() {
   visibleShops =
     visibleShops.map(
       function(shop) {
-        let distanceKm = null;
+        let distanceKm =
+          null;
 
         if (
           userLatitude !== null &&
-          userLongitude !== null
+          userLongitude !== null &&
+          Number.isFinite(
+            shop.latitude
+          ) &&
+          Number.isFinite(
+            shop.longitude
+          )
         ) {
           distanceKm =
             calculateDistance(
@@ -302,6 +489,7 @@ function getVisibleShops() {
 
         return {
           ...shop,
+
           distanceKm:
             distanceKm
         };
@@ -314,12 +502,42 @@ function getVisibleShops() {
   ) {
     visibleShops.sort(
       function(
-        first,
-        second
+        firstShop,
+        secondShop
       ) {
+        if (
+          firstShop.distanceKm ===
+            null &&
+          secondShop.distanceKm ===
+            null
+        ) {
+          return (
+            getDateValue(
+              secondShop.createdAt
+            ) -
+            getDateValue(
+              firstShop.createdAt
+            )
+          );
+        }
+
+        if (
+          firstShop.distanceKm ===
+          null
+        ) {
+          return 1;
+        }
+
+        if (
+          secondShop.distanceKm ===
+          null
+        ) {
+          return -1;
+        }
+
         return (
-          first.distanceKm -
-          second.distanceKm
+          firstShop.distanceKm -
+          secondShop.distanceKm
         );
       }
     );
@@ -340,13 +558,14 @@ function renderLoading() {
 
   shopsList.innerHTML = `
     <div class="sample-notice">
-      Firebaseから掲載情報を
-      読み込んでいます…
+      掲載中の情報を読み込んでいます…
     </div>
   `;
 }
 
-function renderLoadError() {
+function renderLoadError(
+  errorMessage
+) {
   const shopsList =
     document.getElementById(
       "shopsList"
@@ -361,7 +580,44 @@ function renderLoadError() {
       掲載情報を読み込めませんでした。<br>
       少し時間を置いて、
       もう一度ページを更新してください。
+      ${
+        errorMessage
+          ? `
+            <br><small>
+              ${escapeHtml(
+                errorMessage
+              )}
+            </small>
+          `
+          : ""
+      }
     </div>
+  `;
+}
+
+function getMapButtonHtml(
+  shop
+) {
+  const mapUrl =
+    createGoogleMapUrl(
+      shop.latitude,
+      shop.longitude,
+      shop.address,
+      shop.name
+    );
+
+  return `
+    <a
+      class="
+        shop-button
+        map-button
+      "
+      href="${mapUrl}"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      📍 地図
+    </a>
   `;
 }
 
@@ -379,7 +635,8 @@ function renderShops() {
     getVisibleShops();
 
   if (
-    visibleShops.length === 0
+    visibleShops.length ===
+    0
   ) {
     shopsList.innerHTML = `
       <div class="sample-notice">
@@ -395,15 +652,9 @@ function renderShops() {
     visibleShops
       .map(
         function(shop) {
-          const mapUrl =
-            createGoogleMapUrl(
-              shop.latitude,
-              shop.longitude
-            );
-
           const isFavorite =
             favoriteShopIds.has(
-              shop.id
+              shop.firestoreId
             );
 
           return `
@@ -440,7 +691,9 @@ function renderShops() {
                     aria-label="お気に入り"
                     onclick="
                       toggleFavorite(
-                        ${shop.id}
+                        '${escapeHtml(
+                          shop.firestoreId
+                        )}'
                       )
                     "
                   >
@@ -514,6 +767,19 @@ function renderShops() {
 
                 </div>
 
+                ${
+                  shop.address
+                    ? `
+                      <div class="time-limit">
+                        📍
+                        ${escapeHtml(
+                          shop.address
+                        )}
+                      </div>
+                    `
+                    : ""
+                }
+
                 <div class="time-limit">
                   ${escapeHtml(
                     shop.timeMessage
@@ -530,27 +796,18 @@ function renderShops() {
                     type="button"
                     onclick="
                       openShopModal(
-                        ${shop.id}
+                        '${escapeHtml(
+                          shop.firestoreId
+                        )}'
                       )
                     "
                   >
                     今の情報を見る
                   </button>
 
-                  <a
-                    class="
-                      shop-button
-                      map-button
-                    "
-                    href="${mapUrl}"
-                    target="_blank"
-                    rel="
-                      noopener
-                      noreferrer
-                    "
-                  >
-                    📍 地図
-                  </a>
+                  ${getMapButtonHtml(
+                    shop
+                  )}
 
                 </div>
 
@@ -594,19 +851,19 @@ function selectCategory(
 }
 
 function toggleFavorite(
-  shopId
+  firestoreId
 ) {
   if (
     favoriteShopIds.has(
-      shopId
+      firestoreId
     )
   ) {
     favoriteShopIds.delete(
-      shopId
+      firestoreId
     );
   } else {
     favoriteShopIds.add(
-      shopId
+      firestoreId
     );
   }
 
@@ -614,14 +871,14 @@ function toggleFavorite(
 }
 
 function openShopModal(
-  shopId
+  firestoreId
 ) {
   const selectedShop =
     shops.find(
       function(shop) {
         return (
-          shop.id ===
-          shopId
+          shop.firestoreId ===
+          firestoreId
         );
       }
     );
@@ -640,9 +897,39 @@ function openShopModal(
       "modalVisual"
     );
 
+  const modalEmoji =
+    document.getElementById(
+      "modalEmoji"
+    );
+
+  const modalCategory =
+    document.getElementById(
+      "modalCategory"
+    );
+
+  const modalTitle =
+    document.getElementById(
+      "modalTitle"
+    );
+
+  const modalMessage =
+    document.getElementById(
+      "modalMessage"
+    );
+
+  const modalMapButton =
+    document.getElementById(
+      "modalMapButton"
+    );
+
   if (
     !modal ||
-    !modalVisual
+    !modalVisual ||
+    !modalEmoji ||
+    !modalCategory ||
+    !modalTitle ||
+    !modalMessage ||
+    !modalMapButton
   ) {
     return;
   }
@@ -651,41 +938,52 @@ function openShopModal(
     "modal-visual " +
     selectedShop.visualClass;
 
-  document.getElementById(
-    "modalEmoji"
-  ).textContent =
+  modalEmoji.textContent =
     selectedShop.emoji;
 
-  document.getElementById(
-    "modalCategory"
-  ).textContent =
+  modalCategory.textContent =
     selectedShop.categoryText +
     "・" +
     selectedShop.status;
 
-  document.getElementById(
-    "modalTitle"
-  ).textContent =
+  modalTitle.textContent =
     selectedShop.name;
 
-  document.getElementById(
-    "modalMessage"
-  ).innerHTML =
+  let modalText =
     "📢 " +
     escapeHtml(
       selectedShop.message
-    ) +
-    "<br><br>" +
-    escapeHtml(
-      selectedShop.timeMessage
     );
 
-  document.getElementById(
-    "modalMapButton"
-  ).href =
+  if (
+    selectedShop.address
+  ) {
+    modalText +=
+      "<br><br>📍 " +
+      escapeHtml(
+        selectedShop.address
+      );
+  }
+
+  if (
+    selectedShop.timeMessage
+  ) {
+    modalText +=
+      "<br><br>" +
+      escapeHtml(
+        selectedShop.timeMessage
+      );
+  }
+
+  modalMessage.innerHTML =
+    modalText;
+
+  modalMapButton.href =
     createGoogleMapUrl(
       selectedShop.latitude,
-      selectedShop.longitude
+      selectedShop.longitude,
+      selectedShop.address,
+      selectedShop.name
     );
 
   modal.classList.add(
@@ -786,7 +1084,9 @@ function getLocation() {
         currentMapLink.href =
           createGoogleMapUrl(
             userLatitude,
-            userLongitude
+            userLongitude,
+            "",
+            ""
           );
 
         currentMapLink.style.display =
@@ -860,14 +1160,18 @@ function scrollToShops() {
   }
 
   shopsSection.scrollIntoView({
-    behavior: "smooth"
+    behavior:
+      "smooth"
   });
 }
 
 function scrollToTopPage() {
   window.scrollTo({
-    top: 0,
-    behavior: "smooth"
+    top:
+      0,
+
+    behavior:
+      "smooth"
   });
 }
 
@@ -890,7 +1194,8 @@ function updateTopCounts(
   ) {
     countElements[0]
       .textContent =
-      totalCount + "件";
+      totalCount +
+      "件";
   }
 
   if (
@@ -898,28 +1203,99 @@ function updateTopCounts(
   ) {
     countElements[1]
       .textContent =
-      totalCount + "件";
+      totalCount +
+      "件";
   }
+}
+
+function hideSampleNotice() {
+  const sampleNotices =
+    document.querySelectorAll(
+      ".sample-notice"
+    );
+
+  sampleNotices.forEach(
+    function(notice) {
+      const noticeText =
+        notice.textContent ||
+        "";
+
+      if (
+        noticeText.includes(
+          "Firebase接続前"
+        ) ||
+        noticeText.includes(
+          "動作確認用サンプル"
+        ) ||
+        noticeText.includes(
+          "Firebase接続の動作確認用サンプル"
+        )
+      ) {
+        notice.style.display =
+          "none";
+      }
+    }
+  );
+}
+
+function waitForFirebase(
+  maximumWaitMilliseconds
+) {
+  return new Promise(
+    function(
+      resolve,
+      reject
+    ) {
+      const startedAt =
+        Date.now();
+
+      function checkFirebase() {
+        if (
+          window.imamiruDb
+        ) {
+          resolve(
+            window.imamiruDb
+          );
+
+          return;
+        }
+
+        if (
+          Date.now() -
+            startedAt >=
+          maximumWaitMilliseconds
+        ) {
+          reject(
+            new Error(
+              "Firebaseの準備が完了しませんでした。"
+            )
+          );
+
+          return;
+        }
+
+        window.setTimeout(
+          checkFirebase,
+          100
+        );
+      }
+
+      checkFirebase();
+    }
+  );
 }
 
 async function loadApprovedSubmissions() {
   renderLoading();
 
-  if (
-    !window.imamiruDb
-  ) {
-    console.error(
-      "Firestoreへ接続できません。"
-    );
-
-    renderLoadError();
-
-    return;
-  }
-
   try {
+    const database =
+      await waitForFirebase(
+        10000
+      );
+
     const querySnapshot =
-      await window.imamiruDb
+      await database
         .collection(
           "submissions"
         )
@@ -948,68 +1324,62 @@ async function loadApprovedSubmissions() {
 
     approvedShops.sort(
       function(
-        first,
-        second
+        firstShop,
+        secondShop
       ) {
-        const firstTime =
-          first.createdAt &&
-          typeof first
-            .createdAt
-            .toMillis ===
-            "function"
-            ? first
-                .createdAt
-                .toMillis()
-            : 0;
-
-        const secondTime =
-          second.createdAt &&
-          typeof second
-            .createdAt
-            .toMillis ===
-            "function"
-            ? second
-                .createdAt
-                .toMillis()
-            : 0;
-
         return (
-          secondTime -
-          firstTime
+          getDateValue(
+            secondShop.createdAt
+          ) -
+          getDateValue(
+            firstShop.createdAt
+          )
         );
       }
     );
 
-    /*
-      data.jsで作られた配列を
-      Firestoreの掲載中データへ
-     丸ごと入れ替えます。
-    */
-
-    shops.splice(
-      0,
-      shops.length,
-      ...approvedShops
+    approvedShops.forEach(
+      function(
+        shop,
+        index
+      ) {
+        shop.id =
+          index + 1;
+      }
     );
+
+    shops =
+      approvedShops;
 
     updateTopCounts(
       shops.length
     );
 
+    hideSampleNotice();
+
     renderShops();
 
     console.log(
-      "✅ Firestoreから掲載中の広告を読み込みました：" +
+      "✅ 掲載中の広告を読み込みました：" +
       shops.length +
       "件"
     );
   } catch (error) {
     console.error(
-      "❌ 掲載中の広告を読み込めませんでした",
+      "❌ 掲載情報の読み込みに失敗しました。",
       error
     );
 
-    renderLoadError();
+    updateTopCounts(
+      0
+    );
+
+    renderLoadError(
+      error &&
+      error.message
+        ? error.message
+        : ""
+    );
   }
 }
 
@@ -1028,6 +1398,8 @@ document.addEventListener(
 document.addEventListener(
   "DOMContentLoaded",
   function() {
+    hideSampleNotice();
+
     loadApprovedSubmissions();
   }
 );
