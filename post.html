@@ -1622,8 +1622,9 @@
     function setSubmitting(
       submitting
     ) {
-      submitButton.disabled =
-        submitting;
+            submitButton.disabled =
+        submitting ||
+        !agreementInput.checked;
 
       imageSelectButton.disabled =
         submitting;
@@ -2548,7 +2549,13 @@
         );
       }
     );
-
+agreementInput.addEventListener(
+  "change",
+  function() {
+    submitButton.disabled =
+      !agreementInput.checked;
+  }
+);
     submissionForm.addEventListener(
       "submit",
       submitAdvertisement
@@ -2560,7 +2567,8 @@
     );
 
     updateCharacterCounts();
-
+submitButton.disabled =
+  !agreementInput.checked;
     renderImagePreviews();
   </script>
 
