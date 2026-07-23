@@ -8,6 +8,9 @@ const favoriteShopIds = new Set();
 
 let currentModalImages = [];
 let currentModalImageIndex = 0;
+let modalTouchStartX = null;
+let modalTouchEndX = null;
+let modalSlideChanging = false;
 
 function escapeHtml(text) {
   return String(text ?? "")
@@ -314,7 +317,8 @@ function getSafeImageUrl(
   value
 ) {
   if (
-    typeof value !== "string" ||
+    typeof value !==
+      "string" ||
     value.trim() === ""
   ) {
     return "";
@@ -386,7 +390,10 @@ function getSubmissionImageUrls(
     new Set(
       imageUrls
     )
-  ).slice(0, 5);
+  ).slice(
+    0,
+    5
+  );
 }
 
 function getCardVisualHtml(
@@ -418,122 +425,16 @@ function getCardVisualHtml(
       )}の掲載写真"
       loading="lazy"
       style="
-        position:absolute;
-        inset:0;
-        width:100%;
-        height:100%;
-        object-fit:cover;
-        z-index:1;
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
       "
     >
   `;
-}
-
-function showModalImage(
-  imageIndex
-) {
-  const modalVisual =
-    document.getElementById(
-      "modalVisual"
-    );
-
-  const modalEmoji =
-    document.getElementById(
-      "modalEmoji"
-    );
-
-  let modalImageCounter =
-    document.getElementById(
-      "modalImageCounter"
-    );
-
-  if (
-    !modalVisual ||
-    !modalEmoji ||
-    currentModalImages.length === 0
-  ) {
-    return;
-  }
-
-  currentModalImageIndex =
-    (
-      imageIndex +
-      currentModalImages.length
-    ) %
-    currentModalImages.length;
-
-  modalVisual.style.backgroundImage =
-    "url(\"" +
-    currentModalImages[
-      currentModalImageIndex
-    ].replaceAll(
-      "\"",
-      "%22"
-    ) +
-    "\")";
-
-  modalVisual.style.backgroundSize =
-    "cover";
-
-  modalVisual.style.backgroundPosition =
-    "center";
-
-  modalEmoji.style.display =
-    "none";
-
-  if (!modalImageCounter) {
-    modalImageCounter =
-      document.createElement(
-        "div"
-      );
-
-    modalImageCounter.id =
-      "modalImageCounter";
-
-    modalImageCounter.style.position =
-      "absolute";
-
-    modalImageCounter.style.right =
-      "14px";
-
-    modalImageCounter.style.bottom =
-      "12px";
-
-    modalImageCounter.style.zIndex =
-      "5";
-
-    modalImageCounter.style.padding =
-      "6px 10px";
-
-    modalImageCounter.style.borderRadius =
-      "999px";
-
-    modalImageCounter.style.background =
-      "rgba(7, 26, 51, 0.78)";
-
-    modalImageCounter.style.color =
-      "#ffffff";
-
-    modalImageCounter.style.fontSize =
-      "11px";
-
-    modalImageCounter.style.fontWeight =
-      "900";
-
-    modalVisual.appendChild(
-      modalImageCounter
-    );
-  }
-
-  modalImageCounter.textContent =
-    (currentModalImageIndex + 1) +
-    " / " +
-    currentModalImages.length +
-    (
-      currentModalImages.length > 1
-        ? "　画像をクリックで次へ"
-        : ""
-    );
 }
 
 function convertSubmissionToShop(
@@ -817,7 +718,9 @@ function renderLoadError(
       ${
         errorMessage
           ? `
-            <br><small>
+            <br>
+
+            <small>
               ${escapeHtml(
                 errorMessage
               )}
@@ -1069,14 +972,18 @@ function selectCategory(
       ) {
         categoryButton
           .classList
-          .remove("active");
+          .remove(
+            "active"
+          );
       }
     );
 
   if (button) {
     button
       .classList
-      .add("active");
+      .add(
+        "active"
+      );
   }
 
   renderShops();
@@ -1100,6 +1007,761 @@ function toggleFavorite(
   }
 
   renderShops();
+}
+
+function removeModalSlider() {
+  const oldSlider =
+    document.getElementById(
+      "imamiruModalSlider"
+    );
+
+  if (oldSlider) {
+    oldSlider.remove();
+  }
+
+  const modalEmoji =
+    document.getElementById(
+      "modalEmoji"
+    );
+
+  if (modalEmoji) {
+    modalEmoji.style.display =
+      "";
+  }
+
+  currentModalImages =
+    [];
+
+  currentModalImageIndex =
+    0;
+
+  modalTouchStartX =
+    null;
+
+  modalTouchEndX =
+    null;
+
+  modalSlideChanging =
+    false;
+}
+
+function createSliderButton(
+  buttonText,
+  ariaLabel,
+  side
+) {
+  const button =
+    document.createElement(
+      "button"
+    );
+
+  button.type =
+    "button";
+
+  button.textContent =
+    buttonText;
+
+  button.setAttribute(
+    "aria-label",
+    ariaLabel
+  );
+
+  button.style.position =
+    "absolute";
+
+  button.style.top =
+    "50%";
+
+  button.style[side] =
+    "12px";
+
+  button.style.zIndex =
+    "8";
+
+  button.style.width =
+    "42px";
+
+  button.style.height =
+    "42px";
+
+  button.style.display =
+    "grid";
+
+  button.style.placeItems =
+    "center";
+
+  button.style.padding =
+    "0";
+
+  button.style.border =
+    "none";
+
+  button.style.borderRadius =
+    "50%";
+
+  button.style.background =
+    "rgba(7, 26, 51, 0.72)";
+
+  button.style.color =
+    "#ffffff";
+
+  button.style.fontSize =
+    "22px";
+
+  button.style.fontWeight =
+    "900";
+
+  button.style.cursor =
+    "pointer";
+
+  button.style.transform =
+    "translateY(-50%)";
+
+  button.style.boxShadow =
+    "0 6px 18px rgba(0, 0, 0, 0.2)";
+
+  button.style.transition =
+    "transform 0.2s, background 0.2s";
+
+  button.addEventListener(
+    "mouseenter",
+    function() {
+      button.style.background =
+        "rgba(7, 26, 51, 0.92)";
+    }
+  );
+
+  button.addEventListener(
+    "mouseleave",
+    function() {
+      button.style.background =
+        "rgba(7, 26, 51, 0.72)";
+    }
+  );
+
+  return button;
+}
+
+function createModalSlider() {
+  const modalVisual =
+    document.getElementById(
+      "modalVisual"
+    );
+
+  const modalEmoji =
+    document.getElementById(
+      "modalEmoji"
+    );
+
+  if (
+    !modalVisual ||
+    !modalEmoji ||
+    currentModalImages.length ===
+      0
+  ) {
+    return;
+  }
+
+  removeModalSlider();
+
+  modalEmoji.style.display =
+    "none";
+
+  modalVisual.style.position =
+    "relative";
+
+  modalVisual.style.overflow =
+    "hidden";
+
+  modalVisual.style.backgroundImage =
+    "none";
+
+  modalVisual.style.touchAction =
+    "pan-y";
+
+  currentModalImageIndex =
+    0;
+
+  const slider =
+    document.createElement(
+      "div"
+    );
+
+  slider.id =
+    "imamiruModalSlider";
+
+  slider.style.position =
+    "absolute";
+
+  slider.style.inset =
+    "0";
+
+  slider.style.zIndex =
+    "4";
+
+  slider.style.overflow =
+    "hidden";
+
+  slider.style.background =
+    "#e9f1f5";
+
+  const image =
+    document.createElement(
+      "img"
+    );
+
+  image.id =
+    "imamiruModalSlideImage";
+
+  image.alt =
+    "店舗の掲載写真";
+
+  image.draggable =
+    false;
+
+  image.style.position =
+    "absolute";
+
+  image.style.inset =
+    "0";
+
+  image.style.width =
+    "100%";
+
+  image.style.height =
+    "100%";
+
+  image.style.display =
+    "block";
+
+  image.style.objectFit =
+    "cover";
+
+  image.style.userSelect =
+    "none";
+
+  image.style.transition =
+    "opacity 0.24s ease, transform 0.28s ease";
+
+  slider.appendChild(
+    image
+  );
+
+  const counter =
+    document.createElement(
+      "div"
+    );
+
+  counter.id =
+    "imamiruModalImageCounter";
+
+  counter.style.position =
+    "absolute";
+
+  counter.style.top =
+    "12px";
+
+  counter.style.right =
+    "12px";
+
+  counter.style.zIndex =
+    "9";
+
+  counter.style.padding =
+    "6px 10px";
+
+  counter.style.borderRadius =
+    "999px";
+
+  counter.style.background =
+    "rgba(7, 26, 51, 0.76)";
+
+  counter.style.color =
+    "#ffffff";
+
+  counter.style.fontSize =
+    "11px";
+
+  counter.style.fontWeight =
+    "900";
+
+  counter.style.pointerEvents =
+    "none";
+
+  slider.appendChild(
+    counter
+  );
+
+  const dots =
+    document.createElement(
+      "div"
+    );
+
+  dots.id =
+    "imamiruModalSliderDots";
+
+  dots.style.position =
+    "absolute";
+
+  dots.style.right =
+    "60px";
+
+  dots.style.bottom =
+    "13px";
+
+  dots.style.left =
+    "60px";
+
+  dots.style.zIndex =
+    "9";
+
+  dots.style.display =
+    "flex";
+
+  dots.style.alignItems =
+    "center";
+
+  dots.style.justifyContent =
+    "center";
+
+  dots.style.gap =
+    "7px";
+
+  currentModalImages.forEach(
+    function(
+      imageUrl,
+      index
+    ) {
+      const dot =
+        document.createElement(
+          "button"
+        );
+
+      dot.type =
+        "button";
+
+      dot.setAttribute(
+        "aria-label",
+        "写真" +
+        (index + 1) +
+        "を表示"
+      );
+
+      dot.dataset.index =
+        String(index);
+
+      dot.style.width =
+        "9px";
+
+      dot.style.height =
+        "9px";
+
+      dot.style.padding =
+        "0";
+
+      dot.style.border =
+        "2px solid rgba(255, 255, 255, 0.95)";
+
+      dot.style.borderRadius =
+        "50%";
+
+      dot.style.background =
+        index === 0
+          ? "#ffffff"
+          : "rgba(7, 26, 51, 0.55)";
+
+      dot.style.cursor =
+        "pointer";
+
+      dot.style.boxShadow =
+        "0 2px 7px rgba(0, 0, 0, 0.22)";
+
+      dot.style.transition =
+        "transform 0.2s, background 0.2s";
+
+      dot.addEventListener(
+        "click",
+        function(event) {
+          event.stopPropagation();
+
+          const selectedIndex =
+            Number(
+              dot.dataset.index
+            );
+
+          const direction =
+            selectedIndex >
+            currentModalImageIndex
+              ? 1
+              : -1;
+
+          showModalSlide(
+            selectedIndex,
+            direction
+          );
+        }
+      );
+
+      dots.appendChild(
+        dot
+      );
+    }
+  );
+
+  slider.appendChild(
+    dots
+  );
+
+  if (
+    currentModalImages.length >
+    1
+  ) {
+    const previousButton =
+      createSliderButton(
+        "‹",
+        "前の写真",
+        "left"
+      );
+
+    previousButton.id =
+      "imamiruModalPreviousButton";
+
+    previousButton.addEventListener(
+      "click",
+      function(event) {
+        event.stopPropagation();
+
+        showPreviousModalSlide();
+      }
+    );
+
+    slider.appendChild(
+      previousButton
+    );
+
+    const nextButton =
+      createSliderButton(
+        "›",
+        "次の写真",
+        "right"
+      );
+
+    nextButton.id =
+      "imamiruModalNextButton";
+
+    nextButton.addEventListener(
+      "click",
+      function(event) {
+        event.stopPropagation();
+
+        showNextModalSlide();
+      }
+    );
+
+    slider.appendChild(
+      nextButton
+    );
+  }
+
+  slider.addEventListener(
+    "touchstart",
+    function(event) {
+      if (
+        event.touches.length !==
+        1
+      ) {
+        return;
+      }
+
+      modalTouchStartX =
+        event.touches[0]
+          .clientX;
+
+      modalTouchEndX =
+        modalTouchStartX;
+    },
+    {
+      passive: true
+    }
+  );
+
+  slider.addEventListener(
+    "touchmove",
+    function(event) {
+      if (
+        event.touches.length !==
+        1
+      ) {
+        return;
+      }
+
+      modalTouchEndX =
+        event.touches[0]
+          .clientX;
+    },
+    {
+      passive: true
+    }
+  );
+
+  slider.addEventListener(
+    "touchend",
+    function() {
+      handleModalSwipe();
+    }
+  );
+
+  modalVisual.appendChild(
+    slider
+  );
+
+  updateModalSliderDisplay();
+}
+
+function updateModalSliderDisplay() {
+  const image =
+    document.getElementById(
+      "imamiruModalSlideImage"
+    );
+
+  const counter =
+    document.getElementById(
+      "imamiruModalImageCounter"
+    );
+
+  const dotsContainer =
+    document.getElementById(
+      "imamiruModalSliderDots"
+    );
+
+  if (
+    !image ||
+    currentModalImages.length ===
+      0
+  ) {
+    return;
+  }
+
+  image.src =
+    currentModalImages[
+      currentModalImageIndex
+    ];
+
+  if (counter) {
+    counter.textContent =
+      (
+        currentModalImageIndex +
+        1
+      ) +
+      " / " +
+      currentModalImages.length;
+  }
+
+  if (dotsContainer) {
+    const dots =
+      dotsContainer.querySelectorAll(
+        "button"
+      );
+
+    dots.forEach(
+      function(
+        dot,
+        index
+      ) {
+        const isActive =
+          index ===
+          currentModalImageIndex;
+
+        dot.style.background =
+          isActive
+            ? "#ffffff"
+            : "rgba(7, 26, 51, 0.55)";
+
+        dot.style.transform =
+          isActive
+            ? "scale(1.35)"
+            : "scale(1)";
+      }
+    );
+  }
+}
+
+function showModalSlide(
+  nextIndex,
+  direction
+) {
+  if (
+    modalSlideChanging ||
+    currentModalImages.length ===
+      0
+  ) {
+    return;
+  }
+
+  const image =
+    document.getElementById(
+      "imamiruModalSlideImage"
+    );
+
+  if (!image) {
+    return;
+  }
+
+  const normalizedIndex =
+    (
+      nextIndex +
+      currentModalImages.length
+    ) %
+    currentModalImages.length;
+
+  if (
+    normalizedIndex ===
+    currentModalImageIndex
+  ) {
+    return;
+  }
+
+  modalSlideChanging =
+    true;
+
+  const movementDirection =
+    direction >= 0
+      ? -1
+      : 1;
+
+  image.style.opacity =
+    "0";
+
+  image.style.transform =
+    "translateX(" +
+    movementDirection *
+      35 +
+    "px)";
+
+  window.setTimeout(
+    function() {
+      currentModalImageIndex =
+        normalizedIndex;
+
+      image.style.transition =
+        "none";
+
+      image.style.transform =
+        "translateX(" +
+        movementDirection *
+          -35 +
+        "px)";
+
+      image.src =
+        currentModalImages[
+          currentModalImageIndex
+        ];
+
+      updateModalSliderDisplay();
+
+      window.requestAnimationFrame(
+        function() {
+          window.requestAnimationFrame(
+            function() {
+              image.style.transition =
+                "opacity 0.24s ease, transform 0.28s ease";
+
+              image.style.opacity =
+                "1";
+
+              image.style.transform =
+                "translateX(0)";
+            }
+          );
+        }
+      );
+
+      window.setTimeout(
+        function() {
+          modalSlideChanging =
+            false;
+        },
+        300
+      );
+    },
+    180
+  );
+}
+
+function showPreviousModalSlide() {
+  if (
+    currentModalImages.length <=
+    1
+  ) {
+    return;
+  }
+
+  showModalSlide(
+    currentModalImageIndex -
+      1,
+    -1
+  );
+}
+
+function showNextModalSlide() {
+  if (
+    currentModalImages.length <=
+    1
+  ) {
+    return;
+  }
+
+  showModalSlide(
+    currentModalImageIndex +
+      1,
+    1
+  );
+}
+
+function handleModalSwipe() {
+  if (
+    modalTouchStartX ===
+      null ||
+    modalTouchEndX ===
+      null ||
+    currentModalImages.length <=
+      1
+  ) {
+    modalTouchStartX =
+      null;
+
+    modalTouchEndX =
+      null;
+
+    return;
+  }
+
+  const swipeDistance =
+    modalTouchEndX -
+    modalTouchStartX;
+
+  const minimumSwipeDistance =
+    45;
+
+  if (
+    swipeDistance >
+    minimumSwipeDistance
+  ) {
+    showPreviousModalSlide();
+  }
+
+  if (
+    swipeDistance <
+    -minimumSwipeDistance
+  ) {
+    showNextModalSlide();
+  }
+
+  modalTouchStartX =
+    null;
+
+  modalTouchEndX =
+    null;
 }
 
 function openShopModal(
@@ -1166,15 +1828,14 @@ function openShopModal(
     return;
   }
 
+  removeModalSlider();
+
   modalVisual.className =
     "modal-visual " +
     selectedShop.visualClass;
 
   modalVisual.style.position =
     "relative";
-
-  modalVisual.style.cursor =
-    "default";
 
   modalVisual.style.backgroundImage =
     "";
@@ -1184,18 +1845,6 @@ function openShopModal(
 
   modalVisual.style.backgroundPosition =
     "";
-
-  modalVisual.onclick =
-    null;
-
-  const oldModalImageCounter =
-    document.getElementById(
-      "modalImageCounter"
-    );
-
-  if (oldModalImageCounter) {
-    oldModalImageCounter.remove();
-  }
 
   currentModalImages =
     Array.isArray(
@@ -1208,25 +1857,13 @@ function openShopModal(
     0;
 
   if (
-    currentModalImages.length > 0
+    currentModalImages.length >
+    0
   ) {
-    modalVisual.style.cursor =
-      currentModalImages.length > 1
-        ? "pointer"
-        : "default";
+    modalEmoji.style.display =
+      "none";
 
-    modalVisual.onclick =
-      function() {
-        if (
-          currentModalImages.length > 1
-        ) {
-          showModalImage(
-            currentModalImageIndex + 1
-          );
-        }
-      };
-
-    showModalImage(0);
+    createModalSlider();
   } else {
     modalEmoji.style.display =
       "";
@@ -1304,6 +1941,8 @@ function closeShopModal() {
 
   document.body.style.overflow =
     "";
+
+  removeModalSlider();
 }
 
 function closeModalOutside(
@@ -1484,7 +2123,8 @@ function updateTopCounts(
     );
 
   if (
-    countElements.length >= 1
+    countElements.length >=
+    1
   ) {
     countElements[0]
       .textContent =
@@ -1493,7 +2133,8 @@ function updateTopCounts(
   }
 
   if (
-    countElements.length >= 2
+    countElements.length >=
+    2
   ) {
     countElements[1]
       .textContent =
@@ -1685,6 +2326,34 @@ document.addEventListener(
       "Escape"
     ) {
       closeShopModal();
+    }
+
+    const modal =
+      document.getElementById(
+        "shopModal"
+      );
+
+    if (
+      !modal ||
+      !modal.classList.contains(
+        "visible"
+      )
+    ) {
+      return;
+    }
+
+    if (
+      event.key ===
+      "ArrowLeft"
+    ) {
+      showPreviousModalSlide();
+    }
+
+    if (
+      event.key ===
+      "ArrowRight"
+    ) {
+      showNextModalSlide();
     }
   }
 );
