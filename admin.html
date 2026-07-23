@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
   <meta charset="UTF-8">
 
@@ -21,9 +22,12 @@
       --navy-light: #0d294a;
       --blue: #0788c9;
       --cyan: #04b7d7;
-      --green: #19a96b;
-      --red: #e45151;
-      --orange: #ef8c35;
+      --green: #18a86b;
+      --green-light: #e9f8f1;
+      --red: #d94f4f;
+      --red-light: #fff0f0;
+      --orange: #e88932;
+      --orange-light: #fff3e4;
       --white: #ffffff;
       --text: #15233a;
       --subtext: #697386;
@@ -45,18 +49,18 @@
     body {
       margin: 0;
       min-height: 100vh;
+      color: var(--text);
+      background: var(--background);
       font-family:
         "Yu Gothic",
         "Hiragino Kaku Gothic ProN",
         "Meiryo",
         sans-serif;
-      color: var(--text);
-      background: var(--background);
     }
 
     button,
     input {
-      font-family: inherit;
+      font: inherit;
     }
 
     button {
@@ -103,6 +107,7 @@
     .brand-icon {
       width: 43px;
       height: 43px;
+      flex-shrink: 0;
       display: grid;
       place-items: center;
       border-radius: 14px;
@@ -122,7 +127,7 @@
       margin: 0;
       font-size: 20px;
       font-weight: 900;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.05em;
     }
 
     .brand-caption {
@@ -140,6 +145,14 @@
       background: rgba(255, 255, 255, 0.12);
       font-size: 11px;
       font-weight: 900;
+      transition:
+        background 0.2s ease,
+        transform 0.2s ease;
+    }
+
+    .home-link:hover {
+      background: rgba(255, 255, 255, 0.2);
+      transform: translateY(-1px);
     }
 
     main {
@@ -181,7 +194,7 @@
     .page-heading p {
       max-width: 650px;
       margin: 10px 0 0;
-      color: rgba(255, 255, 255, 0.88);
+      color: rgba(255, 255, 255, 0.9);
       font-size: 13px;
       font-weight: 600;
       line-height: 1.8;
@@ -287,7 +300,7 @@
       border: none;
       border-radius: 11px;
       color: #a43b3b;
-      background: #fff0f0;
+      background: var(--red-light);
       font-size: 11px;
       font-weight: 900;
       cursor: pointer;
@@ -312,14 +325,14 @@
     .message-box.success {
       display: block;
       color: #146e4a;
-      background: #e8f8f0;
+      background: var(--green-light);
       border: 1px solid #bce8d2;
     }
 
     .message-box.error {
       display: block;
       color: #a93d3d;
-      background: #fff0f0;
+      background: var(--red-light);
       border: 1px solid #f3c7c7;
     }
 
@@ -376,8 +389,14 @@
       margin-top: 21px;
     }
 
+    .toolbar .message-box {
+      flex: 1;
+      margin-top: 0;
+    }
+
     .refresh-button {
       min-height: 41px;
+      flex-shrink: 0;
       padding: 9px 14px;
       border: none;
       border-radius: 11px;
@@ -386,6 +405,11 @@
       font-size: 11px;
       font-weight: 900;
       cursor: pointer;
+    }
+
+    .refresh-button:disabled {
+      opacity: 0.6;
+      cursor: wait;
     }
 
     .submission-list {
@@ -430,7 +454,7 @@
       padding: 6px 9px;
       border-radius: 999px;
       color: #9a5a20;
-      background: #fff1df;
+      background: var(--orange-light);
       font-size: 10px;
       font-weight: 900;
     }
@@ -465,11 +489,14 @@
       word-break: break-word;
     }
 
-    .submission-date {
+    .submission-meta {
+      display: grid;
+      gap: 5px;
       margin-top: 12px;
       color: var(--subtext);
       font-size: 10px;
       font-weight: 700;
+      line-height: 1.6;
     }
 
     .submission-actions {
@@ -501,7 +528,7 @@
 
     .reject-button {
       color: #a33f3f;
-      background: #fff0f0;
+      background: var(--red-light);
     }
 
     .approve-button:disabled,
@@ -534,6 +561,15 @@
       .summary-grid {
         grid-template-columns: 1fr;
       }
+
+      .toolbar {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .refresh-button {
+        width: 100%;
+      }
     }
 
     @media (max-width: 520px) {
@@ -549,6 +585,15 @@
       .page-heading,
       .panel {
         padding: 19px 16px;
+      }
+
+      .panel-header {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .logout-button.visible {
+        width: 100%;
       }
 
       .submission-actions {
@@ -722,7 +767,7 @@
 
         <div class="summary-card">
           <span class="summary-label">
-            審査待ち
+            現在の審査待ち
           </span>
 
           <span
@@ -813,6 +858,9 @@
   <script src="firebase.js"></script>
 
   <script>
+    const ADMIN_EMAIL =
+      "9413yutaka@gmail.com";
+
     const loginPanel =
       document.getElementById(
         "loginPanel"
@@ -880,9 +928,10 @@
 
     let approvedTotal = 0;
     let rejectedTotal = 0;
+    let currentSubmissions = [];
 
-    function escapeHtml(text) {
-      return String(text ?? "")
+    function escapeHtml(value) {
+      return String(value ?? "")
         .replaceAll("&", "&amp;")
         .replaceAll("<", "&lt;")
         .replaceAll(">", "&gt;")
@@ -942,41 +991,42 @@
         .toLocaleString("ja-JP");
     }
 
-    function setButtonsDisabled(
+    function updateSummary() {
+      pendingCount.textContent =
+        currentSubmissions.length +
+        "件";
+
+      approvedCount.textContent =
+        approvedTotal +
+        "件";
+
+      rejectedCount.textContent =
+        rejectedTotal +
+        "件";
+    }
+
+    function setCardButtonsDisabled(
       documentId,
       disabled
     ) {
-      document
-        .querySelectorAll(
-          `[data-document-id="${documentId}"]`
-        )
-        .forEach(function(button) {
-          button.disabled = disabled;
-        });
-    }
+      const buttons =
+        submissionList.querySelectorAll(
+          `button[data-document-id="${CSS.escape(documentId)}"]`
+        );
 
-    function updateSummary(
-      pendingTotal
-    ) {
-      pendingCount.textContent =
-        pendingTotal + "件";
-
-      approvedCount.textContent =
-        approvedTotal + "件";
-
-      rejectedCount.textContent =
-        rejectedTotal + "件";
-    }
-
-    function renderSubmissions(
-      submissions
-    ) {
-      updateSummary(
-        submissions.length
+      buttons.forEach(
+        function(button) {
+          button.disabled =
+            disabled;
+        }
       );
+    }
+
+    function renderSubmissions() {
+      updateSummary();
 
       if (
-        submissions.length === 0
+        currentSubmissions.length === 0
       ) {
         submissionList.innerHTML = `
           <div class="empty-state">
@@ -988,77 +1038,105 @@
       }
 
       submissionList.innerHTML =
-        submissions.map(
-          function(submission) {
-            return `
-              <article class="submission-card">
+        currentSubmissions
+          .map(
+            function(submission) {
+              return `
+                <article class="submission-card">
 
-                <div class="submission-top">
+                  <div class="submission-top">
 
-                  <span class="submission-category">
-                    ${escapeHtml(submission.category)}
-                  </span>
+                    <span class="submission-category">
+                      ${escapeHtml(
+                        submission.category
+                      )}
+                    </span>
 
-                  <span class="pending-badge">
-                    審査待ち
-                  </span>
-
-                </div>
-
-                <div class="submission-body">
-
-                  <h3 class="shop-name">
-                    ${escapeHtml(submission.shopName)}
-                  </h3>
-
-                  <div class="submission-title">
-                    ${escapeHtml(submission.title)}
-                  </div>
-
-                  <div class="submission-content">
-                    ${escapeHtml(submission.content)}
-                  </div>
-
-                  <div class="submission-date">
-                    申請日時：
-                    ${escapeHtml(
-                      formatCreatedAt(
-                        submission.createdAt
-                      )
-                    )}
-                  </div>
-
-                  <div class="submission-actions">
-
-                    <button
-                      class="approve-button"
-                      type="button"
-                      data-document-id="${escapeHtml(submission.id)}"
-                      onclick="approveSubmission('${escapeHtml(submission.id)}')"
-                    >
-                      ✅ 掲載する
-                    </button>
-
-                    <button
-                      class="reject-button"
-                      type="button"
-                      data-document-id="${escapeHtml(submission.id)}"
-                      onclick="rejectSubmission('${escapeHtml(submission.id)}')"
-                    >
-                      ✕ 却下する
-                    </button>
+                    <span class="pending-badge">
+                      審査待ち
+                    </span>
 
                   </div>
 
-                </div>
-              </article>
-            `;
-          }
-        ).join("");
+                  <div class="submission-body">
+
+                    <h3 class="shop-name">
+                      ${escapeHtml(
+                        submission.shopName
+                      )}
+                    </h3>
+
+                    <div class="submission-title">
+                      ${escapeHtml(
+                        submission.title
+                      )}
+                    </div>
+
+                    <div class="submission-content">
+                      ${escapeHtml(
+                        submission.content
+                      )}
+                    </div>
+
+                    <div class="submission-meta">
+
+                      <span>
+                        申請日時：
+                        ${escapeHtml(
+                          formatCreatedAt(
+                            submission.createdAt
+                          )
+                        )}
+                      </span>
+
+                      <span>
+                        状態：審査待ち
+                      </span>
+
+                    </div>
+
+                    <div class="submission-actions">
+
+                      <button
+                        class="approve-button"
+                        type="button"
+                        data-action="approve"
+                        data-document-id="${escapeHtml(
+                          submission.id
+                        )}"
+                      >
+                        ✅ 掲載する
+                      </button>
+
+                      <button
+                        class="reject-button"
+                        type="button"
+                        data-action="reject"
+                        data-document-id="${escapeHtml(
+                          submission.id
+                        )}"
+                      >
+                        ✕ 却下する
+                      </button>
+
+                    </div>
+
+                  </div>
+                </article>
+              `;
+            }
+          )
+          .join("");
     }
 
     async function loadSubmissions() {
       clearAdminMessage();
+
+      refreshButton.disabled =
+        true;
+
+      refreshButton.textContent =
+        "読み込み中…";
 
       submissionList.innerHTML = `
         <div class="empty-state">
@@ -1071,6 +1149,18 @@
           "Firestoreへ接続できませんでした。",
           "error"
         );
+
+        submissionList.innerHTML = `
+          <div class="empty-state">
+            Firebaseへの接続を確認してください。
+          </div>
+        `;
+
+        refreshButton.disabled =
+          false;
+
+        refreshButton.textContent =
+          "🔄 一覧を更新";
 
         return;
       }
@@ -1085,21 +1175,31 @@
             )
             .get();
 
-        const submissions = [];
+        const pendingSubmissions =
+          [];
 
         querySnapshot.forEach(
           function(documentSnapshot) {
-            submissions.push({
-              id:
-                documentSnapshot.id,
-              ...documentSnapshot.data()
-            });
+            const data =
+              documentSnapshot.data();
+
+            if (
+              data.status ===
+              "pending"
+            ) {
+              pendingSubmissions.push({
+                id:
+                  documentSnapshot.id,
+                ...data
+              });
+            }
           }
         );
 
-        renderSubmissions(
-          submissions
-        );
+        currentSubmissions =
+          pendingSubmissions;
+
+        renderSubmissions();
 
         showAdminMessage(
           "申請一覧を更新しました。",
@@ -1111,6 +1211,10 @@
           error
         );
 
+        currentSubmissions = [];
+
+        updateSummary();
+
         submissionList.innerHTML = `
           <div class="empty-state">
             申請情報を読み込めませんでした。
@@ -1118,130 +1222,50 @@
         `;
 
         showAdminMessage(
-          "申請一覧を読み込む権限がありません。Firebaseの管理者設定を確認してください。",
+          "申請一覧を読み込めませんでした。Firestoreのルールを確認してください。",
           "error"
         );
+      } finally {
+        refreshButton.disabled =
+          false;
+
+        refreshButton.textContent =
+          "🔄 一覧を更新";
       }
     }
 
     async function approveSubmission(
       documentId
     ) {
-      const confirmed =
-        window.confirm(
-          "この申請をイマミルへ掲載しますか？"
-        );
-
-      if (!confirmed) {
-        return;
-      }
-
-      setButtonsDisabled(
-        documentId,
-        true
-      );
-
-      clearAdminMessage();
-
-      try {
-        const submissionReference =
-          window.imamiruDb
-            .collection("submissions")
-            .doc(documentId);
-
-        const submissionSnapshot =
-          await submissionReference.get();
-
-        if (!submissionSnapshot.exists) {
-          throw new Error(
-            "申請データが見つかりません。"
-          );
-        }
-
-        const submission =
-          submissionSnapshot.data();
-
-        const advertisementReference =
-          window.imamiruDb
-            .collection("advertisements")
-            .doc();
-
-        const batch =
-          window.imamiruDb.batch();
-
-        batch.set(
-          advertisementReference,
-          {
-            shopName:
-              submission.shopName,
-            title:
-              submission.title,
-            content:
-              submission.content,
-            category:
-              submission.category,
-            status:
-              "掲載中",
-            badge:
-              submission.title,
-            timeMessage:
-              submission.title,
-            createdAt:
-              firebase.firestore
-                .FieldValue
-                .serverTimestamp(),
-            approvedAt:
-              firebase.firestore
-                .FieldValue
-                .serverTimestamp()
+      const submission =
+        currentSubmissions.find(
+          function(item) {
+            return item.id ===
+              documentId;
           }
         );
 
-        batch.delete(
-          submissionReference
-        );
-
-        await batch.commit();
-
-        approvedTotal += 1;
-
+      if (!submission) {
         showAdminMessage(
-          "✅ 広告を掲載しました。",
-          "success"
-        );
-
-        await loadSubmissions();
-      } catch (error) {
-        console.error(
-          "❌ 広告を掲載できませんでした",
-          error
-        );
-
-        showAdminMessage(
-          "掲載処理に失敗しました。管理者権限を確認してください。",
+          "対象の申請が見つかりませんでした。一覧を更新してください。",
           "error"
         );
 
-        setButtonsDisabled(
-          documentId,
-          false
-        );
+        return;
       }
-    }
 
-    async function rejectSubmission(
-      documentId
-    ) {
       const confirmed =
         window.confirm(
-          "この申請を却下して削除しますか？"
+          "「" +
+          submission.shopName +
+          "」の申請を掲載しますか？"
         );
 
       if (!confirmed) {
         return;
       }
 
-      setButtonsDisabled(
+      setCardButtonsDisabled(
         documentId,
         true
       );
@@ -1252,16 +1276,110 @@
         await window.imamiruDb
           .collection("submissions")
           .doc(documentId)
-          .delete();
+          .update({
+            status: "approved"
+          });
+
+        approvedTotal += 1;
+
+        currentSubmissions =
+          currentSubmissions.filter(
+            function(item) {
+              return item.id !==
+                documentId;
+            }
+          );
+
+        renderSubmissions();
+
+        showAdminMessage(
+          "✅ 「" +
+          submission.shopName +
+          "」を掲載中に変更しました。",
+          "success"
+        );
+      } catch (error) {
+        console.error(
+          "❌ 広告を掲載できませんでした",
+          error
+        );
+
+        showAdminMessage(
+          "掲載処理に失敗しました。Firestoreの管理者権限を確認してください。",
+          "error"
+        );
+
+        setCardButtonsDisabled(
+          documentId,
+          false
+        );
+      }
+    }
+
+    async function rejectSubmission(
+      documentId
+    ) {
+      const submission =
+        currentSubmissions.find(
+          function(item) {
+            return item.id ===
+              documentId;
+          }
+        );
+
+      if (!submission) {
+        showAdminMessage(
+          "対象の申請が見つかりませんでした。一覧を更新してください。",
+          "error"
+        );
+
+        return;
+      }
+
+      const confirmed =
+        window.confirm(
+          "「" +
+          submission.shopName +
+          "」の申請を却下しますか？"
+        );
+
+      if (!confirmed) {
+        return;
+      }
+
+      setCardButtonsDisabled(
+        documentId,
+        true
+      );
+
+      clearAdminMessage();
+
+      try {
+        await window.imamiruDb
+          .collection("submissions")
+          .doc(documentId)
+          .update({
+            status: "rejected"
+          });
 
         rejectedTotal += 1;
 
+        currentSubmissions =
+          currentSubmissions.filter(
+            function(item) {
+              return item.id !==
+                documentId;
+            }
+          );
+
+        renderSubmissions();
+
         showAdminMessage(
-          "申請を却下しました。",
+          "「" +
+          submission.shopName +
+          "」の申請を却下しました。",
           "success"
         );
-
-        await loadSubmissions();
       } catch (error) {
         console.error(
           "❌ 申請を却下できませんでした",
@@ -1269,16 +1387,60 @@
         );
 
         showAdminMessage(
-          "却下処理に失敗しました。管理者権限を確認してください。",
+          "却下処理に失敗しました。Firestoreの管理者権限を確認してください。",
           "error"
         );
 
-        setButtonsDisabled(
+        setCardButtonsDisabled(
           documentId,
           false
         );
       }
     }
+
+    submissionList.addEventListener(
+      "click",
+      async function(event) {
+        const button =
+          event.target.closest(
+            "button[data-action]"
+          );
+
+        if (!button) {
+          return;
+        }
+
+        const action =
+          button.dataset.action;
+
+        const documentId =
+          button.dataset.documentId;
+
+        if (
+          !documentId
+        ) {
+          return;
+        }
+
+        if (
+          action === "approve"
+        ) {
+          await approveSubmission(
+            documentId
+          );
+
+          return;
+        }
+
+        if (
+          action === "reject"
+        ) {
+          await rejectSubmission(
+            documentId
+          );
+        }
+      }
+    );
 
     loginForm.addEventListener(
       "submit",
@@ -1293,7 +1455,8 @@
               "adminEmail"
             )
             .value
-            .trim();
+            .trim()
+            .toLowerCase();
 
         const password =
           document
@@ -1302,7 +1465,20 @@
             )
             .value;
 
-        loginButton.disabled = true;
+        if (
+          email !==
+          ADMIN_EMAIL.toLowerCase()
+        ) {
+          showLoginMessage(
+            "このメールアドレスには管理者権限がありません。",
+            "error"
+          );
+
+          return;
+        }
+
+        loginButton.disabled =
+          true;
 
         loginButton.textContent =
           "ログインしています…";
@@ -1325,7 +1501,8 @@
             "error"
           );
         } finally {
-          loginButton.disabled = false;
+          loginButton.disabled =
+            false;
 
           loginButton.textContent =
             "管理画面へログイン";
@@ -1336,9 +1513,21 @@
     logoutButton.addEventListener(
       "click",
       async function() {
-        await firebase
-          .auth()
-          .signOut();
+        try {
+          await firebase
+            .auth()
+            .signOut();
+        } catch (error) {
+          console.error(
+            "❌ ログアウトに失敗しました",
+            error
+          );
+
+          showAdminMessage(
+            "ログアウトできませんでした。",
+            "error"
+          );
+        }
       }
     );
 
@@ -1350,8 +1539,16 @@
     firebase
       .auth()
       .onAuthStateChanged(
-        function(user) {
-          if (user) {
+        async function(user) {
+          clearLoginMessage();
+          clearAdminMessage();
+
+          if (
+            user &&
+            user.email &&
+            user.email.toLowerCase() ===
+              ADMIN_EMAIL.toLowerCase()
+          ) {
             loginPanel.style.display =
               "none";
 
@@ -1367,28 +1564,56 @@
               user.email +
               " でログインしています。";
 
-            loadSubmissions();
-          } else {
-            loginPanel.style.display =
-              "block";
+            await loadSubmissions();
 
-            adminArea.classList.remove(
-              "visible"
-            );
-
-            logoutButton.classList.remove(
-              "visible"
-            );
-
-            submissionList.innerHTML = `
-              <div class="empty-state">
-                ログイン後に申請を表示します。
-              </div>
-            `;
+            return;
           }
+
+          if (user) {
+            try {
+              await firebase
+                .auth()
+                .signOut();
+            } catch (error) {
+              console.error(
+                "管理者以外のユーザーをログアウトできませんでした",
+                error
+              );
+            }
+
+            showLoginMessage(
+              "このアカウントには管理者権限がありません。",
+              "error"
+            );
+          }
+
+          loginPanel.style.display =
+            "block";
+
+          adminArea.classList.remove(
+            "visible"
+          );
+
+          logoutButton.classList.remove(
+            "visible"
+          );
+
+          currentSubmissions = [];
+
+          approvedTotal = 0;
+          rejectedTotal = 0;
+
+          updateSummary();
+
+          submissionList.innerHTML = `
+            <div class="empty-state">
+              ログイン後に申請を表示します。
+            </div>
+          `;
         }
       );
   </script>
 
 </body>
+
 </html>
