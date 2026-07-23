@@ -1989,7 +1989,138 @@
         }
       );
     }
+    async function compressImageFile(
+      file
+    ) {
+      const maximumLongSide =
+        1600;
 
+      const imageQuality =
+        0.82;
+
+      const imageBitmap =
+        await createImageBitmap(
+          file
+        );
+
+      const originalWidth =
+        imageBitmap.width;
+
+      const originalHeight =
+        imageBitmap.height;
+
+      const longSide =
+        Math.max(
+          originalWidth,
+          originalHeight
+        );
+
+      const resizeRatio =
+        longSide >
+        maximumLongSide
+          ? maximumLongSide /
+            longSide
+          : 1;
+
+      const resizedWidth =
+        Math.max(
+          1,
+          Math.round(
+            originalWidth *
+            resizeRatio
+          )
+        );
+
+      const resizedHeight =
+        Math.max(
+          1,
+          Math.round(
+            originalHeight *
+            resizeRatio
+          )
+        );
+
+      const canvas =
+        document.createElement(
+          "canvas"
+        );
+
+      canvas.width =
+        resizedWidth;
+
+      canvas.height =
+        resizedHeight;
+
+      const context =
+        canvas.getContext(
+          "2d"
+        );
+
+      if (!context) {
+        imageBitmap.close();
+
+        throw new Error(
+          "写真を軽量化できませんでした。"
+        );
+      }
+
+      context.drawImage(
+        imageBitmap,
+        0,
+        0,
+        resizedWidth,
+        resizedHeight
+      );
+
+      imageBitmap.close();
+
+      const compressedBlob =
+        await new Promise(
+          function(
+            resolve,
+            reject
+          ) {
+            canvas.toBlob(
+              function(blob) {
+                if (blob) {
+                  resolve(blob);
+
+                  return;
+                }
+
+                reject(
+                  new Error(
+                    "写真を軽量化できませんでした。"
+                  )
+                );
+              },
+              "image/webp",
+              imageQuality
+            );
+          }
+        );
+
+      const originalFileName =
+        file.name.replace(
+          /\.[^.]+$/,
+          ""
+        );
+
+      return new File(
+        [
+          compressedBlob
+        ],
+        originalFileName +
+        ".webp",
+        {
+          type:
+            "image/webp",
+
+          lastModified:
+            Date.now()
+        }
+      );
+    }
     async function uploadImageToCloudinary(
       file
     ) {
@@ -2001,9 +2132,34 @@
       const formData =
         new FormData();
 
+            setProgress(
+        "写真を軽量化しています…",
+        8
+      );
+
+      const compressedFile =
+        await compressImageFile(
+          file
+        );
+
+      console.log(
+        "画像軽量化：",
+        file.name,
+        Math.round(
+          file.size /
+          1024
+        ) +
+        "KB →",
+        Math.round(
+          compressedFile.size /
+          1024
+        ) +
+        "KB"
+      );
+
       formData.append(
         "file",
-        file
+        compressedFile
       );
 
       formData.append(
