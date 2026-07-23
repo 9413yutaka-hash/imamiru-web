@@ -2222,6 +2222,15 @@ function waitForFirebase(
 async function loadApprovedSubmissions() {
   renderLoading();
 
+  if (window.imamiruExpiryTimer) {
+    window.clearTimeout(
+      window.imamiruExpiryTimer
+    );
+
+    window.imamiruExpiryTimer =
+      null;
+  }
+
   try {
     const database =
       await waitForFirebase(
@@ -2243,16 +2252,46 @@ async function loadApprovedSubmissions() {
     const approvedShops =
       [];
 
+    const currentTime =
+      Date.now();
+
+    let nearestExpiryTime =
+      null;
+
     querySnapshot.forEach(
       function(
         documentSnapshot
       ) {
+        const submissionData =
+          documentSnapshot.data() ||
+          {};
+
+        const expiryTime =
+          getDateValue(
+            submissionData.expiresAt
+          );
+
+        const isStillPublished =
+          expiryTime > currentTime;
+
+        if (!isStillPublished) {
+          return;
+        }
+
         approvedShops.push(
           convertSubmissionToShop(
             documentSnapshot,
             approvedShops.length
           )
         );
+
+        if (
+          nearestExpiryTime === null ||
+          expiryTime < nearestExpiryTime
+        ) {
+          nearestExpiryTime =
+            expiryTime;
+        }
       }
     );
 
@@ -2294,10 +2333,36 @@ async function loadApprovedSubmissions() {
     renderShops();
 
     console.log(
-      "✅ 掲載中の広告を読み込みました：" +
+      "✅ 期限内の広告を読み込みました：" +
       shops.length +
       "件"
     );
+
+    if (
+      nearestExpiryTime !== null
+    ) {
+      const millisecondsUntilExpiry =
+        Math.max(
+          1000,
+          nearestExpiryTime -
+            Date.now() +
+            1000
+        );
+
+      window.imamiruExpiryTimer =
+        window.setTimeout(
+          function() {
+            console.log(
+              "⏰ 掲載期限を確認し直します。"
+            );
+
+            closeShopModal();
+
+            loadApprovedSubmissions();
+          },
+          millisecondsUntilExpiry
+        );
+    }
   } catch (error) {
     console.error(
       "❌ 掲載情報の読み込みに失敗しました。",
