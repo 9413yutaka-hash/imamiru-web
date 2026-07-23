@@ -1162,7 +1162,6 @@ function createModalSlider() {
     return;
   }
 
-  removeModalSlider();
 
   modalEmoji.style.display =
     "none";
