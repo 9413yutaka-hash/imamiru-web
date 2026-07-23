@@ -2,80 +2,12 @@ let userLatitude = null;
 let userLongitude = null;
 let selectedCategory = "すべて";
 
-let shops = [];
-
 const favoriteShopIds = new Set();
 
-const sampleShops = [
-  {
-    id: "sample-1",
-    name: "沖縄そば イマミル食堂",
-    category: "グルメ",
-    categoryText: "沖縄料理・沖縄そば",
-    emoji: "🍜",
-    visualClass: "visual-food",
-    rating: 4.8,
-    status: "営業中",
-    badge: "本日限定",
-    message:
-      "本日限定の三枚肉そばがあります。売り切れ次第終了です！",
-    timeMessage:
-      "⏰ 限定20食・なくなり次第終了",
-    latitude: 26.2124,
-    longitude: 127.6809
-  },
-  {
-    id: "sample-2",
-    name: "Cafe Blue Okinawa",
-    category: "カフェ",
-    categoryText: "カフェ・スイーツ",
-    emoji: "🥭",
-    visualClass: "visual-cafe",
-    rating: 4.6,
-    status: "営業中",
-    badge: "旅人おすすめ",
-    message:
-      "沖縄県産マンゴーを使ったスムージーが、今日のおすすめです。",
-    timeMessage:
-      "🥭 本日のマンゴーがなくなり次第終了",
-    latitude: 26.2167,
-    longitude: 127.6873
-  },
-  {
-    id: "sample-3",
-    name: "島酒場 ゆんたく",
-    category: "居酒屋",
-    categoryText: "沖縄居酒屋",
-    emoji: "🍺",
-    visualClass: "visual-bar",
-    rating: 4.9,
-    status: "営業中",
-    badge: "今夜開催",
-    message:
-      "19時から三線ライブを開催します。予約なしでも参加できます。",
-    timeMessage:
-      "🎵 三線ライブ 19:00スタート",
-    latitude: 26.2078,
-    longitude: 127.6765
-  },
-  {
-    id: "sample-4",
-    name: "国際通り 島唄ナイト",
-    category: "イベント",
-    categoryText: "音楽・文化イベント",
-    emoji: "🎤",
-    visualClass: "visual-event",
-    rating: 4.7,
-    status: "受付中",
-    badge: "参加無料",
-    message:
-      "沖縄の島唄を気軽に楽しめる、旅行者向けのミニライブです。",
-    timeMessage:
-      "🌙 本日20:00から開催",
-    latitude: 26.2149,
-    longitude: 127.6842
-  }
-];
+/*
+  data.jsで作られているshops配列へ、
+  Firestoreの掲載中広告を入れ直します。
+*/
 
 function escapeHtml(text) {
   return String(text ?? "")
@@ -99,10 +31,14 @@ function calculateDistance(
   const earthRadiusKm = 6371;
 
   const latitudeDifference =
-    degreesToRadians(latitude2 - latitude1);
+    degreesToRadians(
+      latitude2 - latitude1
+    );
 
   const longitudeDifference =
-    degreesToRadians(longitude2 - longitude1);
+    degreesToRadians(
+      longitude2 - longitude1
+    );
 
   const firstLatitude =
     degreesToRadians(latitude1);
@@ -111,13 +47,18 @@ function calculateDistance(
     degreesToRadians(latitude2);
 
   const calculation =
-    Math.sin(latitudeDifference / 2) ** 2 +
+    Math.sin(
+      latitudeDifference / 2
+    ) ** 2 +
     Math.cos(firstLatitude) *
     Math.cos(secondLatitude) *
-    Math.sin(longitudeDifference / 2) ** 2;
+    Math.sin(
+      longitudeDifference / 2
+    ) ** 2;
 
   const angle =
-    2 * Math.atan2(
+    2 *
+    Math.atan2(
       Math.sqrt(calculation),
       Math.sqrt(1 - calculation)
     );
@@ -126,33 +67,50 @@ function calculateDistance(
 }
 
 function formatDistance(distanceKm) {
-  if (distanceKm === null) {
-    return "距離を確認";
+  if (
+    distanceKm === null ||
+    !Number.isFinite(distanceKm)
+  ) {
+    return "場所を確認中";
   }
 
   if (distanceKm < 1) {
-    return Math.round(distanceKm * 1000) + "m";
+    return (
+      Math.round(distanceKm * 1000) +
+      "m"
+    );
   }
 
   return distanceKm.toFixed(1) + "km";
 }
 
-function estimateWalkingTime(distanceKm) {
-  if (distanceKm === null) {
-    return "徒歩時間";
+function estimateWalkingTime(
+  distanceKm
+) {
+  if (
+    distanceKm === null ||
+    !Number.isFinite(distanceKm)
+  ) {
+    return "徒歩時間を確認";
   }
 
   const walkingMinutes =
     Math.max(
       1,
-      Math.round(distanceKm / 0.08)
+      Math.round(
+        distanceKm / 0.08
+      )
     );
 
   if (walkingMinutes >= 120) {
     return "車での移動推奨";
   }
 
-  return "徒歩 約" + walkingMinutes + "分";
+  return (
+    "徒歩 約" +
+    walkingMinutes +
+    "分"
+  );
 }
 
 function createGoogleMapUrl(
@@ -160,287 +118,205 @@ function createGoogleMapUrl(
   longitude
 ) {
   if (
-    typeof latitude !== "number" ||
-    typeof longitude !== "number"
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude)
   ) {
-    return "https://www.google.com/maps";
+    return (
+      "https://www.google.com/maps/search/" +
+      "?api=1&query=沖縄"
+    );
   }
 
   return (
-    "https://www.google.com/maps/search/?api=1&query=" +
+    "https://www.google.com/maps/search/" +
+    "?api=1&query=" +
     latitude +
     "," +
     longitude
   );
 }
 
-function getCategoryAppearance(category) {
-  const appearances = {
+function getCategoryDisplay(
+  category
+) {
+  const settings = {
     グルメ: {
-      categoryText: "グルメ・飲食店",
+      categoryText:
+        "グルメ・飲食店",
       emoji: "🍜",
-      visualClass: "visual-food"
+      visualClass:
+        "visual-food"
     },
+
     カフェ: {
-      categoryText: "カフェ・スイーツ",
+      categoryText:
+        "カフェ・スイーツ",
       emoji: "🥭",
-      visualClass: "visual-cafe"
+      visualClass:
+        "visual-cafe"
     },
+
     居酒屋: {
-      categoryText: "居酒屋・ナイト",
+      categoryText:
+        "居酒屋・夜の沖縄",
       emoji: "🍺",
-      visualClass: "visual-bar"
+      visualClass:
+        "visual-bar"
     },
+
     イベント: {
-      categoryText: "イベント・体験",
-      emoji: "🎤",
-      visualClass: "visual-event"
+      categoryText:
+        "イベント・体験",
+      emoji: "🎵",
+      visualClass:
+        "visual-event"
     }
   };
 
-  return appearances[category] || appearances.グルメ;
+  return (
+    settings[category] ||
+    {
+      categoryText:
+        category || "沖縄情報",
+      emoji: "🌺",
+      visualClass:
+        "visual-event"
+    }
+  );
 }
 
-function convertAdvertisementToShop(
-  documentId,
-  advertisement
+function convertSubmissionToShop(
+  documentSnapshot,
+  index
 ) {
-  const category =
-    advertisement.category || "グルメ";
+  const data =
+    documentSnapshot.data();
 
-  const appearance =
-    getCategoryAppearance(category);
+  const categorySetting =
+    getCategoryDisplay(
+      data.category
+    );
 
-  const latitudeNumber =
-    Number(advertisement.latitude);
+  /*
+    現段階の投稿フォームには、
+    緯度・経度の入力がありません。
 
-  const longitudeNumber =
-    Number(advertisement.longitude);
+    そのためVer1では那覇中心部を
+    仮の位置として使います。
+    後で住所・地図機能を追加します。
+  */
+
+  const defaultLatitude =
+    26.2124;
+
+  const defaultLongitude =
+    127.6809;
 
   return {
-    id: documentId,
+    id: index + 1,
+
+    firestoreId:
+      documentSnapshot.id,
 
     name:
-      advertisement.shopName ||
-      advertisement.name ||
-      "店舗名未設定",
+      data.shopName ||
+      "店舗名未登録",
 
-    category: category,
+    category:
+      data.category ||
+      "グルメ",
 
     categoryText:
-      advertisement.categoryText ||
-      appearance.categoryText,
+      categorySetting.categoryText,
 
     emoji:
-      advertisement.emoji ||
-      appearance.emoji,
+      categorySetting.emoji,
 
     visualClass:
-      advertisement.visualClass ||
-      appearance.visualClass,
+      categorySetting.visualClass,
 
-    rating:
-      Number(advertisement.rating) || 4.5,
+    rating: "NEW",
 
-    status:
-      advertisement.status ||
-      "掲載中",
+    status: "掲載中",
 
     badge:
-      advertisement.badge ||
-      advertisement.title ||
-      "新着情報",
+      data.title ||
+      "今だけ情報",
 
     message:
-      advertisement.content ||
-      advertisement.message ||
-      "詳しい情報は店舗へお問い合わせください。",
+      data.content ||
+      "詳しい情報は店舗へご確認ください。",
 
     timeMessage:
-      advertisement.timeMessage ||
-      advertisement.title ||
-      "📢 最新情報を掲載中",
+      "⚡ イマミル掲載中",
 
     latitude:
-      Number.isFinite(latitudeNumber)
-        ? latitudeNumber
-        : 26.2124,
+      Number.isFinite(
+        data.latitude
+      )
+        ? data.latitude
+        : defaultLatitude,
 
     longitude:
-      Number.isFinite(longitudeNumber)
-        ? longitudeNumber
-        : 127.6809,
+      Number.isFinite(
+        data.longitude
+      )
+        ? data.longitude
+        : defaultLongitude,
 
     createdAt:
-      advertisement.createdAt || null
+      data.createdAt || null
   };
-}
-
-function updateInformationCount() {
-  const countElements =
-    document.querySelectorAll(
-      ".mini-info-value"
-    );
-
-  if (countElements.length >= 1) {
-    countElements[0].textContent =
-      shops.length + "件";
-  }
-
-  if (countElements.length >= 2) {
-    countElements[1].textContent =
-      shops.length + "件";
-  }
-}
-
-function updateSampleNotice(message) {
-  const notice =
-    document.querySelector(
-      ".sample-notice"
-    );
-
-  if (!notice) {
-    return;
-  }
-
-  notice.textContent = message;
-}
-
-function showLoadingMessage() {
-  const shopsList =
-    document.getElementById("shopsList");
-
-  if (!shopsList) {
-    return;
-  }
-
-  shopsList.innerHTML = `
-    <div class="sample-notice">
-      Firebaseから最新情報を読み込んでいます…
-    </div>
-  `;
-}
-
-async function loadAdvertisementsFromFirestore() {
-  showLoadingMessage();
-
-  if (!window.imamiruDb) {
-    console.warn(
-      "Firebaseが利用できないため、サンプルデータを表示します。"
-    );
-
-    shops = [...sampleShops];
-
-    updateInformationCount();
-
-    updateSampleNotice(
-      "Firebaseに接続できなかったため、現在はサンプル情報を表示しています。"
-    );
-
-    renderShops();
-
-    return;
-  }
-
-  try {
-    const querySnapshot =
-      await window.imamiruDb
-        .collection("advertisements")
-        .get();
-
-    const firestoreShops = [];
-
-    querySnapshot.forEach(
-      function(documentSnapshot) {
-        const advertisement =
-          documentSnapshot.data();
-
-        firestoreShops.push(
-          convertAdvertisementToShop(
-            documentSnapshot.id,
-            advertisement
-          )
-        );
-      }
-    );
-
-    if (firestoreShops.length === 0) {
-      shops = [...sampleShops];
-
-      updateSampleNotice(
-        "Firestoreに広告がないため、現在はサンプル情報を表示しています。"
-      );
-    } else {
-      shops = firestoreShops;
-
-      updateSampleNotice(
-        "現在表示されている情報は、Firestoreから取得しています。"
-      );
-    }
-
-    updateInformationCount();
-    renderShops();
-
-    console.log(
-      "✅ Firestoreから広告を読み込みました:",
-      firestoreShops.length + "件"
-    );
-  } catch (error) {
-    console.error(
-      "❌ Firestoreの広告読み込みに失敗しました",
-      error
-    );
-
-    shops = [...sampleShops];
-
-    updateInformationCount();
-
-    updateSampleNotice(
-      "Firestoreの読み込みに失敗したため、現在はサンプル情報を表示しています。"
-    );
-
-    renderShops();
-  }
 }
 
 function getVisibleShops() {
   let visibleShops =
-    shops.filter(function(shop) {
-      return (
-        selectedCategory === "すべて" ||
-        shop.category === selectedCategory
-      );
-    });
+    shops.filter(
+      function(shop) {
+        return (
+          selectedCategory ===
+            "すべて" ||
+          shop.category ===
+            selectedCategory
+        );
+      }
+    );
 
   visibleShops =
-    visibleShops.map(function(shop) {
-      let distanceKm = null;
+    visibleShops.map(
+      function(shop) {
+        let distanceKm = null;
 
-      if (
-        userLatitude !== null &&
-        userLongitude !== null
-      ) {
-        distanceKm =
-          calculateDistance(
-            userLatitude,
-            userLongitude,
-            shop.latitude,
-            shop.longitude
-          );
+        if (
+          userLatitude !== null &&
+          userLongitude !== null
+        ) {
+          distanceKm =
+            calculateDistance(
+              userLatitude,
+              userLongitude,
+              shop.latitude,
+              shop.longitude
+            );
+        }
+
+        return {
+          ...shop,
+          distanceKm:
+            distanceKm
+        };
       }
-
-      return {
-        ...shop,
-        distanceKm: distanceKm
-      };
-    });
+    );
 
   if (
     userLatitude !== null &&
     userLongitude !== null
   ) {
     visibleShops.sort(
-      function(first, second) {
+      function(
+        first,
+        second
+      ) {
         return (
           first.distanceKm -
           second.distanceKm
@@ -452,9 +328,48 @@ function getVisibleShops() {
   return visibleShops;
 }
 
+function renderLoading() {
+  const shopsList =
+    document.getElementById(
+      "shopsList"
+    );
+
+  if (!shopsList) {
+    return;
+  }
+
+  shopsList.innerHTML = `
+    <div class="sample-notice">
+      Firebaseから掲載情報を
+      読み込んでいます…
+    </div>
+  `;
+}
+
+function renderLoadError() {
+  const shopsList =
+    document.getElementById(
+      "shopsList"
+    );
+
+  if (!shopsList) {
+    return;
+  }
+
+  shopsList.innerHTML = `
+    <div class="sample-notice">
+      掲載情報を読み込めませんでした。<br>
+      少し時間を置いて、
+      もう一度ページを更新してください。
+    </div>
+  `;
+}
+
 function renderShops() {
   const shopsList =
-    document.getElementById("shopsList");
+    document.getElementById(
+      "shopsList"
+    );
 
   if (!shopsList) {
     return;
@@ -463,11 +378,13 @@ function renderShops() {
   const visibleShops =
     getVisibleShops();
 
-  if (visibleShops.length === 0) {
+  if (
+    visibleShops.length === 0
+  ) {
     shopsList.innerHTML = `
       <div class="sample-notice">
-        このカテゴリーの情報は、
-        まだ登録されていません。
+        現在、このカテゴリーに
+        掲載中の情報はありません。
       </div>
     `;
 
@@ -475,168 +392,260 @@ function renderShops() {
   }
 
   shopsList.innerHTML =
-    visibleShops.map(function(shop) {
-      const mapUrl =
-        createGoogleMapUrl(
-          shop.latitude,
-          shop.longitude
-        );
+    visibleShops
+      .map(
+        function(shop) {
+          const mapUrl =
+            createGoogleMapUrl(
+              shop.latitude,
+              shop.longitude
+            );
 
-      const isFavorite =
-        favoriteShopIds.has(shop.id);
+          const isFavorite =
+            favoriteShopIds.has(
+              shop.id
+            );
 
-      const shopIdForHtml =
-        encodeURIComponent(
-          String(shop.id)
-        );
+          return `
+            <article class="shop-card">
 
-      return `
-        <article class="shop-card">
-
-          <div class="shop-visual ${escapeHtml(shop.visualClass)}">
-
-            <div class="shop-badges">
-
-              <span class="event-badge">
-                ⚡ ${escapeHtml(shop.badge)}
-              </span>
-
-              <button
-                class="favorite-button ${
-                  isFavorite ? "active" : ""
-                }"
-                type="button"
-                aria-label="お気に入り"
-                onclick="toggleFavorite('${shopIdForHtml}')"
+              <div
+                class="
+                  shop-visual
+                  ${escapeHtml(
+                    shop.visualClass
+                  )}
+                "
               >
-                ${
-                  isFavorite ? "♥" : "♡"
-                }
-              </button>
 
-            </div>
+                <div class="shop-badges">
 
-            <span class="shop-emoji">
-              ${escapeHtml(shop.emoji)}
-            </span>
+                  <span class="event-badge">
+                    ⚡
+                    ${escapeHtml(
+                      shop.badge
+                    )}
+                  </span>
 
-          </div>
+                  <button
+                    class="
+                      favorite-button
+                      ${
+                        isFavorite
+                          ? "active"
+                          : ""
+                      }
+                    "
+                    type="button"
+                    aria-label="お気に入り"
+                    onclick="
+                      toggleFavorite(
+                        ${shop.id}
+                      )
+                    "
+                  >
+                    ${
+                      isFavorite
+                        ? "♥"
+                        : "♡"
+                    }
+                  </button>
 
-          <div class="shop-body">
+                </div>
 
-            <div class="shop-category">
-              <span>
-                ${escapeHtml(shop.categoryText)}
-              </span>
+                <span class="shop-emoji">
+                  ${escapeHtml(
+                    shop.emoji
+                  )}
+                </span>
 
-              <span class="open-status">
-                ● ${escapeHtml(shop.status)}
-              </span>
-            </div>
+              </div>
 
-            <h3 class="shop-name">
-              ${escapeHtml(shop.name)}
-            </h3>
+              <div class="shop-body">
 
-            <p class="shop-description">
-              ${escapeHtml(shop.message)}
-            </p>
+                <div class="shop-category">
 
-            <div class="shop-info-row">
+                  <span>
+                    ${escapeHtml(
+                      shop.categoryText
+                    )}
+                  </span>
 
-              <span class="info-chip">
-                ⭐ ${escapeHtml(shop.rating)}
-              </span>
+                  <span class="open-status">
+                    ●
+                    ${escapeHtml(
+                      shop.status
+                    )}
+                  </span>
 
-              <span class="info-chip">
-                📍 ${formatDistance(shop.distanceKm)}
-              </span>
+                </div>
 
-              <span class="info-chip">
-                🚶 ${estimateWalkingTime(shop.distanceKm)}
-              </span>
+                <h3 class="shop-name">
+                  ${escapeHtml(
+                    shop.name
+                  )}
+                </h3>
 
-            </div>
+                <p class="shop-description">
+                  ${escapeHtml(
+                    shop.message
+                  )}
+                </p>
 
-            <div class="time-limit">
-              ${escapeHtml(shop.timeMessage)}
-            </div>
+                <div class="shop-info-row">
 
-            <div class="shop-actions">
+                  <span class="info-chip">
+                    🆕 新着
+                  </span>
 
-              <button
-                class="shop-button detail-button"
-                type="button"
-                onclick="openShopModal('${shopIdForHtml}')"
-              >
-                今の情報を見る
-              </button>
+                  <span class="info-chip">
+                    📍
+                    ${formatDistance(
+                      shop.distanceKm
+                    )}
+                  </span>
 
-              <a
-                class="shop-button map-button"
-                href="${mapUrl}"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                📍 地図
-              </a>
+                  <span class="info-chip">
+                    🚶
+                    ${estimateWalkingTime(
+                      shop.distanceKm
+                    )}
+                  </span>
 
-            </div>
+                </div>
 
-          </div>
-        </article>
-      `;
-    }).join("");
+                <div class="time-limit">
+                  ${escapeHtml(
+                    shop.timeMessage
+                  )}
+                </div>
+
+                <div class="shop-actions">
+
+                  <button
+                    class="
+                      shop-button
+                      detail-button
+                    "
+                    type="button"
+                    onclick="
+                      openShopModal(
+                        ${shop.id}
+                      )
+                    "
+                  >
+                    今の情報を見る
+                  </button>
+
+                  <a
+                    class="
+                      shop-button
+                      map-button
+                    "
+                    href="${mapUrl}"
+                    target="_blank"
+                    rel="
+                      noopener
+                      noreferrer
+                    "
+                  >
+                    📍 地図
+                  </a>
+
+                </div>
+
+              </div>
+
+            </article>
+          `;
+        }
+      )
+      .join("");
 }
 
 function selectCategory(
   category,
   button
 ) {
-  selectedCategory = category;
+  selectedCategory =
+    category;
 
   document
-    .querySelectorAll(".category-button")
-    .forEach(function(categoryButton) {
-      categoryButton.classList.remove("active");
-    });
+    .querySelectorAll(
+      ".category-button"
+    )
+    .forEach(
+      function(
+        categoryButton
+      ) {
+        categoryButton
+          .classList
+          .remove("active");
+      }
+    );
 
-  button.classList.add("active");
-
-  renderShops();
-}
-
-function toggleFavorite(encodedShopId) {
-  const shopId =
-    decodeURIComponent(encodedShopId);
-
-  if (favoriteShopIds.has(shopId)) {
-    favoriteShopIds.delete(shopId);
-  } else {
-    favoriteShopIds.add(shopId);
+  if (button) {
+    button
+      .classList
+      .add("active");
   }
 
   renderShops();
 }
 
-function openShopModal(encodedShopId) {
-  const shopId =
-    decodeURIComponent(encodedShopId);
+function toggleFavorite(
+  shopId
+) {
+  if (
+    favoriteShopIds.has(
+      shopId
+    )
+  ) {
+    favoriteShopIds.delete(
+      shopId
+    );
+  } else {
+    favoriteShopIds.add(
+      shopId
+    );
+  }
 
+  renderShops();
+}
+
+function openShopModal(
+  shopId
+) {
   const selectedShop =
-    shops.find(function(shop) {
-      return String(shop.id) === shopId;
-    });
+    shops.find(
+      function(shop) {
+        return (
+          shop.id ===
+          shopId
+        );
+      }
+    );
 
   if (!selectedShop) {
     return;
   }
 
   const modal =
-    document.getElementById("shopModal");
+    document.getElementById(
+      "shopModal"
+    );
 
   const modalVisual =
-    document.getElementById("modalVisual");
+    document.getElementById(
+      "modalVisual"
+    );
+
+  if (
+    !modal ||
+    !modalVisual
+  ) {
+    return;
+  }
 
   modalVisual.className =
     "modal-visual " +
@@ -663,9 +672,13 @@ function openShopModal(encodedShopId) {
     "modalMessage"
   ).innerHTML =
     "📢 " +
-    escapeHtml(selectedShop.message) +
+    escapeHtml(
+      selectedShop.message
+    ) +
     "<br><br>" +
-    escapeHtml(selectedShop.timeMessage);
+    escapeHtml(
+      selectedShop.timeMessage
+    );
 
   document.getElementById(
     "modalMapButton"
@@ -675,22 +688,39 @@ function openShopModal(encodedShopId) {
       selectedShop.longitude
     );
 
-  modal.classList.add("visible");
+  modal.classList.add(
+    "visible"
+  );
 
   document.body.style.overflow =
     "hidden";
 }
 
 function closeShopModal() {
-  document
-    .getElementById("shopModal")
-    .classList.remove("visible");
+  const modal =
+    document.getElementById(
+      "shopModal"
+    );
 
-  document.body.style.overflow = "";
+  if (!modal) {
+    return;
+  }
+
+  modal.classList.remove(
+    "visible"
+  );
+
+  document.body.style.overflow =
+    "";
 }
 
-function closeModalOutside(event) {
-  if (event.target.id === "shopModal") {
+function closeModalOutside(
+  event
+) {
+  if (
+    event.target.id ===
+    "shopModal"
+  ) {
     closeShopModal();
   }
 }
@@ -711,14 +741,25 @@ function getLocation() {
       "currentMapLink"
     );
 
-  if (!navigator.geolocation) {
+  if (
+    !locationButton ||
+    !locationMessage ||
+    !currentMapLink
+  ) {
+    return;
+  }
+
+  if (
+    !navigator.geolocation
+  ) {
     locationMessage.textContent =
       "このブラウザでは位置情報を利用できません。";
 
     return;
   }
 
-  locationButton.disabled = true;
+  locationButton.disabled =
+    true;
 
   locationButton.textContent =
     "確認しています…";
@@ -726,76 +767,101 @@ function getLocation() {
   locationMessage.textContent =
     "GPSから現在地を取得しています。";
 
-  navigator.geolocation.getCurrentPosition(
-    function(position) {
-      userLatitude =
-        position.coords.latitude;
+  navigator.geolocation
+    .getCurrentPosition(
+      function(position) {
+        userLatitude =
+          position
+            .coords
+            .latitude;
 
-      userLongitude =
-        position.coords.longitude;
+        userLongitude =
+          position
+            .coords
+            .longitude;
 
-      locationMessage.textContent =
-        "現在地を取得しました。近い順に表示しています。";
+        locationMessage.textContent =
+          "現在地を取得しました。近い順に表示しています。";
 
-      currentMapLink.href =
-        createGoogleMapUrl(
-          userLatitude,
-          userLongitude
-        );
+        currentMapLink.href =
+          createGoogleMapUrl(
+            userLatitude,
+            userLongitude
+          );
 
-      currentMapLink.style.display =
-        "block";
+        currentMapLink.style.display =
+          "block";
 
-      locationButton.disabled = false;
+        locationButton.disabled =
+          false;
 
-      locationButton.textContent =
-        "現在地を更新";
+        locationButton.textContent =
+          "現在地を更新";
 
-      renderShops();
-    },
+        renderShops();
+      },
 
-    function(error) {
-      let message =
-        "位置情報を取得できませんでした。";
+      function(error) {
+        let message =
+          "位置情報を取得できませんでした。";
 
-      if (error.code === 1) {
-        message =
-          "ブラウザで位置情報を許可してください。";
+        if (
+          error.code === 1
+        ) {
+          message =
+            "ブラウザで位置情報を許可してください。";
+        }
+
+        if (
+          error.code === 2
+        ) {
+          message =
+            "現在地を確認できませんでした。";
+        }
+
+        if (
+          error.code === 3
+        ) {
+          message =
+            "取得に時間がかかりました。もう一度お試しください。";
+        }
+
+        locationMessage.textContent =
+          message;
+
+        locationButton.disabled =
+          false;
+
+        locationButton.textContent =
+          "もう一度試す";
+      },
+
+      {
+        enableHighAccuracy:
+          true,
+
+        timeout:
+          15000,
+
+        maximumAge:
+          60000
       }
-
-      if (error.code === 2) {
-        message =
-          "現在地を確認できませんでした。";
-      }
-
-      if (error.code === 3) {
-        message =
-          "取得に時間がかかりました。もう一度お試しください。";
-      }
-
-      locationMessage.textContent =
-        message;
-
-      locationButton.disabled = false;
-
-      locationButton.textContent =
-        "もう一度試す";
-    },
-
-    {
-      enableHighAccuracy: true,
-      timeout: 15000,
-      maximumAge: 60000
-    }
-  );
+    );
 }
 
 function scrollToShops() {
-  document
-    .getElementById("shopsSection")
-    .scrollIntoView({
-      behavior: "smooth"
-    });
+  const shopsSection =
+    document.getElementById(
+      "shopsSection"
+    );
+
+  if (!shopsSection) {
+    return;
+  }
+
+  shopsSection.scrollIntoView({
+    behavior: "smooth"
+  });
 }
 
 function scrollToTopPage() {
@@ -811,10 +877,149 @@ function showComingSoon() {
   );
 }
 
+function updateTopCounts(
+  totalCount
+) {
+  const countElements =
+    document.querySelectorAll(
+      ".mini-info-value"
+    );
+
+  if (
+    countElements.length >= 1
+  ) {
+    countElements[0]
+      .textContent =
+      totalCount + "件";
+  }
+
+  if (
+    countElements.length >= 2
+  ) {
+    countElements[1]
+      .textContent =
+      totalCount + "件";
+  }
+}
+
+async function loadApprovedSubmissions() {
+  renderLoading();
+
+  if (
+    !window.imamiruDb
+  ) {
+    console.error(
+      "Firestoreへ接続できません。"
+    );
+
+    renderLoadError();
+
+    return;
+  }
+
+  try {
+    const querySnapshot =
+      await window.imamiruDb
+        .collection(
+          "submissions"
+        )
+        .where(
+          "status",
+          "==",
+          "approved"
+        )
+        .get();
+
+    const approvedShops =
+      [];
+
+    querySnapshot.forEach(
+      function(
+        documentSnapshot
+      ) {
+        approvedShops.push(
+          convertSubmissionToShop(
+            documentSnapshot,
+            approvedShops.length
+          )
+        );
+      }
+    );
+
+    approvedShops.sort(
+      function(
+        first,
+        second
+      ) {
+        const firstTime =
+          first.createdAt &&
+          typeof first
+            .createdAt
+            .toMillis ===
+            "function"
+            ? first
+                .createdAt
+                .toMillis()
+            : 0;
+
+        const secondTime =
+          second.createdAt &&
+          typeof second
+            .createdAt
+            .toMillis ===
+            "function"
+            ? second
+                .createdAt
+                .toMillis()
+            : 0;
+
+        return (
+          secondTime -
+          firstTime
+        );
+      }
+    );
+
+    /*
+      data.jsで作られた配列を
+      Firestoreの掲載中データへ
+     丸ごと入れ替えます。
+    */
+
+    shops.splice(
+      0,
+      shops.length,
+      ...approvedShops
+    );
+
+    updateTopCounts(
+      shops.length
+    );
+
+    renderShops();
+
+    console.log(
+      "✅ Firestoreから掲載中の広告を読み込みました：" +
+      shops.length +
+      "件"
+    );
+  } catch (error) {
+    console.error(
+      "❌ 掲載中の広告を読み込めませんでした",
+      error
+    );
+
+    renderLoadError();
+  }
+}
+
 document.addEventListener(
   "keydown",
   function(event) {
-    if (event.key === "Escape") {
+    if (
+      event.key ===
+      "Escape"
+    ) {
       closeShopModal();
     }
   }
@@ -823,6 +1028,6 @@ document.addEventListener(
 document.addEventListener(
   "DOMContentLoaded",
   function() {
-    loadAdvertisementsFromFirestore();
+    loadApprovedSubmissions();
   }
 );
