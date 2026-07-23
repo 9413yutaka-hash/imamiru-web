@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <meta
+    name="theme-color"
+    content="#0788c9"
+  >
+
+  <title>広告掲載を申し込む｜イマミル</title>
+
+  <style>
+    :root {
+      --navy: #071a33;
+      --blue: #0788c9;
+      --cyan: #04b7d7;
+      --white: #ffffff;
+      --text: #15233a;
+      --subtext: #697386;
+      --border: #dfe8ef;
+      --background: #f4f8fb;
+      --red: #e14d4d;
+      --green: #169c64;
+      --shadow: 0 18px 50px rgba(20, 52, 82, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family:
+        "Yu Gothic",
+        "Hiragino Kaku Gothic ProN",
+        "Meiryo",
+        sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(
+          circle at top right,
+          rgba(4, 183, 215, 0.14),
+          transparent 30%
+        ),
+        var(--background);
+    }
+
+    button,
+    input,
+    textarea,
+    select {
+      font-family: inherit;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .top-bar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      border-bottom: 1px solid rgba(12, 54, 87, 0.08);
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(16px);
+    }
+
+    .top-bar-inner {
+      width: min(100%, 760px);
+      margin: 0 auto;
+      padding: 13px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 15px;
+    }
+
+    .brand-area {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-icon {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      border-radius: 14px;
+      color: var(--white);
+      font-size: 21px;
+      background:
+        linear-gradient(
+          135deg,
+          var(--blue),
+          var(--cyan)
+        );
+      box-shadow:
+        0 8px 20px rgba(4, 158, 199, 0.25);
+    }
+
+    .brand-name {
+      margin: 0;
+      color: var(--navy);
+      font-size: 20px;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+    }
+
+    .brand-caption {
+      margin: 2px 0 0;
+      color: var(--subtext);
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .back-link {
+      flex-shrink: 0;
+      padding: 9px 13px;
+      border-radius: 12px;
+      color: #2465af;
+      background: #edf5ff;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .hero {
+      overflow: hidden;
+      color: var(--white);
+      background:
+        radial-gradient(
+          circle at 88% 14%,
+          rgba(255, 255, 255, 0.22),
+          transparent 25%
+        ),
+        linear-gradient(
+          145deg,
+          #067bb8,
+          #03b5cf 55%,
+          #5bd4d0
+        );
+    }
+
+    .hero-inner {
+      width: min(100%, 760px);
+      margin: 0 auto;
+      padding: 43px 18px 70px;
+    }
+
+    .hero-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.14);
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .hero h1 {
+      margin: 15px 0 0;
+      font-size: clamp(30px, 7vw, 46px);
+      line-height: 1.35;
+    }
+
+    .hero p {
+      max-width: 580px;
+      margin: 15px 0 0;
+      color: rgba(255, 255, 255, 0.92);
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1.9;
+    }
+
+    main {
+      width: min(100%, 760px);
+      margin: 0 auto;
+      padding: 0 18px 60px;
+    }
+
+    .form-card {
+      position: relative;
+      z-index: 5;
+      margin-top: -38px;
+      padding: 25px;
+      border: 1px solid rgba(23, 74, 110, 0.08);
+      border-radius: 24px;
+      background: var(--white);
+      box-shadow: var(--shadow);
+    }
+
+    .form-heading h2 {
+      margin: 0;
+      color: var(--navy);
+      font-size: 23px;
+    }
+
+    .form-heading p {
+      margin: 8px 0 0;
+      color: var(--subtext);
+      font-size: 12px;
+      line-height: 1.8;
+    }
+
+    .notice-box {
+      margin-top: 18px;
+      padding: 14px;
+      border-radius: 14px;
+      color: #496478;
+      background: #edf7fb;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.75;
+    }
+
+    .form-grid {
+      display: grid;
+      gap: 19px;
+      margin-top: 24px;
+    }
+
+    .form-field {
+      display: grid;
+      gap: 8px;
+    }
+
+    .form-field label {
+      color: var(--navy);
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .required {
+      margin-left: 5px;
+      color: var(--red);
+      font-size: 10px;
+    }
+
+    .field-note {
+      color: var(--subtext);
+      font-size: 10px;
+      line-height: 1.5;
+    }
+
+    input,
+    textarea,
+    select {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 13px;
+      outline: none;
+      color: var(--text);
+      background: #fbfdfe;
+      font-size: 14px;
+      transition:
+        border-color 0.2s,
+        box-shadow 0.2s,
+        background 0.2s;
+    }
+
+    input,
+    select {
+      min-height: 50px;
+      padding: 12px 14px;
+    }
+
+    textarea {
+      min-height: 145px;
+      padding: 14px;
+      line-height: 1.8;
+      resize: vertical;
+    }
+
+    input:focus,
+    textarea:focus,
+    select:focus {
+      border-color: var(--cyan);
+      background: var(--white);
+      box-shadow:
+        0 0 0 4px rgba(4, 183, 215, 0.12);
+    }
+
+    .character-count {
+      color: var(--subtext);
+      font-size: 10px;
+      text-align: right;
+    }
+
+    .agreement {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 14px;
+      border-radius: 14px;
+      background: #f6f8fa;
+    }
+
+    .agreement input {
+      width: 18px;
+      height: 18px;
+      min-height: 0;
+      margin: 1px 0 0;
+      flex-shrink: 0;
+    }
+
+    .agreement label {
+      color: #536678;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1.75;
+      cursor: pointer;
+    }
+
+    .submit-button {
+      width: 100%;
+      min-height: 54px;
+      border: none;
+      border-radius: 15px;
+      color: var(--white);
+      background:
+        linear-gradient(
+          135deg,
+          var(--blue),
+          var(--cyan)
+        );
+      font-size: 15px;
+      font-weight: 900;
+      cursor: pointer;
+      box-shadow:
+        0 11px 25px rgba(5, 144, 194, 0.22);
+      transition:
+        transform 0.2s,
+        opacity 0.2s;
+    }
+
+    .submit-button:hover {
+      transform: translateY(-2px);
+    }
+
+    .submit-button:disabled {
+      opacity: 0.6;
+      cursor: wait;
+      transform: none;
+    }
+
+    .message-box {
+      display: none;
+      margin-top: 17px;
+      padding: 15px;
+      border-radius: 14px;
+      font-size: 13px;
+      font-weight: 800;
+      line-height: 1.75;
+    }
+
+    .message-box.success {
+      display: block;
+      color: #146e4a;
+      background: #e8f8f0;
+      border: 1px solid #bce8d2;
+    }
+
+    .message-box.error {
+      display: block;
+      color: #a93d3d;
+      background: #fff0f0;
+      border: 1px solid #f3c7c7;
+    }
+
+    .after-submit-link {
+      display: none;
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 12px;
+      color: #2465af;
+      background: #edf5ff;
+      font-size: 12px;
+      font-weight: 900;
+      text-align: center;
+    }
+
+    .after-submit-link.visible {
+      display: block;
+    }
+
+    footer {
+      padding: 25px 18px 40px;
+      color: #8b9aaa;
+      font-size: 10px;
+      line-height: 1.7;
+      text-align: center;
+    }
+
+    @media (max-width: 520px) {
+      .top-bar-inner {
+        padding: 11px 14px;
+      }
+
+      .hero-inner {
+        padding:
+          35px 15px
+          65px;
+      }
+
+      main {
+        padding-left: 13px;
+        padding-right: 13px;
+      }
+
+      .form-card {
+        padding: 20px 16px;
+        border-radius: 20px;
+      }
+
+      .brand-caption {
+        display: none;
+      }
+
+      .back-link {
+        padding: 8px 10px;
+        font-size: 10px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <header class="top-bar">
+    <div class="top-bar-inner">
+
+      <div class="brand-area">
+        <div class="brand-icon">
+          🌺
+        </div>
+
+        <div>
+          <p class="brand-name">
+            イマミル
+          </p>
+
+          <p class="brand-caption">
+            リアルタイム観光コンシェルジュ
+          </p>
+        </div>
+      </div>
+
+      <a
+        class="back-link"
+        href="index.html"
+      >
+        ← ホームへ戻る
+      </a>
+
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="hero-inner">
+
+      <div class="hero-label">
+        📢 店舗・イベント運営者様
+      </div>
+
+      <h1>
+        今だけの情報を、<br>
+        イマミルへ。
+      </h1>
+
+      <p>
+        タイムセール、限定メニュー、イベントなど、
+        旅行者へ届けたい「今」の情報をお申し込みください。
+      </p>
+
+    </div>
+  </section>
+
+  <main>
+
+    <section class="form-card">
+
+      <div class="form-heading">
+        <h2>
+          広告掲載のお申し込み
+        </h2>
+
+        <p>
+          送信された内容は、運営による確認後に掲載されます。
+          送信した直後に一般公開されることはありません。
+        </p>
+      </div>
+
+      <div class="notice-box">
+        💡 現在はVer1のテスト受付です。
+        店舗名や内容に間違いがないか確認してから送信してください。
+      </div>
+
+      <form id="submissionForm">
+
+        <div class="form-grid">
+
+          <div class="form-field">
+            <label for="shopName">
+              店舗・主催者名
+              <span class="required">
+                必須
+              </span>
+            </label>
+
+            <input
+              id="shopName"
+              name="shopName"
+              type="text"
+              maxlength="60"
+              autocomplete="organization"
+              placeholder="例：沖縄そば イマミル食堂"
+              required
+            >
+
+            <span class="field-note">
+              60文字以内で入力してください。
+            </span>
+          </div>
+
+          <div class="form-field">
+            <label for="category">
+              カテゴリー
+              <span class="required">
+                必須
+              </span>
+            </label>
+
+            <select
+              id="category"
+              name="category"
+              required
+            >
+              <option value="">
+                選択してください
+              </option>
+
+              <option value="グルメ">
+                グルメ
+              </option>
+
+              <option value="カフェ">
+                カフェ
+              </option>
+
+              <option value="居酒屋">
+                居酒屋
+              </option>
+
+              <option value="イベント">
+                イベント
+              </option>
+            </select>
+          </div>
+
+          <div class="form-field">
+            <label for="title">
+              情報のタイトル
+              <span class="required">
+                必須
+              </span>
+            </label>
+
+            <input
+              id="title"
+              name="title"
+              type="text"
+              maxlength="80"
+              placeholder="例：本日限定！三枚肉そば20食"
+              required
+            >
+
+            <span class="field-note">
+              一番伝えたい内容を短く入力してください。
+            </span>
+          </div>
+
+          <div class="form-field">
+            <label for="content">
+              詳しい内容
+              <span class="required">
+                必須
+              </span>
+            </label>
+
+            <textarea
+              id="content"
+              name="content"
+              maxlength="500"
+              placeholder="例：本日限定の三枚肉そばがあります。売り切れ次第終了です。ご来店をお待ちしております。"
+              required
+            ></textarea>
+
+            <div
+              id="contentCount"
+              class="character-count"
+            >
+              0 / 500文字
+            </div>
+          </div>
+
+          <div class="agreement">
+
+            <input
+              id="agreement"
+              name="agreement"
+              type="checkbox"
+              required
+            >
+
+            <label for="agreement">
+              入力内容に虚偽がなく、店舗またはイベントの関係者として
+              申し込むことに同意します。
+            </label>
+
+          </div>
+
+          <button
+            id="submitButton"
+            class="submit-button"
+            type="submit"
+          >
+            この内容で申し込む
+          </button>
+
+        </div>
+
+      </form>
+
+      <div
+        id="messageBox"
+        class="message-box"
+        role="status"
+        aria-live="polite"
+      ></div>
+
+      <a
+        id="homeLink"
+        class="after-submit-link"
+        href="index.html"
+      >
+        イマミルのホームへ戻る
+      </a>
+
+    </section>
+
+  </main>
+
+  <footer>
+    イマミル Web Version 1 MVP<br>
+    広告掲載には運営の確認があります。
+  </footer>
+
+  <script
+    src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"
+  ></script>
+
+  <script
+    src="https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore-compat.js"
+  ></script>
+
+  <script src="firebase.js"></script>
+
+  <script>
+    const submissionForm =
+      document.getElementById(
+        "submissionForm"
+      );
+
+    const submitButton =
+      document.getElementById(
+        "submitButton"
+      );
+
+    const messageBox =
+      document.getElementById(
+        "messageBox"
+      );
+
+    const homeLink =
+      document.getElementById(
+        "homeLink"
+      );
+
+    const contentInput =
+      document.getElementById(
+        "content"
+      );
+
+    const contentCount =
+      document.getElementById(
+        "contentCount"
+      );
+
+    function updateContentCount() {
+      contentCount.textContent =
+        contentInput.value.length +
+        " / 500文字";
+    }
+
+    function showMessage(
+      message,
+      type
+    ) {
+      messageBox.textContent = message;
+
+      messageBox.className =
+        "message-box " + type;
+    }
+
+    function clearMessage() {
+      messageBox.textContent = "";
+
+      messageBox.className =
+        "message-box";
+
+      homeLink.classList.remove(
+        "visible"
+      );
+    }
+
+    contentInput.addEventListener(
+      "input",
+      updateContentCount
+    );
+
+    submissionForm.addEventListener(
+      "submit",
+      async function(event) {
+        event.preventDefault();
+
+        clearMessage();
+
+        if (!submissionForm.checkValidity()) {
+          submissionForm.reportValidity();
+          return;
+        }
+
+        if (!window.imamiruDb) {
+          showMessage(
+            "Firebaseに接続できませんでした。時間を置いて、もう一度お試しください。",
+            "error"
+          );
+
+          return;
+        }
+
+        const shopName =
+          document
+            .getElementById("shopName")
+            .value
+            .trim();
+
+        const category =
+          document
+            .getElementById("category")
+            .value;
+
+        const title =
+          document
+            .getElementById("title")
+            .value
+            .trim();
+
+        const content =
+          contentInput.value.trim();
+
+        if (
+          shopName.length < 1 ||
+          title.length < 1 ||
+          content.length < 1
+        ) {
+          showMessage(
+            "未入力の項目があります。入力内容を確認してください。",
+            "error"
+          );
+
+          return;
+        }
+
+        submitButton.disabled = true;
+
+        submitButton.textContent =
+          "送信しています…";
+
+        try {
+          await window.imamiruDb
+            .collection("submissions")
+            .add({
+              shopName: shopName,
+              title: title,
+              content: content,
+              category: category,
+              createdAt:
+                firebase.firestore
+                  .FieldValue
+                  .serverTimestamp(),
+              status: "pending"
+            });
+
+          submissionForm.reset();
+
+          updateContentCount();
+
+          showMessage(
+            "✅ お申し込みを受け付けました。運営による確認後、掲載手続きを進めます。",
+            "success"
+          );
+
+          homeLink.classList.add(
+            "visible"
+          );
+
+          console.log(
+            "✅ 広告掲載の申請を送信しました"
+          );
+        } catch (error) {
+          console.error(
+            "❌ 広告掲載の申請に失敗しました",
+            error
+          );
+
+          showMessage(
+            "送信できませんでした。入力内容を確認し、もう一度お試しください。",
+            "error"
+          );
+        } finally {
+          submitButton.disabled = false;
+
+          submitButton.textContent =
+            "この内容で申し込む";
+        }
+      }
+    );
+
+    updateContentCount();
+  </script>
+
+</body>
+</html>
