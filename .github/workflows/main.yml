@@ -1,0 +1,15 @@
+name: Expire Posts
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+jobs:
+  expire:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Call expire API
+        run: |
+          curl -L https://imamiru-web.vercel.app/api/expire
