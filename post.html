@@ -2264,7 +2264,64 @@
               60 *
               1000
           );
+        const publicationNumber =
+          String(
+            crypto.getRandomValues(
+              new Uint32Array(1)
+            )[0] %
+              100000000
+          ).padStart(
+            8,
+            "0"
+          );
 
+        const endCodeCharacters =
+          "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+        const endCodeRandomValues =
+          crypto.getRandomValues(
+            new Uint32Array(12)
+          );
+
+        const endCode =
+          Array.from(
+            endCodeRandomValues
+          )
+            .map(
+              function(randomValue) {
+                return endCodeCharacters[
+                  randomValue %
+                    endCodeCharacters.length
+                ];
+              }
+            )
+            .join("");
+
+        const endCodeHashBuffer =
+          await crypto.subtle.digest(
+            "SHA-256",
+            new TextEncoder().encode(
+              endCode
+            )
+          );
+
+        const endCodeHash =
+          Array.from(
+            new Uint8Array(
+              endCodeHashBuffer
+            )
+          )
+            .map(
+              function(byte) {
+                return byte
+                  .toString(16)
+                  .padStart(
+                    2,
+                    "0"
+                  );
+              }
+            )
+            .join("");
         const submissionData = {
           shopName:
             shopNameInput.value
@@ -2307,7 +2364,11 @@
 
           status:
             "pending",
+          publicationNumber:
+            publicationNumber,
 
+          endCodeHash:
+            endCodeHash,
           createdAt:
             firebase
               .firestore
