@@ -1120,6 +1120,52 @@
 
           <label
             class="form-label"
+            for="durationHours"
+          >
+            掲載時間
+
+            <span class="required">
+              必須
+            </span>
+          </label>
+
+          <select
+            id="durationHours"
+            name="durationHours"
+            required
+          >
+            <option value="">
+              選択してください
+            </option>
+
+            <option value="3">
+              3時間
+            </option>
+
+            <option value="6">
+              6時間
+            </option>
+
+            <option value="12">
+              12時間
+            </option>
+
+            <option value="24">
+              24時間
+            </option>
+          </select>
+
+          <p class="form-help">
+            投稿した時点から選択した時間が経過すると、
+            承認済みの広告もトップページから自動で非表示になります。
+          </p>
+
+        </div>
+
+        <div class="form-group">
+
+          <label
+            class="form-label"
             for="content"
           >
             広告内容
@@ -1324,7 +1370,7 @@
   </main>
 
   <footer>
-    イマミル Web Version 1.1
+    イマミル Web Version 1.2
     <br>
     沖縄の「今」を、旅人へ。
   </footer>
@@ -1387,6 +1433,11 @@
     const categoryInput =
       document.getElementById(
         "category"
+      );
+
+    const durationHoursInput =
+      document.getElementById(
+        "durationHours"
       );
 
     const contentInput =
@@ -1584,6 +1635,9 @@
         submitting;
 
       categoryInput.disabled =
+        submitting;
+
+      durationHoursInput.disabled =
         submitting;
 
       contentInput.disabled =
@@ -2113,6 +2167,21 @@
         );
       }
 
+      const durationHours =
+        Number(
+          durationHoursInput.value
+        );
+
+      if (
+        ![3, 6, 12, 24].includes(
+          durationHours
+        )
+      ) {
+        throw new Error(
+          "掲載時間を選択してください。"
+        );
+      }
+
       if (
         contentInput.value
           .trim() ===
@@ -2182,6 +2251,20 @@
             }
           );
 
+        const durationHours =
+          Number(
+            durationHoursInput.value
+          );
+
+        const expiresAtDate =
+          new Date(
+            Date.now() +
+            durationHours *
+              60 *
+              60 *
+              1000
+          );
+
         const submissionData = {
           shopName:
             shopNameInput.value
@@ -2193,6 +2276,17 @@
 
           category:
             categoryInput.value,
+
+          durationHours:
+            durationHours,
+
+          expiresAt:
+            firebase
+              .firestore
+              .Timestamp
+              .fromDate(
+                expiresAtDate
+              ),
 
           content:
             contentInput.value
@@ -2230,7 +2324,7 @@
             "web",
 
           version:
-            "1.1"
+            "1.2"
         };
 
         await database
