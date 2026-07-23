@@ -2237,61 +2237,88 @@
       };
     }
 
-    async function uploadSelectedImages() {
-      const uploadedImages =
-        [];
-
+        async function uploadSelectedImages() {
       if (
         selectedImageFiles.length ===
         0
       ) {
-        return uploadedImages;
+        return [];
       }
 
-      for (
-        let index = 0;
-        index <
-          selectedImageFiles.length;
-        index += 1
-      ) {
-        const file =
-          selectedImageFiles[
+      let completedImageCount =
+        0;
+
+      setProgress(
+        selectedImageFiles.length +
+          "枚の写真を軽量化・アップロードしています…",
+        10
+      );
+
+      const uploadPromises =
+        selectedImageFiles.map(
+          async function(
+            file,
             index
-          ];
+          ) {
+            const uploadedImage =
+              await uploadImageToCloudinary(
+                file
+              );
 
-        const imageNumber =
-          index + 1;
+            completedImageCount +=
+              1;
 
-        const uploadPercent =
-          10 +
-          Math.round(
-            (
-              index /
-              selectedImageFiles.length
-            ) *
-            65
-          );
+            const completedPercent =
+              10 +
+              Math.round(
+                (
+                  completedImageCount /
+                  selectedImageFiles.length
+                ) *
+                  65
+              );
 
-        setProgress(
-          "写真" +
-          imageNumber +
-          " / " +
-          selectedImageFiles.length +
-          "枚をアップロードしています…",
-          uploadPercent
+            setProgress(
+              "写真" +
+                completedImageCount +
+                " / " +
+                selectedImageFiles.length +
+                "枚のアップロードが完了しました。",
+              completedPercent
+            );
+
+            return {
+              index:
+                index,
+
+              uploadedImage:
+                uploadedImage
+            };
+          }
         );
 
-        const uploadedImage =
-          await uploadImageToCloudinary(
-            file
-          );
-
-        uploadedImages.push(
-          uploadedImage
+      const uploadResults =
+        await Promise.all(
+          uploadPromises
         );
-      }
 
-      return uploadedImages;
+      uploadResults.sort(
+        function(
+          firstResult,
+          secondResult
+        ) {
+          return (
+            firstResult.index -
+            secondResult.index
+          );
+        }
+      );
+
+      return uploadResults.map(
+        function(result) {
+          return result.uploadedImage;
+        }
+      );
     }
 
     function validateForm() {
