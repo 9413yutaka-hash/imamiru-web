@@ -1,0 +1,1394 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <meta
+    name="theme-color"
+    content="#071a33"
+  >
+
+  <title>運営管理画面｜イマミル</title>
+
+  <style>
+    :root {
+      --navy: #071a33;
+      --navy-light: #0d294a;
+      --blue: #0788c9;
+      --cyan: #04b7d7;
+      --green: #19a96b;
+      --red: #e45151;
+      --orange: #ef8c35;
+      --white: #ffffff;
+      --text: #15233a;
+      --subtext: #697386;
+      --border: #e2eaf0;
+      --background: #f3f7fa;
+      --shadow:
+        0 16px 45px
+        rgba(20, 52, 82, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family:
+        "Yu Gothic",
+        "Hiragino Kaku Gothic ProN",
+        "Meiryo",
+        sans-serif;
+      color: var(--text);
+      background: var(--background);
+    }
+
+    button,
+    input {
+      font-family: inherit;
+    }
+
+    button {
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .top-bar {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      color: var(--white);
+      background:
+        linear-gradient(
+          135deg,
+          var(--navy),
+          var(--navy-light)
+        );
+      box-shadow:
+        0 8px 25px
+        rgba(7, 26, 51, 0.18);
+    }
+
+    .top-bar-inner {
+      width: min(100%, 1050px);
+      margin: 0 auto;
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 15px;
+    }
+
+    .brand-area {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+    }
+
+    .brand-icon {
+      width: 43px;
+      height: 43px;
+      display: grid;
+      place-items: center;
+      border-radius: 14px;
+      background:
+        linear-gradient(
+          135deg,
+          var(--blue),
+          var(--cyan)
+        );
+      font-size: 21px;
+      box-shadow:
+        0 8px 20px
+        rgba(4, 158, 199, 0.25);
+    }
+
+    .brand-name {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+    }
+
+    .brand-caption {
+      margin: 2px 0 0;
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .home-link {
+      flex-shrink: 0;
+      padding: 9px 13px;
+      border-radius: 11px;
+      color: var(--white);
+      background: rgba(255, 255, 255, 0.12);
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    main {
+      width: min(100%, 1050px);
+      margin: 0 auto;
+      padding: 28px 18px 70px;
+    }
+
+    .page-heading {
+      padding: 25px;
+      border-radius: 22px;
+      color: var(--white);
+      background:
+        linear-gradient(
+          135deg,
+          #067bb8,
+          #04b7d7
+        );
+      box-shadow: var(--shadow);
+    }
+
+    .page-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 11px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.16);
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .page-heading h1 {
+      margin: 13px 0 0;
+      font-size: clamp(26px, 5vw, 38px);
+      line-height: 1.35;
+    }
+
+    .page-heading p {
+      max-width: 650px;
+      margin: 10px 0 0;
+      color: rgba(255, 255, 255, 0.88);
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.8;
+    }
+
+    .panel {
+      margin-top: 22px;
+      padding: 23px;
+      border: 1px solid
+        rgba(23, 74, 110, 0.08);
+      border-radius: 21px;
+      background: var(--white);
+      box-shadow: var(--shadow);
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .panel-title h2 {
+      margin: 0;
+      color: var(--navy);
+      font-size: 21px;
+    }
+
+    .panel-title p {
+      margin: 6px 0 0;
+      color: var(--subtext);
+      font-size: 11px;
+      line-height: 1.7;
+    }
+
+    .login-form {
+      max-width: 520px;
+      display: grid;
+      gap: 17px;
+      margin-top: 23px;
+    }
+
+    .form-field {
+      display: grid;
+      gap: 7px;
+    }
+
+    .form-field label {
+      color: var(--navy);
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .form-field input {
+      width: 100%;
+      min-height: 50px;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: 13px;
+      outline: none;
+      color: var(--text);
+      background: #fbfdfe;
+      font-size: 14px;
+    }
+
+    .form-field input:focus {
+      border-color: var(--cyan);
+      background: var(--white);
+      box-shadow:
+        0 0 0 4px
+        rgba(4, 183, 215, 0.12);
+    }
+
+    .primary-button {
+      min-height: 51px;
+      padding: 12px 17px;
+      border: none;
+      border-radius: 14px;
+      color: var(--white);
+      background:
+        linear-gradient(
+          135deg,
+          var(--blue),
+          var(--cyan)
+        );
+      font-size: 14px;
+      font-weight: 900;
+      cursor: pointer;
+      box-shadow:
+        0 9px 20px
+        rgba(5, 144, 194, 0.2);
+    }
+
+    .primary-button:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+    .logout-button {
+      display: none;
+      min-height: 40px;
+      padding: 9px 14px;
+      border: none;
+      border-radius: 11px;
+      color: #a43b3b;
+      background: #fff0f0;
+      font-size: 11px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .logout-button.visible {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .message-box {
+      display: none;
+      margin-top: 17px;
+      padding: 14px;
+      border-radius: 13px;
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.7;
+    }
+
+    .message-box.success {
+      display: block;
+      color: #146e4a;
+      background: #e8f8f0;
+      border: 1px solid #bce8d2;
+    }
+
+    .message-box.error {
+      display: block;
+      color: #a93d3d;
+      background: #fff0f0;
+      border: 1px solid #f3c7c7;
+    }
+
+    .message-box.info {
+      display: block;
+      color: #315d78;
+      background: #edf7fb;
+      border: 1px solid #cce8f2;
+    }
+
+    #adminArea {
+      display: none;
+    }
+
+    #adminArea.visible {
+      display: block;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns:
+        repeat(3, minmax(0, 1fr));
+      gap: 13px;
+      margin-top: 20px;
+    }
+
+    .summary-card {
+      padding: 17px;
+      border-radius: 16px;
+      background: #f4f8fb;
+      border: 1px solid var(--border);
+    }
+
+    .summary-label {
+      display: block;
+      color: var(--subtext);
+      font-size: 10px;
+      font-weight: 800;
+    }
+
+    .summary-value {
+      display: block;
+      margin-top: 7px;
+      color: var(--navy);
+      font-size: 23px;
+      font-weight: 900;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 13px;
+      margin-top: 21px;
+    }
+
+    .refresh-button {
+      min-height: 41px;
+      padding: 9px 14px;
+      border: none;
+      border-radius: 11px;
+      color: #2465af;
+      background: #edf5ff;
+      font-size: 11px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .submission-list {
+      display: grid;
+      gap: 17px;
+      margin-top: 18px;
+    }
+
+    .submission-card {
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 19px;
+      background: var(--white);
+      box-shadow:
+        0 9px 25px
+        rgba(25, 63, 95, 0.07);
+    }
+
+    .submission-top {
+      padding: 16px 18px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 13px;
+      background: #f8fbfd;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .submission-category {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 9px;
+      border-radius: 999px;
+      color: #2465af;
+      background: #eaf4ff;
+      font-size: 10px;
+      font-weight: 900;
+    }
+
+    .pending-badge {
+      flex-shrink: 0;
+      padding: 6px 9px;
+      border-radius: 999px;
+      color: #9a5a20;
+      background: #fff1df;
+      font-size: 10px;
+      font-weight: 900;
+    }
+
+    .submission-body {
+      padding: 19px;
+    }
+
+    .shop-name {
+      margin: 0;
+      color: var(--navy);
+      font-size: 20px;
+    }
+
+    .submission-title {
+      margin: 9px 0 0;
+      color: var(--blue);
+      font-size: 14px;
+      font-weight: 900;
+      line-height: 1.6;
+    }
+
+    .submission-content {
+      margin: 14px 0 0;
+      padding: 14px;
+      border-radius: 13px;
+      color: #496071;
+      background: #f4f8fa;
+      font-size: 13px;
+      line-height: 1.8;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .submission-date {
+      margin-top: 12px;
+      color: var(--subtext);
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .submission-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 17px;
+    }
+
+    .approve-button,
+    .reject-button {
+      min-height: 47px;
+      border: none;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .approve-button {
+      color: var(--white);
+      background:
+        linear-gradient(
+          135deg,
+          #159460,
+          #24bd7d
+        );
+    }
+
+    .reject-button {
+      color: #a33f3f;
+      background: #fff0f0;
+    }
+
+    .approve-button:disabled,
+    .reject-button:disabled {
+      opacity: 0.55;
+      cursor: wait;
+    }
+
+    .empty-state {
+      padding: 35px 18px;
+      border: 1px dashed #cbd9e3;
+      border-radius: 17px;
+      color: var(--subtext);
+      background: #f9fbfc;
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.8;
+      text-align: center;
+    }
+
+    footer {
+      padding: 25px 18px 45px;
+      color: #8b9aaa;
+      font-size: 10px;
+      line-height: 1.7;
+      text-align: center;
+    }
+
+    @media (max-width: 700px) {
+      .summary-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .top-bar-inner {
+        padding: 11px 13px;
+      }
+
+      main {
+        padding-left: 13px;
+        padding-right: 13px;
+      }
+
+      .page-heading,
+      .panel {
+        padding: 19px 16px;
+      }
+
+      .submission-actions {
+        grid-template-columns: 1fr;
+      }
+
+      .brand-caption {
+        display: none;
+      }
+
+      .home-link {
+        padding: 8px 10px;
+        font-size: 10px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <header class="top-bar">
+    <div class="top-bar-inner">
+
+      <div class="brand-area">
+
+        <div class="brand-icon">
+          🌺
+        </div>
+
+        <div>
+          <p class="brand-name">
+            イマミル管理
+          </p>
+
+          <p class="brand-caption">
+            運営者専用ページ
+          </p>
+        </div>
+
+      </div>
+
+      <a
+        class="home-link"
+        href="index.html"
+      >
+        ← サイトへ戻る
+      </a>
+
+    </div>
+  </header>
+
+  <main>
+
+    <section class="page-heading">
+
+      <div class="page-label">
+        🔐 運営者専用
+      </div>
+
+      <h1>
+        広告申請の管理
+      </h1>
+
+      <p>
+        店舗やイベント運営者から届いた申請内容を確認し、
+        掲載または却下します。
+      </p>
+
+    </section>
+
+    <section
+      id="loginPanel"
+      class="panel"
+    >
+
+      <div class="panel-header">
+
+        <div class="panel-title">
+          <h2>
+            管理者ログイン
+          </h2>
+
+          <p>
+            Firebase Authenticationへ登録した
+            管理者メールアドレスでログインしてください。
+          </p>
+        </div>
+
+      </div>
+
+      <form
+        id="loginForm"
+        class="login-form"
+      >
+
+        <div class="form-field">
+          <label for="adminEmail">
+            メールアドレス
+          </label>
+
+          <input
+            id="adminEmail"
+            type="email"
+            autocomplete="email"
+            placeholder="管理者メールアドレス"
+            required
+          >
+        </div>
+
+        <div class="form-field">
+          <label for="adminPassword">
+            パスワード
+          </label>
+
+          <input
+            id="adminPassword"
+            type="password"
+            autocomplete="current-password"
+            placeholder="管理者パスワード"
+            required
+          >
+        </div>
+
+        <button
+          id="loginButton"
+          class="primary-button"
+          type="submit"
+        >
+          管理画面へログイン
+        </button>
+
+      </form>
+
+      <div
+        id="loginMessage"
+        class="message-box"
+        role="status"
+        aria-live="polite"
+      ></div>
+
+    </section>
+
+    <section
+      id="adminArea"
+      class="panel"
+    >
+
+      <div class="panel-header">
+
+        <div class="panel-title">
+          <h2>
+            申請一覧
+          </h2>
+
+          <p id="loginUserMessage">
+            管理者としてログインしています。
+          </p>
+        </div>
+
+        <button
+          id="logoutButton"
+          class="logout-button"
+          type="button"
+        >
+          ログアウト
+        </button>
+
+      </div>
+
+      <div class="summary-grid">
+
+        <div class="summary-card">
+          <span class="summary-label">
+            審査待ち
+          </span>
+
+          <span
+            id="pendingCount"
+            class="summary-value"
+          >
+            0件
+          </span>
+        </div>
+
+        <div class="summary-card">
+          <span class="summary-label">
+            この画面で掲載
+          </span>
+
+          <span
+            id="approvedCount"
+            class="summary-value"
+          >
+            0件
+          </span>
+        </div>
+
+        <div class="summary-card">
+          <span class="summary-label">
+            この画面で却下
+          </span>
+
+          <span
+            id="rejectedCount"
+            class="summary-value"
+          >
+            0件
+          </span>
+        </div>
+
+      </div>
+
+      <div class="toolbar">
+
+        <div
+          id="adminMessage"
+          class="message-box"
+          role="status"
+          aria-live="polite"
+        ></div>
+
+        <button
+          id="refreshButton"
+          class="refresh-button"
+          type="button"
+        >
+          🔄 一覧を更新
+        </button>
+
+      </div>
+
+      <div
+        id="submissionList"
+        class="submission-list"
+      >
+        <div class="empty-state">
+          申請情報を読み込んでいます…
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <footer>
+    イマミル Web Version 1 MVP<br>
+    このページは運営者専用です。
+  </footer>
+
+  <script
+    src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"
+  ></script>
+
+  <script
+    src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"
+  ></script>
+
+  <script
+    src="https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore-compat.js"
+  ></script>
+
+  <script src="firebase.js"></script>
+
+  <script>
+    const loginPanel =
+      document.getElementById(
+        "loginPanel"
+      );
+
+    const adminArea =
+      document.getElementById(
+        "adminArea"
+      );
+
+    const loginForm =
+      document.getElementById(
+        "loginForm"
+      );
+
+    const loginButton =
+      document.getElementById(
+        "loginButton"
+      );
+
+    const logoutButton =
+      document.getElementById(
+        "logoutButton"
+      );
+
+    const refreshButton =
+      document.getElementById(
+        "refreshButton"
+      );
+
+    const loginMessage =
+      document.getElementById(
+        "loginMessage"
+      );
+
+    const adminMessage =
+      document.getElementById(
+        "adminMessage"
+      );
+
+    const submissionList =
+      document.getElementById(
+        "submissionList"
+      );
+
+    const pendingCount =
+      document.getElementById(
+        "pendingCount"
+      );
+
+    const approvedCount =
+      document.getElementById(
+        "approvedCount"
+      );
+
+    const rejectedCount =
+      document.getElementById(
+        "rejectedCount"
+      );
+
+    const loginUserMessage =
+      document.getElementById(
+        "loginUserMessage"
+      );
+
+    let approvedTotal = 0;
+    let rejectedTotal = 0;
+
+    function escapeHtml(text) {
+      return String(text ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function showLoginMessage(
+      message,
+      type
+    ) {
+      loginMessage.textContent =
+        message;
+
+      loginMessage.className =
+        "message-box " + type;
+    }
+
+    function clearLoginMessage() {
+      loginMessage.textContent = "";
+
+      loginMessage.className =
+        "message-box";
+    }
+
+    function showAdminMessage(
+      message,
+      type
+    ) {
+      adminMessage.textContent =
+        message;
+
+      adminMessage.className =
+        "message-box " + type;
+    }
+
+    function clearAdminMessage() {
+      adminMessage.textContent = "";
+
+      adminMessage.className =
+        "message-box";
+    }
+
+    function formatCreatedAt(
+      createdAt
+    ) {
+      if (
+        !createdAt ||
+        typeof createdAt.toDate !==
+          "function"
+      ) {
+        return "送信日時を確認中";
+      }
+
+      return createdAt
+        .toDate()
+        .toLocaleString("ja-JP");
+    }
+
+    function setButtonsDisabled(
+      documentId,
+      disabled
+    ) {
+      document
+        .querySelectorAll(
+          `[data-document-id="${documentId}"]`
+        )
+        .forEach(function(button) {
+          button.disabled = disabled;
+        });
+    }
+
+    function updateSummary(
+      pendingTotal
+    ) {
+      pendingCount.textContent =
+        pendingTotal + "件";
+
+      approvedCount.textContent =
+        approvedTotal + "件";
+
+      rejectedCount.textContent =
+        rejectedTotal + "件";
+    }
+
+    function renderSubmissions(
+      submissions
+    ) {
+      updateSummary(
+        submissions.length
+      );
+
+      if (
+        submissions.length === 0
+      ) {
+        submissionList.innerHTML = `
+          <div class="empty-state">
+            現在、審査待ちの申請はありません。
+          </div>
+        `;
+
+        return;
+      }
+
+      submissionList.innerHTML =
+        submissions.map(
+          function(submission) {
+            return `
+              <article class="submission-card">
+
+                <div class="submission-top">
+
+                  <span class="submission-category">
+                    ${escapeHtml(submission.category)}
+                  </span>
+
+                  <span class="pending-badge">
+                    審査待ち
+                  </span>
+
+                </div>
+
+                <div class="submission-body">
+
+                  <h3 class="shop-name">
+                    ${escapeHtml(submission.shopName)}
+                  </h3>
+
+                  <div class="submission-title">
+                    ${escapeHtml(submission.title)}
+                  </div>
+
+                  <div class="submission-content">
+                    ${escapeHtml(submission.content)}
+                  </div>
+
+                  <div class="submission-date">
+                    申請日時：
+                    ${escapeHtml(
+                      formatCreatedAt(
+                        submission.createdAt
+                      )
+                    )}
+                  </div>
+
+                  <div class="submission-actions">
+
+                    <button
+                      class="approve-button"
+                      type="button"
+                      data-document-id="${escapeHtml(submission.id)}"
+                      onclick="approveSubmission('${escapeHtml(submission.id)}')"
+                    >
+                      ✅ 掲載する
+                    </button>
+
+                    <button
+                      class="reject-button"
+                      type="button"
+                      data-document-id="${escapeHtml(submission.id)}"
+                      onclick="rejectSubmission('${escapeHtml(submission.id)}')"
+                    >
+                      ✕ 却下する
+                    </button>
+
+                  </div>
+
+                </div>
+              </article>
+            `;
+          }
+        ).join("");
+    }
+
+    async function loadSubmissions() {
+      clearAdminMessage();
+
+      submissionList.innerHTML = `
+        <div class="empty-state">
+          申請情報を読み込んでいます…
+        </div>
+      `;
+
+      if (!window.imamiruDb) {
+        showAdminMessage(
+          "Firestoreへ接続できませんでした。",
+          "error"
+        );
+
+        return;
+      }
+
+      try {
+        const querySnapshot =
+          await window.imamiruDb
+            .collection("submissions")
+            .orderBy(
+              "createdAt",
+              "desc"
+            )
+            .get();
+
+        const submissions = [];
+
+        querySnapshot.forEach(
+          function(documentSnapshot) {
+            submissions.push({
+              id:
+                documentSnapshot.id,
+              ...documentSnapshot.data()
+            });
+          }
+        );
+
+        renderSubmissions(
+          submissions
+        );
+
+        showAdminMessage(
+          "申請一覧を更新しました。",
+          "success"
+        );
+      } catch (error) {
+        console.error(
+          "❌ 申請一覧を読み込めませんでした",
+          error
+        );
+
+        submissionList.innerHTML = `
+          <div class="empty-state">
+            申請情報を読み込めませんでした。
+          </div>
+        `;
+
+        showAdminMessage(
+          "申請一覧を読み込む権限がありません。Firebaseの管理者設定を確認してください。",
+          "error"
+        );
+      }
+    }
+
+    async function approveSubmission(
+      documentId
+    ) {
+      const confirmed =
+        window.confirm(
+          "この申請をイマミルへ掲載しますか？"
+        );
+
+      if (!confirmed) {
+        return;
+      }
+
+      setButtonsDisabled(
+        documentId,
+        true
+      );
+
+      clearAdminMessage();
+
+      try {
+        const submissionReference =
+          window.imamiruDb
+            .collection("submissions")
+            .doc(documentId);
+
+        const submissionSnapshot =
+          await submissionReference.get();
+
+        if (!submissionSnapshot.exists) {
+          throw new Error(
+            "申請データが見つかりません。"
+          );
+        }
+
+        const submission =
+          submissionSnapshot.data();
+
+        const advertisementReference =
+          window.imamiruDb
+            .collection("advertisements")
+            .doc();
+
+        const batch =
+          window.imamiruDb.batch();
+
+        batch.set(
+          advertisementReference,
+          {
+            shopName:
+              submission.shopName,
+            title:
+              submission.title,
+            content:
+              submission.content,
+            category:
+              submission.category,
+            status:
+              "掲載中",
+            badge:
+              submission.title,
+            timeMessage:
+              submission.title,
+            createdAt:
+              firebase.firestore
+                .FieldValue
+                .serverTimestamp(),
+            approvedAt:
+              firebase.firestore
+                .FieldValue
+                .serverTimestamp()
+          }
+        );
+
+        batch.delete(
+          submissionReference
+        );
+
+        await batch.commit();
+
+        approvedTotal += 1;
+
+        showAdminMessage(
+          "✅ 広告を掲載しました。",
+          "success"
+        );
+
+        await loadSubmissions();
+      } catch (error) {
+        console.error(
+          "❌ 広告を掲載できませんでした",
+          error
+        );
+
+        showAdminMessage(
+          "掲載処理に失敗しました。管理者権限を確認してください。",
+          "error"
+        );
+
+        setButtonsDisabled(
+          documentId,
+          false
+        );
+      }
+    }
+
+    async function rejectSubmission(
+      documentId
+    ) {
+      const confirmed =
+        window.confirm(
+          "この申請を却下して削除しますか？"
+        );
+
+      if (!confirmed) {
+        return;
+      }
+
+      setButtonsDisabled(
+        documentId,
+        true
+      );
+
+      clearAdminMessage();
+
+      try {
+        await window.imamiruDb
+          .collection("submissions")
+          .doc(documentId)
+          .delete();
+
+        rejectedTotal += 1;
+
+        showAdminMessage(
+          "申請を却下しました。",
+          "success"
+        );
+
+        await loadSubmissions();
+      } catch (error) {
+        console.error(
+          "❌ 申請を却下できませんでした",
+          error
+        );
+
+        showAdminMessage(
+          "却下処理に失敗しました。管理者権限を確認してください。",
+          "error"
+        );
+
+        setButtonsDisabled(
+          documentId,
+          false
+        );
+      }
+    }
+
+    loginForm.addEventListener(
+      "submit",
+      async function(event) {
+        event.preventDefault();
+
+        clearLoginMessage();
+
+        const email =
+          document
+            .getElementById(
+              "adminEmail"
+            )
+            .value
+            .trim();
+
+        const password =
+          document
+            .getElementById(
+              "adminPassword"
+            )
+            .value;
+
+        loginButton.disabled = true;
+
+        loginButton.textContent =
+          "ログインしています…";
+
+        try {
+          await firebase
+            .auth()
+            .signInWithEmailAndPassword(
+              email,
+              password
+            );
+        } catch (error) {
+          console.error(
+            "❌ 管理者ログインに失敗しました",
+            error
+          );
+
+          showLoginMessage(
+            "ログインできませんでした。メールアドレスとパスワードを確認してください。",
+            "error"
+          );
+        } finally {
+          loginButton.disabled = false;
+
+          loginButton.textContent =
+            "管理画面へログイン";
+        }
+      }
+    );
+
+    logoutButton.addEventListener(
+      "click",
+      async function() {
+        await firebase
+          .auth()
+          .signOut();
+      }
+    );
+
+    refreshButton.addEventListener(
+      "click",
+      loadSubmissions
+    );
+
+    firebase
+      .auth()
+      .onAuthStateChanged(
+        function(user) {
+          if (user) {
+            loginPanel.style.display =
+              "none";
+
+            adminArea.classList.add(
+              "visible"
+            );
+
+            logoutButton.classList.add(
+              "visible"
+            );
+
+            loginUserMessage.textContent =
+              user.email +
+              " でログインしています。";
+
+            loadSubmissions();
+          } else {
+            loginPanel.style.display =
+              "block";
+
+            adminArea.classList.remove(
+              "visible"
+            );
+
+            logoutButton.classList.remove(
+              "visible"
+            );
+
+            submissionList.innerHTML = `
+              <div class="empty-state">
+                ログイン後に申請を表示します。
+              </div>
+            `;
+          }
+        }
+      );
+  </script>
+
+</body>
+</html>
