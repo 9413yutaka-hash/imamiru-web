@@ -13,21 +13,34 @@
     content="#0788c9"
   >
 
-  <title>広告掲載を申し込む｜イマミル</title>
+  <meta
+    name="description"
+    content="イマミルへ店舗・イベントのリアルタイム情報を投稿するページです。"
+  >
+
+  <title>
+    広告を投稿する｜イマミル
+  </title>
 
   <style>
     :root {
       --navy: #071a33;
+      --navy-light: #0d294a;
       --blue: #0788c9;
       --cyan: #04b7d7;
+      --sky: #dff7ff;
+      --yellow: #ffd85a;
+      --orange: #ff9e45;
+      --green: #19a96b;
+      --red: #ef5a67;
       --white: #ffffff;
       --text: #15233a;
       --subtext: #697386;
-      --border: #dfe8ef;
+      --border: #e2eaf1;
       --background: #f4f8fb;
-      --red: #e14d4d;
-      --green: #169c64;
-      --shadow: 0 18px 50px rgba(20, 52, 82, 0.12);
+      --shadow:
+        0 18px 50px
+        rgba(20, 52, 82, 0.12);
     }
 
     * {
@@ -46,21 +59,26 @@
         "Hiragino Kaku Gothic ProN",
         "Meiryo",
         sans-serif;
-      color: var(--text);
       background:
-        radial-gradient(
-          circle at top right,
-          rgba(4, 183, 215, 0.14),
-          transparent 30%
-        ),
-        var(--background);
+        linear-gradient(
+          180deg,
+          #e9faff 0,
+          var(--background) 360px
+        );
+      color: var(--text);
     }
 
     button,
     input,
     textarea,
-    select {
+    select,
+    a {
       font-family: inherit;
+    }
+
+    button {
+      -webkit-tap-highlight-color:
+        transparent;
     }
 
     a {
@@ -71,20 +89,40 @@
     .top-bar {
       position: sticky;
       top: 0;
-      z-index: 20;
-      border-bottom: 1px solid rgba(12, 54, 87, 0.08);
-      background: rgba(255, 255, 255, 0.94);
-      backdrop-filter: blur(16px);
+      z-index: 50;
+      background:
+        rgba(
+          255,
+          255,
+          255,
+          0.94
+        );
+      backdrop-filter:
+        blur(16px);
+      border-bottom:
+        1px solid
+        rgba(
+          12,
+          54,
+          87,
+          0.08
+        );
     }
 
     .top-bar-inner {
-      width: min(100%, 760px);
+      width: min(
+        100%,
+        760px
+      );
       margin: 0 auto;
-      padding: 13px 18px;
+      padding:
+        13px
+        18px;
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      gap: 15px;
+      justify-content:
+        space-between;
+      gap: 14px;
     }
 
     .brand-area {
@@ -98,25 +136,33 @@
       height: 42px;
       display: grid;
       place-items: center;
+      flex-shrink: 0;
       border-radius: 14px;
-      color: var(--white);
-      font-size: 21px;
       background:
         linear-gradient(
           135deg,
           var(--blue),
           var(--cyan)
         );
+      color: var(--white);
+      font-size: 21px;
       box-shadow:
-        0 8px 20px rgba(4, 158, 199, 0.25);
+        0 8px 20px
+        rgba(
+          4,
+          158,
+          199,
+          0.25
+        );
     }
 
     .brand-name {
       margin: 0;
       color: var(--navy);
-      font-size: 20px;
+      font-size: 21px;
       font-weight: 900;
-      letter-spacing: 0.08em;
+      letter-spacing:
+        0.08em;
     }
 
     .brand-caption {
@@ -126,81 +172,136 @@
       font-weight: 700;
     }
 
-    .back-link {
-      flex-shrink: 0;
-      padding: 9px 13px;
-      border-radius: 12px;
-      color: #2465af;
-      background: #edf5ff;
+    .home-link {
+      padding:
+        9px
+        13px;
+      border:
+        1px solid
+        var(--border);
+      border-radius: 999px;
+      background:
+        var(--white);
+      color: var(--navy);
       font-size: 12px;
       font-weight: 900;
+      white-space: nowrap;
     }
 
-    .hero {
-      overflow: hidden;
-      color: var(--white);
+    .page-hero {
+      padding:
+        42px
+        18px
+        86px;
       background:
-        radial-gradient(
-          circle at 88% 14%,
-          rgba(255, 255, 255, 0.22),
-          transparent 25%
-        ),
         linear-gradient(
-          145deg,
-          #067bb8,
-          #03b5cf 55%,
-          #5bd4d0
+          135deg,
+          #0687c5,
+          #13c3ce
         );
+      color: var(--white);
     }
 
-    .hero-inner {
-      width: min(100%, 760px);
+    .page-hero-inner {
+      width: min(
+        100%,
+        720px
+      );
       margin: 0 auto;
-      padding: 43px 18px 70px;
     }
 
     .hero-label {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      padding: 7px 12px;
-      border: 1px solid rgba(255, 255, 255, 0.3);
+      gap: 7px;
+      padding:
+        8px
+        12px;
+      border:
+        1px solid
+        rgba(
+          255,
+          255,
+          255,
+          0.3
+        );
       border-radius: 999px;
-      background: rgba(255, 255, 255, 0.14);
+      background:
+        rgba(
+          255,
+          255,
+          255,
+          0.12
+        );
       font-size: 11px;
       font-weight: 900;
     }
 
-    .hero h1 {
-      margin: 15px 0 0;
-      font-size: clamp(30px, 7vw, 46px);
-      line-height: 1.35;
+    .page-hero h1 {
+      margin:
+        20px
+        0 0;
+      font-size:
+        clamp(
+          30px,
+          7vw,
+          46px
+        );
+      line-height: 1.3;
+      letter-spacing:
+        0.02em;
     }
 
-    .hero p {
-      max-width: 580px;
-      margin: 15px 0 0;
-      color: rgba(255, 255, 255, 0.92);
+    .page-hero p {
+      margin:
+        16px
+        0 0;
+      max-width: 600px;
+      color:
+        rgba(
+          255,
+          255,
+          255,
+          0.92
+        );
       font-size: 14px;
-      font-weight: 600;
+      font-weight: 700;
       line-height: 1.9;
     }
 
     main {
-      width: min(100%, 760px);
+      width: min(
+        100%,
+        720px
+      );
       margin: 0 auto;
-      padding: 0 18px 60px;
+      padding:
+        0
+        16px
+        70px;
     }
 
     .form-card {
-      position: relative;
-      z-index: 5;
-      margin-top: -38px;
-      padding: 25px;
-      border: 1px solid rgba(23, 74, 110, 0.08);
-      border-radius: 24px;
-      background: var(--white);
-      box-shadow: var(--shadow);
+      margin-top: -55px;
+      padding:
+        28px;
+      border:
+        1px solid
+        rgba(
+          12,
+          54,
+          87,
+          0.08
+        );
+      border-radius: 26px;
+      background:
+        var(--white);
+      box-shadow:
+        var(--shadow);
+    }
+
+    .form-heading {
+      margin-bottom: 25px;
     }
 
     .form-heading h2 {
@@ -210,229 +311,627 @@
     }
 
     .form-heading p {
-      margin: 8px 0 0;
+      margin:
+        9px
+        0 0;
       color: var(--subtext);
-      font-size: 12px;
+      font-size: 13px;
       line-height: 1.8;
     }
 
     .notice-box {
-      margin-top: 18px;
-      padding: 14px;
+      margin-bottom: 24px;
+      padding:
+        15px
+        16px;
+      border:
+        1px solid
+        #cfeefa;
       border-radius: 14px;
-      color: #496478;
-      background: #edf7fb;
+      background: #effbff;
+      color: #24627e;
       font-size: 12px;
       font-weight: 700;
-      line-height: 1.75;
+      line-height: 1.8;
     }
 
-    .form-grid {
-      display: grid;
-      gap: 19px;
-      margin-top: 24px;
+    .form-group {
+      margin-top: 22px;
     }
 
-    .form-field {
-      display: grid;
-      gap: 8px;
-    }
-
-    .form-field label {
+    .form-label {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 9px;
       color: var(--navy);
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 900;
     }
 
     .required {
-      margin-left: 5px;
+      padding:
+        3px
+        7px;
+      border-radius: 999px;
+      background: #fff0f0;
       color: var(--red);
-      font-size: 10px;
+      font-size: 9px;
+      font-weight: 900;
     }
 
-    .field-note {
-      color: var(--subtext);
-      font-size: 10px;
-      line-height: 1.5;
+    .optional {
+      padding:
+        3px
+        7px;
+      border-radius: 999px;
+      background: #eef5f8;
+      color: #648093;
+      font-size: 9px;
+      font-weight: 900;
+    }
+
+    .form-help {
+      margin:
+        7px
+        0 0;
+      color: #8a97a6;
+      font-size: 11px;
+      line-height: 1.7;
     }
 
     input,
     textarea,
     select {
       width: 100%;
-      border: 1px solid var(--border);
-      border-radius: 13px;
+      border:
+        1px solid
+        var(--border);
+      border-radius: 14px;
       outline: none;
+      background:
+        #fbfdff;
       color: var(--text);
-      background: #fbfdfe;
-      font-size: 14px;
+      font-size: 15px;
       transition:
-        border-color 0.2s,
-        box-shadow 0.2s,
-        background 0.2s;
+        border-color
+        0.2s,
+        box-shadow
+        0.2s,
+        background
+        0.2s;
     }
 
     input,
     select {
-      min-height: 50px;
-      padding: 12px 14px;
+      min-height: 52px;
+      padding:
+        0
+        15px;
     }
 
     textarea {
-      min-height: 145px;
-      padding: 14px;
-      line-height: 1.8;
+      min-height: 150px;
+      padding: 15px;
       resize: vertical;
+      line-height: 1.8;
     }
 
     input:focus,
     textarea:focus,
     select:focus {
-      border-color: var(--cyan);
-      background: var(--white);
+      border-color:
+        var(--cyan);
+      background:
+        var(--white);
       box-shadow:
-        0 0 0 4px rgba(4, 183, 215, 0.12);
+        0 0 0 4px
+        rgba(
+          4,
+          183,
+          215,
+          0.12
+        );
     }
 
     .character-count {
-      color: var(--subtext);
-      font-size: 10px;
+      margin-top: 7px;
+      color: #8a97a6;
       text-align: right;
-    }
-
-    .agreement {
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
-      padding: 14px;
-      border-radius: 14px;
-      background: #f6f8fa;
-    }
-
-    .agreement input {
-      width: 18px;
-      height: 18px;
-      min-height: 0;
-      margin: 1px 0 0;
-      flex-shrink: 0;
-    }
-
-    .agreement label {
-      color: #536678;
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 700;
-      line-height: 1.75;
-      cursor: pointer;
     }
 
-    .submit-button {
-      width: 100%;
-      min-height: 54px;
+    .image-upload-area {
+      padding:
+        18px;
+      border:
+        2px dashed
+        #b9dbe8;
+      border-radius: 18px;
+      background:
+        #f7fcfe;
+      text-align: center;
+      transition:
+        border-color
+        0.2s,
+        background
+        0.2s;
+    }
+
+    .image-upload-area.drag-over {
+      border-color:
+        var(--cyan);
+      background:
+        #ebfbff;
+    }
+
+    .image-upload-icon {
+      font-size: 38px;
+    }
+
+    .image-upload-title {
+      margin:
+        9px
+        0 0;
+      color: var(--navy);
+      font-size: 15px;
+      font-weight: 900;
+    }
+
+    .image-upload-description {
+      margin:
+        7px
+        0 0;
+      color: var(--subtext);
+      font-size: 11px;
+      line-height: 1.7;
+    }
+
+    .image-input {
+      display: none;
+    }
+
+    .image-select-button {
+      margin-top: 14px;
+      min-height: 45px;
+      padding:
+        0
+        18px;
       border: none;
-      border-radius: 15px;
-      color: var(--white);
+      border-radius: 13px;
       background:
         linear-gradient(
           135deg,
           var(--blue),
           var(--cyan)
         );
-      font-size: 15px;
+      color: var(--white);
+      font-size: 13px;
       font-weight: 900;
       cursor: pointer;
       box-shadow:
-        0 11px 25px rgba(5, 144, 194, 0.22);
-      transition:
-        transform 0.2s,
-        opacity 0.2s;
+        0 9px 20px
+        rgba(
+          4,
+          158,
+          199,
+          0.2
+        );
     }
 
-    .submit-button:hover {
-      transform: translateY(-2px);
+    .image-select-button:hover {
+      transform:
+        translateY(-1px);
+    }
+
+    .image-count {
+      margin:
+        12px
+        0 0;
+      color: var(--blue);
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .image-preview-list {
+      display: grid;
+      grid-template-columns:
+        repeat(
+          5,
+          minmax(
+            0,
+            1fr
+          )
+        );
+      gap: 9px;
+      margin-top: 15px;
+    }
+
+    .image-preview-item {
+      position: relative;
+      overflow: hidden;
+      aspect-ratio: 1 / 1;
+      border:
+        1px solid
+        var(--border);
+      border-radius: 13px;
+      background:
+        #eef4f7;
+    }
+
+    .image-preview-item img {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: cover;
+    }
+
+    .image-number {
+      position: absolute;
+      top: 6px;
+      left: 6px;
+      min-width: 23px;
+      height: 23px;
+      display: grid;
+      place-items: center;
+      padding:
+        0
+        6px;
+      border-radius: 999px;
+      background:
+        rgba(
+          7,
+          26,
+          51,
+          0.78
+        );
+      color: var(--white);
+      font-size: 9px;
+      font-weight: 900;
+    }
+
+    .image-remove-button {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      width: 26px;
+      height: 26px;
+      display: grid;
+      place-items: center;
+      padding: 0;
+      border: none;
+      border-radius: 50%;
+      background:
+        rgba(
+          255,
+          255,
+          255,
+          0.94
+        );
+      color: var(--red);
+      font-size: 13px;
+      font-weight: 900;
+      cursor: pointer;
+      box-shadow:
+        0 4px 12px
+        rgba(
+          0,
+          0,
+          0,
+          0.15
+        );
+    }
+
+    .first-image-label {
+      position: absolute;
+      right: 6px;
+      bottom: 6px;
+      left: 6px;
+      padding:
+        5px
+        4px;
+      border-radius: 8px;
+      background:
+        rgba(
+          255,
+          255,
+          255,
+          0.94
+        );
+      color: var(--navy);
+      font-size: 8px;
+      font-weight: 900;
+      text-align: center;
+    }
+
+    .agreement-box {
+      margin-top: 26px;
+      padding:
+        17px;
+      border:
+        1px solid
+        var(--border);
+      border-radius: 15px;
+      background:
+        #f8fafc;
+    }
+
+    .agreement-label {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      cursor: pointer;
+    }
+
+    .agreement-label input {
+      width: 19px;
+      height: 19px;
+      min-height: 0;
+      flex-shrink: 0;
+      margin-top: 2px;
+      accent-color:
+        var(--blue);
+    }
+
+    .agreement-text {
+      color: #526474;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.8;
+    }
+
+    .submit-button {
+      width: 100%;
+      min-height: 58px;
+      margin-top: 24px;
+      border: none;
+      border-radius: 16px;
+      background:
+        linear-gradient(
+          135deg,
+          var(--blue),
+          var(--cyan)
+        );
+      color: var(--white);
+      font-size: 16px;
+      font-weight: 900;
+      cursor: pointer;
+      box-shadow:
+        0 13px 28px
+        rgba(
+          4,
+          158,
+          199,
+          0.25
+        );
+      transition:
+        transform
+        0.2s,
+        opacity
+        0.2s;
+    }
+
+    .submit-button:hover:not(
+      :disabled
+    ) {
+      transform:
+        translateY(-2px);
     }
 
     .submit-button:disabled {
-      opacity: 0.6;
-      cursor: wait;
-      transform: none;
+      cursor:
+        not-allowed;
+      opacity: 0.55;
+    }
+
+    .progress-area {
+      display: none;
+      margin-top: 18px;
+      padding:
+        16px;
+      border-radius: 14px;
+      background:
+        #f0f9fc;
+    }
+
+    .progress-area.visible {
+      display: block;
+    }
+
+    .progress-message {
+      margin: 0;
+      color: #24627e;
+      font-size: 12px;
+      font-weight: 900;
+      line-height: 1.7;
+    }
+
+    .progress-bar {
+      overflow: hidden;
+      height: 8px;
+      margin-top: 11px;
+      border-radius: 999px;
+      background:
+        #dceef4;
+    }
+
+    .progress-bar-fill {
+      width: 0;
+      height: 100%;
+      border-radius: inherit;
+      background:
+        linear-gradient(
+          90deg,
+          var(--blue),
+          var(--cyan)
+        );
+      transition:
+        width
+        0.3s;
     }
 
     .message-box {
       display: none;
-      margin-top: 17px;
-      padding: 15px;
+      margin-top: 18px;
+      padding:
+        16px;
       border-radius: 14px;
       font-size: 13px;
       font-weight: 800;
-      line-height: 1.75;
+      line-height: 1.8;
+    }
+
+    .message-box.visible {
+      display: block;
     }
 
     .message-box.success {
-      display: block;
-      color: #146e4a;
-      background: #e8f8f0;
-      border: 1px solid #bce8d2;
+      border:
+        1px solid
+        #bcebd4;
+      background:
+        #ebfff5;
+      color: #16734b;
     }
 
     .message-box.error {
-      display: block;
-      color: #a93d3d;
-      background: #fff0f0;
-      border: 1px solid #f3c7c7;
+      border:
+        1px solid
+        #ffd0d4;
+      background:
+        #fff2f3;
+      color: #b33c49;
     }
 
-    .after-submit-link {
+    .after-submit-actions {
       display: none;
-      margin-top: 12px;
-      padding: 12px;
-      border-radius: 12px;
-      color: #2465af;
-      background: #edf5ff;
+      grid-template-columns:
+        1fr
+        1fr;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .after-submit-actions.visible {
+      display: grid;
+    }
+
+    .after-action {
+      min-height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding:
+        0
+        12px;
+      border-radius: 13px;
       font-size: 12px;
       font-weight: 900;
       text-align: center;
     }
 
-    .after-submit-link.visible {
-      display: block;
+    .back-home-button {
+      background:
+        var(--navy);
+      color: var(--white);
     }
 
-    footer {
-      padding: 25px 18px 40px;
-      color: #8b9aaa;
+    .new-post-button {
+      border:
+        1px solid
+        var(--border);
+      background:
+        var(--white);
+      color: var(--navy);
+      cursor: pointer;
+    }
+
+    .security-note {
+      margin-top: 22px;
+      padding-top: 18px;
+      border-top:
+        1px solid
+        var(--border);
+      color: #8b98a5;
       font-size: 10px;
-      line-height: 1.7;
+      line-height: 1.8;
       text-align: center;
     }
 
-    @media (max-width: 520px) {
-      .top-bar-inner {
-        padding: 11px 14px;
+    footer {
+      padding:
+        0
+        18px
+        35px;
+      color: #8c9aa8;
+      text-align: center;
+      font-size: 10px;
+      line-height: 1.8;
+    }
+
+    @media (
+      max-width: 620px
+    ) {
+      .form-card {
+        padding:
+          22px
+          17px;
+        border-radius: 22px;
       }
 
-      .hero-inner {
+      .image-preview-list {
+        grid-template-columns:
+          repeat(
+            3,
+            minmax(
+              0,
+              1fr
+            )
+          );
+      }
+    }
+
+    @media (
+      max-width: 420px
+    ) {
+      .top-bar-inner {
         padding:
-          35px 15px
-          65px;
+          11px
+          13px;
+      }
+
+      .brand-icon {
+        width: 38px;
+        height: 38px;
+      }
+
+      .brand-name {
+        font-size: 18px;
+      }
+
+      .home-link {
+        padding:
+          8px
+          10px;
+        font-size: 10px;
+      }
+
+      .page-hero {
+        padding:
+          34px
+          15px
+          78px;
       }
 
       main {
-        padding-left: 13px;
-        padding-right: 13px;
+        padding-right: 12px;
+        padding-left: 12px;
       }
 
-      .form-card {
-        padding: 20px 16px;
-        border-radius: 20px;
-      }
-
-      .brand-caption {
-        display: none;
-      }
-
-      .back-link {
-        padding: 8px 10px;
-        font-size: 10px;
+      .after-submit-actions {
+        grid-template-columns:
+          1fr;
       }
     }
   </style>
@@ -444,6 +943,7 @@
     <div class="top-bar-inner">
 
       <div class="brand-area">
+
         <div class="brand-icon">
           🌺
         </div>
@@ -457,33 +957,34 @@
             リアルタイム観光コンシェルジュ
           </p>
         </div>
+
       </div>
 
       <a
-        class="back-link"
+        class="home-link"
         href="index.html"
       >
-        ← ホームへ戻る
+        ← トップへ戻る
       </a>
 
     </div>
   </header>
 
-  <section class="hero">
-    <div class="hero-inner">
+  <section class="page-hero">
+    <div class="page-hero-inner">
 
       <div class="hero-label">
         📢 店舗・イベント運営者様
       </div>
 
       <h1>
-        今だけの情報を、<br>
-        イマミルへ。
+        沖縄の「今」を、<br>
+        旅人へ届けよう。
       </h1>
 
       <p>
         タイムセール、限定メニュー、イベントなど、
-        旅行者へ届けたい「今」の情報をお申し込みください。
+        今だからこそ伝えたい情報を投稿できます。
       </p>
 
     </div>
@@ -494,210 +995,398 @@
     <section class="form-card">
 
       <div class="form-heading">
+
         <h2>
           広告掲載のお申し込み
         </h2>
 
         <p>
-          送信された内容は、運営による確認後に掲載されます。
-          送信した直後に一般公開されることはありません。
+          投稿後、イマミル運営による確認を行います。
+          承認された情報だけがトップページに掲載されます。
         </p>
+
       </div>
 
       <div class="notice-box">
-        💡 現在はVer1のテスト受付です。
-        店舗名や内容に間違いがないか確認してから送信してください。
+        💡 写真は最大5枚まで選択できます。
+        1枚目の写真がトップページのメイン画像になります。
+        写真を付けずに投稿することもできます。
       </div>
 
       <form id="submissionForm">
 
-        <div class="form-grid">
+        <div class="form-group">
 
-          <div class="form-field">
-            <label for="shopName">
-              店舗・主催者名
-              <span class="required">
-                必須
-              </span>
-            </label>
+          <label
+            class="form-label"
+            for="shopName"
+          >
+            店舗・イベント名
 
-            <input
-              id="shopName"
-              name="shopName"
-              type="text"
-              maxlength="60"
-              autocomplete="organization"
-              placeholder="例：沖縄そば イマミル食堂"
-              required
-            >
+            <span class="required">
+              必須
+            </span>
+          </label>
 
-            <span class="field-note">
-              60文字以内で入力してください。
+          <input
+            id="shopName"
+            name="shopName"
+            type="text"
+            maxlength="60"
+            autocomplete="organization"
+            placeholder="例：南国食堂"
+            required
+          >
+
+          <p class="form-help">
+            お客様に表示される正式な名称を入力してください。
+          </p>
+
+        </div>
+
+        <div class="form-group">
+
+          <label
+            class="form-label"
+            for="title"
+          >
+            広告タイトル
+
+            <span class="required">
+              必須
+            </span>
+          </label>
+
+          <input
+            id="title"
+            name="title"
+            type="text"
+            maxlength="50"
+            placeholder="例：本日限定！ハマチ半額"
+            required
+          >
+
+          <div
+            id="titleCount"
+            class="character-count"
+          >
+            0 / 50文字
+          </div>
+
+        </div>
+
+        <div class="form-group">
+
+          <label
+            class="form-label"
+            for="category"
+          >
+            カテゴリー
+
+            <span class="required">
+              必須
+            </span>
+          </label>
+
+          <select
+            id="category"
+            name="category"
+            required
+          >
+            <option value="">
+              選択してください
+            </option>
+
+            <option value="グルメ">
+              🍜 グルメ
+            </option>
+
+            <option value="カフェ">
+              🥭 カフェ
+            </option>
+
+            <option value="居酒屋">
+              🍺 居酒屋
+            </option>
+
+            <option value="イベント">
+              🎵 イベント
+            </option>
+          </select>
+
+        </div>
+
+        <div class="form-group">
+
+          <label
+            class="form-label"
+            for="content"
+          >
+            広告内容
+
+            <span class="required">
+              必須
+            </span>
+          </label>
+
+          <textarea
+            id="content"
+            name="content"
+            maxlength="300"
+            placeholder="例：本日限定でハマチのお刺身を半額で提供します。売り切れ次第終了です！"
+            required
+          ></textarea>
+
+          <div
+            id="contentCount"
+            class="character-count"
+          >
+            0 / 300文字
+          </div>
+
+        </div>
+
+        <div class="form-group">
+
+          <label
+            class="form-label"
+            for="address"
+          >
+            住所・場所
+
+            <span class="optional">
+              任意
+            </span>
+          </label>
+
+          <input
+            id="address"
+            name="address"
+            type="text"
+            maxlength="120"
+            autocomplete="street-address"
+            placeholder="例：沖縄県那覇市〇〇1-2-3"
+          >
+
+          <p class="form-help">
+            入力すると、トップページの地図ボタンから
+            Googleマップで検索できるようになります。
+          </p>
+
+        </div>
+
+        <div class="form-group">
+
+          <div class="form-label">
+            掲載写真
+
+            <span class="optional">
+              任意・最大5枚
             </span>
           </div>
 
-          <div class="form-field">
-            <label for="category">
-              カテゴリー
-              <span class="required">
-                必須
-              </span>
-            </label>
+          <div
+            id="imageUploadArea"
+            class="image-upload-area"
+          >
 
-            <select
-              id="category"
-              name="category"
-              required
-            >
-              <option value="">
-                選択してください
-              </option>
+            <div class="image-upload-icon">
+              📷
+            </div>
 
-              <option value="グルメ">
-                グルメ
-              </option>
+            <p class="image-upload-title">
+              広告に掲載する写真を選択
+            </p>
 
-              <option value="カフェ">
-                カフェ
-              </option>
-
-              <option value="居酒屋">
-                居酒屋
-              </option>
-
-              <option value="イベント">
-                イベント
-              </option>
-            </select>
-          </div>
-
-          <div class="form-field">
-            <label for="title">
-              情報のタイトル
-              <span class="required">
-                必須
-              </span>
-            </label>
+            <p class="image-upload-description">
+              JPG・PNG・WEBPに対応しています。<br>
+              1枚につき10MB以内、最大5枚まで選択できます。
+            </p>
 
             <input
-              id="title"
-              name="title"
-              type="text"
-              maxlength="80"
-              placeholder="例：本日限定！三枚肉そば20食"
-              required
+              id="imageInput"
+              class="image-input"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              multiple
             >
 
-            <span class="field-note">
-              一番伝えたい内容を短く入力してください。
-            </span>
-          </div>
+            <button
+              id="imageSelectButton"
+              class="image-select-button"
+              type="button"
+            >
+              ＋ 写真を選ぶ
+            </button>
 
-          <div class="form-field">
-            <label for="content">
-              詳しい内容
-              <span class="required">
-                必須
-              </span>
-            </label>
-
-            <textarea
-              id="content"
-              name="content"
-              maxlength="500"
-              placeholder="例：本日限定の三枚肉そばがあります。売り切れ次第終了です。ご来店をお待ちしております。"
-              required
-            ></textarea>
+            <p
+              id="imageCount"
+              class="image-count"
+            >
+              0 / 5枚
+            </p>
 
             <div
-              id="contentCount"
-              class="character-count"
-            >
-              0 / 500文字
-            </div>
+              id="imagePreviewList"
+              class="image-preview-list"
+            ></div>
+
           </div>
 
-          <div class="agreement">
+        </div>
+
+        <div class="agreement-box">
+
+          <label class="agreement-label">
 
             <input
               id="agreement"
-              name="agreement"
               type="checkbox"
               required
             >
 
-            <label for="agreement">
-              入力内容に虚偽がなく、店舗またはイベントの関係者として
-              申し込むことに同意します。
-            </label>
+            <span class="agreement-text">
+              入力内容に虚偽がなく、第三者の権利を侵害する
+              写真や文章を投稿していないことを確認しました。
+            </span>
 
+          </label>
+
+        </div>
+
+        <button
+          id="submitButton"
+          class="submit-button"
+          type="submit"
+        >
+          この内容で掲載を申し込む
+        </button>
+
+        <div
+          id="progressArea"
+          class="progress-area"
+        >
+
+          <p
+            id="progressMessage"
+            class="progress-message"
+          >
+            投稿の準備をしています…
+          </p>
+
+          <div class="progress-bar">
+            <div
+              id="progressBarFill"
+              class="progress-bar-fill"
+            ></div>
           </div>
 
-          <button
-            id="submitButton"
-            class="submit-button"
-            type="submit"
+        </div>
+
+        <div
+          id="messageBox"
+          class="message-box"
+          role="status"
+          aria-live="polite"
+        ></div>
+
+        <div
+          id="afterSubmitActions"
+          class="after-submit-actions"
+        >
+
+          <a
+            class="after-action back-home-button"
+            href="index.html"
           >
-            この内容で申し込む
+            トップページへ戻る
+          </a>
+
+          <button
+            id="newPostButton"
+            class="after-action new-post-button"
+            type="button"
+          >
+            続けて投稿する
           </button>
 
         </div>
 
       </form>
 
-      <div
-        id="messageBox"
-        class="message-box"
-        role="status"
-        aria-live="polite"
-      ></div>
-
-      <a
-        id="homeLink"
-        class="after-submit-link"
-        href="index.html"
-      >
-        イマミルのホームへ戻る
-      </a>
+      <div class="security-note">
+        投稿された情報は、イマミル運営の確認後に公開されます。
+        API Secretや管理者情報が、このページから送信されることはありません。
+      </div>
 
     </section>
 
   </main>
 
   <footer>
-    イマミル Web Version 1 MVP<br>
-    広告掲載には運営の確認があります。
+    イマミル Web Version 1.1
+    <br>
+    沖縄の「今」を、旅人へ。
   </footer>
 
+  <!-- Firebase本体 -->
   <script
-    src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"
+    src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"
   ></script>
 
+  <!-- Firestore -->
   <script
-    src="https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore-compat.js"
+    src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"
   ></script>
 
+  <!-- イマミルのFirebase接続設定 -->
   <script src="firebase.js"></script>
 
   <script>
+    /*
+      Cloudinary設定
+    */
+
+    const CLOUDINARY_CLOUD_NAME =
+      "cdhyctnp";
+
+    const CLOUDINARY_UPLOAD_PRESET =
+      "imamiru_upload";
+
+    const MAX_IMAGE_COUNT =
+      5;
+
+    const MAX_IMAGE_SIZE_BYTES =
+      10 * 1024 * 1024;
+
+    const ALLOWED_IMAGE_TYPES =
+      [
+        "image/jpeg",
+        "image/png",
+        "image/webp"
+      ];
+
+    let selectedImageFiles =
+      [];
+
     const submissionForm =
       document.getElementById(
         "submissionForm"
       );
 
-    const submitButton =
+    const shopNameInput =
       document.getElementById(
-        "submitButton"
+        "shopName"
       );
 
-    const messageBox =
+    const titleInput =
       document.getElementById(
-        "messageBox"
+        "title"
       );
 
-    const homeLink =
+    const categoryInput =
       document.getElementById(
-        "homeLink"
+        "category"
       );
 
     const contentInput =
@@ -705,153 +1394,1010 @@
         "content"
       );
 
+    const addressInput =
+      document.getElementById(
+        "address"
+      );
+
+    const agreementInput =
+      document.getElementById(
+        "agreement"
+      );
+
+    const imageInput =
+      document.getElementById(
+        "imageInput"
+      );
+
+    const imageSelectButton =
+      document.getElementById(
+        "imageSelectButton"
+      );
+
+    const imageUploadArea =
+      document.getElementById(
+        "imageUploadArea"
+      );
+
+    const imagePreviewList =
+      document.getElementById(
+        "imagePreviewList"
+      );
+
+    const imageCount =
+      document.getElementById(
+        "imageCount"
+      );
+
+    const titleCount =
+      document.getElementById(
+        "titleCount"
+      );
+
     const contentCount =
       document.getElementById(
         "contentCount"
       );
 
-    function updateContentCount() {
+    const submitButton =
+      document.getElementById(
+        "submitButton"
+      );
+
+    const progressArea =
+      document.getElementById(
+        "progressArea"
+      );
+
+    const progressMessage =
+      document.getElementById(
+        "progressMessage"
+      );
+
+    const progressBarFill =
+      document.getElementById(
+        "progressBarFill"
+      );
+
+    const messageBox =
+      document.getElementById(
+        "messageBox"
+      );
+
+    const afterSubmitActions =
+      document.getElementById(
+        "afterSubmitActions"
+      );
+
+    const newPostButton =
+      document.getElementById(
+        "newPostButton"
+      );
+
+    function escapeHtml(
+      text
+    ) {
+      return String(
+        text ?? ""
+      )
+        .replaceAll(
+          "&",
+          "&amp;"
+        )
+        .replaceAll(
+          "<",
+          "&lt;"
+        )
+        .replaceAll(
+          ">",
+          "&gt;"
+        )
+        .replaceAll(
+          '"',
+          "&quot;"
+        )
+        .replaceAll(
+          "'",
+          "&#039;"
+        );
+    }
+
+    function updateCharacterCounts() {
+      titleCount.textContent =
+        titleInput.value.length +
+        " / 50文字";
+
       contentCount.textContent =
         contentInput.value.length +
-        " / 500文字";
+        " / 300文字";
     }
 
     function showMessage(
-      message,
-      type
+      type,
+      message
     ) {
-      messageBox.textContent = message;
-
       messageBox.className =
-        "message-box " + type;
+        "message-box visible " +
+        type;
+
+      messageBox.innerHTML =
+        escapeHtml(
+          message
+        ).replaceAll(
+          "\n",
+          "<br>"
+        );
     }
 
     function clearMessage() {
-      messageBox.textContent = "";
-
       messageBox.className =
         "message-box";
 
-      homeLink.classList.remove(
+      messageBox.textContent =
+        "";
+    }
+
+    function setProgress(
+      message,
+      percent
+    ) {
+      progressArea.classList.add(
         "visible"
+      );
+
+      progressMessage.textContent =
+        message;
+
+      progressBarFill.style.width =
+        Math.max(
+          0,
+          Math.min(
+            100,
+            percent
+          )
+        ) +
+        "%";
+    }
+
+    function hideProgress() {
+      progressArea.classList.remove(
+        "visible"
+      );
+
+      progressBarFill.style.width =
+        "0%";
+    }
+
+    function setSubmitting(
+      submitting
+    ) {
+      submitButton.disabled =
+        submitting;
+
+      imageSelectButton.disabled =
+        submitting;
+
+      shopNameInput.disabled =
+        submitting;
+
+      titleInput.disabled =
+        submitting;
+
+      categoryInput.disabled =
+        submitting;
+
+      contentInput.disabled =
+        submitting;
+
+      addressInput.disabled =
+        submitting;
+
+      agreementInput.disabled =
+        submitting;
+
+      if (submitting) {
+        submitButton.textContent =
+          "送信しています…";
+      } else {
+        submitButton.textContent =
+          "この内容で掲載を申し込む";
+      }
+    }
+
+    function createFileKey(
+      file
+    ) {
+      return [
+        file.name,
+        file.size,
+        file.lastModified
+      ].join(
+        "-"
       );
     }
 
-    contentInput.addEventListener(
-      "input",
-      updateContentCount
-    );
+    function validateImageFile(
+      file
+    ) {
+      if (
+        !ALLOWED_IMAGE_TYPES.includes(
+          file.type
+        )
+      ) {
+        return (
+          file.name +
+          "は対応していない画像形式です。"
+        );
+      }
 
-    submissionForm.addEventListener(
-      "submit",
-      async function(event) {
-        event.preventDefault();
+      if (
+        file.size >
+        MAX_IMAGE_SIZE_BYTES
+      ) {
+        return (
+          file.name +
+          "は10MBを超えています。"
+        );
+      }
 
-        clearMessage();
+      return "";
+    }
 
-        if (!submissionForm.checkValidity()) {
-          submissionForm.reportValidity();
-          return;
-        }
+    function addSelectedFiles(
+      files
+    ) {
+      clearMessage();
 
-        if (!window.imamiruDb) {
-          showMessage(
-            "Firebaseに接続できませんでした。時間を置いて、もう一度お試しください。",
-            "error"
-          );
+      const incomingFiles =
+        Array.from(
+          files
+        );
 
-          return;
-        }
+      if (
+        incomingFiles.length ===
+        0
+      ) {
+        return;
+      }
 
-        const shopName =
-          document
-            .getElementById("shopName")
-            .value
-            .trim();
+      const currentKeys =
+        new Set(
+          selectedImageFiles.map(
+            createFileKey
+          )
+        );
 
-        const category =
-          document
-            .getElementById("category")
-            .value;
-
-        const title =
-          document
-            .getElementById("title")
-            .value
-            .trim();
-
-        const content =
-          contentInput.value.trim();
-
+      for (
+        const file
+        of incomingFiles
+      ) {
         if (
-          shopName.length < 1 ||
-          title.length < 1 ||
-          content.length < 1
+          selectedImageFiles.length >=
+          MAX_IMAGE_COUNT
         ) {
           showMessage(
-            "未入力の項目があります。入力内容を確認してください。",
-            "error"
+            "error",
+            "写真は最大5枚まで選択できます。"
           );
 
-          return;
+          break;
         }
 
-        submitButton.disabled = true;
+        const errorMessage =
+          validateImageFile(
+            file
+          );
 
-        submitButton.textContent =
-          "送信しています…";
-
-        try {
-          await window.imamiruDb
-            .collection("submissions")
-            .add({
-              shopName: shopName,
-              title: title,
-              content: content,
-              category: category,
-              createdAt:
-                firebase.firestore
-                  .FieldValue
-                  .serverTimestamp(),
-              status: "pending"
-            });
-
-          submissionForm.reset();
-
-          updateContentCount();
-
+        if (errorMessage) {
           showMessage(
-            "✅ お申し込みを受け付けました。運営による確認後、掲載手続きを進めます。",
-            "success"
+            "error",
+            errorMessage
           );
 
-          homeLink.classList.add(
-            "visible"
+          continue;
+        }
+
+        const fileKey =
+          createFileKey(
+            file
           );
 
-          console.log(
-            "✅ 広告掲載の申請を送信しました"
-          );
-        } catch (error) {
-          console.error(
-            "❌ 広告掲載の申請に失敗しました",
-            error
+        if (
+          currentKeys.has(
+            fileKey
+          )
+        ) {
+          continue;
+        }
+
+        selectedImageFiles.push(
+          file
+        );
+
+        currentKeys.add(
+          fileKey
+        );
+      }
+
+      imageInput.value =
+        "";
+
+      renderImagePreviews();
+    }
+
+    function removeSelectedImage(
+      index
+    ) {
+      selectedImageFiles.splice(
+        index,
+        1
+      );
+
+      renderImagePreviews();
+    }
+
+    function renderImagePreviews() {
+      imageCount.textContent =
+        selectedImageFiles.length +
+        " / " +
+        MAX_IMAGE_COUNT +
+        "枚";
+
+      if (
+        selectedImageFiles.length ===
+        0
+      ) {
+        imagePreviewList.innerHTML =
+          "";
+
+        imageSelectButton.textContent =
+          "＋ 写真を選ぶ";
+
+        return;
+      }
+
+      imageSelectButton.textContent =
+        selectedImageFiles.length <
+        MAX_IMAGE_COUNT
+          ? "＋ 写真を追加する"
+          : "写真を5枚選択済み";
+
+      imageSelectButton.disabled =
+        selectedImageFiles.length >=
+        MAX_IMAGE_COUNT;
+
+      imagePreviewList.innerHTML =
+        "";
+
+      selectedImageFiles.forEach(
+        function(
+          file,
+          index
+        ) {
+          const previewUrl =
+            URL.createObjectURL(
+              file
+            );
+
+          const previewItem =
+            document.createElement(
+              "div"
+            );
+
+          previewItem.className =
+            "image-preview-item";
+
+          const image =
+            document.createElement(
+              "img"
+            );
+
+          image.src =
+            previewUrl;
+
+          image.alt =
+            "選択した写真" +
+            (index + 1);
+
+          image.addEventListener(
+            "load",
+            function() {
+              URL.revokeObjectURL(
+                previewUrl
+              );
+            },
+            {
+              once: true
+            }
           );
 
-          showMessage(
-            "送信できませんでした。入力内容を確認し、もう一度お試しください。",
-            "error"
-          );
-        } finally {
-          submitButton.disabled = false;
+          const numberLabel =
+            document.createElement(
+              "span"
+            );
 
-          submitButton.textContent =
-            "この内容で申し込む";
+          numberLabel.className =
+            "image-number";
+
+          numberLabel.textContent =
+            index + 1;
+
+          const removeButton =
+            document.createElement(
+              "button"
+            );
+
+          removeButton.className =
+            "image-remove-button";
+
+          removeButton.type =
+            "button";
+
+          removeButton.setAttribute(
+            "aria-label",
+            "写真" +
+            (index + 1) +
+            "を削除"
+          );
+
+          removeButton.textContent =
+            "✕";
+
+          removeButton.addEventListener(
+            "click",
+            function() {
+              removeSelectedImage(
+                index
+              );
+            }
+          );
+
+          previewItem.appendChild(
+            image
+          );
+
+          previewItem.appendChild(
+            numberLabel
+          );
+
+          previewItem.appendChild(
+            removeButton
+          );
+
+          if (index === 0) {
+            const firstLabel =
+              document.createElement(
+                "span"
+              );
+
+            firstLabel.className =
+              "first-image-label";
+
+            firstLabel.textContent =
+              "トップ画像";
+
+            previewItem.appendChild(
+              firstLabel
+            );
+          }
+
+          imagePreviewList.appendChild(
+            previewItem
+          );
+        }
+      );
+    }
+
+    function waitForFirebase(
+      maximumWaitMilliseconds
+    ) {
+      return new Promise(
+        function(
+          resolve,
+          reject
+        ) {
+          const startedAt =
+            Date.now();
+
+          function checkFirebase() {
+            if (
+              window.imamiruDb
+            ) {
+              resolve(
+                window.imamiruDb
+              );
+
+              return;
+            }
+
+            if (
+              Date.now() -
+                startedAt >=
+              maximumWaitMilliseconds
+            ) {
+              reject(
+                new Error(
+                  "Firebaseへ接続できませんでした。"
+                )
+              );
+
+              return;
+            }
+
+            window.setTimeout(
+              checkFirebase,
+              100
+            );
+          }
+
+          checkFirebase();
+        }
+      );
+    }
+
+    async function uploadImageToCloudinary(
+      file
+    ) {
+      const uploadUrl =
+        "https://api.cloudinary.com/v1_1/" +
+        CLOUDINARY_CLOUD_NAME +
+        "/image/upload";
+
+      const formData =
+        new FormData();
+
+      formData.append(
+        "file",
+        file
+      );
+
+      formData.append(
+        "upload_preset",
+        CLOUDINARY_UPLOAD_PRESET
+      );
+
+      const response =
+        await fetch(
+          uploadUrl,
+          {
+            method: "POST",
+            body: formData
+          }
+        );
+
+      let responseData =
+        null;
+
+      try {
+        responseData =
+          await response.json();
+      } catch (
+        jsonError
+      ) {
+        throw new Error(
+          "画像アップロードの応答を読み取れませんでした。"
+        );
+      }
+
+      if (
+        !response.ok
+      ) {
+        const cloudinaryMessage =
+          responseData &&
+          responseData.error &&
+          responseData.error.message
+            ? responseData
+                .error
+                .message
+            : "画像をアップロードできませんでした。";
+
+        throw new Error(
+          cloudinaryMessage
+        );
+      }
+
+      if (
+        !responseData.secure_url
+      ) {
+        throw new Error(
+          "画像URLを取得できませんでした。"
+        );
+      }
+
+      return {
+        url:
+          responseData.secure_url,
+
+        publicId:
+          responseData.public_id ||
+          "",
+
+        width:
+          responseData.width ||
+          null,
+
+        height:
+          responseData.height ||
+          null,
+
+        format:
+          responseData.format ||
+          ""
+      };
+    }
+
+    async function uploadSelectedImages() {
+      const uploadedImages =
+        [];
+
+      if (
+        selectedImageFiles.length ===
+        0
+      ) {
+        return uploadedImages;
+      }
+
+      for (
+        let index = 0;
+        index <
+          selectedImageFiles.length;
+        index += 1
+      ) {
+        const file =
+          selectedImageFiles[
+            index
+          ];
+
+        const imageNumber =
+          index + 1;
+
+        const uploadPercent =
+          10 +
+          Math.round(
+            (
+              index /
+              selectedImageFiles.length
+            ) *
+            65
+          );
+
+        setProgress(
+          "写真" +
+          imageNumber +
+          " / " +
+          selectedImageFiles.length +
+          "枚をアップロードしています…",
+          uploadPercent
+        );
+
+        const uploadedImage =
+          await uploadImageToCloudinary(
+            file
+          );
+
+        uploadedImages.push(
+          uploadedImage
+        );
+      }
+
+      return uploadedImages;
+    }
+
+    function validateForm() {
+      if (
+        shopNameInput.value
+          .trim() ===
+        ""
+      ) {
+        throw new Error(
+          "店舗・イベント名を入力してください。"
+        );
+      }
+
+      if (
+        titleInput.value
+          .trim() ===
+        ""
+      ) {
+        throw new Error(
+          "広告タイトルを入力してください。"
+        );
+      }
+
+      if (
+        categoryInput.value ===
+        ""
+      ) {
+        throw new Error(
+          "カテゴリーを選択してください。"
+        );
+      }
+
+      if (
+        contentInput.value
+          .trim() ===
+        ""
+      ) {
+        throw new Error(
+          "広告内容を入力してください。"
+        );
+      }
+
+      if (
+        !agreementInput.checked
+      ) {
+        throw new Error(
+          "確認事項への同意が必要です。"
+        );
+      }
+    }
+
+    async function submitAdvertisement(
+      event
+    ) {
+      event.preventDefault();
+
+      clearMessage();
+
+      afterSubmitActions.classList.remove(
+        "visible"
+      );
+
+      try {
+        validateForm();
+
+        setSubmitting(
+          true
+        );
+
+        setProgress(
+          "投稿の準備をしています…",
+          5
+        );
+
+        const database =
+          await waitForFirebase(
+            10000
+          );
+
+        const uploadedImages =
+          await uploadSelectedImages();
+
+        setProgress(
+          "広告情報をイマミルへ送信しています…",
+          82
+        );
+
+        const imageUrls =
+          uploadedImages.map(
+            function(image) {
+              return image.url;
+            }
+          );
+
+        const imagePublicIds =
+          uploadedImages.map(
+            function(image) {
+              return image.publicId;
+            }
+          );
+
+        const submissionData = {
+          shopName:
+            shopNameInput.value
+              .trim(),
+
+          title:
+            titleInput.value
+              .trim(),
+
+          category:
+            categoryInput.value,
+
+          content:
+            contentInput.value
+              .trim(),
+
+          address:
+            addressInput.value
+              .trim(),
+
+          imageUrls:
+            imageUrls,
+
+          imagePublicIds:
+            imagePublicIds,
+
+          images:
+            uploadedImages,
+
+          status:
+            "pending",
+
+          createdAt:
+            firebase
+              .firestore
+              .FieldValue
+              .serverTimestamp(),
+
+          updatedAt:
+            firebase
+              .firestore
+              .FieldValue
+              .serverTimestamp(),
+
+          source:
+            "web",
+
+          version:
+            "1.1"
+        };
+
+        await database
+          .collection(
+            "submissions"
+          )
+          .add(
+            submissionData
+          );
+
+        setProgress(
+          "投稿が完了しました。",
+          100
+        );
+
+        showMessage(
+          "success",
+          "掲載のお申し込みを受け付けました。\n運営による確認後、承認された情報がトップページに掲載されます。"
+        );
+
+        submitButton.style.display =
+          "none";
+
+        afterSubmitActions.classList.add(
+          "visible"
+        );
+
+        window.setTimeout(
+          function() {
+            hideProgress();
+          },
+          900
+        );
+      } catch (
+        error
+      ) {
+        console.error(
+          "投稿エラー：",
+          error
+        );
+
+        hideProgress();
+
+        setSubmitting(
+          false
+        );
+
+        showMessage(
+          "error",
+          error &&
+          error.message
+            ? error.message
+            : "投稿に失敗しました。もう一度お試しください。"
+        );
+      }
+    }
+
+    function resetSubmissionForm() {
+      submissionForm.reset();
+
+      selectedImageFiles =
+        [];
+
+      renderImagePreviews();
+
+      updateCharacterCounts();
+
+      clearMessage();
+
+      hideProgress();
+
+      afterSubmitActions.classList.remove(
+        "visible"
+      );
+
+      submitButton.style.display =
+        "block";
+
+      setSubmitting(
+        false
+      );
+
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth"
+      });
+    }
+
+    titleInput.addEventListener(
+      "input",
+      updateCharacterCounts
+    );
+
+    contentInput.addEventListener(
+      "input",
+      updateCharacterCounts
+    );
+
+    imageSelectButton.addEventListener(
+      "click",
+      function() {
+        if (
+          selectedImageFiles.length <
+          MAX_IMAGE_COUNT
+        ) {
+          imageInput.click();
         }
       }
     );
 
-    updateContentCount();
+    imageInput.addEventListener(
+      "change",
+      function(event) {
+        addSelectedFiles(
+          event.target.files
+        );
+      }
+    );
+
+    imageUploadArea.addEventListener(
+      "dragover",
+      function(event) {
+        event.preventDefault();
+
+        imageUploadArea.classList.add(
+          "drag-over"
+        );
+      }
+    );
+
+    imageUploadArea.addEventListener(
+      "dragleave",
+      function() {
+        imageUploadArea.classList.remove(
+          "drag-over"
+        );
+      }
+    );
+
+    imageUploadArea.addEventListener(
+      "drop",
+      function(event) {
+        event.preventDefault();
+
+        imageUploadArea.classList.remove(
+          "drag-over"
+        );
+
+        addSelectedFiles(
+          event.dataTransfer.files
+        );
+      }
+    );
+
+    submissionForm.addEventListener(
+      "submit",
+      submitAdvertisement
+    );
+
+    newPostButton.addEventListener(
+      "click",
+      resetSubmissionForm
+    );
+
+    updateCharacterCounts();
+
+    renderImagePreviews();
   </script>
 
 </body>
