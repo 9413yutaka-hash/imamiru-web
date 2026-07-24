@@ -404,7 +404,11 @@
     </div>
 
   </div>
-
+<!-- Googleマップ表示エリア -->
+<section class="map-section">
+  <h2>近くの情報を地図で見る</h2>
+  <div id="google-map"></div>
+</section>
   <!-- Firebase本体 -->
   <script
     src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"
@@ -420,6 +424,10 @@
 
   <!-- トップページの動き -->
   <script src="app.js"></script>
-
+<script
+  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA7J7_GoXDAfRfmU_EyjRmr9SgEQXYC4tw&callback=initGoogleMap"
+  async
+  defer
+></script>
 </body>
 </html>

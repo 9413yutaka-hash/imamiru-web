@@ -2430,3 +2430,32 @@ document.addEventListener(
     loadApprovedSubmissions();
   }
 );
+// Googleマップを表示する
+function initGoogleMap() {
+  const mapElement = document.getElementById("google-map");
+
+  if (!mapElement) {
+    return;
+  }
+
+  const nahaStation = {
+    lat: 26.2124,
+    lng: 127.6792
+  };
+
+  const map = new google.maps.Map(mapElement, {
+    center: nahaStation,
+    zoom: 13,
+    mapTypeControl: false,
+    streetViewControl: false,
+    fullscreenControl: true
+  });
+
+  new google.maps.Marker({
+    position: nahaStation,
+    map: map,
+    title: "イマミル"
+  });
+}
+
+window.initGoogleMap = initGoogleMap;
