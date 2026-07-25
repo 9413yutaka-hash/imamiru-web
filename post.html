@@ -1387,7 +1387,12 @@
 
   <!-- イマミルのFirebase接続設定 -->
   <script src="firebase.js"></script>
-
+<!-- 住所を緯度・経度へ変換するGoogle Maps -->
+<script
+  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyC7LLuNBYIXKT1YcrIaiuwyFssKQyMMjkU"
+  async
+  defer
+></script>
   <script>
     /*
       Cloudinary設定
@@ -2320,7 +2325,63 @@
         }
       );
     }
+async function convertAddressToCoordinates(
+  address
+) {
+  const trimmedAddress =
+    String(address || "").trim();
 
+  if (trimmedAddress === "") {
+    return {
+      latitude: null,
+      longitude: null
+    };
+  }
+
+  if (
+    typeof google === "undefined" ||
+    !google.maps ||
+    !google.maps.Geocoder
+  ) {
+    throw new Error(
+      "地図機能の準備が完了していません。少し待ってから、もう一度お試しください。"
+    );
+  }
+
+  const geocoder =
+    new google.maps.Geocoder();
+
+  const response =
+    await geocoder.geocode({
+      address:
+        trimmedAddress,
+
+      region:
+        "JP"
+    });
+
+  if (
+    !response.results ||
+    response.results.length === 0
+  ) {
+    throw new Error(
+      "入力された住所の場所を確認できませんでした。住所を詳しく入力してください。"
+    );
+  }
+
+  const location =
+    response.results[0]
+      .geometry
+      .location;
+
+  return {
+    latitude:
+      location.lat(),
+
+    longitude:
+      location.lng()
+  };
+}
     function validateForm() {
       if (
         shopNameInput.value
@@ -2506,6 +2567,10 @@
               }
             )
             .join("");
+  const coordinates =
+  await convertAddressToCoordinates(
+    addressInput.value
+  );
         const submissionData = {
           shopName:
             shopNameInput.value
@@ -2536,7 +2601,11 @@
           address:
             addressInput.value
               .trim(),
+latitude:
+  coordinates.latitude,
 
+longitude:
+  coordinates.longitude,
           imageUrls:
             imageUrls,
 
