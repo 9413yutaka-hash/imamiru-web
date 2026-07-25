@@ -126,34 +126,30 @@ function createGoogleMapUrl(
   address,
   shopName
 ) {
+  let destination = "";
+
   if (
     Number.isFinite(latitude) &&
     Number.isFinite(longitude)
   ) {
-    return (
-      "https://www.google.com/maps/search/" +
-      "?api=1&query=" +
-      encodeURIComponent(
-        latitude +
-        "," +
-        longitude
-      )
-    );
+    destination =
+      latitude + "," + longitude;
+  } else {
+    destination =
+      address ||
+      shopName ||
+      "沖縄";
   }
 
-  const searchText =
-    address ||
-    shopName ||
-    "沖縄";
-
   return (
-    "https://www.google.com/maps/search/" +
-    "?api=1&query=" +
-    encodeURIComponent(
-      searchText
-    )
+    "https://www.google.com/maps/dir/" +
+    "?api=1" +
+    "&destination=" +
+    encodeURIComponent(destination) +
+    "&travelmode=walking"
   );
 }
+ 
 
 function getCategoryDisplay(
   category
