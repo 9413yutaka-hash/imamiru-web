@@ -2120,9 +2120,14 @@ function scrollToTopPage() {
   });
 }
 
-function showComingSoon() {
+function showMyPage() {
   alert(
-    "マイページは今後追加予定です。"
+    "👤 マイページ\n\n" +
+    "❤️ お気に入り\n" +
+    "📢 投稿履歴\n" +
+    "🌐 言語\n" +
+    "⚙️ 設定\n\n" +
+    "現在準備中です。"
   );
 }
 
