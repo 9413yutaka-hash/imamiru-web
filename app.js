@@ -592,10 +592,9 @@ function getVisibleShops() {
     shops.filter(
       function(shop) {
         return (
-          selectedCategory ===
-            "すべて" ||
-          shop.category ===
-            selectedCategory
+          selectedCategory === "すべて" ||
+selectedCategory === "お気に入り" ||
+shop.category === selectedCategory
         );
       }
     );
