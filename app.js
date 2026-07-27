@@ -4,7 +4,14 @@ let userLatitude = null;
 let userLongitude = null;
 let selectedCategory = "すべて";
 
-const favoriteShopIds = new Set();
+const favoriteShopIds =
+  new Set(
+    JSON.parse(
+      localStorage.getItem(
+        "imamiruFavoriteShopIds"
+      ) || "[]"
+    )
+  );
 
 let currentModalImages = [];
 let currentModalImageIndex = 0;
@@ -1001,7 +1008,14 @@ function toggleFavorite(
       firestoreId
     );
   }
-
+localStorage.setItem(
+  "imamiruFavoriteShopIds",
+  JSON.stringify(
+    Array.from(
+      favoriteShopIds
+    )
+  )
+);
   renderShops();
 }
 
