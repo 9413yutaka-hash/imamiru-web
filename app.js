@@ -599,7 +599,11 @@ function getVisibleShops() {
         );
       }
     );
-
+if (selectedCategory === "お気に入り") {
+    visibleShops = visibleShops.filter(function (shop) {
+        return favoriteShopIds.has(shop.firestoreId);
+    });
+}
   visibleShops =
     visibleShops.map(
       function(shop) {
