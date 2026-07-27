@@ -2124,14 +2124,25 @@ function scrollToTopPage() {
 }
 
 function showMyPage() {
-  alert(
-    "👤 マイページ\n\n" +
-    "❤️ お気に入り\n" +
-    "📢 投稿履歴\n" +
-    "🌐 言語\n" +
-    "⚙️ 設定\n\n" +
-    "現在準備中です。"
-  );
+  const shopsSection =
+    document.getElementById("shopsSection");
+
+  const myPageSection =
+    document.getElementById("myPageSection");
+
+  if (
+    !shopsSection ||
+    !myPageSection
+  ) {
+    return;
+  }
+
+  shopsSection.style.display = "none";
+  myPageSection.style.display = "block";
+
+  myPageSection.scrollIntoView({
+    behavior: "smooth"
+  });
 }
 
 function updateTopCounts(
