@@ -2168,25 +2168,44 @@ const mapSection =
   });
 }
 function showFavoriteList() {
-    selectedCategory = "お気に入り";
+  selectedCategory = "お気に入り";
 
-    const shopsSection = document.getElementById("shopsSection");
-    const myPageSection = document.getElementById("myPageSection");
-    const mapSection = document.querySelector(".map-section");
+  const shopsSection =
+    document.getElementById("shopsSection");
 
-    if (shopsSection) {
-        shopsSection.style.display = "block";
-    }
+  const myPageSection =
+    document.getElementById("myPageSection");
 
-    if (mapSection) {
-        mapSection.style.display = "none";
-    }
+  const mapSection =
+    document.querySelector(".map-section");
 
-    if (myPageSection) {
-        myPageSection.style.display = "none";
-    }
+  const favoriteList =
+    document.getElementById("favoriteList");
 
-    renderShops();
+  if (
+    !shopsSection ||
+    !myPageSection
+  ) {
+    return;
+  }
+
+  shopsSection.style.display = "block";
+  myPageSection.style.display = "none";
+
+  if (mapSection) {
+    mapSection.style.display = "none";
+  }
+
+  if (favoriteList) {
+    favoriteList.style.display = "none";
+  }
+
+  renderShops();
+
+  shopsSection.scrollIntoView({
+    behavior: "smooth",
+    block: "start"
+  });
 }
 function updateTopCounts(
   totalCount
