@@ -2129,7 +2129,8 @@ function showMyPage() {
 
   const myPageSection =
     document.getElementById("myPageSection");
-
+const mapSection =
+  document.querySelector(".map-section");
   if (
     !shopsSection ||
     !myPageSection
@@ -2138,6 +2139,7 @@ function showMyPage() {
   }
 
   shopsSection.style.display = "none";
+  mapSection.style.display = "none";
   myPageSection.style.display = "block";
 
   myPageSection.scrollIntoView({
