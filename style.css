@@ -977,3 +977,7 @@
   overflow: hidden;
   border: 1px solid #ddd;
 }
+#favoriteList {
+  display: none;
+  margin-top: 16px;
+}
