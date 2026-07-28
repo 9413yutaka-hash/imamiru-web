@@ -2146,7 +2146,27 @@ const mapSection =
     behavior: "smooth"
   });
 }
+function showFavoriteList() {
+    selectedCategory = "お気に入り";
 
+    const shopsSection = document.getElementById("shopsSection");
+    const myPageSection = document.getElementById("myPageSection");
+    const mapSection = document.querySelector(".map-section");
+
+    if (shopsSection) {
+        shopsSection.style.display = "block";
+    }
+
+    if (mapSection) {
+        mapSection.style.display = "none";
+    }
+
+    if (myPageSection) {
+        myPageSection.style.display = "none";
+    }
+
+    renderShops();
+}
 function updateTopCounts(
   totalCount
 ) {
