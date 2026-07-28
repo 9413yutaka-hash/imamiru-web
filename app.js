@@ -2114,12 +2114,33 @@ function scrollToShops() {
 }
 
 function scrollToTopPage() {
-  window.scrollTo({
-    top:
-      0,
+  const shopsSection =
+    document.getElementById("shopsSection");
 
-    behavior:
-      "smooth"
+  const myPageSection =
+    document.getElementById("myPageSection");
+
+  const mapSection =
+    document.querySelector(".map-section");
+
+  if (shopsSection) {
+    shopsSection.style.display = "block";
+  }
+
+  if (myPageSection) {
+    myPageSection.style.display = "none";
+  }
+
+  if (mapSection) {
+    mapSection.style.display = "block";
+  }
+
+  selectedCategory = "すべて";
+  renderShops();
+
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth"
   });
 }
 
