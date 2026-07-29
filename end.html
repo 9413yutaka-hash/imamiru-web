@@ -1,0 +1,1278 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <meta
+    name="theme-color"
+    content="#0788c9"
+  >
+
+  <meta
+    name="description"
+    content="イマミルに掲載した情報を店舗・イベント運営者様が終了するためのページです。"
+  >
+
+  <title>
+    掲載を終了する｜イマミル
+  </title>
+
+  <style>
+    :root {
+      --navy: #071a33;
+      --navy-light: #0d294a;
+      --blue: #0788c9;
+      --cyan: #04b7d7;
+      --sky: #dff7ff;
+      --green: #19a96b;
+      --red: #ef5a67;
+      --white: #ffffff;
+      --text: #15233a;
+      --subtext: #697386;
+      --border: #e2eaf1;
+      --background: #f4f8fb;
+      --shadow:
+        0 18px 50px
+        rgba(20, 52, 82, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family:
+        "Yu Gothic",
+        "Hiragino Kaku Gothic ProN",
+        "Meiryo",
+        sans-serif;
+      background:
+        linear-gradient(
+          180deg,
+          #e9faff 0,
+          var(--background) 360px
+        );
+      color: var(--text);
+    }
+
+    button,
+    input,
+    a {
+      font-family: inherit;
+    }
+
+    button {
+      -webkit-tap-highlight-color:
+        transparent;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .top-bar {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      border-bottom:
+        1px solid
+        rgba(12, 54, 87, 0.08);
+      background:
+        rgba(255, 255, 255, 0.94);
+      backdrop-filter:
+        blur(16px);
+    }
+
+    .top-bar-inner {
+      width: min(100%, 760px);
+      margin: 0 auto;
+      padding: 13px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .brand-area {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-icon {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+      border-radius: 14px;
+      background:
+        linear-gradient(
+          135deg,
+          var(--blue),
+          var(--cyan)
+        );
+      color: var(--white);
+      font-size: 21px;
+      box-shadow:
+        0 8px 20px
+        rgba(4, 158, 199, 0.25);
+    }
+
+    .brand-name {
+      margin: 0;
+      color: var(--navy);
+      font-size: 21px;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+    }
+
+    .brand-caption {
+      margin: 2px 0 0;
+      color: var(--subtext);
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .home-link {
+      padding: 9px 13px;
+      border:
+        1px solid
+        var(--border);
+      border-radius: 999px;
+      background: var(--white);
+      color: var(--navy);
+      font-size: 12px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .page-hero {
+      padding:
+        42px
+        18px
+        86px;
+      background:
+        linear-gradient(
+          135deg,
+          #0687c5,
+          #13c3ce
+        );
+      color: var(--white);
+    }
+
+    .page-hero-inner {
+      width: min(100%, 720px);
+      margin: 0 auto;
+    }
+
+    .hero-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 8px 12px;
+      border:
+        1px solid
+        rgba(255, 255, 255, 0.3);
+      border-radius: 999px;
+      background:
+        rgba(255, 255, 255, 0.12);
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .page-hero h1 {
+      margin: 20px 0 0;
+      font-size:
+        clamp(
+          30px,
+          7vw,
+          46px
+        );
+      line-height: 1.3;
+      letter-spacing: 0.02em;
+    }
+
+    .page-hero p {
+      max-width: 600px;
+      margin: 16px 0 0;
+      color:
+        rgba(255, 255, 255, 0.92);
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.9;
+    }
+
+    main {
+      width: min(100%, 720px);
+      margin: 0 auto;
+      padding:
+        0
+        16px
+        70px;
+    }
+
+    .form-card {
+      margin-top: -55px;
+      padding: 28px;
+      border:
+        1px solid
+        rgba(12, 54, 87, 0.08);
+      border-radius: 26px;
+      background: var(--white);
+      box-shadow: var(--shadow);
+    }
+
+    .form-heading {
+      margin-bottom: 24px;
+    }
+
+    .form-heading h2 {
+      margin: 0;
+      color: var(--navy);
+      font-size: 23px;
+    }
+
+    .form-heading p {
+      margin: 9px 0 0;
+      color: var(--subtext);
+      font-size: 13px;
+      line-height: 1.8;
+    }
+
+    .warning-box {
+      margin-bottom: 24px;
+      padding: 16px;
+      border:
+        1px solid
+        #ffe1a8;
+      border-radius: 15px;
+      background: #fff9eb;
+      color: #76551e;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.8;
+    }
+
+    .warning-title {
+      display: block;
+      margin-bottom: 5px;
+      color: #8a5a00;
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .form-group {
+      margin-top: 22px;
+    }
+
+    .form-label {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 9px;
+      color: var(--navy);
+      font-size: 14px;
+      font-weight: 900;
+    }
+
+    .required {
+      padding: 3px 7px;
+      border-radius: 999px;
+      background: #fff0f0;
+      color: var(--red);
+      font-size: 9px;
+      font-weight: 900;
+    }
+
+    .form-help {
+      margin: 7px 0 0;
+      color: #8a97a6;
+      font-size: 11px;
+      line-height: 1.7;
+    }
+
+    input {
+      width: 100%;
+      min-height: 54px;
+      padding: 0 15px;
+      border:
+        1px solid
+        var(--border);
+      border-radius: 14px;
+      outline: none;
+      background: #fbfdff;
+      color: var(--text);
+      font-size: 17px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      transition:
+        border-color 0.2s,
+        box-shadow 0.2s,
+        background 0.2s;
+    }
+
+    input:focus {
+      border-color: var(--cyan);
+      background: var(--white);
+      box-shadow:
+        0 0 0 4px
+        rgba(4, 183, 215, 0.12);
+    }
+
+    input:disabled {
+      cursor: not-allowed;
+      opacity: 0.65;
+    }
+
+    .agreement-box {
+      margin-top: 26px;
+      padding: 17px;
+      border:
+        1px solid
+        var(--border);
+      border-radius: 15px;
+      background: #f8fafc;
+    }
+
+    .agreement-label {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      cursor: pointer;
+    }
+
+    .agreement-label input {
+      width: 19px;
+      height: 19px;
+      min-height: 0;
+      flex-shrink: 0;
+      margin-top: 2px;
+      padding: 0;
+      accent-color: var(--red);
+    }
+
+    .agreement-text {
+      color: #526474;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.8;
+      letter-spacing: normal;
+    }
+
+    .end-button {
+      width: 100%;
+      min-height: 58px;
+      margin-top: 24px;
+      border: none;
+      border-radius: 16px;
+      background:
+        linear-gradient(
+          135deg,
+          #e84f5f,
+          #f27d62
+        );
+      color: var(--white);
+      font-size: 16px;
+      font-weight: 900;
+      cursor: pointer;
+      box-shadow:
+        0 13px 28px
+        rgba(232, 79, 95, 0.24);
+      transition:
+        transform 0.2s,
+        opacity 0.2s;
+    }
+
+    .end-button:hover:not(:disabled) {
+      transform:
+        translateY(-2px);
+    }
+
+    .end-button:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+    }
+
+    .progress-area {
+      display: none;
+      margin-top: 18px;
+      padding: 16px;
+      border-radius: 14px;
+      background: #f0f9fc;
+    }
+
+    .progress-area.visible {
+      display: block;
+    }
+
+    .progress-message {
+      margin: 0;
+      color: #24627e;
+      font-size: 12px;
+      font-weight: 900;
+      line-height: 1.7;
+    }
+
+    .loading-dots::after {
+      display: inline-block;
+      width: 1.5em;
+      overflow: hidden;
+      vertical-align: bottom;
+      content: "…";
+      animation:
+        loadingDots
+        1.2s
+        infinite;
+    }
+
+    @keyframes loadingDots {
+      0% {
+        width: 0;
+      }
+
+      33% {
+        width: 0.5em;
+      }
+
+      66% {
+        width: 1em;
+      }
+
+      100% {
+        width: 1.5em;
+      }
+    }
+
+    .message-box {
+      display: none;
+      margin-top: 18px;
+      padding: 17px;
+      border-radius: 14px;
+      font-size: 13px;
+      font-weight: 800;
+      line-height: 1.8;
+    }
+
+    .message-box.visible {
+      display: block;
+    }
+
+    .message-box.success {
+      border:
+        1px solid
+        #bcebd4;
+      background: #ebfff5;
+      color: #16734b;
+    }
+
+    .message-box.error {
+      border:
+        1px solid
+        #ffd0d4;
+      background: #fff2f3;
+      color: #b33c49;
+    }
+
+    .success-icon {
+      width: 65px;
+      height: 65px;
+      display: grid;
+      place-items: center;
+      margin: 0 auto 15px;
+      border-radius: 50%;
+      background: #dff9ed;
+      color: var(--green);
+      font-size: 31px;
+      font-weight: 900;
+    }
+
+    .success-heading {
+      margin: 0;
+      color: #126b46;
+      text-align: center;
+      font-size: 20px;
+      font-weight: 900;
+    }
+
+    .success-description {
+      margin: 10px 0 0;
+      text-align: center;
+    }
+
+    .after-end-actions {
+      display: none;
+      grid-template-columns:
+        1fr
+        1fr;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .after-end-actions.visible {
+      display: grid;
+    }
+
+    .after-action {
+      min-height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 12px;
+      border-radius: 13px;
+      font-size: 12px;
+      font-weight: 900;
+      text-align: center;
+    }
+
+    .back-home-button {
+      background: var(--navy);
+      color: var(--white);
+    }
+
+    .post-button {
+      border:
+        1px solid
+        var(--border);
+      background: var(--white);
+      color: var(--navy);
+    }
+
+    .security-note {
+      margin-top: 22px;
+      padding-top: 18px;
+      border-top:
+        1px solid
+        var(--border);
+      color: #8b98a5;
+      font-size: 10px;
+      line-height: 1.8;
+      text-align: center;
+    }
+
+    footer {
+      padding:
+        0
+        18px
+        35px;
+      color: #8c9aa8;
+      text-align: center;
+      font-size: 10px;
+      line-height: 1.8;
+    }
+
+    @media (
+      max-width: 620px
+    ) {
+      .form-card {
+        padding:
+          22px
+          17px;
+        border-radius: 22px;
+      }
+    }
+
+    @media (
+      max-width: 420px
+    ) {
+      .top-bar-inner {
+        padding:
+          11px
+          13px;
+      }
+
+      .brand-icon {
+        width: 38px;
+        height: 38px;
+      }
+
+      .brand-name {
+        font-size: 18px;
+      }
+
+      .home-link {
+        padding:
+          8px
+          10px;
+        font-size: 10px;
+      }
+
+      .page-hero {
+        padding:
+          34px
+          15px
+          78px;
+      }
+
+      main {
+        padding-right: 12px;
+        padding-left: 12px;
+      }
+
+      .after-end-actions {
+        grid-template-columns:
+          1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <header class="top-bar">
+    <div class="top-bar-inner">
+
+      <div class="brand-area">
+
+        <div class="brand-icon">
+          🌺
+        </div>
+
+        <div>
+          <p class="brand-name">
+            イマミル
+          </p>
+
+          <p class="brand-caption">
+            リアルタイム観光コンシェルジュ
+          </p>
+        </div>
+
+      </div>
+
+      <a
+        class="home-link"
+        href="index.html"
+      >
+        ← トップへ戻る
+      </a>
+
+    </div>
+  </header>
+
+  <section class="page-hero">
+    <div class="page-hero-inner">
+
+      <div class="hero-label">
+        🏪 店舗・イベント運営者様
+      </div>
+
+      <h1>
+        掲載を終了する
+      </h1>
+
+      <p>
+        商品の売り切れやイベント終了など、
+        掲載を予定より早く終了したい場合にご利用ください。
+      </p>
+
+    </div>
+  </section>
+
+  <main>
+
+    <section class="form-card">
+
+      <div class="form-heading">
+
+        <h2>
+          掲載終了のお手続き
+        </h2>
+
+        <p>
+          投稿完了時に表示された「掲載番号」と
+          「終了番号」を入力してください。
+        </p>
+
+      </div>
+
+      <div class="warning-box">
+
+        <span class="warning-title">
+          ⚠️ 掲載終了後は元に戻せません
+        </span>
+
+        掲載を終了すると、イマミルのトップページから
+        対象の情報が非表示になります。
+        入力内容をよく確認してからお手続きください。
+
+      </div>
+
+      <form id="endForm">
+
+        <div class="form-group">
+
+          <label
+            class="form-label"
+            for="publicationNumber"
+          >
+            掲載番号
+
+            <span class="required">
+              必須
+            </span>
+          </label>
+
+          <input
+            id="publicationNumber"
+            name="publicationNumber"
+            type="text"
+            inputmode="numeric"
+            autocomplete="off"
+            maxlength="8"
+            placeholder="例：12345678"
+            aria-describedby="publicationNumberHelp"
+            required
+          >
+
+          <p
+            id="publicationNumberHelp"
+            class="form-help"
+          >
+            投稿完了時に表示された8桁の数字です。
+          </p>
+
+        </div>
+
+        <div class="form-group">
+
+          <label
+            class="form-label"
+            for="endCode"
+          >
+            終了番号
+
+            <span class="required">
+              必須
+            </span>
+          </label>
+
+          <input
+            id="endCode"
+            name="endCode"
+            type="text"
+            autocomplete="off"
+            autocapitalize="characters"
+            spellcheck="false"
+            maxlength="12"
+            placeholder="例：A2BC3D4EF5GH"
+            aria-describedby="endCodeHelp"
+            required
+          >
+
+          <p
+            id="endCodeHelp"
+            class="form-help"
+          >
+            投稿完了時に表示された12文字の英数字です。
+            小文字で入力しても自動で大文字になります。
+          </p>
+
+        </div>
+
+        <div class="agreement-box">
+
+          <label class="agreement-label">
+
+            <input
+              id="agreement"
+              type="checkbox"
+              required
+            >
+
+            <span class="agreement-text">
+              対象の掲載情報を確認し、掲載終了後は
+              元に戻せないことを理解しました。
+            </span>
+
+          </label>
+
+        </div>
+
+        <button
+          id="endButton"
+          class="end-button"
+          type="submit"
+          disabled
+        >
+          この掲載を終了する
+        </button>
+
+        <div
+          id="progressArea"
+          class="progress-area"
+          role="status"
+          aria-live="polite"
+        >
+
+          <p class="progress-message">
+            掲載情報を確認しています
+            <span class="loading-dots"></span>
+          </p>
+
+        </div>
+
+        <div
+          id="messageBox"
+          class="message-box"
+          role="status"
+          aria-live="polite"
+        ></div>
+
+        <div
+          id="afterEndActions"
+          class="after-end-actions"
+        >
+
+          <a
+            class="after-action back-home-button"
+            href="index.html"
+          >
+            トップページへ戻る
+          </a>
+
+          <a
+            class="after-action post-button"
+            href="post.html"
+          >
+            新しい情報を投稿する
+          </a>
+
+        </div>
+
+      </form>
+
+      <div class="security-note">
+        掲載番号と終了番号が一致した場合のみ、
+        対象の掲載情報を終了します。
+        終了番号そのものをイマミルが保存することはありません。
+      </div>
+
+    </section>
+
+  </main>
+
+  <footer>
+    イマミル Web Version 1.2
+    <br>
+    沖縄の「今」を、旅人へ。
+  </footer>
+
+  <script>
+    const endForm =
+      document.getElementById(
+        "endForm"
+      );
+
+    const publicationNumberInput =
+      document.getElementById(
+        "publicationNumber"
+      );
+
+    const endCodeInput =
+      document.getElementById(
+        "endCode"
+      );
+
+    const agreementInput =
+      document.getElementById(
+        "agreement"
+      );
+
+    const endButton =
+      document.getElementById(
+        "endButton"
+      );
+
+    const progressArea =
+      document.getElementById(
+        "progressArea"
+      );
+
+    const messageBox =
+      document.getElementById(
+        "messageBox"
+      );
+
+    const afterEndActions =
+      document.getElementById(
+        "afterEndActions"
+      );
+
+
+    function escapeHtml(
+      text
+    ) {
+      return String(
+        text ?? ""
+      )
+        .replaceAll(
+          "&",
+          "&amp;"
+        )
+        .replaceAll(
+          "<",
+          "&lt;"
+        )
+        .replaceAll(
+          ">",
+          "&gt;"
+        )
+        .replaceAll(
+          '"',
+          "&quot;"
+        )
+        .replaceAll(
+          "'",
+          "&#039;"
+        );
+    }
+
+
+    function normalizePublicationNumber(
+      value
+    ) {
+      return String(
+        value || ""
+      )
+        .replace(
+          /[^0-9]/g,
+          ""
+        )
+        .slice(
+          0,
+          8
+        );
+    }
+
+
+    function normalizeEndCode(
+      value
+    ) {
+      return String(
+        value || ""
+      )
+        .toUpperCase()
+        .replace(
+          /[^A-Z0-9]/g,
+          ""
+        )
+        .slice(
+          0,
+          12
+        );
+    }
+
+
+    function clearMessage() {
+      messageBox.className =
+        "message-box";
+
+      messageBox.textContent =
+        "";
+    }
+
+
+    function showMessage(
+      type,
+      message
+    ) {
+      messageBox.className =
+        "message-box visible " +
+        type;
+
+      messageBox.innerHTML =
+        escapeHtml(
+          message
+        ).replaceAll(
+          "\n",
+          "<br>"
+        );
+    }
+
+
+    function showSuccessMessage(
+      message
+    ) {
+      messageBox.className =
+        "message-box visible success";
+
+      messageBox.innerHTML =
+        '<div class="success-icon">✓</div>' +
+        '<h3 class="success-heading">' +
+        "掲載終了が完了しました" +
+        "</h3>" +
+        '<p class="success-description">' +
+        escapeHtml(
+          message
+        ) +
+        "</p>";
+    }
+
+
+    function setSubmitting(
+      submitting
+    ) {
+      publicationNumberInput.disabled =
+        submitting;
+
+      endCodeInput.disabled =
+        submitting;
+
+      agreementInput.disabled =
+        submitting;
+
+      endButton.disabled =
+        submitting ||
+        !agreementInput.checked;
+
+      if (
+        submitting
+      ) {
+        endButton.textContent =
+          "掲載終了の処理中です…";
+
+        progressArea.classList.add(
+          "visible"
+        );
+      } else {
+        endButton.textContent =
+          "この掲載を終了する";
+
+        progressArea.classList.remove(
+          "visible"
+        );
+      }
+    }
+
+
+    function validateForm() {
+      const publicationNumber =
+        normalizePublicationNumber(
+          publicationNumberInput.value
+        );
+
+      const endCode =
+        normalizeEndCode(
+          endCodeInput.value
+        );
+
+      if (
+        !/^\d{8}$/.test(
+          publicationNumber
+        )
+      ) {
+        throw new Error(
+          "掲載番号は8桁の数字で入力してください。"
+        );
+      }
+
+      if (
+        !/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{12}$/.test(
+          endCode
+        )
+      ) {
+        throw new Error(
+          "終了番号を正しく入力してください。"
+        );
+      }
+
+      if (
+        !agreementInput.checked
+      ) {
+        throw new Error(
+          "掲載終了についての確認が必要です。"
+        );
+      }
+
+      return {
+        publicationNumber:
+          publicationNumber,
+
+        endCode:
+          endCode
+      };
+    }
+
+
+    async function endAdvertisement(
+      event
+    ) {
+      event.preventDefault();
+
+      clearMessage();
+
+      afterEndActions.classList.remove(
+        "visible"
+      );
+
+      try {
+        const formData =
+          validateForm();
+
+        const confirmed =
+          window.confirm(
+            "この掲載を終了します。\n" +
+            "終了後は元に戻せません。\n\n" +
+            "本当に終了しますか？"
+          );
+
+        if (
+          !confirmed
+        ) {
+          return;
+        }
+
+        setSubmitting(
+          true
+        );
+
+        const response =
+          await fetch(
+            "/api/end-ad",
+            {
+              method:
+                "POST",
+
+              headers: {
+                "Content-Type":
+                  "application/json"
+              },
+
+              body:
+                JSON.stringify(
+                  formData
+                )
+            }
+          );
+
+        let responseData =
+          null;
+
+        try {
+          responseData =
+            await response.json();
+        } catch (
+          jsonError
+        ) {
+          throw new Error(
+            "サーバーからの応答を読み取れませんでした。"
+          );
+        }
+
+        if (
+          !response.ok ||
+          !responseData.success
+        ) {
+          throw new Error(
+            responseData &&
+            responseData.message
+              ? responseData.message
+              : "掲載終了処理に失敗しました。"
+          );
+        }
+
+        progressArea.classList.remove(
+          "visible"
+        );
+
+        showSuccessMessage(
+          responseData.message ||
+          "掲載を終了しました。"
+        );
+
+        endButton.style.display =
+          "none";
+
+        afterEndActions.classList.add(
+          "visible"
+        );
+
+        publicationNumberInput.disabled =
+          true;
+
+        endCodeInput.disabled =
+          true;
+
+        agreementInput.disabled =
+          true;
+      } catch (
+        error
+      ) {
+        console.error(
+          "掲載終了エラー：",
+          error
+        );
+
+        setSubmitting(
+          false
+        );
+
+        showMessage(
+          "error",
+          error &&
+          error.message
+            ? error.message
+            : "掲載終了処理に失敗しました。もう一度お試しください。"
+        );
+      }
+    }
+
+
+    publicationNumberInput.addEventListener(
+      "input",
+      function() {
+        publicationNumberInput.value =
+          normalizePublicationNumber(
+            publicationNumberInput.value
+          );
+
+        clearMessage();
+      }
+    );
+
+
+    endCodeInput.addEventListener(
+      "input",
+      function() {
+        endCodeInput.value =
+          normalizeEndCode(
+            endCodeInput.value
+          );
+
+        clearMessage();
+      }
+    );
+
+
+    agreementInput.addEventListener(
+      "change",
+      function() {
+        endButton.disabled =
+          !agreementInput.checked;
+
+        clearMessage();
+      }
+    );
+
+
+    endForm.addEventListener(
+      "submit",
+      endAdvertisement
+    );
+  </script>
+
+</body>
+</html>
