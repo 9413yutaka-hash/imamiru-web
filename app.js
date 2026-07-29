@@ -960,7 +960,40 @@ function renderShops() {
       )
       .join("");
 }
+function renderFavoriteList() {
+  const favoriteList =
+    document.getElementById("favoriteList");
 
+  if (!favoriteList) {
+    return;
+  }
+
+  const favoriteShops = shops.filter(
+    function (shop) {
+      return favoriteShopIds.has(
+        shop.firestoreId
+      );
+    }
+  );
+
+  if (favoriteShops.length === 0) {
+    favoriteList.innerHTML =
+      "<p>まだお気に入りはありません。</p>";
+    return;
+  }
+
+  favoriteList.innerHTML =
+    favoriteShops
+      .map(function (shop) {
+        return `
+          <div class="favorite-list-item">
+            <strong>${escapeHtml(shop.name)}</strong>
+            <p>${escapeHtml(shop.title)}</p>
+          </div>
+        `;
+      })
+      .join("");
+}
 function selectCategory(
   category,
   button
@@ -2200,7 +2233,7 @@ function showFavoriteList() {
     favoriteList.style.display = "none";
   }
 
-  renderShops();
+  renderFavoriteList();
 
   shopsSection.scrollIntoView({
     behavior: "smooth",
