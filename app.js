@@ -2222,20 +2222,20 @@ function showFavoriteList() {
     return;
   }
 
-  shopsSection.style.display = "block";
-  myPageSection.style.display = "none";
+  shopsSection.style.display = "none";
+myPageSection.style.display = "block";
 
   if (mapSection) {
     mapSection.style.display = "none";
   }
 
   if (favoriteList) {
-    favoriteList.style.display = "none";
+    favoriteList.style.display = "block";
   }
 
   renderFavoriteList();
 
-  shopsSection.scrollIntoView({
+  myPageSection.scrollIntoView({
     behavior: "smooth",
     block: "start"
   });
