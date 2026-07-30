@@ -985,10 +985,60 @@ function renderFavoriteList() {
   favoriteList.innerHTML =
     favoriteShops
       .map(function (shop) {
+        const firstImageUrl =
+          shop.imageUrls &&
+          shop.imageUrls.length > 0
+            ? shop.imageUrls[0]
+            : "";
+
+        const visualHtml = firstImageUrl
+          ? `
+            <img
+              src="${escapeHtml(firstImageUrl)}"
+              alt="${escapeHtml(shop.name)}の掲載写真"
+              loading="lazy"
+              style="
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+              "
+            >
+          `
+          : `
+            <span class="shop-emoji">🌺</span>
+          `;
+
         return `
           <div class="favorite-list-item">
+            <div
+              class="favorite-list-visual"
+              style="
+                position: relative;
+                width: 100%;
+                aspect-ratio: 4 / 3;
+                overflow: hidden;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+              "
+            >
+              ${visualHtml}
+            </div>
             <strong>${escapeHtml(shop.name)}</strong>
             <p>${escapeHtml(shop.title)}</p>
+            <div class="shop-actions">
+              <button
+                class="shop-button detail-button"
+                type="button"
+                onclick="
+                  openShopModal(
+                    '${escapeHtml(shop.firestoreId)}'
+                  )
+                "
+              >
+                今の情報を見る
+              </button>
+            </div>
           </div>
         `;
       })
