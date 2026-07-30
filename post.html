@@ -251,9 +251,6 @@
       letter-spacing:
         0.02em;
     }
-        letter-spacing:
-        0.02em;
-    }
 
     .page-hero p {
       margin:
@@ -267,233 +264,235 @@
           255,
           0.92
         );
-      line-height: 1.8;
-      font-size: 15px;
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.9;
     }
 
     main {
       width: min(
         100%,
-        760px
+        720px
       );
-      margin:
-        -54px auto
-        80px;
-      padding:
-        0 18px;
-    }
-
-    .card {
-      background:
-        var(--white);
-      border-radius:
-        24px;
-      box-shadow:
-        var(--shadow);
-      overflow: hidden;
-    }
-
-    .card-header {
-      padding:
-        28px
-        28px
-        12px;
-    }
-
-    .card-title {
-      margin: 0;
-      color:
-        var(--navy);
-      font-size: 24px;
-      font-weight: 900;
-    }
-
-    .card-description {
-      margin:
-        10px
-        0 0;
-      color:
-        var(--subtext);
-      line-height: 1.8;
-      font-size: 14px;
-    }
-
-    form {
+      margin: 0 auto;
       padding:
         0
-        28px
-        34px;
+        16px
+        70px;
     }
 
-    .section {
-      margin-top: 28px;
+    .form-card {
+      margin-top: -55px;
+      padding:
+        28px;
+      border:
+        1px solid
+        rgba(
+          12,
+          54,
+          87,
+          0.08
+        );
+      border-radius: 26px;
+      background:
+        var(--white);
+      box-shadow:
+        var(--shadow);
     }
 
-    .section-title {
+    .form-heading {
+      margin-bottom: 25px;
+    }
+
+    .form-heading h2 {
+      margin: 0;
+      color: var(--navy);
+      font-size: 23px;
+    }
+
+    .form-heading p {
+      margin:
+        9px
+        0 0;
+      color: var(--subtext);
+      font-size: 13px;
+      line-height: 1.8;
+    }
+
+    .notice-box {
+      margin-bottom: 24px;
+      padding:
+        15px
+        16px;
+      border:
+        1px solid
+        #cfeefa;
+      border-radius: 14px;
+      background: #effbff;
+      color: #24627e;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.8;
+    }
+
+    .form-group {
+      margin-top: 22px;
+    }
+
+    .form-label {
       display: flex;
       align-items: center;
-      gap: 8px;
-      margin: 0 0 14px;
-      color:
-        var(--navy);
-      font-size: 16px;
+      gap: 7px;
+      margin-bottom: 9px;
+      color: var(--navy);
+      font-size: 14px;
       font-weight: 900;
     }
 
-    .badge-required {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 38px;
+    .required {
       padding:
         3px
-        8px;
+        7px;
       border-radius: 999px;
-      background:
-        rgba(
-          239,
-          90,
-          103,
-          0.12
-        );
-      color:
-        var(--red);
-      font-size: 11px;
+      background: #fff0f0;
+      color: var(--red);
+      font-size: 9px;
       font-weight: 900;
     }
 
-    .field {
-      margin-bottom: 20px;
+    .optional {
+      padding:
+        3px
+        7px;
+      border-radius: 999px;
+      background: #eef5f8;
+      color: #648093;
+      font-size: 9px;
+      font-weight: 900;
     }
 
-    .field:last-child {
-      margin-bottom: 0;
-    }
-
-    label {
-      display: block;
-      margin-bottom: 8px;
-      color:
-        var(--navy);
-      font-size: 14px;
-      font-weight: 800;
-    }
-
-    .hint {
-      margin-top: 6px;
-      color:
-        var(--subtext);
-      font-size: 12px;
-      line-height: 1.6;
+    .form-help {
+      margin:
+        7px
+        0 0;
+      color: #8a97a6;
+      font-size: 11px;
+      line-height: 1.7;
     }
 
     input,
     textarea,
     select {
       width: 100%;
-      padding:
-        14px
-        15px;
       border:
         1px solid
         var(--border);
-      border-radius:
-        14px;
+      border-radius: 14px;
+      outline: none;
       background:
         #fbfdff;
-      color:
-        var(--text);
+      color: var(--text);
       font-size: 15px;
       transition:
         border-color
-          0.2s,
+        0.2s,
         box-shadow
-          0.2s;
+        0.2s,
+        background
+        0.2s;
+    }
+
+    input,
+    select {
+      min-height: 52px;
+      padding:
+        0
+        15px;
+    }
+
+    textarea {
+      min-height: 150px;
+      padding: 15px;
+      resize: vertical;
+      line-height: 1.8;
     }
 
     input:focus,
     textarea:focus,
     select:focus {
-      outline: none;
       border-color:
-        var(--blue);
+        var(--cyan);
+      background:
+        var(--white);
       box-shadow:
         0 0 0 4px
         rgba(
-          7,
-          136,
-          201,
+          4,
+          183,
+          215,
           0.12
         );
     }
 
-    textarea {
-      resize: vertical;
-      min-height: 140px;
-    }
-
-    .character-counter {
-      margin-top: 6px;
+    .character-count {
+      margin-top: 7px;
+      color: #8a97a6;
       text-align: right;
-      color:
-        var(--subtext);
-      font-size: 12px;
+      font-size: 10px;
+      font-weight: 700;
     }
 
     .image-upload-area {
+      padding:
+        18px;
       border:
         2px dashed
-        #9dddf4;
-      border-radius:
-        18px;
-      padding:
-        26px
-        18px;
+        #b9dbe8;
+      border-radius: 18px;
       background:
-        #f8fdff;
+        #f7fcfe;
       text-align: center;
       transition:
         border-color
-          0.2s,
+        0.2s,
         background
-          0.2s;
+        0.2s;
     }
 
     .image-upload-area.drag-over {
       border-color:
-        var(--blue);
+        var(--cyan);
       background:
-        #eefbff;
+        #ebfbff;
     }
 
-    .image-upload-button {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      padding:
-        12px
-        18px;
-      border: none;
-      border-radius:
-        999px;
-      background:
-        linear-gradient(
-          135deg,
-          var(--blue),
-          var(--cyan)
-        );
-      color:
-        var(--white);
+    .image-upload-icon {
+      font-size: 38px;
+    }
+
+    .image-upload-title {
+      margin:
+        9px
+        0 0;
+      color: var(--navy);
+      font-size: 15px;
       font-weight: 900;
-      cursor: pointer;
     }
 
-    .image-upload-button:disabled {
-      opacity: 0.55;
-      cursor: default;
-    }  
-        .image-select-button {
+    .image-upload-description {
+      margin:
+        7px
+        0 0;
+      color: var(--subtext);
+      font-size: 11px;
+      line-height: 1.7;
+    }
+
+    .image-input {
+      display: none;
+    }
+
+    .image-select-button {
       margin-top: 14px;
       min-height: 45px;
       padding:
@@ -649,84 +648,116 @@
     .agreement-box {
       margin-top: 26px;
       padding:
-              18px;
-      border-radius: 16px;
-      background: #fff9e8;
-      border: 1px solid #ffe39d;
+        17px;
+      border:
+        1px solid
+        var(--border);
+      border-radius: 15px;
+      background:
+        #f8fafc;
     }
 
-    .agreement-box label {
+    .agreement-label {
       display: flex;
-      gap: 10px;
       align-items: flex-start;
-      margin: 0;
+      gap: 10px;
       cursor: pointer;
-      line-height: 1.8;
-      font-size: 13px;
-      font-weight: 700;
     }
 
-    .agreement-box input[type="checkbox"] {
-      width: 18px;
-      height: 18px;
-      margin-top: 2px;
+    .agreement-label input {
+      width: 19px;
+      height: 19px;
+      min-height: 0;
       flex-shrink: 0;
+      margin-top: 2px;
+      accent-color:
+        var(--blue);
     }
 
-    .message {
-      display: none;
-      margin-top: 22px;
-      padding: 14px 16px;
-      border-radius: 14px;
-      font-size: 14px;
+    .agreement-text {
+      color: #526474;
+      font-size: 12px;
       font-weight: 700;
+      line-height: 1.8;
+    }
+
+    .submit-button {
+      width: 100%;
+      min-height: 58px;
+      margin-top: 24px;
+      border: none;
+      border-radius: 16px;
+      background:
+        linear-gradient(
+          135deg,
+          var(--blue),
+          var(--cyan)
+        );
+      color: var(--white);
+      font-size: 16px;
+      font-weight: 900;
+      cursor: pointer;
+      box-shadow:
+        0 13px 28px
+        rgba(
+          4,
+          158,
+          199,
+          0.25
+        );
+      transition:
+        transform
+        0.2s,
+        opacity
+        0.2s;
+    }
+
+    .submit-button:hover:not(
+      :disabled
+    ) {
+      transform:
+        translateY(-2px);
+    }
+
+    .submit-button:disabled {
+      cursor:
+        not-allowed;
+      opacity: 0.55;
+    }
+
+    .progress-area {
+      display: none;
+      margin-top: 18px;
+      padding:
+        16px;
+      border-radius: 14px;
+      background:
+        #f0f9fc;
+    }
+
+    .progress-area.visible {
+      display: block;
+    }
+
+    .progress-message {
+      margin: 0;
+      color: #24627e;
+      font-size: 12px;
+      font-weight: 900;
       line-height: 1.7;
     }
 
-    .message.success {
-      display: block;
-      background: #eafaf2;
-      color: #18794e;
-      border: 1px solid #bde8ce;
-    }
-
-    .message.error {
-      display: block;
-      background: #fff1f1;
-      color: #b42318;
-      border: 1px solid #fecaca;
-    }
-
-    .progress-panel {
-      display: none;
-      margin-top: 22px;
-      padding: 18px;
-      border-radius: 16px;
-      background: #f8fcff;
-      border: 1px solid #d9eef8;
-    }
-
-    .progress-panel.visible {
-      display: block;
-    }
-
-    .progress-title {
-      margin: 0 0 10px;
-      font-size: 14px;
-      font-weight: 900;
-      color: var(--navy);
-    }
-
     .progress-bar {
-      width: 100%;
-      height: 12px;
       overflow: hidden;
+      height: 8px;
+      margin-top: 11px;
       border-radius: 999px;
-      background: #e6eef5;
+      background:
+        #dceef4;
     }
 
     .progress-bar-fill {
-      width: 0%;
+      width: 0;
       height: 100%;
       border-radius: inherit;
       background:
@@ -735,313 +766,78 @@
           var(--blue),
           var(--cyan)
         );
-      transition: width .25s ease;
+      transition:
+        width
+        0.3s;
     }
 
-    .progress-status {
-      margin-top: 10px;
-      color: var(--subtext);
-      font-size: 13px;
-      line-height: 1.6;
-    }
-
-    .submit-button {
-      width: 100%;
-      margin-top: 28px;
-      padding: 16px;
-      border: none;
-      border-radius: 16px;
-      background:
-        linear-gradient(
-          135deg,
-          var(--orange),
-          var(--yellow)
-        );
-      color: var(--navy);
-      font-size: 17px;
-      font-weight: 900;
-      cursor: pointer;
-      box-shadow:
-        0 14px 28px
-        rgba(
-          255,
-          158,
-          69,
-          .25
-        );
-    }
-
-    .submit-button:disabled {
-      opacity: .6;
-      cursor: default;
-    }
-
-    .completion-panel {
-            display: none;
-      margin-top: 28px;
-      padding: 28px;
-      border-radius: 22px;
-      background:
-        linear-gradient(
-          180deg,
-          #ffffff,
-          #f7fcff
-        );
-      border:
-        2px solid
-        #d9eef8;
-      box-shadow:
-        0 18px 40px
-        rgba(
-          7,
-          136,
-          201,
-          0.12
-        );
-    }
-
-    .completion-panel.visible {
-      display: block;
-      animation:
-        completionFadeIn
-        .35s ease;
-    }
-
-    @keyframes completionFadeIn {
-      from {
-        opacity: 0;
-        transform:
-          translateY(
-            14px
-          );
-      }
-
-      to {
-        opacity: 1;
-        transform:
-          translateY(0);
-      }
-    }
-
-    .completion-title {
-      margin: 0;
-      color: var(--navy);
-      font-size: 28px;
-      font-weight: 900;
-      text-align: center;
-    }
-
-    .completion-subtitle {
-      margin:
-        12px
-        0
-        24px;
-      color: var(--subtext);
-      text-align: center;
-      line-height: 1.8;
-      font-size: 14px;
-    }
-
-    .completion-summary {
-      display: grid;
-      gap: 14px;
-      margin-bottom: 26px;
-    }
-
-    .completion-summary-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 16px;
+    .message-box {
+      display: none;
+      margin-top: 18px;
       padding:
-        14px
         16px;
       border-radius: 14px;
-      background: #f8fbfd;
-      border:
-        1px solid
-        var(--border);
-    }
-
-    .completion-summary-label {
-      color: var(--subtext);
       font-size: 13px;
-      font-weight: 700;
-    }
-
-    .completion-summary-value {
-      color: var(--navy);
-      font-size: 14px;
-      font-weight: 900;
-      text-align: right;
-    }
-
-    .number-card-grid {
-      display: grid;
-      grid-template-columns:
-        repeat(
-          2,
-          minmax(
-            0,
-            1fr
-          )
-        );
-      gap: 18px;
-      margin-bottom: 24px;
-    }
-
-    .number-card {
-      padding: 20px;
-      border-radius: 18px;
-      background: #ffffff;
-      border:
-        2px solid
-        #d8edf8;
-      text-align: center;
-    }
-
-    .number-card-title {
-      color: var(--subtext);
-      font-size: 12px;
       font-weight: 800;
-      margin-bottom: 10px;
-      letter-spacing: .08em;
+      line-height: 1.8;
     }
 
-    .number-card-value {
-      word-break: break-all;
-      color: var(--navy);
-      font-size: 24px;
-      font-weight: 900;
-      letter-spacing: .08em;
-    }
-        .copy-button {
-      width: 100%;
-      margin-top: 14px;
-      padding: 12px;
-      border: none;
-      border-radius: 12px;
-      background:
-        linear-gradient(
-          135deg,
-          var(--blue),
-          var(--cyan)
-        );
-      color: var(--white);
-      font-size: 13px;
-      font-weight: 900;
-      cursor: pointer;
+    .message-box.visible {
+      display: block;
     }
 
-    .copy-button:active {
-      transform: scale(.98);
-    }
-
-    .completion-warning {
-      margin:
-        24px
-        0;
-      padding:
-        18px;
-      border-radius: 16px;
-      background: #fff8e8;
+    .message-box.success {
       border:
         1px solid
-        #ffe2a8;
-      color: #7a5300;
-      line-height: 1.8;
-      font-size: 13px;
-    }
-
-    .completion-actions {
-      display: grid;
-      gap: 14px;
-    }
-
-    .secondary-button {
-      width: 100%;
-      padding: 15px;
-      border-radius: 14px;
-      border:
-        2px solid
-        var(--blue);
-      background: var(--white);
-      color: var(--blue);
-      font-size: 15px;
-      font-weight: 900;
-      cursor: pointer;
-    }
-
-    .primary-button {
-      width: 100%;
-      padding: 16px;
-      border: none;
-      border-radius: 14px;
+        #bcebd4;
       background:
-        linear-gradient(
-          135deg,
-          var(--orange),
-          var(--yellow)
-        );
-      color: var(--navy);
-      font-size: 16px;
-      font-weight: 900;
-      cursor: pointer;
+        #ebfff5;
+      color: #16734b;
+    }
+
+    .message-box.error {
+      border:
+        1px solid
+        #ffd0d4;
+      background:
+        #fff2f3;
+      color: #b33c49;
     }
 
     .after-submit-actions {
       display: none;
-      margin-top: 20px;
+      grid-template-columns:
+        1fr
+        1fr;
+      gap: 10px;
+      margin-top: 16px;
     }
 
     .after-submit-actions.visible {
-      display: block;
+      display: grid;
     }
 
-    @media (
-      max-width: 640px
-    ) {
-      .number-card-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .completion-summary-item {
-        flex-direction: column;
-        align-items: flex-start;
-      }
-
-      .completion-summary-value {
-        text-align: left;
-      }
+    .after-action {
+      min-height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding:
+        0
+        12px;
+      border-radius: 13px;
+      font-size: 12px;
+      font-weight: 900;
+      text-align: center;
     }
 
-    @media print {
-      .top-bar,
-      .page-hero,
-      .submit-button,
-      .after-submit-actions,
-      .copy-button,
-      .primary-button,
-      .secondary-button {
-        display: none !important;
-      }
-
-      body {
-        background: #fff;
-      }
-
-      main {
-        margin: 0;
-        padding: 0;
-      }
-
-      .completion-panel {
-        display: block !important;
-        box-shadow: none;
-        border: none;
-      }
+    .back-home-button {
+      background:
+        var(--navy);
+      color: var(--white);
     }
-        .new-post-button {
+
+    .new-post-button {
       border:
         1px solid
         var(--border);
@@ -1074,80 +870,68 @@
       line-height: 1.8;
     }
 
-    @media print {
-      body {
-        background: var(--white);
-      }
-
-      .top-bar,
-      .page-hero,
-      .form-heading,
-      .notice-box,
-      .security-note,
-      footer,
-      .after-submit-actions,
-      .completion-tools,
-      .copy-button {
-        display: none !important;
-      }
-
-      main {
-        width: 100%;
-        padding: 0;
-      }
-
-      .form-card {
-        margin: 0;
-        padding: 0;
-        border: none;
-        box-shadow: none;
-      }
-
-      .completion-panel {
-        display: block !important;
-        margin: 0;
-        border: 2px solid #15233a;
-        box-shadow: none;
-      }
-    }
-
     @media (
       max-width: 620px
     ) {
       .form-card {
         padding:
           22px
-          17px;次
-
-        }
-
-      .card-header {
-        padding:
-          22px
-          17px
-          10px;
+          17px;
+        border-radius: 22px;
       }
 
-      form {
+      .image-preview-list {
+        grid-template-columns:
+          repeat(
+            3,
+            minmax(
+              0,
+              1fr
+            )
+          );
+      }
+    }
+
+    @media (
+      max-width: 420px
+    ) {
+      .top-bar-inner {
         padding:
-          0
-          17px
-          24px;
+          11px
+          13px;
+      }
+
+      .brand-icon {
+        width: 38px;
+        height: 38px;
+      }
+
+      .brand-name {
+        font-size: 18px;
+      }
+
+      .home-link {
+        padding:
+          8px
+          10px;
+        font-size: 10px;
       }
 
       .page-hero {
         padding:
           34px
-          16px
-          74px;
+          15px
+          78px;
       }
 
-      .number-card-value {
-        font-size: 20px;
+      main {
+        padding-right: 12px;
+        padding-left: 12px;
       }
 
-      .completion-title {
-        font-size: 24px;
+      .after-submit-actions {
+        grid-template-columns:
+          1fr;
       }
     }
   </style>
@@ -1159,721 +943,1884 @@
     <div class="top-bar-inner">
 
       <div class="brand-area">
+
         <div class="brand-icon">
-          📢
+          🌺
         </div>
 
         <div>
-          <h1 class="brand-name">
+          <p class="brand-name">
             イマミル
-          </h1>
+          </p>
 
           <p class="brand-caption">
-            広告投稿ページ
+            リアルタイム観光コンシェルジュ
           </p>
         </div>
+
       </div>
 
       <a
         class="home-link"
         href="index.html"
       >
-        ← ホームへ
+        ← トップへ戻る
       </a>
 
     </div>
-  </header>   
-  
-    <main>
+  </header>
 
-    <section class="card">
+  <section class="page-hero">
+    <div class="page-hero-inner">
 
-      <div class="card-header">
+      <div class="hero-label">
+        📢 店舗・イベント運営者様
+      </div>
 
-        <h2 class="card-title">
-          広告を投稿する
+      <h1>
+        沖縄の「今」を、<br>
+        旅人へ届けよう。
+      </h1>
+
+      <p>
+        タイムセール、限定メニュー、イベントなど、
+        今だからこそ伝えたい情報を投稿できます。
+      </p>
+
+    </div>
+  </section>
+
+  <main>
+
+    <section class="form-card">
+
+      <div class="form-heading">
+
+        <h2>
+          広告掲載のお申し込み
         </h2>
 
-        <p class="card-description">
-          写真・タイムセール・イベント・限定情報などを投稿できます。<br>
-          投稿後に表示される「掲載番号」と「終了番号」は、掲載終了時に必要になりますので必ず保存してください。
+        <p>
+          投稿後、イマミル運営による確認を行います。
+          承認された情報だけがトップページに掲載されます。
         </p>
 
       </div>
 
-      <form
-        id="submissionForm"
-        novalidate
-      >
+      <div class="notice-box">
+        💡 写真は最大5枚まで選択できます。
+        1枚目の写真がトップページのメイン画像になります。
+        写真を付けずに投稿することもできます。
+      </div>
 
-        <section class="section">
+      <form id="submissionForm">
 
-          <h3 class="section-title">
-            基本情報
-            <span class="badge-required">
+        <div class="form-group">
+
+          <label
+            class="form-label"
+            for="shopName"
+          >
+            店舗・イベント名
+
+            <span class="required">
               必須
             </span>
-          </h3>
-                    <div class="field">
+          </label>
 
-            <label for="shopName">
-              店舗・イベント名
-            </label>
-
-            <input
-              id="shopName"
-              type="text"
-              maxlength="60"
-              autocomplete="organization"
-              placeholder="例：沖縄そば〇〇"
-              required
-            >
-
-            <p class="hint">
-              お客様に表示される店舗名・イベント名です。
-            </p>
-
-          </div>
-
-          <div class="field">
-
-            <label for="title">
-              広告タイトル
-            </label>
-
-            <input
-              id="title"
-              type="text"
-              maxlength="60"
-              placeholder="例：本日限定！ドリンク半額"
-              required
-            >
-
-            <div
-              class="character-counter"
-              id="titleCounter"
-            >
-              0 / 60
-            </div>
-
-          </div>
-                    <div class="field">
-
-            <label for="category">
-              カテゴリー
-            </label>
-
-            <select
-              id="category"
-              required
-            >
-              <option value="">
-                選択してください
-              </option>
-
-              <option value="グルメ">
-                🍜 グルメ
-              </option>
-
-              <option value="カフェ">
-                ☕ カフェ
-              </option>
-
-              <option value="居酒屋">
-                🍺 居酒屋
-              </option>
-
-              <option value="イベント">
-                🎉 イベント
-              </option>
-
-              <option value="観光">
-                🌺 観光
-              </option>
-
-              <option value="セール">
-                🛍 セール
-              </option>
-
-              <option value="その他">
-                📢 その他
-              </option>
-
-            </select>
-
-          </div>
-                    <div class="field">
-
-            <label for="durationHours">
-              掲載時間
-            </label>
-
-            <select
-              id="durationHours"
-              required
-            >
-              <option value="">
-                選択してください
-              </option>
-
-              <option value="3">
-                3時間
-              </option>
-
-              <option value="6">
-                6時間
-              </option>
-
-              <option value="12">
-                12時間
-              </option>
-
-              <option value="24">
-                24時間
-              </option>
-
-            </select>
-
-            <p class="hint">
-              選択した時間が過ぎると、自動的に掲載終了になります。
-            </p>
-
-          </div>
-                    <div class="field">
-
-            <label for="address">
-              住所
-            </label>
-
-            <input
-              id="address"
-              type="text"
-              maxlength="120"
-              autocomplete="street-address"
-              placeholder="例：沖縄県那覇市〇〇1-2-3"
-            >
-
-            <p class="hint">
-              AIがお客様の近くへ広告を表示するために利用します。
-            </p>
-
-          </div>
-
-          <div class="field">
-
-            <label for="content">
-              広告内容
-            </label>
-
-            <textarea
-              id="content"
-              maxlength="500"
-              placeholder="おすすめ商品・イベント内容・タイムセールなどをご記入ください。"
-              required
-            ></textarea>
-
-            <div
-              class="character-counter"
-              id="contentCounter"
-            >
-              0 / 500
-            </div>
-
-          </div>
-                    <section class="section">
-
-            <h3 class="section-title">
-              写真
-            </h3>
-
-            <div
-              class="image-upload-area"
-              id="imageUploadArea"
-            >
-
-              <input
-                id="imageInput"
-                type="file"
-                accept="image/*"
-                multiple
-                hidden
-              >
-
-              <button
-                type="button"
-                id="imageSelectButton"
-                class="image-select-button"
-              >
-                ＋ 写真を選ぶ
-              </button>
-
-              <p class="image-count">
-                <span id="imageCount">
-                  0 / 5枚
-                </span>
-              </p>
-
-              <div
-                class="image-preview-list"
-                id="imagePreviewList"
-              ></div>
-
-            </div>
-
-          </section>
-                    <section class="section">
-
-            <h3 class="section-title">
-              確認事項
-            </h3>
-
-            <div class="agreement-box">
-
-              <label>
-
-                <input
-                  id="agreement"
-                  type="checkbox"
-                >
-
-                <span>
-                  内容に間違いがないことを確認しました。<br>
-                  ガイドラインに反する内容は掲載されません。
-                </span>
-
-              </label>
-
-            </div>
-
-          </section>
-
-          <div
-            id="message"
-            class="message"
-          ></div>
-
-          <div
-            id="progressPanel"
-            class="progress-panel"
+          <input
+            id="shopName"
+            name="shopName"
+            type="text"
+            maxlength="60"
+            autocomplete="organization"
+            placeholder="例：南国食堂"
+            required
           >
 
-            <p class="progress-title">
-              投稿中…
+          <p class="form-help">
+            お客様に表示される正式な名称を入力してください。
+          </p>
+
+        </div>
+
+        <div class="form-group">
+
+          <label
+            class="form-label"
+            for="title"
+          >
+            広告タイトル
+
+            <span class="required">
+              必須
+            </span>
+          </label>
+
+          <input
+            id="title"
+            name="title"
+            type="text"
+            maxlength="50"
+            placeholder="例：本日限定！ハマチ半額"
+            required
+          >
+
+          <div
+            id="titleCount"
+            class="character-count"
+          >
+            0 / 50文字
+          </div>
+
+        </div>
+
+        <div class="form-group">
+
+          <label
+            class="form-label"
+            for="category"
+          >
+            カテゴリー
+
+            <span class="required">
+              必須
+            </span>
+          </label>
+
+          <select
+            id="category"
+            name="category"
+            required
+          >
+            <option value="">
+              選択してください
+            </option>
+
+            <option value="グルメ">
+              🍜 グルメ
+            </option>
+
+            <option value="カフェ">
+              🥭 カフェ
+            </option>
+
+            <option value="居酒屋">
+              🍺 居酒屋
+            </option>
+
+            <option value="イベント">
+              🎵 イベント
+            </option>
+          </select>
+
+        </div>
+
+        <div class="form-group">
+
+          <label
+            class="form-label"
+            for="durationHours"
+          >
+            掲載時間
+
+            <span class="required">
+              必須
+            </span>
+          </label>
+
+          <select
+            id="durationHours"
+            name="durationHours"
+            required
+          >
+            <option value="">
+              選択してください
+            </option>
+
+            <option value="3">
+              3時間
+            </option>
+
+            <option value="6">
+              6時間
+            </option>
+
+            <option value="12">
+              12時間
+            </option>
+
+            <option value="24">
+              24時間
+            </option>
+          </select>
+
+          <p class="form-help">
+            投稿した時点から選択した時間が経過すると、
+            承認済みの広告もトップページから自動で非表示になります。
+          </p>
+
+        </div>
+
+        <div class="form-group">
+
+          <label
+            class="form-label"
+            for="content"
+          >
+            広告内容
+
+            <span class="required">
+              必須
+            </span>
+          </label>
+
+          <textarea
+            id="content"
+            name="content"
+            maxlength="300"
+            placeholder="例：本日限定でハマチのお刺身を半額で提供します。売り切れ次第終了です！"
+            required
+          ></textarea>
+
+          <div
+            id="contentCount"
+            class="character-count"
+          >
+            0 / 300文字
+          </div>
+
+        </div>
+
+        <div class="form-group">
+
+          <label
+            class="form-label"
+            for="address"
+          >
+            住所・場所
+
+            <span class="optional">
+              任意
+            </span>
+          </label>
+
+          <input
+            id="address"
+            name="address"
+            type="text"
+            maxlength="120"
+            autocomplete="street-address"
+            placeholder="例：沖縄県那覇市〇〇1-2-3"
+          >
+
+          <p class="form-help">
+            入力すると、トップページの地図ボタンから
+            Googleマップで検索できるようになります。
+          </p>
+
+        </div>
+
+        <div class="form-group">
+
+          <div class="form-label">
+            掲載写真
+
+            <span class="optional">
+              任意・最大5枚
+            </span>
+          </div>
+
+          <div
+            id="imageUploadArea"
+            class="image-upload-area"
+          >
+
+            <div class="image-upload-icon">
+              📷
+            </div>
+
+            <p class="image-upload-title">
+              広告に掲載する写真を選択
             </p>
 
-            <div class="progress-bar">
+            <p class="image-upload-description">
+              JPG・PNG・WEBPに対応しています。<br>
+              1枚につき10MB以内、最大5枚まで選択できます。
+            </p>
 
-              <div
-                id="progressBarFill"
-                class="progress-bar-fill"
-              ></div>
+            <input
+              id="imageInput"
+              class="image-input"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              multiple
+            >
 
-            </div>
+            <button
+              id="imageSelectButton"
+              class="image-select-button"
+              type="button"
+            >
+              ＋ 写真を選ぶ
+            </button>
 
             <p
-              id="progressStatus"
-              class="progress-status"
+              id="imageCount"
+              class="image-count"
             >
-              準備中…
+              0 / 5枚
             </p>
-
-          </div>
-                    <div
-            id="completionPanel"
-            class="completion-panel"
-          >
-
-            <h2 class="completion-title">
-              🎉 投稿が完了しました！
-            </h2>
-
-            <p class="completion-subtitle">
-              下の「掲載番号」と「終了番号」は掲載終了時に必要です。<br>
-              必ずスクリーンショットを撮るか、コピーして保存してください。
-            </p>
-
-            <div class="completion-summary">
-
-              <div class="completion-summary-item">
-                <span class="completion-summary-label">
-                  店舗・イベント名
-                </span>
-
-                <span
-                  id="completionShopName"
-                  class="completion-summary-value"
-                ></span>
-              </div>
-
-              <div class="completion-summary-item">
-                <span class="completion-summary-label">
-                  掲載時間
-                </span>
-
-                <span
-                  id="completionDuration"
-                  class="completion-summary-value"
-                ></span>
-              </div>
-
-              <div class="completion-summary-item">
-                <span class="completion-summary-label">
-                  掲載終了予定
-                </span>
-
-                <span
-                  id="completionExpiresAt"
-                  class="completion-summary-value"
-                ></span>
-              </div>
-
-            </div>
-                        <div class="number-card-grid">
-
-              <div class="number-card">
-
-                <div class="number-card-title">
-                  掲載番号
-                </div>
-
-                <div
-                  id="completionPublicationNumber"
-                  class="number-card-value"
-                ></div>
-
-                <button
-                  type="button"
-                  id="copyPublicationNumberButton"
-                  class="copy-button"
-                >
-                  掲載番号をコピー
-                </button>
-
-              </div>
-
-              <div class="number-card">
-
-                <div class="number-card-title">
-                  終了番号
-                </div>
-
-                <div
-                  id="completionEndCode"
-                  class="number-card-value"
-                ></div>
-
-                <button
-                  type="button"
-                  id="copyEndCodeButton"
-                  class="copy-button"
-                >
-                  終了番号をコピー
-                </button>
-
-              </div>
-
-            </div>
-                        <div class="completion-warning">
-              <strong>⚠ 大切なお知らせ</strong><br>
-              「掲載番号」と「終了番号」がないと、ご自身で掲載終了できません。<br>
-              必ずスクリーンショットを撮るか、コピーして保存してください。
-            </div>
-
-            <div class="completion-actions">
-
-              <button
-                type="button"
-                id="copyAllNumbersButton"
-                class="secondary-button"
-              >
-                掲載番号・終了番号をまとめてコピー
-              </button>
-
-              <button
-                type="button"
-                id="printCompletionButton"
-                class="secondary-button"
-              >
-                この画面を印刷
-              </button>
-
-            </div>
 
             <div
-              id="afterSubmitActions"
-              class="after-submit-actions"
-            >
-
-              <button
-                type="button"
-                id="newPostButton"
-                class="primary-button"
-              >
-                続けて新しい広告を投稿する
-              </button>
-
-            </div>
+              id="imagePreviewList"
+              class="image-preview-list"
+            ></div>
 
           </div>
-                  <div class="submit-area">
+
+        </div>
+
+        <div class="agreement-box">
+
+          <label class="agreement-label">
+
+            <input
+              id="agreement"
+              type="checkbox"
+              required
+            >
+
+            <span class="agreement-text">
+              入力内容に虚偽がなく、第三者の権利を侵害する
+              写真や文章を投稿していないことを確認しました。
+            </span>
+
+          </label>
+
+        </div>
+
+        <button
+          id="submitButton"
+          class="submit-button"
+          type="submit"
+        >
+          この内容で掲載を申し込む
+        </button>
+
+        <div
+          id="progressArea"
+          class="progress-area"
+        >
+
+          <p
+            id="progressMessage"
+            class="progress-message"
+          >
+            投稿の準備をしています…
+          </p>
+
+          <div class="progress-bar">
+            <div
+              id="progressBarFill"
+              class="progress-bar-fill"
+            ></div>
+          </div>
+
+        </div>
+
+        <div
+          id="messageBox"
+          class="message-box"
+          role="status"
+          aria-live="polite"
+        ></div>
+
+        <div
+          id="afterSubmitActions"
+          class="after-submit-actions"
+        >
+
+          <a
+            class="after-action back-home-button"
+            href="index.html"
+          >
+            トップページへ戻る
+          </a>
 
           <button
-            type="submit"
-            id="submitButton"
-            class="submit-button"
+            id="newPostButton"
+            class="after-action new-post-button"
+            type="button"
           >
-            広告を投稿する
+            続けて投稿する
           </button>
 
         </div>
 
       </form>
 
+      <div class="security-note">
+        投稿された情報は、イマミル運営の確認後に公開されます。
+        API Secretや管理者情報が、このページから送信されることはありません。
+      </div>
+
     </section>
 
   </main>
 
   <footer>
-
-    <p>
-      © IMAMIRU
-    </p>
-
+    イマミル Web Version 1.2
+    <br>
+    沖縄の「今」を、旅人へ。
   </footer>
 
-  <script type="module">
-       import {
-      db,
-      storage
-    } from "./firebase.js";
+  <!-- Firebase本体 -->
+  <script
+    src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"
+  ></script>
 
-    import {
-      collection,
-      addDoc,
-      serverTimestamp
-    } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
+  <!-- Firestore -->
+  <script
+    src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"
+  ></script>
 
-    import {
-      ref,
-      uploadBytes,
-      getDownloadURL
-    } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-storage.js";
+  <!-- イマミルのFirebase接続設定 -->
+  <script src="firebase.js"></script>
+<!-- 住所を緯度・経度へ変換するGoogle Maps -->
+<script
+  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyC7LLuNBYIXKT1YcrIaiuwyFssKQyMMjkU"
+  async
+  defer
+></script>
+  <script>
+    /*
+      Cloudinary設定
+    */
 
-    const form = document.getElementById("submissionForm");
-    const submitButton = document.getElementById("submitButton");
-    const message = document.getElementById("message");
-    const progressPanel = document.getElementById("progressPanel");
-    const progressBarFill = document.getElementById("progressBarFill");
-    const progressStatus = document.getElementById("progressStatus");
-    const completionPanel = document.getElementById("completionPanel");
+    const CLOUDINARY_CLOUD_NAME =
+      "cdhyctnp";
 
-    const shopNameInput = document.getElementById("shopName");
-    const titleInput = document.getElementById("title");
-    const categoryInput = document.getElementById("category");
-    const durationHoursInput = document.getElementById("durationHours");
-    const addressInput = document.getElementById("address");
-    const contentInput = document.getElementById("content");
-    const agreementInput = document.getElementById("agreement"); 
-        const imageInput = document.getElementById("imageInput");
-    const imageSelectButton = document.getElementById("imageSelectButton");
-    const imagePreviewList = document.getElementById("imagePreviewList");
-    const imageCount = document.getElementById("imageCount");
+    const CLOUDINARY_UPLOAD_PRESET =
+      "imamiru_upload";
 
-    const titleCounter = document.getElementById("titleCounter");
-    const contentCounter = document.getElementById("contentCounter");
+    const MAX_IMAGE_COUNT =
+      5;
 
-    const completionShopName = document.getElementById("completionShopName");
-    const completionDuration = document.getElementById("completionDuration");
-    const completionExpiresAt = document.getElementById("completionExpiresAt");
+    const MAX_IMAGE_SIZE_BYTES =
+      10 * 1024 * 1024;
 
-    const completionPublicationNumber = document.getElementById("completionPublicationNumber");
-    const completionEndCode = document.getElementById("completionEndCode");
+    const ALLOWED_IMAGE_TYPES =
+      [
+        "image/jpeg",
+        "image/png",
+        "image/webp"
+      ];
 
-    const copyPublicationNumberButton = document.getElementById("copyPublicationNumberButton");
-    const copyEndCodeButton = document.getElementById("copyEndCodeButton");
-    const copyAllNumbersButton = document.getElementById("copyAllNumbersButton");
+    let selectedImageFiles =
+      [];
 
-    const printCompletionButton = document.getElementById("printCompletionButton");
-    const newPostButton = document.getElementById("newPostButton");
-     let selectedImages = [];
+    const submissionForm =
+      document.getElementById(
+        "submissionForm"
+      );
 
-    function updateTitleCounter() {
-      titleCounter.textContent = `${titleInput.value.length} / 60`;
+    const shopNameInput =
+      document.getElementById(
+        "shopName"
+      );
+
+    const titleInput =
+      document.getElementById(
+        "title"
+      );
+
+    const categoryInput =
+      document.getElementById(
+        "category"
+      );
+
+    const durationHoursInput =
+      document.getElementById(
+        "durationHours"
+      );
+
+    const contentInput =
+      document.getElementById(
+        "content"
+      );
+
+    const addressInput =
+      document.getElementById(
+        "address"
+      );
+
+    const agreementInput =
+      document.getElementById(
+        "agreement"
+      );
+
+    const imageInput =
+      document.getElementById(
+        "imageInput"
+      );
+
+    const imageSelectButton =
+      document.getElementById(
+        "imageSelectButton"
+      );
+
+    const imageUploadArea =
+      document.getElementById(
+        "imageUploadArea"
+      );
+
+    const imagePreviewList =
+      document.getElementById(
+        "imagePreviewList"
+      );
+
+    const imageCount =
+      document.getElementById(
+        "imageCount"
+      );
+
+    const titleCount =
+      document.getElementById(
+        "titleCount"
+      );
+
+    const contentCount =
+      document.getElementById(
+        "contentCount"
+      );
+
+    const submitButton =
+      document.getElementById(
+        "submitButton"
+      );
+
+    const progressArea =
+      document.getElementById(
+        "progressArea"
+      );
+
+    const progressMessage =
+      document.getElementById(
+        "progressMessage"
+      );
+
+    const progressBarFill =
+      document.getElementById(
+        "progressBarFill"
+      );
+
+    const messageBox =
+      document.getElementById(
+        "messageBox"
+      );
+
+    const afterSubmitActions =
+      document.getElementById(
+        "afterSubmitActions"
+      );
+
+    const newPostButton =
+      document.getElementById(
+        "newPostButton"
+      );
+
+    function escapeHtml(
+      text
+    ) {
+      return String(
+        text ?? ""
+      )
+        .replaceAll(
+          "&",
+          "&amp;"
+        )
+        .replaceAll(
+          "<",
+          "&lt;"
+        )
+        .replaceAll(
+          ">",
+          "&gt;"
+        )
+        .replaceAll(
+          '"',
+          "&quot;"
+        )
+        .replaceAll(
+          "'",
+          "&#039;"
+        );
     }
 
-    function updateContentCounter() {
-      contentCounter.textContent = `${contentInput.value.length} / 500`;
+    function updateCharacterCounts() {
+      titleCount.textContent =
+        titleInput.value.length +
+        " / 50文字";
+
+      contentCount.textContent =
+        contentInput.value.length +
+        " / 300文字";
     }
 
-    function updateImageCount() {
-      imageCount.textContent = `${selectedImages.length} / 5枚`;
+    function showMessage(
+      type,
+      message
+    ) {
+      messageBox.className =
+        "message-box visible " +
+        type;
+
+      messageBox.innerHTML =
+        escapeHtml(
+          message
+        ).replaceAll(
+          "\n",
+          "<br>"
+        );
     }
 
-    function formatDateTime(date) {
-      const yyyy = date.getFullYear();
-      const mm = String(date.getMonth() + 1).padStart(2, "0");
-      const dd = String(date.getDate()).padStart(2, "0");
-      const hh = String(date.getHours()).padStart(2, "0");
-      const mi = String(date.getMinutes()).padStart(2, "0");
+    function clearMessage() {
+      messageBox.className =
+        "message-box";
 
-      return `${yyyy}/${mm}/${dd} ${hh}:${mi}`;
-    }   
-        function copyText(text) {
-      if (!text) return;
-
-      navigator.clipboard.writeText(text)
-        .then(() => {
-          alert("コピーしました。");
-        })
-        .catch(() => {
-          alert("コピーできませんでした。");
-        });
+      messageBox.textContent =
+        "";
     }
 
-    function showCompletionPanel(data) {
+    function setProgress(
+      message,
+      percent
+    ) {
+      progressArea.classList.add(
+        "visible"
+      );
 
-      completionShopName.textContent = data.shopName;
-      completionDuration.textContent = `${data.durationHours}時間`;
-      completionExpiresAt.textContent = formatDateTime(data.expiresAt);
+      progressMessage.textContent =
+        message;
 
-      completionPublicationNumber.textContent = data.publicationNumber;
-      completionEndCode.textContent = data.endCode;
-
-      completionPanel.style.display = "block";
-
-      window.scrollTo({
-        top: completionPanel.offsetTop - 20,
-        behavior: "smooth"
-      });
+      progressBarFill.style.width =
+        Math.max(
+          0,
+          Math.min(
+            100,
+            percent
+          )
+        ) +
+        "%";
     }
-        imageSelectButton.addEventListener("click", () => {
-      imageInput.click();
-    });
 
-    imageInput.addEventListener("change", () => {
+    function hideProgress() {
+      progressArea.classList.remove(
+        "visible"
+      );
 
-      const files = Array.from(imageInput.files);
+      progressBarFill.style.width =
+        "0%";
+    }
 
-      selectedImages = files.slice(0, 5);
+    function setSubmitting(
+      submitting
+    ) {
+            submitButton.disabled =
+        submitting ||
+        !agreementInput.checked;
 
-      imagePreviewList.innerHTML = "";
+      imageSelectButton.disabled =
+        submitting;
 
-      selectedImages.forEach((file) => {
+      shopNameInput.disabled =
+        submitting;
 
-        const item = document.createElement("div");
-        item.className = "image-preview-item";
+      titleInput.disabled =
+        submitting;
 
-        const img = document.createElement("img");
-        img.src = URL.createObjectURL(file);
+      categoryInput.disabled =
+        submitting;
 
-        item.appendChild(img);
+      durationHoursInput.disabled =
+        submitting;
 
-        imagePreviewList.appendChild(item);
+      contentInput.disabled =
+        submitting;
 
-      });
+      addressInput.disabled =
+        submitting;
 
-      updateImageCount();
+      agreementInput.disabled =
+        submitting;
 
-    });
-    form.addEventListener("submit", async (event) => {
-  event.preventDefault();
+      if (submitting) {
+        submitButton.textContent =
+          "送信しています…";
+      } else {
+        submitButton.textContent =
+          "この内容で掲載を申し込む";
+      }
+    }
 
-  if (selectedImages.length === 0) {
-    alert("写真を1枚以上選択してください。");
-    return;
-  }
+    function createFileKey(
+      file
+    ) {
+      return [
+        file.name,
+        file.size,
+        file.lastModified
+      ].join(
+        "-"
+      );
+    }
 
-  if (!agreementInput.checked) {
-    alert("利用規約への同意が必要です。");
-    return;
-  }
+    function validateImageFile(
+      file
+    ) {
+      if (
+        !ALLOWED_IMAGE_TYPES.includes(
+          file.type
+        )
+      ) {
+        return (
+          file.name +
+          "は対応していない画像形式です。"
+        );
+      }
 
-  submitButton.disabled = true;
-  progressPanel.style.display = "block";
-  progressBarFill.style.width = "10%";
-  progressStatus.textContent = "画像をアップロードしています...";
+      if (
+        file.size >
+        MAX_IMAGE_SIZE_BYTES
+      ) {
+        return (
+          file.name +
+          "は10MBを超えています。"
+        );
+      }
 
-  try {
-        progressBarFill.style.width = "30%";
-    progressStatus.textContent = "画像をCloudinaryへアップロードしています...";
+      return "";
+    }
 
-    const imageUrls = [];
+    function addSelectedFiles(
+      files
+    ) {
+      clearMessage();
 
-    for (const file of selectedImages) {
-      const formData = new FormData();
+      const incomingFiles =
+        Array.from(
+          files
+        );
 
-      formData.append("file", file);
-      formData.append("upload_preset", "imamiru");
+      if (
+        incomingFiles.length ===
+        0
+      ) {
+        return;
+      }
 
-      const response = await fetch(
-        "https://api.cloudinary.com/v1_1/dcbj8k0h4/image/upload",
+      const currentKeys =
+        new Set(
+          selectedImageFiles.map(
+            createFileKey
+          )
+        );
+
+      for (
+        const file
+        of incomingFiles
+      ) {
+        if (
+          selectedImageFiles.length >=
+          MAX_IMAGE_COUNT
+        ) {
+          showMessage(
+            "error",
+            "写真は最大5枚まで選択できます。"
+          );
+
+          break;
+        }
+
+        const errorMessage =
+          validateImageFile(
+            file
+          );
+
+        if (errorMessage) {
+          showMessage(
+            "error",
+            errorMessage
+          );
+
+          continue;
+        }
+
+        const fileKey =
+          createFileKey(
+            file
+          );
+
+        if (
+          currentKeys.has(
+            fileKey
+          )
+        ) {
+          continue;
+        }
+
+        selectedImageFiles.push(
+          file
+        );
+
+        currentKeys.add(
+          fileKey
+        );
+      }
+
+      imageInput.value =
+        "";
+
+      renderImagePreviews();
+    }
+
+    function removeSelectedImage(
+      index
+    ) {
+      selectedImageFiles.splice(
+        index,
+        1
+      );
+
+      renderImagePreviews();
+    }
+
+    function renderImagePreviews() {
+      imageCount.textContent =
+        selectedImageFiles.length +
+        " / " +
+        MAX_IMAGE_COUNT +
+        "枚";
+
+      if (
+        selectedImageFiles.length ===
+        0
+      ) {
+        imagePreviewList.innerHTML =
+          "";
+
+        imageSelectButton.textContent =
+          "＋ 写真を選ぶ";
+
+        return;
+      }
+
+      imageSelectButton.textContent =
+        selectedImageFiles.length <
+        MAX_IMAGE_COUNT
+          ? "＋ 写真を追加する"
+          : "写真を5枚選択済み";
+
+      imageSelectButton.disabled =
+        selectedImageFiles.length >=
+        MAX_IMAGE_COUNT;
+
+      imagePreviewList.innerHTML =
+        "";
+
+      selectedImageFiles.forEach(
+        function(
+          file,
+          index
+        ) {
+          const previewUrl =
+            URL.createObjectURL(
+              file
+            );
+
+          const previewItem =
+            document.createElement(
+              "div"
+            );
+
+          previewItem.className =
+            "image-preview-item";
+
+          const image =
+            document.createElement(
+              "img"
+            );
+
+          image.src =
+            previewUrl;
+
+          image.alt =
+            "選択した写真" +
+            (index + 1);
+
+          image.addEventListener(
+            "load",
+            function() {
+              URL.revokeObjectURL(
+                previewUrl
+              );
+            },
+            {
+              once: true
+            }
+          );
+
+          const numberLabel =
+            document.createElement(
+              "span"
+            );
+
+          numberLabel.className =
+            "image-number";
+
+          numberLabel.textContent =
+            index + 1;
+
+          const removeButton =
+            document.createElement(
+              "button"
+            );
+
+          removeButton.className =
+            "image-remove-button";
+
+          removeButton.type =
+            "button";
+
+          removeButton.setAttribute(
+            "aria-label",
+            "写真" +
+            (index + 1) +
+            "を削除"
+          );
+
+          removeButton.textContent =
+            "✕";
+
+          removeButton.addEventListener(
+            "click",
+            function() {
+              removeSelectedImage(
+                index
+              );
+            }
+          );
+
+          previewItem.appendChild(
+            image
+          );
+
+          previewItem.appendChild(
+            numberLabel
+          );
+
+          previewItem.appendChild(
+            removeButton
+          );
+
+          if (index === 0) {
+            const firstLabel =
+              document.createElement(
+                "span"
+              );
+
+            firstLabel.className =
+              "first-image-label";
+
+            firstLabel.textContent =
+              "トップ画像";
+
+            previewItem.appendChild(
+              firstLabel
+            );
+          }
+
+          imagePreviewList.appendChild(
+            previewItem
+          );
+        }
+      );
+    }
+
+    function waitForFirebase(
+      maximumWaitMilliseconds
+    ) {
+      return new Promise(
+        function(
+          resolve,
+          reject
+        ) {
+          const startedAt =
+            Date.now();
+
+          function checkFirebase() {
+            if (
+              window.imamiruDb
+            ) {
+              resolve(
+                window.imamiruDb
+              );
+
+              return;
+            }
+
+            if (
+              Date.now() -
+                startedAt >=
+              maximumWaitMilliseconds
+            ) {
+              reject(
+                new Error(
+                  "Firebaseへ接続できませんでした。"
+                )
+              );
+
+              return;
+            }
+
+            window.setTimeout(
+              checkFirebase,
+              100
+            );
+          }
+
+          checkFirebase();
+        }
+      );
+    }
+    async function compressImageFile(
+      file
+    ) {
+      const maximumLongSide =
+        1600;
+
+      const imageQuality =
+        0.82;
+
+      const imageBitmap =
+        await createImageBitmap(
+          file
+        );
+
+      const originalWidth =
+        imageBitmap.width;
+
+      const originalHeight =
+        imageBitmap.height;
+
+      const longSide =
+        Math.max(
+          originalWidth,
+          originalHeight
+        );
+
+      const resizeRatio =
+        longSide >
+        maximumLongSide
+          ? maximumLongSide /
+            longSide
+          : 1;
+
+      const resizedWidth =
+        Math.max(
+          1,
+          Math.round(
+            originalWidth *
+            resizeRatio
+          )
+        );
+
+      const resizedHeight =
+        Math.max(
+          1,
+          Math.round(
+            originalHeight *
+            resizeRatio
+          )
+        );
+
+      const canvas =
+        document.createElement(
+          "canvas"
+        );
+
+      canvas.width =
+        resizedWidth;
+
+      canvas.height =
+        resizedHeight;
+
+      const context =
+        canvas.getContext(
+          "2d"
+        );
+
+      if (!context) {
+        imageBitmap.close();
+
+        throw new Error(
+          "写真を軽量化できませんでした。"
+        );
+      }
+
+      context.drawImage(
+        imageBitmap,
+        0,
+        0,
+        resizedWidth,
+        resizedHeight
+      );
+
+      imageBitmap.close();
+
+      const compressedBlob =
+        await new Promise(
+          function(
+            resolve,
+            reject
+          ) {
+            canvas.toBlob(
+              function(blob) {
+                if (blob) {
+                  resolve(blob);
+
+                  return;
+                }
+
+                reject(
+                  new Error(
+                    "写真を軽量化できませんでした。"
+                  )
+                );
+              },
+              "image/webp",
+              imageQuality
+            );
+          }
+        );
+
+      const originalFileName =
+        file.name.replace(
+          /\.[^.]+$/,
+          ""
+        );
+
+      return new File(
+        [
+          compressedBlob
+        ],
+        originalFileName +
+        ".webp",
         {
-          method: "POST",
-          body: formData
+          type:
+            "image/webp",
+
+          lastModified:
+            Date.now()
+        }
+      );
+    }
+    async function uploadImageToCloudinary(
+      file
+    ) {
+      const uploadUrl =
+        "https://api.cloudinary.com/v1_1/" +
+        CLOUDINARY_CLOUD_NAME +
+        "/image/upload";
+
+      const formData =
+        new FormData();
+
+            setProgress(
+        "写真を軽量化しています…",
+        8
+      );
+
+      const compressedFile =
+        await compressImageFile(
+          file
+        );
+
+      console.log(
+        "画像軽量化：",
+        file.name,
+        Math.round(
+          file.size /
+          1024
+        ) +
+        "KB →",
+        Math.round(
+          compressedFile.size /
+          1024
+        ) +
+        "KB"
+      );
+
+      formData.append(
+        "file",
+        compressedFile
+      );
+
+      formData.append(
+        "upload_preset",
+        CLOUDINARY_UPLOAD_PRESET
+      );
+
+      const response =
+        await fetch(
+          uploadUrl,
+          {
+            method: "POST",
+            body: formData
+          }
+        );
+
+      let responseData =
+        null;
+
+      try {
+        responseData =
+          await response.json();
+      } catch (
+        jsonError
+      ) {
+        throw new Error(
+          "画像アップロードの応答を読み取れませんでした。"
+        );
+      }
+
+      if (
+        !response.ok
+      ) {
+        const cloudinaryMessage =
+          responseData &&
+          responseData.error &&
+          responseData.error.message
+            ? responseData
+                .error
+                .message
+            : "画像をアップロードできませんでした。";
+
+        throw new Error(
+          cloudinaryMessage
+        );
+      }
+
+      if (
+        !responseData.secure_url
+      ) {
+        throw new Error(
+          "画像URLを取得できませんでした。"
+        );
+      }
+
+      return {
+        url:
+          responseData.secure_url,
+
+        publicId:
+          responseData.public_id ||
+          "",
+
+        width:
+          responseData.width ||
+          null,
+
+        height:
+          responseData.height ||
+          null,
+
+        format:
+          responseData.format ||
+          ""
+      };
+    }
+
+        async function uploadSelectedImages() {
+      if (
+        selectedImageFiles.length ===
+        0
+      ) {
+        return [];
+      }
+
+      let completedImageCount =
+        0;
+
+      setProgress(
+        selectedImageFiles.length +
+          "枚の写真を軽量化・アップロードしています…",
+        10
+      );
+
+      const uploadPromises =
+        selectedImageFiles.map(
+          async function(
+            file,
+            index
+          ) {
+            const uploadedImage =
+              await uploadImageToCloudinary(
+                file
+              );
+
+            completedImageCount +=
+              1;
+
+            const completedPercent =
+              10 +
+              Math.round(
+                (
+                  completedImageCount /
+                  selectedImageFiles.length
+                ) *
+                  65
+              );
+
+            setProgress(
+              "写真" +
+                completedImageCount +
+                " / " +
+                selectedImageFiles.length +
+                "枚のアップロードが完了しました。",
+              completedPercent
+            );
+
+            return {
+              index:
+                index,
+
+              uploadedImage:
+                uploadedImage
+            };
+          }
+        );
+
+      const uploadResults =
+        await Promise.all(
+          uploadPromises
+        );
+
+      uploadResults.sort(
+        function(
+          firstResult,
+          secondResult
+        ) {
+          return (
+            firstResult.index -
+            secondResult.index
+          );
         }
       );
 
-      const result = await response.json();
+      return uploadResults.map(
+        function(result) {
+          return result.uploadedImage;
+        }
+      );
+    }
+async function convertAddressToCoordinates(
+  address
+) {
+  const trimmedAddress =
+    String(address || "").trim();
 
-      if (!result.secure_url) {
-        throw new Error("画像アップロード失敗");
+  if (trimmedAddress === "") {
+    return {
+      latitude: null,
+      longitude: null
+    };
+  }
+
+  if (
+    typeof google === "undefined" ||
+    !google.maps ||
+    !google.maps.Geocoder
+  ) {
+    throw new Error(
+      "地図機能の準備が完了していません。少し待ってから、もう一度お試しください。"
+    );
+  }
+
+  const geocoder =
+    new google.maps.Geocoder();
+
+  const response =
+    await geocoder.geocode({
+      address:
+        trimmedAddress,
+
+      region:
+        "JP"
+    });
+
+  if (
+    !response.results ||
+    response.results.length === 0
+  ) {
+    throw new Error(
+      "入力された住所の場所を確認できませんでした。住所を詳しく入力してください。"
+    );
+  }
+
+  const location =
+    response.results[0]
+      .geometry
+      .location;
+
+  return {
+    latitude:
+      location.lat(),
+
+    longitude:
+      location.lng()
+  };
+}
+    function validateForm() {
+      if (
+        shopNameInput.value
+          .trim() ===
+        ""
+      ) {
+        throw new Error(
+          "店舗・イベント名を入力してください。"
+        );
       }
 
-      imageUrls.push(result.secure_url);
-    }
-        progressBarFill.style.width = "70%";
-    progressStatus.textContent = "Firestoreへ保存しています...";
+      if (
+        titleInput.value
+          .trim() ===
+        ""
+      ) {
+        throw new Error(
+          "広告タイトルを入力してください。"
+        );
+      }
 
-    const durationHours = Number(durationHoursInput.value);
-    const expiresAt = new Date(
-      Date.now() + durationHours * 60 * 60 * 1000
+      if (
+        categoryInput.value ===
+        ""
+      ) {
+        throw new Error(
+          "カテゴリーを選択してください。"
+        );
+      }
+
+      const durationHours =
+        Number(
+          durationHoursInput.value
+        );
+
+      if (
+        ![3, 6, 12, 24].includes(
+          durationHours
+        )
+      ) {
+        throw new Error(
+          "掲載時間を選択してください。"
+        );
+      }
+
+      if (
+        contentInput.value
+          .trim() ===
+        ""
+      ) {
+        throw new Error(
+          "広告内容を入力してください。"
+        );
+      }
+
+      if (
+        !agreementInput.checked
+      ) {
+        throw new Error(
+          "確認事項への同意が必要です。"
+        );
+      }
+    }
+
+    async function submitAdvertisement(
+      event
+    ) {
+      event.preventDefault();
+
+      clearMessage();
+
+      afterSubmitActions.classList.remove(
+        "visible"
+      );
+
+      try {
+        validateForm();
+
+        setSubmitting(
+          true
+        );
+
+        setProgress(
+          "投稿の準備をしています…",
+          5
+        );
+
+        const database =
+          await waitForFirebase(
+            10000
+          );
+
+        const uploadedImages =
+          await uploadSelectedImages();
+
+        setProgress(
+          "広告情報をイマミルへ送信しています…",
+          82
+        );
+
+        const imageUrls =
+          uploadedImages.map(
+            function(image) {
+              return image.url;
+            }
+          );
+
+        const imagePublicIds =
+          uploadedImages.map(
+            function(image) {
+              return image.publicId;
+            }
+          );
+
+        const durationHours =
+          Number(
+            durationHoursInput.value
+          );
+
+        const expiresAtDate =
+          new Date(
+            Date.now() +
+            durationHours *
+              60 *
+              60 *
+              1000
+          );
+        const publicationNumber =
+          String(
+            crypto.getRandomValues(
+              new Uint32Array(1)
+            )[0] %
+              100000000
+          ).padStart(
+            8,
+            "0"
+          );
+
+        const endCodeCharacters =
+          "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+        const endCodeRandomValues =
+          crypto.getRandomValues(
+            new Uint32Array(12)
+          );
+
+        const endCode =
+          Array.from(
+            endCodeRandomValues
+          )
+            .map(
+              function(randomValue) {
+                return endCodeCharacters[
+                  randomValue %
+                    endCodeCharacters.length
+                ];
+              }
+            )
+            .join("");
+
+        const endCodeHashBuffer =
+          await crypto.subtle.digest(
+            "SHA-256",
+            new TextEncoder().encode(
+              endCode
+            )
+          );
+
+        const endCodeHash =
+          Array.from(
+            new Uint8Array(
+              endCodeHashBuffer
+            )
+          )
+            .map(
+              function(byte) {
+                return byte
+                  .toString(16)
+                  .padStart(
+                    2,
+                    "0"
+                  );
+              }
+            )
+            .join("");
+  const coordinates =
+  await convertAddressToCoordinates(
+    addressInput.value
+  );
+        const submissionData = {
+          shopName:
+            shopNameInput.value
+              .trim(),
+
+          title:
+            titleInput.value
+              .trim(),
+
+          category:
+            categoryInput.value,
+
+          durationHours:
+            durationHours,
+
+          expiresAt:
+            firebase
+              .firestore
+              .Timestamp
+              .fromDate(
+                expiresAtDate
+              ),
+
+          content:
+            contentInput.value
+              .trim(),
+
+          address:
+            addressInput.value
+              .trim(),
+latitude:
+  coordinates.latitude,
+
+longitude:
+  coordinates.longitude,
+          imageUrls:
+            imageUrls,
+
+          imagePublicIds:
+            imagePublicIds,
+
+          images:
+            uploadedImages,
+
+          status: "approved",
+          publicationNumber:
+            publicationNumber,
+
+          endCodeHash:
+            endCodeHash,
+          createdAt:
+            firebase
+              .firestore
+              .FieldValue
+              .serverTimestamp(),
+
+          updatedAt:
+            firebase
+              .firestore
+              .FieldValue
+              .serverTimestamp(),
+
+          source:
+            "web",
+
+          version:
+            "1.2"
+        };
+
+        await database
+          .collection(
+            "submissions"
+          )
+          .add(
+            submissionData
+          );
+
+        setProgress(
+          "投稿が完了しました。",
+          100
+        );
+
+                showMessage(
+          "success",
+          "掲載のお申し込みを受け付けました。\n\n" +
+          "掲載番号：" +
+          publicationNumber +
+          "\n" +
+          "終了番号：" +
+          endCode +
+          "\n\n" +
+          "この2つの番号は、掲載を途中で終了するときに必要です。\n" +
+          "この画面をスクリーンショットするか、必ずメモしてください。\n\n" +
+          "運営による確認後、承認された情報がトップページに掲載されます。"
+        );
+
+        submitButton.style.display =
+          "none";
+
+        afterSubmitActions.classList.add(
+          "visible"
+        );
+
+        window.setTimeout(
+          function() {
+            hideProgress();
+          },
+          900
+        );
+      } catch (
+        error
+      ) {
+        console.error(
+          "投稿エラー：",
+          error
+        );
+
+        hideProgress();
+
+        setSubmitting(
+          false
+        );
+
+        showMessage(
+          "error",
+          error &&
+          error.message
+            ? error.message
+            : "投稿に失敗しました。もう一度お試しください。"
+        );
+      }
+    }
+
+    function resetSubmissionForm() {
+      submissionForm.reset();
+
+      selectedImageFiles =
+        [];
+
+      renderImagePreviews();
+
+      updateCharacterCounts();
+
+      clearMessage();
+
+      hideProgress();
+
+      afterSubmitActions.classList.remove(
+        "visible"
+      );
+
+      submitButton.style.display =
+        "block";
+
+      setSubmitting(
+        false
+      );
+
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth"
+      });
+    }
+
+    titleInput.addEventListener(
+      "input",
+      updateCharacterCounts
     );
 
-    const docRef = await addDoc(collection(db, "submissions"), {
-      shopName: shopNameInput.value.trim(),
-      title: titleInput.value.trim(),
-      category: categoryInput.value,
-      durationHours,
-      address: addressInput.value.trim(),
-      content: contentInput.value.trim(),
-      imageUrls,
-      status: "pending",
-      createdAt: serverTimestamp(),
-      expiresAt,
-      publicationNumber: crypto.randomUUID().slice(0, 8).toUpperCase(),
-      endCode: crypto.randomUUID().slice(0, 8).toUpperCase()
-    });
-        progressBarFill.style.width = "100%";
-    progressStatus.textContent = "投稿完了！";
+    contentInput.addEventListener(
+      "input",
+      updateCharacterCounts
+    );
 
-    showCompletionPanel({
-      shopName: shopNameInput.value.trim(),
-      durationHours,
-      expiresAt,
-      publicationNumber: docRef.id,
-      endCode: docRef.id.slice(-8).toUpperCase()
-    });
+    imageSelectButton.addEventListener(
+      "click",
+      function() {
+        if (
+          selectedImageFiles.length <
+          MAX_IMAGE_COUNT
+        ) {
+          imageInput.click();
+        }
+      }
+    );
 
-    progressPanel.style.display = "none";
+    imageInput.addEventListener(
+      "change",
+      function(event) {
+        addSelectedFiles(
+          event.target.files
+        );
+      }
+    );
 
-    form.reset();
-    selectedImages = [];
-    imagePreviewList.innerHTML = "";
-    updateImageCount();
-    updateTitleCounter();
-    updateContentCounter();
+    imageUploadArea.addEventListener(
+      "dragover",
+      function(event) {
+        event.preventDefault();
 
-    submitButton.disabled = false;
-      } catch (error) {
-    console.error(error);
+        imageUploadArea.classList.add(
+          "drag-over"
+        );
+      }
+    );
 
-    alert("投稿に失敗しました。もう一度お試しください。");
+    imageUploadArea.addEventListener(
+      "dragleave",
+      function() {
+        imageUploadArea.classList.remove(
+          "drag-over"
+        );
+      }
+    );
 
-    progressPanel.style.display = "none";
-  } finally {
-    submitButton.disabled = false;
+    imageUploadArea.addEventListener(
+      "drop",
+      function(event) {
+        event.preventDefault();
+
+        imageUploadArea.classList.remove(
+          "drag-over"
+        );
+
+        addSelectedFiles(
+          event.dataTransfer.files
+        );
+      }
+    );
+agreementInput.addEventListener(
+  "change",
+  function() {
+    submitButton.disabled =
+      !agreementInput.checked;
   }
-});
+);
+    submissionForm.addEventListener(
+      "submit",
+      submitAdvertisement
+    );
+
+    newPostButton.addEventListener(
+      "click",
+      resetSubmissionForm
+    );
+
+    updateCharacterCounts();
+submitButton.disabled =
+  !agreementInput.checked;
+    renderImagePreviews();
   </script>
 
 </body>
