@@ -1,0 +1,1749 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <meta
+    name="theme-color"
+    content="#0788c9"
+  >
+
+  <meta
+    name="description"
+    content="イマミルに掲載した情報を店舗・イベント運営者様が編集するためのページです。"
+  >
+
+  <title>
+    投稿内容を編集｜イマミル
+  </title>
+
+  <style>
+    :root {
+      --navy: #071a33;
+      --navy-light: #0d294a;
+      --blue: #0788c9;
+      --cyan: #04b7d7;
+      --sky: #dff7ff;
+      --green: #19a96b;
+      --red: #ef5a67;
+      --white: #ffffff;
+      --text: #15233a;
+      --subtext: #697386;
+      --border: #e2eaf1;
+      --background: #f4f8fb;
+      --shadow:
+        0 18px 50px
+        rgba(20, 52, 82, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family:
+        "Yu Gothic",
+        "Hiragino Kaku Gothic ProN",
+        "Meiryo",
+        sans-serif;
+      background:
+        linear-gradient(
+          180deg,
+          #e9faff 0,
+          var(--background) 360px
+        );
+      color: var(--text);
+    }
+
+    button,
+    input,
+    textarea,
+    select,
+    a {
+      font-family: inherit;
+    }
+
+    button {
+      -webkit-tap-highlight-color:
+        transparent;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .top-bar {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      border-bottom:
+        1px solid
+        rgba(12, 54, 87, 0.08);
+      background:
+        rgba(255, 255, 255, 0.94);
+      backdrop-filter:
+        blur(16px);
+    }
+
+    .top-bar-inner {
+      width: min(100%, 760px);
+      margin: 0 auto;
+      padding: 13px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .brand-area {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-icon {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+      border-radius: 14px;
+      background:
+        linear-gradient(
+          135deg,
+          var(--blue),
+          var(--cyan)
+        );
+      color: var(--white);
+      font-size: 21px;
+      box-shadow:
+        0 8px 20px
+        rgba(4, 158, 199, 0.25);
+    }
+
+    .brand-name {
+      margin: 0;
+      color: var(--navy);
+      font-size: 21px;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+    }
+
+    .brand-caption {
+      margin: 2px 0 0;
+      color: var(--subtext);
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .home-link {
+      padding: 9px 13px;
+      border:
+        1px solid
+        var(--border);
+      border-radius: 999px;
+      background: var(--white);
+      color: var(--navy);
+      font-size: 12px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .page-hero {
+      padding:
+        42px
+        18px
+        86px;
+      background:
+        linear-gradient(
+          135deg,
+          #0687c5,
+          #13c3ce
+        );
+      color: var(--white);
+    }
+
+    .page-hero-inner {
+      width: min(100%, 720px);
+      margin: 0 auto;
+    }
+
+    .hero-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 8px 12px;
+      border:
+        1px solid
+        rgba(255, 255, 255, 0.3);
+      border-radius: 999px;
+      background:
+        rgba(255, 255, 255, 0.12);
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .page-hero h1 {
+      margin: 20px 0 0;
+      font-size:
+        clamp(
+          30px,
+          7vw,
+          46px
+        );
+      line-height: 1.3;
+      letter-spacing: 0.02em;
+    }
+
+    .page-hero p {
+      max-width: 600px;
+      margin: 16px 0 0;
+      color:
+        rgba(255, 255, 255, 0.92);
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.9;
+    }
+
+    main {
+      width: min(100%, 720px);
+      margin: 0 auto;
+      padding:
+        0
+        16px
+        70px;
+    }
+
+    .form-card {
+      margin-top: -55px;
+      padding: 28px;
+      border:
+        1px solid
+        rgba(12, 54, 87, 0.08);
+      border-radius: 26px;
+      background: var(--white);
+      box-shadow: var(--shadow);
+    }
+
+    .form-card + .form-card {
+      margin-top: 20px;
+    }
+
+    .form-heading {
+      margin-bottom: 24px;
+    }
+
+    .form-heading h2 {
+      margin: 0;
+      color: var(--navy);
+      font-size: 23px;
+    }
+
+    .form-heading p {
+      margin: 9px 0 0;
+      color: var(--subtext);
+      font-size: 13px;
+      line-height: 1.8;
+    }
+
+    .notice-box {
+      margin-bottom: 24px;
+      padding: 15px 16px;
+      border:
+        1px solid
+        #cfeefa;
+      border-radius: 14px;
+      background: #effbff;
+      color: #24627e;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.8;
+    }
+
+    .warning-box {
+      margin-bottom: 24px;
+      padding: 16px;
+      border:
+        1px solid
+        #ffe1a8;
+      border-radius: 15px;
+      background: #fff9eb;
+      color: #76551e;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.8;
+    }
+
+    .warning-title {
+      display: block;
+      margin-bottom: 5px;
+      color: #8a5a00;
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .form-group {
+      margin-top: 22px;
+    }
+
+    .form-label {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 9px;
+      color: var(--navy);
+      font-size: 14px;
+      font-weight: 900;
+    }
+
+    .required {
+      padding: 3px 7px;
+      border-radius: 999px;
+      background: #fff0f0;
+      color: var(--red);
+      font-size: 9px;
+      font-weight: 900;
+    }
+
+    .optional {
+      padding: 3px 7px;
+      border-radius: 999px;
+      background: #eef5f8;
+      color: #648093;
+      font-size: 9px;
+      font-weight: 900;
+    }
+
+    .form-help {
+      margin: 7px 0 0;
+      color: #8a97a6;
+      font-size: 11px;
+      line-height: 1.7;
+    }
+
+    .character-count {
+      margin-top: 7px;
+      color: #8a97a6;
+      text-align: right;
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    input,
+    textarea,
+    select {
+      width: 100%;
+      border:
+        1px solid
+        var(--border);
+      border-radius: 14px;
+      outline: none;
+      background: #fbfdff;
+      color: var(--text);
+      font-size: 15px;
+      transition:
+        border-color 0.2s,
+        box-shadow 0.2s,
+        background 0.2s;
+    }
+
+    input,
+    select {
+      min-height: 52px;
+      padding: 0 15px;
+    }
+
+    textarea {
+      min-height: 150px;
+      padding: 15px;
+      resize: vertical;
+      line-height: 1.8;
+    }
+
+    #publicationNumber,
+    #endCode {
+      min-height: 54px;
+      font-size: 17px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+    }
+
+    input:focus,
+    textarea:focus,
+    select:focus {
+      border-color: var(--cyan);
+      background: var(--white);
+      box-shadow:
+        0 0 0 4px
+        rgba(4, 183, 215, 0.12);
+    }
+
+    input:disabled,
+    textarea:disabled,
+    select:disabled {
+      cursor: not-allowed;
+      opacity: 0.65;
+    }
+
+    .lookup-button,
+    .save-button {
+      width: 100%;
+      min-height: 58px;
+      margin-top: 24px;
+      border: none;
+      border-radius: 16px;
+      background:
+        linear-gradient(
+          135deg,
+          var(--blue),
+          var(--cyan)
+        );
+      color: var(--white);
+      font-size: 16px;
+      font-weight: 900;
+      cursor: pointer;
+      box-shadow:
+        0 13px 28px
+        rgba(4, 158, 199, 0.24);
+      transition:
+        transform 0.2s,
+        opacity 0.2s;
+    }
+
+    .lookup-button:hover:not(:disabled),
+    .save-button:hover:not(:disabled) {
+      transform:
+        translateY(-2px);
+    }
+
+    .lookup-button:disabled,
+    .save-button:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+    }
+
+    a.save-button-link {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+
+    a.save-button-link.visible {
+      display: flex;
+    }
+
+    .progress-area {
+      display: none;
+      margin-top: 18px;
+      padding: 16px;
+      border-radius: 14px;
+      background: #f0f9fc;
+    }
+
+    .progress-area.visible {
+      display: block;
+    }
+
+    .progress-message {
+      margin: 0;
+      color: #24627e;
+      font-size: 12px;
+      font-weight: 900;
+      line-height: 1.7;
+    }
+
+    .loading-dots::after {
+      display: inline-block;
+      width: 1.5em;
+      overflow: hidden;
+      vertical-align: bottom;
+      content: "…";
+      animation:
+        loadingDots
+        1.2s
+        infinite;
+    }
+
+    @keyframes loadingDots {
+      0% {
+        width: 0;
+      }
+
+      33% {
+        width: 0.5em;
+      }
+
+      66% {
+        width: 1em;
+      }
+
+      100% {
+        width: 1.5em;
+      }
+    }
+
+    .message-box {
+      display: none;
+      margin-top: 18px;
+      padding: 17px;
+      border-radius: 14px;
+      font-size: 13px;
+      font-weight: 800;
+      line-height: 1.8;
+    }
+
+    .message-box.visible {
+      display: block;
+    }
+
+    .message-box.success {
+      border:
+        1px solid
+        #bcebd4;
+      background: #ebfff5;
+      color: #16734b;
+    }
+
+    .message-box.error {
+      border:
+        1px solid
+        #ffd0d4;
+      background: #fff2f3;
+      color: #b33c49;
+    }
+
+    .security-note {
+      margin-top: 22px;
+      padding-top: 18px;
+      border-top:
+        1px solid
+        var(--border);
+      color: #8b98a5;
+      font-size: 10px;
+      line-height: 1.8;
+      text-align: center;
+    }
+
+    .edit-section {
+      display: none;
+    }
+
+    .edit-section.visible {
+      display: block;
+    }
+
+    footer {
+      padding:
+        0
+        18px
+        35px;
+      color: #8c9aa8;
+      text-align: center;
+      font-size: 10px;
+      line-height: 1.8;
+    }
+
+    @media (
+      max-width: 620px
+    ) {
+      .form-card {
+        padding:
+          22px
+          17px;
+        border-radius: 22px;
+      }
+    }
+
+    @media (
+      max-width: 420px
+    ) {
+      .top-bar-inner {
+        padding:
+          11px
+          13px;
+      }
+
+      .brand-icon {
+        width: 38px;
+        height: 38px;
+      }
+
+      .brand-name {
+        font-size: 18px;
+      }
+
+      .home-link {
+        padding:
+          8px
+          10px;
+        font-size: 10px;
+      }
+
+      .page-hero {
+        padding:
+          34px
+          15px
+          78px;
+      }
+
+      main {
+        padding-right: 12px;
+        padding-left: 12px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <header class="top-bar">
+    <div class="top-bar-inner">
+
+      <div class="brand-area">
+
+        <div class="brand-icon">
+          🌺
+        </div>
+
+        <div>
+          <p class="brand-name">
+            イマミル
+          </p>
+
+          <p class="brand-caption">
+            リアルタイム観光コンシェルジュ
+          </p>
+        </div>
+
+      </div>
+
+      <a
+        class="home-link"
+        href="index.html"
+      >
+        ← トップへ戻る
+      </a>
+
+    </div>
+  </header>
+
+  <section class="page-hero">
+    <div class="page-hero-inner">
+
+      <div class="hero-label">
+        🏪 店舗・イベント運営者様
+      </div>
+
+      <h1>
+        投稿内容を編集する
+      </h1>
+
+      <p>
+        掲載番号と終了番号で本人確認を行うと、
+        現在の投稿内容を編集できます。
+      </p>
+
+    </div>
+  </section>
+
+  <main>
+
+    <section
+      id="lookupCard"
+      class="form-card"
+    >
+
+      <div class="form-heading">
+
+        <h2>
+          本人確認
+        </h2>
+
+        <p>
+          投稿完了時に表示された「掲載番号」と
+          「終了番号」を入力してください。
+        </p>
+
+      </div>
+
+      <div class="warning-box">
+
+        <span class="warning-title">
+          ⚠️ 番号の入力について
+        </span>
+
+        掲載番号と終了番号が一致した場合のみ、
+        対象の投稿内容を表示します。
+        終了番号そのものをイマミルが保存することはありません。
+
+      </div>
+
+      <form id="lookupForm">
+
+        <div class="form-group">
+
+          <label
+            class="form-label"
+            for="publicationNumber"
+          >
+            掲載番号
+
+            <span class="required">
+              必須
+            </span>
+          </label>
+
+          <input
+            id="publicationNumber"
+            name="publicationNumber"
+            type="text"
+            inputmode="numeric"
+            autocomplete="off"
+            maxlength="8"
+            placeholder="例：12345678"
+            aria-describedby="publicationNumberHelp"
+            required
+          >
+
+          <p
+            id="publicationNumberHelp"
+            class="form-help"
+          >
+            投稿完了時に表示された8桁の数字です。
+          </p>
+
+        </div>
+
+        <div class="form-group">
+
+          <label
+            class="form-label"
+            for="endCode"
+          >
+            終了番号
+
+            <span class="required">
+              必須
+            </span>
+          </label>
+
+          <input
+            id="endCode"
+            name="endCode"
+            type="text"
+            autocomplete="off"
+            autocapitalize="characters"
+            spellcheck="false"
+            maxlength="12"
+            placeholder="例：A2BC3D4EF5GH"
+            aria-describedby="endCodeHelp"
+            required
+          >
+
+          <p
+            id="endCodeHelp"
+            class="form-help"
+          >
+            投稿完了時に表示された12文字の英数字です。
+            小文字で入力しても自動で大文字になります。
+          </p>
+
+        </div>
+
+        <button
+          id="lookupButton"
+          class="lookup-button"
+          type="submit"
+        >
+          投稿内容を確認する
+        </button>
+
+        <div
+          id="lookupProgressArea"
+          class="progress-area"
+          role="status"
+          aria-live="polite"
+        >
+
+          <p class="progress-message">
+            投稿内容を確認しています
+            <span class="loading-dots"></span>
+          </p>
+
+        </div>
+
+        <div
+          id="lookupMessageBox"
+          class="message-box"
+          role="status"
+          aria-live="polite"
+        ></div>
+
+      </form>
+
+      <div class="security-note">
+        入力された終了番号は本人確認のためだけに使用し、
+        画面に再表示することはありません。
+      </div>
+
+    </section>
+
+    <section
+      id="editCard"
+      class="form-card edit-section"
+    >
+
+      <div class="form-heading">
+
+        <h2>
+          投稿内容の編集
+        </h2>
+
+        <p>
+          現在の投稿内容です。内容を確認・修正してください。
+        </p>
+
+      </div>
+
+      <div class="notice-box">
+        💡 内容を確認・修正のうえ「この内容で保存する」を押してください。
+        保存すると、この投稿にすぐに反映されます。
+      </div>
+
+      <form id="editForm">
+
+        <div class="form-group">
+
+          <label
+            class="form-label"
+            for="shopName"
+          >
+            店舗・イベント名
+
+            <span class="required">
+              必須
+            </span>
+          </label>
+
+          <input
+            id="shopName"
+            name="shopName"
+            type="text"
+            maxlength="60"
+            autocomplete="organization"
+            placeholder="例：南国食堂"
+            required
+          >
+
+        </div>
+
+        <div class="form-group">
+
+          <label
+            class="form-label"
+            for="title"
+          >
+            広告タイトル
+
+            <span class="required">
+              必須
+            </span>
+          </label>
+
+          <input
+            id="title"
+            name="title"
+            type="text"
+            maxlength="50"
+            placeholder="例：本日限定！ハマチ半額"
+            required
+          >
+
+        </div>
+
+        <div class="form-group">
+
+          <label
+            class="form-label"
+            for="category"
+          >
+            カテゴリー
+
+            <span class="required">
+              必須
+            </span>
+          </label>
+
+          <select
+            id="category"
+            name="category"
+            required
+          >
+            <option value="">
+              選択してください
+            </option>
+
+            <option value="グルメ">
+              🍜 グルメ
+            </option>
+
+            <option value="カフェ">
+              🥭 カフェ
+            </option>
+
+            <option value="居酒屋">
+              🍺 居酒屋
+            </option>
+
+            <option value="イベント">
+              🎵 イベント
+            </option>
+          </select>
+
+        </div>
+
+        <div class="form-group">
+
+          <label
+            class="form-label"
+            for="content"
+          >
+            広告内容
+
+            <span class="required">
+              必須
+            </span>
+          </label>
+
+          <textarea
+            id="content"
+            name="content"
+            maxlength="300"
+            placeholder="例：本日限定でハマチのお刺身を半額で提供します。売り切れ次第終了です！"
+            required
+          ></textarea>
+
+        </div>
+
+        <div class="form-group">
+
+          <label
+            class="form-label"
+            for="address"
+          >
+            住所・場所
+
+            <span class="optional">
+              任意
+            </span>
+          </label>
+
+          <input
+            id="address"
+            name="address"
+            type="text"
+            maxlength="120"
+            autocomplete="street-address"
+            placeholder="例：沖縄県那覇市〇〇1-2-3"
+          >
+
+        </div>
+
+        <button
+          id="saveButton"
+          class="save-button"
+          type="submit"
+        >
+          この内容で保存する
+        </button>
+
+        <div
+          id="saveProgressArea"
+          class="progress-area"
+          role="status"
+          aria-live="polite"
+        >
+
+          <p class="progress-message">
+            投稿内容を保存しています
+            <span class="loading-dots"></span>
+          </p>
+
+        </div>
+
+        <div
+          id="editMessageBox"
+          class="message-box"
+          role="status"
+          aria-live="polite"
+        ></div>
+
+        <a
+          id="backHomeLink"
+          class="save-button save-button-link"
+          href="index.html"
+        >
+          トップページへ戻る
+        </a>
+
+      </form>
+
+    </section>
+
+  </main>
+
+  <footer>
+    イマミル Web Version 1.2
+    <br>
+    沖縄の「今」を、旅人へ。
+  </footer>
+
+  <script>
+    const lookupCard =
+      document.getElementById(
+        "lookupCard"
+      );
+
+    const editCard =
+      document.getElementById(
+        "editCard"
+      );
+
+    const lookupForm =
+      document.getElementById(
+        "lookupForm"
+      );
+
+    const publicationNumberInput =
+      document.getElementById(
+        "publicationNumber"
+      );
+
+    const endCodeInput =
+      document.getElementById(
+        "endCode"
+      );
+
+    const lookupButton =
+      document.getElementById(
+        "lookupButton"
+      );
+
+    const lookupProgressArea =
+      document.getElementById(
+        "lookupProgressArea"
+      );
+
+    const lookupMessageBox =
+      document.getElementById(
+        "lookupMessageBox"
+      );
+
+    const editForm =
+      document.getElementById(
+        "editForm"
+      );
+
+    const shopNameInput =
+      document.getElementById(
+        "shopName"
+      );
+
+    const titleInput =
+      document.getElementById(
+        "title"
+      );
+
+    const categoryInput =
+      document.getElementById(
+        "category"
+      );
+
+    const contentInput =
+      document.getElementById(
+        "content"
+      );
+
+    const addressInput =
+      document.getElementById(
+        "address"
+      );
+
+    const saveButton =
+      document.getElementById(
+        "saveButton"
+      );
+
+    const saveProgressArea =
+      document.getElementById(
+        "saveProgressArea"
+      );
+
+    const editMessageBox =
+      document.getElementById(
+        "editMessageBox"
+      );
+
+    const backHomeLink =
+      document.getElementById(
+        "backHomeLink"
+      );
+
+
+    const ALLOWED_CATEGORIES = [
+      "グルメ",
+      "カフェ",
+      "居酒屋",
+      "イベント"
+    ];
+
+
+    let isLookupInProgress =
+      false;
+
+    let isSaveInProgress =
+      false;
+
+    let hasSavedSuccessfully =
+      false;
+
+    let verifiedPublicationNumber =
+      null;
+
+    let verifiedEndCode =
+      null;
+
+
+    function normalizePublicationNumber(
+      value
+    ) {
+      return String(
+        value || ""
+      )
+        .replace(
+          /[^0-9]/g,
+          ""
+        )
+        .slice(
+          0,
+          8
+        );
+    }
+
+
+    function normalizeEndCode(
+      value
+    ) {
+      return String(
+        value || ""
+      )
+        .toUpperCase()
+        .replace(
+          /[^A-Z0-9]/g,
+          ""
+        )
+        .slice(
+          0,
+          12
+        );
+    }
+
+
+    function clearLookupMessage() {
+      lookupMessageBox.className =
+        "message-box";
+
+      lookupMessageBox.textContent =
+        "";
+    }
+
+
+    function showLookupMessage(
+      type,
+      message
+    ) {
+      lookupMessageBox.className =
+        "message-box visible " +
+        type;
+
+      lookupMessageBox.textContent =
+        message;
+    }
+
+
+    function setLookupSubmitting(
+      submitting
+    ) {
+      isLookupInProgress =
+        submitting;
+
+      publicationNumberInput.disabled =
+        submitting;
+
+      endCodeInput.disabled =
+        submitting;
+
+      lookupButton.disabled =
+        submitting;
+
+      if (
+        submitting
+      ) {
+        lookupButton.textContent =
+          "確認しています…";
+
+        lookupProgressArea.classList.add(
+          "visible"
+        );
+      } else {
+        lookupButton.textContent =
+          "投稿内容を確認する";
+
+        lookupProgressArea.classList.remove(
+          "visible"
+        );
+      }
+    }
+
+
+    function validateLookupForm() {
+      const publicationNumber =
+        normalizePublicationNumber(
+          publicationNumberInput.value
+        );
+
+      const endCode =
+        normalizeEndCode(
+          endCodeInput.value
+        );
+
+      if (
+        !/^\d{8}$/.test(
+          publicationNumber
+        )
+      ) {
+        throw new Error(
+          "掲載番号は8桁の数字で入力してください。"
+        );
+      }
+
+      if (
+        !/^[A-Z0-9]{12}$/.test(
+          endCode
+        )
+      ) {
+        throw new Error(
+          "終了番号を正しく入力してください。"
+        );
+      }
+
+      return {
+        publicationNumber:
+          publicationNumber,
+
+        endCode:
+          endCode
+      };
+    }
+
+
+    function fillEditForm(
+      submission
+    ) {
+      shopNameInput.value =
+        submission.shopName ||
+        "";
+
+      titleInput.value =
+        submission.title ||
+        "";
+
+      categoryInput.value =
+        submission.category ||
+        "";
+
+      contentInput.value =
+        submission.content ||
+        "";
+
+      addressInput.value =
+        submission.address ||
+        "";
+    }
+
+
+    async function lookupSubmission(
+      event
+    ) {
+      event.preventDefault();
+
+      if (
+        isLookupInProgress
+      ) {
+        return;
+      }
+
+      clearLookupMessage();
+
+      try {
+        const formData =
+          validateLookupForm();
+
+        setLookupSubmitting(
+          true
+        );
+
+        const response =
+          await fetch(
+            "/api/edit-lookup",
+            {
+              method:
+                "POST",
+
+              headers: {
+                "Content-Type":
+                  "application/json"
+              },
+
+              body:
+                JSON.stringify(
+                  {
+                    publicationNumber:
+                      formData.publicationNumber,
+
+                    endCode:
+                      formData.endCode
+                  }
+                )
+            }
+          );
+
+        let responseData =
+          null;
+
+        try {
+          responseData =
+            await response.json();
+        } catch (
+          jsonError
+        ) {
+          throw new Error(
+            "サーバーからの応答を読み取れませんでした。"
+          );
+        }
+
+        if (
+          !response.ok ||
+          !responseData.success
+        ) {
+          throw new Error(
+            responseData &&
+            responseData.message
+              ? responseData.message
+              : "本人確認に失敗しました。"
+          );
+        }
+
+        verifiedPublicationNumber =
+          formData.publicationNumber;
+
+        verifiedEndCode =
+          formData.endCode;
+
+        fillEditForm(
+          responseData.submission ||
+            {}
+        );
+
+        lookupCard.style.display =
+          "none";
+
+        editCard.classList.add(
+          "visible"
+        );
+
+        setLookupSubmitting(
+          false
+        );
+      } catch (
+        error
+      ) {
+        setLookupSubmitting(
+          false
+        );
+
+        showLookupMessage(
+          "error",
+          error &&
+          error.message
+            ? error.message
+            : "本人確認に失敗しました。もう一度お試しください。"
+        );
+      }
+    }
+
+
+    function clearEditMessage() {
+      editMessageBox.className =
+        "message-box";
+
+      editMessageBox.textContent =
+        "";
+    }
+
+
+    function showEditMessage(
+      type,
+      message
+    ) {
+      editMessageBox.className =
+        "message-box visible " +
+        type;
+
+      editMessageBox.textContent =
+        message;
+    }
+
+
+    function setSaveSubmitting(
+      submitting
+    ) {
+      isSaveInProgress =
+        submitting;
+
+      shopNameInput.disabled =
+        submitting;
+
+      titleInput.disabled =
+        submitting;
+
+      categoryInput.disabled =
+        submitting;
+
+      contentInput.disabled =
+        submitting;
+
+      addressInput.disabled =
+        submitting;
+
+      saveButton.disabled =
+        submitting;
+
+      if (
+        submitting
+      ) {
+        saveButton.textContent =
+          "保存しています…";
+
+        saveProgressArea.classList.add(
+          "visible"
+        );
+      } else {
+        saveButton.textContent =
+          "この内容で保存する";
+
+        saveProgressArea.classList.remove(
+          "visible"
+        );
+      }
+    }
+
+
+    function validateEditForm() {
+      const shopName =
+        shopNameInput.value
+          .trim();
+
+      if (shopName === "") {
+        throw new Error(
+          "店舗・イベント名を入力してください。"
+        );
+      }
+
+      if (
+        shopName.length > 60
+      ) {
+        throw new Error(
+          "店舗・イベント名は60文字以内で入力してください。"
+        );
+      }
+
+      const title =
+        titleInput.value
+          .trim();
+
+      if (title === "") {
+        throw new Error(
+          "広告タイトルを入力してください。"
+        );
+      }
+
+      if (
+        title.length > 50
+      ) {
+        throw new Error(
+          "広告タイトルは50文字以内で入力してください。"
+        );
+      }
+
+      const category =
+        categoryInput.value;
+
+      if (
+        !ALLOWED_CATEGORIES.includes(
+          category
+        )
+      ) {
+        throw new Error(
+          "カテゴリーを選択してください。"
+        );
+      }
+
+      const content =
+        contentInput.value
+          .trim();
+
+      if (content === "") {
+        throw new Error(
+          "広告内容を入力してください。"
+        );
+      }
+
+      if (
+        content.length > 300
+      ) {
+        throw new Error(
+          "広告内容は300文字以内で入力してください。"
+        );
+      }
+
+      const address =
+        addressInput.value
+          .trim();
+
+      if (
+        address.length > 120
+      ) {
+        throw new Error(
+          "住所・場所は120文字以内で入力してください。"
+        );
+      }
+
+      return {
+        shopName: shopName,
+        title: title,
+        category: category,
+        content: content,
+        address: address
+      };
+    }
+
+
+    async function saveSubmission(
+      event
+    ) {
+      event.preventDefault();
+
+      if (
+        isSaveInProgress ||
+        hasSavedSuccessfully
+      ) {
+        return;
+      }
+
+      if (
+        !verifiedPublicationNumber ||
+        !verifiedEndCode
+      ) {
+        showEditMessage(
+          "error",
+          "本人確認が完了していません。最初からやり直してください。"
+        );
+
+        return;
+      }
+
+      clearEditMessage();
+
+      try {
+        const formData =
+          validateEditForm();
+
+        setSaveSubmitting(
+          true
+        );
+
+        const response =
+          await fetch(
+            "/api/edit-ad",
+            {
+              method:
+                "POST",
+
+              headers: {
+                "Content-Type":
+                  "application/json"
+              },
+
+              body:
+                JSON.stringify(
+                  {
+                    publicationNumber:
+                      verifiedPublicationNumber,
+
+                    endCode:
+                      verifiedEndCode,
+
+                    shopName:
+                      formData.shopName,
+
+                    title:
+                      formData.title,
+
+                    category:
+                      formData.category,
+
+                    content:
+                      formData.content,
+
+                    address:
+                      formData.address
+                  }
+                )
+            }
+          );
+
+        let responseData =
+          null;
+
+        try {
+          responseData =
+            await response.json();
+        } catch (
+          jsonError
+        ) {
+          throw new Error(
+            "サーバーからの応答を読み取れませんでした。"
+          );
+        }
+
+        if (
+          !response.ok ||
+          !responseData.success
+        ) {
+          throw new Error(
+            responseData &&
+            responseData.message
+              ? responseData.message
+              : "投稿内容の保存に失敗しました。"
+          );
+        }
+
+        hasSavedSuccessfully =
+          true;
+
+        saveProgressArea.classList.remove(
+          "visible"
+        );
+
+        showEditMessage(
+          "success",
+          responseData.message ||
+          "投稿内容を保存しました。"
+        );
+
+        shopNameInput.disabled =
+          true;
+
+        titleInput.disabled =
+          true;
+
+        categoryInput.disabled =
+          true;
+
+        contentInput.disabled =
+          true;
+
+        addressInput.disabled =
+          true;
+
+        saveButton.disabled =
+          true;
+
+        saveButton.style.display =
+          "none";
+
+        backHomeLink.classList.add(
+          "visible"
+        );
+      } catch (
+        error
+      ) {
+        setSaveSubmitting(
+          false
+        );
+
+        showEditMessage(
+          "error",
+          error &&
+          error.message
+            ? error.message
+            : "投稿内容の保存に失敗しました。もう一度お試しください。"
+        );
+      }
+    }
+
+
+    publicationNumberInput.addEventListener(
+      "input",
+      function() {
+        publicationNumberInput.value =
+          normalizePublicationNumber(
+            publicationNumberInput.value
+          );
+
+        clearLookupMessage();
+      }
+    );
+
+
+    endCodeInput.addEventListener(
+      "input",
+      function() {
+        endCodeInput.value =
+          normalizeEndCode(
+            endCodeInput.value
+          );
+
+        clearLookupMessage();
+      }
+    );
+
+
+    lookupForm.addEventListener(
+      "submit",
+      lookupSubmission
+    );
+
+
+    editForm.addEventListener(
+      "submit",
+      saveSubmission
+    );
+  </script>
+
+</body>
+</html>
