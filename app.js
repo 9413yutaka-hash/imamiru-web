@@ -19,6 +19,11 @@ let modalTouchStartX = null;
 let modalTouchEndX = null;
 let modalSlideChanging = false;
 
+let googleMapInstance = null;
+let shopMarkers = [];
+let shopInfoWindow = null;
+let currentLocationMarker = null;
+
 function escapeHtml(text) {
   return String(text ?? "")
     .replaceAll("&", "&amp;")
@@ -776,6 +781,8 @@ function renderShops() {
 
   const visibleShops =
     getVisibleShops();
+
+  updateShopMarkers();
 
   if (
     visibleShops.length ===
@@ -2126,6 +2133,11 @@ function getLocation() {
         locationButton.textContent =
           "現在地を更新";
 
+        showCurrentLocationMarker(
+          userLatitude,
+          userLongitude
+        );
+
         renderShops();
       },
 
@@ -2620,7 +2632,7 @@ function initGoogleMap() {
     lng: 127.6792
   };
 
-  const map = new google.maps.Map(mapElement, {
+  googleMapInstance = new google.maps.Map(mapElement, {
     center: nahaStation,
     zoom: 13,
     mapTypeControl: false,
@@ -2630,9 +2642,184 @@ function initGoogleMap() {
 
   new google.maps.Marker({
     position: nahaStation,
-    map: map,
+    map: googleMapInstance,
     title: "イマミル"
   });
+
+  shopInfoWindow =
+    new google.maps.InfoWindow();
+
+  updateShopMarkers();
 }
 
 window.initGoogleMap = initGoogleMap;
+
+
+function clearShopMarkers() {
+  shopMarkers.forEach(
+    function(marker) {
+      marker.setMap(null);
+    }
+  );
+
+  shopMarkers = [];
+}
+
+
+function showShopInfoWindow(
+  shop,
+  marker
+) {
+  if (
+    !googleMapInstance ||
+    !shopInfoWindow
+  ) {
+    return;
+  }
+
+  const infoWindowHtml = `
+    <div style="min-width:180px; max-width:220px;">
+      <strong style="display:block; margin-bottom:4px;">
+        ${escapeHtml(shop.name)}
+      </strong>
+      <p style="margin:0 0 8px; font-size:13px; color:#444;">
+        ${escapeHtml(shop.title)}
+      </p>
+      <button
+        type="button"
+        onclick="openShopModal('${escapeHtml(shop.firestoreId)}')"
+        style="
+          width:100%;
+          padding:6px 10px;
+          border:none;
+          border-radius:6px;
+          background:#0788c9;
+          color:#fff;
+          font-weight:700;
+          cursor:pointer;
+        "
+      >
+        今の情報を見る
+      </button>
+    </div>
+  `;
+
+  shopInfoWindow.setContent(
+    infoWindowHtml
+  );
+
+  shopInfoWindow.open(
+    googleMapInstance,
+    marker
+  );
+}
+
+
+function updateShopMarkers() {
+  try {
+    if (!googleMapInstance) {
+      return;
+    }
+
+    const visibleShops =
+      getVisibleShops();
+
+    clearShopMarkers();
+
+    visibleShops.forEach(
+      function(shop) {
+        if (
+          !Number.isFinite(
+            shop.latitude
+          ) ||
+          !Number.isFinite(
+            shop.longitude
+          )
+        ) {
+          return;
+        }
+
+        const marker =
+          new google.maps.Marker({
+            position: {
+              lat: shop.latitude,
+              lng: shop.longitude
+            },
+
+            map: googleMapInstance,
+            title: shop.name
+          });
+
+        marker.addListener(
+          "click",
+          function() {
+            showShopInfoWindow(
+              shop,
+              marker
+            );
+          }
+        );
+
+        shopMarkers.push(
+          marker
+        );
+      }
+    );
+  } catch (error) {
+    console.error(
+      "地図ピンの表示に失敗しました：",
+      error
+    );
+  }
+}
+
+
+function showCurrentLocationMarker(
+  latitude,
+  longitude
+) {
+  try {
+    if (!googleMapInstance) {
+      return;
+    }
+
+    const position = {
+      lat: latitude,
+      lng: longitude
+    };
+
+    if (currentLocationMarker) {
+      currentLocationMarker.setPosition(
+        position
+      );
+    } else {
+      currentLocationMarker =
+        new google.maps.Marker({
+          position: position,
+          map: googleMapInstance,
+          title: "現在地",
+
+          icon: {
+            path:
+              google.maps.SymbolPath
+                .CIRCLE,
+
+            scale: 8,
+            fillColor: "#0788c9",
+            fillOpacity: 1,
+            strokeColor: "#ffffff",
+            strokeWeight: 2
+          }
+        });
+    }
+
+    googleMapInstance.setCenter(
+      position
+    );
+  } catch (error) {
+    console.error(
+      "現在地マーカーの表示に失敗しました：",
+      error
+    );
+  }
+}
