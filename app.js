@@ -24,6 +24,8 @@ let shopMarkers = [];
 let shopInfoWindow = null;
 let currentLocationMarker = null;
 
+let expiryDisplayRefreshTimerId = null;
+
 function escapeHtml(text) {
   return String(text ?? "")
     .replaceAll("&", "&amp;")
@@ -264,6 +266,532 @@ function getDateValue(
   }
 
   return parsedDate.getTime();
+}
+
+const JST_OFFSET_MILLISECONDS =
+  9 * 60 * 60 * 1000;
+
+function getJstEndOfTodayMilliseconds(
+  nowMilliseconds
+) {
+  const jstShiftedMilliseconds =
+    nowMilliseconds +
+    JST_OFFSET_MILLISECONDS;
+
+  const jstShiftedDate =
+    new Date(
+      jstShiftedMilliseconds
+    );
+
+  const jstEndOfDayShiftedMilliseconds =
+    Date.UTC(
+      jstShiftedDate.getUTCFullYear(),
+      jstShiftedDate.getUTCMonth(),
+      jstShiftedDate.getUTCDate(),
+      23,
+      59,
+      59,
+      999
+    );
+
+  return (
+    jstEndOfDayShiftedMilliseconds -
+    JST_OFFSET_MILLISECONDS
+  );
+}
+
+function getExpiryDisplayText(
+  shop
+) {
+  const expiryMilliseconds =
+    getDateValue(
+      shop.expiresAt
+    );
+
+  const nowMilliseconds =
+    Date.now();
+
+  const remainingMilliseconds =
+    expiryMilliseconds -
+    nowMilliseconds;
+
+  if (
+    expiryMilliseconds <= 0 ||
+    remainingMilliseconds <= 0
+  ) {
+    return "🆕 新着";
+  }
+
+  if (
+    remainingMilliseconds <
+    60 * 60 * 1000
+  ) {
+    const remainingMinutesTotal =
+      Math.max(
+        1,
+        Math.ceil(
+          remainingMilliseconds /
+            60000
+        )
+      );
+
+    return (
+      "⚡ あと" +
+      remainingMinutesTotal +
+      "分"
+    );
+  }
+
+  if (
+    remainingMilliseconds <=
+    24 * 60 * 60 * 1000
+  ) {
+    return "🔥 今日だけ";
+  }
+
+  return "🆕 新着";
+}
+
+function getJstMinutesSinceMidnight(
+  nowMilliseconds
+) {
+  const jstShiftedMilliseconds =
+    nowMilliseconds +
+    JST_OFFSET_MILLISECONDS;
+
+  const jstShiftedDate =
+    new Date(
+      jstShiftedMilliseconds
+    );
+
+  return (
+    jstShiftedDate.getUTCHours() *
+      60 +
+    jstShiftedDate.getUTCMinutes()
+  );
+}
+
+function parseTimeStringToMinutes(
+  timeString
+) {
+  if (
+    typeof timeString !== "string"
+  ) {
+    return null;
+  }
+
+  const match =
+    timeString.match(
+      /^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/
+    );
+
+  if (!match) {
+    return null;
+  }
+
+  return (
+    Number(match[1]) * 60 +
+    Number(match[2])
+  );
+}
+
+function getBusinessStatus(
+  shop
+) {
+  if (shop.isOpen24Hours === true) {
+    return {
+      text: "営業中",
+      isOpen: true
+    };
+  }
+
+  const businessStartTime =
+    shop.businessStartTime || "";
+
+  const businessEndTime =
+    shop.businessEndTime || "";
+
+  if (
+    businessStartTime === "" &&
+    businessEndTime === ""
+  ) {
+    return {
+      text: "掲載中",
+      isOpen: null
+    };
+  }
+
+  const startMinutes =
+    parseTimeStringToMinutes(
+      businessStartTime
+    );
+
+  const endMinutes =
+    parseTimeStringToMinutes(
+      businessEndTime
+    );
+
+  if (
+    startMinutes === null ||
+    endMinutes === null
+  ) {
+    return {
+      text: "掲載中",
+      isOpen: null
+    };
+  }
+
+  if (startMinutes === endMinutes) {
+    return {
+      text: "営業中",
+      isOpen: true
+    };
+  }
+
+  const nowMinutes =
+    getJstMinutesSinceMidnight(
+      Date.now()
+    );
+
+  let isOpen;
+
+  if (startMinutes < endMinutes) {
+    isOpen =
+      nowMinutes >= startMinutes &&
+      nowMinutes < endMinutes;
+  } else {
+    isOpen =
+      nowMinutes >= startMinutes ||
+      nowMinutes < endMinutes;
+  }
+
+  return {
+    text:
+      isOpen ?
+        "営業中" :
+        "営業時間外",
+
+    isOpen: isOpen
+  };
+}
+
+function getBusinessClosingText(
+  shop
+) {
+  if (!shop) {
+    return "";
+  }
+
+  if (shop.isOpen24Hours === true) {
+    return "";
+  }
+
+  const businessStatus =
+    getBusinessStatus(shop);
+
+  if (businessStatus.isOpen !== true) {
+    return "";
+  }
+
+  const startMinutes =
+    parseTimeStringToMinutes(
+      shop.businessStartTime || ""
+    );
+
+  const endMinutes =
+    parseTimeStringToMinutes(
+      shop.businessEndTime || ""
+    );
+
+  if (
+    startMinutes === null ||
+    endMinutes === null
+  ) {
+    return "";
+  }
+
+  if (startMinutes === endMinutes) {
+    return "";
+  }
+
+  const nowMinutes =
+    getJstMinutesSinceMidnight(
+      Date.now()
+    );
+
+  let remainingMinutes;
+
+  if (startMinutes < endMinutes) {
+    remainingMinutes =
+      endMinutes -
+      nowMinutes;
+  } else if (
+    nowMinutes >= startMinutes
+  ) {
+    remainingMinutes =
+      (1440 - nowMinutes) +
+      endMinutes;
+  } else {
+    remainingMinutes =
+      endMinutes -
+      nowMinutes;
+  }
+
+  if (remainingMinutes <= 0) {
+    return "";
+  }
+
+  if (remainingMinutes < 60) {
+    const remainingMinutesTotal =
+      Math.max(
+        1,
+        Math.ceil(
+          remainingMinutes
+        )
+      );
+
+    return (
+      "⚡ 営業終了まであと" +
+      remainingMinutesTotal +
+      "分"
+    );
+  }
+
+  const remainingHoursTotal =
+    Math.max(
+      1,
+      Math.ceil(
+        remainingMinutes / 60
+      )
+    );
+
+  return (
+    "⏰ 営業終了まであと" +
+    remainingHoursTotal +
+    "時間"
+  );
+}
+
+function getBusinessRemainingMinutes(
+  shop
+) {
+  if (!shop) {
+    return null;
+  }
+
+  if (shop.isOpen24Hours === true) {
+    return null;
+  }
+
+  const businessStatus =
+    getBusinessStatus(shop);
+
+  if (businessStatus.isOpen !== true) {
+    return null;
+  }
+
+  const startMinutes =
+    parseTimeStringToMinutes(
+      shop.businessStartTime || ""
+    );
+
+  const endMinutes =
+    parseTimeStringToMinutes(
+      shop.businessEndTime || ""
+    );
+
+  if (
+    startMinutes === null ||
+    endMinutes === null
+  ) {
+    return null;
+  }
+
+  if (startMinutes === endMinutes) {
+    return null;
+  }
+
+  const nowMinutes =
+    getJstMinutesSinceMidnight(
+      Date.now()
+    );
+
+  let remainingMinutes;
+
+  if (startMinutes < endMinutes) {
+    remainingMinutes =
+      endMinutes -
+      nowMinutes;
+  } else if (
+    nowMinutes >= startMinutes
+  ) {
+    remainingMinutes =
+      (1440 - nowMinutes) +
+      endMinutes;
+  } else {
+    remainingMinutes =
+      endMinutes -
+      nowMinutes;
+  }
+
+  if (remainingMinutes <= 0) {
+    return null;
+  }
+
+  return remainingMinutes;
+}
+
+function getBusinessClosedMessage(
+  shop
+) {
+  if (!shop) {
+    return "";
+  }
+
+  if (shop.isOpen24Hours === true) {
+    return "";
+  }
+
+  const businessStartTime =
+    shop.businessStartTime || "";
+
+  const businessEndTime =
+    shop.businessEndTime || "";
+
+  if (
+    businessStartTime === "" &&
+    businessEndTime === ""
+  ) {
+    return "";
+  }
+
+  const startMinutes =
+    parseTimeStringToMinutes(
+      businessStartTime
+    );
+
+  const endMinutes =
+    parseTimeStringToMinutes(
+      businessEndTime
+    );
+
+  if (
+    startMinutes === null ||
+    endMinutes === null
+  ) {
+    return "";
+  }
+
+  if (startMinutes === endMinutes) {
+    return "";
+  }
+
+  const businessStatus =
+    getBusinessStatus(shop);
+
+  if (businessStatus.isOpen !== false) {
+    return "";
+  }
+
+  const nowMinutes =
+    getJstMinutesSinceMidnight(
+      Date.now()
+    );
+
+  if (startMinutes < endMinutes) {
+    if (nowMinutes < startMinutes) {
+      return (
+        "🕘 本日は" +
+        businessStartTime +
+        "から営業します"
+      );
+    }
+
+    if (nowMinutes >= endMinutes) {
+      return "🌙 本日の営業は終了しました";
+    }
+
+    return "";
+  }
+
+  if (
+    endMinutes <= nowMinutes &&
+    nowMinutes < startMinutes
+  ) {
+    return "🌙 本日の営業は終了しました";
+  }
+
+  return "";
+}
+
+function getBusinessHoursDisplayText(
+  shop
+) {
+  if (!shop) {
+    return "";
+  }
+
+  if (shop.isOpen24Hours === true) {
+    return "🕘 24時間営業";
+  }
+
+  const businessStartTime =
+    shop.businessStartTime || "";
+
+  const businessEndTime =
+    shop.businessEndTime || "";
+
+  if (
+    businessStartTime === "" ||
+    businessEndTime === ""
+  ) {
+    return "";
+  }
+
+  const startMinutes =
+    parseTimeStringToMinutes(
+      businessStartTime
+    );
+
+  const endMinutes =
+    parseTimeStringToMinutes(
+      businessEndTime
+    );
+
+  if (
+    startMinutes === null ||
+    endMinutes === null
+  ) {
+    return "";
+  }
+
+  if (startMinutes === endMinutes) {
+    return "🕘 24時間営業";
+  }
+
+  return (
+    "🕘 営業時間 " +
+    businessStartTime +
+    "〜" +
+    businessEndTime
+  );
+}
+
+function startExpiryDisplayRefreshTimer() {
+  if (
+    expiryDisplayRefreshTimerId !==
+    null
+  ) {
+    return;
+  }
+
+  expiryDisplayRefreshTimerId =
+    window.setInterval(
+      function() {
+        renderShops();
+      },
+      60000
+    );
 }
 
 function getFirstText(
@@ -588,7 +1116,28 @@ function convertSubmissionToShop(
       data.createdAt ||
       data.submittedAt ||
       data.updatedAt ||
-      null
+      null,
+
+    expiresAt:
+      data.expiresAt ||
+      null,
+
+    businessStartTime:
+      typeof data.businessStartTime ===
+      "string"
+        ? data.businessStartTime.trim()
+        : "",
+
+    businessEndTime:
+      typeof data.businessEndTime ===
+      "string"
+        ? data.businessEndTime.trim()
+        : "",
+
+    isOpen24Hours:
+      Boolean(
+        data.isOpen24Hours
+      )
   };
 }
 
@@ -807,6 +1356,62 @@ function renderShops() {
               shop.firestoreId
             );
 
+          const expiryDisplayText =
+            getExpiryDisplayText(
+              shop
+            );
+
+          const businessStatus =
+            getBusinessStatus(
+              shop
+            );
+
+          const businessStatusColor =
+            businessStatus.isOpen ===
+            false
+              ? "#d9534f"
+              : "var(--green)";
+
+          const businessClosingText =
+            getBusinessClosingText(
+              shop
+            );
+
+          const businessRemainingMinutes =
+            getBusinessRemainingMinutes(
+              shop
+            );
+
+          let businessClosingChipStyle =
+            "";
+
+          if (
+            businessRemainingMinutes !==
+              null &&
+            businessRemainingMinutes <=
+              30
+          ) {
+            businessClosingChipStyle =
+              "color: #d9534f; " +
+              "border-color: rgba(217, 83, 79, 0.3); " +
+              "background: rgba(217, 83, 79, 0.08);";
+          } else if (
+            businessRemainingMinutes !==
+              null &&
+            businessRemainingMinutes <=
+              120
+          ) {
+            businessClosingChipStyle =
+              "color: #e67e22; " +
+              "border-color: rgba(230, 126, 34, 0.3); " +
+              "background: rgba(230, 126, 34, 0.08);";
+          }
+
+          const businessClosedMessage =
+            getBusinessClosedMessage(
+              shop
+            );
+
           return `
             <article class="shop-card">
 
@@ -872,10 +1477,13 @@ function renderShops() {
                     )}
                   </span>
 
-                  <span class="open-status">
+                  <span
+                    class="open-status"
+                    style="color: ${businessStatusColor};"
+                  >
                     ●
                     ${escapeHtml(
-                      shop.status
+                      businessStatus.text
                     )}
                   </span>
 
@@ -896,7 +1504,13 @@ function renderShops() {
                 <div class="shop-info-row">
 
                   <span class="info-chip">
-                    🆕 新着
+                    ${
+                      expiryDisplayText
+                        ? escapeHtml(
+                            expiryDisplayText
+                          )
+                        : "🆕 新着"
+                    }
                   </span>
 
                   <span class="info-chip">
@@ -912,6 +1526,21 @@ function renderShops() {
                       shop.distanceKm
                     )}
                   </span>
+
+                  ${
+                    businessClosingText
+                      ? `
+                        <span
+                          class="info-chip"
+                          style="${businessClosingChipStyle}"
+                        >
+                          ${escapeHtml(
+                            businessClosingText
+                          )}
+                        </span>
+                      `
+                      : ""
+                  }
 
                 </div>
 
@@ -933,6 +1562,18 @@ function renderShops() {
                     shop.timeMessage
                   )}
                 </div>
+
+                ${
+                  businessClosedMessage
+                    ? `
+                      <div class="time-limit">
+                        ${escapeHtml(
+                          businessClosedMessage
+                        )}
+                      </div>
+                    `
+                    : ""
+                }
 
                 <div class="shop-actions">
 
@@ -1974,10 +2615,15 @@ function openShopModal(
       selectedShop.emoji;
   }
 
+  const modalBusinessStatus =
+    getBusinessStatus(
+      selectedShop
+    );
+
   modalCategory.textContent =
     selectedShop.categoryText +
     "・" +
-    selectedShop.status;
+    modalBusinessStatus.text;
 
   modalTitle.textContent =
     selectedShop.name;
@@ -2005,6 +2651,58 @@ function openShopModal(
       "<br><br>" +
       escapeHtml(
         selectedShop.timeMessage
+      );
+  }
+
+  const modalBusinessHoursDisplayText =
+    getBusinessHoursDisplayText(
+      selectedShop
+    );
+
+  if (modalBusinessHoursDisplayText) {
+    modalText +=
+      "<br><br>" +
+      escapeHtml(
+        modalBusinessHoursDisplayText
+      );
+  }
+
+  const modalExpiryDisplayText =
+    getExpiryDisplayText(
+      selectedShop
+    );
+
+  if (modalExpiryDisplayText) {
+    modalText +=
+      "<br><br>" +
+      escapeHtml(
+        modalExpiryDisplayText
+      );
+  }
+
+  const modalBusinessClosingText =
+    getBusinessClosingText(
+      selectedShop
+    );
+
+  if (modalBusinessClosingText) {
+    modalText +=
+      "<br><br>" +
+      escapeHtml(
+        modalBusinessClosingText
+      );
+  }
+
+  const modalBusinessClosedMessage =
+    getBusinessClosedMessage(
+      selectedShop
+    );
+
+  if (modalBusinessClosedMessage) {
+    modalText +=
+      "<br><br>" +
+      escapeHtml(
+        modalBusinessClosedMessage
       );
   }
 
@@ -2617,6 +3315,8 @@ document.addEventListener(
     hideSampleNotice();
 
     loadApprovedSubmissions();
+
+    startExpiryDisplayRefreshTimer();
   }
 );
 // Googleマップを表示する

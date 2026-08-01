@@ -1224,6 +1224,81 @@
         <div class="form-group">
 
           <div class="form-label">
+            店舗の営業時間
+
+            <span class="optional">
+              任意
+            </span>
+          </div>
+
+          <p class="form-help">
+            実際のお店の営業時間です。掲載時間とは異なります。
+          </p>
+
+        </div>
+
+        <div class="form-group">
+
+          <label
+            class="form-label"
+            for="businessStartTime"
+          >
+            営業開始時刻
+
+            <span class="optional">
+              任意
+            </span>
+          </label>
+
+          <input
+            id="businessStartTime"
+            name="businessStartTime"
+            type="time"
+          >
+
+        </div>
+
+        <div class="form-group">
+
+          <label
+            class="form-label"
+            for="businessEndTime"
+          >
+            営業終了時刻
+
+            <span class="optional">
+              任意
+            </span>
+          </label>
+
+          <input
+            id="businessEndTime"
+            name="businessEndTime"
+            type="time"
+          >
+
+        </div>
+
+        <div class="agreement-box">
+
+          <label class="agreement-label">
+
+            <input
+              id="isOpen24Hours"
+              type="checkbox"
+            >
+
+            <span class="agreement-text">
+              24時間営業(開始・終了時刻の入力は不要です)
+            </span>
+
+          </label>
+
+        </div>
+
+        <div class="form-group">
+
+          <div class="form-label">
             掲載写真
 
             <span class="optional">
@@ -1455,6 +1530,21 @@
         "address"
       );
 
+    const businessStartTimeInput =
+      document.getElementById(
+        "businessStartTime"
+      );
+
+    const businessEndTimeInput =
+      document.getElementById(
+        "businessEndTime"
+      );
+
+    const isOpen24HoursInput =
+      document.getElementById(
+        "isOpen24Hours"
+      );
+
     const agreementInput =
       document.getElementById(
         "agreement"
@@ -1650,6 +1740,17 @@
         submitting;
 
       addressInput.disabled =
+        submitting;
+
+      businessStartTimeInput.disabled =
+        submitting ||
+        isOpen24HoursInput.checked;
+
+      businessEndTimeInput.disabled =
+        submitting ||
+        isOpen24HoursInput.checked;
+
+      isOpen24HoursInput.disabled =
         submitting;
 
       agreementInput.disabled =
@@ -2438,6 +2539,39 @@ async function convertAddressToCoordinates(
       }
 
       if (
+        !isOpen24HoursInput.checked
+      ) {
+        const businessStartTimeValue =
+          businessStartTimeInput.value
+            .trim();
+
+        const businessEndTimeValue =
+          businessEndTimeInput.value
+            .trim();
+
+        const isOnlyStartTimeFilled =
+          businessStartTimeValue !==
+            "" &&
+          businessEndTimeValue ===
+            "";
+
+        const isOnlyEndTimeFilled =
+          businessStartTimeValue ===
+            "" &&
+          businessEndTimeValue !==
+            "";
+
+        if (
+          isOnlyStartTimeFilled ||
+          isOnlyEndTimeFilled
+        ) {
+          throw new Error(
+            "営業開始時刻と営業終了時刻は両方入力するか、両方空欄にしてください。"
+          );
+        }
+      }
+
+      if (
         !agreementInput.checked
       ) {
         throw new Error(
@@ -2606,6 +2740,18 @@ latitude:
 
 longitude:
   coordinates.longitude,
+
+          businessStartTime:
+            businessStartTimeInput.value
+              .trim(),
+
+          businessEndTime:
+            businessEndTimeInput.value
+              .trim(),
+
+          isOpen24Hours:
+            isOpen24HoursInput.checked,
+
           imageUrls:
             imageUrls,
 
@@ -2743,6 +2889,17 @@ longitude:
     contentInput.addEventListener(
       "input",
       updateCharacterCounts
+    );
+
+    isOpen24HoursInput.addEventListener(
+      "change",
+      function() {
+        businessStartTimeInput.disabled =
+          isOpen24HoursInput.checked;
+
+        businessEndTimeInput.disabled =
+          isOpen24HoursInput.checked;
+      }
     );
 
     imageSelectButton.addEventListener(
