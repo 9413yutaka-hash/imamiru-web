@@ -940,6 +940,31 @@ function getSafeImageUrl(
   return imageUrl;
 }
 
+function getSafeWebsiteUrl(
+  value
+) {
+  if (
+    typeof value !==
+      "string" ||
+    value.trim() === ""
+  ) {
+    return "";
+  }
+
+  const websiteUrl =
+    value.trim();
+
+  if (
+    !/^https?:\/\//.test(
+      websiteUrl
+    )
+  ) {
+    return "";
+  }
+
+  return websiteUrl;
+}
+
 function getSubmissionImageUrls(
   data
 ) {
@@ -1172,6 +1197,11 @@ function convertSubmissionToShop(
 
     longitude:
       longitude,
+
+    websiteUrl:
+      getSafeWebsiteUrl(
+        data.websiteUrl
+      ),
 
     imageUrls:
       getSubmissionImageUrls(
@@ -2613,6 +2643,48 @@ function handleModalSwipe() {
     null;
 }
 
+function getOrCreateModalWebsiteButton(
+  modalMapButtonElement
+) {
+  let modalWebsiteButton =
+    document.getElementById(
+      "modalWebsiteButton"
+    );
+
+  if (
+    !modalWebsiteButton &&
+    modalMapButtonElement &&
+    modalMapButtonElement.parentNode
+  ) {
+    modalWebsiteButton =
+      document.createElement(
+        "a"
+      );
+
+    modalWebsiteButton.id =
+      "modalWebsiteButton";
+
+    modalWebsiteButton.className =
+      "modal-map-button";
+
+    modalWebsiteButton.target =
+      "_blank";
+
+    modalWebsiteButton.rel =
+      "noopener noreferrer";
+
+    modalWebsiteButton.textContent =
+      "🔗 お店のページを見る";
+
+    modalMapButtonElement.parentNode.insertBefore(
+      modalWebsiteButton,
+      modalMapButtonElement.nextSibling
+    );
+  }
+
+  return modalWebsiteButton;
+}
+
 function openShopModal(
   firestoreId
 ) {
@@ -2832,6 +2904,27 @@ function openShopModal(
 
     modalMapButton.style.display =
       "";
+  }
+
+  const modalWebsiteButton =
+    getOrCreateModalWebsiteButton(
+      modalMapButton
+    );
+
+  if (modalWebsiteButton) {
+    if (
+      selectedShop.websiteUrl ===
+      ""
+    ) {
+      modalWebsiteButton.style.display =
+        "none";
+    } else {
+      modalWebsiteButton.href =
+        selectedShop.websiteUrl;
+
+      modalWebsiteButton.style.display =
+        "";
+    }
   }
 
   modal.classList.add(

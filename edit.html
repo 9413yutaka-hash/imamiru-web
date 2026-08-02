@@ -1004,6 +1004,35 @@
 
         </div>
 
+        <div class="form-group">
+
+          <label
+            class="form-label"
+            for="websiteUrl"
+          >
+            お店のページ（任意）
+
+            <span class="optional">
+              任意
+            </span>
+          </label>
+
+          <input
+            id="websiteUrl"
+            name="websiteUrl"
+            type="text"
+            maxlength="300"
+            autocomplete="url"
+            placeholder="例：https://www.instagram.com/お店の名前/"
+          >
+
+          <p class="form-help">
+            ホームページ・Instagram・LINE・予約ページなどがあれば、そのページを開いて上のアドレスをコピーして貼り付けてください。<br>
+            わからない場合は、空欄のままで大丈夫です。
+          </p>
+
+        </div>
+
         <button
           id="saveButton"
           class="save-button"
@@ -1115,6 +1144,11 @@
     const addressInput =
       document.getElementById(
         "address"
+      );
+
+    const websiteUrlInput =
+      document.getElementById(
+        "websiteUrl"
       );
 
     const saveButton =
@@ -1323,6 +1357,10 @@
       addressInput.value =
         submission.address ||
         "";
+
+      websiteUrlInput.value =
+        submission.websiteUrl ||
+        "";
     }
 
 
@@ -1480,6 +1518,9 @@
       addressInput.disabled =
         submitting;
 
+      websiteUrlInput.disabled =
+        submitting;
+
       saveButton.disabled =
         submitting;
 
@@ -1630,6 +1671,25 @@
         });
       }
 
+      const websiteUrl =
+        websiteUrlInput.value
+          .trim();
+
+      if (
+        websiteUrl !== "" &&
+        !/^https?:\/\//.test(
+          websiteUrl
+        )
+      ) {
+        validationErrors.push({
+          message:
+            "ページのアドレスは「https://」または「http://」から始まる形で貼り付けてください。\nわからない場合は、空欄のままで大丈夫です。",
+
+          element:
+            websiteUrlInput
+        });
+      }
+
       if (
         validationErrors.length >
         0
@@ -1664,7 +1724,8 @@
         title: title,
         category: category,
         content: content,
-        address: address
+        address: address,
+        websiteUrl: websiteUrl
       };
     }
 
@@ -1737,7 +1798,10 @@
                       formData.content,
 
                     address:
-                      formData.address
+                      formData.address,
+
+                    websiteUrl:
+                      formData.websiteUrl
                   }
                 )
             }
@@ -1795,6 +1859,9 @@
           true;
 
         addressInput.disabled =
+          true;
+
+        websiteUrlInput.disabled =
           true;
 
         saveButton.disabled =

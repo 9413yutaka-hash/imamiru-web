@@ -178,7 +178,8 @@ const FIELD_MAX_LENGTHS = {
   shopName: 60,
   title: 50,
   content: 300,
-  address: 120
+  address: 120,
+  websiteUrl: 300
 };
 
 
@@ -279,12 +280,39 @@ function validateEditableFields(
     );
   }
 
+  const websiteUrl =
+    String(
+      requestBody.websiteUrl || ""
+    )
+      .trim();
+
+  if (
+    websiteUrl.length >
+    FIELD_MAX_LENGTHS.websiteUrl
+  ) {
+    throw new Error(
+      "お店のページのアドレスが長すぎます。"
+    );
+  }
+
+  if (
+    websiteUrl !== "" &&
+    !/^https?:\/\//.test(
+      websiteUrl
+    )
+  ) {
+    throw new Error(
+      "ページのアドレスは「https://」または「http://」から始まる形で貼り付けてください。"
+    );
+  }
+
   return {
     shopName: shopName,
     title: title,
     category: category,
     content: content,
-    address: address
+    address: address,
+    websiteUrl: websiteUrl
   };
 }
 
@@ -596,6 +624,9 @@ export default async function handler(
 
       address:
         editableFields.address,
+
+      websiteUrl:
+        editableFields.websiteUrl,
 
       latitude:
         latitude,
