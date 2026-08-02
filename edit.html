@@ -503,6 +503,7 @@
       font-size: 13px;
       font-weight: 800;
       line-height: 1.8;
+      white-space: pre-line;
     }
 
     .message-box.visible {
@@ -831,6 +832,13 @@
         novalidate
       >
 
+        <div
+          id="editMessageBox"
+          class="message-box"
+          role="status"
+          aria-live="polite"
+        ></div>
+
         <div class="form-group">
 
           <label
@@ -989,13 +997,6 @@
           </p>
 
         </div>
-
-        <div
-          id="editMessageBox"
-          class="message-box"
-          role="status"
-          aria-live="polite"
-        ></div>
 
         <a
           id="backHomeLink"
@@ -1468,23 +1469,50 @@
     }
 
 
+    function focusInvalidField(
+      inputElement
+    ) {
+      if (!inputElement) {
+        return;
+      }
+
+      inputElement.scrollIntoView({
+        behavior: "smooth",
+        block: "center"
+      });
+
+      inputElement.focus({
+        preventScroll: true
+      });
+    }
+
+
     function validateEditForm() {
+      const validationErrors =
+        [];
+
       const shopName =
         shopNameInput.value
           .trim();
 
       if (shopName === "") {
-        throw new Error(
-          "店舗・イベント名を入力してください。"
-        );
-      }
+        validationErrors.push({
+          message:
+            "店舗・イベント名を入力してください。",
 
-      if (
+          element:
+            shopNameInput
+        });
+      } else if (
         shopName.length > 60
       ) {
-        throw new Error(
-          "店舗・イベント名は60文字以内で入力してください。"
-        );
+        validationErrors.push({
+          message:
+            "店舗・イベント名は60文字以内で入力してください。",
+
+          element:
+            shopNameInput
+        });
       }
 
       const title =
@@ -1492,17 +1520,23 @@
           .trim();
 
       if (title === "") {
-        throw new Error(
-          "広告タイトルを入力してください。"
-        );
-      }
+        validationErrors.push({
+          message:
+            "広告タイトルを入力してください。",
 
-      if (
+          element:
+            titleInput
+        });
+      } else if (
         title.length > 50
       ) {
-        throw new Error(
-          "広告タイトルは50文字以内で入力してください。"
-        );
+        validationErrors.push({
+          message:
+            "広告タイトルは50文字以内で入力してください。",
+
+          element:
+            titleInput
+        });
       }
 
       const category =
@@ -1513,9 +1547,13 @@
           category
         )
       ) {
-        throw new Error(
-          "カテゴリーを選択してください。"
-        );
+        validationErrors.push({
+          message:
+            "カテゴリーを選択してください。",
+
+          element:
+            categoryInput
+        });
       }
 
       const content =
@@ -1523,17 +1561,23 @@
           .trim();
 
       if (content === "") {
-        throw new Error(
-          "広告内容を入力してください。"
-        );
-      }
+        validationErrors.push({
+          message:
+            "広告内容を入力してください。",
 
-      if (
+          element:
+            contentInput
+        });
+      } else if (
         content.length > 300
       ) {
-        throw new Error(
-          "広告内容は300文字以内で入力してください。"
-        );
+        validationErrors.push({
+          message:
+            "広告内容は300文字以内で入力してください。",
+
+          element:
+            contentInput
+        });
       }
 
       const address =
@@ -1543,8 +1587,41 @@
       if (
         address.length > 120
       ) {
+        validationErrors.push({
+          message:
+            "住所・場所は120文字以内で入力してください。",
+
+          element:
+            addressInput
+        });
+      }
+
+      if (
+        validationErrors.length >
+        0
+      ) {
+        focusInvalidField(
+          validationErrors[0]
+            .element
+        );
+
+        const combinedMessage =
+          "入力内容を確認してください。\n" +
+          validationErrors
+            .map(
+              function(
+                validationError
+              ) {
+                return (
+                  "・" +
+                  validationError.message
+                );
+              }
+            )
+            .join("\n");
+
         throw new Error(
-          "住所・場所は120文字以内で入力してください。"
+          combinedMessage
         );
       }
 
