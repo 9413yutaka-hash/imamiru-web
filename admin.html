@@ -358,7 +358,7 @@
     .summary-grid {
       display: grid;
       grid-template-columns:
-        repeat(3, minmax(0, 1fr));
+        repeat(2, minmax(0, 1fr));
       gap: 13px;
       margin-top: 20px;
     }
@@ -601,6 +601,24 @@
       text-align: center;
     }
 
+    .load-more-button {
+      display: none;
+      width: 100%;
+      min-height: 44px;
+      margin-top: 16px;
+      border: none;
+      border-radius: 12px;
+      color: #2465af;
+      background: #edf5ff;
+      font-size: 12px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .load-more-button.visible {
+      display: block;
+    }
+
     footer {
       padding: 25px 18px 45px;
       color: #8b9aaa;
@@ -820,20 +838,7 @@
 
         <div class="summary-card">
           <span class="summary-label">
-            現在の審査待ち
-          </span>
-
-          <span
-            id="pendingCount"
-            class="summary-value"
-          >
-            0件
-          </span>
-        </div>
-
-        <div class="summary-card">
-          <span class="summary-label">
-            この画面で掲載
+            現在の掲載中
           </span>
 
           <span
@@ -846,7 +851,7 @@
 
         <div class="summary-card">
           <span class="summary-label">
-            この画面で却下
+            掲載終了済み
           </span>
 
           <span
@@ -928,7 +933,7 @@
           </h2>
 
           <p>
-            閲覧のみできます。最新50件まで表示します。
+            閲覧のみできます。50件ずつ表示します。
           </p>
         </div>
       </div>
@@ -941,6 +946,14 @@
           却下・掲載終了済みの投稿を読み込んでいます…
         </div>
       </div>
+
+      <button
+        id="loadMoreInactiveButton"
+        class="load-more-button"
+        type="button"
+      >
+        もっと見る
+      </button>
 
     </section>
 
@@ -1029,9 +1042,9 @@
         "inactiveSubmissionList"
       );
 
-    const pendingCount =
+    const loadMoreInactiveButton =
       document.getElementById(
-        "pendingCount"
+        "loadMoreInactiveButton"
       );
 
     const approvedCount =
@@ -1049,12 +1062,11 @@
         "loginUserMessage"
       );
 
-    let approvedTotal = 0;
-    let rejectedTotal = 0;
     let currentSubmissions = [];
     let currentApprovedSubmissions = [];
     let currentInactiveSubmissions = [];
     let searchQuery = "";
+    let inactiveDisplayLimit = 50;
 
     function escapeHtml(value) {
       return String(value ?? "")
@@ -1199,16 +1211,12 @@
     }
 
     function updateSummary() {
-      pendingCount.textContent =
-        currentSubmissions.length +
-        "件";
-
       approvedCount.textContent =
-        approvedTotal +
+        currentApprovedSubmissions.length +
         "件";
 
       rejectedCount.textContent =
-        rejectedTotal +
+        currentInactiveSubmissions.length +
         "件";
     }
 
@@ -1454,9 +1462,19 @@
         searchQuery === ""
           ? filteredSubmissions.slice(
               0,
-              50
+              inactiveDisplayLimit
             )
           : filteredSubmissions;
+
+      const shouldShowLoadMoreButton =
+        searchQuery === "" &&
+        filteredSubmissions.length >
+          inactiveDisplayLimit;
+
+      loadMoreInactiveButton.classList.toggle(
+        "visible",
+        shouldShowLoadMoreButton
+      );
 
       if (
         displayedSubmissions.length === 0
@@ -1684,6 +1702,8 @@
         currentInactiveSubmissions =
           inactiveSubmissions;
 
+        inactiveDisplayLimit = 50;
+
         renderSubmissions();
 
         renderEndableSubmissions();
@@ -1705,6 +1725,12 @@
         currentApprovedSubmissions = [];
 
         currentInactiveSubmissions = [];
+
+        inactiveDisplayLimit = 50;
+
+        loadMoreInactiveButton.classList.remove(
+          "visible"
+        );
 
         updateSummary();
 
@@ -1785,17 +1811,7 @@
             status: "approved"
           });
 
-        approvedTotal += 1;
-
-        currentSubmissions =
-          currentSubmissions.filter(
-            function(item) {
-              return item.id !==
-                documentId;
-            }
-          );
-
-        renderSubmissions();
+        await loadSubmissions();
 
         showAdminMessage(
           "✅ 「" +
@@ -1867,17 +1883,7 @@
             status: "rejected"
           });
 
-        rejectedTotal += 1;
-
-        currentSubmissions =
-          currentSubmissions.filter(
-            function(item) {
-              return item.id !==
-                documentId;
-            }
-          );
-
-        renderSubmissions();
+        await loadSubmissions();
 
         showAdminMessage(
           "「" +
@@ -2169,6 +2175,16 @@
       }
     );
 
+    loadMoreInactiveButton.addEventListener(
+      "click",
+      function() {
+        inactiveDisplayLimit +=
+          50;
+
+        renderInactiveSubmissions();
+      }
+    );
+
     firebase
       .auth()
       .onAuthStateChanged(
@@ -2235,8 +2251,13 @@
 
           currentApprovedSubmissions = [];
 
-          approvedTotal = 0;
-          rejectedTotal = 0;
+          currentInactiveSubmissions = [];
+
+          inactiveDisplayLimit = 50;
+
+          loadMoreInactiveButton.classList.remove(
+            "visible"
+          );
 
           updateSummary();
 
@@ -2249,6 +2270,12 @@
           endableSubmissionList.innerHTML = `
             <div class="empty-state">
               ログイン後に掲載中の投稿を表示します。
+            </div>
+          `;
+
+          inactiveSubmissionList.innerHTML = `
+            <div class="empty-state">
+              ログイン後に却下・掲載終了済みの投稿を表示します。
             </div>
           `;
         }
