@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <meta
+    name="theme-color"
+    content="#0788c9"
+  >
+
+  <meta
+    name="description"
+    content="イマミルへ店舗・イベント情報を掲載する運営者様向けの入口ページです。投稿・編集・掲載終了はこちらから行えます。"
+  >
+
+  <title>
+    店舗・イベント運営者様へ｜イマミル
+  </title>
+
+  <style>
+    :root {
+      --navy: #071a33;
+      --navy-light: #0d294a;
+      --blue: #0788c9;
+      --cyan: #04b7d7;
+      --sky: #dff7ff;
+      --green: #19a96b;
+      --red: #ef5a67;
+      --white: #ffffff;
+      --text: #15233a;
+      --subtext: #697386;
+      --border: #e2eaf1;
+      --background: #f4f8fb;
+      --shadow:
+        0 18px 50px
+        rgba(20, 52, 82, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family:
+        "Yu Gothic",
+        "Hiragino Kaku Gothic ProN",
+        "Meiryo",
+        sans-serif;
+      background:
+        linear-gradient(
+          180deg,
+          #e9faff 0,
+          var(--background) 360px
+        );
+      color: var(--text);
+    }
+
+    button,
+    input,
+    a {
+      font-family: inherit;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .top-bar {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      border-bottom:
+        1px solid
+        rgba(12, 54, 87, 0.08);
+      background:
+        rgba(255, 255, 255, 0.94);
+      backdrop-filter:
+        blur(16px);
+    }
+
+    .top-bar-inner {
+      width: min(100%, 760px);
+      margin: 0 auto;
+      padding: 13px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .brand-area {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-icon {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+      border-radius: 14px;
+      background:
+        linear-gradient(
+          135deg,
+          var(--blue),
+          var(--cyan)
+        );
+      color: var(--white);
+      font-size: 21px;
+      box-shadow:
+        0 8px 20px
+        rgba(4, 158, 199, 0.25);
+    }
+
+    .brand-name {
+      margin: 0;
+      color: var(--navy);
+      font-size: 21px;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+    }
+
+    .brand-caption {
+      margin: 2px 0 0;
+      color: var(--subtext);
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .home-link {
+      padding: 9px 13px;
+      border:
+        1px solid
+        var(--border);
+      border-radius: 999px;
+      background: var(--white);
+      color: var(--navy);
+      font-size: 12px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .page-hero {
+      padding:
+        42px
+        18px
+        86px;
+      background:
+        linear-gradient(
+          135deg,
+          #0687c5,
+          #13c3ce
+        );
+      color: var(--white);
+    }
+
+    .page-hero-inner {
+      width: min(100%, 720px);
+      margin: 0 auto;
+    }
+
+    .hero-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 8px 12px;
+      border:
+        1px solid
+        rgba(255, 255, 255, 0.3);
+      border-radius: 999px;
+      background:
+        rgba(255, 255, 255, 0.12);
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .page-hero h1 {
+      margin: 20px 0 0;
+      font-size:
+        clamp(
+          28px,
+          6vw,
+          40px
+        );
+      line-height: 1.3;
+      letter-spacing: 0.02em;
+    }
+
+    .page-hero p {
+      max-width: 600px;
+      margin: 16px 0 0;
+      color:
+        rgba(255, 255, 255, 0.92);
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.9;
+    }
+
+    main {
+      width: min(100%, 720px);
+      margin: 0 auto;
+      padding:
+        0
+        16px
+        70px;
+    }
+
+    .form-card {
+      margin-top: -55px;
+      padding: 28px;
+      border:
+        1px solid
+        rgba(12, 54, 87, 0.08);
+      border-radius: 26px;
+      background: var(--white);
+      box-shadow: var(--shadow);
+    }
+
+    .form-heading {
+      margin-bottom: 24px;
+    }
+
+    .form-heading h2 {
+      margin: 0;
+      color: var(--navy);
+      font-size: 22px;
+    }
+
+    .form-heading p {
+      margin: 9px 0 0;
+      color: var(--subtext);
+      font-size: 13px;
+      line-height: 1.8;
+    }
+
+    .entry-list {
+      display: grid;
+      gap: 14px;
+    }
+
+    .entry-link {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 20px;
+      border-radius: 18px;
+      background:
+        linear-gradient(
+          135deg,
+          var(--blue),
+          var(--cyan)
+        );
+      color: var(--white);
+      box-shadow:
+        0 13px 28px
+        rgba(4, 158, 199, 0.24);
+      transition:
+        transform 0.2s;
+    }
+
+    .entry-link:hover {
+      transform:
+        translateY(-2px);
+    }
+
+    .entry-link.entry-caution {
+      background:
+        linear-gradient(
+          135deg,
+          #e84f5f,
+          #f27d62
+        );
+      box-shadow:
+        0 13px 28px
+        rgba(232, 79, 95, 0.24);
+    }
+
+    .entry-icon {
+      flex-shrink: 0;
+      width: 46px;
+      height: 46px;
+      display: grid;
+      place-items: center;
+      border-radius: 14px;
+      background:
+        rgba(255, 255, 255, 0.18);
+      font-size: 22px;
+    }
+
+    .entry-text {
+      display: grid;
+      gap: 4px;
+    }
+
+    .entry-title {
+      font-size: 16px;
+      font-weight: 900;
+    }
+
+    .entry-description {
+      font-size: 12px;
+      font-weight: 700;
+      color:
+        rgba(255, 255, 255, 0.9);
+      line-height: 1.6;
+    }
+
+    .traveler-link-area {
+      margin-top: 26px;
+      padding-top: 20px;
+      border-top:
+        1px solid
+        var(--border);
+      text-align: center;
+    }
+
+    .traveler-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 9px 15px;
+      border:
+        1px solid
+        var(--border);
+      border-radius: 999px;
+      color: var(--subtext);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    footer {
+      padding:
+        0
+        18px
+        35px;
+      color: #8c9aa8;
+      text-align: center;
+      font-size: 10px;
+      line-height: 1.8;
+    }
+
+    @media (
+      max-width: 620px
+    ) {
+      .form-card {
+        padding:
+          22px
+          17px;
+        border-radius: 22px;
+      }
+
+      .entry-link {
+        padding: 17px;
+      }
+    }
+
+    @media (
+      max-width: 420px
+    ) {
+      .top-bar-inner {
+        padding:
+          11px
+          13px;
+      }
+
+      .brand-icon {
+        width: 38px;
+        height: 38px;
+      }
+
+      .brand-name {
+        font-size: 18px;
+      }
+
+      .home-link {
+        padding:
+          8px
+          10px;
+        font-size: 10px;
+      }
+
+      .page-hero {
+        padding:
+          34px
+          15px
+          78px;
+      }
+
+      main {
+        padding-right: 12px;
+        padding-left: 12px;
+      }
+
+      .entry-icon {
+        width: 40px;
+        height: 40px;
+        font-size: 19px;
+      }
+
+      .entry-title {
+        font-size: 14px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <header class="top-bar">
+    <div class="top-bar-inner">
+
+      <div class="brand-area">
+
+        <div class="brand-icon">
+          🌺
+        </div>
+
+        <div>
+          <p class="brand-name">
+            イマミル
+          </p>
+
+          <p class="brand-caption">
+            店舗・イベント運営者様向け
+          </p>
+        </div>
+
+      </div>
+
+      <a
+        class="home-link"
+        href="index.html"
+      >
+        旅人向けトップページへ
+      </a>
+
+    </div>
+  </header>
+
+  <section class="page-hero">
+    <div class="page-hero-inner">
+
+      <div class="hero-label">
+        🏪 店舗・イベント運営者様
+      </div>
+
+      <h1>
+        店舗・イベント運営者様へ
+      </h1>
+
+      <p>
+        広告の投稿・編集・掲載終了はこちらから行えます。
+      </p>
+
+    </div>
+  </section>
+
+  <main>
+
+    <section class="form-card">
+
+      <div class="form-heading">
+        <h2>
+          お手続きを選んでください
+        </h2>
+
+        <p>
+          目的に合わせて、以下からお進みください。
+        </p>
+      </div>
+
+      <div class="entry-list">
+
+        <a
+          class="entry-link"
+          href="post.html"
+        >
+          <span class="entry-icon">
+            📢
+          </span>
+
+          <span class="entry-text">
+            <span class="entry-title">
+              広告を投稿する
+            </span>
+
+            <span class="entry-description">
+              新しく店舗・イベント情報を掲載します。
+            </span>
+          </span>
+        </a>
+
+        <a
+          class="entry-link"
+          href="edit.html"
+        >
+          <span class="entry-icon">
+            ✏️
+          </span>
+
+          <span class="entry-text">
+            <span class="entry-title">
+              投稿内容を編集する
+            </span>
+
+            <span class="entry-description">
+              掲載中の内容を修正します。
+            </span>
+          </span>
+        </a>
+
+        <a
+          class="entry-link entry-caution"
+          href="end.html"
+        >
+          <span class="entry-icon">
+            🛑
+          </span>
+
+          <span class="entry-text">
+            <span class="entry-title">
+              掲載を終了する
+            </span>
+
+            <span class="entry-description">
+              予定より早く掲載を終了します。
+            </span>
+          </span>
+        </a>
+
+      </div>
+
+      <div class="traveler-link-area">
+        <a
+          class="traveler-link"
+          href="index.html"
+        >
+          旅人向けトップページへ
+        </a>
+      </div>
+
+    </section>
+
+  </main>
+
+  <footer>
+    イマミル Web Version 1.2
+    <br>
+    沖縄の「今」を、旅人へ。
+  </footer>
+
+</body>
+</html>
