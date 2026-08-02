@@ -841,6 +841,45 @@
       color: #b33c49;
     }
 
+    .copy-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 10px;
+      padding:
+        10px
+        12px;
+      border-radius: 10px;
+      background:
+        rgba(255, 255, 255, 0.6);
+    }
+
+    .copy-value {
+      font-weight: 900;
+      letter-spacing: 0.05em;
+    }
+
+    .copy-button {
+      flex-shrink: 0;
+      min-height: 34px;
+      padding:
+        0
+        14px;
+      border: none;
+      border-radius: 999px;
+      background:
+        linear-gradient(
+          135deg,
+          var(--blue),
+          var(--cyan)
+        );
+      color: var(--white);
+      font-size: 11px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
     .after-submit-actions {
       display: none;
       grid-template-columns:
@@ -1502,6 +1541,7 @@
         >
 
           <a
+            id="backHomeLink"
             class="after-action back-home-button"
             href="index.html"
           >
@@ -1724,6 +1764,11 @@
         "newPostButton"
       );
 
+    const backHomeLink =
+      document.getElementById(
+        "backHomeLink"
+      );
+
     function escapeHtml(
       text
     ) {
@@ -1785,6 +1830,114 @@
 
       messageBox.textContent =
         "";
+    }
+
+    async function copySubmissionValue(
+      value,
+      buttonElement
+    ) {
+      const originalButtonText =
+        buttonElement.textContent;
+
+      if (
+        !navigator.clipboard ||
+        !navigator.clipboard
+          .writeText
+      ) {
+        buttonElement.textContent =
+          "コピーできませんでした";
+
+        window.setTimeout(
+          function() {
+            buttonElement.textContent =
+              originalButtonText;
+          },
+          2000
+        );
+
+        return;
+      }
+
+      try {
+        await navigator.clipboard.writeText(
+          value
+        );
+
+        buttonElement.textContent =
+          "コピーしました";
+      } catch (error) {
+        buttonElement.textContent =
+          "コピーできませんでした";
+      }
+
+      window.setTimeout(
+        function() {
+          buttonElement.textContent =
+            originalButtonText;
+        },
+        2000
+      );
+    }
+
+    function showSubmissionSuccessMessage(
+      publicationNumber,
+      endCode
+    ) {
+      messageBox.className =
+        "message-box visible success";
+
+      messageBox.innerHTML = `
+        掲載のお申し込みを受け付けました。
+        <br><br>
+
+        <div class="copy-row">
+          <span class="copy-value">
+            掲載番号：${escapeHtml(
+              publicationNumber
+            )}
+          </span>
+
+          <button
+            type="button"
+            class="copy-button"
+            onclick="copySubmissionValue('${escapeHtml(
+              publicationNumber
+            )}', this)"
+          >
+            コピー
+          </button>
+        </div>
+
+        <div class="copy-row">
+          <span class="copy-value">
+            終了番号：${escapeHtml(
+              endCode
+            )}
+          </span>
+
+          <button
+            type="button"
+            class="copy-button"
+            onclick="copySubmissionValue('${escapeHtml(
+              endCode
+            )}', this)"
+          >
+            コピー
+          </button>
+        </div>
+
+        <br>
+
+        <strong>
+          終了番号は後から再表示できません。必ず保存してください。
+        </strong>
+        <br><br>
+
+        この画面をスクリーンショットするか、必ずメモしてください。
+        <br><br>
+
+        運営による確認後、承認された情報がトップページに掲載されます。
+      `;
     }
 
     function setProgress(
@@ -3121,18 +3274,19 @@ longitude:
           100
         );
 
-                showMessage(
-          "success",
-          "掲載のお申し込みを受け付けました。\n\n" +
-          "掲載番号：" +
-          publicationNumber +
-          "\n" +
-          "終了番号：" +
-          endCode +
-          "\n\n" +
-          "この2つの番号は、掲載を途中で終了するときに必要です。\n" +
-          "この画面をスクリーンショットするか、必ずメモしてください。\n\n" +
-          "運営による確認後、承認された情報がトップページに掲載されます。"
+                showSubmissionSuccessMessage(
+          publicationNumber,
+          endCode
+        );
+
+        messageBox.scrollIntoView(
+          {
+            behavior:
+              "smooth",
+
+            block:
+              "start"
+          }
         );
 
         submitButton.style.display =
@@ -3329,7 +3483,32 @@ agreementInput.addEventListener(
 
     newPostButton.addEventListener(
       "click",
-      resetSubmissionForm
+      function() {
+        const confirmed =
+          window.confirm(
+            "掲載番号と終了番号は保存しましたか？"
+          );
+
+        if (!confirmed) {
+          return;
+        }
+
+        resetSubmissionForm();
+      }
+    );
+
+    backHomeLink.addEventListener(
+      "click",
+      function(event) {
+        const confirmed =
+          window.confirm(
+            "掲載番号と終了番号は保存しましたか？"
+          );
+
+        if (!confirmed) {
+          event.preventDefault();
+        }
+      }
     );
 
     updateCharacterCounts();
