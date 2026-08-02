@@ -2629,57 +2629,6 @@ async function convertAddressToCoordinates(
       }
     }
 
-    function createRandomPublicationNumber() {
-      return String(
-        crypto.getRandomValues(
-          new Uint32Array(1)
-        )[0] %
-          100000000
-      ).padStart(
-        8,
-        "0"
-      );
-    }
-
-    async function generateUniquePublicationNumber(
-      database
-    ) {
-      const maximumAttempts = 5;
-
-      for (
-        let attemptIndex = 0;
-        attemptIndex <
-          maximumAttempts;
-        attemptIndex += 1
-      ) {
-        const candidateNumber =
-          createRandomPublicationNumber();
-
-        const existingSnapshot =
-          await database
-            .collection(
-              "submissions"
-            )
-            .where(
-              "publicationNumber",
-              "==",
-              candidateNumber
-            )
-            .limit(1)
-            .get();
-
-        if (
-          existingSnapshot.empty
-        ) {
-          return candidateNumber;
-        }
-      }
-
-      throw new Error(
-        "掲載番号の生成に失敗しました。もう一度お試しください。"
-      );
-    }
-
     async function submitAdvertisement(
       event
     ) {
@@ -2744,8 +2693,14 @@ async function convertAddressToCoordinates(
               1000
           );
         const publicationNumber =
-          await generateUniquePublicationNumber(
-            database
+          String(
+            crypto.getRandomValues(
+              new Uint32Array(1)
+            )[0] %
+              100000000
+          ).padStart(
+            8,
+            "0"
           );
 
         const endCodeCharacters =
