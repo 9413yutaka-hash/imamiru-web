@@ -547,6 +547,26 @@
       font-weight: 900;
     }
 
+    .rejected-badge {
+      flex-shrink: 0;
+      padding: 6px 9px;
+      border-radius: 999px;
+      color: #a33f3f;
+      background: var(--red-light);
+      font-size: 10px;
+      font-weight: 900;
+    }
+
+    .expired-badge {
+      flex-shrink: 0;
+      padding: 6px 9px;
+      border-radius: 999px;
+      color: var(--subtext);
+      background: #eef2f5;
+      font-size: 10px;
+      font-weight: 900;
+    }
+
     .end-button {
       min-height: 47px;
       width: 100%;
@@ -884,6 +904,27 @@
         </div>
       </div>
 
+      <div class="panel-header">
+        <div class="panel-title">
+          <h2>
+            却下・掲載終了済みの投稿
+          </h2>
+
+          <p>
+            閲覧のみできます。最新50件まで表示します。
+          </p>
+        </div>
+      </div>
+
+      <div
+        id="inactiveSubmissionList"
+        class="submission-list"
+      >
+        <div class="empty-state">
+          却下・掲載終了済みの投稿を読み込んでいます…
+        </div>
+      </div>
+
     </section>
 
   </main>
@@ -961,6 +1002,11 @@
         "endableSubmissionList"
       );
 
+    const inactiveSubmissionList =
+      document.getElementById(
+        "inactiveSubmissionList"
+      );
+
     const pendingCount =
       document.getElementById(
         "pendingCount"
@@ -985,6 +1031,7 @@
     let rejectedTotal = 0;
     let currentSubmissions = [];
     let currentApprovedSubmissions = [];
+    let currentInactiveSubmissions = [];
 
     function escapeHtml(value) {
       return String(value ?? "")
@@ -1045,6 +1092,40 @@
       return createdAt
         .toDate()
         .toLocaleString("ja-JP");
+    }
+
+    function formatEndedAt(
+      submission
+    ) {
+      const timestamp =
+        submission.endedAt ||
+        submission.updatedAt;
+
+      if (
+        !timestamp ||
+        typeof timestamp.toDate !==
+          "function"
+      ) {
+        return "終了日時不明";
+      }
+
+      return timestamp
+        .toDate()
+        .toLocaleString("ja-JP");
+    }
+
+    function formatEndedBy(
+      endedBy
+    ) {
+      if (endedBy === "admin") {
+        return "管理者";
+      }
+
+      if (endedBy === "shop") {
+        return "店舗";
+      }
+
+      return "自動";
     }
 
     function updateSummary() {
@@ -1275,6 +1356,127 @@
           .join("");
     }
 
+    function renderInactiveSubmissions() {
+      if (
+        currentInactiveSubmissions.length === 0
+      ) {
+        inactiveSubmissionList.innerHTML = `
+          <div class="empty-state">
+            却下・掲載終了済みの投稿はありません。
+          </div>
+        `;
+
+        return;
+      }
+
+      inactiveSubmissionList.innerHTML =
+        currentInactiveSubmissions
+          .slice(
+            0,
+            50
+          )
+          .map(
+            function(submission) {
+              const isExpired =
+                submission.status ===
+                "expired";
+
+              const statusBadgeClass =
+                isExpired
+                  ? "expired-badge"
+                  : "rejected-badge";
+
+              const statusBadgeText =
+                isExpired
+                  ? "掲載終了"
+                  : "却下";
+
+              return `
+                <article class="submission-card">
+
+                  <div class="submission-top">
+
+                    <span class="submission-category">
+                      ${escapeHtml(
+                        submission.category
+                      )}
+                    </span>
+
+                    <span class="${statusBadgeClass}">
+                      ${statusBadgeText}
+                    </span>
+
+                  </div>
+
+                  <div class="submission-body">
+
+                    <h3 class="shop-name">
+                      ${escapeHtml(
+                        submission.shopName
+                      )}
+                    </h3>
+
+                    <div class="submission-title">
+                      ${escapeHtml(
+                        submission.title
+                      )}
+                    </div>
+
+                    <div class="submission-content">
+                      ${escapeHtml(
+                        submission.content
+                      )}
+                    </div>
+
+                    <div class="submission-meta">
+
+                      <span>
+                        申請日時：
+                        ${escapeHtml(
+                          formatCreatedAt(
+                            submission.createdAt
+                          )
+                        )}
+                      </span>
+
+                      <span>
+                        状態：${statusBadgeText}
+                      </span>
+
+                      ${
+                        isExpired
+                          ? `
+                            <span>
+                              終了日時：
+                              ${escapeHtml(
+                                formatEndedAt(
+                                  submission
+                                )
+                              )}
+                            </span>
+
+                            <span>
+                              終了方法：
+                              ${escapeHtml(
+                                formatEndedBy(
+                                  submission.endedBy
+                                )
+                              )}
+                            </span>
+                          `
+                          : ""
+                      }
+
+                    </div>
+
+                  </div>
+                </article>
+              `;
+            }
+          )
+          .join("");
+    }
+
     async function loadSubmissions() {
       clearAdminMessage();
 
@@ -1327,6 +1529,9 @@
         const approvedSubmissions =
           [];
 
+        const inactiveSubmissions =
+          [];
+
         querySnapshot.forEach(
           function(documentSnapshot) {
             const data =
@@ -1353,6 +1558,19 @@
                 ...data
               });
             }
+
+            if (
+              data.status ===
+                "rejected" ||
+              data.status ===
+                "expired"
+            ) {
+              inactiveSubmissions.push({
+                id:
+                  documentSnapshot.id,
+                ...data
+              });
+            }
           }
         );
 
@@ -1362,9 +1580,14 @@
         currentApprovedSubmissions =
           approvedSubmissions;
 
+        currentInactiveSubmissions =
+          inactiveSubmissions;
+
         renderSubmissions();
 
         renderEndableSubmissions();
+
+        renderInactiveSubmissions();
 
         showAdminMessage(
           "申請一覧を更新しました。",
@@ -1380,6 +1603,8 @@
 
         currentApprovedSubmissions = [];
 
+        currentInactiveSubmissions = [];
+
         updateSummary();
 
         submissionList.innerHTML = `
@@ -1391,6 +1616,12 @@
         endableSubmissionList.innerHTML = `
           <div class="empty-state">
             掲載中の投稿を読み込めませんでした。
+          </div>
+        `;
+
+        inactiveSubmissionList.innerHTML = `
+          <div class="empty-state">
+            却下・掲載終了済みの投稿を読み込めませんでした。
           </div>
         `;
 
