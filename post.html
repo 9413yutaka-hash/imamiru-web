@@ -525,6 +525,43 @@
         translateY(-1px);
     }
 
+    .location-button {
+      min-height: 45px;
+      padding:
+        0
+        18px;
+      border: none;
+      border-radius: 13px;
+      background:
+        linear-gradient(
+          135deg,
+          var(--blue),
+          var(--cyan)
+        );
+      color: var(--white);
+      font-size: 13px;
+      font-weight: 900;
+      cursor: pointer;
+      box-shadow:
+        0 9px 20px
+        rgba(
+          4,
+          158,
+          199,
+          0.2
+        );
+    }
+
+    .location-button:hover:not(:disabled) {
+      transform:
+        translateY(-1px);
+    }
+
+    .location-button:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
     .image-count {
       margin:
         12px
@@ -1236,6 +1273,37 @@
         <div class="form-group">
 
           <div class="form-label">
+            現在地から取得
+
+            <span class="optional">
+              任意
+            </span>
+          </div>
+
+          <p class="form-help">
+            現在地を取得すると、住所入力を省略できます。
+          </p>
+
+          <button
+            id="locationButton"
+            class="location-button"
+            type="button"
+          >
+            📍 現在地を取得
+          </button>
+
+          <div
+            id="locationMessageBox"
+            class="message-box"
+            role="status"
+            aria-live="polite"
+          ></div>
+
+        </div>
+
+        <div class="form-group">
+
+          <div class="form-label">
             店舗の営業時間
 
             <span class="optional">
@@ -1512,6 +1580,15 @@
     let selectedImageFiles =
       [];
 
+    let capturedLatitude =
+      null;
+
+    let capturedLongitude =
+      null;
+
+    let capturedAccuracy =
+      null;
+
     const submissionForm =
       document.getElementById(
         "submissionForm"
@@ -1545,6 +1622,16 @@
     const addressInput =
       document.getElementById(
         "address"
+      );
+
+    const locationButton =
+      document.getElementById(
+        "locationButton"
+      );
+
+    const locationMessageBox =
+      document.getElementById(
+        "locationMessageBox"
       );
 
     const businessStartTimeInput =
@@ -2500,6 +2587,127 @@ async function convertAddressToCoordinates(
       location.lng()
   };
 }
+
+function showLocationMessage(
+  type,
+  message
+) {
+  locationMessageBox.className =
+    "message-box visible " +
+    type;
+
+  locationMessageBox.textContent =
+    message;
+}
+
+function requestCurrentLocationForPost() {
+  if (!navigator.geolocation) {
+    showLocationMessage(
+      "error",
+      "このブラウザでは位置情報を利用できません。"
+    );
+
+    return;
+  }
+
+  locationButton.disabled =
+    true;
+
+  locationButton.textContent =
+    "取得しています…";
+
+  navigator.geolocation
+    .getCurrentPosition(
+      function(position) {
+        capturedLatitude =
+          position
+            .coords
+            .latitude;
+
+        capturedLongitude =
+          position
+            .coords
+            .longitude;
+
+        capturedAccuracy =
+          position
+            .coords
+            .accuracy;
+
+        const roundedAccuracy =
+          Math.round(
+            capturedAccuracy
+          );
+
+        if (
+          capturedAccuracy > 100
+        ) {
+          showLocationMessage(
+            "success",
+            "現在地を取得しました(誤差 約" +
+              roundedAccuracy +
+              "m)。位置の誤差が大きいため、電波状況の良い場所で再取得することをおすすめします。"
+          );
+        } else {
+          showLocationMessage(
+            "success",
+            "現在地を取得しました(誤差 約" +
+              roundedAccuracy +
+              "m)。"
+          );
+        }
+
+        locationButton.disabled =
+          false;
+
+        locationButton.textContent =
+          "📍 現在地を再取得";
+      },
+
+      function(error) {
+        let message =
+          "位置情報を取得できませんでした。";
+
+        if (error.code === 1) {
+          message =
+            "位置情報の利用が許可されませんでした。ブラウザの設定から位置情報を許可してください。";
+        } else if (
+          error.code === 2
+        ) {
+          message =
+            "現在地を取得できませんでした。電波状況の良い場所でもう一度お試しください。";
+        } else if (
+          error.code === 3
+        ) {
+          message =
+            "取得に時間がかかりました。もう一度お試しください。";
+        }
+
+        showLocationMessage(
+          "error",
+          message
+        );
+
+        locationButton.disabled =
+          false;
+
+        locationButton.textContent =
+          "📍 現在地を取得";
+      },
+
+      {
+        enableHighAccuracy:
+          true,
+
+        timeout:
+          15000,
+
+        maximumAge:
+          0
+      }
+    );
+}
+
     function focusInvalidField(
       inputElement
     ) {
@@ -2797,10 +3005,28 @@ async function convertAddressToCoordinates(
               }
             )
             .join("");
-  const coordinates =
-  await convertAddressToCoordinates(
-    addressInput.value
-  );
+  let finalLatitude =
+    capturedLatitude;
+
+  let finalLongitude =
+    capturedLongitude;
+
+  if (
+    finalLatitude === null ||
+    finalLongitude === null
+  ) {
+    const geocodedCoordinates =
+      await convertAddressToCoordinates(
+        addressInput.value
+      );
+
+    finalLatitude =
+      geocodedCoordinates.latitude;
+
+    finalLongitude =
+      geocodedCoordinates.longitude;
+  }
+
         const submissionData = {
           shopName:
             shopNameInput.value
@@ -2832,10 +3058,10 @@ async function convertAddressToCoordinates(
             addressInput.value
               .trim(),
 latitude:
-  coordinates.latitude,
+  finalLatitude,
 
 longitude:
-  coordinates.longitude,
+  finalLongitude,
 
           businessStartTime:
             businessStartTimeInput.value
@@ -2952,6 +3178,27 @@ longitude:
       selectedImageFiles =
         [];
 
+      capturedLatitude =
+        null;
+
+      capturedLongitude =
+        null;
+
+      capturedAccuracy =
+        null;
+
+      locationButton.disabled =
+        false;
+
+      locationButton.textContent =
+        "📍 現在地を取得";
+
+      locationMessageBox.className =
+        "message-box";
+
+      locationMessageBox.textContent =
+        "";
+
       renderImagePreviews();
 
       updateCharacterCounts();
@@ -3006,6 +3253,11 @@ longitude:
         businessEndTimeInput.disabled =
           isOpen24HoursInput.checked;
       }
+    );
+
+    locationButton.addEventListener(
+      "click",
+      requestCurrentLocationForPost
     );
 
     imageSelectButton.addEventListener(

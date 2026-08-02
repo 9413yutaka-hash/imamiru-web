@@ -148,11 +148,11 @@ function createGoogleMapUrl(
   ) {
     destination =
       latitude + "," + longitude;
-  } else {
+  } else if (address) {
     destination =
-      address ||
-      shopName ||
-      "沖縄";
+      address;
+  } else {
+    return "";
   }
 
   return (
@@ -1302,6 +1302,10 @@ function getMapButtonHtml(
       shop.address,
       shop.name
     );
+
+  if (mapUrl === "") {
+    return "";
+  }
 
   return `
     <a
@@ -2709,13 +2713,24 @@ function openShopModal(
   modalMessage.innerHTML =
     modalText;
 
-  modalMapButton.href =
+  const modalMapUrl =
     createGoogleMapUrl(
       selectedShop.latitude,
       selectedShop.longitude,
       selectedShop.address,
       selectedShop.name
     );
+
+  if (modalMapUrl === "") {
+    modalMapButton.style.display =
+      "none";
+  } else {
+    modalMapButton.href =
+      modalMapUrl;
+
+    modalMapButton.style.display =
+      "";
+  }
 
   modal.classList.add(
     "visible"
