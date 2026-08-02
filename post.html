@@ -2483,12 +2483,33 @@ async function convertAddressToCoordinates(
       location.lng()
   };
 }
+    function focusInvalidField(
+      inputElement
+    ) {
+      if (!inputElement) {
+        return;
+      }
+
+      inputElement.scrollIntoView({
+        behavior: "smooth",
+        block: "center"
+      });
+
+      inputElement.focus({
+        preventScroll: true
+      });
+    }
+
     function validateForm() {
       if (
         shopNameInput.value
           .trim() ===
         ""
       ) {
+        focusInvalidField(
+          shopNameInput
+        );
+
         throw new Error(
           "店舗・イベント名を入力してください。"
         );
@@ -2499,6 +2520,10 @@ async function convertAddressToCoordinates(
           .trim() ===
         ""
       ) {
+        focusInvalidField(
+          titleInput
+        );
+
         throw new Error(
           "広告タイトルを入力してください。"
         );
@@ -2508,6 +2533,10 @@ async function convertAddressToCoordinates(
         categoryInput.value ===
         ""
       ) {
+        focusInvalidField(
+          categoryInput
+        );
+
         throw new Error(
           "カテゴリーを選択してください。"
         );
@@ -2523,6 +2552,10 @@ async function convertAddressToCoordinates(
           durationHours
         )
       ) {
+        focusInvalidField(
+          durationHoursInput
+        );
+
         throw new Error(
           "掲載時間を選択してください。"
         );
@@ -2533,6 +2566,10 @@ async function convertAddressToCoordinates(
           .trim() ===
         ""
       ) {
+        focusInvalidField(
+          contentInput
+        );
+
         throw new Error(
           "広告内容を入力してください。"
         );
@@ -2565,6 +2602,12 @@ async function convertAddressToCoordinates(
           isOnlyStartTimeFilled ||
           isOnlyEndTimeFilled
         ) {
+          focusInvalidField(
+            isOnlyStartTimeFilled
+              ? businessEndTimeInput
+              : businessStartTimeInput
+          );
+
           throw new Error(
             "営業開始時刻と営業終了時刻は両方入力するか、両方空欄にしてください。"
           );
@@ -2574,6 +2617,10 @@ async function convertAddressToCoordinates(
       if (
         !agreementInput.checked
       ) {
+        focusInvalidField(
+          agreementInput
+        );
+
         throw new Error(
           "確認事項への同意が必要です。"
         );
