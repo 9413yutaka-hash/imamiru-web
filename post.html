@@ -1037,6 +1037,7 @@
       </div>
 
       <a
+        id="topHomeLink"
         class="home-link"
         href="index.html"
       >
@@ -1629,6 +1630,9 @@
     let capturedAccuracy =
       null;
 
+    let hasSubmittedSuccessfully =
+      false;
+
     const submissionForm =
       document.getElementById(
         "submissionForm"
@@ -1767,6 +1771,11 @@
     const backHomeLink =
       document.getElementById(
         "backHomeLink"
+      );
+
+    const topHomeLink =
+      document.getElementById(
+        "topHomeLink"
       );
 
     function escapeHtml(
@@ -3274,6 +3283,9 @@ longitude:
           100
         );
 
+        hasSubmittedSuccessfully =
+          true;
+
                 showSubmissionSuccessMessage(
           publicationNumber,
           endCode
@@ -3340,6 +3352,9 @@ longitude:
 
       capturedAccuracy =
         null;
+
+      hasSubmittedSuccessfully =
+        false;
 
       locationButton.disabled =
         false;
@@ -3497,18 +3512,33 @@ agreementInput.addEventListener(
       }
     );
 
+    function confirmLeavingIfSubmitted(
+      event
+    ) {
+      if (
+        !hasSubmittedSuccessfully
+      ) {
+        return;
+      }
+
+      const confirmed =
+        window.confirm(
+          "掲載番号と終了番号は保存しましたか？"
+        );
+
+      if (!confirmed) {
+        event.preventDefault();
+      }
+    }
+
     backHomeLink.addEventListener(
       "click",
-      function(event) {
-        const confirmed =
-          window.confirm(
-            "掲載番号と終了番号は保存しましたか？"
-          );
+      confirmLeavingIfSubmitted
+    );
 
-        if (!confirmed) {
-          event.preventDefault();
-        }
-      }
+    topHomeLink.addEventListener(
+      "click",
+      confirmLeavingIfSubmitted
     );
 
     updateCharacterCounts();
