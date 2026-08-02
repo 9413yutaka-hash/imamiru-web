@@ -1013,7 +1013,17 @@
         写真を付けずに投稿することもできます。
       </div>
 
-      <form id="submissionForm">
+      <form
+        id="submissionForm"
+        novalidate
+      >
+
+        <div
+          id="messageBox"
+          class="message-box"
+          role="status"
+          aria-live="polite"
+        ></div>
 
         <div class="form-group">
 
@@ -1417,13 +1427,6 @@
           </div>
 
         </div>
-
-        <div
-          id="messageBox"
-          class="message-box"
-          role="status"
-          aria-live="polite"
-        ></div>
 
         <div
           id="afterSubmitActions"
@@ -2515,18 +2518,21 @@ async function convertAddressToCoordinates(
     }
 
     function validateForm() {
+      const validationErrors =
+        [];
+
       if (
         shopNameInput.value
           .trim() ===
         ""
       ) {
-        focusInvalidField(
-          shopNameInput
-        );
+        validationErrors.push({
+          message:
+            "店舗・イベント名を入力してください。",
 
-        throw new Error(
-          "店舗・イベント名を入力してください。"
-        );
+          element:
+            shopNameInput
+        });
       }
 
       if (
@@ -2534,26 +2540,26 @@ async function convertAddressToCoordinates(
           .trim() ===
         ""
       ) {
-        focusInvalidField(
-          titleInput
-        );
+        validationErrors.push({
+          message:
+            "広告タイトルを入力してください。",
 
-        throw new Error(
-          "広告タイトルを入力してください。"
-        );
+          element:
+            titleInput
+        });
       }
 
       if (
         categoryInput.value ===
         ""
       ) {
-        focusInvalidField(
-          categoryInput
-        );
+        validationErrors.push({
+          message:
+            "カテゴリーを選択してください。",
 
-        throw new Error(
-          "カテゴリーを選択してください。"
-        );
+          element:
+            categoryInput
+        });
       }
 
       const durationHours =
@@ -2566,13 +2572,13 @@ async function convertAddressToCoordinates(
           durationHours
         )
       ) {
-        focusInvalidField(
-          durationHoursInput
-        );
+        validationErrors.push({
+          message:
+            "掲載時間を選択してください。",
 
-        throw new Error(
-          "掲載時間を選択してください。"
-        );
+          element:
+            durationHoursInput
+        });
       }
 
       if (
@@ -2580,13 +2586,13 @@ async function convertAddressToCoordinates(
           .trim() ===
         ""
       ) {
-        focusInvalidField(
-          contentInput
-        );
+        validationErrors.push({
+          message:
+            "広告内容を入力してください。",
 
-        throw new Error(
-          "広告内容を入力してください。"
-        );
+          element:
+            contentInput
+        });
       }
 
       if (
@@ -2616,27 +2622,56 @@ async function convertAddressToCoordinates(
           isOnlyStartTimeFilled ||
           isOnlyEndTimeFilled
         ) {
-          focusInvalidField(
-            isOnlyStartTimeFilled
-              ? businessEndTimeInput
-              : businessStartTimeInput
-          );
+          validationErrors.push({
+            message:
+              "営業開始時刻と営業終了時刻は両方入力するか、両方空欄にしてください。",
 
-          throw new Error(
-            "営業開始時刻と営業終了時刻は両方入力するか、両方空欄にしてください。"
-          );
+            element:
+              isOnlyStartTimeFilled
+                ? businessEndTimeInput
+                : businessStartTimeInput
+          });
         }
       }
 
       if (
         !agreementInput.checked
       ) {
+        validationErrors.push({
+          message:
+            "確認事項への同意が必要です。",
+
+          element:
+            agreementInput
+        });
+      }
+
+      if (
+        validationErrors.length >
+        0
+      ) {
         focusInvalidField(
-          agreementInput
+          validationErrors[0]
+            .element
         );
 
+        const combinedMessage =
+          "入力内容を確認してください。\n" +
+          validationErrors
+            .map(
+              function(
+                validationError
+              ) {
+                return (
+                  "・" +
+                  validationError.message
+                );
+              }
+            )
+            .join("\n");
+
         throw new Error(
-          "確認事項への同意が必要です。"
+          combinedMessage
         );
       }
     }
