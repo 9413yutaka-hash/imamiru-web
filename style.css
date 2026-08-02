@@ -588,6 +588,42 @@
         );
     }
 
+    .visual-shopping {
+      background:
+        linear-gradient(
+          135deg,
+          #ffcf7a,
+          #f2a340
+        );
+    }
+
+    .visual-sightseeing {
+      background:
+        linear-gradient(
+          135deg,
+          #7fd8b0,
+          #2fa87a
+        );
+    }
+
+    .visual-beauty {
+      background:
+        linear-gradient(
+          135deg,
+          #e6a9e0,
+          #c65cb0
+        );
+    }
+
+    .visual-stay {
+      background:
+        linear-gradient(
+          135deg,
+          #9db8e8,
+          #5b7fc9
+        );
+    }
+
     .shop-emoji {
       position: relative;
       z-index: 2;

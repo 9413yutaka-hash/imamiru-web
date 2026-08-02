@@ -180,6 +180,83 @@ function getCategoryDisplay(
         "visual-food"
     },
 
+    "カフェ・スイーツ": {
+      categoryText:
+        "カフェ・スイーツ",
+
+      emoji:
+        "🥭",
+
+      visualClass:
+        "visual-cafe"
+    },
+
+    ショッピング: {
+      categoryText:
+        "ショッピング・お土産",
+
+      emoji:
+        "🛍️",
+
+      visualClass:
+        "visual-shopping"
+    },
+
+    イベント: {
+      categoryText:
+        "イベント・体験",
+
+      emoji:
+        "🎵",
+
+      visualClass:
+        "visual-event"
+    },
+
+    "観光・体験": {
+      categoryText:
+        "観光・体験",
+
+      emoji:
+        "🏝️",
+
+      visualClass:
+        "visual-sightseeing"
+    },
+
+    ナイトスポット: {
+      categoryText:
+        "ナイトスポット・夜の沖縄",
+
+      emoji:
+        "🌃",
+
+      visualClass:
+        "visual-bar"
+    },
+
+    "美容・リラクゼーション": {
+      categoryText:
+        "美容・リラクゼーション",
+
+      emoji:
+        "💆",
+
+      visualClass:
+        "visual-beauty"
+    },
+
+    宿泊: {
+      categoryText:
+        "宿泊",
+
+      emoji:
+        "🏨",
+
+      visualClass:
+        "visual-stay"
+    },
+
     カフェ: {
       categoryText:
         "カフェ・スイーツ",
@@ -193,24 +270,13 @@ function getCategoryDisplay(
 
     居酒屋: {
       categoryText:
-        "居酒屋・夜の沖縄",
+        "ナイトスポット・夜の沖縄",
 
       emoji:
-        "🍺",
+        "🌃",
 
       visualClass:
         "visual-bar"
-    },
-
-    イベント: {
-      categoryText:
-        "イベント・体験",
-
-      emoji:
-        "🎵",
-
-      visualClass:
-        "visual-event"
     }
   };
 
@@ -1141,6 +1207,39 @@ function convertSubmissionToShop(
   };
 }
 
+const CATEGORY_FILTER_ALIASES = {
+  "カフェ・スイーツ": [
+    "カフェ・スイーツ",
+    "カフェ"
+  ],
+
+  ナイトスポット: [
+    "ナイトスポット",
+    "居酒屋"
+  ]
+};
+
+function shopMatchesSelectedCategory(
+  shop,
+  selectedCategoryValue
+) {
+  const aliasGroup =
+    CATEGORY_FILTER_ALIASES[
+      selectedCategoryValue
+    ];
+
+  if (aliasGroup) {
+    return aliasGroup.includes(
+      shop.category
+    );
+  }
+
+  return (
+    shop.category ===
+    selectedCategoryValue
+  );
+}
+
 function getVisibleShops() {
   let visibleShops =
     shops.filter(
@@ -1148,7 +1247,10 @@ function getVisibleShops() {
         return (
           selectedCategory === "すべて" ||
 selectedCategory === "お気に入り" ||
-shop.category === selectedCategory
+shopMatchesSelectedCategory(
+  shop,
+  selectedCategory
+)
         );
       }
     );
