@@ -277,6 +277,17 @@ function getCategoryDisplay(
 
       visualClass:
         "visual-bar"
+    },
+
+    お知らせ: {
+      categoryText:
+        "お知らせ",
+
+      emoji:
+        "📢",
+
+      visualClass:
+        "visual-official"
     }
   };
 
@@ -1233,7 +1244,18 @@ function convertSubmissionToShop(
     isOpen24Hours:
       Boolean(
         data.isOpen24Hours
-      )
+      ),
+
+    postType:
+      typeof data.postType === "string" &&
+      data.postType.trim() !== ""
+        ? data.postType.trim()
+        : "shop",
+
+    sourceLabel:
+      typeof data.sourceLabel === "string"
+        ? data.sourceLabel.trim()
+        : ""
   };
 }
 
@@ -1497,10 +1519,16 @@ function renderShops() {
               shop
             );
 
+          const isAdminPost =
+            shop.postType ===
+            "admin";
+
           const businessStatus =
-            getBusinessStatus(
-              shop
-            );
+            isAdminPost
+              ? { text: "", isOpen: null }
+              : getBusinessStatus(
+                  shop
+                );
 
           const businessStatusColor =
             businessStatus.isOpen ===
@@ -1509,14 +1537,18 @@ function renderShops() {
               : "var(--green)";
 
           const businessClosingText =
-            getBusinessClosingText(
-              shop
-            );
+            isAdminPost
+              ? ""
+              : getBusinessClosingText(
+                  shop
+                );
 
           const businessRemainingMinutes =
-            getBusinessRemainingMinutes(
-              shop
-            );
+            isAdminPost
+              ? null
+              : getBusinessRemainingMinutes(
+                  shop
+                );
 
           let businessClosingChipStyle =
             "";
@@ -1544,9 +1576,11 @@ function renderShops() {
           }
 
           const businessClosedMessage =
-            getBusinessClosedMessage(
-              shop
-            );
+            isAdminPost
+              ? ""
+              : getBusinessClosedMessage(
+                  shop
+                );
 
           return `
             <article class="shop-card">
@@ -1613,15 +1647,27 @@ function renderShops() {
                     )}
                   </span>
 
-                  <span
-                    class="open-status"
-                    style="color: ${businessStatusColor};"
-                  >
-                    ●
-                    ${escapeHtml(
-                      businessStatus.text
-                    )}
-                  </span>
+                  ${
+                    isAdminPost
+                      ? `
+                        <span class="admin-post-badge">
+                          🌺 イマミル運営より
+                        </span>
+                      `
+                      : businessStatus.text
+                        ? `
+                          <span
+                            class="open-status"
+                            style="color: ${businessStatusColor};"
+                          >
+                            ●
+                            ${escapeHtml(
+                              businessStatus.text
+                            )}
+                          </span>
+                        `
+                        : ""
+                  }
 
                 </div>
 
@@ -2793,15 +2839,23 @@ function openShopModal(
       selectedShop.emoji;
   }
 
+  const isAdminPost =
+    selectedShop.postType ===
+    "admin";
+
   const modalBusinessStatus =
-    getBusinessStatus(
-      selectedShop
-    );
+    isAdminPost
+      ? { text: "", isOpen: null }
+      : getBusinessStatus(
+          selectedShop
+        );
 
   modalCategory.textContent =
-    selectedShop.categoryText +
-    "・" +
-    modalBusinessStatus.text;
+    modalBusinessStatus.text
+      ? selectedShop.categoryText +
+        "・" +
+        modalBusinessStatus.text
+      : selectedShop.categoryText;
 
   modalTitle.textContent =
     selectedShop.name;
@@ -2811,6 +2865,16 @@ function openShopModal(
     escapeHtml(
       selectedShop.message
     );
+
+  if (
+    selectedShop.sourceLabel
+  ) {
+    modalText +=
+      "<br><br>🌺 " +
+      escapeHtml(
+        selectedShop.sourceLabel
+      );
+  }
 
   if (
     selectedShop.address
@@ -2833,9 +2897,11 @@ function openShopModal(
   }
 
   const modalBusinessHoursDisplayText =
-    getBusinessHoursDisplayText(
-      selectedShop
-    );
+    isAdminPost
+      ? ""
+      : getBusinessHoursDisplayText(
+          selectedShop
+        );
 
   if (modalBusinessHoursDisplayText) {
     modalText +=
@@ -2859,9 +2925,11 @@ function openShopModal(
   }
 
   const modalBusinessClosingText =
-    getBusinessClosingText(
-      selectedShop
-    );
+    isAdminPost
+      ? ""
+      : getBusinessClosingText(
+          selectedShop
+        );
 
   if (modalBusinessClosingText) {
     modalText +=
@@ -2872,9 +2940,11 @@ function openShopModal(
   }
 
   const modalBusinessClosedMessage =
-    getBusinessClosedMessage(
-      selectedShop
-    );
+    isAdminPost
+      ? ""
+      : getBusinessClosedMessage(
+          selectedShop
+        );
 
   if (modalBusinessClosedMessage) {
     modalText +=

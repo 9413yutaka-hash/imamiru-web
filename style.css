@@ -624,6 +624,15 @@
         );
     }
 
+    .visual-official {
+      background:
+        linear-gradient(
+          135deg,
+          #ffb199,
+          #ff6f61
+        );
+    }
+
     .shop-emoji {
       position: relative;
       z-index: 2;
@@ -690,6 +699,19 @@
 
     .open-status {
       color: var(--green);
+    }
+
+    .admin-post-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 9px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, #ff8fab, #ff5f8f);
+      color: #ffffff;
+      font-size: 10px;
+      font-weight: 900;
+      white-space: nowrap;
     }
 
     .shop-name {

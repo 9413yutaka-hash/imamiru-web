@@ -1,0 +1,1810 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <meta
+    name="theme-color"
+    content="#071a33"
+  >
+
+  <meta
+    name="description"
+    content="イマミル運営がお知らせ・現地情報を投稿するための管理者専用ページです。"
+  >
+
+  <title>
+    運営情報を投稿する｜イマミル管理
+  </title>
+
+  <style>
+    :root {
+      --navy: #071a33;
+      --navy-light: #0d294a;
+      --blue: #0788c9;
+      --cyan: #04b7d7;
+      --white: #ffffff;
+      --text: #15233a;
+      --subtext: #697386;
+      --border: #e2eaf1;
+      --background: #f4f8fb;
+      --red: #ef5a67;
+      --shadow:
+        0 18px 50px
+        rgba(20, 52, 82, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family:
+        "Yu Gothic",
+        "Hiragino Kaku Gothic ProN",
+        "Meiryo",
+        sans-serif;
+      background: var(--background);
+      color: var(--text);
+    }
+
+    button,
+    input,
+    textarea,
+    select,
+    a {
+      font-family: inherit;
+    }
+
+    button {
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .top-bar {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      color: var(--white);
+      background: linear-gradient(135deg, var(--navy), var(--navy-light));
+      box-shadow: 0 8px 25px rgba(7, 26, 51, 0.18);
+    }
+
+    .top-bar-inner {
+      width: min(100%, 760px);
+      margin: 0 auto;
+      padding: 13px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .brand-area {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-icon {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      color: var(--white);
+      font-size: 21px;
+    }
+
+    .brand-name {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 900;
+      letter-spacing: 0.05em;
+    }
+
+    .brand-caption {
+      margin: 2px 0 0;
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .home-link {
+      flex-shrink: 0;
+      padding: 9px 13px;
+      border-radius: 999px;
+      color: var(--white);
+      background: rgba(255, 255, 255, 0.12);
+      font-size: 11px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .page-hero {
+      padding: 42px 18px 86px;
+      background: linear-gradient(135deg, var(--navy), #0d3a63);
+      color: var(--white);
+    }
+
+    .page-hero-inner {
+      width: min(100%, 720px);
+      margin: 0 auto;
+    }
+
+    .hero-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 8px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .page-hero h1 {
+      margin: 20px 0 0;
+      font-size: clamp(26px, 6vw, 38px);
+      line-height: 1.35;
+    }
+
+    .page-hero p {
+      max-width: 600px;
+      margin: 16px 0 0;
+      color: rgba(255, 255, 255, 0.88);
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.9;
+    }
+
+    main {
+      width: min(100%, 720px);
+      margin: 0 auto;
+      padding: 0 16px 70px;
+    }
+
+    .form-card {
+      margin-top: -55px;
+      padding: 28px;
+      border: 1px solid rgba(12, 54, 87, 0.08);
+      border-radius: 26px;
+      background: var(--white);
+      box-shadow: var(--shadow);
+    }
+
+    .form-heading {
+      margin-bottom: 24px;
+    }
+
+    .form-heading h2 {
+      margin: 0;
+      color: var(--navy);
+      font-size: 22px;
+    }
+
+    .form-heading p {
+      margin: 9px 0 0;
+      color: var(--subtext);
+      font-size: 13px;
+      line-height: 1.8;
+    }
+
+    .notice-box {
+      margin-bottom: 24px;
+      padding: 15px 16px;
+      border: 1px solid #cfeefa;
+      border-radius: 14px;
+      background: #effbff;
+      color: #24627e;
+      font-size: 13px;
+      font-weight: 800;
+      line-height: 1.8;
+    }
+
+    .form-group {
+      margin-top: 22px;
+    }
+
+    .form-label {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 9px;
+      color: var(--navy);
+      font-size: 14px;
+      font-weight: 900;
+    }
+
+    .required {
+      padding: 3px 7px;
+      border-radius: 999px;
+      background: #fff0f0;
+      color: var(--red);
+      font-size: 9px;
+      font-weight: 900;
+    }
+
+    .optional {
+      padding: 3px 7px;
+      border-radius: 999px;
+      background: #eef5f8;
+      color: #648093;
+      font-size: 9px;
+      font-weight: 900;
+    }
+
+    .form-help {
+      margin: 7px 0 0;
+      color: #8a97a6;
+      font-size: 11px;
+      line-height: 1.7;
+    }
+
+    input,
+    textarea,
+    select {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      outline: none;
+      background: #fbfdff;
+      color: var(--text);
+      font-size: 15px;
+      transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+    }
+
+    input,
+    select {
+      min-height: 52px;
+      padding: 0 15px;
+    }
+
+    textarea {
+      min-height: 150px;
+      padding: 15px;
+      resize: vertical;
+      line-height: 1.8;
+    }
+
+    input:focus,
+    textarea:focus,
+    select:focus {
+      border-color: var(--cyan);
+      background: var(--white);
+      box-shadow: 0 0 0 4px rgba(4, 183, 215, 0.12);
+    }
+
+    input:disabled,
+    textarea:disabled,
+    select:disabled {
+      cursor: not-allowed;
+      opacity: 0.65;
+    }
+
+    .character-count {
+      margin-top: 7px;
+      color: #8a97a6;
+      text-align: right;
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .image-upload-area {
+      padding: 18px;
+      border: 2px dashed #b9dbe8;
+      border-radius: 18px;
+      background: #f7fcfe;
+      text-align: center;
+      transition: border-color 0.2s, background 0.2s;
+    }
+
+    .image-upload-area.drag-over {
+      border-color: var(--cyan);
+      background: #ebfbff;
+    }
+
+    .image-upload-icon {
+      font-size: 38px;
+    }
+
+    .image-upload-title {
+      margin: 9px 0 0;
+      color: var(--navy);
+      font-size: 15px;
+      font-weight: 900;
+    }
+
+    .image-upload-description {
+      margin: 7px 0 0;
+      color: var(--subtext);
+      font-size: 11px;
+      line-height: 1.7;
+    }
+
+    .image-input {
+      display: none;
+    }
+
+    .image-select-button {
+      margin-top: 14px;
+      min-height: 45px;
+      padding: 0 18px;
+      border: none;
+      border-radius: 13px;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      color: var(--white);
+      font-size: 13px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .image-select-button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .location-button {
+      min-height: 45px;
+      padding: 0 18px;
+      border: none;
+      border-radius: 13px;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      color: var(--white);
+      font-size: 13px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .location-button:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+    .image-count {
+      margin: 12px 0 0;
+      color: var(--blue);
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .image-preview-list {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 9px;
+      margin-top: 15px;
+    }
+
+    .image-preview-item {
+      position: relative;
+      overflow: hidden;
+      aspect-ratio: 1 / 1;
+      border: 1px solid var(--border);
+      border-radius: 13px;
+      background: #eef4f7;
+    }
+
+    .image-preview-item img {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: cover;
+    }
+
+    .image-number {
+      position: absolute;
+      top: 6px;
+      left: 6px;
+      min-width: 23px;
+      height: 23px;
+      display: grid;
+      place-items: center;
+      padding: 0 6px;
+      border-radius: 999px;
+      background: rgba(7, 26, 51, 0.78);
+      color: var(--white);
+      font-size: 9px;
+      font-weight: 900;
+    }
+
+    .image-remove-button {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      width: 26px;
+      height: 26px;
+      display: grid;
+      place-items: center;
+      padding: 0;
+      border: none;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.94);
+      color: var(--red);
+      font-size: 13px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .first-image-label {
+      position: absolute;
+      right: 6px;
+      bottom: 6px;
+      left: 6px;
+      padding: 5px 4px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.94);
+      color: var(--navy);
+      font-size: 8px;
+      font-weight: 900;
+      text-align: center;
+    }
+
+    .submit-button {
+      width: 100%;
+      min-height: 58px;
+      margin-top: 24px;
+      border: none;
+      border-radius: 16px;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      color: var(--white);
+      font-size: 16px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .submit-button:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+    }
+
+    .progress-area {
+      display: none;
+      margin-top: 18px;
+      padding: 16px;
+      border-radius: 14px;
+      background: #f0f9fc;
+    }
+
+    .progress-area.visible {
+      display: block;
+    }
+
+    .progress-message {
+      margin: 0;
+      color: #24627e;
+      font-size: 12px;
+      font-weight: 900;
+      line-height: 1.7;
+    }
+
+    .progress-bar {
+      overflow: hidden;
+      height: 8px;
+      margin-top: 11px;
+      border-radius: 999px;
+      background: #dceef4;
+    }
+
+    .progress-bar-fill {
+      width: 0;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--blue), var(--cyan));
+      transition: width 0.3s;
+    }
+
+    .message-box {
+      display: none;
+      margin-top: 18px;
+      padding: 16px;
+      border-radius: 14px;
+      font-size: 13px;
+      font-weight: 800;
+      line-height: 1.8;
+      white-space: pre-line;
+    }
+
+    .message-box.visible {
+      display: block;
+    }
+
+    .message-box.success {
+      border: 1px solid #bcebd4;
+      background: #ebfff5;
+      color: #16734b;
+    }
+
+    .message-box.error {
+      border: 1px solid #ffd0d4;
+      background: #fff2f3;
+      color: #b33c49;
+    }
+
+    .after-submit-actions {
+      display: none;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .after-submit-actions.visible {
+      display: grid;
+    }
+
+    .after-action {
+      min-height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 12px;
+      border-radius: 13px;
+      font-size: 12px;
+      font-weight: 900;
+      text-align: center;
+    }
+
+    .back-home-button {
+      background: var(--navy);
+      color: var(--white);
+    }
+
+    .new-post-button {
+      border: 1px solid var(--border);
+      background: var(--white);
+      color: var(--navy);
+      cursor: pointer;
+    }
+
+    .security-note {
+      margin-top: 22px;
+      padding-top: 18px;
+      border-top: 1px solid var(--border);
+      color: #8b98a5;
+      font-size: 10px;
+      line-height: 1.8;
+      text-align: center;
+    }
+
+    footer {
+      padding: 0 18px 35px;
+      color: #8c9aa8;
+      text-align: center;
+      font-size: 10px;
+      line-height: 1.8;
+    }
+
+    @media (max-width: 620px) {
+      .form-card {
+        padding: 22px 17px;
+        border-radius: 22px;
+      }
+
+      .image-preview-list {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 420px) {
+      .top-bar-inner {
+        padding: 11px 13px;
+      }
+
+      .brand-icon {
+        width: 38px;
+        height: 38px;
+      }
+
+      .brand-name {
+        font-size: 18px;
+      }
+
+      .home-link {
+        padding: 8px 10px;
+        font-size: 10px;
+      }
+
+      .page-hero {
+        padding: 34px 15px 78px;
+      }
+
+      main {
+        padding-right: 12px;
+        padding-left: 12px;
+      }
+
+      .after-submit-actions {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <header class="top-bar">
+    <div class="top-bar-inner">
+
+      <div class="brand-area">
+
+        <div class="brand-icon">
+          🌺
+        </div>
+
+        <div>
+          <p class="brand-name">
+            イマミル管理
+          </p>
+
+          <p class="brand-caption">
+            運営者専用ページ
+          </p>
+        </div>
+
+      </div>
+
+      <a
+        class="home-link"
+        href="admin.html"
+      >
+        ← 管理画面へ戻る
+      </a>
+
+    </div>
+  </header>
+
+  <section class="page-hero">
+    <div class="page-hero-inner">
+
+      <div class="hero-label">
+        🔐 運営者専用
+      </div>
+
+      <h1>
+        運営情報を投稿する
+      </h1>
+
+      <p>
+        店舗投稿とは別に、イマミル運営からのお知らせや現地情報を公開できます。
+        入力後、すぐに公開されます。
+      </p>
+
+    </div>
+  </section>
+
+  <main>
+
+    <section
+      id="authCheckingPanel"
+      class="form-card"
+    >
+      <p>ログイン状態を確認しています…</p>
+    </section>
+
+    <section
+      id="loginRequiredPanel"
+      class="form-card"
+      style="display: none;"
+    >
+
+      <div class="form-heading">
+        <h2>ログインが必要です</h2>
+        <p>
+          この機能は管理者専用です。管理画面からログインしてください。
+        </p>
+      </div>
+
+      <a
+        class="submit-button"
+        style="display: flex; align-items: center; justify-content: center;"
+        href="admin.html"
+      >
+        管理画面へ戻る
+      </a>
+
+    </section>
+
+    <section
+      id="postFormSection"
+      class="form-card"
+      style="display: none;"
+    >
+
+      <div class="form-heading">
+        <h2>運営情報の投稿</h2>
+        <p>
+          店舗の終了番号のような自己申告用の番号は発行されません。
+        </p>
+      </div>
+
+      <div class="notice-box">
+        🌺 公開元：イマミル運営
+      </div>
+
+      <form
+        id="adminPostForm"
+        novalidate
+      >
+
+        <div
+          id="messageBox"
+          class="message-box"
+          role="status"
+          aria-live="polite"
+        ></div>
+
+        <div class="form-group">
+
+          <label
+            class="form-label"
+            for="title"
+          >
+            情報タイトル
+            <span class="required">必須</span>
+          </label>
+
+          <input
+            id="title"
+            name="title"
+            type="text"
+            maxlength="50"
+            placeholder="例：イルカショーは天候により中止です"
+            required
+          >
+
+          <div
+            id="titleCount"
+            class="character-count"
+          >
+            0 / 50文字
+          </div>
+
+        </div>
+
+        <div class="form-group">
+
+          <label
+            class="form-label"
+            for="category"
+          >
+            カテゴリー
+            <span class="required">必須</span>
+          </label>
+
+          <select
+            id="category"
+            name="category"
+            required
+          >
+            <option value="">選択してください</option>
+            <option value="お知らせ">📢 お知らせ</option>
+            <option value="イベント">🎵 イベント</option>
+            <option value="観光・体験">🏝️ 観光・体験</option>
+            <option value="グルメ">🍜 グルメ</option>
+            <option value="カフェ・スイーツ">🥭 カフェ・スイーツ</option>
+            <option value="ショッピング">🛍️ ショッピング</option>
+            <option value="ナイトスポット">🌃 ナイトスポット</option>
+            <option value="美容・リラクゼーション">💆 美容・リラクゼーション</option>
+            <option value="宿泊">🏨 宿泊</option>
+          </select>
+
+        </div>
+
+        <div class="form-group">
+
+          <label
+            class="form-label"
+            for="content"
+          >
+            内容
+            <span class="required">必須</span>
+          </label>
+
+          <textarea
+            id="content"
+            name="content"
+            maxlength="300"
+            placeholder="例：本日は天候不良のためイルカショーを中止します。"
+            required
+          ></textarea>
+
+          <div
+            id="contentCount"
+            class="character-count"
+          >
+            0 / 300文字
+          </div>
+
+        </div>
+
+        <div class="form-group">
+
+          <label
+            class="form-label"
+            for="expiresAt"
+          >
+            掲載終了日時
+            <span class="required">必須</span>
+          </label>
+
+          <input
+            id="expiresAt"
+            name="expiresAt"
+            type="datetime-local"
+            required
+          >
+
+          <p class="form-help">
+            指定した日時を過ぎると、トップページから自動的に非表示になります。<br>
+            現在より未来、最大90日先まで指定できます。
+          </p>
+
+        </div>
+
+        <div class="form-group">
+
+          <label
+            class="form-label"
+            for="address"
+          >
+            住所・場所
+            <span class="optional">任意</span>
+          </label>
+
+          <input
+            id="address"
+            name="address"
+            type="text"
+            maxlength="120"
+            autocomplete="street-address"
+            placeholder="例：沖縄県那覇市〇〇1-2-3"
+          >
+
+        </div>
+
+        <div class="form-group">
+
+          <div class="form-label">
+            現在地から取得
+            <span class="optional">任意</span>
+          </div>
+
+          <p class="form-help">
+            現在地を取得すると、住所入力を省略できます。
+          </p>
+
+          <button
+            id="locationButton"
+            class="location-button"
+            type="button"
+          >
+            📍 現在地を取得
+          </button>
+
+          <div
+            id="locationMessageBox"
+            class="message-box"
+            role="status"
+            aria-live="polite"
+          ></div>
+
+        </div>
+
+        <div class="form-group">
+
+          <label
+            class="form-label"
+            for="websiteUrl"
+          >
+            情報元ページ
+            <span class="optional">任意</span>
+          </label>
+
+          <input
+            id="websiteUrl"
+            name="websiteUrl"
+            type="text"
+            maxlength="300"
+            autocomplete="url"
+            placeholder="例：https://example.com/news/"
+          >
+
+          <p class="form-help">
+            施設の公式ページや発表元のページがあれば貼り付けてください。<br>
+            空欄でも投稿できます。
+          </p>
+
+        </div>
+
+        <div class="form-group">
+
+          <div class="form-label">
+            写真
+            <span class="optional">任意・最大5枚</span>
+          </div>
+
+          <div
+            id="imageUploadArea"
+            class="image-upload-area"
+          >
+
+            <div class="image-upload-icon">📷</div>
+
+            <p class="image-upload-title">
+              掲載する写真を選択
+            </p>
+
+            <p class="image-upload-description">
+              JPG・PNG・WEBPに対応しています。<br>
+              1枚につき10MB以内、最大5枚まで選択できます。
+            </p>
+
+            <input
+              id="imageInput"
+              class="image-input"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              multiple
+            >
+
+            <button
+              id="imageSelectButton"
+              class="image-select-button"
+              type="button"
+            >
+              ＋ 写真を選ぶ
+            </button>
+
+            <p
+              id="imageCount"
+              class="image-count"
+            >
+              0 / 5枚
+            </p>
+
+            <div
+              id="imagePreviewList"
+              class="image-preview-list"
+            ></div>
+
+          </div>
+
+        </div>
+
+        <button
+          id="submitButton"
+          class="submit-button"
+          type="submit"
+        >
+          この内容で公開する
+        </button>
+
+        <div
+          id="progressArea"
+          class="progress-area"
+        >
+
+          <p
+            id="progressMessage"
+            class="progress-message"
+          >
+            投稿の準備をしています…
+          </p>
+
+          <div class="progress-bar">
+            <div
+              id="progressBarFill"
+              class="progress-bar-fill"
+            ></div>
+          </div>
+
+        </div>
+
+        <div
+          id="afterSubmitActions"
+          class="after-submit-actions"
+        >
+
+          <a
+            id="backAdminLink"
+            class="after-action back-home-button"
+            href="admin.html"
+          >
+            管理画面へ戻る
+          </a>
+
+          <button
+            id="newPostButton"
+            class="after-action new-post-button"
+            type="button"
+          >
+            続けて投稿する
+          </button>
+
+        </div>
+
+      </form>
+
+      <div class="security-note">
+        この投稿はイマミル運営としてただちに公開されます。
+        店舗投稿の終了番号のような仕組みはありません。
+      </div>
+
+    </section>
+
+  </main>
+
+  <footer>
+    イマミル Web Version 1.2<br>
+    このページは運営者専用です。
+  </footer>
+
+  <script
+    src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"
+  ></script>
+
+  <script
+    src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"
+  ></script>
+
+  <script
+    src="https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore-compat.js"
+  ></script>
+
+  <script src="firebase.js"></script>
+
+  <script>
+    const ADMIN_EMAIL = "9413yutaka@gmail.com";
+
+    const CLOUDINARY_CLOUD_NAME = "cdhyctnp";
+    const CLOUDINARY_UPLOAD_PRESET = "imamiru_upload";
+
+    const MAX_IMAGE_COUNT = 5;
+    const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
+    const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+    const MAX_EXPIRES_AT_DAYS = 90;
+
+    let selectedImageFiles = [];
+    let capturedLatitude = null;
+    let capturedLongitude = null;
+    let capturedAccuracy = null;
+    let hasSubmittedSuccessfully = false;
+
+    const authCheckingPanel = document.getElementById("authCheckingPanel");
+    const loginRequiredPanel = document.getElementById("loginRequiredPanel");
+    const postFormSection = document.getElementById("postFormSection");
+
+    const adminPostForm = document.getElementById("adminPostForm");
+    const titleInput = document.getElementById("title");
+    const categoryInput = document.getElementById("category");
+    const contentInput = document.getElementById("content");
+    const expiresAtInput = document.getElementById("expiresAt");
+    const addressInput = document.getElementById("address");
+    const websiteUrlInput = document.getElementById("websiteUrl");
+
+    const locationButton = document.getElementById("locationButton");
+    const locationMessageBox = document.getElementById("locationMessageBox");
+
+    const imageInput = document.getElementById("imageInput");
+    const imageSelectButton = document.getElementById("imageSelectButton");
+    const imageUploadArea = document.getElementById("imageUploadArea");
+    const imagePreviewList = document.getElementById("imagePreviewList");
+    const imageCount = document.getElementById("imageCount");
+
+    const titleCount = document.getElementById("titleCount");
+    const contentCount = document.getElementById("contentCount");
+
+    const submitButton = document.getElementById("submitButton");
+    const progressArea = document.getElementById("progressArea");
+    const progressMessage = document.getElementById("progressMessage");
+    const progressBarFill = document.getElementById("progressBarFill");
+    const messageBox = document.getElementById("messageBox");
+
+    const afterSubmitActions = document.getElementById("afterSubmitActions");
+    const newPostButton = document.getElementById("newPostButton");
+
+    function escapeHtml(text) {
+      return String(text ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function updateCharacterCounts() {
+      titleCount.textContent = titleInput.value.length + " / 50文字";
+      contentCount.textContent = contentInput.value.length + " / 300文字";
+    }
+
+    function showMessage(type, message) {
+      messageBox.className = "message-box visible " + type;
+      messageBox.textContent = message;
+    }
+
+    function clearMessage() {
+      messageBox.className = "message-box";
+      messageBox.textContent = "";
+    }
+
+    function setProgress(message, percent) {
+      progressArea.classList.add("visible");
+      progressMessage.textContent = message;
+      progressBarFill.style.width = Math.max(0, Math.min(100, percent)) + "%";
+    }
+
+    function hideProgress() {
+      progressArea.classList.remove("visible");
+      progressBarFill.style.width = "0%";
+    }
+
+    function setSubmitting(submitting) {
+      submitButton.disabled = submitting;
+      imageSelectButton.disabled = submitting;
+      titleInput.disabled = submitting;
+      categoryInput.disabled = submitting;
+      contentInput.disabled = submitting;
+      expiresAtInput.disabled = submitting;
+      addressInput.disabled = submitting;
+      websiteUrlInput.disabled = submitting;
+      locationButton.disabled = submitting;
+
+      submitButton.textContent = submitting
+        ? "公開しています…"
+        : "この内容で公開する";
+    }
+
+    function createFileKey(file) {
+      return [file.name, file.size, file.lastModified].join("-");
+    }
+
+    function validateImageFile(file) {
+      if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+        return file.name + "は対応していない画像形式です。";
+      }
+
+      if (file.size > MAX_IMAGE_SIZE_BYTES) {
+        return file.name + "は10MBを超えています。";
+      }
+
+      return "";
+    }
+
+    function addSelectedFiles(files) {
+      clearMessage();
+
+      const incomingFiles = Array.from(files);
+
+      if (incomingFiles.length === 0) {
+        return;
+      }
+
+      const currentKeys = new Set(
+        selectedImageFiles.map(createFileKey)
+      );
+
+      for (const file of incomingFiles) {
+        if (selectedImageFiles.length >= MAX_IMAGE_COUNT) {
+          showMessage("error", "写真は最大5枚まで選択できます。");
+          break;
+        }
+
+        const errorMessage = validateImageFile(file);
+
+        if (errorMessage) {
+          showMessage("error", errorMessage);
+          continue;
+        }
+
+        const fileKey = createFileKey(file);
+
+        if (currentKeys.has(fileKey)) {
+          continue;
+        }
+
+        selectedImageFiles.push(file);
+        currentKeys.add(fileKey);
+      }
+
+      imageInput.value = "";
+      renderImagePreviews();
+    }
+
+    function removeSelectedImage(index) {
+      selectedImageFiles.splice(index, 1);
+      renderImagePreviews();
+    }
+
+    function renderImagePreviews() {
+      imageCount.textContent =
+        selectedImageFiles.length + " / " + MAX_IMAGE_COUNT + "枚";
+
+      if (selectedImageFiles.length === 0) {
+        imagePreviewList.innerHTML = "";
+        imageSelectButton.textContent = "＋ 写真を選ぶ";
+        return;
+      }
+
+      imageSelectButton.textContent =
+        selectedImageFiles.length < MAX_IMAGE_COUNT
+          ? "＋ 写真を追加する"
+          : "写真を5枚選択済み";
+
+      imageSelectButton.disabled =
+        selectedImageFiles.length >= MAX_IMAGE_COUNT;
+
+      imagePreviewList.innerHTML = "";
+
+      selectedImageFiles.forEach(function(file, index) {
+        const previewUrl = URL.createObjectURL(file);
+
+        const previewItem = document.createElement("div");
+        previewItem.className = "image-preview-item";
+
+        const image = document.createElement("img");
+        image.src = previewUrl;
+        image.alt = "選択した写真" + (index + 1);
+        image.addEventListener(
+          "load",
+          function() {
+            URL.revokeObjectURL(previewUrl);
+          },
+          { once: true }
+        );
+
+        const numberLabel = document.createElement("span");
+        numberLabel.className = "image-number";
+        numberLabel.textContent = index + 1;
+
+        const removeButton = document.createElement("button");
+        removeButton.className = "image-remove-button";
+        removeButton.type = "button";
+        removeButton.setAttribute("aria-label", "写真" + (index + 1) + "を削除");
+        removeButton.textContent = "✕";
+        removeButton.addEventListener("click", function() {
+          removeSelectedImage(index);
+        });
+
+        previewItem.appendChild(image);
+        previewItem.appendChild(numberLabel);
+        previewItem.appendChild(removeButton);
+
+        if (index === 0) {
+          const firstLabel = document.createElement("span");
+          firstLabel.className = "first-image-label";
+          firstLabel.textContent = "トップ画像";
+          previewItem.appendChild(firstLabel);
+        }
+
+        imagePreviewList.appendChild(previewItem);
+      });
+    }
+
+    async function compressImageFile(file) {
+      const maximumLongSide = 1600;
+      const imageQuality = 0.82;
+
+      const imageBitmap = await createImageBitmap(file);
+
+      const originalWidth = imageBitmap.width;
+      const originalHeight = imageBitmap.height;
+
+      const longSide = Math.max(originalWidth, originalHeight);
+
+      const resizeRatio =
+        longSide > maximumLongSide ? maximumLongSide / longSide : 1;
+
+      const resizedWidth = Math.max(1, Math.round(originalWidth * resizeRatio));
+      const resizedHeight = Math.max(1, Math.round(originalHeight * resizeRatio));
+
+      const canvas = document.createElement("canvas");
+      canvas.width = resizedWidth;
+      canvas.height = resizedHeight;
+
+      const context = canvas.getContext("2d");
+
+      if (!context) {
+        imageBitmap.close();
+        throw new Error("写真を軽量化できませんでした。");
+      }
+
+      context.drawImage(imageBitmap, 0, 0, resizedWidth, resizedHeight);
+      imageBitmap.close();
+
+      const compressedBlob = await new Promise(function(resolve, reject) {
+        canvas.toBlob(
+          function(blob) {
+            if (blob) {
+              resolve(blob);
+              return;
+            }
+
+            reject(new Error("写真を軽量化できませんでした。"));
+          },
+          "image/webp",
+          imageQuality
+        );
+      });
+
+      const originalFileName = file.name.replace(/\.[^.]+$/, "");
+
+      return new File(
+        [compressedBlob],
+        originalFileName + ".webp",
+        { type: "image/webp", lastModified: Date.now() }
+      );
+    }
+
+    async function uploadImageToCloudinary(file) {
+      const uploadUrl =
+        "https://api.cloudinary.com/v1_1/" +
+        CLOUDINARY_CLOUD_NAME +
+        "/image/upload";
+
+      setProgress("写真を軽量化しています…", 8);
+
+      const compressedFile = await compressImageFile(file);
+
+      const formData = new FormData();
+      formData.append("file", compressedFile);
+      formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+
+      const response = await fetch(uploadUrl, {
+        method: "POST",
+        body: formData
+      });
+
+      let responseData = null;
+
+      try {
+        responseData = await response.json();
+      } catch (jsonError) {
+        throw new Error("画像アップロードの応答を読み取れませんでした。");
+      }
+
+      if (!response.ok) {
+        const cloudinaryMessage =
+          responseData && responseData.error && responseData.error.message
+            ? responseData.error.message
+            : "画像をアップロードできませんでした。";
+
+        throw new Error(cloudinaryMessage);
+      }
+
+      if (!responseData.secure_url) {
+        throw new Error("画像URLを取得できませんでした。");
+      }
+
+      return {
+        url: responseData.secure_url,
+        publicId: responseData.public_id || ""
+      };
+    }
+
+    async function uploadSelectedImages() {
+      if (selectedImageFiles.length === 0) {
+        return [];
+      }
+
+      let completedImageCount = 0;
+
+      setProgress(
+        selectedImageFiles.length + "枚の写真を軽量化・アップロードしています…",
+        10
+      );
+
+      const uploadPromises = selectedImageFiles.map(
+        async function(file, index) {
+          const uploadedImage = await uploadImageToCloudinary(file);
+
+          completedImageCount += 1;
+
+          const completedPercent =
+            10 +
+            Math.round((completedImageCount / selectedImageFiles.length) * 65);
+
+          setProgress(
+            "写真" +
+              completedImageCount +
+              " / " +
+              selectedImageFiles.length +
+              "枚のアップロードが完了しました。",
+            completedPercent
+          );
+
+          return { index: index, uploadedImage: uploadedImage };
+        }
+      );
+
+      const uploadResults = await Promise.all(uploadPromises);
+
+      uploadResults.sort(function(firstResult, secondResult) {
+        return firstResult.index - secondResult.index;
+      });
+
+      return uploadResults.map(function(result) {
+        return result.uploadedImage;
+      });
+    }
+
+    function showLocationMessage(type, message) {
+      locationMessageBox.className = "message-box visible " + type;
+      locationMessageBox.textContent = message;
+    }
+
+    function requestCurrentLocationForPost() {
+      if (!navigator.geolocation) {
+        showLocationMessage("error", "このブラウザでは位置情報を利用できません。");
+        return;
+      }
+
+      locationButton.disabled = true;
+      locationButton.textContent = "取得しています…";
+
+      navigator.geolocation.getCurrentPosition(
+        function(position) {
+          capturedLatitude = position.coords.latitude;
+          capturedLongitude = position.coords.longitude;
+          capturedAccuracy = position.coords.accuracy;
+
+          const roundedAccuracy = Math.round(capturedAccuracy);
+
+          if (capturedAccuracy > 100) {
+            showLocationMessage(
+              "success",
+              "現在地を取得しました(誤差 約" +
+                roundedAccuracy +
+                "m)。位置の誤差が大きいため、電波状況の良い場所で再取得することをおすすめします。"
+            );
+          } else {
+            showLocationMessage(
+              "success",
+              "現在地を取得しました(誤差 約" + roundedAccuracy + "m)。"
+            );
+          }
+
+          locationButton.disabled = false;
+          locationButton.textContent = "📍 現在地を再取得";
+        },
+
+        function(error) {
+          let message = "位置情報を取得できませんでした。";
+
+          if (error.code === 1) {
+            message =
+              "位置情報の利用が許可されませんでした。ブラウザの設定から位置情報を許可してください。";
+          } else if (error.code === 2) {
+            message =
+              "現在地を取得できませんでした。電波状況の良い場所でもう一度お試しください。";
+          } else if (error.code === 3) {
+            message = "取得に時間がかかりました。もう一度お試しください。";
+          }
+
+          showLocationMessage("error", message);
+
+          locationButton.disabled = false;
+          locationButton.textContent = "📍 現在地を取得";
+        },
+
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      );
+    }
+
+    function focusInvalidField(inputElement) {
+      if (!inputElement) {
+        return;
+      }
+
+      inputElement.scrollIntoView({ behavior: "smooth", block: "center" });
+      inputElement.focus({ preventScroll: true });
+    }
+
+    function formatDatetimeLocalValue(date) {
+      function pad(number) {
+        return String(number).padStart(2, "0");
+      }
+
+      return (
+        date.getFullYear() +
+        "-" +
+        pad(date.getMonth() + 1) +
+        "-" +
+        pad(date.getDate()) +
+        "T" +
+        pad(date.getHours()) +
+        ":" +
+        pad(date.getMinutes())
+      );
+    }
+
+    function getMaxExpiresAtDate() {
+      return new Date(Date.now() + MAX_EXPIRES_AT_DAYS * 24 * 60 * 60 * 1000);
+    }
+
+    function refreshExpiresAtBounds() {
+      expiresAtInput.min = formatDatetimeLocalValue(new Date(Date.now() + 60000));
+      expiresAtInput.max = formatDatetimeLocalValue(getMaxExpiresAtDate());
+    }
+
+    function validateForm() {
+      const validationErrors = [];
+
+      if (titleInput.value.trim() === "") {
+        validationErrors.push({
+          message: "情報タイトルを入力してください。",
+          element: titleInput
+        });
+      }
+
+      if (categoryInput.value === "") {
+        validationErrors.push({
+          message: "カテゴリーを選択してください。",
+          element: categoryInput
+        });
+      }
+
+      if (contentInput.value.trim() === "") {
+        validationErrors.push({
+          message: "内容を入力してください。",
+          element: contentInput
+        });
+      }
+
+      const expiresAtValue = expiresAtInput.value;
+
+      if (expiresAtValue === "") {
+        validationErrors.push({
+          message: "掲載終了日時を指定してください。",
+          element: expiresAtInput
+        });
+      } else {
+        const expiresAtDate = new Date(expiresAtValue);
+
+        if (Number.isNaN(expiresAtDate.getTime())) {
+          validationErrors.push({
+            message: "掲載終了日時を正しく指定してください。",
+            element: expiresAtInput
+          });
+        } else if (expiresAtDate.getTime() <= Date.now()) {
+          validationErrors.push({
+            message: "掲載終了日時は現在より未来の日時を指定してください。",
+            element: expiresAtInput
+          });
+        } else if (expiresAtDate.getTime() > getMaxExpiresAtDate().getTime()) {
+          validationErrors.push({
+            message: "掲載終了日時は90日以内で指定してください。",
+            element: expiresAtInput
+          });
+        }
+      }
+
+      const websiteUrlValue = websiteUrlInput.value.trim();
+
+      if (websiteUrlValue !== "" && !/^https?:\/\//.test(websiteUrlValue)) {
+        validationErrors.push({
+          message:
+            "ページのアドレスは「https://」または「http://」から始まる形で貼り付けてください。\nわからない場合は、空欄のままで大丈夫です。",
+          element: websiteUrlInput
+        });
+      }
+
+      if (validationErrors.length > 0) {
+        focusInvalidField(validationErrors[0].element);
+
+        const combinedMessage =
+          "入力内容を確認してください。\n" +
+          validationErrors
+            .map(function(validationError) {
+              return "・" + validationError.message;
+            })
+            .join("\n");
+
+        throw new Error(combinedMessage);
+      }
+    }
+
+    function showAdminPostSuccessMessage() {
+      messageBox.className = "message-box visible success";
+      messageBox.textContent = "運営情報を公開しました。";
+    }
+
+    async function submitAdminPost(event) {
+      event.preventDefault();
+
+      clearMessage();
+      afterSubmitActions.classList.remove("visible");
+
+      try {
+        validateForm();
+
+        setSubmitting(true);
+        setProgress("投稿の準備をしています…", 5);
+
+        const uploadedImages = await uploadSelectedImages();
+
+        setProgress("運営情報をイマミルへ送信しています…", 82);
+
+        const imageUrls = uploadedImages.map(function(image) {
+          return image.url;
+        });
+
+        const expiresAtDate = new Date(expiresAtInput.value);
+
+        const currentUser = firebase.auth().currentUser;
+
+        if (!currentUser) {
+          throw new Error(
+            "ログイン状態を確認できませんでした。管理画面から再度ログインしてください。"
+          );
+        }
+
+        const idToken = await currentUser.getIdToken();
+
+        const payload = {
+          title: titleInput.value.trim(),
+          category: categoryInput.value,
+          content: contentInput.value.trim(),
+          expiresAt: expiresAtDate.toISOString(),
+          address: addressInput.value.trim(),
+          latitude: capturedLatitude,
+          longitude: capturedLongitude,
+          imageUrls: imageUrls,
+          websiteUrl: websiteUrlInput.value.trim()
+        };
+
+        const response = await fetch("/api/admin-post", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + idToken
+          },
+          body: JSON.stringify(payload)
+        });
+
+        let responseData = null;
+
+        try {
+          responseData = await response.json();
+        } catch (jsonError) {
+          throw new Error("サーバーからの応答を読み取れませんでした。");
+        }
+
+        if (!response.ok || !responseData.success) {
+          throw new Error(
+            responseData && responseData.message
+              ? responseData.message
+              : "投稿に失敗しました。"
+          );
+        }
+
+        setProgress("投稿が完了しました。", 100);
+
+        hasSubmittedSuccessfully = true;
+
+        showAdminPostSuccessMessage();
+
+        messageBox.scrollIntoView({ behavior: "smooth", block: "start" });
+
+        submitButton.style.display = "none";
+        afterSubmitActions.classList.add("visible");
+
+        window.setTimeout(function() {
+          hideProgress();
+        }, 900);
+      } catch (error) {
+        console.error("運営情報の投稿エラー：", error);
+
+        hideProgress();
+        setSubmitting(false);
+
+        showMessage(
+          "error",
+          error && error.message ? error.message : "投稿に失敗しました。もう一度お試しください。"
+        );
+      }
+    }
+
+    function resetAdminPostForm() {
+      adminPostForm.reset();
+
+      selectedImageFiles = [];
+      capturedLatitude = null;
+      capturedLongitude = null;
+      capturedAccuracy = null;
+      hasSubmittedSuccessfully = false;
+
+      locationButton.disabled = false;
+      locationButton.textContent = "📍 現在地を取得";
+      locationMessageBox.className = "message-box";
+      locationMessageBox.textContent = "";
+
+      refreshExpiresAtBounds();
+      renderImagePreviews();
+      updateCharacterCounts();
+      clearMessage();
+      hideProgress();
+
+      afterSubmitActions.classList.remove("visible");
+      submitButton.style.display = "block";
+
+      setSubmitting(false);
+
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    titleInput.addEventListener("input", updateCharacterCounts);
+    contentInput.addEventListener("input", updateCharacterCounts);
+
+    locationButton.addEventListener("click", requestCurrentLocationForPost);
+
+    imageSelectButton.addEventListener("click", function() {
+      if (selectedImageFiles.length < MAX_IMAGE_COUNT) {
+        imageInput.click();
+      }
+    });
+
+    imageInput.addEventListener("change", function(event) {
+      addSelectedFiles(event.target.files);
+    });
+
+    imageUploadArea.addEventListener("dragover", function(event) {
+      event.preventDefault();
+      imageUploadArea.classList.add("drag-over");
+    });
+
+    imageUploadArea.addEventListener("dragleave", function() {
+      imageUploadArea.classList.remove("drag-over");
+    });
+
+    imageUploadArea.addEventListener("drop", function(event) {
+      event.preventDefault();
+      imageUploadArea.classList.remove("drag-over");
+      addSelectedFiles(event.dataTransfer.files);
+    });
+
+    adminPostForm.addEventListener("submit", submitAdminPost);
+
+    newPostButton.addEventListener("click", function() {
+      resetAdminPostForm();
+    });
+
+    refreshExpiresAtBounds();
+    updateCharacterCounts();
+
+    firebase.auth().onAuthStateChanged(function(user) {
+      authCheckingPanel.style.display = "none";
+
+      if (
+        user &&
+        user.email &&
+        user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()
+      ) {
+        loginRequiredPanel.style.display = "none";
+        postFormSection.style.display = "block";
+        return;
+      }
+
+      postFormSection.style.display = "none";
+      loginRequiredPanel.style.display = "block";
+    });
+  </script>
+
+</body>
+</html>
