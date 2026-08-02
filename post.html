@@ -2943,6 +2943,16 @@ longitude:
     isOpen24HoursInput.addEventListener(
       "change",
       function() {
+        if (
+          isOpen24HoursInput.checked
+        ) {
+          businessStartTimeInput.value =
+            "";
+
+          businessEndTimeInput.value =
+            "";
+        }
+
         businessStartTimeInput.disabled =
           isOpen24HoursInput.checked;
 
