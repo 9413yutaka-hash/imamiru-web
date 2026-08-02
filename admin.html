@@ -268,6 +268,10 @@
         rgba(4, 183, 215, 0.12);
     }
 
+    .search-field {
+      margin-top: 20px;
+    }
+
     .primary-button {
       min-height: 51px;
       padding: 12px 17px;
@@ -855,6 +859,19 @@
 
       </div>
 
+      <div class="form-field search-field">
+        <label for="searchInput">
+          掲載番号・店舗名・タイトルで検索
+        </label>
+
+        <input
+          id="searchInput"
+          type="search"
+          placeholder="例：12345678 / 南国食堂 / 半額"
+          autocomplete="off"
+        >
+      </div>
+
       <div class="toolbar">
 
         <button
@@ -982,6 +999,11 @@
         "refreshButton"
       );
 
+    const searchInput =
+      document.getElementById(
+        "searchInput"
+      );
+
     const loginMessage =
       document.getElementById(
         "loginMessage"
@@ -1032,6 +1054,7 @@
     let currentSubmissions = [];
     let currentApprovedSubmissions = [];
     let currentInactiveSubmissions = [];
+    let searchQuery = "";
 
     function escapeHtml(value) {
       return String(value ?? "")
@@ -1128,6 +1151,53 @@
       return "自動";
     }
 
+    function normalizeSearchText(
+      value
+    ) {
+      return String(
+        value || ""
+      ).toLowerCase();
+    }
+
+    function matchesSearchQuery(
+      submission
+    ) {
+      if (searchQuery === "") {
+        return true;
+      }
+
+      const normalizedQuery =
+        normalizeSearchText(
+          searchQuery
+        );
+
+      return (
+        normalizeSearchText(
+          submission.publicationNumber
+        ).includes(
+          normalizedQuery
+        ) ||
+        normalizeSearchText(
+          submission.shopName
+        ).includes(
+          normalizedQuery
+        ) ||
+        normalizeSearchText(
+          submission.title
+        ).includes(
+          normalizedQuery
+        )
+      );
+    }
+
+    function filterSubmissionsByQuery(
+      submissions
+    ) {
+      return submissions.filter(
+        matchesSearchQuery
+      );
+    }
+
     function updateSummary() {
       pendingCount.textContent =
         currentSubmissions.length +
@@ -1162,12 +1232,21 @@
     function renderSubmissions() {
       updateSummary();
 
+      const filteredSubmissions =
+        filterSubmissionsByQuery(
+          currentSubmissions
+        );
+
       if (
-        currentSubmissions.length === 0
+        filteredSubmissions.length === 0
       ) {
         submissionList.innerHTML = `
           <div class="empty-state">
-            現在、審査待ちの申請はありません。
+            ${
+              searchQuery === ""
+                ? "現在、審査待ちの申請はありません。"
+                : "検索条件に一致する審査待ちの申請はありません。"
+            }
           </div>
         `;
 
@@ -1175,7 +1254,7 @@
       }
 
       submissionList.innerHTML =
-        currentSubmissions
+        filteredSubmissions
           .map(
             function(submission) {
               return `
@@ -1267,12 +1346,21 @@
     }
 
     function renderEndableSubmissions() {
+      const filteredSubmissions =
+        filterSubmissionsByQuery(
+          currentApprovedSubmissions
+        );
+
       if (
-        currentApprovedSubmissions.length === 0
+        filteredSubmissions.length === 0
       ) {
         endableSubmissionList.innerHTML = `
           <div class="empty-state">
-            現在、掲載中の投稿はありません。
+            ${
+              searchQuery === ""
+                ? "現在、掲載中の投稿はありません。"
+                : "検索条件に一致する掲載中の投稿はありません。"
+            }
           </div>
         `;
 
@@ -1280,7 +1368,7 @@
       }
 
       endableSubmissionList.innerHTML =
-        currentApprovedSubmissions
+        filteredSubmissions
           .map(
             function(submission) {
               return `
@@ -1357,12 +1445,29 @@
     }
 
     function renderInactiveSubmissions() {
+      const filteredSubmissions =
+        filterSubmissionsByQuery(
+          currentInactiveSubmissions
+        );
+
+      const displayedSubmissions =
+        searchQuery === ""
+          ? filteredSubmissions.slice(
+              0,
+              50
+            )
+          : filteredSubmissions;
+
       if (
-        currentInactiveSubmissions.length === 0
+        displayedSubmissions.length === 0
       ) {
         inactiveSubmissionList.innerHTML = `
           <div class="empty-state">
-            却下・掲載終了済みの投稿はありません。
+            ${
+              searchQuery === ""
+                ? "却下・掲載終了済みの投稿はありません。"
+                : "検索条件に一致する却下・掲載終了済みの投稿はありません。"
+            }
           </div>
         `;
 
@@ -1370,11 +1475,7 @@
       }
 
       inactiveSubmissionList.innerHTML =
-        currentInactiveSubmissions
-          .slice(
-            0,
-            50
-          )
+        displayedSubmissions
           .map(
             function(submission) {
               const isExpired =
@@ -2052,6 +2153,20 @@
     refreshButton.addEventListener(
       "click",
       loadSubmissions
+    );
+
+    searchInput.addEventListener(
+      "input",
+      function() {
+        searchQuery =
+          searchInput.value.trim();
+
+        renderSubmissions();
+
+        renderEndableSubmissions();
+
+        renderInactiveSubmissions();
+      }
     );
 
     firebase
