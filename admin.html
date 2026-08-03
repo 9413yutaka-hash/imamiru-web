@@ -453,16 +453,6 @@
       font-weight: 900;
     }
 
-    .pending-badge {
-      flex-shrink: 0;
-      padding: 6px 9px;
-      border-radius: 999px;
-      color: #9a5a20;
-      background: var(--orange-light);
-      font-size: 10px;
-      font-weight: 900;
-    }
-
     .submission-body {
       padding: 19px;
     }
@@ -508,37 +498,6 @@
       grid-template-columns: 1fr 1fr;
       gap: 10px;
       margin-top: 17px;
-    }
-
-    .approve-button,
-    .reject-button {
-      min-height: 47px;
-      border: none;
-      border-radius: 12px;
-      font-size: 12px;
-      font-weight: 900;
-      cursor: pointer;
-    }
-
-    .approve-button {
-      color: var(--white);
-      background:
-        linear-gradient(
-          135deg,
-          #159460,
-          #24bd7d
-        );
-    }
-
-    .reject-button {
-      color: #a33f3f;
-      background: var(--red-light);
-    }
-
-    .approve-button:disabled,
-    .reject-button:disabled {
-      opacity: 0.55;
-      cursor: wait;
     }
 
     .approved-badge {
@@ -839,7 +798,7 @@
 
         <div class="panel-title">
           <h2>
-            申請一覧
+            投稿管理
           </h2>
 
           <p id="loginUserMessage">
@@ -932,15 +891,6 @@
         role="status"
         aria-live="polite"
       ></div>
-
-      <div
-        id="submissionList"
-        class="submission-list"
-      >
-        <div class="empty-state">
-          申請情報を読み込んでいます…
-        </div>
-      </div>
 
       <div class="panel-header">
         <div class="panel-title">
@@ -1064,11 +1014,6 @@
         "adminMessage"
       );
 
-    const submissionList =
-      document.getElementById(
-        "submissionList"
-      );
-
     const endableSubmissionList =
       document.getElementById(
         "endableSubmissionList"
@@ -1099,7 +1044,6 @@
         "loginUserMessage"
       );
 
-    let currentSubmissions = [];
     let currentApprovedSubmissions = [];
     let currentInactiveSubmissions = [];
     let searchQuery = "";
@@ -1262,7 +1206,7 @@
       disabled
     ) {
       const buttons =
-        submissionList.querySelectorAll(
+        endableSubmissionList.querySelectorAll(
           `button[data-document-id="${CSS.escape(documentId)}"]`
         );
 
@@ -1272,122 +1216,6 @@
             disabled;
         }
       );
-    }
-
-    function renderSubmissions() {
-      updateSummary();
-
-      const filteredSubmissions =
-        filterSubmissionsByQuery(
-          currentSubmissions
-        );
-
-      if (
-        filteredSubmissions.length === 0
-      ) {
-        submissionList.innerHTML = `
-          <div class="empty-state">
-            ${
-              searchQuery === ""
-                ? "現在、審査待ちの申請はありません。"
-                : "検索条件に一致する審査待ちの申請はありません。"
-            }
-          </div>
-        `;
-
-        return;
-      }
-
-      submissionList.innerHTML =
-        filteredSubmissions
-          .map(
-            function(submission) {
-              return `
-                <article class="submission-card">
-
-                  <div class="submission-top">
-
-                    <span class="submission-category">
-                      ${escapeHtml(
-                        submission.category
-                      )}
-                    </span>
-
-                    <span class="pending-badge">
-                      審査待ち
-                    </span>
-
-                  </div>
-
-                  <div class="submission-body">
-
-                    <h3 class="shop-name">
-                      ${escapeHtml(
-                        submission.shopName
-                      )}
-                    </h3>
-
-                    <div class="submission-title">
-                      ${escapeHtml(
-                        submission.title
-                      )}
-                    </div>
-
-                    <div class="submission-content">
-                      ${escapeHtml(
-                        submission.content
-                      )}
-                    </div>
-
-                    <div class="submission-meta">
-
-                      <span>
-                        申請日時：
-                        ${escapeHtml(
-                          formatCreatedAt(
-                            submission.createdAt
-                          )
-                        )}
-                      </span>
-
-                      <span>
-                        状態：審査待ち
-                      </span>
-
-                    </div>
-
-                    <div class="submission-actions">
-
-                      <button
-                        class="approve-button"
-                        type="button"
-                        data-action="approve"
-                        data-document-id="${escapeHtml(
-                          submission.id
-                        )}"
-                      >
-                        ✅ 掲載する
-                      </button>
-
-                      <button
-                        class="reject-button"
-                        type="button"
-                        data-action="reject"
-                        data-document-id="${escapeHtml(
-                          submission.id
-                        )}"
-                      >
-                        ✕ 却下する
-                      </button>
-
-                    </div>
-
-                  </div>
-                </article>
-              `;
-            }
-          )
-          .join("");
     }
 
     function renderEndableSubmissions() {
@@ -1676,23 +1504,11 @@
       refreshButton.textContent =
         "読み込み中…";
 
-      submissionList.innerHTML = `
-        <div class="empty-state">
-          申請情報を読み込んでいます…
-        </div>
-      `;
-
       if (!window.imamiruDb) {
         showAdminMessage(
           "Firestoreへ接続できませんでした。",
           "error"
         );
-
-        submissionList.innerHTML = `
-          <div class="empty-state">
-            Firebaseへの接続を確認してください。
-          </div>
-        `;
 
         refreshButton.disabled =
           false;
@@ -1713,9 +1529,6 @@
             )
             .get();
 
-        const pendingSubmissions =
-          [];
-
         const approvedSubmissions =
           [];
 
@@ -1726,17 +1539,6 @@
           function(documentSnapshot) {
             const data =
               documentSnapshot.data();
-
-            if (
-              data.status ===
-              "pending"
-            ) {
-              pendingSubmissions.push({
-                id:
-                  documentSnapshot.id,
-                ...data
-              });
-            }
 
             if (
               data.status ===
@@ -1764,9 +1566,6 @@
           }
         );
 
-        currentSubmissions =
-          pendingSubmissions;
-
         currentApprovedSubmissions =
           approvedSubmissions;
 
@@ -1775,14 +1574,14 @@
 
         inactiveDisplayLimit = 50;
 
-        renderSubmissions();
+        updateSummary();
 
         renderEndableSubmissions();
 
         renderInactiveSubmissions();
 
         showAdminMessage(
-          "申請一覧を更新しました。",
+          "投稿一覧を更新しました。",
           "success"
         );
       } catch (error) {
@@ -1790,8 +1589,6 @@
           "❌ 申請一覧を読み込めませんでした",
           error
         );
-
-        currentSubmissions = [];
 
         currentApprovedSubmissions = [];
 
@@ -1804,12 +1601,6 @@
         );
 
         updateSummary();
-
-        submissionList.innerHTML = `
-          <div class="empty-state">
-            申請情報を読み込めませんでした。
-          </div>
-        `;
 
         endableSubmissionList.innerHTML = `
           <div class="empty-state">
@@ -1824,7 +1615,7 @@
         `;
 
         showAdminMessage(
-          "申請一覧を読み込めませんでした。Firestoreのルールを確認してください。",
+          "投稿一覧を読み込めませんでした。Firestoreのルールを確認してください。",
           "error"
         );
       } finally {
@@ -1833,150 +1624,6 @@
 
         refreshButton.textContent =
           "🔄 一覧を更新";
-      }
-    }
-
-    async function approveSubmission(
-      documentId
-    ) {
-      const submission =
-        currentSubmissions.find(
-          function(item) {
-            return item.id ===
-              documentId;
-          }
-        );
-
-      if (!submission) {
-        showAdminMessage(
-          "対象の申請が見つかりませんでした。一覧を更新してください。",
-          "error"
-        );
-
-        return;
-      }
-
-      const confirmed =
-        window.confirm(
-          "「" +
-          submission.shopName +
-          "」の申請を掲載しますか？"
-        );
-
-      if (!confirmed) {
-        return;
-      }
-
-      setCardButtonsDisabled(
-        documentId,
-        true
-      );
-
-      clearAdminMessage();
-
-      try {
-        await window.imamiruDb
-          .collection("submissions")
-          .doc(documentId)
-          .update({
-            status: "approved"
-          });
-
-        await loadSubmissions();
-
-        showAdminMessage(
-          "✅ 「" +
-          submission.shopName +
-          "」を掲載中に変更しました。",
-          "success"
-        );
-      } catch (error) {
-        console.error(
-          "❌ 広告を掲載できませんでした",
-          error
-        );
-
-        showAdminMessage(
-          "掲載処理に失敗しました。Firestoreの管理者権限を確認してください。",
-          "error"
-        );
-
-        setCardButtonsDisabled(
-          documentId,
-          false
-        );
-      }
-    }
-
-    async function rejectSubmission(
-      documentId
-    ) {
-      const submission =
-        currentSubmissions.find(
-          function(item) {
-            return item.id ===
-              documentId;
-          }
-        );
-
-      if (!submission) {
-        showAdminMessage(
-          "対象の申請が見つかりませんでした。一覧を更新してください。",
-          "error"
-        );
-
-        return;
-      }
-
-      const confirmed =
-        window.confirm(
-          "「" +
-          submission.shopName +
-          "」の申請を却下しますか？"
-        );
-
-      if (!confirmed) {
-        return;
-      }
-
-      setCardButtonsDisabled(
-        documentId,
-        true
-      );
-
-      clearAdminMessage();
-
-      try {
-        await window.imamiruDb
-          .collection("submissions")
-          .doc(documentId)
-          .update({
-            status: "rejected"
-          });
-
-        await loadSubmissions();
-
-        showAdminMessage(
-          "「" +
-          submission.shopName +
-          "」の申請を却下しました。",
-          "success"
-        );
-      } catch (error) {
-        console.error(
-          "❌ 申請を却下できませんでした",
-          error
-        );
-
-        showAdminMessage(
-          "却下処理に失敗しました。Firestoreの管理者権限を確認してください。",
-          "error"
-        );
-
-        setCardButtonsDisabled(
-          documentId,
-          false
-        );
       }
     }
 
@@ -2059,50 +1706,6 @@
         );
       }
     }
-
-    submissionList.addEventListener(
-      "click",
-      async function(event) {
-        const button =
-          event.target.closest(
-            "button[data-action]"
-          );
-
-        if (!button) {
-          return;
-        }
-
-        const action =
-          button.dataset.action;
-
-        const documentId =
-          button.dataset.documentId;
-
-        if (
-          !documentId
-        ) {
-          return;
-        }
-
-        if (
-          action === "approve"
-        ) {
-          await approveSubmission(
-            documentId
-          );
-
-          return;
-        }
-
-        if (
-          action === "reject"
-        ) {
-          await rejectSubmission(
-            documentId
-          );
-        }
-      }
-    );
 
     endableSubmissionList.addEventListener(
       "click",
@@ -2238,8 +1841,6 @@
         searchQuery =
           searchInput.value.trim();
 
-        renderSubmissions();
-
         renderEndableSubmissions();
 
         renderInactiveSubmissions();
@@ -2318,8 +1919,6 @@
             "visible"
           );
 
-          currentSubmissions = [];
-
           currentApprovedSubmissions = [];
 
           currentInactiveSubmissions = [];
@@ -2331,12 +1930,6 @@
           );
 
           updateSummary();
-
-          submissionList.innerHTML = `
-            <div class="empty-state">
-              ログイン後に申請を表示します。
-            </div>
-          `;
 
           endableSubmissionList.innerHTML = `
             <div class="empty-state">
