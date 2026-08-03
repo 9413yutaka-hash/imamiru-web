@@ -658,6 +658,21 @@
         AI回答を読み込む
       </button>
 
+      <button
+        id="polishTextButton"
+        class="secondary-button"
+        type="button"
+      >
+        ✨ AIで文章を整える
+      </button>
+
+      <div
+        id="polishMessageBox"
+        class="message-box"
+        role="status"
+        aria-live="polite"
+      ></div>
+
     </section>
 
     <section
@@ -869,6 +884,8 @@
     const aiAnswerText = document.getElementById("aiAnswerText");
     const aiAnswerMessageBox = document.getElementById("aiAnswerMessageBox");
     const loadAiAnswerButton = document.getElementById("loadAiAnswerButton");
+    const polishTextButton = document.getElementById("polishTextButton");
+    const polishMessageBox = document.getElementById("polishMessageBox");
 
     const previewMessageBox = document.getElementById("previewMessageBox");
     const draftTitle = document.getElementById("draftTitle");
@@ -1255,6 +1272,69 @@
       }
     }
 
+    function showPolishMessage(type, message) {
+      polishMessageBox.className = "message-box visible " + type;
+      polishMessageBox.textContent = message;
+    }
+
+    function clearPolishMessage() {
+      polishMessageBox.className = "message-box";
+      polishMessageBox.textContent = "";
+    }
+
+    function buildPolishPrompt(titleValue, contentValue) {
+      return (
+        "あなたはイマミルAI編集部です。\n" +
+        "\n" +
+        "以下のタイトルと本文について、事実や意味を変えずに、\n" +
+        "誤字脱字の修正・読みやすさの向上・丁寧な表現への調整だけを行ってください。\n" +
+        "\n" +
+        "カテゴリー・掲載終了日時・情報元URLについては触れないでください。\n" +
+        "\n" +
+        "以下の形式で出力してください。\n" +
+        "\n" +
+        "タイトル：（修正後のタイトル）\n" +
+        "本文：（修正後の本文）\n" +
+        "\n" +
+        "【タイトル】\n" +
+        "\n" +
+        titleValue +
+        "\n" +
+        "\n" +
+        "【本文】\n" +
+        "\n" +
+        contentValue
+      );
+    }
+
+    function createPolishPrompt() {
+      clearPolishMessage();
+
+      const currentTitle = draftTitle.value.trim();
+      const currentContent = draftContent.value.trim();
+
+      if (currentTitle === "" && currentContent === "") {
+        showPolishMessage(
+          "error",
+          "タイトルまたは本文が空です。先に「下書きを確認する」または「AI回答を読み込む」で内容を作成してください。"
+        );
+
+        return;
+      }
+
+      generatedPromptText.value = buildPolishPrompt(
+        currentTitle,
+        currentContent
+      );
+
+      promptOutputGroup.style.display = "block";
+
+      promptOutputGroup.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+      });
+    }
+
     function validateDraftForHandoff() {
       const validationErrors = [];
 
@@ -1379,6 +1459,7 @@
     createPromptButton.addEventListener("click", createChatGptPrompt);
     copyPromptButton.addEventListener("click", copyGeneratedPrompt);
     loadAiAnswerButton.addEventListener("click", loadAiAnswer);
+    polishTextButton.addEventListener("click", createPolishPrompt);
     handoffButton.addEventListener("click", handoffDraftToAdminPost);
 
     backToInputButton.addEventListener("click", function() {
