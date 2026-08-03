@@ -585,6 +585,43 @@
         下書きを確認する
       </button>
 
+      <button
+        id="createPromptButton"
+        class="secondary-button"
+        type="button"
+      >
+        🤖 ChatGPT用プロンプトを作る
+      </button>
+
+      <div
+        id="promptOutputGroup"
+        class="form-group"
+        style="display: none;"
+      >
+
+        <label
+          class="form-label"
+          for="generatedPromptText"
+        >
+          生成されたプロンプト
+        </label>
+
+        <textarea
+          id="generatedPromptText"
+          style="min-height: 220px;"
+          readonly
+        ></textarea>
+
+        <button
+          id="copyPromptButton"
+          class="secondary-button"
+          type="button"
+        >
+          コピー
+        </button>
+
+      </div>
+
     </section>
 
     <section
@@ -789,6 +826,10 @@
     const sourceTextCount = document.getElementById("sourceTextCount");
     const sourceUrl = document.getElementById("sourceUrl");
     const createDraftButton = document.getElementById("createDraftButton");
+    const createPromptButton = document.getElementById("createPromptButton");
+    const promptOutputGroup = document.getElementById("promptOutputGroup");
+    const generatedPromptText = document.getElementById("generatedPromptText");
+    const copyPromptButton = document.getElementById("copyPromptButton");
 
     const previewMessageBox = document.getElementById("previewMessageBox");
     const draftTitle = document.getElementById("draftTitle");
@@ -917,6 +958,121 @@
       });
     }
 
+    function buildChatGptPrompt(sourceTextValue, sourceUrlValue) {
+      const sourceUrlDisplay =
+        sourceUrlValue !== "" ? sourceUrlValue : "なし";
+
+      return (
+        "あなたはイマミルAI編集部です。\n" +
+        "\n" +
+        "以下の元情報から、\n" +
+        "\n" +
+        "・タイトル（50文字以内）\n" +
+        "・カテゴリー（既存カテゴリーから選択）\n" +
+        "・本文（300文字以内）\n" +
+        "・掲載終了日時の提案\n" +
+        "\n" +
+        "を作成してください。\n" +
+        "\n" +
+        "事実を推測で補完しないでください。\n" +
+        "\n" +
+        "情報不足なら\n" +
+        "「情報不足」\n" +
+        "と書いてください。\n" +
+        "\n" +
+        "【元情報】\n" +
+        "\n" +
+        sourceTextValue +
+        "\n" +
+        "\n" +
+        "【情報元】\n" +
+        "\n" +
+        sourceUrlDisplay
+      );
+    }
+
+    function createChatGptPrompt() {
+      clearSourceMessage();
+
+      const trimmedSourceText = sourceText.value.trim();
+      const trimmedSourceUrl = sourceUrl.value.trim();
+
+      const validationErrors = [];
+
+      if (trimmedSourceText === "") {
+        validationErrors.push({
+          message: "元情報を入力してください。",
+          element: sourceText
+        });
+      }
+
+      if (
+        trimmedSourceUrl !== "" &&
+        !/^https?:\/\//.test(trimmedSourceUrl)
+      ) {
+        validationErrors.push({
+          message:
+            "情報元ページのアドレスは「https://」または「http://」から始まる形で貼り付けてください。",
+          element: sourceUrl
+        });
+      }
+
+      if (validationErrors.length > 0) {
+        focusInvalidField(validationErrors[0].element);
+
+        const combinedMessage =
+          "入力内容を確認してください。\n" +
+          validationErrors
+            .map(function(validationError) {
+              return "・" + validationError.message;
+            })
+            .join("\n");
+
+        showSourceMessage("error", combinedMessage);
+        return;
+      }
+
+      generatedPromptText.value = buildChatGptPrompt(
+        trimmedSourceText,
+        trimmedSourceUrl
+      );
+
+      promptOutputGroup.style.display = "block";
+
+      promptOutputGroup.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+      });
+    }
+
+    async function copyGeneratedPrompt() {
+      const originalButtonText = copyPromptButton.textContent;
+
+      if (
+        !navigator.clipboard ||
+        !navigator.clipboard.writeText
+      ) {
+        copyPromptButton.textContent = "コピーできませんでした";
+
+        window.setTimeout(function() {
+          copyPromptButton.textContent = originalButtonText;
+        }, 2000);
+
+        return;
+      }
+
+      try {
+        await navigator.clipboard.writeText(generatedPromptText.value);
+        copyPromptButton.textContent = "コピーしました";
+      } catch (error) {
+        copyPromptButton.textContent = "コピーできませんでした";
+      }
+
+      window.setTimeout(function() {
+        copyPromptButton.textContent = originalButtonText;
+      }, 2000);
+    }
+
     function validateDraftForHandoff() {
       const validationErrors = [];
 
@@ -1038,6 +1194,8 @@
     draftContent.addEventListener("input", updateDraftCounts);
 
     createDraftButton.addEventListener("click", createDraftFromSource);
+    createPromptButton.addEventListener("click", createChatGptPrompt);
+    copyPromptButton.addEventListener("click", copyGeneratedPrompt);
     handoffButton.addEventListener("click", handoffDraftToAdminPost);
 
     backToInputButton.addEventListener("click", function() {
