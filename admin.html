@@ -584,6 +584,29 @@
       background: var(--red-light);
     }
 
+    .edit-button {
+      min-height: 47px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 900;
+      cursor: pointer;
+      color: var(--white);
+      background:
+        linear-gradient(
+          135deg,
+          var(--blue),
+          var(--cyan)
+        );
+    }
+
+    .submission-actions .end-button {
+      margin-top: 0;
+    }
+
     .end-button:disabled {
       opacity: 0.55;
       cursor: wait;
@@ -1393,6 +1416,10 @@
         filteredSubmissions
           .map(
             function(submission) {
+              const isAdminPost =
+                submission.postType ===
+                "admin";
+
               return `
                 <article class="submission-card">
 
@@ -1447,16 +1474,46 @@
 
                     </div>
 
-                    <button
-                      class="end-button"
-                      type="button"
-                      data-action="end"
-                      data-document-id="${escapeHtml(
-                        submission.id
-                      )}"
-                    >
-                      🛑 掲載終了
-                    </button>
+                    ${
+                      isAdminPost
+                        ? `
+                          <div class="submission-actions">
+
+                            <a
+                              class="edit-button"
+                              href="admin-post.html?id=${encodeURIComponent(
+                                submission.id
+                              )}"
+                            >
+                              ✏️ 編集する
+                            </a>
+
+                            <button
+                              class="end-button"
+                              type="button"
+                              data-action="end"
+                              data-document-id="${escapeHtml(
+                                submission.id
+                              )}"
+                            >
+                              🛑 掲載終了
+                            </button>
+
+                          </div>
+                        `
+                        : `
+                          <button
+                            class="end-button"
+                            type="button"
+                            data-action="end"
+                            data-document-id="${escapeHtml(
+                              submission.id
+                            )}"
+                          >
+                            🛑 掲載終了
+                          </button>
+                        `
+                    }
 
                   </div>
                 </article>

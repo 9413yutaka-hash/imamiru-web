@@ -728,7 +728,7 @@
     >
 
       <div class="form-heading">
-        <h2>運営情報の投稿</h2>
+        <h2 id="formHeadingTitle">運営情報の投稿</h2>
         <p>
           店舗の終了番号のような自己申告用の番号は発行されません。
         </p>
@@ -984,6 +984,12 @@
               class="image-preview-list"
             ></div>
 
+            <p
+              id="existingImageNote"
+              class="form-help"
+              style="display: none;"
+            ></p>
+
           </div>
 
         </div>
@@ -1086,6 +1092,14 @@
     let capturedLongitude = null;
     let capturedAccuracy = null;
     let hasSubmittedSuccessfully = false;
+    let existingImageUrls = [];
+
+    const editDocumentId =
+      new URLSearchParams(window.location.search).get("id");
+
+    const isEditMode =
+      typeof editDocumentId === "string" &&
+      editDocumentId.trim() !== "";
 
     const authCheckingPanel = document.getElementById("authCheckingPanel");
     const loginRequiredPanel = document.getElementById("loginRequiredPanel");
@@ -1119,6 +1133,9 @@
 
     const afterSubmitActions = document.getElementById("afterSubmitActions");
     const newPostButton = document.getElementById("newPostButton");
+
+    const formHeadingTitle = document.getElementById("formHeadingTitle");
+    const existingImageNote = document.getElementById("existingImageNote");
 
     function escapeHtml(text) {
       return String(text ?? "")
@@ -1166,9 +1183,15 @@
       websiteUrlInput.disabled = submitting;
       locationButton.disabled = submitting;
 
-      submitButton.textContent = submitting
-        ? "公開しています…"
-        : "この内容で公開する";
+      if (submitting) {
+        submitButton.textContent = isEditMode
+          ? "保存しています…"
+          : "公開しています…";
+      } else {
+        submitButton.textContent = isEditMode
+          ? "変更を保存する"
+          : "この内容で公開する";
+      }
     }
 
     function createFileKey(file) {
@@ -1622,7 +1645,9 @@
 
     function showAdminPostSuccessMessage() {
       messageBox.className = "message-box visible success";
-      messageBox.textContent = "運営情報を公開しました。";
+      messageBox.textContent = isEditMode
+        ? "運営情報を更新しました。"
+        : "運営情報を公開しました。";
     }
 
     async function submitAdminPost(event) {
@@ -1635,15 +1660,28 @@
         validateForm();
 
         setSubmitting(true);
-        setProgress("投稿の準備をしています…", 5);
+        setProgress(
+          isEditMode ? "保存の準備をしています…" : "投稿の準備をしています…",
+          5
+        );
 
         const uploadedImages = await uploadSelectedImages();
 
-        setProgress("運営情報をイマミルへ送信しています…", 82);
+        setProgress(
+          isEditMode
+            ? "運営情報を更新しています…"
+            : "運営情報をイマミルへ送信しています…",
+          82
+        );
 
-        const imageUrls = uploadedImages.map(function(image) {
-          return image.url;
-        });
+        const imageUrls =
+          uploadedImages.length > 0
+            ? uploadedImages.map(function(image) {
+                return image.url;
+              })
+            : isEditMode
+              ? existingImageUrls
+              : [];
 
         const expiresAtDate = new Date(expiresAtInput.value);
 
@@ -1669,7 +1707,15 @@
           websiteUrl: websiteUrlInput.value.trim()
         };
 
-        const response = await fetch("/api/admin-post", {
+        if (isEditMode) {
+          payload.documentId = editDocumentId;
+        }
+
+        const endpoint = isEditMode
+          ? "/api/admin-submission-update"
+          : "/api/admin-post";
+
+        const response = await fetch(endpoint, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -1694,7 +1740,10 @@
           );
         }
 
-        setProgress("投稿が完了しました。", 100);
+        setProgress(
+          isEditMode ? "更新が完了しました。" : "投稿が完了しました。",
+          100
+        );
 
         hasSubmittedSuccessfully = true;
 
@@ -1749,6 +1798,105 @@
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
 
+    async function loadExistingSubmission(currentUser) {
+      const idToken = await currentUser.getIdToken();
+
+      const response = await fetch(
+        "/api/admin-submission-get?id=" + encodeURIComponent(editDocumentId),
+        {
+          method: "GET",
+          headers: {
+            "Authorization": "Bearer " + idToken
+          }
+        }
+      );
+
+      let responseData = null;
+
+      try {
+        responseData = await response.json();
+      } catch (jsonError) {
+        throw new Error("サーバーからの応答を読み取れませんでした。");
+      }
+
+      if (!response.ok || !responseData.success) {
+        throw new Error(
+          responseData && responseData.message
+            ? responseData.message
+            : "投稿内容を取得できませんでした。"
+        );
+      }
+
+      return responseData.submission || {};
+    }
+
+    function fillFormForEdit(submission) {
+      titleInput.value = submission.title || "";
+      categoryInput.value = submission.category || "";
+      contentInput.value = submission.content || "";
+      addressInput.value = submission.address || "";
+      websiteUrlInput.value = submission.websiteUrl || "";
+
+      if (typeof submission.latitude === "number") {
+        capturedLatitude = submission.latitude;
+      }
+
+      if (typeof submission.longitude === "number") {
+        capturedLongitude = submission.longitude;
+      }
+
+      if (submission.expiresAt) {
+        const expiresAtDate = new Date(submission.expiresAt);
+
+        if (!Number.isNaN(expiresAtDate.getTime())) {
+          expiresAtInput.value = formatDatetimeLocalValue(expiresAtDate);
+        }
+      }
+
+      existingImageUrls = Array.isArray(submission.imageUrls)
+        ? submission.imageUrls
+        : [];
+
+      if (existingImageUrls.length > 0) {
+        existingImageNote.textContent =
+          "現在" +
+          existingImageUrls.length +
+          "枚の写真が登録されています。新しい写真を選択すると、これらの写真と入れ替わります。";
+        existingImageNote.style.display = "block";
+      } else {
+        existingImageNote.style.display = "none";
+      }
+
+      updateCharacterCounts();
+    }
+
+    async function initializeEditMode(currentUser) {
+      formHeadingTitle.textContent = "運営情報を編集する";
+      newPostButton.style.display = "none";
+      afterSubmitActions.style.gridTemplateColumns = "1fr";
+
+      setSubmitting(false);
+      clearMessage();
+      setProgress("投稿内容を読み込んでいます…", 30);
+
+      try {
+        const submission = await loadExistingSubmission(currentUser);
+
+        fillFormForEdit(submission);
+
+        hideProgress();
+      } catch (error) {
+        hideProgress();
+
+        showMessage(
+          "error",
+          error && error.message
+            ? error.message
+            : "投稿内容を取得できませんでした。"
+        );
+      }
+    }
+
     titleInput.addEventListener("input", updateCharacterCounts);
     contentInput.addEventListener("input", updateCharacterCounts);
 
@@ -1791,18 +1939,23 @@
     firebase.auth().onAuthStateChanged(function(user) {
       authCheckingPanel.style.display = "none";
 
-      if (
+      const isAdminUser =
         user &&
         user.email &&
-        user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()
-      ) {
-        loginRequiredPanel.style.display = "none";
-        postFormSection.style.display = "block";
+        user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+
+      if (!isAdminUser) {
+        postFormSection.style.display = "none";
+        loginRequiredPanel.style.display = "block";
         return;
       }
 
-      postFormSection.style.display = "none";
-      loginRequiredPanel.style.display = "block";
+      loginRequiredPanel.style.display = "none";
+      postFormSection.style.display = "block";
+
+      if (isEditMode) {
+        initializeEditMode(user);
+      }
     });
   </script>
 
