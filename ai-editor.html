@@ -748,6 +748,24 @@
 
         <label
           class="form-label"
+          for="draftReliability"
+        >
+          情報の信頼度
+        </label>
+
+        <select id="draftReliability">
+          <option value="公式発表">公式発表</option>
+          <option value="現地確認">現地確認</option>
+          <option value="SNS情報">SNS情報</option>
+          <option value="未確認情報" selected>未確認情報</option>
+        </select>
+
+      </div>
+
+      <div class="form-group">
+
+        <label
+          class="form-label"
           for="draftContent"
         >
           本文
@@ -867,6 +885,13 @@
       "宿泊"
     ];
 
+    const RELIABILITY_OPTIONS = [
+      "公式発表",
+      "現地確認",
+      "SNS情報",
+      "未確認情報"
+    ];
+
     const authCheckingPanel = document.getElementById("authCheckingPanel");
     const loginRequiredPanel = document.getElementById("loginRequiredPanel");
     const draftFormSection = document.getElementById("draftFormSection");
@@ -891,6 +916,7 @@
     const draftTitle = document.getElementById("draftTitle");
     const draftTitleCount = document.getElementById("draftTitleCount");
     const draftCategory = document.getElementById("draftCategory");
+    const draftReliability = document.getElementById("draftReliability");
     const draftContent = document.getElementById("draftContent");
     const draftContentCount = document.getElementById("draftContentCount");
     const draftWebsiteUrl = document.getElementById("draftWebsiteUrl");
@@ -997,6 +1023,7 @@
 
       draftTitle.value = trimmedSourceText.slice(0, 50);
       draftCategory.value = "お知らせ";
+      draftReliability.value = "未確認情報";
       draftContent.value = trimmedSourceText.slice(0, 300);
       draftWebsiteUrl.value = trimmedSourceUrl;
 
@@ -1039,8 +1066,16 @@
         "・カテゴリー（既存カテゴリーから選択）\n" +
         "・本文（300文字以内）\n" +
         "・掲載終了日時の提案\n" +
+        "・信頼度（下記4種類から必ず1つ選択）\n" +
         "\n" +
         "を作成してください。\n" +
+        "\n" +
+        "【信頼度の判定基準】\n" +
+        "\n" +
+        "・施設・行政・公式サイト等の発表 → 公式発表\n" +
+        "・運営者自身が現地で確認 → 現地確認\n" +
+        "・SNS投稿のみを根拠にしている → SNS情報\n" +
+        "・根拠が明確でない → 未確認情報\n" +
         "\n" +
         "事実を推測で補完しないでください。\n" +
         "\n" +
@@ -1153,7 +1188,7 @@
 
     function parseAiAnswer(rawText) {
       const labelPattern =
-        /^\s*(タイトル|カテゴリー|本文|掲載終了日時)\s*[：:]\s*(.*)$/;
+        /^\s*(タイトル|カテゴリー|本文|掲載終了日時|信頼度)\s*[：:]\s*(.*)$/;
 
       const lines = rawText.split(/\r\n|\r|\n/);
 
@@ -1236,6 +1271,17 @@
               parsedFields.カテゴリー +
               "」は既存カテゴリーと一致しないため反映していません。"
           );
+        }
+      }
+
+      if (
+        typeof parsedFields.信頼度 === "string" &&
+        parsedFields.信頼度 !== ""
+      ) {
+        if (RELIABILITY_OPTIONS.includes(parsedFields.信頼度)) {
+          draftReliability.value = parsedFields.信頼度;
+        } else {
+          skippedNotes.push("信頼度を認識できませんでした。");
         }
       }
 
