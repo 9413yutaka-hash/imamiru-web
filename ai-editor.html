@@ -622,6 +622,42 @@
 
       </div>
 
+      <div class="form-group">
+
+        <label
+          class="form-label"
+          for="aiAnswerText"
+        >
+          ChatGPTの回答を貼り付ける
+        </label>
+
+        <textarea
+          id="aiAnswerText"
+          style="min-height: 220px;"
+          placeholder="タイトル：〇〇&#10;カテゴリー：〇〇&#10;本文：〇〇&#10;掲載終了日時：〇〇"
+        ></textarea>
+
+        <p class="form-help">
+          ChatGPTの回答をそのまま貼り付けてください。
+        </p>
+
+      </div>
+
+      <div
+        id="aiAnswerMessageBox"
+        class="message-box"
+        role="status"
+        aria-live="polite"
+      ></div>
+
+      <button
+        id="loadAiAnswerButton"
+        class="secondary-button"
+        type="button"
+      >
+        AI回答を読み込む
+      </button>
+
     </section>
 
     <section
@@ -830,6 +866,9 @@
     const promptOutputGroup = document.getElementById("promptOutputGroup");
     const generatedPromptText = document.getElementById("generatedPromptText");
     const copyPromptButton = document.getElementById("copyPromptButton");
+    const aiAnswerText = document.getElementById("aiAnswerText");
+    const aiAnswerMessageBox = document.getElementById("aiAnswerMessageBox");
+    const loadAiAnswerButton = document.getElementById("loadAiAnswerButton");
 
     const previewMessageBox = document.getElementById("previewMessageBox");
     const draftTitle = document.getElementById("draftTitle");
@@ -1073,6 +1112,149 @@
       }, 2000);
     }
 
+    function showAiAnswerMessage(type, message) {
+      aiAnswerMessageBox.className = "message-box visible " + type;
+      aiAnswerMessageBox.textContent = message;
+    }
+
+    function clearAiAnswerMessage() {
+      aiAnswerMessageBox.className = "message-box";
+      aiAnswerMessageBox.textContent = "";
+    }
+
+    function parseAiAnswer(rawText) {
+      const labelPattern =
+        /^\s*(タイトル|カテゴリー|本文|掲載終了日時)\s*[：:]\s*(.*)$/;
+
+      const lines = rawText.split(/\r\n|\r|\n/);
+
+      const collected = {};
+
+      let currentLabel = null;
+
+      lines.forEach(function(line) {
+        const match = line.match(labelPattern);
+
+        if (match) {
+          currentLabel = match[1];
+          collected[currentLabel] = match[2];
+          return;
+        }
+
+        if (currentLabel) {
+          collected[currentLabel] =
+            (collected[currentLabel] ? collected[currentLabel] + "\n" : "") +
+            line;
+        }
+      });
+
+      Object.keys(collected).forEach(function(key) {
+        collected[key] = collected[key].trim();
+      });
+
+      return collected;
+    }
+
+    function loadAiAnswer() {
+      clearAiAnswerMessage();
+
+      const rawAnswer = aiAnswerText.value.trim();
+
+      if (rawAnswer === "") {
+        showAiAnswerMessage(
+          "error",
+          "ChatGPTの回答を貼り付けてください。"
+        );
+
+        focusInvalidField(aiAnswerText);
+
+        return;
+      }
+
+      const parsedFields = parseAiAnswer(rawAnswer);
+
+      const hasAnyField =
+        Object.keys(parsedFields).some(function(key) {
+          return parsedFields[key] !== "";
+        });
+
+      if (!hasAnyField) {
+        showAiAnswerMessage(
+          "error",
+          "回答を解析できませんでした。\n" +
+            "「タイトル：」「カテゴリー：」「本文：」「掲載終了日時：」の形式で貼り付けてください。"
+        );
+
+        return;
+      }
+
+      const skippedNotes = [];
+
+      if (typeof parsedFields.タイトル === "string" && parsedFields.タイトル !== "") {
+        draftTitle.value = parsedFields.タイトル.slice(0, 50);
+      }
+
+      if (typeof parsedFields.本文 === "string" && parsedFields.本文 !== "") {
+        draftContent.value = parsedFields.本文.slice(0, 300);
+      }
+
+      if (typeof parsedFields.カテゴリー === "string" && parsedFields.カテゴリー !== "") {
+        if (ALLOWED_CATEGORIES.includes(parsedFields.カテゴリー)) {
+          draftCategory.value = parsedFields.カテゴリー;
+        } else {
+          skippedNotes.push(
+            "カテゴリー「" +
+              parsedFields.カテゴリー +
+              "」は既存カテゴリーと一致しないため反映していません。"
+          );
+        }
+      }
+
+      if (
+        typeof parsedFields.掲載終了日時 === "string" &&
+        parsedFields.掲載終了日時 !== ""
+      ) {
+        const parsedExpiresAtDate = new Date(parsedFields.掲載終了日時);
+
+        if (!Number.isNaN(parsedExpiresAtDate.getTime())) {
+          draftExpiresAt.value = formatDatetimeLocalValue(parsedExpiresAtDate);
+        } else {
+          skippedNotes.push(
+            "掲載終了日時「" +
+              parsedFields.掲載終了日時 +
+              "」を認識できなかったため反映していません。手動で入力してください。"
+          );
+        }
+      }
+
+      updateDraftCounts();
+      clearPreviewMessage();
+
+      draftPreviewSection.style.display = "block";
+
+      draftPreviewSection.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+      });
+
+      if (skippedNotes.length > 0) {
+        showAiAnswerMessage(
+          "error",
+          "一部の項目を反映できませんでした。\n" +
+            skippedNotes
+              .map(function(note) {
+                return "・" + note;
+              })
+              .join("\n")
+        );
+      } else {
+        showAiAnswerMessage(
+          "success",
+          "AIの回答を読み込みました。内容を確認してください。"
+        );
+      }
+    }
+
     function validateDraftForHandoff() {
       const validationErrors = [];
 
@@ -1196,6 +1378,7 @@
     createDraftButton.addEventListener("click", createDraftFromSource);
     createPromptButton.addEventListener("click", createChatGptPrompt);
     copyPromptButton.addEventListener("click", copyGeneratedPrompt);
+    loadAiAnswerButton.addEventListener("click", loadAiAnswer);
     handoffButton.addEventListener("click", handoffDraftToAdminPost);
 
     backToInputButton.addEventListener("click", function() {
