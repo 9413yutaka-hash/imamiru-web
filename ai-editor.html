@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <meta
+    name="theme-color"
+    content="#071a33"
+  >
+
+  <meta
+    name="description"
+    content="イマミル運営が元情報から運営投稿の下書きを作成するための管理者専用ページです。"
+  >
+
+  <title>
+    AI編集部｜イマミル管理
+  </title>
+
+  <style>
+    :root {
+      --navy: #071a33;
+      --navy-light: #0d294a;
+      --blue: #0788c9;
+      --cyan: #04b7d7;
+      --white: #ffffff;
+      --text: #15233a;
+      --subtext: #697386;
+      --border: #e2eaf1;
+      --background: #f4f8fb;
+      --red: #ef5a67;
+      --shadow:
+        0 18px 50px
+        rgba(20, 52, 82, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family:
+        "Yu Gothic",
+        "Hiragino Kaku Gothic ProN",
+        "Meiryo",
+        sans-serif;
+      background: var(--background);
+      color: var(--text);
+    }
+
+    button,
+    input,
+    textarea,
+    select,
+    a {
+      font-family: inherit;
+    }
+
+    button {
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .top-bar {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      color: var(--white);
+      background: linear-gradient(135deg, var(--navy), var(--navy-light));
+      box-shadow: 0 8px 25px rgba(7, 26, 51, 0.18);
+    }
+
+    .top-bar-inner {
+      width: min(100%, 760px);
+      margin: 0 auto;
+      padding: 13px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .brand-area {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-icon {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      color: var(--white);
+      font-size: 21px;
+    }
+
+    .brand-name {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 900;
+      letter-spacing: 0.05em;
+    }
+
+    .brand-caption {
+      margin: 2px 0 0;
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .home-link {
+      flex-shrink: 0;
+      padding: 9px 13px;
+      border-radius: 999px;
+      color: var(--white);
+      background: rgba(255, 255, 255, 0.12);
+      font-size: 11px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .page-hero {
+      padding: 42px 18px 86px;
+      background: linear-gradient(135deg, var(--navy), #0d3a63);
+      color: var(--white);
+    }
+
+    .page-hero-inner {
+      width: min(100%, 720px);
+      margin: 0 auto;
+    }
+
+    .hero-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 8px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .page-hero h1 {
+      margin: 20px 0 0;
+      font-size: clamp(26px, 6vw, 38px);
+      line-height: 1.35;
+    }
+
+    .page-hero p {
+      max-width: 600px;
+      margin: 16px 0 0;
+      color: rgba(255, 255, 255, 0.88);
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.9;
+    }
+
+    main {
+      width: min(100%, 720px);
+      margin: 0 auto;
+      padding: 0 16px 70px;
+    }
+
+    .form-card {
+      margin-top: -55px;
+      padding: 28px;
+      border: 1px solid rgba(12, 54, 87, 0.08);
+      border-radius: 26px;
+      background: var(--white);
+      box-shadow: var(--shadow);
+    }
+
+    .form-card + .form-card {
+      margin-top: 20px;
+    }
+
+    .form-heading {
+      margin-bottom: 24px;
+    }
+
+    .form-heading h2 {
+      margin: 0;
+      color: var(--navy);
+      font-size: 22px;
+    }
+
+    .form-heading p {
+      margin: 9px 0 0;
+      color: var(--subtext);
+      font-size: 13px;
+      line-height: 1.8;
+    }
+
+    .notice-box {
+      margin-bottom: 24px;
+      padding: 15px 16px;
+      border: 1px solid #cfeefa;
+      border-radius: 14px;
+      background: #effbff;
+      color: #24627e;
+      font-size: 13px;
+      font-weight: 800;
+      line-height: 1.8;
+    }
+
+    .form-group {
+      margin-top: 22px;
+    }
+
+    .form-label {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 9px;
+      color: var(--navy);
+      font-size: 14px;
+      font-weight: 900;
+    }
+
+    .required {
+      padding: 3px 7px;
+      border-radius: 999px;
+      background: #fff0f0;
+      color: var(--red);
+      font-size: 9px;
+      font-weight: 900;
+    }
+
+    .optional {
+      padding: 3px 7px;
+      border-radius: 999px;
+      background: #eef5f8;
+      color: #648093;
+      font-size: 9px;
+      font-weight: 900;
+    }
+
+    .form-help {
+      margin: 7px 0 0;
+      color: #8a97a6;
+      font-size: 11px;
+      line-height: 1.7;
+    }
+
+    input,
+    textarea,
+    select {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      outline: none;
+      background: #fbfdff;
+      color: var(--text);
+      font-size: 15px;
+      transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+    }
+
+    input,
+    select {
+      min-height: 52px;
+      padding: 0 15px;
+    }
+
+    textarea {
+      min-height: 150px;
+      padding: 15px;
+      resize: vertical;
+      line-height: 1.8;
+    }
+
+    input:focus,
+    textarea:focus,
+    select:focus {
+      border-color: var(--cyan);
+      background: var(--white);
+      box-shadow: 0 0 0 4px rgba(4, 183, 215, 0.12);
+    }
+
+    .character-count {
+      margin-top: 7px;
+      color: #8a97a6;
+      text-align: right;
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .submit-button {
+      width: 100%;
+      min-height: 58px;
+      margin-top: 24px;
+      border: none;
+      border-radius: 16px;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      color: var(--white);
+      font-size: 16px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .submit-button:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+    }
+
+    .secondary-button {
+      width: 100%;
+      min-height: 52px;
+      margin-top: 22px;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: var(--white);
+      color: var(--navy);
+      font-size: 14px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .message-box {
+      display: none;
+      margin-top: 18px;
+      padding: 16px;
+      border-radius: 14px;
+      font-size: 13px;
+      font-weight: 800;
+      line-height: 1.8;
+      white-space: pre-line;
+    }
+
+    .message-box.visible {
+      display: block;
+    }
+
+    .message-box.success {
+      border: 1px solid #bcebd4;
+      background: #ebfff5;
+      color: #16734b;
+    }
+
+    .message-box.error {
+      border: 1px solid #ffd0d4;
+      background: #fff2f3;
+      color: #b33c49;
+    }
+
+    .security-note {
+      margin-top: 22px;
+      padding-top: 18px;
+      border-top: 1px solid var(--border);
+      color: #8b98a5;
+      font-size: 10px;
+      line-height: 1.8;
+      text-align: center;
+    }
+
+    footer {
+      padding: 0 18px 35px;
+      color: #8c9aa8;
+      text-align: center;
+      font-size: 10px;
+      line-height: 1.8;
+    }
+
+    @media (max-width: 620px) {
+      .form-card {
+        padding: 22px 17px;
+        border-radius: 22px;
+      }
+    }
+
+    @media (max-width: 420px) {
+      .top-bar-inner {
+        padding: 11px 13px;
+      }
+
+      .brand-icon {
+        width: 38px;
+        height: 38px;
+      }
+
+      .brand-name {
+        font-size: 18px;
+      }
+
+      .home-link {
+        padding: 8px 10px;
+        font-size: 10px;
+      }
+
+      .page-hero {
+        padding: 34px 15px 78px;
+      }
+
+      main {
+        padding-right: 12px;
+        padding-left: 12px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <header class="top-bar">
+    <div class="top-bar-inner">
+
+      <div class="brand-area">
+
+        <div class="brand-icon">
+          🌺
+        </div>
+
+        <div>
+          <p class="brand-name">
+            イマミル管理
+          </p>
+
+          <p class="brand-caption">
+            運営者専用ページ
+          </p>
+        </div>
+
+      </div>
+
+      <a
+        class="home-link"
+        href="admin.html"
+      >
+        ← 管理画面へ戻る
+      </a>
+
+    </div>
+  </header>
+
+  <section class="page-hero">
+    <div class="page-hero-inner">
+
+      <div class="hero-label">
+        🔐 運営者専用
+      </div>
+
+      <h1>
+        AI編集部（下書き作成）
+      </h1>
+
+      <p>
+        元情報を貼り付けると、運営投稿の下書きを作成できます。
+        内容を確認・編集してから、運営投稿画面へ引き継げます。
+      </p>
+
+    </div>
+  </section>
+
+  <main>
+
+    <section
+      id="authCheckingPanel"
+      class="form-card"
+    >
+      <p>ログイン状態を確認しています…</p>
+    </section>
+
+    <section
+      id="loginRequiredPanel"
+      class="form-card"
+      style="display: none;"
+    >
+
+      <div class="form-heading">
+        <h2>ログインが必要です</h2>
+        <p>
+          この機能は管理者専用です。管理画面からログインしてください。
+        </p>
+      </div>
+
+      <a
+        class="submit-button"
+        style="display: flex; align-items: center; justify-content: center;"
+        href="admin.html"
+      >
+        管理画面へ戻る
+      </a>
+
+    </section>
+
+    <section
+      id="draftFormSection"
+      class="form-card"
+      style="display: none;"
+    >
+
+      <div class="form-heading">
+        <h2>元情報から下書きを作成</h2>
+        <p>
+          AIによる自動生成はまだ行いません。入力内容から下書きの初期値を作成します。
+        </p>
+      </div>
+
+      <div
+        id="sourceMessageBox"
+        class="message-box"
+        role="status"
+        aria-live="polite"
+      ></div>
+
+      <div class="form-group">
+
+        <label
+          class="form-label"
+          for="sourceText"
+        >
+          元情報
+          <span class="required">必須</span>
+        </label>
+
+        <textarea
+          id="sourceText"
+          maxlength="1000"
+          placeholder="例：〇〇海洋博公園より、本日のイルカショーは天候不良のため中止との発表がありました。"
+        ></textarea>
+
+        <p class="form-help">
+          公式発表や現地で確認した情報を、そのまま貼り付けてください。
+        </p>
+
+        <div
+          id="sourceTextCount"
+          class="character-count"
+        >
+          0 / 1000文字
+        </div>
+
+      </div>
+
+      <div class="form-group">
+
+        <label
+          class="form-label"
+          for="sourceUrl"
+        >
+          情報元ページ
+          <span class="optional">任意</span>
+        </label>
+
+        <input
+          id="sourceUrl"
+          type="text"
+          maxlength="300"
+          autocomplete="url"
+          placeholder="例：https://example.com/news/"
+        >
+
+        <p class="form-help">
+          施設の公式ページや発表元のページがあれば貼り付けてください。<br>
+          空欄でも下書きを作成できます。
+        </p>
+
+      </div>
+
+      <button
+        id="createDraftButton"
+        class="submit-button"
+        type="button"
+      >
+        下書きを確認する
+      </button>
+
+    </section>
+
+    <section
+      id="draftPreviewSection"
+      class="form-card"
+      style="display: none;"
+    >
+
+      <div class="form-heading">
+        <h2>下書きプレビュー（編集できます）</h2>
+        <p>
+          運営投稿画面へ引き継ぐ前に、内容を確認・修正してください。
+        </p>
+      </div>
+
+      <div
+        id="previewMessageBox"
+        class="message-box"
+        role="status"
+        aria-live="polite"
+      ></div>
+
+      <div class="form-group">
+
+        <label
+          class="form-label"
+          for="draftTitle"
+        >
+          タイトル
+          <span class="required">必須</span>
+        </label>
+
+        <input
+          id="draftTitle"
+          type="text"
+          maxlength="50"
+        >
+
+        <div
+          id="draftTitleCount"
+          class="character-count"
+        >
+          0 / 50文字
+        </div>
+
+      </div>
+
+      <div class="form-group">
+
+        <label
+          class="form-label"
+          for="draftCategory"
+        >
+          カテゴリー
+          <span class="required">必須</span>
+        </label>
+
+        <select id="draftCategory">
+          <option value="お知らせ">📢 お知らせ</option>
+          <option value="イベント">🎵 イベント</option>
+          <option value="観光・体験">🏝️ 観光・体験</option>
+          <option value="グルメ">🍜 グルメ</option>
+          <option value="カフェ・スイーツ">🥭 カフェ・スイーツ</option>
+          <option value="ショッピング">🛍️ ショッピング</option>
+          <option value="ナイトスポット">🌃 ナイトスポット</option>
+          <option value="美容・リラクゼーション">💆 美容・リラクゼーション</option>
+          <option value="宿泊">🏨 宿泊</option>
+        </select>
+
+      </div>
+
+      <div class="form-group">
+
+        <label
+          class="form-label"
+          for="draftContent"
+        >
+          本文
+          <span class="required">必須</span>
+        </label>
+
+        <textarea
+          id="draftContent"
+          maxlength="300"
+        ></textarea>
+
+        <div
+          id="draftContentCount"
+          class="character-count"
+        >
+          0 / 300文字
+        </div>
+
+      </div>
+
+      <div class="form-group">
+
+        <label
+          class="form-label"
+          for="draftWebsiteUrl"
+        >
+          情報元ページ
+          <span class="optional">任意</span>
+        </label>
+
+        <input
+          id="draftWebsiteUrl"
+          type="text"
+          maxlength="300"
+          autocomplete="url"
+        >
+
+      </div>
+
+      <div class="form-group">
+
+        <label
+          class="form-label"
+          for="draftExpiresAt"
+        >
+          掲載終了日時
+          <span class="required">必須</span>
+        </label>
+
+        <input
+          id="draftExpiresAt"
+          type="datetime-local"
+        >
+
+        <p class="form-help">
+          初期値は現在から24時間後です。運営投稿画面でも確認・修正できます。
+        </p>
+
+      </div>
+
+      <button
+        id="handoffButton"
+        class="submit-button"
+        type="button"
+      >
+        運営投稿画面へ引き継ぐ
+      </button>
+
+      <button
+        id="backToInputButton"
+        class="secondary-button"
+        type="button"
+      >
+        元情報の入力に戻る
+      </button>
+
+      <div class="security-note">
+        引き継いだ内容は、この端末のタブを閉じるまでの間だけ一時的に保存されます。
+        運営投稿画面で保存するまでは公開されません。
+      </div>
+
+    </section>
+
+  </main>
+
+  <footer>
+    イマミル Web Version 1.2<br>
+    このページは運営者専用です。
+  </footer>
+
+  <script
+    src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"
+  ></script>
+
+  <script
+    src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"
+  ></script>
+
+  <script
+    src="https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore-compat.js"
+  ></script>
+
+  <script src="firebase.js"></script>
+
+  <script>
+    const ADMIN_EMAIL = "9413yutaka@gmail.com";
+
+    const ALLOWED_CATEGORIES = [
+      "お知らせ",
+      "イベント",
+      "観光・体験",
+      "グルメ",
+      "カフェ・スイーツ",
+      "ショッピング",
+      "ナイトスポット",
+      "美容・リラクゼーション",
+      "宿泊"
+    ];
+
+    const authCheckingPanel = document.getElementById("authCheckingPanel");
+    const loginRequiredPanel = document.getElementById("loginRequiredPanel");
+    const draftFormSection = document.getElementById("draftFormSection");
+    const draftPreviewSection = document.getElementById("draftPreviewSection");
+
+    const sourceMessageBox = document.getElementById("sourceMessageBox");
+    const sourceText = document.getElementById("sourceText");
+    const sourceTextCount = document.getElementById("sourceTextCount");
+    const sourceUrl = document.getElementById("sourceUrl");
+    const createDraftButton = document.getElementById("createDraftButton");
+
+    const previewMessageBox = document.getElementById("previewMessageBox");
+    const draftTitle = document.getElementById("draftTitle");
+    const draftTitleCount = document.getElementById("draftTitleCount");
+    const draftCategory = document.getElementById("draftCategory");
+    const draftContent = document.getElementById("draftContent");
+    const draftContentCount = document.getElementById("draftContentCount");
+    const draftWebsiteUrl = document.getElementById("draftWebsiteUrl");
+    const draftExpiresAt = document.getElementById("draftExpiresAt");
+    const handoffButton = document.getElementById("handoffButton");
+    const backToInputButton = document.getElementById("backToInputButton");
+
+    function showSourceMessage(type, message) {
+      sourceMessageBox.className = "message-box visible " + type;
+      sourceMessageBox.textContent = message;
+    }
+
+    function clearSourceMessage() {
+      sourceMessageBox.className = "message-box";
+      sourceMessageBox.textContent = "";
+    }
+
+    function showPreviewMessage(type, message) {
+      previewMessageBox.className = "message-box visible " + type;
+      previewMessageBox.textContent = message;
+    }
+
+    function clearPreviewMessage() {
+      previewMessageBox.className = "message-box";
+      previewMessageBox.textContent = "";
+    }
+
+    function focusInvalidField(inputElement) {
+      if (!inputElement) {
+        return;
+      }
+
+      inputElement.scrollIntoView({ behavior: "smooth", block: "center" });
+      inputElement.focus({ preventScroll: true });
+    }
+
+    function updateSourceTextCount() {
+      sourceTextCount.textContent = sourceText.value.length + " / 1000文字";
+    }
+
+    function updateDraftCounts() {
+      draftTitleCount.textContent = draftTitle.value.length + " / 50文字";
+      draftContentCount.textContent = draftContent.value.length + " / 300文字";
+    }
+
+    function formatDatetimeLocalValue(date) {
+      function pad(number) {
+        return String(number).padStart(2, "0");
+      }
+
+      return (
+        date.getFullYear() +
+        "-" +
+        pad(date.getMonth() + 1) +
+        "-" +
+        pad(date.getDate()) +
+        "T" +
+        pad(date.getHours()) +
+        ":" +
+        pad(date.getMinutes())
+      );
+    }
+
+    function createDraftFromSource() {
+      clearSourceMessage();
+
+      const trimmedSourceText = sourceText.value.trim();
+      const trimmedSourceUrl = sourceUrl.value.trim();
+
+      const validationErrors = [];
+
+      if (trimmedSourceText === "") {
+        validationErrors.push({
+          message: "元情報を入力してください。",
+          element: sourceText
+        });
+      }
+
+      if (
+        trimmedSourceUrl !== "" &&
+        !/^https?:\/\//.test(trimmedSourceUrl)
+      ) {
+        validationErrors.push({
+          message:
+            "情報元ページのアドレスは「https://」または「http://」から始まる形で貼り付けてください。",
+          element: sourceUrl
+        });
+      }
+
+      if (validationErrors.length > 0) {
+        focusInvalidField(validationErrors[0].element);
+
+        const combinedMessage =
+          "入力内容を確認してください。\n" +
+          validationErrors
+            .map(function(validationError) {
+              return "・" + validationError.message;
+            })
+            .join("\n");
+
+        showSourceMessage("error", combinedMessage);
+        return;
+      }
+
+      draftTitle.value = trimmedSourceText.slice(0, 50);
+      draftCategory.value = "お知らせ";
+      draftContent.value = trimmedSourceText.slice(0, 300);
+      draftWebsiteUrl.value = trimmedSourceUrl;
+
+      const defaultExpiresAtDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      draftExpiresAt.value = formatDatetimeLocalValue(defaultExpiresAtDate);
+
+      updateDraftCounts();
+      clearPreviewMessage();
+
+      draftPreviewSection.style.display = "block";
+
+      draftPreviewSection.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+      });
+    }
+
+    function validateDraftForHandoff() {
+      const validationErrors = [];
+
+      const titleValue = draftTitle.value.trim();
+
+      if (titleValue === "") {
+        validationErrors.push({
+          message: "タイトルを入力してください。",
+          element: draftTitle
+        });
+      } else if (titleValue.length > 50) {
+        validationErrors.push({
+          message: "タイトルは50文字以内で入力してください。",
+          element: draftTitle
+        });
+      }
+
+      if (!ALLOWED_CATEGORIES.includes(draftCategory.value)) {
+        validationErrors.push({
+          message: "カテゴリーを選択してください。",
+          element: draftCategory
+        });
+      }
+
+      const contentValue = draftContent.value.trim();
+
+      if (contentValue === "") {
+        validationErrors.push({
+          message: "本文を入力してください。",
+          element: draftContent
+        });
+      } else if (contentValue.length > 300) {
+        validationErrors.push({
+          message: "本文は300文字以内で入力してください。",
+          element: draftContent
+        });
+      }
+
+      const websiteUrlValue = draftWebsiteUrl.value.trim();
+
+      if (
+        websiteUrlValue !== "" &&
+        !/^https?:\/\//.test(websiteUrlValue)
+      ) {
+        validationErrors.push({
+          message:
+            "情報元ページのアドレスは「https://」または「http://」から始まる形で貼り付けてください。",
+          element: draftWebsiteUrl
+        });
+      }
+
+      const expiresAtValue = draftExpiresAt.value;
+      let expiresAtDate = null;
+
+      if (expiresAtValue === "") {
+        validationErrors.push({
+          message: "掲載終了日時を指定してください。",
+          element: draftExpiresAt
+        });
+      } else {
+        expiresAtDate = new Date(expiresAtValue);
+
+        if (Number.isNaN(expiresAtDate.getTime())) {
+          validationErrors.push({
+            message: "掲載終了日時を正しく指定してください。",
+            element: draftExpiresAt
+          });
+        }
+      }
+
+      if (validationErrors.length > 0) {
+        focusInvalidField(validationErrors[0].element);
+
+        const combinedMessage =
+          "内容を確認してください。\n" +
+          validationErrors
+            .map(function(validationError) {
+              return "・" + validationError.message;
+            })
+            .join("\n");
+
+        showPreviewMessage("error", combinedMessage);
+        return null;
+      }
+
+      return {
+        title: titleValue,
+        category: draftCategory.value,
+        content: contentValue,
+        websiteUrl: websiteUrlValue,
+        expiresAt: expiresAtDate.toISOString()
+      };
+    }
+
+    function handoffDraftToAdminPost() {
+      clearPreviewMessage();
+
+      const draft = validateDraftForHandoff();
+
+      if (!draft) {
+        return;
+      }
+
+      try {
+        sessionStorage.setItem("imamiruAiDraft", JSON.stringify(draft));
+      } catch (error) {
+        showPreviewMessage(
+          "error",
+          "下書きの引き継ぎに失敗しました。もう一度お試しください。"
+        );
+        return;
+      }
+
+      window.location.href = "admin-post.html";
+    }
+
+    sourceText.addEventListener("input", updateSourceTextCount);
+    draftTitle.addEventListener("input", updateDraftCounts);
+    draftContent.addEventListener("input", updateDraftCounts);
+
+    createDraftButton.addEventListener("click", createDraftFromSource);
+    handoffButton.addEventListener("click", handoffDraftToAdminPost);
+
+    backToInputButton.addEventListener("click", function() {
+      draftPreviewSection.style.display = "none";
+      draftFormSection.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+
+    updateSourceTextCount();
+
+    firebase.auth().onAuthStateChanged(function(user) {
+      authCheckingPanel.style.display = "none";
+
+      const isAdminUser =
+        user &&
+        user.email &&
+        user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+
+      if (!isAdminUser) {
+        draftFormSection.style.display = "none";
+        draftPreviewSection.style.display = "none";
+        loginRequiredPanel.style.display = "block";
+        return;
+      }
+
+      loginRequiredPanel.style.display = "none";
+      draftFormSection.style.display = "block";
+    });
+  </script>
+
+</body>
+</html>

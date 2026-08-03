@@ -1897,6 +1897,60 @@
       }
     }
 
+    function applyAiDraftIfPresent() {
+      let rawDraft = null;
+
+      try {
+        rawDraft = sessionStorage.getItem("imamiruAiDraft");
+      } catch (error) {
+        return;
+      }
+
+      if (!rawDraft) {
+        return;
+      }
+
+      sessionStorage.removeItem("imamiruAiDraft");
+
+      let draft = null;
+
+      try {
+        draft = JSON.parse(rawDraft);
+      } catch (error) {
+        return;
+      }
+
+      if (!draft || typeof draft !== "object") {
+        return;
+      }
+
+      if (typeof draft.title === "string") {
+        titleInput.value = draft.title;
+      }
+
+      if (typeof draft.category === "string") {
+        categoryInput.value = draft.category;
+      }
+
+      if (typeof draft.content === "string") {
+        contentInput.value = draft.content;
+      }
+
+      if (typeof draft.websiteUrl === "string") {
+        websiteUrlInput.value = draft.websiteUrl;
+      }
+
+      if (typeof draft.expiresAt === "string") {
+        const draftExpiresAtDate = new Date(draft.expiresAt);
+
+        if (!Number.isNaN(draftExpiresAtDate.getTime())) {
+          expiresAtInput.value = formatDatetimeLocalValue(draftExpiresAtDate);
+        }
+      }
+
+      updateCharacterCounts();
+    }
+
     titleInput.addEventListener("input", updateCharacterCounts);
     contentInput.addEventListener("input", updateCharacterCounts);
 
@@ -1955,6 +2009,8 @@
 
       if (isEditMode) {
         initializeEditMode(user);
+      } else {
+        applyAiDraftIfPresent();
       }
     });
   </script>

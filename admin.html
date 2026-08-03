@@ -297,6 +297,24 @@
       cursor: wait;
     }
 
+    .post-entry-actions {
+      display: flex;
+      align-items: stretch;
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .post-entry-actions .primary-button {
+      flex: 1;
+      margin-top: 0;
+    }
+
+    .secondary-entry-button {
+      color: var(--navy);
+      background: #eef5f8;
+      box-shadow: none;
+    }
+
     .logout-button {
       display: none;
       min-height: 40px;
@@ -622,6 +640,10 @@
       .refresh-button {
         width: 100%;
       }
+
+      .post-entry-actions {
+        flex-direction: column;
+      }
     }
 
     @media (max-width: 520px) {
@@ -816,19 +838,35 @@
 
       </div>
 
-      <a
-        id="adminPostLink"
-        class="primary-button"
-        href="admin-post.html"
-        style="
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          margin-top: 18px;
-        "
-      >
-        🌺 運営情報を投稿する
-      </a>
+      <div class="post-entry-actions">
+
+        <a
+          id="adminPostLink"
+          class="primary-button"
+          href="admin-post.html"
+          style="
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+          "
+        >
+          🌺 運営情報を投稿する
+        </a>
+
+        <a
+          id="aiEditorLink"
+          class="primary-button secondary-entry-button"
+          href="ai-editor.html"
+          style="
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+          "
+        >
+          🤖 AI編集部
+        </a>
+
+      </div>
 
       <div class="summary-grid">
 
