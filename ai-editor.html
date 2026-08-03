@@ -1911,6 +1911,12 @@
 
       renderDraftHistory();
     });
+
+    window.addEventListener("pageshow", function() {
+      if (draftFormSection.style.display === "block") {
+        renderDraftHistory();
+      }
+    });
   </script>
 
 </body>
