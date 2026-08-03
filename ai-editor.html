@@ -336,6 +336,80 @@
       cursor: pointer;
     }
 
+    .history-list {
+      display: grid;
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    .history-item {
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: #fbfdff;
+    }
+
+    .history-item-title {
+      margin: 0;
+      color: var(--navy);
+      font-size: 15px;
+      font-weight: 900;
+    }
+
+    .history-item-meta {
+      margin-top: 6px;
+      color: var(--subtext);
+      font-size: 11px;
+      line-height: 1.7;
+    }
+
+    .history-item-content {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: #f4f8fa;
+      color: #496071;
+      font-size: 12px;
+      line-height: 1.7;
+      word-break: break-word;
+    }
+
+    .history-item-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .history-reuse-button,
+    .history-delete-button {
+      min-height: 40px;
+      border: none;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .history-reuse-button {
+      color: var(--white);
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+    }
+
+    .history-delete-button {
+      color: var(--red);
+      background: #fff0f0;
+    }
+
+    .history-empty-state {
+      padding: 20px;
+      border: 1px dashed var(--border);
+      border-radius: 14px;
+      color: var(--subtext);
+      font-size: 12px;
+      text-align: center;
+    }
+
     .message-box {
       display: none;
       margin-top: 18px;
@@ -849,6 +923,46 @@
 
     </section>
 
+    <section
+      id="draftHistorySection"
+      class="form-card"
+    >
+
+      <div class="form-heading">
+        <h2>投稿履歴</h2>
+        <p>
+          運営投稿画面へ引き継いだ下書きの履歴です。検索・再利用・削除ができます。
+        </p>
+      </div>
+
+      <div class="notice-box">
+        履歴はこのブラウザ内に保存されます。共有端末では、使用後に不要な履歴を削除してください。
+      </div>
+
+      <div class="form-group">
+
+        <label
+          class="form-label"
+          for="historySearchInput"
+        >
+          履歴を検索
+        </label>
+
+        <input
+          id="historySearchInput"
+          type="text"
+          placeholder="タイトル・本文で検索"
+        >
+
+      </div>
+
+      <div
+        id="historyListContainer"
+        class="history-list"
+      ></div>
+
+    </section>
+
   </main>
 
   <footer>
@@ -892,6 +1006,9 @@
       "未確認情報"
     ];
 
+    const HISTORY_STORAGE_KEY = "imamiruAiDraftHistory";
+    const MAX_HISTORY_COUNT = 50;
+
     const authCheckingPanel = document.getElementById("authCheckingPanel");
     const loginRequiredPanel = document.getElementById("loginRequiredPanel");
     const draftFormSection = document.getElementById("draftFormSection");
@@ -923,6 +1040,9 @@
     const draftExpiresAt = document.getElementById("draftExpiresAt");
     const handoffButton = document.getElementById("handoffButton");
     const backToInputButton = document.getElementById("backToInputButton");
+
+    const historySearchInput = document.getElementById("historySearchInput");
+    const historyListContainer = document.getElementById("historyListContainer");
 
     function showSourceMessage(type, message) {
       sourceMessageBox.className = "message-box visible " + type;
@@ -1487,6 +1607,197 @@
       };
     }
 
+    function loadDraftHistory() {
+      let rawHistory = null;
+
+      try {
+        rawHistory = localStorage.getItem(HISTORY_STORAGE_KEY);
+      } catch (error) {
+        return [];
+      }
+
+      if (!rawHistory) {
+        return [];
+      }
+
+      try {
+        const parsedHistory = JSON.parse(rawHistory);
+        return Array.isArray(parsedHistory) ? parsedHistory : [];
+      } catch (error) {
+        return [];
+      }
+    }
+
+    function saveDraftHistory(historyEntries) {
+      try {
+        localStorage.setItem(
+          HISTORY_STORAGE_KEY,
+          JSON.stringify(historyEntries)
+        );
+      } catch (error) {
+        // localStorageが使えない場合でも、他の機能には影響させない
+      }
+    }
+
+    function formatHistoryCreatedAt(createdAtValue) {
+      const parsedDate = new Date(createdAtValue);
+
+      if (Number.isNaN(parsedDate.getTime())) {
+        return "保存日時不明";
+      }
+
+      return parsedDate.toLocaleString("ja-JP");
+    }
+
+    function renderDraftHistory() {
+      const historyEntries = loadDraftHistory();
+      const searchQuery = historySearchInput.value.trim().toLowerCase();
+
+      const filteredEntries =
+        searchQuery === ""
+          ? historyEntries
+          : historyEntries.filter(function(entry) {
+              const titleText =
+                typeof entry.title === "string"
+                  ? entry.title.toLowerCase()
+                  : "";
+
+              const contentText =
+                typeof entry.content === "string"
+                  ? entry.content.toLowerCase()
+                  : "";
+
+              return (
+                titleText.includes(searchQuery) ||
+                contentText.includes(searchQuery)
+              );
+            });
+
+      if (filteredEntries.length === 0) {
+        historyListContainer.innerHTML =
+          '<div class="history-empty-state">' +
+          (searchQuery === ""
+            ? "まだ履歴がありません。"
+            : "検索条件に一致する履歴はありません。") +
+          "</div>";
+
+        return;
+      }
+
+      historyListContainer.innerHTML = filteredEntries
+        .map(function(entry) {
+          const safeId = escapeHtml(entry.id || "");
+          const safeTitle = escapeHtml(entry.title || "(タイトルなし)");
+          const safeCategory = escapeHtml(entry.category || "");
+          const safeReliability = escapeHtml(entry.sourceReliability || "");
+
+          const safeCreatedAt = escapeHtml(
+            formatHistoryCreatedAt(entry.createdAt)
+          );
+
+          const safeContentPreview = escapeHtml(
+            typeof entry.content === "string"
+              ? entry.content.slice(0, 60)
+              : ""
+          );
+
+          return (
+            '<div class="history-item">' +
+            '<h3 class="history-item-title">' +
+            safeTitle +
+            "</h3>" +
+            '<div class="history-item-meta">' +
+            safeCategory +
+            "・" +
+            safeReliability +
+            "・" +
+            safeCreatedAt +
+            "</div>" +
+            '<div class="history-item-content">' +
+            safeContentPreview +
+            "</div>" +
+            '<div class="history-item-actions">' +
+            '<button type="button" class="history-reuse-button" data-action="reuse" data-history-id="' +
+            safeId +
+            '">再利用</button>' +
+            '<button type="button" class="history-delete-button" data-action="delete" data-history-id="' +
+            safeId +
+            '">削除</button>' +
+            "</div>" +
+            "</div>"
+          );
+        })
+        .join("");
+    }
+
+    function reuseDraftHistoryEntry(historyId) {
+      const historyEntries = loadDraftHistory();
+
+      const targetEntry = historyEntries.find(function(entry) {
+        return entry.id === historyId;
+      });
+
+      if (!targetEntry) {
+        return;
+      }
+
+      draftTitle.value =
+        typeof targetEntry.title === "string" ? targetEntry.title : "";
+
+      draftCategory.value =
+        typeof targetEntry.category === "string" ? targetEntry.category : "";
+
+      draftContent.value =
+        typeof targetEntry.content === "string" ? targetEntry.content : "";
+
+      draftWebsiteUrl.value =
+        typeof targetEntry.websiteUrl === "string"
+          ? targetEntry.websiteUrl
+          : "";
+
+      if (typeof targetEntry.expiresAt === "string") {
+        const expiresAtDate = new Date(targetEntry.expiresAt);
+
+        if (!Number.isNaN(expiresAtDate.getTime())) {
+          draftExpiresAt.value = formatDatetimeLocalValue(expiresAtDate);
+        }
+      }
+
+      if (
+        typeof targetEntry.sourceReliability === "string" &&
+        RELIABILITY_OPTIONS.includes(targetEntry.sourceReliability)
+      ) {
+        draftReliability.value = targetEntry.sourceReliability;
+      }
+
+      updateDraftCounts();
+      clearPreviewMessage();
+
+      draftPreviewSection.style.display = "block";
+
+      draftPreviewSection.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+      });
+    }
+
+    function deleteDraftHistoryEntry(historyId) {
+      const confirmed = window.confirm("この履歴を削除しますか？");
+
+      if (!confirmed) {
+        return;
+      }
+
+      const historyEntries = loadDraftHistory();
+
+      const updatedEntries = historyEntries.filter(function(entry) {
+        return entry.id !== historyId;
+      });
+
+      saveDraftHistory(updatedEntries);
+      renderDraftHistory();
+    }
+
     function handoffDraftToAdminPost() {
       clearPreviewMessage();
 
@@ -1504,6 +1815,31 @@
           "下書きの引き継ぎに失敗しました。もう一度お試しください。"
         );
         return;
+      }
+
+      try {
+        const newHistoryEntry = {
+          id:
+            Date.now().toString(36) +
+            Math.random().toString(36).slice(2, 10),
+          title: draft.title,
+          category: draft.category,
+          content: draft.content,
+          websiteUrl: draft.websiteUrl,
+          expiresAt: draft.expiresAt,
+          sourceReliability: draftReliability.value,
+          createdAt: new Date().toISOString()
+        };
+
+        const existingHistoryEntries = loadDraftHistory();
+
+        const updatedHistoryEntries = [newHistoryEntry]
+          .concat(existingHistoryEntries)
+          .slice(0, MAX_HISTORY_COUNT);
+
+        saveDraftHistory(updatedHistoryEntries);
+      } catch (error) {
+        // 履歴保存に失敗しても、運営投稿画面への引き継ぎは継続する
       }
 
       window.location.href = "admin-post.html";
@@ -1525,6 +1861,34 @@
       draftFormSection.scrollIntoView({ behavior: "smooth", block: "start" });
     });
 
+    historySearchInput.addEventListener("input", function() {
+      renderDraftHistory();
+    });
+
+    historyListContainer.addEventListener("click", function(event) {
+      const button = event.target.closest("button[data-action]");
+
+      if (!button) {
+        return;
+      }
+
+      const action = button.dataset.action;
+      const historyId = button.dataset.historyId;
+
+      if (!historyId) {
+        return;
+      }
+
+      if (action === "reuse") {
+        reuseDraftHistoryEntry(historyId);
+        return;
+      }
+
+      if (action === "delete") {
+        deleteDraftHistoryEntry(historyId);
+      }
+    });
+
     updateSourceTextCount();
 
     firebase.auth().onAuthStateChanged(function(user) {
@@ -1544,6 +1908,8 @@
 
       loginRequiredPanel.style.display = "none";
       draftFormSection.style.display = "block";
+
+      renderDraftHistory();
     });
   </script>
 
