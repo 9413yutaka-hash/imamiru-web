@@ -935,6 +935,12 @@
         </p>
       </div>
 
+      <div
+        id="historyDebugBox"
+        class="notice-box"
+        style="white-space: pre-wrap; word-break: break-all;"
+      ></div>
+
       <div class="notice-box">
         履歴はこのブラウザ内に保存されます。共有端末では、使用後に不要な履歴を削除してください。
       </div>
@@ -1043,6 +1049,7 @@
 
     const historySearchInput = document.getElementById("historySearchInput");
     const historyListContainer = document.getElementById("historyListContainer");
+    const historyDebugBox = document.getElementById("historyDebugBox");
 
     function showSourceMessage(type, message) {
       sourceMessageBox.className = "message-box visible " + type;
@@ -1649,7 +1656,36 @@
       return parsedDate.toLocaleString("ja-JP");
     }
 
+    function updateHistoryDebugBox() {
+      if (!historyDebugBox) {
+        return;
+      }
+
+      let rawHistory = null;
+
+      try {
+        rawHistory = localStorage.getItem(HISTORY_STORAGE_KEY);
+      } catch (error) {
+        rawHistory = null;
+      }
+
+      const loadedCount = loadDraftHistory().length;
+
+      historyDebugBox.textContent =
+        "【一時デバッグ表示】\n" +
+        "\n" +
+        "保存データ：\n" +
+        (rawHistory === null ? "null" : rawHistory) +
+        "\n" +
+        "\n" +
+        "読込件数：\n" +
+        loadedCount +
+        "件";
+    }
+
     function renderDraftHistory() {
+      updateHistoryDebugBox();
+
       const historyEntries = loadDraftHistory();
       const searchQuery = historySearchInput.value.trim().toLowerCase();
 
@@ -1838,6 +1874,7 @@
           .slice(0, MAX_HISTORY_COUNT);
 
         saveDraftHistory(updatedHistoryEntries);
+        updateHistoryDebugBox();
       } catch (error) {
         // 履歴保存に失敗しても、運営投稿画面への引き継ぎは継続する
       }
