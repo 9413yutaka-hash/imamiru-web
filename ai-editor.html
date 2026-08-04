@@ -1738,7 +1738,7 @@
       }
 
       try {
-        historyListContainer.innerHTML = filteredEntries
+        const historyHtml = filteredEntries
           .map(function(entry) {
             const safeId = escapeHtml(entry.id || "");
             const safeTitle = escapeHtml(entry.title || "(タイトルなし)");
@@ -1782,9 +1782,17 @@
             );
           })
           .join("");
+
+        console.log("history html", historyHtml);
+
+        historyListContainer.innerHTML = historyHtml;
+
+        console.log(historyListContainer.innerHTML);
       } catch (error) {
-        historyListContainer.innerHTML =
-          '<div class="history-empty-state">投稿履歴を表示できませんでした。</div>';
+        historyListContainer.textContent =
+          "投稿履歴を表示できませんでした。\n" +
+          "エラー名：" + (error?.name || "不明") + "\n" +
+          "内容：" + (error?.message || String(error));
       }
     }
 
