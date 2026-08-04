@@ -1051,6 +1051,15 @@
     const historyListContainer = document.getElementById("historyListContainer");
     const historyDebugBox = document.getElementById("historyDebugBox");
 
+    function escapeHtml(text) {
+      return String(text ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
     function showSourceMessage(type, message) {
       sourceMessageBox.className = "message-box visible " + type;
       sourceMessageBox.textContent = message;
