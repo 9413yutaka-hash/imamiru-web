@@ -1653,7 +1653,24 @@
         return "保存日時不明";
       }
 
-      return parsedDate.toLocaleString("ja-JP");
+      try {
+        return parsedDate.toLocaleString("ja-JP");
+      } catch (error) {
+        const paddedMinutes =
+          String(parsedDate.getMinutes()).padStart(2, "0");
+
+        return (
+          parsedDate.getFullYear() +
+          "/" +
+          (parsedDate.getMonth() + 1) +
+          "/" +
+          parsedDate.getDate() +
+          " " +
+          parsedDate.getHours() +
+          ":" +
+          paddedMinutes
+        );
+      }
     }
 
     function updateHistoryDebugBox() {
@@ -1720,50 +1737,55 @@
         return;
       }
 
-      historyListContainer.innerHTML = filteredEntries
-        .map(function(entry) {
-          const safeId = escapeHtml(entry.id || "");
-          const safeTitle = escapeHtml(entry.title || "(タイトルなし)");
-          const safeCategory = escapeHtml(entry.category || "");
-          const safeReliability = escapeHtml(entry.sourceReliability || "");
+      try {
+        historyListContainer.innerHTML = filteredEntries
+          .map(function(entry) {
+            const safeId = escapeHtml(entry.id || "");
+            const safeTitle = escapeHtml(entry.title || "(タイトルなし)");
+            const safeCategory = escapeHtml(entry.category || "");
+            const safeReliability = escapeHtml(entry.sourceReliability || "");
 
-          const safeCreatedAt = escapeHtml(
-            formatHistoryCreatedAt(entry.createdAt)
-          );
+            const safeCreatedAt = escapeHtml(
+              formatHistoryCreatedAt(entry.createdAt)
+            );
 
-          const safeContentPreview = escapeHtml(
-            typeof entry.content === "string"
-              ? entry.content.slice(0, 60)
-              : ""
-          );
+            const safeContentPreview = escapeHtml(
+              typeof entry.content === "string"
+                ? entry.content.slice(0, 60)
+                : ""
+            );
 
-          return (
-            '<div class="history-item">' +
-            '<h3 class="history-item-title">' +
-            safeTitle +
-            "</h3>" +
-            '<div class="history-item-meta">' +
-            safeCategory +
-            "・" +
-            safeReliability +
-            "・" +
-            safeCreatedAt +
-            "</div>" +
-            '<div class="history-item-content">' +
-            safeContentPreview +
-            "</div>" +
-            '<div class="history-item-actions">' +
-            '<button type="button" class="history-reuse-button" data-action="reuse" data-history-id="' +
-            safeId +
-            '">再利用</button>' +
-            '<button type="button" class="history-delete-button" data-action="delete" data-history-id="' +
-            safeId +
-            '">削除</button>' +
-            "</div>" +
-            "</div>"
-          );
-        })
-        .join("");
+            return (
+              '<div class="history-item">' +
+              '<h3 class="history-item-title">' +
+              safeTitle +
+              "</h3>" +
+              '<div class="history-item-meta">' +
+              safeCategory +
+              "・" +
+              safeReliability +
+              "・" +
+              safeCreatedAt +
+              "</div>" +
+              '<div class="history-item-content">' +
+              safeContentPreview +
+              "</div>" +
+              '<div class="history-item-actions">' +
+              '<button type="button" class="history-reuse-button" data-action="reuse" data-history-id="' +
+              safeId +
+              '">再利用</button>' +
+              '<button type="button" class="history-delete-button" data-action="delete" data-history-id="' +
+              safeId +
+              '">削除</button>' +
+              "</div>" +
+              "</div>"
+            );
+          })
+          .join("");
+      } catch (error) {
+        historyListContainer.innerHTML =
+          '<div class="history-empty-state">投稿履歴を表示できませんでした。</div>';
+      }
     }
 
     function reuseDraftHistoryEntry(historyId) {
