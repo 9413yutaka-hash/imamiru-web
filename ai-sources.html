@@ -1,0 +1,1495 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <meta
+    name="theme-color"
+    content="#071a33"
+  >
+
+  <meta
+    name="description"
+    content="イマミル運営がAI記者の情報源（公式サイト・施設ページ等）を登録・管理するための管理者専用ページです。"
+  >
+
+  <title>
+    情報源管理｜イマミル管理
+  </title>
+
+  <style>
+    :root {
+      --navy: #071a33;
+      --navy-light: #0d294a;
+      --blue: #0788c9;
+      --cyan: #04b7d7;
+      --white: #ffffff;
+      --text: #15233a;
+      --subtext: #697386;
+      --border: #e2eaf1;
+      --background: #f4f8fb;
+      --red: #ef5a67;
+      --green: #18a86b;
+      --shadow:
+        0 18px 50px
+        rgba(20, 52, 82, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family:
+        "Yu Gothic",
+        "Hiragino Kaku Gothic ProN",
+        "Meiryo",
+        sans-serif;
+      background: var(--background);
+      color: var(--text);
+    }
+
+    button,
+    input,
+    textarea,
+    select,
+    a {
+      font-family: inherit;
+    }
+
+    button {
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .top-bar {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      color: var(--white);
+      background: linear-gradient(135deg, var(--navy), var(--navy-light));
+      box-shadow: 0 8px 25px rgba(7, 26, 51, 0.18);
+    }
+
+    .top-bar-inner {
+      width: min(100%, 760px);
+      margin: 0 auto;
+      padding: 13px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .brand-area {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-icon {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      color: var(--white);
+      font-size: 21px;
+    }
+
+    .brand-name {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 900;
+      letter-spacing: 0.05em;
+    }
+
+    .brand-caption {
+      margin: 2px 0 0;
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .home-link {
+      flex-shrink: 0;
+      padding: 9px 13px;
+      border-radius: 999px;
+      color: var(--white);
+      background: rgba(255, 255, 255, 0.12);
+      font-size: 11px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .page-hero {
+      padding: 42px 18px 86px;
+      background: linear-gradient(135deg, var(--navy), #0d3a63);
+      color: var(--white);
+    }
+
+    .page-hero-inner {
+      width: min(100%, 720px);
+      margin: 0 auto;
+    }
+
+    .hero-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 8px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .page-hero h1 {
+      margin: 20px 0 0;
+      font-size: clamp(26px, 6vw, 38px);
+      line-height: 1.35;
+    }
+
+    .page-hero p {
+      max-width: 600px;
+      margin: 16px 0 0;
+      color: rgba(255, 255, 255, 0.88);
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.9;
+    }
+
+    main {
+      width: min(100%, 720px);
+      margin: 0 auto;
+      padding: 0 16px 70px;
+    }
+
+    .form-card {
+      margin-top: -55px;
+      padding: 28px;
+      border: 1px solid rgba(12, 54, 87, 0.08);
+      border-radius: 26px;
+      background: var(--white);
+      box-shadow: var(--shadow);
+    }
+
+    .form-card + .form-card {
+      margin-top: 20px;
+    }
+
+    .form-heading {
+      margin-bottom: 24px;
+    }
+
+    .form-heading h2 {
+      margin: 0;
+      color: var(--navy);
+      font-size: 22px;
+    }
+
+    .form-heading p {
+      margin: 9px 0 0;
+      color: var(--subtext);
+      font-size: 13px;
+      line-height: 1.8;
+    }
+
+    .notice-box {
+      margin-bottom: 24px;
+      padding: 15px 16px;
+      border: 1px solid #cfeefa;
+      border-radius: 14px;
+      background: #effbff;
+      color: #24627e;
+      font-size: 13px;
+      font-weight: 800;
+      line-height: 1.8;
+    }
+
+    .form-group {
+      margin-top: 22px;
+    }
+
+    .form-label {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 9px;
+      color: var(--navy);
+      font-size: 14px;
+      font-weight: 900;
+    }
+
+    .required {
+      padding: 3px 7px;
+      border-radius: 999px;
+      background: #fff0f0;
+      color: var(--red);
+      font-size: 9px;
+      font-weight: 900;
+    }
+
+    .optional {
+      padding: 3px 7px;
+      border-radius: 999px;
+      background: #eef5f8;
+      color: #648093;
+      font-size: 9px;
+      font-weight: 900;
+    }
+
+    .form-help {
+      margin: 7px 0 0;
+      color: #8a97a6;
+      font-size: 11px;
+      line-height: 1.7;
+    }
+
+    input,
+    textarea,
+    select {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      outline: none;
+      background: #fbfdff;
+      color: var(--text);
+      font-size: 15px;
+      transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+    }
+
+    input,
+    select {
+      min-height: 52px;
+      padding: 0 15px;
+    }
+
+    input:focus,
+    select:focus {
+      border-color: var(--cyan);
+      background: var(--white);
+      box-shadow: 0 0 0 4px rgba(4, 183, 215, 0.12);
+    }
+
+    input:disabled,
+    select:disabled {
+      cursor: not-allowed;
+      opacity: 0.65;
+    }
+
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .checkbox-row input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      min-height: 0;
+      flex-shrink: 0;
+      accent-color: var(--blue);
+    }
+
+    .checkbox-row label {
+      color: var(--navy);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .submit-button {
+      width: 100%;
+      min-height: 58px;
+      margin-top: 24px;
+      border: none;
+      border-radius: 16px;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      color: var(--white);
+      font-size: 16px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .submit-button:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+    }
+
+    .secondary-button {
+      width: 100%;
+      min-height: 52px;
+      margin-top: 22px;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: var(--white);
+      color: var(--navy);
+      font-size: 14px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .message-box {
+      display: none;
+      margin-top: 18px;
+      padding: 16px;
+      border-radius: 14px;
+      font-size: 13px;
+      font-weight: 800;
+      line-height: 1.8;
+      white-space: pre-line;
+    }
+
+    .message-box.visible {
+      display: block;
+    }
+
+    .message-box.success {
+      border: 1px solid #bcebd4;
+      background: #ebfff5;
+      color: #16734b;
+    }
+
+    .message-box.error {
+      border: 1px solid #ffd0d4;
+      background: #fff2f3;
+      color: #b33c49;
+    }
+
+    .source-list {
+      display: grid;
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    .source-item {
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: #fbfdff;
+    }
+
+    .source-item-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .source-item-name {
+      margin: 0;
+      color: var(--navy);
+      font-size: 15px;
+      font-weight: 900;
+      word-break: break-word;
+    }
+
+    .source-status-enabled,
+    .source-status-disabled {
+      flex-shrink: 0;
+      padding: 5px 9px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .source-status-enabled {
+      color: #158a5c;
+      background: #e9f8f1;
+    }
+
+    .source-status-disabled {
+      color: var(--subtext);
+      background: #eef2f5;
+    }
+
+    .source-item-meta {
+      margin-top: 6px;
+      color: var(--subtext);
+      font-size: 11px;
+      line-height: 1.7;
+    }
+
+    .source-item-url {
+      margin-top: 6px;
+      color: var(--blue);
+      font-size: 12px;
+      line-height: 1.7;
+      word-break: break-all;
+    }
+
+    .source-item-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .source-edit-button,
+    .source-toggle-button,
+    .source-delete-button {
+      min-height: 40px;
+      border: none;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .source-edit-button {
+      color: var(--white);
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+    }
+
+    .source-toggle-button {
+      color: var(--navy);
+      background: #eef5f8;
+    }
+
+    .source-delete-button {
+      color: var(--red);
+      background: #fff0f0;
+    }
+
+    .source-empty-state {
+      padding: 20px;
+      border: 1px dashed var(--border);
+      border-radius: 14px;
+      color: var(--subtext);
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .security-note {
+      margin-top: 22px;
+      padding-top: 18px;
+      border-top: 1px solid var(--border);
+      color: #8b98a5;
+      font-size: 10px;
+      line-height: 1.8;
+      text-align: center;
+    }
+
+    footer {
+      padding: 0 18px 35px;
+      color: #8c9aa8;
+      text-align: center;
+      font-size: 10px;
+      line-height: 1.8;
+    }
+
+    @media (max-width: 620px) {
+      .form-card {
+        padding: 22px 17px;
+        border-radius: 22px;
+      }
+
+      .source-item-actions {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 420px) {
+      .top-bar-inner {
+        padding: 11px 13px;
+      }
+
+      .brand-icon {
+        width: 38px;
+        height: 38px;
+      }
+
+      .brand-name {
+        font-size: 18px;
+      }
+
+      .home-link {
+        padding: 8px 10px;
+        font-size: 10px;
+      }
+
+      .page-hero {
+        padding: 34px 15px 78px;
+      }
+
+      main {
+        padding-right: 12px;
+        padding-left: 12px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <header class="top-bar">
+    <div class="top-bar-inner">
+
+      <div class="brand-area">
+
+        <div class="brand-icon">
+          🌺
+        </div>
+
+        <div>
+          <p class="brand-name">
+            イマミル管理
+          </p>
+
+          <p class="brand-caption">
+            運営者専用ページ
+          </p>
+        </div>
+
+      </div>
+
+      <a
+        class="home-link"
+        href="ai-editor.html"
+      >
+        ← AI編集部へ戻る
+      </a>
+
+    </div>
+  </header>
+
+  <section class="page-hero">
+    <div class="page-hero-inner">
+
+      <div class="hero-label">
+        🔐 運営者専用
+      </div>
+
+      <h1>
+        情報源管理
+      </h1>
+
+      <p>
+        公式サイトや施設のお知らせページを登録します。
+        今回はまだ外部サイトの巡回・取得は行いません。
+      </p>
+
+    </div>
+  </section>
+
+  <main>
+
+    <section
+      id="authCheckingPanel"
+      class="form-card"
+    >
+      <p>ログイン状態を確認しています…</p>
+    </section>
+
+    <section
+      id="loginRequiredPanel"
+      class="form-card"
+      style="display: none;"
+    >
+
+      <div class="form-heading">
+        <h2>ログインが必要です</h2>
+        <p>
+          この機能は管理者専用です。管理画面からログインしてください。
+        </p>
+      </div>
+
+      <a
+        class="submit-button"
+        style="display: flex; align-items: center; justify-content: center;"
+        href="admin.html"
+      >
+        管理画面へ戻る
+      </a>
+
+    </section>
+
+    <section
+      id="sourceFormSection"
+      class="form-card"
+      style="display: none;"
+    >
+
+      <div class="form-heading">
+        <h2 id="sourceFormHeadingTitle">情報源を登録する</h2>
+        <p>
+          登録した情報源は、将来の巡回機能で利用する予定です。今回はまだ巡回・取得は行いません。
+        </p>
+      </div>
+
+      <div
+        id="sourceMessageBox"
+        class="message-box"
+        role="status"
+        aria-live="polite"
+      ></div>
+
+      <div class="form-group">
+
+        <label
+          class="form-label"
+          for="sourceNameInput"
+        >
+          情報源名
+          <span class="required">必須</span>
+        </label>
+
+        <input
+          id="sourceNameInput"
+          type="text"
+          maxlength="80"
+          placeholder="例：〇〇市役所"
+        >
+
+      </div>
+
+      <div class="form-group">
+
+        <label
+          class="form-label"
+          for="sourceUrlInput"
+        >
+          情報源URL
+          <span class="required">必須</span>
+        </label>
+
+        <input
+          id="sourceUrlInput"
+          type="text"
+          maxlength="300"
+          autocomplete="url"
+          placeholder="例：https://example.jp/news/"
+        >
+
+      </div>
+
+      <div class="form-group">
+
+        <label
+          class="form-label"
+          for="sourceTypeInput"
+        >
+          種類
+          <span class="required">必須</span>
+        </label>
+
+        <select id="sourceTypeInput">
+          <option value="">選択してください</option>
+          <option value="行政">行政</option>
+          <option value="観光施設">観光施設</option>
+          <option value="イベント">イベント</option>
+          <option value="交通">交通</option>
+          <option value="防災・気象">防災・気象</option>
+          <option value="その他">その他</option>
+        </select>
+
+      </div>
+
+      <div class="form-group">
+
+        <label
+          class="form-label"
+          for="sourceAreaInput"
+        >
+          対象地域
+          <span class="optional">任意</span>
+        </label>
+
+        <input
+          id="sourceAreaInput"
+          type="text"
+          maxlength="80"
+          placeholder="例：那覇市"
+        >
+
+      </div>
+
+      <div class="form-group">
+
+        <div class="checkbox-row">
+
+          <input
+            id="sourceIsEnabledInput"
+            type="checkbox"
+            checked
+          >
+
+          <label for="sourceIsEnabledInput">
+            有効にする
+          </label>
+
+        </div>
+
+        <p class="form-help">
+          停止中の情報源は、将来の巡回機能で対象外になります。
+        </p>
+
+      </div>
+
+      <button
+        id="sourceSubmitButton"
+        class="submit-button"
+        type="button"
+      >
+        登録する
+      </button>
+
+      <button
+        id="cancelEditButton"
+        class="secondary-button"
+        type="button"
+        style="display: none;"
+      >
+        編集をやめる
+      </button>
+
+    </section>
+
+    <section
+      id="sourceListSection"
+      class="form-card"
+      style="display: none;"
+    >
+
+      <div class="form-heading">
+        <h2>登録済みの情報源</h2>
+        <p>
+          名前・URL・対象地域で検索できます。
+        </p>
+      </div>
+
+      <div class="form-group">
+
+        <label
+          class="form-label"
+          for="sourceSearchInput"
+        >
+          情報源を検索
+        </label>
+
+        <input
+          id="sourceSearchInput"
+          type="text"
+          placeholder="名前・URL・対象地域で検索"
+        >
+
+      </div>
+
+      <div
+        id="listMessageBox"
+        class="message-box"
+        role="status"
+        aria-live="polite"
+      ></div>
+
+      <div
+        id="sourceListContainer"
+        class="source-list"
+      ></div>
+
+      <div class="security-note">
+        登録した情報源は、AI記者機能の下書き作成には現在使用されません。
+        巡回・取得を行う機能は今後追加予定です。
+      </div>
+
+    </section>
+
+  </main>
+
+  <footer>
+    イマミル Web Version 1.2<br>
+    このページは運営者専用です。
+  </footer>
+
+  <script
+    src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"
+  ></script>
+
+  <script
+    src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"
+  ></script>
+
+  <script
+    src="https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore-compat.js"
+  ></script>
+
+  <script src="firebase.js"></script>
+
+  <script>
+    const ADMIN_EMAIL = "9413yutaka@gmail.com";
+
+    const ALLOWED_SOURCE_TYPES = [
+      "行政",
+      "観光施設",
+      "イベント",
+      "交通",
+      "防災・気象",
+      "その他"
+    ];
+
+    const MAX_NAME_LENGTH = 80;
+    const MAX_URL_LENGTH = 300;
+    const MAX_AREA_LENGTH = 80;
+
+    let editingSourceId = null;
+    let cachedSources = [];
+
+    const authCheckingPanel = document.getElementById("authCheckingPanel");
+    const loginRequiredPanel = document.getElementById("loginRequiredPanel");
+    const sourceFormSection = document.getElementById("sourceFormSection");
+    const sourceListSection = document.getElementById("sourceListSection");
+
+    const sourceFormHeadingTitle = document.getElementById("sourceFormHeadingTitle");
+    const sourceMessageBox = document.getElementById("sourceMessageBox");
+    const sourceNameInput = document.getElementById("sourceNameInput");
+    const sourceUrlInput = document.getElementById("sourceUrlInput");
+    const sourceTypeInput = document.getElementById("sourceTypeInput");
+    const sourceAreaInput = document.getElementById("sourceAreaInput");
+    const sourceIsEnabledInput = document.getElementById("sourceIsEnabledInput");
+    const sourceSubmitButton = document.getElementById("sourceSubmitButton");
+    const cancelEditButton = document.getElementById("cancelEditButton");
+
+    const sourceSearchInput = document.getElementById("sourceSearchInput");
+    const listMessageBox = document.getElementById("listMessageBox");
+    const sourceListContainer = document.getElementById("sourceListContainer");
+
+    function escapeHtml(text) {
+      return String(text ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function showMessage(type, message) {
+      sourceMessageBox.className = "message-box visible " + type;
+      sourceMessageBox.textContent = message;
+    }
+
+    function clearMessage() {
+      sourceMessageBox.className = "message-box";
+      sourceMessageBox.textContent = "";
+    }
+
+    function showListMessage(type, message) {
+      listMessageBox.className = "message-box visible " + type;
+      listMessageBox.textContent = message;
+    }
+
+    function clearListMessage() {
+      listMessageBox.className = "message-box";
+      listMessageBox.textContent = "";
+    }
+
+    function focusInvalidField(inputElement) {
+      if (!inputElement) {
+        return;
+      }
+
+      inputElement.scrollIntoView({ behavior: "smooth", block: "center" });
+      inputElement.focus({ preventScroll: true });
+    }
+
+    function formatSourceDate(dateValue) {
+      if (!dateValue) {
+        return "";
+      }
+
+      const parsedDate = new Date(dateValue);
+
+      if (Number.isNaN(parsedDate.getTime())) {
+        return "";
+      }
+
+      try {
+        return parsedDate.toLocaleString("ja-JP");
+      } catch (error) {
+        const pad = function(number) {
+          return String(number).padStart(2, "0");
+        };
+
+        return (
+          parsedDate.getFullYear() +
+          "/" +
+          (parsedDate.getMonth() + 1) +
+          "/" +
+          parsedDate.getDate() +
+          " " +
+          parsedDate.getHours() +
+          ":" +
+          pad(parsedDate.getMinutes())
+        );
+      }
+    }
+
+    function validateSourceForm() {
+      const validationErrors = [];
+
+      const nameValue = sourceNameInput.value.trim();
+
+      if (nameValue === "") {
+        validationErrors.push({
+          message: "情報源名を入力してください。",
+          element: sourceNameInput
+        });
+      } else if (nameValue.length > MAX_NAME_LENGTH) {
+        validationErrors.push({
+          message: "情報源名は" + MAX_NAME_LENGTH + "文字以内で入力してください。",
+          element: sourceNameInput
+        });
+      }
+
+      const urlValue = sourceUrlInput.value.trim();
+
+      if (urlValue === "") {
+        validationErrors.push({
+          message: "情報源URLを入力してください。",
+          element: sourceUrlInput
+        });
+      } else if (urlValue.length > MAX_URL_LENGTH) {
+        validationErrors.push({
+          message: "情報源URLは" + MAX_URL_LENGTH + "文字以内で入力してください。",
+          element: sourceUrlInput
+        });
+      } else if (!/^https?:\/\//.test(urlValue)) {
+        validationErrors.push({
+          message:
+            "情報源URLは「https://」または「http://」から始まる形で入力してください。",
+          element: sourceUrlInput
+        });
+      }
+
+      if (!ALLOWED_SOURCE_TYPES.includes(sourceTypeInput.value)) {
+        validationErrors.push({
+          message: "種類を選択してください。",
+          element: sourceTypeInput
+        });
+      }
+
+      const areaValue = sourceAreaInput.value.trim();
+
+      if (areaValue.length > MAX_AREA_LENGTH) {
+        validationErrors.push({
+          message: "対象地域は" + MAX_AREA_LENGTH + "文字以内で入力してください。",
+          element: sourceAreaInput
+        });
+      }
+
+      if (validationErrors.length > 0) {
+        focusInvalidField(validationErrors[0].element);
+
+        const combinedMessage =
+          "入力内容を確認してください。\n" +
+          validationErrors
+            .map(function(validationError) {
+              return "・" + validationError.message;
+            })
+            .join("\n");
+
+        throw new Error(combinedMessage);
+      }
+
+      return {
+        name: nameValue,
+        url: urlValue,
+        sourceType: sourceTypeInput.value,
+        area: areaValue,
+        isEnabled: sourceIsEnabledInput.checked
+      };
+    }
+
+    function setSourceFormSubmitting(submitting) {
+      sourceNameInput.disabled = submitting;
+      sourceUrlInput.disabled = submitting;
+      sourceTypeInput.disabled = submitting;
+      sourceAreaInput.disabled = submitting;
+      sourceIsEnabledInput.disabled = submitting;
+      sourceSubmitButton.disabled = submitting;
+
+      if (submitting) {
+        sourceSubmitButton.textContent = editingSourceId
+          ? "保存しています…"
+          : "登録しています…";
+      } else {
+        sourceSubmitButton.textContent = editingSourceId
+          ? "変更を保存する"
+          : "登録する";
+      }
+    }
+
+    function resetSourceFormToCreateMode() {
+      editingSourceId = null;
+
+      sourceNameInput.value = "";
+      sourceUrlInput.value = "";
+      sourceTypeInput.value = "";
+      sourceAreaInput.value = "";
+      sourceIsEnabledInput.checked = true;
+
+      sourceFormHeadingTitle.textContent = "情報源を登録する";
+      sourceSubmitButton.textContent = "登録する";
+      cancelEditButton.style.display = "none";
+    }
+
+    async function getIdTokenOrThrow() {
+      const currentUser = firebase.auth().currentUser;
+
+      if (!currentUser) {
+        throw new Error(
+          "ログイン状態を確認できませんでした。管理画面から再度ログインしてください。"
+        );
+      }
+
+      return currentUser.getIdToken();
+    }
+
+    async function fetchSourceList() {
+      const idToken = await getIdTokenOrThrow();
+
+      const response = await fetch("/api/admin-source-list", {
+        method: "GET",
+        headers: {
+          "Authorization": "Bearer " + idToken
+        }
+      });
+
+      let responseData = null;
+
+      try {
+        responseData = await response.json();
+      } catch (jsonError) {
+        throw new Error("サーバーからの応答を読み取れませんでした。");
+      }
+
+      if (!response.ok || !responseData.success) {
+        throw new Error(
+          responseData && responseData.message
+            ? responseData.message
+            : "情報源一覧を取得できませんでした。"
+        );
+      }
+
+      return Array.isArray(responseData.sources) ? responseData.sources : [];
+    }
+
+    function renderSourceList() {
+      const searchQuery = sourceSearchInput.value.trim().toLowerCase();
+
+      const filteredSources =
+        searchQuery === ""
+          ? cachedSources
+          : cachedSources.filter(function(source) {
+              const nameText =
+                typeof source.name === "string"
+                  ? source.name.toLowerCase()
+                  : "";
+
+              const urlText =
+                typeof source.url === "string"
+                  ? source.url.toLowerCase()
+                  : "";
+
+              const areaText =
+                typeof source.area === "string"
+                  ? source.area.toLowerCase()
+                  : "";
+
+              return (
+                nameText.includes(searchQuery) ||
+                urlText.includes(searchQuery) ||
+                areaText.includes(searchQuery)
+              );
+            });
+
+      if (filteredSources.length === 0) {
+        sourceListContainer.innerHTML =
+          '<div class="source-empty-state">' +
+          (searchQuery === ""
+            ? "まだ情報源が登録されていません。"
+            : "検索条件に一致する情報源はありません。") +
+          "</div>";
+
+        return;
+      }
+
+      try {
+        sourceListContainer.innerHTML = filteredSources
+          .map(function(source) {
+            const safeId = escapeHtml(source.id || "");
+            const safeName = escapeHtml(source.name || "(名称未設定)");
+            const safeUrl = escapeHtml(source.url || "");
+            const safeType = escapeHtml(source.sourceType || "");
+            const safeArea = escapeHtml(source.area || "地域未設定");
+            const isEnabled = source.isEnabled === true;
+
+            const statusClass = isEnabled
+              ? "source-status-enabled"
+              : "source-status-disabled";
+
+            const statusText = isEnabled ? "有効" : "停止中";
+            const toggleButtonText = isEnabled ? "停止する" : "有効にする";
+
+            return (
+              '<div class="source-item">' +
+              '<div class="source-item-top">' +
+              '<h3 class="source-item-name">' +
+              safeName +
+              "</h3>" +
+              '<span class="' +
+              statusClass +
+              '">' +
+              statusText +
+              "</span>" +
+              "</div>" +
+              '<div class="source-item-meta">' +
+              safeType +
+              "・" +
+              safeArea +
+              "</div>" +
+              '<div class="source-item-url">' +
+              safeUrl +
+              "</div>" +
+              '<div class="source-item-actions">' +
+              '<button type="button" class="source-edit-button" data-action="edit" data-source-id="' +
+              safeId +
+              '">編集</button>' +
+              '<button type="button" class="source-toggle-button" data-action="toggle" data-source-id="' +
+              safeId +
+              '">' +
+              toggleButtonText +
+              "</button>" +
+              '<button type="button" class="source-delete-button" data-action="delete" data-source-id="' +
+              safeId +
+              '">削除</button>' +
+              "</div>" +
+              "</div>"
+            );
+          })
+          .join("");
+      } catch (error) {
+        sourceListContainer.innerHTML =
+          '<div class="source-empty-state">情報源一覧を表示できませんでした。</div>';
+      }
+    }
+
+    async function loadAndRenderSources() {
+      clearListMessage();
+
+      try {
+        cachedSources = await fetchSourceList();
+        renderSourceList();
+      } catch (error) {
+        cachedSources = [];
+
+        sourceListContainer.innerHTML =
+          '<div class="source-empty-state">情報源一覧を読み込めませんでした。</div>';
+
+        showListMessage(
+          "error",
+          error && error.message
+            ? error.message
+            : "情報源一覧を読み込めませんでした。"
+        );
+      }
+    }
+
+    function startEditingSource(sourceId) {
+      const targetSource = cachedSources.find(function(source) {
+        return source.id === sourceId;
+      });
+
+      if (!targetSource) {
+        return;
+      }
+
+      editingSourceId = sourceId;
+
+      sourceNameInput.value = targetSource.name || "";
+      sourceUrlInput.value = targetSource.url || "";
+      sourceTypeInput.value = targetSource.sourceType || "";
+      sourceAreaInput.value = targetSource.area || "";
+      sourceIsEnabledInput.checked = targetSource.isEnabled === true;
+
+      sourceFormHeadingTitle.textContent = "情報源を編集する";
+      sourceSubmitButton.textContent = "変更を保存する";
+      cancelEditButton.style.display = "block";
+
+      clearMessage();
+
+      sourceFormSection.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    async function toggleSourceEnabled(sourceId) {
+      const targetSource = cachedSources.find(function(source) {
+        return source.id === sourceId;
+      });
+
+      if (!targetSource) {
+        return;
+      }
+
+      clearListMessage();
+
+      try {
+        const idToken = await getIdTokenOrThrow();
+
+        const response = await fetch("/api/admin-source-update", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + idToken
+          },
+          body: JSON.stringify({
+            documentId: sourceId,
+            name: targetSource.name,
+            url: targetSource.url,
+            sourceType: targetSource.sourceType,
+            area: targetSource.area,
+            isEnabled: !targetSource.isEnabled
+          })
+        });
+
+        let responseData = null;
+
+        try {
+          responseData = await response.json();
+        } catch (jsonError) {
+          throw new Error("サーバーからの応答を読み取れませんでした。");
+        }
+
+        if (!response.ok || !responseData.success) {
+          throw new Error(
+            responseData && responseData.message
+              ? responseData.message
+              : "更新に失敗しました。"
+          );
+        }
+
+        await loadAndRenderSources();
+      } catch (error) {
+        showListMessage(
+          "error",
+          error && error.message ? error.message : "更新に失敗しました。"
+        );
+      }
+    }
+
+    async function deleteSource(sourceId) {
+      const confirmed = window.confirm("この情報源を削除しますか？");
+
+      if (!confirmed) {
+        return;
+      }
+
+      clearListMessage();
+
+      try {
+        const idToken = await getIdTokenOrThrow();
+
+        const response = await fetch("/api/admin-source-delete", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + idToken
+          },
+          body: JSON.stringify({ documentId: sourceId })
+        });
+
+        let responseData = null;
+
+        try {
+          responseData = await response.json();
+        } catch (jsonError) {
+          throw new Error("サーバーからの応答を読み取れませんでした。");
+        }
+
+        if (!response.ok || !responseData.success) {
+          throw new Error(
+            responseData && responseData.message
+              ? responseData.message
+              : "削除に失敗しました。"
+          );
+        }
+
+        if (editingSourceId === sourceId) {
+          resetSourceFormToCreateMode();
+        }
+
+        await loadAndRenderSources();
+      } catch (error) {
+        showListMessage(
+          "error",
+          error && error.message ? error.message : "削除に失敗しました。"
+        );
+      }
+    }
+
+    async function createOrUpdateSource() {
+      clearMessage();
+
+      let sourceFields;
+
+      try {
+        sourceFields = validateSourceForm();
+      } catch (validationError) {
+        showMessage("error", validationError.message);
+        return;
+      }
+
+      setSourceFormSubmitting(true);
+
+      try {
+        const idToken = await getIdTokenOrThrow();
+
+        const endpoint = editingSourceId
+          ? "/api/admin-source-update"
+          : "/api/admin-source-create";
+
+        const payload = {
+          name: sourceFields.name,
+          url: sourceFields.url,
+          sourceType: sourceFields.sourceType,
+          area: sourceFields.area,
+          isEnabled: sourceFields.isEnabled
+        };
+
+        if (editingSourceId) {
+          payload.documentId = editingSourceId;
+        }
+
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + idToken
+          },
+          body: JSON.stringify(payload)
+        });
+
+        let responseData = null;
+
+        try {
+          responseData = await response.json();
+        } catch (jsonError) {
+          throw new Error("サーバーからの応答を読み取れませんでした。");
+        }
+
+        if (!response.ok || !responseData.success) {
+          throw new Error(
+            responseData && responseData.message
+              ? responseData.message
+              : "保存に失敗しました。"
+          );
+        }
+
+        showMessage(
+          "success",
+          responseData.message ||
+            (editingSourceId ? "情報源を更新しました。" : "情報源を登録しました。")
+        );
+
+        resetSourceFormToCreateMode();
+
+        await loadAndRenderSources();
+      } catch (error) {
+        showMessage(
+          "error",
+          error && error.message ? error.message : "保存に失敗しました。"
+        );
+      } finally {
+        setSourceFormSubmitting(false);
+      }
+    }
+
+    sourceSubmitButton.addEventListener("click", createOrUpdateSource);
+
+    cancelEditButton.addEventListener("click", function() {
+      clearMessage();
+      resetSourceFormToCreateMode();
+    });
+
+    sourceSearchInput.addEventListener("input", function() {
+      renderSourceList();
+    });
+
+    sourceListContainer.addEventListener("click", function(event) {
+      const button = event.target.closest("button[data-action]");
+
+      if (!button) {
+        return;
+      }
+
+      const action = button.dataset.action;
+      const sourceId = button.dataset.sourceId;
+
+      if (!sourceId) {
+        return;
+      }
+
+      if (action === "edit") {
+        startEditingSource(sourceId);
+        return;
+      }
+
+      if (action === "toggle") {
+        toggleSourceEnabled(sourceId);
+        return;
+      }
+
+      if (action === "delete") {
+        deleteSource(sourceId);
+      }
+    });
+
+    firebase.auth().onAuthStateChanged(function(user) {
+      authCheckingPanel.style.display = "none";
+
+      const isAdminUser =
+        user &&
+        user.email &&
+        user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+
+      if (!isAdminUser) {
+        sourceFormSection.style.display = "none";
+        sourceListSection.style.display = "none";
+        loginRequiredPanel.style.display = "block";
+        return;
+      }
+
+      loginRequiredPanel.style.display = "none";
+      sourceFormSection.style.display = "block";
+      sourceListSection.style.display = "block";
+
+      loadAndRenderSources();
+    });
+
+    window.addEventListener("pageshow", function() {
+      if (sourceFormSection.style.display === "block") {
+        loadAndRenderSources();
+      }
+    });
+  </script>
+
+</body>
+</html>
