@@ -480,6 +480,89 @@
       text-align: center;
     }
 
+    .source-collect-button {
+      width: 100%;
+      min-height: 42px;
+      margin-top: 10px;
+      border: none;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      color: var(--white);
+      font-size: 12px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .collected-list {
+      display: grid;
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    .collected-item {
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: #fbfdff;
+    }
+
+    .collected-item-title {
+      margin: 0;
+      color: var(--navy);
+      font-size: 15px;
+      font-weight: 900;
+      word-break: break-word;
+    }
+
+    .collected-item-meta {
+      margin-top: 6px;
+      color: var(--subtext);
+      font-size: 11px;
+      line-height: 1.7;
+    }
+
+    .collected-item-summary {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: #f4f8fa;
+      color: #496071;
+      font-size: 12px;
+      line-height: 1.7;
+      word-break: break-word;
+    }
+
+    .collected-item-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .collected-open-button,
+    .collected-handoff-button {
+      min-height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 900;
+      cursor: pointer;
+      text-align: center;
+    }
+
+    .collected-open-button {
+      color: var(--navy);
+      background: #eef5f8;
+    }
+
+    .collected-handoff-button {
+      color: var(--white);
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+    }
+
     .security-note {
       margin-top: 22px;
       padding-top: 18px;
@@ -505,6 +588,10 @@
       }
 
       .source-item-actions {
+        grid-template-columns: 1fr;
+      }
+
+      .collected-item-actions {
         grid-template-columns: 1fr;
       }
     }
@@ -726,6 +813,30 @@
 
       <div class="form-group">
 
+        <label
+          class="form-label"
+          for="sourceFeedUrlInput"
+        >
+          RSS URL
+          <span class="optional">任意</span>
+        </label>
+
+        <input
+          id="sourceFeedUrlInput"
+          type="text"
+          maxlength="300"
+          autocomplete="url"
+          placeholder="例：https://example.jp/feed/"
+        >
+
+        <p class="form-help">
+          RSSまたはAtomのフィードURLがあれば入力してください。「情報を集める」ボタンが使えるようになります。
+        </p>
+
+      </div>
+
+      <div class="form-group">
+
         <div class="checkbox-row">
 
           <input
@@ -808,9 +919,37 @@
       ></div>
 
       <div class="security-note">
-        登録した情報源は、AI記者機能の下書き作成には現在使用されません。
-        巡回・取得を行う機能は今後追加予定です。
+        「情報を集める」はRSS／Atom形式のフィードのみに対応しています。
+        通常のWebページの巡回・スクレイピングは行いません。
       </div>
+
+    </section>
+
+    <section
+      id="collectedItemsSection"
+      class="form-card"
+      style="display: none;"
+    >
+
+      <div class="form-heading">
+        <h2>情報の候補</h2>
+        <p>
+          取得した最新の情報です。内容を確認してから、AI編集部へ渡してください。
+          自動で公開されることはありません。
+        </p>
+      </div>
+
+      <div
+        id="collectMessageBox"
+        class="message-box"
+        role="status"
+        aria-live="polite"
+      ></div>
+
+      <div
+        id="collectedItemsContainer"
+        class="collected-list"
+      ></div>
 
     </section>
 
@@ -850,9 +989,11 @@
     const MAX_NAME_LENGTH = 80;
     const MAX_URL_LENGTH = 300;
     const MAX_AREA_LENGTH = 80;
+    const MAX_FEED_URL_LENGTH = 300;
 
     let editingSourceId = null;
     let cachedSources = [];
+    let lastCollectedItems = [];
 
     const authCheckingPanel = document.getElementById("authCheckingPanel");
     const loginRequiredPanel = document.getElementById("loginRequiredPanel");
@@ -865,6 +1006,7 @@
     const sourceUrlInput = document.getElementById("sourceUrlInput");
     const sourceTypeInput = document.getElementById("sourceTypeInput");
     const sourceAreaInput = document.getElementById("sourceAreaInput");
+    const sourceFeedUrlInput = document.getElementById("sourceFeedUrlInput");
     const sourceIsEnabledInput = document.getElementById("sourceIsEnabledInput");
     const sourceSubmitButton = document.getElementById("sourceSubmitButton");
     const cancelEditButton = document.getElementById("cancelEditButton");
@@ -872,6 +1014,10 @@
     const sourceSearchInput = document.getElementById("sourceSearchInput");
     const listMessageBox = document.getElementById("listMessageBox");
     const sourceListContainer = document.getElementById("sourceListContainer");
+
+    const collectedItemsSection = document.getElementById("collectedItemsSection");
+    const collectMessageBox = document.getElementById("collectMessageBox");
+    const collectedItemsContainer = document.getElementById("collectedItemsContainer");
 
     function escapeHtml(text) {
       return String(text ?? "")
@@ -996,6 +1142,24 @@
         });
       }
 
+      const feedUrlValue = sourceFeedUrlInput.value.trim();
+
+      if (feedUrlValue.length > MAX_FEED_URL_LENGTH) {
+        validationErrors.push({
+          message: "RSS URLは" + MAX_FEED_URL_LENGTH + "文字以内で入力してください。",
+          element: sourceFeedUrlInput
+        });
+      } else if (
+        feedUrlValue !== "" &&
+        !/^https?:\/\//.test(feedUrlValue)
+      ) {
+        validationErrors.push({
+          message:
+            "RSS URLは「https://」または「http://」から始まる形で入力してください。",
+          element: sourceFeedUrlInput
+        });
+      }
+
       if (validationErrors.length > 0) {
         focusInvalidField(validationErrors[0].element);
 
@@ -1015,7 +1179,8 @@
         url: urlValue,
         sourceType: sourceTypeInput.value,
         area: areaValue,
-        isEnabled: sourceIsEnabledInput.checked
+        isEnabled: sourceIsEnabledInput.checked,
+        feedUrl: feedUrlValue
       };
     }
 
@@ -1024,6 +1189,7 @@
       sourceUrlInput.disabled = submitting;
       sourceTypeInput.disabled = submitting;
       sourceAreaInput.disabled = submitting;
+      sourceFeedUrlInput.disabled = submitting;
       sourceIsEnabledInput.disabled = submitting;
       sourceSubmitButton.disabled = submitting;
 
@@ -1045,6 +1211,7 @@
       sourceUrlInput.value = "";
       sourceTypeInput.value = "";
       sourceAreaInput.value = "";
+      sourceFeedUrlInput.value = "";
       sourceIsEnabledInput.checked = true;
 
       sourceFormHeadingTitle.textContent = "情報源を登録する";
@@ -1150,6 +1317,12 @@
             const statusText = isEnabled ? "有効" : "停止中";
             const toggleButtonText = isEnabled ? "停止する" : "有効にする";
 
+            const hasFeedUrl =
+              typeof source.feedUrl === "string" &&
+              source.feedUrl.trim() !== "";
+
+            const canCollect = hasFeedUrl && isEnabled;
+
             return (
               '<div class="source-item">' +
               '<div class="source-item-top">' +
@@ -1183,6 +1356,13 @@
               safeId +
               '">削除</button>' +
               "</div>" +
+              (
+                canCollect
+                  ? '<button type="button" class="source-collect-button" data-action="collect" data-source-id="' +
+                    safeId +
+                    '">📰 情報を集める</button>'
+                  : ""
+              ) +
               "</div>"
             );
           })
@@ -1229,6 +1409,7 @@
       sourceUrlInput.value = targetSource.url || "";
       sourceTypeInput.value = targetSource.sourceType || "";
       sourceAreaInput.value = targetSource.area || "";
+      sourceFeedUrlInput.value = targetSource.feedUrl || "";
       sourceIsEnabledInput.checked = targetSource.isEnabled === true;
 
       sourceFormHeadingTitle.textContent = "情報源を編集する";
@@ -1266,6 +1447,7 @@
             url: targetSource.url,
             sourceType: targetSource.sourceType,
             area: targetSource.area,
+            feedUrl: targetSource.feedUrl,
             isEnabled: !targetSource.isEnabled
           })
         });
@@ -1345,6 +1527,167 @@
       }
     }
 
+    function showCollectMessage(type, message) {
+      collectMessageBox.className = "message-box visible " + type;
+      collectMessageBox.textContent = message;
+    }
+
+    function clearCollectMessage() {
+      collectMessageBox.className = "message-box";
+      collectMessageBox.textContent = "";
+    }
+
+    function renderCollectedItems(items) {
+      if (!Array.isArray(items) || items.length === 0) {
+        collectedItemsContainer.innerHTML =
+          '<div class="source-empty-state">候補となる情報が見つかりませんでした。</div>';
+        return;
+      }
+
+      try {
+        collectedItemsContainer.innerHTML = items
+          .map(function(item, index) {
+            const safeTitle = escapeHtml(item.title || "(タイトルなし)");
+            const safeSourceName = escapeHtml(item.sourceName || "");
+            const safePublishedAt = escapeHtml(item.publishedAt || "公開日時不明");
+            const safeSummary = escapeHtml(item.summary || "");
+            const safeLink = escapeHtml(item.link || "");
+
+            return (
+              '<div class="collected-item">' +
+              '<h3 class="collected-item-title">' +
+              safeTitle +
+              "</h3>" +
+              '<div class="collected-item-meta">' +
+              safeSourceName +
+              "・" +
+              safePublishedAt +
+              "</div>" +
+              '<div class="collected-item-summary">' +
+              safeSummary +
+              "</div>" +
+              '<div class="collected-item-actions">' +
+              (
+                safeLink !== ""
+                  ? '<a class="collected-open-button" href="' +
+                    safeLink +
+                    '" target="_blank" rel="noopener noreferrer">元ページを開く</a>'
+                  : '<span class="collected-open-button">元ページなし</span>'
+              ) +
+              '<button type="button" class="collected-handoff-button" data-index="' +
+              index +
+              '">AI編集部へ渡す</button>' +
+              "</div>" +
+              "</div>"
+            );
+          })
+          .join("");
+      } catch (error) {
+        collectedItemsContainer.innerHTML =
+          '<div class="source-empty-state">候補一覧を表示できませんでした。</div>';
+      }
+    }
+
+    async function collectSourceItems(sourceId) {
+      clearListMessage();
+      clearCollectMessage();
+
+      collectedItemsSection.style.display = "block";
+
+      collectedItemsContainer.innerHTML =
+        '<div class="source-empty-state">情報を取得しています…</div>';
+
+      collectedItemsSection.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+      });
+
+      try {
+        const idToken = await getIdTokenOrThrow();
+
+        const response = await fetch("/api/admin-source-collect", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + idToken
+          },
+          body: JSON.stringify({ documentId: sourceId })
+        });
+
+        let responseData = null;
+
+        try {
+          responseData = await response.json();
+        } catch (jsonError) {
+          throw new Error("サーバーからの応答を読み取れませんでした。");
+        }
+
+        if (!response.ok || !responseData.success) {
+          throw new Error(
+            responseData && responseData.message
+              ? responseData.message
+              : "情報の取得に失敗しました。"
+          );
+        }
+
+        lastCollectedItems = Array.isArray(responseData.items)
+          ? responseData.items
+          : [];
+
+        renderCollectedItems(lastCollectedItems);
+
+        showCollectMessage(
+          "success",
+          lastCollectedItems.length + "件の候補を取得しました。"
+        );
+      } catch (error) {
+        lastCollectedItems = [];
+
+        collectedItemsContainer.innerHTML = "";
+
+        showCollectMessage(
+          "error",
+          error && error.message ? error.message : "情報の取得に失敗しました。"
+        );
+      }
+    }
+
+    function handoffCandidateToAiEditor(index) {
+      const item = lastCollectedItems[index];
+
+      if (!item) {
+        return;
+      }
+
+      const sourceTextValue =
+        "タイトル：" + (item.title || "") + "\n\n" +
+        "概要：" + (item.summary || "") + "\n\n" +
+        "公開日時：" + (item.publishedAt || "") + "\n" +
+        "情報源：" + (item.sourceName || "");
+
+      const payload = {
+        sourceText: sourceTextValue,
+        sourceUrl: item.link || "",
+        sourceName: item.sourceName || "",
+        publishedAt: item.publishedAt || ""
+      };
+
+      try {
+        sessionStorage.setItem(
+          "imamiruCollectedSourceItem",
+          JSON.stringify(payload)
+        );
+      } catch (error) {
+        showCollectMessage(
+          "error",
+          "AI編集部への引き継ぎに失敗しました。もう一度お試しください。"
+        );
+        return;
+      }
+
+      window.location.href = "ai-editor.html";
+    }
+
     async function createOrUpdateSource() {
       clearMessage();
 
@@ -1371,7 +1714,8 @@
           url: sourceFields.url,
           sourceType: sourceFields.sourceType,
           area: sourceFields.area,
-          isEnabled: sourceFields.isEnabled
+          isEnabled: sourceFields.isEnabled,
+          feedUrl: sourceFields.feedUrl
         };
 
         if (editingSourceId) {
@@ -1459,7 +1803,28 @@
 
       if (action === "delete") {
         deleteSource(sourceId);
+        return;
       }
+
+      if (action === "collect") {
+        collectSourceItems(sourceId);
+      }
+    });
+
+    collectedItemsContainer.addEventListener("click", function(event) {
+      const button = event.target.closest("button[data-index]");
+
+      if (!button) {
+        return;
+      }
+
+      const index = Number(button.dataset.index);
+
+      if (!Number.isInteger(index)) {
+        return;
+      }
+
+      handoffCandidateToAiEditor(index);
     });
 
     firebase.auth().onAuthStateChanged(function(user) {

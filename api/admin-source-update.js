@@ -111,7 +111,8 @@ const ALLOWED_SOURCE_TYPES = [
 const FIELD_MAX_LENGTHS = {
   name: 80,
   url: 300,
-  area: 80
+  area: 80,
+  feedUrl: 300
 };
 
 
@@ -209,12 +210,39 @@ function validateSourceFields(
     );
   }
 
+  const feedUrl =
+    String(
+      requestBody.feedUrl || ""
+    )
+      .trim();
+
+  if (
+    feedUrl.length >
+    FIELD_MAX_LENGTHS.feedUrl
+  ) {
+    throw new Error(
+      "RSS URLが長すぎます。"
+    );
+  }
+
+  if (
+    feedUrl !== "" &&
+    !/^https?:\/\//.test(
+      feedUrl
+    )
+  ) {
+    throw new Error(
+      "RSS URLは「https://」または「http://」から始まる形で入力してください。"
+    );
+  }
+
   return {
     name: name,
     url: url,
     sourceType: sourceType,
     area: area,
-    isEnabled: requestBody.isEnabled
+    isEnabled: requestBody.isEnabled,
+    feedUrl: feedUrl
   };
 }
 
@@ -409,6 +437,9 @@ export default async function handler(
 
       isEnabled:
         sourceFields.isEnabled,
+
+      feedUrl:
+        sourceFields.feedUrl,
 
       updatedAt:
         FieldValue.serverTimestamp()

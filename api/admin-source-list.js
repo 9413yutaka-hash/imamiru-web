@@ -213,6 +213,9 @@ export default async function handler(
             isEnabled:
               data.isEnabled === true,
 
+            feedUrl:
+              data.feedUrl || "",
+
             createdAt:
               toIsoStringOrNull(
                 data.createdAt

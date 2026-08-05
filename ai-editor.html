@@ -1887,6 +1887,46 @@
       window.location.href = "admin-post.html";
     }
 
+    function applyCollectedSourceItemIfPresent() {
+      let rawItem = null;
+
+      try {
+        rawItem = sessionStorage.getItem("imamiruCollectedSourceItem");
+      } catch (error) {
+        return;
+      }
+
+      if (!rawItem) {
+        return;
+      }
+
+      sessionStorage.removeItem("imamiruCollectedSourceItem");
+
+      let collectedItem = null;
+
+      try {
+        collectedItem = JSON.parse(rawItem);
+      } catch (error) {
+        return;
+      }
+
+      if (!collectedItem || typeof collectedItem !== "object") {
+        return;
+      }
+
+      if (typeof collectedItem.sourceText === "string") {
+        sourceText.value = collectedItem.sourceText;
+      }
+
+      if (typeof collectedItem.sourceUrl === "string") {
+        sourceUrl.value = collectedItem.sourceUrl;
+      }
+
+      updateSourceTextCount();
+
+      draftFormSection.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
     sourceText.addEventListener("input", updateSourceTextCount);
     draftTitle.addEventListener("input", updateDraftCounts);
     draftContent.addEventListener("input", updateDraftCounts);
@@ -1952,6 +1992,7 @@
       draftFormSection.style.display = "block";
 
       renderDraftHistory();
+      applyCollectedSourceItemIfPresent();
     });
 
     window.addEventListener("pageshow", function() {
