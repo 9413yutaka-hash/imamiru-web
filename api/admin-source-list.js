@@ -71,6 +71,11 @@ function readBearerToken(
 }
 
 
+const ALLOWED_PRIORITY_VALUES = [1, 2, 3, 4, 5];
+
+const DEFAULT_SOURCE_PRIORITY = 3;
+
+
 function toIsoStringOrNull(
   timestampValue
 ) {
@@ -215,6 +220,11 @@ export default async function handler(
 
             feedUrl:
               data.feedUrl || "",
+
+            priority:
+              ALLOWED_PRIORITY_VALUES.includes(data.priority)
+                ? data.priority
+                : DEFAULT_SOURCE_PRIORITY,
 
             createdAt:
               toIsoStringOrNull(

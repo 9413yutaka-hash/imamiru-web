@@ -430,6 +430,14 @@
       line-height: 1.7;
     }
 
+    .source-item-priority {
+      margin-top: 6px;
+      color: #c98a1c;
+      font-size: 11px;
+      font-weight: 900;
+      line-height: 1.7;
+    }
+
     .source-item-url {
       margin-top: 6px;
       color: var(--blue);
@@ -871,6 +879,26 @@
 
         <label
           class="form-label"
+          for="sourcePriorityInput"
+        >
+          情報源ランク
+          <span class="required">必須</span>
+        </label>
+
+        <select id="sourcePriorityInput">
+          <option value="5">★★★★★ 最重要</option>
+          <option value="4">★★★★☆ 重要</option>
+          <option value="3" selected>★★★☆☆ 標準</option>
+          <option value="2">★★☆☆☆ 補足</option>
+          <option value="1">★☆☆☆☆ 参考</option>
+        </select>
+
+      </div>
+
+      <div class="form-group">
+
+        <label
+          class="form-label"
           for="sourceAreaInput"
         >
           対象地域
@@ -1094,6 +1122,18 @@
       "その他"
     ];
 
+    const ALLOWED_SOURCE_PRIORITY_VALUES = [1, 2, 3, 4, 5];
+
+    const DEFAULT_SOURCE_PRIORITY = 3;
+
+    const SOURCE_PRIORITY_LABELS_BY_VALUE = {
+      5: "最重要",
+      4: "重要",
+      3: "標準",
+      2: "補足",
+      1: "参考"
+    };
+
     const MAX_NAME_LENGTH = 80;
     const MAX_URL_LENGTH = 300;
     const MAX_AREA_LENGTH = 80;
@@ -1182,6 +1222,7 @@
     const sourceNameInput = document.getElementById("sourceNameInput");
     const sourceUrlInput = document.getElementById("sourceUrlInput");
     const sourceTypeInput = document.getElementById("sourceTypeInput");
+    const sourcePriorityInput = document.getElementById("sourcePriorityInput");
     const sourceAreaInput = document.getElementById("sourceAreaInput");
     const sourceFeedUrlInput = document.getElementById("sourceFeedUrlInput");
     const sourceIsEnabledInput = document.getElementById("sourceIsEnabledInput");
@@ -1315,6 +1356,15 @@
         });
       }
 
+      const priorityValue = Number(sourcePriorityInput.value);
+
+      if (!ALLOWED_SOURCE_PRIORITY_VALUES.includes(priorityValue)) {
+        validationErrors.push({
+          message: "情報源ランクを選択してください。",
+          element: sourcePriorityInput
+        });
+      }
+
       const areaValue = sourceAreaInput.value.trim();
 
       if (areaValue.length > MAX_AREA_LENGTH) {
@@ -1360,6 +1410,7 @@
         name: nameValue,
         url: urlValue,
         sourceType: sourceTypeInput.value,
+        priority: priorityValue,
         area: areaValue,
         isEnabled: sourceIsEnabledInput.checked,
         feedUrl: feedUrlValue
@@ -1370,6 +1421,7 @@
       sourceNameInput.disabled = submitting;
       sourceUrlInput.disabled = submitting;
       sourceTypeInput.disabled = submitting;
+      sourcePriorityInput.disabled = submitting;
       sourceAreaInput.disabled = submitting;
       sourceFeedUrlInput.disabled = submitting;
       sourceIsEnabledInput.disabled = submitting;
@@ -1392,6 +1444,7 @@
       sourceNameInput.value = "";
       sourceUrlInput.value = "";
       sourceTypeInput.value = "";
+      sourcePriorityInput.value = String(DEFAULT_SOURCE_PRIORITY);
       sourceAreaInput.value = "";
       sourceFeedUrlInput.value = "";
       sourceIsEnabledInput.checked = true;
@@ -1505,6 +1558,20 @@
 
             const canCollect = hasFeedUrl && isEnabled;
 
+            const priorityValue =
+              ALLOWED_SOURCE_PRIORITY_VALUES.includes(source.priority)
+                ? source.priority
+                : DEFAULT_SOURCE_PRIORITY;
+
+            const priorityStars =
+              "★".repeat(priorityValue) +
+              "☆".repeat(5 - priorityValue);
+
+            const safePriorityLabel =
+              escapeHtml(
+                SOURCE_PRIORITY_LABELS_BY_VALUE[priorityValue]
+              );
+
             return (
               '<div class="source-item">' +
               '<div class="source-item-top">' +
@@ -1521,6 +1588,12 @@
               safeType +
               "・" +
               safeArea +
+              "</div>" +
+              '<div class="source-item-priority">' +
+              "情報源ランク：" +
+              priorityStars +
+              " " +
+              safePriorityLabel +
               "</div>" +
               '<div class="source-item-url">' +
               safeUrl +
@@ -1590,6 +1663,12 @@
       sourceNameInput.value = targetSource.name || "";
       sourceUrlInput.value = targetSource.url || "";
       sourceTypeInput.value = targetSource.sourceType || "";
+
+      sourcePriorityInput.value =
+        ALLOWED_SOURCE_PRIORITY_VALUES.includes(targetSource.priority)
+          ? String(targetSource.priority)
+          : String(DEFAULT_SOURCE_PRIORITY);
+
       sourceAreaInput.value = targetSource.area || "";
       sourceFeedUrlInput.value = targetSource.feedUrl || "";
       sourceIsEnabledInput.checked = targetSource.isEnabled === true;
@@ -2171,6 +2250,7 @@
           name: sourceFields.name,
           url: sourceFields.url,
           sourceType: sourceFields.sourceType,
+          priority: sourceFields.priority,
           area: sourceFields.area,
           isEnabled: sourceFields.isEnabled,
           feedUrl: sourceFields.feedUrl

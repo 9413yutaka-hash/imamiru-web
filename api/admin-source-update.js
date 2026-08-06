@@ -116,6 +116,9 @@ const FIELD_MAX_LENGTHS = {
 };
 
 
+const ALLOWED_PRIORITY_VALUES = [1, 2, 3, 4, 5];
+
+
 function validateSourceFields(
   requestBody
 ) {
@@ -236,13 +239,27 @@ function validateSourceFields(
     );
   }
 
+  const priority =
+    requestBody.priority;
+
+  if (
+    typeof priority !== "number" ||
+    !Number.isInteger(priority) ||
+    !ALLOWED_PRIORITY_VALUES.includes(priority)
+  ) {
+    throw new Error(
+      "情報源ランクは1〜5の整数で指定してください。"
+    );
+  }
+
   return {
     name: name,
     url: url,
     sourceType: sourceType,
     area: area,
     isEnabled: requestBody.isEnabled,
-    feedUrl: feedUrl
+    feedUrl: feedUrl,
+    priority: priority
   };
 }
 
@@ -440,6 +457,9 @@ export default async function handler(
 
       feedUrl:
         sourceFields.feedUrl,
+
+      priority:
+        sourceFields.priority,
 
       updatedAt:
         FieldValue.serverTimestamp()
