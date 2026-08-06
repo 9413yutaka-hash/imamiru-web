@@ -613,6 +613,31 @@
       color: #c98a1c;
     }
 
+    .editor-desk-count {
+      margin-top: 6px;
+      color: var(--navy);
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .editor-desk-comment {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: #eef5f8;
+      color: #2c4a5e;
+      font-size: 12px;
+      line-height: 1.7;
+      white-space: pre-line;
+      word-break: break-word;
+    }
+
+    .editor-desk-actions {
+      display: grid;
+      grid-template-columns: 1fr;
+      margin-top: 12px;
+    }
+
     .security-note {
       margin-top: 22px;
       padding-top: 18px;
@@ -1011,6 +1036,31 @@
 
     </section>
 
+    <section
+      id="editorDeskSection"
+      class="form-card"
+      style="display: none;"
+    >
+
+      <div class="form-heading">
+        <h2>🤖 編集デスク</h2>
+        <div
+          id="editorDeskCountText"
+          class="editor-desk-count"
+        ></div>
+        <p>
+          AIが旅行者向けと判断した候補です。<br>
+          編集長が確認してAI編集部へ渡します。
+        </p>
+      </div>
+
+      <div
+        id="editorDeskContainer"
+        class="collected-list"
+      ></div>
+
+    </section>
+
   </main>
 
   <footer>
@@ -1072,6 +1122,51 @@
 
     const RELEVANCE_VISIBLE_MINIMUM_SCORE = 3;
 
+    const EDITOR_COMMENT_TEMPLATES = [
+      {
+        keywords: ["台風", "大雨", "津波", "警報"],
+        comment:
+          "【台風】\n\n" +
+          "旅行中は交通機関への影響が出る可能性があります。\n" +
+          "最新情報をご確認ください。"
+      },
+      {
+        keywords: ["熱中症"],
+        comment:
+          "【熱中症】\n\n" +
+          "屋外観光ではこまめな水分補給をおすすめします。"
+      },
+      {
+        keywords: ["イベント", "祭り", "花火"],
+        comment:
+          "【イベント】\n\n" +
+          "期間限定の催しです。\n" +
+          "混雑状況を確認して訪れると安心です。"
+      },
+      {
+        keywords: [
+          "通行止め", "交通規制", "バス", "ゆいレール",
+          "フェリー", "空港", "欠航", "運休"
+        ],
+        comment:
+          "【交通】\n\n" +
+          "運行状況をご確認のうえ移動すると安心です。"
+      },
+      {
+        keywords: [
+          "観光", "ビーチ", "海", "観光施設",
+          "営業時間", "臨時休業", "首里城", "美ら海水族館"
+        ],
+        comment:
+          "【観光】\n\n" +
+          "営業時間など最新情報をご確認ください。"
+      }
+    ];
+
+    const EDITOR_COMMENT_FALLBACK =
+      "【その他】\n\n" +
+      "旅行前・旅行中の参考情報としてご確認ください。";
+
     let editingSourceId = null;
     let cachedSources = [];
     let lastCollectedItems = [];
@@ -1101,6 +1196,10 @@
     const collectMessageBox = document.getElementById("collectMessageBox");
     const collectedShowAllToggleButton = document.getElementById("collectedShowAllToggleButton");
     const collectedItemsContainer = document.getElementById("collectedItemsContainer");
+
+    const editorDeskSection = document.getElementById("editorDeskSection");
+    const editorDeskCountText = document.getElementById("editorDeskCountText");
+    const editorDeskContainer = document.getElementById("editorDeskContainer");
 
     function escapeHtml(text) {
       return String(text ?? "")
@@ -1675,6 +1774,28 @@
       };
     }
 
+    function buildEditorComment(item) {
+      const boostKeywords =
+        Array.isArray(item.relevanceBoostKeywords)
+          ? item.relevanceBoostKeywords
+          : [];
+
+      const matchedTemplate =
+        EDITOR_COMMENT_TEMPLATES.find(
+          function(template) {
+            return template.keywords.some(
+              function(keyword) {
+                return boostKeywords.includes(keyword);
+              }
+            );
+          }
+        );
+
+      return matchedTemplate
+        ? matchedTemplate.comment
+        : EDITOR_COMMENT_FALLBACK;
+    }
+
     function updateShowAllToggleButton() {
       collectedShowAllToggleButton.textContent =
         showAllCandidates
@@ -1814,6 +1935,86 @@
       }
     }
 
+    function renderEditorDesk() {
+      const indexedItems =
+        lastCollectedItems.map(
+          function(item, index) {
+            return { item: item, originalIndex: index };
+          }
+        );
+
+      const visibleIndexedItems =
+        indexedItems.filter(
+          function(entry) {
+            return (
+              entry.item.relevanceScore >=
+              RELEVANCE_VISIBLE_MINIMUM_SCORE
+            );
+          }
+        );
+
+      editorDeskCountText.textContent =
+        "現在" + visibleIndexedItems.length + "件あります";
+
+      if (visibleIndexedItems.length === 0) {
+        editorDeskContainer.innerHTML =
+          '<div class="source-empty-state">旅行者向けと判断された候補はまだありません。</div>';
+        return;
+      }
+
+      try {
+        editorDeskContainer.innerHTML = visibleIndexedItems
+          .map(function(entry) {
+            const item = entry.item;
+            const index = entry.originalIndex;
+
+            const safeTitle = escapeHtml(item.title || "(タイトルなし)");
+            const safeSourceName = escapeHtml(item.sourceName || "");
+            const safePublishedAt = escapeHtml(item.publishedAt || "公開日時不明");
+
+            const relevanceScore =
+              item.relevanceScore || RELEVANCE_VISIBLE_MINIMUM_SCORE;
+
+            const relevanceStars =
+              "★".repeat(relevanceScore) +
+              "☆".repeat(5 - relevanceScore);
+
+            const safeEditorComment =
+              escapeHtml(
+                buildEditorComment(item)
+              );
+
+            return (
+              '<div class="collected-item">' +
+              '<div class="collected-item-relevance-stars">' +
+              relevanceStars +
+              "</div>" +
+              '<h3 class="collected-item-title">' +
+              safeTitle +
+              "</h3>" +
+              '<div class="collected-item-meta">' +
+              safeSourceName +
+              "・" +
+              safePublishedAt +
+              "</div>" +
+              '<div class="editor-desk-comment">' +
+              safeEditorComment +
+              "</div>" +
+              '<div class="editor-desk-actions">' +
+              '<button type="button" class="collected-handoff-button" data-index="' +
+              index +
+              '">AI編集部へ渡す</button>' +
+              "</div>" +
+              "</div>"
+            );
+          })
+          .join("");
+      } catch (error) {
+        editorDeskContainer.innerHTML =
+          '<div class="source-empty-state">編集デスクを表示できませんでした。</div>';
+      }
+    }
+
     collectedShowAllToggleButton.addEventListener("click", function() {
       showAllCandidates = !showAllCandidates;
 
@@ -1827,9 +2028,15 @@
       clearCollectMessage();
 
       collectedItemsSection.style.display = "block";
+      editorDeskSection.style.display = "block";
 
       collectedItemsContainer.innerHTML =
         '<div class="source-empty-state">情報を取得しています…</div>';
+
+      editorDeskContainer.innerHTML =
+        '<div class="source-empty-state">情報を取得しています…</div>';
+
+      editorDeskCountText.textContent = "現在0件あります";
 
       collectedItemsSection.scrollIntoView({
         behavior: "smooth",
@@ -1879,6 +2086,7 @@
         updateShowAllToggleButton();
 
         renderCollectedItems(lastCollectedItems);
+        renderEditorDesk();
 
         showCollectMessage(
           "success",
@@ -1892,6 +2100,8 @@
         updateShowAllToggleButton();
 
         collectedItemsContainer.innerHTML = "";
+
+        renderEditorDesk();
 
         showCollectMessage(
           "error",
@@ -2059,7 +2269,7 @@
       }
     });
 
-    collectedItemsContainer.addEventListener("click", function(event) {
+    function handleCandidateListClick(event) {
       const button = event.target.closest("button[data-index]");
 
       if (!button) {
@@ -2073,7 +2283,10 @@
       }
 
       handoffCandidateToAiEditor(index);
-    });
+    }
+
+    collectedItemsContainer.addEventListener("click", handleCandidateListClick);
+    editorDeskContainer.addEventListener("click", handleCandidateListClick);
 
     firebase.auth().onAuthStateChanged(function(user) {
       authCheckingPanel.style.display = "none";
