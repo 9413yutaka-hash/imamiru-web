@@ -563,6 +563,56 @@
       background: linear-gradient(135deg, var(--blue), var(--cyan));
     }
 
+    .collected-toggle-row {
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .collected-toggle-button {
+      min-height: 36px;
+      padding: 0 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #eef5f8;
+      color: var(--navy);
+      font-size: 11px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .collected-toggle-button.active {
+      color: var(--white);
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      border-color: transparent;
+    }
+
+    .collected-item-relevance {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: #fff7ec;
+      color: #7a5b2a;
+      font-size: 11px;
+      line-height: 1.7;
+      word-break: break-word;
+    }
+
+    .collected-item-relevance-score {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 900;
+    }
+
+    .collected-item-relevance-stars {
+      font-size: 13px;
+      letter-spacing: 1px;
+      color: #c98a1c;
+    }
+
     .security-note {
       margin-top: 22px;
       padding-top: 18px;
@@ -946,6 +996,14 @@
         aria-live="polite"
       ></div>
 
+      <div class="collected-toggle-row">
+        <button
+          type="button"
+          id="collectedShowAllToggleButton"
+          class="collected-toggle-button"
+        >すべて表示</button>
+      </div>
+
       <div
         id="collectedItemsContainer"
         class="collected-list"
@@ -991,9 +1049,33 @@
     const MAX_AREA_LENGTH = 80;
     const MAX_FEED_URL_LENGTH = 300;
 
+    const TRAVELER_RELEVANCE_KEYWORDS = [
+      "イベント", "祭り", "花火", "観光", "ビーチ", "海",
+      "台風", "大雨", "津波", "警報", "熱中症",
+      "通行止め", "交通規制", "バス", "ゆいレール", "フェリー",
+      "空港", "欠航", "運休", "観光施設", "営業時間",
+      "臨時休業", "首里城", "美ら海水族館"
+    ];
+
+    const INTERNAL_RELEVANCE_KEYWORDS = [
+      "採用", "入札", "公募", "補助金", "納税", "申請書",
+      "会議", "委員会", "職員", "事業者向け", "制度", "調達"
+    ];
+
+    const RELEVANCE_LABELS_BY_SCORE = {
+      5: "最重要",
+      4: "旅行者向け",
+      3: "要確認",
+      2: "優先度低",
+      1: "行政向け"
+    };
+
+    const RELEVANCE_VISIBLE_MINIMUM_SCORE = 3;
+
     let editingSourceId = null;
     let cachedSources = [];
     let lastCollectedItems = [];
+    let showAllCandidates = false;
 
     const authCheckingPanel = document.getElementById("authCheckingPanel");
     const loginRequiredPanel = document.getElementById("loginRequiredPanel");
@@ -1017,6 +1099,7 @@
 
     const collectedItemsSection = document.getElementById("collectedItemsSection");
     const collectMessageBox = document.getElementById("collectMessageBox");
+    const collectedShowAllToggleButton = document.getElementById("collectedShowAllToggleButton");
     const collectedItemsContainer = document.getElementById("collectedItemsContainer");
 
     function escapeHtml(text) {
@@ -1537,6 +1620,73 @@
       collectMessageBox.textContent = "";
     }
 
+    function computeRelevance(item) {
+      const combinedText =
+        (item.title || "") + " " + (item.summary || "");
+
+      const boostKeywords =
+        TRAVELER_RELEVANCE_KEYWORDS.filter(
+          function(keyword) {
+            return combinedText.includes(keyword);
+          }
+        );
+
+      const dropKeywords =
+        INTERNAL_RELEVANCE_KEYWORDS.filter(
+          function(keyword) {
+            return combinedText.includes(keyword);
+          }
+        );
+
+      const rawScore =
+        2 + boostKeywords.length - dropKeywords.length;
+
+      const relevanceScore =
+        Math.min(5, Math.max(1, rawScore));
+
+      const relevanceLabel =
+        RELEVANCE_LABELS_BY_SCORE[relevanceScore];
+
+      const reasonParts = [];
+
+      if (boostKeywords.length > 0) {
+        reasonParts.push(
+          "旅行者向け：" + boostKeywords.join("、")
+        );
+      }
+
+      if (dropKeywords.length > 0) {
+        reasonParts.push(
+          "優先度低下：" + dropKeywords.join("、")
+        );
+      }
+
+      const relevanceReason =
+        reasonParts.length > 0
+          ? reasonParts.join(" / ")
+          : "一致する判定キーワードはありません。";
+
+      return {
+        relevanceScore: relevanceScore,
+        relevanceLabel: relevanceLabel,
+        relevanceReason: relevanceReason,
+        relevanceBoostKeywords: boostKeywords,
+        relevanceDropKeywords: dropKeywords
+      };
+    }
+
+    function updateShowAllToggleButton() {
+      collectedShowAllToggleButton.textContent =
+        showAllCandidates
+          ? "3点以上のみ表示"
+          : "すべて表示";
+
+      collectedShowAllToggleButton.classList.toggle(
+        "active",
+        showAllCandidates
+      );
+    }
+
     function renderCollectedItems(items) {
       if (!Array.isArray(items) || items.length === 0) {
         collectedItemsContainer.innerHTML =
@@ -1544,14 +1694,71 @@
         return;
       }
 
+      const indexedItems =
+        items.map(
+          function(item, index) {
+            return { item: item, originalIndex: index };
+          }
+        );
+
+      const visibleIndexedItems =
+        showAllCandidates
+          ? indexedItems
+          : indexedItems.filter(
+              function(entry) {
+                return (
+                  entry.item.relevanceScore >=
+                  RELEVANCE_VISIBLE_MINIMUM_SCORE
+                );
+              }
+            );
+
+      if (visibleIndexedItems.length === 0) {
+        collectedItemsContainer.innerHTML =
+          '<div class="source-empty-state">3点以上の候補はありません。「すべて表示」で確認できます。</div>';
+        return;
+      }
+
       try {
-        collectedItemsContainer.innerHTML = items
-          .map(function(item, index) {
+        collectedItemsContainer.innerHTML = visibleIndexedItems
+          .map(function(entry) {
+            const item = entry.item;
+            const index = entry.originalIndex;
+
             const safeTitle = escapeHtml(item.title || "(タイトルなし)");
             const safeSourceName = escapeHtml(item.sourceName || "");
             const safePublishedAt = escapeHtml(item.publishedAt || "公開日時不明");
             const safeSummary = escapeHtml(item.summary || "");
             const safeLink = escapeHtml(item.link || "");
+
+            const relevanceScore =
+              item.relevanceScore || RELEVANCE_VISIBLE_MINIMUM_SCORE;
+
+            const relevanceStars =
+              "★".repeat(relevanceScore) +
+              "☆".repeat(5 - relevanceScore);
+
+            const safeRelevanceLabel =
+              escapeHtml(item.relevanceLabel || "");
+
+            const safeRelevanceReason =
+              escapeHtml(item.relevanceReason || "");
+
+            const safeBoostKeywords =
+              escapeHtml(
+                Array.isArray(item.relevanceBoostKeywords) &&
+                item.relevanceBoostKeywords.length > 0
+                  ? item.relevanceBoostKeywords.join("、")
+                  : "なし"
+              );
+
+            const safeDropKeywords =
+              escapeHtml(
+                Array.isArray(item.relevanceDropKeywords) &&
+                item.relevanceDropKeywords.length > 0
+                  ? item.relevanceDropKeywords.join("、")
+                  : "なし"
+              );
 
             return (
               '<div class="collected-item">' +
@@ -1565,6 +1772,25 @@
               "</div>" +
               '<div class="collected-item-summary">' +
               safeSummary +
+              "</div>" +
+              '<div class="collected-item-relevance">' +
+              '<div class="collected-item-relevance-score">' +
+              '<span class="collected-item-relevance-stars">' +
+              relevanceStars +
+              "</span>" +
+              "<span>" +
+              safeRelevanceLabel +
+              "</span>" +
+              "</div>" +
+              "<div>判定理由：" +
+              safeRelevanceReason +
+              "</div>" +
+              "<div>加点キーワード：" +
+              safeBoostKeywords +
+              "</div>" +
+              "<div>減点キーワード：" +
+              safeDropKeywords +
+              "</div>" +
               "</div>" +
               '<div class="collected-item-actions">' +
               (
@@ -1587,6 +1813,14 @@
           '<div class="source-empty-state">候補一覧を表示できませんでした。</div>';
       }
     }
+
+    collectedShowAllToggleButton.addEventListener("click", function() {
+      showAllCandidates = !showAllCandidates;
+
+      updateShowAllToggleButton();
+
+      renderCollectedItems(lastCollectedItems);
+    });
 
     async function collectSourceItems(sourceId) {
       clearListMessage();
@@ -1631,8 +1865,18 @@
         }
 
         lastCollectedItems = Array.isArray(responseData.items)
-          ? responseData.items
+          ? responseData.items.map(function(item) {
+              return Object.assign(
+                {},
+                item,
+                computeRelevance(item)
+              );
+            })
           : [];
+
+        showAllCandidates = false;
+
+        updateShowAllToggleButton();
 
         renderCollectedItems(lastCollectedItems);
 
@@ -1642,6 +1886,10 @@
         );
       } catch (error) {
         lastCollectedItems = [];
+
+        showAllCandidates = false;
+
+        updateShowAllToggleButton();
 
         collectedItemsContainer.innerHTML = "";
 
