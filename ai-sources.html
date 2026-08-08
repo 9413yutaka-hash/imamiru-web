@@ -637,6 +637,19 @@
       border-color: transparent;
     }
 
+    .duplicate-group-toggle-button {
+      width: 100%;
+      margin-top: 8px;
+    }
+
+    .duplicate-group-members {
+      display: grid;
+      gap: 14px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--border);
+    }
+
     .collected-item-relevance {
       margin-top: 10px;
       padding: 10px 12px;
@@ -2013,6 +2026,281 @@
       };
     }
 
+    const DUPLICATE_TITLE_JACCARD_THRESHOLD = 0.6;
+
+    const LENGTH_RATIO_CONFIRMATION_JACCARD_THRESHOLD = 0.45;
+
+    const RELATED_TITLE_JACCARD_THRESHOLD = 0.35;
+
+    const MINIMUM_LENGTH_RATIO_FOR_DUPLICATE = 0.65;
+
+    const MINIMUM_NORMALIZED_TITLE_LENGTH_FOR_SIMILARITY = 6;
+
+    const SIMILARITY_KEEP_CHARACTERS_REGEX =
+      /[^0-9a-z぀-ゟ゠-ヿ一-鿿０-９Ａ-Ｚａ-ｚ]/g;
+
+    function normalizeTitleForSimilarity(text) {
+      return String(text || "")
+        .trim()
+        .toLowerCase()
+        .replace(
+          SIMILARITY_KEEP_CHARACTERS_REGEX,
+          ""
+        );
+    }
+
+    function buildCharacterBigrams(normalizedText) {
+      const bigramSet = new Set();
+
+      if (
+        typeof normalizedText !== "string" ||
+        normalizedText.length < 2
+      ) {
+        return bigramSet;
+      }
+
+      for (
+        let characterIndex = 0;
+        characterIndex < normalizedText.length - 1;
+        characterIndex++
+      ) {
+        bigramSet.add(
+          normalizedText.slice(
+            characterIndex,
+            characterIndex + 2
+          )
+        );
+      }
+
+      return bigramSet;
+    }
+
+    function calculateJaccardSimilarity(setA, setB) {
+      if (
+        !setA ||
+        !setB ||
+        setA.size === 0 ||
+        setB.size === 0
+      ) {
+        return 0;
+      }
+
+      let intersectionCount = 0;
+
+      setA.forEach(function(token) {
+        if (setB.has(token)) {
+          intersectionCount += 1;
+        }
+      });
+
+      const unionCount =
+        setA.size + setB.size - intersectionCount;
+
+      if (unionCount === 0) {
+        return 0;
+      }
+
+      return intersectionCount / unionCount;
+    }
+
+    function calculateNormalizedTitleLengthRatio(normalizedTitleA, normalizedTitleB) {
+      const lengthA = normalizedTitleA.length;
+      const lengthB = normalizedTitleB.length;
+
+      if (lengthA === 0 || lengthB === 0) {
+        return 0;
+      }
+
+      const shorterLength = Math.min(lengthA, lengthB);
+      const longerLength = Math.max(lengthA, lengthB);
+
+      return shorterLength / longerLength;
+    }
+
+    function judgeSameTopicLevel(itemA, itemB) {
+      const linkA =
+        typeof itemA.link === "string"
+          ? itemA.link.trim()
+          : "";
+
+      const linkB =
+        typeof itemB.link === "string"
+          ? itemB.link.trim()
+          : "";
+
+      if (
+        linkA !== "" &&
+        linkB !== "" &&
+        linkA === linkB
+      ) {
+        return "duplicate";
+      }
+
+      const normalizedTitleA =
+        normalizeTitleForSimilarity(
+          itemA.title
+        );
+
+      const normalizedTitleB =
+        normalizeTitleForSimilarity(
+          itemB.title
+        );
+
+      if (
+        normalizedTitleA.length <
+          MINIMUM_NORMALIZED_TITLE_LENGTH_FOR_SIMILARITY ||
+        normalizedTitleB.length <
+          MINIMUM_NORMALIZED_TITLE_LENGTH_FOR_SIMILARITY
+      ) {
+        return "unique";
+      }
+
+      const similarity =
+        calculateJaccardSimilarity(
+          buildCharacterBigrams(
+            normalizedTitleA
+          ),
+          buildCharacterBigrams(
+            normalizedTitleB
+          )
+        );
+
+      if (
+        similarity >=
+        DUPLICATE_TITLE_JACCARD_THRESHOLD
+      ) {
+        return "duplicate";
+      }
+
+      if (
+        similarity >=
+        LENGTH_RATIO_CONFIRMATION_JACCARD_THRESHOLD
+      ) {
+        const lengthRatio =
+          calculateNormalizedTitleLengthRatio(
+            normalizedTitleA,
+            normalizedTitleB
+          );
+
+        if (
+          lengthRatio >=
+          MINIMUM_LENGTH_RATIO_FOR_DUPLICATE
+        ) {
+          return "duplicate";
+        }
+
+        return "related";
+      }
+
+      if (
+        similarity >=
+        RELATED_TITLE_JACCARD_THRESHOLD
+      ) {
+        return "related";
+      }
+
+      return "unique";
+    }
+
+    function parsePublishedAtTimestamp(publishedAt) {
+      if (
+        typeof publishedAt !== "string" ||
+        publishedAt.trim() === ""
+      ) {
+        return NaN;
+      }
+
+      const parsedTime =
+        Date.parse(
+          publishedAt
+        );
+
+      return Number.isNaN(parsedTime)
+        ? NaN
+        : parsedTime;
+    }
+
+    function compareEntriesForRepresentativeSelection(entryA, entryB) {
+      const scoreA =
+        typeof entryA.item.relevanceScore === "number"
+          ? entryA.item.relevanceScore
+          : 0;
+
+      const scoreB =
+        typeof entryB.item.relevanceScore === "number"
+          ? entryB.item.relevanceScore
+          : 0;
+
+      if (scoreA !== scoreB) {
+        return scoreB - scoreA;
+      }
+
+      const timeA =
+        parsePublishedAtTimestamp(
+          entryA.item.publishedAt
+        );
+
+      const timeB =
+        parsePublishedAtTimestamp(
+          entryB.item.publishedAt
+        );
+
+      const isTimeAValid = !Number.isNaN(timeA);
+      const isTimeBValid = !Number.isNaN(timeB);
+
+      if (isTimeAValid && isTimeBValid && timeA !== timeB) {
+        return timeB - timeA;
+      }
+
+      if (isTimeAValid && !isTimeBValid) {
+        return -1;
+      }
+
+      if (!isTimeAValid && isTimeBValid) {
+        return 1;
+      }
+
+      return entryA.originalIndex - entryB.originalIndex;
+    }
+
+    function buildDuplicateGroups(indexedItems) {
+      const groups = [];
+
+      indexedItems.forEach(function(entry) {
+        const matchedGroup =
+          groups.find(function(group) {
+            return (
+              judgeSameTopicLevel(
+                group.anchorEntry.item,
+                entry.item
+              ) === "duplicate"
+            );
+          });
+
+        if (matchedGroup) {
+          matchedGroup.memberEntries.push(entry);
+          return;
+        }
+
+        groups.push({
+          anchorEntry: entry,
+          memberEntries: [entry]
+        });
+      });
+
+      return groups.map(function(group) {
+        const sortedMemberEntries =
+          group.memberEntries
+            .slice()
+            .sort(compareEntriesForRepresentativeSelection);
+
+        return {
+          representativeEntry: sortedMemberEntries[0],
+          memberEntries: sortedMemberEntries
+        };
+      });
+    }
+
     function buildEditorComment(item) {
       const boostKeywords =
         Array.isArray(item.relevanceBoostKeywords)
@@ -2044,6 +2332,194 @@
       collectedShowAllToggleButton.classList.toggle(
         "active",
         showAllCandidates
+      );
+    }
+
+    function buildCollectedItemCardHtml(entry) {
+      const item = entry.item;
+      const index = entry.originalIndex;
+
+      const safeTitle = escapeHtml(item.title || "(タイトルなし)");
+      const safeSourceName = escapeHtml(item.sourceName || "");
+      const safePublishedAt = escapeHtml(item.publishedAt || "公開日時不明");
+      const safeSummary = escapeHtml(item.summary || "");
+      const safeLink = escapeHtml(item.link || "");
+
+      const relevanceScore =
+        item.relevanceScore || RELEVANCE_VISIBLE_MINIMUM_SCORE;
+
+      const relevanceStars =
+        "★".repeat(relevanceScore) +
+        "☆".repeat(5 - relevanceScore);
+
+      const safeRelevanceLabel =
+        escapeHtml(item.relevanceLabel || "");
+
+      const safeRelevanceReason =
+        escapeHtml(item.relevanceReason || "");
+
+      const safeBoostKeywords =
+        escapeHtml(
+          Array.isArray(item.relevanceBoostKeywords) &&
+          item.relevanceBoostKeywords.length > 0
+            ? item.relevanceBoostKeywords.join("、")
+            : "なし"
+        );
+
+      const safeDropKeywords =
+        escapeHtml(
+          Array.isArray(item.relevanceDropKeywords) &&
+          item.relevanceDropKeywords.length > 0
+            ? item.relevanceDropKeywords.join("、")
+            : "なし"
+        );
+
+      return (
+        '<div class="collected-item">' +
+        '<h3 class="collected-item-title">' +
+        safeTitle +
+        "</h3>" +
+        '<div class="collected-item-meta">' +
+        safeSourceName +
+        "・" +
+        safePublishedAt +
+        "</div>" +
+        '<div class="collected-item-summary">' +
+        safeSummary +
+        "</div>" +
+        '<div class="collected-item-relevance">' +
+        '<div class="collected-item-relevance-score">' +
+        '<span class="collected-item-relevance-stars">' +
+        relevanceStars +
+        "</span>" +
+        "<span>" +
+        safeRelevanceLabel +
+        "</span>" +
+        "</div>" +
+        "<div>判定理由：" +
+        safeRelevanceReason +
+        "</div>" +
+        "<div>加点キーワード：" +
+        safeBoostKeywords +
+        "</div>" +
+        "<div>減点キーワード：" +
+        safeDropKeywords +
+        "</div>" +
+        "</div>" +
+        '<div class="collected-item-actions">' +
+        (
+          safeLink !== ""
+            ? '<a class="collected-open-button" href="' +
+              safeLink +
+              '" target="_blank" rel="noopener noreferrer">元ページを開く</a>'
+            : '<span class="collected-open-button">元ページなし</span>'
+        ) +
+        '<button type="button" class="collected-handoff-button" data-index="' +
+        index +
+        '">AI編集部へ渡す</button>' +
+        "</div>" +
+        "</div>"
+      );
+    }
+
+    function buildEditorDeskCardHtml(entry) {
+      const item = entry.item;
+      const index = entry.originalIndex;
+
+      const safeTitle = escapeHtml(item.title || "(タイトルなし)");
+      const safeSourceName = escapeHtml(item.sourceName || "");
+      const safePublishedAt = escapeHtml(item.publishedAt || "公開日時不明");
+
+      const relevanceScore =
+        item.relevanceScore || RELEVANCE_VISIBLE_MINIMUM_SCORE;
+
+      const relevanceStars =
+        "★".repeat(relevanceScore) +
+        "☆".repeat(5 - relevanceScore);
+
+      const safeEditorComment =
+        escapeHtml(
+          buildEditorComment(item)
+        );
+
+      return (
+        '<div class="collected-item">' +
+        '<div class="collected-item-relevance-stars">' +
+        relevanceStars +
+        "</div>" +
+        '<h3 class="collected-item-title">' +
+        safeTitle +
+        "</h3>" +
+        '<div class="collected-item-meta">' +
+        safeSourceName +
+        "・" +
+        safePublishedAt +
+        "</div>" +
+        '<div class="editor-desk-comment">' +
+        safeEditorComment +
+        "</div>" +
+        '<div class="editor-desk-actions">' +
+        '<button type="button" class="collected-handoff-button" data-index="' +
+        index +
+        '">AI編集部へ渡す</button>' +
+        "</div>" +
+        "</div>"
+      );
+    }
+
+    function renderGroupCardHtml(group, buildCardHtml, idPrefix) {
+      const representativeCardHtml =
+        buildCardHtml(
+          group.representativeEntry
+        );
+
+      if (group.memberEntries.length <= 1) {
+        return representativeCardHtml;
+      }
+
+      const otherMemberEntries =
+        group.memberEntries.filter(
+          function(entry) {
+            return (
+              entry.originalIndex !==
+              group.representativeEntry.originalIndex
+            );
+          }
+        );
+
+      const groupToggleId =
+        idPrefix +
+        group.representativeEntry.originalIndex;
+
+      const toggleLabel =
+        "同じ話題 " +
+        group.memberEntries.length +
+        "件";
+
+      const safeToggleLabel =
+        escapeHtml(toggleLabel);
+
+      const membersHtml =
+        otherMemberEntries
+          .map(buildCardHtml)
+          .join("");
+
+      return (
+        '<div class="duplicate-group">' +
+        representativeCardHtml +
+        '<button type="button" class="collected-toggle-button duplicate-group-toggle-button" data-toggle-target="' +
+        groupToggleId +
+        '" data-toggle-label="' +
+        safeToggleLabel +
+        '">' +
+        safeToggleLabel +
+        "</button>" +
+        '<div class="duplicate-group-members" id="' +
+        groupToggleId +
+        '" style="display: none;">' +
+        membersHtml +
+        "</div>" +
+        "</div>"
       );
     }
 
@@ -2079,92 +2555,25 @@
         return;
       }
 
+      const displayGroups =
+        showAllCandidates
+          ? visibleIndexedItems.map(
+              function(entry) {
+                return {
+                  representativeEntry: entry,
+                  memberEntries: [entry]
+                };
+              }
+            )
+          : buildDuplicateGroups(visibleIndexedItems);
+
       try {
-        collectedItemsContainer.innerHTML = visibleIndexedItems
-          .map(function(entry) {
-            const item = entry.item;
-            const index = entry.originalIndex;
-
-            const safeTitle = escapeHtml(item.title || "(タイトルなし)");
-            const safeSourceName = escapeHtml(item.sourceName || "");
-            const safePublishedAt = escapeHtml(item.publishedAt || "公開日時不明");
-            const safeSummary = escapeHtml(item.summary || "");
-            const safeLink = escapeHtml(item.link || "");
-
-            const relevanceScore =
-              item.relevanceScore || RELEVANCE_VISIBLE_MINIMUM_SCORE;
-
-            const relevanceStars =
-              "★".repeat(relevanceScore) +
-              "☆".repeat(5 - relevanceScore);
-
-            const safeRelevanceLabel =
-              escapeHtml(item.relevanceLabel || "");
-
-            const safeRelevanceReason =
-              escapeHtml(item.relevanceReason || "");
-
-            const safeBoostKeywords =
-              escapeHtml(
-                Array.isArray(item.relevanceBoostKeywords) &&
-                item.relevanceBoostKeywords.length > 0
-                  ? item.relevanceBoostKeywords.join("、")
-                  : "なし"
-              );
-
-            const safeDropKeywords =
-              escapeHtml(
-                Array.isArray(item.relevanceDropKeywords) &&
-                item.relevanceDropKeywords.length > 0
-                  ? item.relevanceDropKeywords.join("、")
-                  : "なし"
-              );
-
-            return (
-              '<div class="collected-item">' +
-              '<h3 class="collected-item-title">' +
-              safeTitle +
-              "</h3>" +
-              '<div class="collected-item-meta">' +
-              safeSourceName +
-              "・" +
-              safePublishedAt +
-              "</div>" +
-              '<div class="collected-item-summary">' +
-              safeSummary +
-              "</div>" +
-              '<div class="collected-item-relevance">' +
-              '<div class="collected-item-relevance-score">' +
-              '<span class="collected-item-relevance-stars">' +
-              relevanceStars +
-              "</span>" +
-              "<span>" +
-              safeRelevanceLabel +
-              "</span>" +
-              "</div>" +
-              "<div>判定理由：" +
-              safeRelevanceReason +
-              "</div>" +
-              "<div>加点キーワード：" +
-              safeBoostKeywords +
-              "</div>" +
-              "<div>減点キーワード：" +
-              safeDropKeywords +
-              "</div>" +
-              "</div>" +
-              '<div class="collected-item-actions">' +
-              (
-                safeLink !== ""
-                  ? '<a class="collected-open-button" href="' +
-                    safeLink +
-                    '" target="_blank" rel="noopener noreferrer">元ページを開く</a>'
-                  : '<span class="collected-open-button">元ページなし</span>'
-              ) +
-              '<button type="button" class="collected-handoff-button" data-index="' +
-              index +
-              '">AI編集部へ渡す</button>' +
-              "</div>" +
-              "</div>"
+        collectedItemsContainer.innerHTML = displayGroups
+          .map(function(group) {
+            return renderGroupCardHtml(
+              group,
+              buildCollectedItemCardHtml,
+              "collectedDuplicateGroup"
             );
           })
           .join("");
@@ -2201,50 +2610,18 @@
         return;
       }
 
+      const editorDeskGroups =
+        buildDuplicateGroups(
+          visibleIndexedItems
+        );
+
       try {
-        editorDeskContainer.innerHTML = visibleIndexedItems
-          .map(function(entry) {
-            const item = entry.item;
-            const index = entry.originalIndex;
-
-            const safeTitle = escapeHtml(item.title || "(タイトルなし)");
-            const safeSourceName = escapeHtml(item.sourceName || "");
-            const safePublishedAt = escapeHtml(item.publishedAt || "公開日時不明");
-
-            const relevanceScore =
-              item.relevanceScore || RELEVANCE_VISIBLE_MINIMUM_SCORE;
-
-            const relevanceStars =
-              "★".repeat(relevanceScore) +
-              "☆".repeat(5 - relevanceScore);
-
-            const safeEditorComment =
-              escapeHtml(
-                buildEditorComment(item)
-              );
-
-            return (
-              '<div class="collected-item">' +
-              '<div class="collected-item-relevance-stars">' +
-              relevanceStars +
-              "</div>" +
-              '<h3 class="collected-item-title">' +
-              safeTitle +
-              "</h3>" +
-              '<div class="collected-item-meta">' +
-              safeSourceName +
-              "・" +
-              safePublishedAt +
-              "</div>" +
-              '<div class="editor-desk-comment">' +
-              safeEditorComment +
-              "</div>" +
-              '<div class="editor-desk-actions">' +
-              '<button type="button" class="collected-handoff-button" data-index="' +
-              index +
-              '">AI編集部へ渡す</button>' +
-              "</div>" +
-              "</div>"
+        editorDeskContainer.innerHTML = editorDeskGroups
+          .map(function(group) {
+            return renderGroupCardHtml(
+              group,
+              buildEditorDeskCardHtml,
+              "editorDeskDuplicateGroup"
             );
           })
           .join("");
@@ -2948,6 +3325,43 @@
 
     collectedItemsContainer.addEventListener("click", handleCandidateListClick);
     editorDeskContainer.addEventListener("click", handleCandidateListClick);
+
+    function handleDuplicateGroupToggleClick(event) {
+      const toggleButton =
+        event.target.closest("button[data-toggle-target]");
+
+      if (!toggleButton) {
+        return;
+      }
+
+      const targetElement =
+        document.getElementById(
+          toggleButton.dataset.toggleTarget
+        );
+
+      if (!targetElement) {
+        return;
+      }
+
+      const isCurrentlyHidden =
+        targetElement.style.display === "none";
+
+      targetElement.style.display =
+        isCurrentlyHidden ? "block" : "none";
+
+      toggleButton.textContent =
+        isCurrentlyHidden
+          ? "閉じる"
+          : toggleButton.dataset.toggleLabel;
+
+      toggleButton.classList.toggle(
+        "active",
+        isCurrentlyHidden
+      );
+    }
+
+    collectedItemsContainer.addEventListener("click", handleDuplicateGroupToggleClick);
+    editorDeskContainer.addEventListener("click", handleDuplicateGroupToggleClick);
 
     firebase.auth().onAuthStateChanged(function(user) {
       authCheckingPanel.style.display = "none";
