@@ -1820,7 +1820,7 @@
       try {
         const idToken = await getIdTokenOrThrow();
 
-        const response = await fetch("/api/admin-source-update", {
+        const response = await fetch("/api/admin-source-save", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -2366,9 +2366,7 @@
       try {
         const idToken = await getIdTokenOrThrow();
 
-        const endpoint = editingSourceId
-          ? "/api/admin-source-update"
-          : "/api/admin-source-create";
+        const endpoint = "/api/admin-source-save";
 
         const payload = {
           name: sourceFields.name,

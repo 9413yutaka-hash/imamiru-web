@@ -119,6 +119,9 @@ const FIELD_MAX_LENGTHS = {
 const ALLOWED_PRIORITY_VALUES = [1, 2, 3, 4, 5];
 
 
+const MAX_SOURCE_COUNT = 100;
+
+
 function validateSourceFields(
   requestBody
 ) {
@@ -264,6 +267,219 @@ function validateSourceFields(
 }
 
 
+async function createSource(
+  database,
+  requestBody,
+  response
+) {
+  let sourceFields;
+
+  try {
+    sourceFields =
+      validateSourceFields(
+        requestBody
+      );
+  } catch (validationError) {
+    return response.status(400).json({
+      success: false,
+      message:
+        validationError.message
+    });
+  }
+
+  const duplicateSnapshot =
+    await database
+      .collection(
+        "aiSources"
+      )
+      .where(
+        "url",
+        "==",
+        sourceFields.url
+      )
+      .limit(1)
+      .get();
+
+  if (
+    !duplicateSnapshot.empty
+  ) {
+    return response.status(409).json({
+      success: false,
+      message:
+        "このURLは既に登録されています。"
+    });
+  }
+
+  const countSnapshot =
+    await database
+      .collection(
+        "aiSources"
+      )
+      .count()
+      .get();
+
+  if (
+    countSnapshot.data().count >=
+    MAX_SOURCE_COUNT
+  ) {
+    return response.status(400).json({
+      success: false,
+      message:
+        "情報源の登録件数が上限（" +
+        MAX_SOURCE_COUNT +
+        "件）に達しています。"
+    });
+  }
+
+  await database
+    .collection(
+      "aiSources"
+    )
+    .add({
+      name:
+        sourceFields.name,
+
+      url:
+        sourceFields.url,
+
+      sourceType:
+        sourceFields.sourceType,
+
+      area:
+        sourceFields.area,
+
+      isEnabled:
+        sourceFields.isEnabled,
+
+      feedUrl:
+        sourceFields.feedUrl,
+
+      priority:
+        sourceFields.priority,
+
+      createdAt:
+        FieldValue.serverTimestamp(),
+
+      updatedAt:
+        FieldValue.serverTimestamp()
+    });
+
+  return response.status(200).json({
+    success: true,
+    message:
+      "情報源を登録しました。"
+  });
+}
+
+
+async function updateSource(
+  database,
+  documentId,
+  requestBody,
+  response
+) {
+  const documentReference =
+    database
+      .collection(
+        "aiSources"
+      )
+      .doc(
+        documentId
+      );
+
+  const documentSnapshot =
+    await documentReference.get();
+
+  if (
+    !documentSnapshot.exists
+  ) {
+    return response.status(404).json({
+      success: false,
+      message:
+        "対象の情報源が見つかりませんでした。"
+    });
+  }
+
+  let sourceFields;
+
+  try {
+    sourceFields =
+      validateSourceFields(
+        requestBody
+      );
+  } catch (validationError) {
+    return response.status(400).json({
+      success: false,
+      message:
+        validationError.message
+    });
+  }
+
+  const duplicateSnapshot =
+    await database
+      .collection(
+        "aiSources"
+      )
+      .where(
+        "url",
+        "==",
+        sourceFields.url
+      )
+      .limit(10)
+      .get();
+
+  const hasDuplicate =
+    duplicateSnapshot.docs.some(
+      function(otherDocumentSnapshot) {
+        return (
+          otherDocumentSnapshot.id !==
+          documentId
+        );
+      }
+    );
+
+  if (hasDuplicate) {
+    return response.status(409).json({
+      success: false,
+      message:
+        "このURLは既に登録されています。"
+    });
+  }
+
+  await documentReference.update({
+    name:
+      sourceFields.name,
+
+    url:
+      sourceFields.url,
+
+    sourceType:
+      sourceFields.sourceType,
+
+    area:
+      sourceFields.area,
+
+    isEnabled:
+      sourceFields.isEnabled,
+
+    feedUrl:
+      sourceFields.feedUrl,
+
+    priority:
+      sourceFields.priority,
+
+    updatedAt:
+      FieldValue.serverTimestamp()
+  });
+
+  return response.status(200).json({
+    success: true,
+    message:
+      "情報源を更新しました。"
+  });
+}
+
+
 export default async function handler(
   request,
   response
@@ -360,126 +576,33 @@ export default async function handler(
         ? requestBody.documentId.trim()
         : "";
 
-    if (documentId === "") {
-      return response.status(400).json({
-        success: false,
-        message:
-          "documentIdを指定してください。"
-      });
-    }
-
     const database =
       getFirestore(app);
 
-    const documentReference =
-      database
-        .collection(
-          "aiSources"
-        )
-        .doc(
-          documentId
-        );
-
-    const documentSnapshot =
-      await documentReference.get();
-
-    if (
-      !documentSnapshot.exists
-    ) {
-      return response.status(404).json({
-        success: false,
-        message:
-          "対象の情報源が見つかりませんでした。"
-      });
-    }
-
-    let sourceFields;
-
-    try {
-      sourceFields =
-        validateSourceFields(
-          requestBody
-        );
-    } catch (validationError) {
-      return response.status(400).json({
-        success: false,
-        message:
-          validationError.message
-      });
-    }
-
-    const duplicateSnapshot =
-      await database
-        .collection(
-          "aiSources"
-        )
-        .where(
-          "url",
-          "==",
-          sourceFields.url
-        )
-        .limit(10)
-        .get();
-
-    const hasDuplicate =
-      duplicateSnapshot.docs.some(
-        function(otherDocumentSnapshot) {
-          return (
-            otherDocumentSnapshot.id !==
-            documentId
-          );
-        }
+    if (documentId === "") {
+      return await createSource(
+        database,
+        requestBody,
+        response
       );
-
-    if (hasDuplicate) {
-      return response.status(409).json({
-        success: false,
-        message:
-          "このURLは既に登録されています。"
-      });
     }
 
-    await documentReference.update({
-      name:
-        sourceFields.name,
-
-      url:
-        sourceFields.url,
-
-      sourceType:
-        sourceFields.sourceType,
-
-      area:
-        sourceFields.area,
-
-      isEnabled:
-        sourceFields.isEnabled,
-
-      feedUrl:
-        sourceFields.feedUrl,
-
-      priority:
-        sourceFields.priority,
-
-      updatedAt:
-        FieldValue.serverTimestamp()
-    });
-
-    return response.status(200).json({
-      success: true,
-      message:
-        "情報源を更新しました。"
-    });
+    return await updateSource(
+      database,
+      documentId,
+      requestBody,
+      response
+    );
   } catch (error) {
     console.error(
-      "情報源の更新エラー：",
+      "情報源の保存エラー：",
       error
     );
 
     return response.status(500).json({
       success: false,
       message:
-        "情報源の更新に失敗しました。時間をおいて、もう一度お試しください。"
+        "情報源の保存に失敗しました。時間をおいて、もう一度お試しください。"
     });
   }
 }
