@@ -375,6 +375,46 @@
       color: #b33c49;
     }
 
+    textarea {
+      min-height: 220px;
+      padding: 14px 15px;
+      resize: vertical;
+      font-family: "Consolas", "Menlo", monospace;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .bulk-result-item {
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #fbfdff;
+      font-size: 12px;
+      line-height: 1.7;
+    }
+
+    .bulk-result-item + .bulk-result-item {
+      margin-top: 8px;
+    }
+
+    .bulk-result-item.status-ok {
+      border-color: #bcebd4;
+      background: #f3fffa;
+      color: #16734b;
+    }
+
+    .bulk-result-item.status-error {
+      border-color: #ffd0d4;
+      background: #fff5f6;
+      color: #b33c49;
+    }
+
+    .bulk-result-item.status-duplicate {
+      border-color: #ffe1b3;
+      background: #fff9ef;
+      color: #96631a;
+    }
+
     .source-list {
       display: grid;
       gap: 14px;
@@ -980,6 +1020,80 @@
     </section>
 
     <section
+      id="bulkImportSection"
+      class="form-card"
+      style="display: none;"
+    >
+
+      <div class="form-heading">
+        <h2>一括登録（JSON）</h2>
+        <p>
+          複数の情報源をまとめて登録します。1回に登録できるのは30件までです。
+          1件でもエラーまたは重複がある場合は、1件も登録されません。
+        </p>
+      </div>
+
+      <div
+        id="bulkImportMessageBox"
+        class="message-box"
+        role="status"
+        aria-live="polite"
+      ></div>
+
+      <div class="notice-box">
+        項目：name（情報源名・必須）／url（情報源URL・必須）／sourceType（種類・必須）／area（対象地域・任意）／feedUrl（RSS
+        URL・任意）／priority（情報源ランク1〜5・未指定なら3）／isEnabled（有効／停止・未指定ならtrue）
+      </div>
+
+      <div class="form-group">
+
+        <label
+          class="form-label"
+          for="bulkImportTextarea"
+        >
+          JSONデータ
+          <span class="required">必須</span>
+        </label>
+
+        <textarea
+          id="bulkImportTextarea"
+          rows="10"
+          placeholder='[&#10;  {&#10;    &quot;name&quot;: &quot;〇〇市役所&quot;,&#10;    &quot;url&quot;: &quot;https://example.jp/news/&quot;,&#10;    &quot;feedUrl&quot;: &quot;https://example.jp/feed/&quot;,&#10;    &quot;sourceType&quot;: &quot;行政&quot;,&#10;    &quot;area&quot;: &quot;〇〇市&quot;,&#10;    &quot;priority&quot;: 3,&#10;    &quot;isEnabled&quot;: true&#10;  }&#10;]'
+        ></textarea>
+
+        <p class="form-help">
+          JSON配列で入力してください（最大30件）。priority・isEnabled・feedUrl・areaは省略できます。
+        </p>
+
+      </div>
+
+      <button
+        id="bulkImportSubmitButton"
+        class="submit-button"
+        type="button"
+      >
+        内容を確認して一括登録
+      </button>
+
+      <div
+        id="bulkImportResultBox"
+        style="display: none; margin-top: 18px;"
+      >
+
+        <div
+          id="bulkImportResultSummary"
+          class="notice-box"
+        ></div>
+
+        <div
+          id="bulkImportResultList"
+        ></div>
+
+      </div>
+
+    </section>
+
+    <section
       id="sourceListSection"
       class="form-card"
       style="display: none;"
@@ -1228,6 +1342,16 @@
     const sourceIsEnabledInput = document.getElementById("sourceIsEnabledInput");
     const sourceSubmitButton = document.getElementById("sourceSubmitButton");
     const cancelEditButton = document.getElementById("cancelEditButton");
+
+    const bulkImportSection = document.getElementById("bulkImportSection");
+    const bulkImportMessageBox = document.getElementById("bulkImportMessageBox");
+    const bulkImportTextarea = document.getElementById("bulkImportTextarea");
+    const bulkImportSubmitButton = document.getElementById("bulkImportSubmitButton");
+    const bulkImportResultBox = document.getElementById("bulkImportResultBox");
+    const bulkImportResultSummary = document.getElementById("bulkImportResultSummary");
+    const bulkImportResultList = document.getElementById("bulkImportResultList");
+
+    const MAX_BULK_IMPORT_ITEM_COUNT = 30;
 
     const sourceSearchInput = document.getElementById("sourceSearchInput");
     const listMessageBox = document.getElementById("listMessageBox");
@@ -2304,6 +2428,191 @@
       }
     }
 
+    function showBulkImportMessage(type, message) {
+      bulkImportMessageBox.className = "message-box visible " + type;
+      bulkImportMessageBox.textContent = message;
+    }
+
+    function clearBulkImportMessage() {
+      bulkImportMessageBox.className = "message-box";
+      bulkImportMessageBox.textContent = "";
+    }
+
+    function statusLabelForBulkResult(status) {
+      if (status === "ok") {
+        return "登録OK";
+      }
+
+      if (status === "duplicate") {
+        return "重複";
+      }
+
+      return "エラー";
+    }
+
+    function renderBulkImportResult(summary, results) {
+      bulkImportResultBox.style.display = "block";
+
+      const safeSummaryText =
+        "入力件数：" + summary.totalCount + "件　" +
+        "成功：" + summary.successCount + "件　" +
+        "重複：" + summary.duplicateCount + "件　" +
+        "エラー：" + summary.errorCount + "件";
+
+      bulkImportResultSummary.textContent = safeSummaryText;
+
+      const problemResults =
+        Array.isArray(results)
+          ? results.filter(function(result) {
+              return result.status !== "ok";
+            })
+          : [];
+
+      if (problemResults.length === 0) {
+        bulkImportResultList.innerHTML = "";
+        return;
+      }
+
+      try {
+        bulkImportResultList.innerHTML = problemResults
+          .map(function(result) {
+            const safeStatusClass =
+              "status-" +
+              (result.status === "duplicate" ? "duplicate" : "error");
+
+            const safeStatusLabel =
+              escapeHtml(statusLabelForBulkResult(result.status));
+
+            const safeMessage =
+              escapeHtml(result.message || "");
+
+            return (
+              '<div class="bulk-result-item ' +
+              safeStatusClass +
+              '">' +
+              (result.row + "行目：【" + safeStatusLabel + "】" + safeMessage) +
+              "</div>"
+            );
+          })
+          .join("");
+      } catch (error) {
+        bulkImportResultList.innerHTML =
+          '<div class="bulk-result-item status-error">結果の表示に失敗しました。</div>';
+      }
+    }
+
+    function setBulkImportSubmitting(submitting) {
+      bulkImportTextarea.disabled = submitting;
+      bulkImportSubmitButton.disabled = submitting;
+
+      bulkImportSubmitButton.textContent = submitting
+        ? "登録しています…"
+        : "内容を確認して一括登録";
+    }
+
+    async function submitBulkImport() {
+      clearBulkImportMessage();
+
+      bulkImportResultBox.style.display = "none";
+      bulkImportResultSummary.textContent = "";
+      bulkImportResultList.innerHTML = "";
+
+      const rawText = bulkImportTextarea.value.trim();
+
+      if (rawText === "") {
+        showBulkImportMessage("error", "JSONデータを入力してください。");
+        return;
+      }
+
+      let parsedItems;
+
+      try {
+        parsedItems = JSON.parse(rawText);
+      } catch (parseError) {
+        showBulkImportMessage(
+          "error",
+          "JSONの形式が正しくありません。入力内容を確認してください。"
+        );
+        return;
+      }
+
+      if (!Array.isArray(parsedItems) || parsedItems.length === 0) {
+        showBulkImportMessage(
+          "error",
+          "JSON配列（[ ]で囲まれた一覧）で入力してください。"
+        );
+        return;
+      }
+
+      if (parsedItems.length > MAX_BULK_IMPORT_ITEM_COUNT) {
+        showBulkImportMessage(
+          "error",
+          "一度に登録できるのは" +
+            MAX_BULK_IMPORT_ITEM_COUNT +
+            "件までです。（入力：" +
+            parsedItems.length +
+            "件）"
+        );
+        return;
+      }
+
+      setBulkImportSubmitting(true);
+
+      try {
+        const idToken = await getIdTokenOrThrow();
+
+        const response = await fetch("/api/admin-source-bulk-create", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + idToken
+          },
+          body: JSON.stringify({ items: parsedItems })
+        });
+
+        let responseData = null;
+
+        try {
+          responseData = await response.json();
+        } catch (jsonError) {
+          throw new Error("サーバーからの応答を読み取れませんでした。");
+        }
+
+        if (responseData && responseData.summary) {
+          renderBulkImportResult(
+            responseData.summary,
+            responseData.results
+          );
+        }
+
+        if (!response.ok || !responseData.success) {
+          throw new Error(
+            responseData && responseData.message
+              ? responseData.message
+              : "一括登録に失敗しました。"
+          );
+        }
+
+        showBulkImportMessage(
+          "success",
+          responseData.message || "一括登録が完了しました。"
+        );
+
+        bulkImportTextarea.value = "";
+
+        await loadAndRenderSources();
+      } catch (error) {
+        showBulkImportMessage(
+          "error",
+          error && error.message ? error.message : "一括登録に失敗しました。"
+        );
+      } finally {
+        setBulkImportSubmitting(false);
+      }
+    }
+
+    bulkImportSubmitButton.addEventListener("click", submitBulkImport);
+
     sourceSubmitButton.addEventListener("click", createOrUpdateSource);
 
     cancelEditButton.addEventListener("click", function() {
@@ -2378,6 +2687,7 @@
 
       if (!isAdminUser) {
         sourceFormSection.style.display = "none";
+        bulkImportSection.style.display = "none";
         sourceListSection.style.display = "none";
         loginRequiredPanel.style.display = "block";
         return;
@@ -2385,6 +2695,7 @@
 
       loginRequiredPanel.style.display = "none";
       sourceFormSection.style.display = "block";
+      bulkImportSection.style.display = "block";
       sourceListSection.style.display = "block";
 
       loadAndRenderSources();
