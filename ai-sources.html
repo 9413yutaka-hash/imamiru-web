@@ -1108,6 +1108,34 @@
 
       <div class="form-group">
 
+        <button
+          id="bulkCollectButton"
+          type="button"
+          class="source-collect-button"
+        >
+          まとめて情報を集める
+        </button>
+
+        <p class="form-help">
+          有効かつRSS URLが設定されている情報源だけを対象に、まとめて情報を取得します。
+        </p>
+
+        <div
+          id="bulkCollectMessageBox"
+          class="message-box"
+          role="status"
+          aria-live="polite"
+        ></div>
+
+        <div
+          id="bulkCollectResultList"
+          style="display: none;"
+        ></div>
+
+      </div>
+
+      <div class="form-group">
+
         <label
           class="form-label"
           for="sourceSearchInput"
@@ -1352,6 +1380,14 @@
     const bulkImportResultList = document.getElementById("bulkImportResultList");
 
     const MAX_BULK_IMPORT_ITEM_COUNT = 30;
+
+    const bulkCollectButton = document.getElementById("bulkCollectButton");
+    const bulkCollectMessageBox = document.getElementById("bulkCollectMessageBox");
+    const bulkCollectResultList = document.getElementById("bulkCollectResultList");
+
+    const BULK_COLLECT_MAX_CONCURRENCY = 2;
+
+    let bulkCollectInProgress = false;
 
     const sourceSearchInput = document.getElementById("sourceSearchInput");
     const listMessageBox = document.getElementById("listMessageBox");
@@ -2312,6 +2348,244 @@
         );
       }
     }
+
+    function getBulkCollectTargetSources() {
+      return cachedSources.filter(function(source) {
+        return (
+          source.isEnabled === true &&
+          typeof source.feedUrl === "string" &&
+          source.feedUrl.trim() !== ""
+        );
+      });
+    }
+
+    function showBulkCollectMessage(type, message) {
+      bulkCollectMessageBox.className = "message-box visible " + type;
+      bulkCollectMessageBox.textContent = message;
+    }
+
+    function clearBulkCollectMessage() {
+      bulkCollectMessageBox.className = "message-box";
+      bulkCollectMessageBox.textContent = "";
+    }
+
+    function renderBulkCollectFailures(failedSources) {
+      if (!Array.isArray(failedSources) || failedSources.length === 0) {
+        bulkCollectResultList.style.display = "none";
+        bulkCollectResultList.innerHTML = "";
+        return;
+      }
+
+      bulkCollectResultList.style.display = "block";
+
+      try {
+        bulkCollectResultList.innerHTML = failedSources
+          .map(function(failure) {
+            const safeSourceName =
+              escapeHtml(failure.sourceName || "(名称未設定)");
+
+            const safeMessage =
+              escapeHtml(failure.message || "");
+
+            return (
+              '<div class="bulk-result-item status-error">' +
+              safeSourceName +
+              "：" +
+              safeMessage +
+              "</div>"
+            );
+          })
+          .join("");
+      } catch (error) {
+        bulkCollectResultList.innerHTML =
+          '<div class="bulk-result-item status-error">失敗情報の表示に失敗しました。</div>';
+      }
+    }
+
+    async function fetchCollectItemsForSource(source, idToken) {
+      const response = await fetch("/api/admin-source-collect", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + idToken
+        },
+        body: JSON.stringify({ documentId: source.id })
+      });
+
+      let responseData = null;
+
+      try {
+        responseData = await response.json();
+      } catch (jsonError) {
+        throw new Error("サーバーからの応答を読み取れませんでした。");
+      }
+
+      if (!response.ok || !responseData.success) {
+        throw new Error(
+          responseData && responseData.message
+            ? responseData.message
+            : "情報の取得に失敗しました。"
+        );
+      }
+
+      return Array.isArray(responseData.items) ? responseData.items : [];
+    }
+
+    async function collectAllEnabledSources() {
+      if (bulkCollectInProgress) {
+        return;
+      }
+
+      clearBulkCollectMessage();
+      renderBulkCollectFailures([]);
+
+      const targetSources = getBulkCollectTargetSources();
+
+      if (targetSources.length === 0) {
+        showBulkCollectMessage(
+          "error",
+          "収集できるRSS情報源がありません。"
+        );
+        return;
+      }
+
+      bulkCollectInProgress = true;
+      bulkCollectButton.disabled = true;
+      bulkCollectButton.textContent = "収集しています…";
+
+      const totalCount = targetSources.length;
+      let completedCount = 0;
+      let successCount = 0;
+      const allCollectedItems = [];
+      const failedSources = [];
+
+      try {
+        const idToken = await getIdTokenOrThrow();
+
+        showBulkCollectMessage(
+          "success",
+          totalCount +
+            "情報源を収集中…\n" +
+            completedCount +
+            " / " +
+            totalCount +
+            " 完了"
+        );
+
+        let nextSourceIndex = 0;
+
+        async function runBulkCollectWorker() {
+          while (nextSourceIndex < targetSources.length) {
+            const currentSourceIndex = nextSourceIndex;
+            nextSourceIndex += 1;
+
+            const source = targetSources[currentSourceIndex];
+
+            try {
+              const items =
+                await fetchCollectItemsForSource(
+                  source,
+                  idToken
+                );
+
+              items.forEach(function(item) {
+                allCollectedItems.push(
+                  Object.assign(
+                    {},
+                    item,
+                    {
+                      sourceId: source.id,
+                      sourcePriority: source.priority
+                    }
+                  )
+                );
+              });
+
+              successCount += 1;
+            } catch (collectError) {
+              failedSources.push({
+                sourceName: source.name || "",
+                message:
+                  collectError && collectError.message
+                    ? collectError.message
+                    : "情報の取得に失敗しました。"
+              });
+            }
+
+            completedCount += 1;
+
+            showBulkCollectMessage(
+              "success",
+              totalCount +
+                "情報源を収集中…\n" +
+                completedCount +
+                " / " +
+                totalCount +
+                " 完了"
+            );
+          }
+        }
+
+        const workerCount =
+          Math.min(
+            BULK_COLLECT_MAX_CONCURRENCY,
+            targetSources.length
+          );
+
+        const workers = [];
+
+        for (
+          let workerIndex = 0;
+          workerIndex < workerCount;
+          workerIndex++
+        ) {
+          workers.push(
+            runBulkCollectWorker()
+          );
+        }
+
+        await Promise.all(workers);
+
+        lastCollectedItems = allCollectedItems.map(function(item) {
+          return Object.assign(
+            {},
+            item,
+            computeRelevance(item)
+          );
+        });
+
+        showAllCandidates = false;
+
+        updateShowAllToggleButton();
+
+        collectedItemsSection.style.display = "block";
+        editorDeskSection.style.display = "block";
+
+        renderCollectedItems(lastCollectedItems);
+        renderEditorDesk();
+
+        renderBulkCollectFailures(failedSources);
+
+        showBulkCollectMessage(
+          failedSources.length === 0 ? "success" : "error",
+          "取得対象：" + totalCount + "件\n" +
+          "成功：" + successCount + "件\n" +
+          "失敗：" + failedSources.length + "件\n" +
+          "取得候補：" + lastCollectedItems.length + "件"
+        );
+      } catch (error) {
+        showBulkCollectMessage(
+          "error",
+          error && error.message ? error.message : "一括収集に失敗しました。"
+        );
+      } finally {
+        bulkCollectInProgress = false;
+        bulkCollectButton.disabled = false;
+        bulkCollectButton.textContent = "まとめて情報を集める";
+      }
+    }
+
+    bulkCollectButton.addEventListener("click", collectAllEnabledSources);
 
     function handoffCandidateToAiEditor(index) {
       const item = lastCollectedItems[index];
