@@ -497,7 +497,7 @@ export default async function handler(
       )
       .add({
         shopName:
-          "イマミル運営",
+          "マチナウ運営",
 
         title:
           postFields.title,
@@ -535,7 +535,7 @@ export default async function handler(
           "admin",
 
         sourceLabel:
-          "イマミル運営より",
+          "マチナウ運営より",
 
         createdAt:
           FieldValue.serverTimestamp(),

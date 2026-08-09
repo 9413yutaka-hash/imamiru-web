@@ -15,11 +15,11 @@
 
   <meta
     name="description"
-    content="イマミル運営が元情報から運営投稿の下書きを作成するための管理者専用ページです。"
+    content="マチナウ運営が元情報から運営投稿の下書きを作成するための管理者専用ページです。"
   >
 
   <title>
-    AI編集部｜イマミル管理
+    AI編集部｜マチナウ管理
   </title>
 
   <style>
@@ -506,7 +506,7 @@
 
         <div>
           <p class="brand-name">
-            イマミル管理
+            マチナウ管理
           </p>
 
           <p class="brand-caption">
@@ -977,7 +977,7 @@
   </main>
 
   <footer>
-    イマミル Web Version 1.2<br>
+    マチナウ Web Version 1.2<br>
     このページは運営者専用です。
   </footer>
 
@@ -1017,7 +1017,8 @@
       "未確認情報"
     ];
 
-    const HISTORY_STORAGE_KEY = "imamiruAiDraftHistory";
+    const HISTORY_STORAGE_KEY = "machinauAiDraftHistory";
+    const LEGACY_HISTORY_STORAGE_KEY = "imamiruAiDraftHistory";
     const MAX_HISTORY_COUNT = 50;
 
     const authCheckingPanel = document.getElementById("authCheckingPanel");
@@ -1203,9 +1204,9 @@
         sourceUrlValue !== "" ? sourceUrlValue : "なし";
 
       return (
-        "あなたはイマミルAI編集部です。\n" +
+        "あなたはマチナウAI編集部です。\n" +
         "\n" +
-        "【イマミル編集ルール】\n" +
+        "【マチナウ編集ルール】\n" +
         "\n" +
         "・旅行者に寄り添う\n" +
         "・安心感を与える\n" +
@@ -1499,7 +1500,7 @@
 
     function buildPolishPrompt(titleValue, contentValue) {
       return (
-        "あなたはイマミルAI編集部です。\n" +
+        "あなたはマチナウAI編集部です。\n" +
         "\n" +
         "以下のタイトルと本文について、事実や意味を変えずに、\n" +
         "誤字脱字の修正・読みやすさの向上・丁寧な表現への調整だけを行ってください。\n" +
@@ -1654,7 +1655,25 @@
       }
 
       if (!rawHistory) {
-        return [];
+        let rawLegacyHistory = null;
+
+        try {
+          rawLegacyHistory = localStorage.getItem(LEGACY_HISTORY_STORAGE_KEY);
+        } catch (error) {
+          rawLegacyHistory = null;
+        }
+
+        if (!rawLegacyHistory) {
+          return [];
+        }
+
+        try {
+          localStorage.setItem(HISTORY_STORAGE_KEY, rawLegacyHistory);
+        } catch (error) {
+          // 新キーへの移行に失敗しても、今回の読み込みは旧データで継続する
+        }
+
+        rawHistory = rawLegacyHistory;
       }
 
       try {
@@ -1867,7 +1886,7 @@
       }
 
       try {
-        sessionStorage.setItem("imamiruAiDraft", JSON.stringify(draft));
+        sessionStorage.setItem("machinauAiDraft", JSON.stringify(draft));
       } catch (error) {
         showPreviewMessage(
           "error",
@@ -1906,9 +1925,15 @@
 
     function applyCollectedSourceItemIfPresent() {
       let rawItem = null;
+      let usedLegacyStorageKey = false;
 
       try {
-        rawItem = sessionStorage.getItem("imamiruCollectedSourceItem");
+        rawItem = sessionStorage.getItem("machinauCollectedSourceItem");
+
+        if (!rawItem) {
+          rawItem = sessionStorage.getItem("imamiruCollectedSourceItem");
+          usedLegacyStorageKey = rawItem !== null;
+        }
       } catch (error) {
         return;
       }
@@ -1917,7 +1942,11 @@
         return;
       }
 
-      sessionStorage.removeItem("imamiruCollectedSourceItem");
+      sessionStorage.removeItem(
+        usedLegacyStorageKey
+          ? "imamiruCollectedSourceItem"
+          : "machinauCollectedSourceItem"
+      );
 
       let collectedItem = null;
 

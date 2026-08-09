@@ -4,13 +4,55 @@ let userLatitude = null;
 let userLongitude = null;
 let selectedCategory = "すべて";
 
+function loadFavoriteShopIdsFromStorage() {
+  let rawFavoriteShopIds = null;
+
+  try {
+    rawFavoriteShopIds =
+      localStorage.getItem(
+        "machinauFavoriteShopIds"
+      );
+
+    if (!rawFavoriteShopIds) {
+      const rawLegacyFavoriteShopIds =
+        localStorage.getItem(
+          "imamiruFavoriteShopIds"
+        );
+
+      if (rawLegacyFavoriteShopIds) {
+        try {
+          localStorage.setItem(
+            "machinauFavoriteShopIds",
+            rawLegacyFavoriteShopIds
+          );
+        } catch (error) {
+          // 新キーへの移行に失敗しても、今回の読み込みは旧データで継続する
+        }
+
+        rawFavoriteShopIds = rawLegacyFavoriteShopIds;
+      }
+    }
+  } catch (error) {
+    rawFavoriteShopIds = null;
+  }
+
+  try {
+    const parsedFavoriteShopIds =
+      JSON.parse(
+        rawFavoriteShopIds || "[]"
+      );
+
+    return Array.isArray(parsedFavoriteShopIds)
+      ? parsedFavoriteShopIds
+      : [];
+  } catch (error) {
+    return [];
+  }
+}
+
 const favoriteShopIds =
   new Set(
-    JSON.parse(
-      localStorage.getItem(
-        "imamiruFavoriteShopIds"
-      ) || "[]"
-    )
+    loadFavoriteShopIdsFromStorage()
   );
 
 let currentModalImages = [];
@@ -1157,7 +1199,7 @@ function convertSubmissionToShop(
         data.eventTime,
         data.openingHours
       ],
-      "⚡ イマミル掲載中"
+      "⚡ マチナウ掲載中"
     );
 
   return {
@@ -1651,7 +1693,7 @@ function renderShops() {
                     isAdminPost
                       ? `
                         <span class="admin-post-badge">
-                          🌺 イマミル運営より
+                          🌺 マチナウ運営より
                         </span>
                       `
                       : businessStatus.text
@@ -1925,7 +1967,7 @@ function toggleFavorite(
     );
   }
 localStorage.setItem(
-  "imamiruFavoriteShopIds",
+  "machinauFavoriteShopIds",
   JSON.stringify(
     Array.from(
       favoriteShopIds
@@ -1938,7 +1980,7 @@ localStorage.setItem(
 function removeModalSlider() {
   const oldSlider =
     document.getElementById(
-      "imamiruModalSlider"
+      "machinauModalSlider"
     );
 
   if (oldSlider) {
@@ -2113,7 +2155,7 @@ function createModalSlider() {
     );
 
   slider.id =
-    "imamiruModalSlider";
+    "machinauModalSlider";
 
   slider.style.position =
     "absolute";
@@ -2136,7 +2178,7 @@ function createModalSlider() {
     );
 
   image.id =
-    "imamiruModalSlideImage";
+    "machinauModalSlideImage";
 
   image.alt =
     "店舗の掲載写真";
@@ -2178,7 +2220,7 @@ function createModalSlider() {
     );
 
   counter.id =
-    "imamiruModalImageCounter";
+    "machinauModalImageCounter";
 
   counter.style.position =
     "absolute";
@@ -2223,7 +2265,7 @@ function createModalSlider() {
     );
 
   dots.id =
-    "imamiruModalSliderDots";
+    "machinauModalSliderDots";
 
   dots.style.position =
     "absolute";
@@ -2349,7 +2391,7 @@ function createModalSlider() {
       );
 
     previousButton.id =
-      "imamiruModalPreviousButton";
+      "machinauModalPreviousButton";
 
     previousButton.addEventListener(
       "click",
@@ -2372,7 +2414,7 @@ function createModalSlider() {
       );
 
     nextButton.id =
-      "imamiruModalNextButton";
+      "machinauModalNextButton";
 
     nextButton.addEventListener(
       "click",
@@ -2446,17 +2488,17 @@ function createModalSlider() {
 function updateModalSliderDisplay() {
   const image =
     document.getElementById(
-      "imamiruModalSlideImage"
+      "machinauModalSlideImage"
     );
 
   const counter =
     document.getElementById(
-      "imamiruModalImageCounter"
+      "machinauModalImageCounter"
     );
 
   const dotsContainer =
     document.getElementById(
-      "imamiruModalSliderDots"
+      "machinauModalSliderDots"
     );
 
   if (
@@ -2525,7 +2567,7 @@ function showModalSlide(
 
   const image =
     document.getElementById(
-      "imamiruModalSlideImage"
+      "machinauModalSlideImage"
     );
 
   if (!image) {
@@ -3352,10 +3394,10 @@ function waitForFirebase(
 
       function checkFirebase() {
         if (
-          window.imamiruDb
+          window.machinauDb
         ) {
           resolve(
-            window.imamiruDb
+            window.machinauDb
           );
 
           return;
@@ -3389,12 +3431,12 @@ function waitForFirebase(
 async function loadApprovedSubmissions() {
   renderLoading();
 
-  if (window.imamiruExpiryTimer) {
+  if (window.machinauExpiryTimer) {
     window.clearTimeout(
-      window.imamiruExpiryTimer
+      window.machinauExpiryTimer
     );
 
-    window.imamiruExpiryTimer =
+    window.machinauExpiryTimer =
       null;
   }
 
@@ -3516,7 +3558,7 @@ async function loadApprovedSubmissions() {
             1000
         );
 
-      window.imamiruExpiryTimer =
+      window.machinauExpiryTimer =
         window.setTimeout(
           function() {
             console.log(
@@ -3623,7 +3665,7 @@ function initGoogleMap() {
   new google.maps.Marker({
     position: nahaStation,
     map: googleMapInstance,
-    title: "イマミル"
+    title: "マチナウ"
   });
 
   shopInfoWindow =

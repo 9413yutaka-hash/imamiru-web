@@ -14,7 +14,7 @@
     content="#071a33"
   >
 
-  <title>運営管理画面｜イマミル</title>
+  <title>運営管理画面｜マチナウ</title>
 
   <style>
     :root {
@@ -699,7 +699,7 @@
 
         <div>
           <p class="brand-name">
-            イマミル管理
+            マチナウ管理
           </p>
 
           <p class="brand-caption">
@@ -985,7 +985,7 @@
   </main>
 
   <footer>
-    イマミル Web Version 1 MVP<br>
+    マチナウ Web Version 1 MVP<br>
     このページは運営者専用です。
   </footer>
 
@@ -1542,7 +1542,7 @@
       refreshButton.textContent =
         "読み込み中…";
 
-      if (!window.imamiruDb) {
+      if (!window.machinauDb) {
         showAdminMessage(
           "Firestoreへ接続できませんでした。",
           "error"
@@ -1559,7 +1559,7 @@
 
       try {
         const querySnapshot =
-          await window.imamiruDb
+          await window.machinauDb
             .collection("submissions")
             .orderBy(
               "createdAt",
@@ -1704,7 +1704,7 @@
       clearAdminMessage();
 
       try {
-        await window.imamiruDb
+        await window.machinauDb
           .collection("submissions")
           .doc(documentId)
           .update({

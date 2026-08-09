@@ -15,11 +15,11 @@
 
   <meta
     name="description"
-    content="イマミルへ店舗・イベントのリアルタイム情報を投稿するページです。"
+    content="マチナウへ店舗・イベントのリアルタイム情報を投稿するページです。"
   >
 
   <title>
-    広告を投稿する｜イマミル
+    広告を投稿する｜マチナウ
   </title>
 
   <style>
@@ -1026,7 +1026,7 @@
 
         <div>
           <p class="brand-name">
-            イマミル
+            マチナウ
           </p>
 
           <p class="brand-caption">
@@ -1078,7 +1078,7 @@
         </h2>
 
         <p>
-          投稿後、イマミル運営による確認を行います。
+          投稿後、マチナウ運営による確認を行います。
           承認された情報だけがトップページに掲載されます。
         </p>
 
@@ -1607,7 +1607,7 @@
       </form>
 
       <div class="security-note">
-        投稿された情報は、イマミル運営の確認後に公開されます。
+        投稿された情報は、マチナウ運営の確認後に公開されます。
         API Secretや管理者情報が、このページから送信されることはありません。
       </div>
 
@@ -1616,7 +1616,7 @@
   </main>
 
   <footer>
-    イマミル Web Version 1.2
+    マチナウ Web Version 1.2
     <br>
     沖縄の「今」を、旅人へ。
   </footer>
@@ -1631,7 +1631,7 @@
     src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"
   ></script>
 
-  <!-- イマミルのFirebase接続設定 -->
+  <!-- マチナウのFirebase接続設定 -->
   <script src="firebase.js"></script>
 <!-- 住所を緯度・経度へ変換するGoogle Maps -->
 <script
@@ -2378,10 +2378,10 @@
 
           function checkFirebase() {
             if (
-              window.imamiruDb
+              window.machinauDb
             ) {
               resolve(
-                window.imamiruDb
+                window.machinauDb
               );
 
               return;
@@ -3147,7 +3147,7 @@ function requestCurrentLocationForPost() {
           await uploadSelectedImages();
 
         setProgress(
-          "広告情報をイマミルへ送信しています…",
+          "広告情報をマチナウへ送信しています…",
           82
         );
 

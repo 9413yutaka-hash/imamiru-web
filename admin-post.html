@@ -15,11 +15,11 @@
 
   <meta
     name="description"
-    content="イマミル運営がお知らせ・現地情報を投稿するための管理者専用ページです。"
+    content="マチナウ運営がお知らせ・現地情報を投稿するための管理者専用ページです。"
   >
 
   <title>
-    運営情報を投稿する｜イマミル管理
+    運営情報を投稿する｜マチナウ管理
   </title>
 
   <style>
@@ -650,7 +650,7 @@
 
         <div>
           <p class="brand-name">
-            イマミル管理
+            マチナウ管理
           </p>
 
           <p class="brand-caption">
@@ -682,7 +682,7 @@
       </h1>
 
       <p>
-        店舗投稿とは別に、イマミル運営からのお知らせや現地情報を公開できます。
+        店舗投稿とは別に、マチナウ運営からのお知らせや現地情報を公開できます。
         入力後、すぐに公開されます。
       </p>
 
@@ -735,7 +735,7 @@
       </div>
 
       <div class="notice-box">
-        🌺 公開元：イマミル運営
+        🌺 公開元：マチナウ運営
       </div>
 
       <form
@@ -1049,7 +1049,7 @@
       </form>
 
       <div class="security-note">
-        この投稿はイマミル運営としてただちに公開されます。
+        この投稿はマチナウ運営としてただちに公開されます。
         店舗投稿の終了番号のような仕組みはありません。
       </div>
 
@@ -1058,7 +1058,7 @@
   </main>
 
   <footer>
-    イマミル Web Version 1.2<br>
+    マチナウ Web Version 1.2<br>
     このページは運営者専用です。
   </footer>
 
@@ -1670,7 +1670,7 @@
         setProgress(
           isEditMode
             ? "運営情報を更新しています…"
-            : "運営情報をイマミルへ送信しています…",
+            : "運営情報をマチナウへ送信しています…",
           82
         );
 
@@ -1899,9 +1899,15 @@
 
     function applyAiDraftIfPresent() {
       let rawDraft = null;
+      let usedLegacyStorageKey = false;
 
       try {
-        rawDraft = sessionStorage.getItem("imamiruAiDraft");
+        rawDraft = sessionStorage.getItem("machinauAiDraft");
+
+        if (!rawDraft) {
+          rawDraft = sessionStorage.getItem("imamiruAiDraft");
+          usedLegacyStorageKey = rawDraft !== null;
+        }
       } catch (error) {
         return;
       }
@@ -1910,7 +1916,9 @@
         return;
       }
 
-      sessionStorage.removeItem("imamiruAiDraft");
+      sessionStorage.removeItem(
+        usedLegacyStorageKey ? "imamiruAiDraft" : "machinauAiDraft"
+      );
 
       let draft = null;
 

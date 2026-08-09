@@ -373,7 +373,7 @@ async function fetchFeedContent(
 
             headers: {
               "User-Agent":
-                "ImamiruAIReporterBot/1.0 (+admin RSS collector)"
+                "MachinauAIReporterBot/1.0 (+admin RSS collector)"
             }
           }
         );

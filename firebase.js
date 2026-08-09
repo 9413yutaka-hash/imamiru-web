@@ -14,13 +14,13 @@ try {
 
   const firestoreDb = firebase.firestore(firebaseApp);
 
-  window.imamiruFirebaseApp = firebaseApp;
-  window.imamiruDb = firestoreDb;
+  window.machinauFirebaseApp = firebaseApp;
+  window.machinauDb = firestoreDb;
 
-  console.log("✅ イマミルとFirebaseの接続に成功しました");
+  console.log("✅ マチナウとFirebaseの接続に成功しました");
 } catch (error) {
   console.error("❌ Firebaseの初期化に失敗しました", error);
 
-  window.imamiruFirebaseApp = null;
-  window.imamiruDb = null;
+  window.machinauFirebaseApp = null;
+  window.machinauDb = null;
 }
