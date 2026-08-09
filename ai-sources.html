@@ -1317,50 +1317,97 @@
 
     const RELEVANCE_VISIBLE_MINIMUM_SCORE = 3;
 
-    const EDITOR_COMMENT_TEMPLATES = [
+    const EDITOR_COMMENT_DISASTER_KEYWORDS = [
+      "台風", "津波", "警報", "大雨", "暴風"
+    ];
+
+    const EDITOR_COMMENT_TRANSPORT_KEYWORDS = [
+      "欠航", "運休", "通行止め", "交通規制",
+      "フェリー", "空港", "バス", "ゆいレール"
+    ];
+
+    const EDITOR_COMMENT_FACILITY_KEYWORDS = [
+      "臨時休館", "臨時休業", "休園", "閉館", "営業時間"
+    ];
+
+    const EDITOR_COMMENT_BEACH_KEYWORDS = [
+      "遊泳", "ビーチ", "海"
+    ];
+
+    const EDITOR_COMMENT_EVENT_KEYWORDS = [
+      "イベント", "祭り", "花火"
+    ];
+
+    const EDITOR_COMMENT_DEAL_KEYWORDS = [
+      "セール", "割引", "クーポン", "無料"
+    ];
+
+    const EDITOR_COMMENT_LOW_PRIORITY_KEYWORDS = [
+      "採用", "募集", "入札", "委託", "会議", "審議"
+    ];
+
+    const EDITOR_COMMENT_CATEGORY_RULES = [
       {
-        keywords: ["台風", "大雨", "津波", "警報"],
+        category: "disaster",
+        keywords: EDITOR_COMMENT_DISASTER_KEYWORDS,
         comment:
-          "【台風】\n\n" +
-          "旅行中は交通機関への影響が出る可能性があります。\n" +
-          "最新情報をご確認ください。"
+          "移動や滞在予定に大きく影響する可能性がある情報です。" +
+          "安全と交通の最新状況を優先して確認したい候補です。"
       },
       {
-        keywords: ["熱中症"],
+        category: "transport",
+        keywords: EDITOR_COMMENT_TRANSPORT_KEYWORDS,
         comment:
-          "【熱中症】\n\n" +
-          "屋外観光ではこまめな水分補給をおすすめします。"
+          "移動予定に直接影響する情報です。" +
+          "代替手段を含め、出発前に最新の運行状況を確認したい候補です。"
       },
       {
-        keywords: ["イベント", "祭り", "花火"],
+        category: "facility",
+        keywords: EDITOR_COMMENT_FACILITY_KEYWORDS,
         comment:
-          "【イベント】\n\n" +
-          "期間限定の催しです。\n" +
-          "混雑状況を確認して訪れると安心です。"
+          "訪問予定がある旅行者は事前確認したい情報です。" +
+          "現地到着後に利用できないという損失を防げます。"
       },
       {
-        keywords: [
-          "通行止め", "交通規制", "バス", "ゆいレール",
-          "フェリー", "空港", "欠航", "運休"
-        ],
+        category: "beach",
+        keywords: EDITOR_COMMENT_BEACH_KEYWORDS,
         comment:
-          "【交通】\n\n" +
-          "運行状況をご確認のうえ移動すると安心です。"
+          "海で過ごす予定の旅行者に直接関係する情報です。" +
+          "遊泳可否や安全情報を現地へ向かう前に確認したい候補です。"
       },
       {
-        keywords: [
-          "観光", "ビーチ", "海", "観光施設",
-          "営業時間", "臨時休業", "首里城", "美ら海水族館"
-        ],
+        category: "event",
+        keywords: EDITOR_COMMENT_EVENT_KEYWORDS,
         comment:
-          "【観光】\n\n" +
-          "営業時間など最新情報をご確認ください。"
+          "期間限定で体験できる情報です。" +
+          "近くにいる旅行者には「知らなくて損した」を防げる候補です。"
+      },
+      {
+        category: "deal",
+        keywords: EDITOR_COMMENT_DEAL_KEYWORDS,
+        comment:
+          "旅行中の立ち寄り先や出費の判断に使える期間限定情報です。" +
+          "対象地域にいる旅行者へ届ける価値があります。"
+      },
+      {
+        category: "lowPriority",
+        keywords: EDITOR_COMMENT_LOW_PRIORITY_KEYWORDS,
+        comment:
+          "旅行者への直接的な影響は小さい情報です。" +
+          "通常は公開候補としての優先度を下げてよさそうです。"
       }
     ];
 
-    const EDITOR_COMMENT_FALLBACK =
-      "【その他】\n\n" +
-      "旅行前・旅行中の参考情報としてご確認ください。";
+    const EDITOR_COMMENT_SCORE_FALLBACKS = {
+      5: "旅行者の行動判断に影響する可能性が高い情報です。",
+      4: "旅行者に届ける価値がある情報です。",
+      3: "旅行者との関連を編集長が確認したい情報です。",
+      2: "旅行者への関連は限定的な情報です。",
+      1: "旅行者への関連は薄い情報です。"
+    };
+
+    const HIGH_TRUST_SOURCE_PRIORITY_COMMENT_SUFFIX =
+      " 優先度の高い情報源からの情報です。";
 
     let editingSourceId = null;
     let cachedSources = [];
@@ -2366,26 +2413,65 @@
       );
     }
 
-    function buildEditorComment(item) {
-      const boostKeywords =
-        Array.isArray(item.relevanceBoostKeywords)
-          ? item.relevanceBoostKeywords
-          : [];
+    function findEditorCommentCategoryText(item) {
+      const combinedText =
+        (item.title || "") + " " + (item.summary || "");
 
-      const matchedTemplate =
-        EDITOR_COMMENT_TEMPLATES.find(
-          function(template) {
-            return template.keywords.some(
+      const hasComputedDropKeyword =
+        Array.isArray(item.relevanceDropKeywords) &&
+        item.relevanceDropKeywords.length > 0;
+
+      const matchedRule =
+        EDITOR_COMMENT_CATEGORY_RULES.find(
+          function(rule) {
+            if (
+              rule.category === "lowPriority" &&
+              hasComputedDropKeyword
+            ) {
+              return true;
+            }
+
+            return rule.keywords.some(
               function(keyword) {
-                return boostKeywords.includes(keyword);
+                return combinedText.includes(keyword);
               }
             );
           }
         );
 
-      return matchedTemplate
-        ? matchedTemplate.comment
-        : EDITOR_COMMENT_FALLBACK;
+      return matchedRule
+        ? matchedRule.comment
+        : null;
+    }
+
+    function buildEditorComment(item) {
+      const categoryComment =
+        findEditorCommentCategoryText(item);
+
+      if (categoryComment) {
+        return categoryComment;
+      }
+
+      const relevanceScore =
+        typeof item.relevanceScore === "number"
+          ? item.relevanceScore
+          : RELEVANCE_VISIBLE_MINIMUM_SCORE;
+
+      const fallbackComment =
+        EDITOR_COMMENT_SCORE_FALLBACKS[relevanceScore] ||
+        EDITOR_COMMENT_SCORE_FALLBACKS[RELEVANCE_VISIBLE_MINIMUM_SCORE];
+
+      const isHighTrustSource =
+        item.sourcePriority === 5;
+
+      if (isHighTrustSource) {
+        return (
+          fallbackComment +
+          HIGH_TRUST_SOURCE_PRIORITY_COMMENT_SUFFIX
+        );
+      }
+
+      return fallbackComment;
     }
 
     function updateShowAllToggleButton() {
