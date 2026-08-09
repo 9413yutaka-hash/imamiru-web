@@ -1123,6 +1123,186 @@
       );
     }
 
+    const DRAFT_TITLE_SUFFIX_TRIGGER_KEYWORDS = [
+      "節水", "断水", "停電",
+      "欠航", "運休", "通行止め",
+      "警報", "避難"
+    ];
+
+    const DRAFT_TITLE_SUFFIX_TEXT = "｜滞在中・渡航予定の方も確認を";
+
+    const DRAFT_LIFELINE_KEYWORDS = ["節水", "断水", "停電"];
+
+    const DRAFT_TRANSPORT_KEYWORDS = [
+      "交通", "通行止め", "交通規制", "欠航", "運休"
+    ];
+
+    const DRAFT_EMERGENCY_KEYWORDS = [
+      "避難", "警報", "台風", "津波", "大雨", "熱中症"
+    ];
+
+    const DRAFT_EVENT_KEYWORDS = ["イベント", "祭り", "花火"];
+
+    const DRAFT_SIGHTSEEING_KEYWORDS = [
+      "ビーチ", "海", "観光施設", "首里城", "美ら海水族館"
+    ];
+
+    const DRAFT_LIFELINE_NOTE =
+      "滞在中・渡航予定の方も、現地での生活に関わる情報として確認しておくと安心です。";
+
+    const DRAFT_TRANSPORT_NOTE =
+      "移動予定がある方は、利用前に最新情報を確認してください。";
+
+    const DRAFT_EMERGENCY_NOTE =
+      "滞在中・移動予定の方は、最新の公式情報を確認してください。";
+
+    const DRAFT_EVENT_NOTE =
+      "滞在中・近くを訪れる予定の方は、開催情報を確認してみてください。";
+
+    const DRAFT_OFFICIAL_SOURCE_NOTE =
+      "詳しい状況・最新情報は情報元ページをご確認ください。";
+
+    const DRAFT_CONTENT_MAX_LENGTH = 300;
+
+    function normalizeDraftSummaryText(text) {
+      return String(text || "")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    function shouldAddTravelerTitleSuffix(combinedText) {
+      return DRAFT_TITLE_SUFFIX_TRIGGER_KEYWORDS.some(
+        function(keyword) {
+          return combinedText.includes(keyword);
+        }
+      );
+    }
+
+    function buildDraftTitleText(baseTitle, combinedText) {
+      if (!shouldAddTravelerTitleSuffix(combinedText)) {
+        return baseTitle.slice(0, 50);
+      }
+
+      return (
+        baseTitle + DRAFT_TITLE_SUFFIX_TEXT
+      ).slice(0, 50);
+    }
+
+    function resolveDraftCategory(combinedText) {
+      const matchesNoticeKeepKeyword =
+        DRAFT_LIFELINE_KEYWORDS.some(function(keyword) {
+          return combinedText.includes(keyword);
+        }) ||
+        DRAFT_TRANSPORT_KEYWORDS.some(function(keyword) {
+          return combinedText.includes(keyword);
+        }) ||
+        DRAFT_EMERGENCY_KEYWORDS.some(function(keyword) {
+          return combinedText.includes(keyword);
+        });
+
+      if (matchesNoticeKeepKeyword) {
+        return "お知らせ";
+      }
+
+      const matchesEventKeyword =
+        DRAFT_EVENT_KEYWORDS.some(function(keyword) {
+          return combinedText.includes(keyword);
+        });
+
+      if (matchesEventKeyword) {
+        return "イベント";
+      }
+
+      const matchesSightseeingKeyword =
+        DRAFT_SIGHTSEEING_KEYWORDS.some(function(keyword) {
+          return combinedText.includes(keyword);
+        });
+
+      if (matchesSightseeingKeyword) {
+        return "観光・体験";
+      }
+
+      return "お知らせ";
+    }
+
+    function resolveDraftTravelerNote(combinedText) {
+      const matchesEmergencyKeyword =
+        DRAFT_EMERGENCY_KEYWORDS.some(function(keyword) {
+          return combinedText.includes(keyword);
+        });
+
+      if (matchesEmergencyKeyword) {
+        return DRAFT_EMERGENCY_NOTE;
+      }
+
+      const matchesLifelineKeyword =
+        DRAFT_LIFELINE_KEYWORDS.some(function(keyword) {
+          return combinedText.includes(keyword);
+        });
+
+      if (matchesLifelineKeyword) {
+        return DRAFT_LIFELINE_NOTE;
+      }
+
+      const matchesTransportKeyword =
+        DRAFT_TRANSPORT_KEYWORDS.some(function(keyword) {
+          return combinedText.includes(keyword);
+        });
+
+      if (matchesTransportKeyword) {
+        return DRAFT_TRANSPORT_NOTE;
+      }
+
+      const matchesEventKeyword =
+        DRAFT_EVENT_KEYWORDS.some(function(keyword) {
+          return combinedText.includes(keyword);
+        });
+
+      if (matchesEventKeyword) {
+        return DRAFT_EVENT_NOTE;
+      }
+
+      return "";
+    }
+
+    function buildDraftContentText(article, trimmedSourceUrlValue, combinedText) {
+      const travelerNote =
+        resolveDraftTravelerNote(combinedText);
+
+      const officialSourceNote =
+        trimmedSourceUrlValue !== ""
+          ? DRAFT_OFFICIAL_SOURCE_NOTE
+          : "";
+
+      const trailingParts =
+        [travelerNote, officialSourceNote].filter(
+          function(part) {
+            return part !== "";
+          }
+        );
+
+      const trailingText =
+        trailingParts.length > 0
+          ? "\n\n" + trailingParts.join("\n\n")
+          : "";
+
+      const maxSummaryLength =
+        Math.max(
+          0,
+          DRAFT_CONTENT_MAX_LENGTH - trailingText.length
+        );
+
+      const normalizedSummary =
+        normalizeDraftSummaryText(article.summary);
+
+      const truncatedSummary =
+        normalizedSummary.slice(0, maxSummaryLength);
+
+      return (
+        truncatedSummary + trailingText
+      ).slice(0, DRAFT_CONTENT_MAX_LENGTH);
+    }
+
     function createDraftFromSource() {
       clearSourceMessage();
 
@@ -1172,15 +1352,33 @@
         currentCollectedArticle !== null &&
         currentCollectedArticle.summary !== "";
 
+      const combinedArticleText =
+        currentCollectedArticle !== null
+          ? currentCollectedArticle.title +
+            " " +
+            currentCollectedArticle.summary
+          : "";
+
       draftTitle.value = hasStructuredTitle
-        ? currentCollectedArticle.title.slice(0, 50)
+        ? buildDraftTitleText(
+            currentCollectedArticle.title,
+            combinedArticleText
+          )
         : trimmedSourceText.slice(0, 50);
 
-      draftCategory.value = "お知らせ";
+      draftCategory.value =
+        currentCollectedArticle !== null
+          ? resolveDraftCategory(combinedArticleText)
+          : "お知らせ";
+
       draftReliability.value = "未確認情報";
 
       draftContent.value = hasStructuredSummary
-        ? currentCollectedArticle.summary.slice(0, 300)
+        ? buildDraftContentText(
+            currentCollectedArticle,
+            trimmedSourceUrl,
+            combinedArticleText
+          )
         : trimmedSourceText.slice(0, 300);
 
       draftWebsiteUrl.value = trimmedSourceUrl;
