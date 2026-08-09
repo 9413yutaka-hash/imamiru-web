@@ -2301,6 +2301,71 @@
       });
     }
 
+    function resolveSourcePriorityForSort(item) {
+      return ALLOWED_SOURCE_PRIORITY_VALUES.includes(item.sourcePriority)
+        ? item.sourcePriority
+        : DEFAULT_SOURCE_PRIORITY;
+    }
+
+    function compareGroupsForEditorDeskOrder(groupA, groupB) {
+      const itemA = groupA.representativeEntry.item;
+      const itemB = groupB.representativeEntry.item;
+
+      const scoreA =
+        typeof itemA.relevanceScore === "number"
+          ? itemA.relevanceScore
+          : 0;
+
+      const scoreB =
+        typeof itemB.relevanceScore === "number"
+          ? itemB.relevanceScore
+          : 0;
+
+      if (scoreA !== scoreB) {
+        return scoreB - scoreA;
+      }
+
+      const priorityA =
+        resolveSourcePriorityForSort(itemA);
+
+      const priorityB =
+        resolveSourcePriorityForSort(itemB);
+
+      if (priorityA !== priorityB) {
+        return priorityB - priorityA;
+      }
+
+      const timeA =
+        parsePublishedAtTimestamp(
+          itemA.publishedAt
+        );
+
+      const timeB =
+        parsePublishedAtTimestamp(
+          itemB.publishedAt
+        );
+
+      const isTimeAValid = !Number.isNaN(timeA);
+      const isTimeBValid = !Number.isNaN(timeB);
+
+      if (isTimeAValid && isTimeBValid && timeA !== timeB) {
+        return timeB - timeA;
+      }
+
+      if (isTimeAValid && !isTimeBValid) {
+        return -1;
+      }
+
+      if (!isTimeAValid && isTimeBValid) {
+        return 1;
+      }
+
+      return (
+        groupA.representativeEntry.originalIndex -
+        groupB.representativeEntry.originalIndex
+      );
+    }
+
     function buildEditorComment(item) {
       const boostKeywords =
         Array.isArray(item.relevanceBoostKeywords)
@@ -2614,6 +2679,10 @@
         buildDuplicateGroups(
           visibleIndexedItems
         );
+
+      editorDeskGroups.sort(
+        compareGroupsForEditorDeskOrder
+      );
 
       try {
         editorDeskContainer.innerHTML = editorDeskGroups
