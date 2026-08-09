@@ -1055,6 +1055,8 @@
     const historySearchInput = document.getElementById("historySearchInput");
     const historyListContainer = document.getElementById("historyListContainer");
 
+    let currentCollectedArticle = null;
+
     function escapeHtml(text) {
       return String(text ?? "")
         .replaceAll("&", "&amp;")
@@ -1161,10 +1163,25 @@
         return;
       }
 
-      draftTitle.value = trimmedSourceText.slice(0, 50);
+      const hasStructuredTitle =
+        currentCollectedArticle !== null &&
+        currentCollectedArticle.title !== "";
+
+      const hasStructuredSummary =
+        currentCollectedArticle !== null &&
+        currentCollectedArticle.summary !== "";
+
+      draftTitle.value = hasStructuredTitle
+        ? currentCollectedArticle.title.slice(0, 50)
+        : trimmedSourceText.slice(0, 50);
+
       draftCategory.value = "お知らせ";
       draftReliability.value = "未確認情報";
-      draftContent.value = trimmedSourceText.slice(0, 300);
+
+      draftContent.value = hasStructuredSummary
+        ? currentCollectedArticle.summary.slice(0, 300)
+        : trimmedSourceText.slice(0, 300);
+
       draftWebsiteUrl.value = trimmedSourceUrl;
 
       const defaultExpiresAtDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
@@ -1914,6 +1931,55 @@
         return;
       }
 
+      const hasStructuredFields =
+        typeof collectedItem.title === "string";
+
+      currentCollectedArticle = hasStructuredFields
+        ? {
+            title: collectedItem.title || "",
+            summary:
+              typeof collectedItem.summary === "string"
+                ? collectedItem.summary
+                : "",
+            sourceUrl:
+              typeof collectedItem.sourceUrl === "string"
+                ? collectedItem.sourceUrl
+                : "",
+            sourceName:
+              typeof collectedItem.sourceName === "string"
+                ? collectedItem.sourceName
+                : "",
+            publishedAt:
+              typeof collectedItem.publishedAt === "string"
+                ? collectedItem.publishedAt
+                : "",
+            relevanceScore:
+              typeof collectedItem.relevanceScore === "number"
+                ? collectedItem.relevanceScore
+                : null,
+            relevanceLabel:
+              typeof collectedItem.relevanceLabel === "string"
+                ? collectedItem.relevanceLabel
+                : "",
+            relevanceBoostKeywords:
+              Array.isArray(collectedItem.relevanceBoostKeywords)
+                ? collectedItem.relevanceBoostKeywords
+                : [],
+            relevanceDropKeywords:
+              Array.isArray(collectedItem.relevanceDropKeywords)
+                ? collectedItem.relevanceDropKeywords
+                : [],
+            sourcePriority:
+              typeof collectedItem.sourcePriority === "number"
+                ? collectedItem.sourcePriority
+                : null,
+            sourceId:
+              typeof collectedItem.sourceId === "string"
+                ? collectedItem.sourceId
+                : ""
+          }
+        : null;
+
       if (typeof collectedItem.sourceText === "string") {
         sourceText.value = collectedItem.sourceText;
       }
@@ -1927,7 +1993,10 @@
       draftFormSection.scrollIntoView({ behavior: "smooth", block: "start" });
     }
 
-    sourceText.addEventListener("input", updateSourceTextCount);
+    sourceText.addEventListener("input", function() {
+      currentCollectedArticle = null;
+      updateSourceTextCount();
+    });
     draftTitle.addEventListener("input", updateDraftCounts);
     draftContent.addEventListener("input", updateDraftCounts);
 

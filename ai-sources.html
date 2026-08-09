@@ -3136,7 +3136,27 @@
         sourceText: sourceTextValue,
         sourceUrl: item.link || "",
         sourceName: item.sourceName || "",
-        publishedAt: item.publishedAt || ""
+        publishedAt: item.publishedAt || "",
+        title: item.title || "",
+        summary: item.summary || "",
+        relevanceScore:
+          typeof item.relevanceScore === "number"
+            ? item.relevanceScore
+            : null,
+        relevanceLabel: item.relevanceLabel || "",
+        relevanceBoostKeywords:
+          Array.isArray(item.relevanceBoostKeywords)
+            ? item.relevanceBoostKeywords
+            : [],
+        relevanceDropKeywords:
+          Array.isArray(item.relevanceDropKeywords)
+            ? item.relevanceDropKeywords
+            : [],
+        sourcePriority:
+          typeof item.sourcePriority === "number"
+            ? item.sourcePriority
+            : null,
+        sourceId: item.sourceId || ""
       };
 
       try {
