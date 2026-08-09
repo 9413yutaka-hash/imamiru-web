@@ -528,6 +528,16 @@
       font-weight: 900;
     }
 
+    .pending-badge {
+      flex-shrink: 0;
+      padding: 6px 9px;
+      border-radius: 999px;
+      color: var(--orange);
+      background: var(--orange-light);
+      font-size: 10px;
+      font-weight: 900;
+    }
+
     .rejected-badge {
       flex-shrink: 0;
       padding: 6px 9px;
@@ -585,6 +595,40 @@
     }
 
     .end-button:disabled {
+      opacity: 0.55;
+      cursor: wait;
+    }
+
+    .approve-button {
+      min-height: 47px;
+      width: 100%;
+      border: none;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 900;
+      cursor: pointer;
+      color: #158a5c;
+      background: var(--green-light);
+    }
+
+    .approve-button:disabled {
+      opacity: 0.55;
+      cursor: wait;
+    }
+
+    .reject-button {
+      min-height: 47px;
+      width: 100%;
+      border: none;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 900;
+      cursor: pointer;
+      color: #a33f3f;
+      background: var(--red-light);
+    }
+
+    .reject-button:disabled {
       opacity: 0.55;
       cursor: wait;
     }
@@ -872,6 +916,19 @@
 
         <div class="summary-card">
           <span class="summary-label">
+            審査待ち
+          </span>
+
+          <span
+            id="pendingCount"
+            class="summary-value"
+          >
+            0件
+          </span>
+        </div>
+
+        <div class="summary-card">
+          <span class="summary-label">
             現在の掲載中
           </span>
 
@@ -929,6 +986,27 @@
         role="status"
         aria-live="polite"
       ></div>
+
+      <div class="panel-header">
+        <div class="panel-title">
+          <h2>
+            審査待ちの投稿
+          </h2>
+
+          <p>
+            内容を確認し、承認または却下してください。
+          </p>
+        </div>
+      </div>
+
+      <div
+        id="pendingSubmissionList"
+        class="submission-list"
+      >
+        <div class="empty-state">
+          審査待ちの投稿を読み込んでいます…
+        </div>
+      </div>
 
       <div class="panel-header">
         <div class="panel-title">
@@ -1067,6 +1145,16 @@
         "loadMoreInactiveButton"
       );
 
+    const pendingSubmissionList =
+      document.getElementById(
+        "pendingSubmissionList"
+      );
+
+    const pendingCount =
+      document.getElementById(
+        "pendingCount"
+      );
+
     const approvedCount =
       document.getElementById(
         "approvedCount"
@@ -1082,6 +1170,7 @@
         "loginUserMessage"
       );
 
+    let currentPendingSubmissions = [];
     let currentApprovedSubmissions = [];
     let currentInactiveSubmissions = [];
     let searchQuery = "";
@@ -1230,6 +1319,10 @@
     }
 
     function updateSummary() {
+      pendingCount.textContent =
+        currentPendingSubmissions.length +
+        "件";
+
       approvedCount.textContent =
         currentApprovedSubmissions.length +
         "件";
@@ -1254,6 +1347,137 @@
             disabled;
         }
       );
+    }
+
+    function setPendingCardButtonsDisabled(
+      documentId,
+      disabled
+    ) {
+      const buttons =
+        pendingSubmissionList.querySelectorAll(
+          `button[data-document-id="${CSS.escape(documentId)}"]`
+        );
+
+      buttons.forEach(
+        function(button) {
+          button.disabled =
+            disabled;
+        }
+      );
+    }
+
+    function renderPendingSubmissions() {
+      const filteredSubmissions =
+        filterSubmissionsByQuery(
+          currentPendingSubmissions
+        );
+
+      if (
+        filteredSubmissions.length === 0
+      ) {
+        pendingSubmissionList.innerHTML = `
+          <div class="empty-state">
+            ${
+              searchQuery === ""
+                ? "現在、審査待ちの投稿はありません。"
+                : "検索条件に一致する審査待ちの投稿はありません。"
+            }
+          </div>
+        `;
+
+        return;
+      }
+
+      pendingSubmissionList.innerHTML =
+        filteredSubmissions
+          .map(
+            function(submission) {
+              return `
+                <article class="submission-card">
+
+                  <div class="submission-top">
+
+                    <span class="submission-category">
+                      ${escapeHtml(
+                        submission.category
+                      )}
+                    </span>
+
+                    <span class="pending-badge">
+                      審査待ち
+                    </span>
+
+                  </div>
+
+                  <div class="submission-body">
+
+                    <h3 class="shop-name">
+                      ${escapeHtml(
+                        submission.shopName
+                      )}
+                    </h3>
+
+                    <div class="submission-title">
+                      ${escapeHtml(
+                        submission.title
+                      )}
+                    </div>
+
+                    <div class="submission-content">
+                      ${escapeHtml(
+                        submission.content
+                      )}
+                    </div>
+
+                    <div class="submission-meta">
+
+                      <span>
+                        申請日時：
+                        ${escapeHtml(
+                          formatCreatedAt(
+                            submission.createdAt
+                          )
+                        )}
+                      </span>
+
+                      <span>
+                        状態：審査待ち
+                      </span>
+
+                    </div>
+
+                    <div class="submission-actions">
+
+                      <button
+                        class="approve-button"
+                        type="button"
+                        data-action="approve"
+                        data-document-id="${escapeHtml(
+                          submission.id
+                        )}"
+                      >
+                        ✅ 承認
+                      </button>
+
+                      <button
+                        class="reject-button"
+                        type="button"
+                        data-action="reject"
+                        data-document-id="${escapeHtml(
+                          submission.id
+                        )}"
+                      >
+                        🚫 却下
+                      </button>
+
+                    </div>
+
+                  </div>
+                </article>
+              `;
+            }
+          )
+          .join("");
     }
 
     function renderEndableSubmissions() {
@@ -1567,6 +1791,9 @@
             )
             .get();
 
+        const pendingSubmissions =
+          [];
+
         const approvedSubmissions =
           [];
 
@@ -1577,6 +1804,17 @@
           function(documentSnapshot) {
             const data =
               documentSnapshot.data();
+
+            if (
+              data.status ===
+              "pending"
+            ) {
+              pendingSubmissions.push({
+                id:
+                  documentSnapshot.id,
+                ...data
+              });
+            }
 
             if (
               data.status ===
@@ -1604,6 +1842,9 @@
           }
         );
 
+        currentPendingSubmissions =
+          pendingSubmissions;
+
         currentApprovedSubmissions =
           approvedSubmissions;
 
@@ -1613,6 +1854,8 @@
         inactiveDisplayLimit = 50;
 
         updateSummary();
+
+        renderPendingSubmissions();
 
         renderEndableSubmissions();
 
@@ -1628,6 +1871,8 @@
           error
         );
 
+        currentPendingSubmissions = [];
+
         currentApprovedSubmissions = [];
 
         currentInactiveSubmissions = [];
@@ -1639,6 +1884,12 @@
         );
 
         updateSummary();
+
+        pendingSubmissionList.innerHTML = `
+          <div class="empty-state">
+            審査待ちの投稿を読み込めませんでした。
+          </div>
+        `;
 
         endableSubmissionList.innerHTML = `
           <div class="empty-state">
@@ -1744,6 +1995,241 @@
         );
       }
     }
+
+    async function approveSubmission(
+      documentId
+    ) {
+      const submission =
+        currentPendingSubmissions.find(
+          function(item) {
+            return item.id ===
+              documentId;
+          }
+        );
+
+      if (!submission) {
+        showAdminMessage(
+          "対象の投稿が見つかりませんでした。一覧を更新してください。",
+          "error"
+        );
+
+        return;
+      }
+
+      const durationHoursValue =
+        typeof submission.durationHours === "number" &&
+        Number.isFinite(
+          submission.durationHours
+        ) &&
+        submission.durationHours > 0
+          ? submission.durationHours
+          : null;
+
+      if (durationHoursValue === null) {
+        showAdminMessage(
+          "「" +
+          submission.shopName +
+          "」は掲載時間の情報が正しく設定されていないため、承認できません。データを確認してください。",
+          "error"
+        );
+
+        return;
+      }
+
+      const confirmed =
+        window.confirm(
+          "「" +
+          submission.shopName +
+          "」を承認しますか？"
+        );
+
+      if (!confirmed) {
+        return;
+      }
+
+      setPendingCardButtonsDisabled(
+        documentId,
+        true
+      );
+
+      clearAdminMessage();
+
+      try {
+        const newExpiresAtDate =
+          new Date(
+            Date.now() +
+            durationHoursValue *
+              60 *
+              60 *
+              1000
+          );
+
+        await window.machinauDb
+          .collection("submissions")
+          .doc(documentId)
+          .update({
+            status: "approved",
+
+            expiresAt:
+              firebase
+                .firestore
+                .Timestamp
+                .fromDate(
+                  newExpiresAtDate
+                ),
+
+            updatedAt:
+              firebase
+                .firestore
+                .FieldValue
+                .serverTimestamp()
+          });
+
+        await loadSubmissions();
+
+        showAdminMessage(
+          "✅ 「" +
+          submission.shopName +
+          "」を承認しました。",
+          "success"
+        );
+      } catch (error) {
+        console.error(
+          "❌ 承認できませんでした",
+          error
+        );
+
+        showAdminMessage(
+          "承認処理に失敗しました。Firestoreの管理者権限を確認してください。",
+          "error"
+        );
+
+        setPendingCardButtonsDisabled(
+          documentId,
+          false
+        );
+      }
+    }
+
+    async function rejectSubmission(
+      documentId
+    ) {
+      const submission =
+        currentPendingSubmissions.find(
+          function(item) {
+            return item.id ===
+              documentId;
+          }
+        );
+
+      if (!submission) {
+        showAdminMessage(
+          "対象の投稿が見つかりませんでした。一覧を更新してください。",
+          "error"
+        );
+
+        return;
+      }
+
+      const confirmed =
+        window.confirm(
+          "「" +
+          submission.shopName +
+          "」を却下しますか？"
+        );
+
+      if (!confirmed) {
+        return;
+      }
+
+      setPendingCardButtonsDisabled(
+        documentId,
+        true
+      );
+
+      clearAdminMessage();
+
+      try {
+        await window.machinauDb
+          .collection("submissions")
+          .doc(documentId)
+          .update({
+            status: "rejected",
+
+            updatedAt:
+              firebase
+                .firestore
+                .FieldValue
+                .serverTimestamp()
+          });
+
+        await loadSubmissions();
+
+        showAdminMessage(
+          "🚫 「" +
+          submission.shopName +
+          "」を却下しました。",
+          "success"
+        );
+      } catch (error) {
+        console.error(
+          "❌ 却下できませんでした",
+          error
+        );
+
+        showAdminMessage(
+          "却下処理に失敗しました。Firestoreの管理者権限を確認してください。",
+          "error"
+        );
+
+        setPendingCardButtonsDisabled(
+          documentId,
+          false
+        );
+      }
+    }
+
+    pendingSubmissionList.addEventListener(
+      "click",
+      async function(event) {
+        const button =
+          event.target.closest(
+            "button[data-action]"
+          );
+
+        if (!button) {
+          return;
+        }
+
+        const action =
+          button.dataset.action;
+
+        const documentId =
+          button.dataset.documentId;
+
+        if (
+          !documentId
+        ) {
+          return;
+        }
+
+        if (
+          action === "approve"
+        ) {
+          await approveSubmission(
+            documentId
+          );
+        }
+
+        if (
+          action === "reject"
+        ) {
+          await rejectSubmission(
+            documentId
+          );
+        }
+      }
+    );
 
     endableSubmissionList.addEventListener(
       "click",
@@ -1957,6 +2443,8 @@
             "visible"
           );
 
+          currentPendingSubmissions = [];
+
           currentApprovedSubmissions = [];
 
           currentInactiveSubmissions = [];
@@ -1968,6 +2456,12 @@
           );
 
           updateSummary();
+
+          pendingSubmissionList.innerHTML = `
+            <div class="empty-state">
+              ログイン後に審査待ちの投稿を表示します。
+            </div>
+          `;
 
           endableSubmissionList.innerHTML = `
             <div class="empty-state">

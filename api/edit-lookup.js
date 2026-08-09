@@ -284,7 +284,8 @@ export default async function handler(
       matchingDocument.data();
 
     if (
-      currentData.status !== "approved"
+      currentData.status !== "approved" &&
+      currentData.status !== "pending"
     ) {
       return response.status(409).json({
         success: false,
