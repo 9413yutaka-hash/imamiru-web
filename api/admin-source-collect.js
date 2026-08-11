@@ -5,6 +5,7 @@ import {
 } from "firebase-admin/app";
 
 import {
+  FieldValue,
   getFirestore
 } from "firebase-admin/firestore";
 
@@ -15,6 +16,11 @@ import {
 import {
   lookup as dnsLookup
 } from "node:dns/promises";
+
+import {
+  createHash,
+  timingSafeEqual
+} from "node:crypto";
 
 import {
   XMLParser
@@ -103,6 +109,159 @@ function readBearerToken(
 
   return match[1].trim();
 }
+
+
+function readCronSecretHeader(
+  request
+) {
+  const headerValue =
+    request.headers &&
+    request.headers["x-machinau-cron-secret"];
+
+  if (
+    typeof headerValue !== "string"
+  ) {
+    return "";
+  }
+
+  return headerValue;
+}
+
+
+function cronSecretsMatch(
+  providedSecret,
+  expectedSecret
+) {
+  if (
+    typeof providedSecret !== "string" ||
+    typeof expectedSecret !== "string" ||
+    providedSecret === "" ||
+    expectedSecret === ""
+  ) {
+    return false;
+  }
+
+  const providedBuffer =
+    Buffer.from(
+      providedSecret,
+      "utf8"
+    );
+
+  const expectedBuffer =
+    Buffer.from(
+      expectedSecret,
+      "utf8"
+    );
+
+  if (
+    providedBuffer.length !==
+    expectedBuffer.length
+  ) {
+    return false;
+  }
+
+  try {
+    return timingSafeEqual(
+      providedBuffer,
+      expectedBuffer
+    );
+  } catch (error) {
+    return false;
+  }
+}
+
+
+const TRACKING_QUERY_PARAM_NAMES = [
+  "utm_source",
+  "utm_medium",
+  "utm_campaign",
+  "utm_term",
+  "utm_content"
+];
+
+
+function normalizeArticleUrl(
+  rawUrl
+) {
+  const originalUrl =
+    String(
+      rawUrl || ""
+    )
+      .trim();
+
+  let parsedUrl;
+
+  try {
+    parsedUrl =
+      new URL(
+        originalUrl
+      );
+  } catch (error) {
+    return originalUrl;
+  }
+
+  parsedUrl.hostname =
+    parsedUrl.hostname.toLowerCase();
+
+  parsedUrl.hash =
+    "";
+
+  TRACKING_QUERY_PARAM_NAMES.forEach(
+    function(paramName) {
+      parsedUrl.searchParams.delete(
+        paramName
+      );
+    }
+  );
+
+  let pathname =
+    parsedUrl.pathname;
+
+  if (
+    pathname.length > 1 &&
+    pathname.endsWith("/")
+  ) {
+    pathname =
+      pathname.slice(
+        0,
+        -1
+      );
+  }
+
+  parsedUrl.pathname =
+    pathname;
+
+  return parsedUrl.toString();
+}
+
+
+function computeNormalizedUrlHash(
+  normalizedUrl
+) {
+  return createHash("sha256")
+    .update(
+      normalizedUrl,
+      "utf8"
+    )
+    .digest("hex");
+}
+
+
+const PROCESSING_STATUS_DISCOVERED =
+  "DISCOVERED";
+
+const PROCESSING_STATUS_PROCESSING =
+  "PROCESSING";
+
+const PROCESSING_STATUS_DONE =
+  "DONE";
+
+const PROCESSING_STATUS_ERROR =
+  "ERROR";
+
+
+const AI_COLLECTED_ARTICLES_COLLECTION =
+  "aiCollectedArticles";
 
 
 const FETCH_TIMEOUT_MILLISECONDS =
@@ -814,66 +973,99 @@ export default async function handler(
     });
   }
 
-  const adminEmail =
-    process.env.ADMIN_EMAIL;
-
-  if (!adminEmail) {
-    return response.status(500).json({
-      success: false,
-      message:
-        "管理者メールアドレスが設定されていません。"
-    });
-  }
-
-  const idToken =
-    readBearerToken(
+  const cronSecretHeaderValue =
+    readCronSecretHeader(
       request
     );
 
-  if (idToken === "") {
-    return response.status(401).json({
-      success: false,
-      message:
-        "認証情報がありません。"
-    });
-  }
+  const isCronRequest =
+    cronSecretHeaderValue !== "";
 
-  try {
-    const app =
-      getFirebaseAdminApp();
+  if (isCronRequest) {
+    const expectedCronSecret =
+      process.env.AI_COLLECT_CRON_SECRET;
 
-    let decodedToken;
-
-    try {
-      decodedToken =
-        await getAuth(app)
-          .verifyIdToken(
-            idToken
-          );
-    } catch (verifyError) {
+    if (
+      !cronSecretsMatch(
+        cronSecretHeaderValue,
+        expectedCronSecret
+      )
+    ) {
       return response.status(401).json({
         success: false,
         message:
           "認証情報が正しくありません。"
       });
     }
+  }
 
-    const decodedEmail =
-      String(
-        decodedToken.email || ""
-      )
-        .toLowerCase();
+  const adminEmail =
+    process.env.ADMIN_EMAIL;
 
-    if (
-      decodedEmail === "" ||
-      decodedEmail !==
-        adminEmail.toLowerCase()
-    ) {
-      return response.status(403).json({
+  let idToken =
+    "";
+
+  if (!isCronRequest) {
+    if (!adminEmail) {
+      return response.status(500).json({
         success: false,
         message:
-          "管理者権限がありません。"
+          "管理者メールアドレスが設定されていません。"
       });
+    }
+
+    idToken =
+      readBearerToken(
+        request
+      );
+
+    if (idToken === "") {
+      return response.status(401).json({
+        success: false,
+        message:
+          "認証情報がありません。"
+      });
+    }
+  }
+
+  try {
+    const app =
+      getFirebaseAdminApp();
+
+    if (!isCronRequest) {
+      let decodedToken;
+
+      try {
+        decodedToken =
+          await getAuth(app)
+            .verifyIdToken(
+              idToken
+            );
+      } catch (verifyError) {
+        return response.status(401).json({
+          success: false,
+          message:
+            "認証情報が正しくありません。"
+        });
+      }
+
+      const decodedEmail =
+        String(
+          decodedToken.email || ""
+        )
+          .toLowerCase();
+
+      if (
+        decodedEmail === "" ||
+        decodedEmail !==
+          adminEmail.toLowerCase()
+      ) {
+        return response.status(403).json({
+          success: false,
+          message:
+            "管理者権限がありません。"
+        });
+      }
     }
 
     const requestBody =
@@ -984,6 +1176,121 @@ export default async function handler(
         message:
           parseError.message
       });
+    }
+
+    try {
+      const articleCollectionReference =
+        database.collection(
+          AI_COLLECTED_ARTICLES_COLLECTION
+        );
+
+      const articleLookupEntries =
+        candidateItems.map(
+          function(candidateItem) {
+            const normalizedUrl =
+              normalizeArticleUrl(
+                candidateItem.link
+              );
+
+            const normalizedUrlHash =
+              computeNormalizedUrlHash(
+                normalizedUrl
+              );
+
+            const articleDocumentId =
+              documentId +
+              "_" +
+              normalizedUrlHash;
+
+            return {
+              candidateItem:
+                candidateItem,
+
+              normalizedUrlHash:
+                normalizedUrlHash,
+
+              documentRef:
+                articleCollectionReference.doc(
+                  articleDocumentId
+                )
+            };
+          }
+        );
+
+      if (articleLookupEntries.length > 0) {
+        const existingArticleSnapshots =
+          await database.getAll(
+            ...articleLookupEntries.map(
+              function(entry) {
+                return entry.documentRef;
+              }
+            )
+          );
+
+        const articleWriteBatch =
+          database.batch();
+
+        articleLookupEntries.forEach(
+          function(entry, entryIndex) {
+            const existingSnapshot =
+              existingArticleSnapshots[
+                entryIndex
+              ];
+
+            if (
+              existingSnapshot &&
+              existingSnapshot.exists
+            ) {
+              articleWriteBatch.update(
+                entry.documentRef,
+                {
+                  lastSeenAt:
+                    FieldValue.serverTimestamp()
+                }
+              );
+            } else {
+              articleWriteBatch.set(
+                entry.documentRef,
+                {
+                  sourceId:
+                    documentId,
+
+                  articleUrl:
+                    entry.candidateItem.link,
+
+                  normalizedUrlHash:
+                    entry.normalizedUrlHash,
+
+                  title:
+                    entry.candidateItem.title,
+
+                  publishedAt:
+                    entry.candidateItem.publishedAt,
+
+                  firstSeenAt:
+                    FieldValue.serverTimestamp(),
+
+                  lastSeenAt:
+                    FieldValue.serverTimestamp(),
+
+                  processingStatus:
+                    PROCESSING_STATUS_DISCOVERED,
+
+                  processingError:
+                    ""
+                }
+              );
+            }
+          }
+        );
+
+        await articleWriteBatch.commit();
+      }
+    } catch (articleRecordError) {
+      console.error(
+        "既読記事の記録エラー：",
+        articleRecordError
+      );
     }
 
     const sourceName =
