@@ -3115,6 +3115,57 @@ function requestCurrentLocationForPost() {
       }
     }
 
+    function triggerSubmissionModeration(
+      documentId,
+      publicationNumber,
+      endCode
+    ) {
+      try {
+        fetch(
+          "/api/moderate-submission",
+          {
+            method:
+              "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json"
+            },
+
+            body:
+              JSON.stringify(
+                {
+                  documentId:
+                    documentId,
+
+                  publicationNumber:
+                    publicationNumber,
+
+                  endCode:
+                    endCode
+                }
+              ),
+
+            keepalive:
+              true
+          }
+        ).catch(
+          function(error) {
+            console.error(
+              "AI自動審査トリガーエラー：",
+              error
+            );
+          }
+        );
+      } catch (error) {
+        console.error(
+          "AI自動審査トリガーエラー：",
+          error
+        );
+      }
+    }
+
+
     async function submitAdvertisement(
       event
     ) {
@@ -3343,13 +3394,20 @@ longitude:
             "1.2"
         };
 
-        await database
-          .collection(
-            "submissions"
-          )
-          .add(
-            submissionData
-          );
+        const submissionDocumentReference =
+          await database
+            .collection(
+              "submissions"
+            )
+            .add(
+              submissionData
+            );
+
+        triggerSubmissionModeration(
+          submissionDocumentReference.id,
+          publicationNumber,
+          endCode
+        );
 
         setProgress(
           "投稿が完了しました。",

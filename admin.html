@@ -538,6 +538,42 @@
       font-weight: 900;
     }
 
+    .ai-review-note {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .ai-review-badge {
+      flex-shrink: 0;
+      padding: 6px 9px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 900;
+    }
+
+    .ai-review-badge.review {
+      color: #a33f3f;
+      background: var(--red-light);
+    }
+
+    .ai-review-badge.error {
+      color: var(--subtext);
+      background: #eef2f5;
+    }
+
+    .ai-review-badge.waiting {
+      color: var(--subtext);
+      background: #eef2f5;
+    }
+
+    .ai-review-reason {
+      font-size: 11px;
+      color: var(--subtext);
+    }
+
     .rejected-badge {
       flex-shrink: 0;
       padding: 6px 9px;
@@ -1445,6 +1481,35 @@
                       </span>
 
                     </div>
+
+                    ${
+                      submission.aiReviewStatus === "REVIEW"
+                        ? `
+                          <div class="ai-review-note">
+                            <span class="ai-review-badge review">AI判定：要確認</span>
+                            ${
+                              submission.aiReviewReason
+                                ? `<span class="ai-review-reason">${escapeHtml(
+                                    submission.aiReviewReason
+                                  )}</span>`
+                                : ""
+                            }
+                          </div>
+                        `
+                        : submission.aiReviewStatus === "ERROR"
+                          ? `
+                            <div class="ai-review-note">
+                              <span class="ai-review-badge error">AI審査エラー</span>
+                            </div>
+                          `
+                          : submission.aiReviewStatus
+                            ? ""
+                            : `
+                              <div class="ai-review-note">
+                                <span class="ai-review-badge waiting">AI審査待ち</span>
+                              </div>
+                            `
+                    }
 
                     <div class="submission-actions">
 
