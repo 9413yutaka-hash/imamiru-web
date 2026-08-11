@@ -949,6 +949,261 @@ function parseFeedXml(
 }
 
 
+function createCollectionError(
+  statusCode,
+  message
+) {
+  const collectionError =
+    new Error(
+      message
+    );
+
+  collectionError.statusCode =
+    statusCode;
+
+  return collectionError;
+}
+
+
+async function collectFromSource(
+  database,
+  sourceId
+) {
+  const documentSnapshot =
+    await database
+      .collection(
+        "aiSources"
+      )
+      .doc(
+        sourceId
+      )
+      .get();
+
+  if (
+    !documentSnapshot.exists
+  ) {
+    throw createCollectionError(
+      404,
+      "対象の情報源が見つかりませんでした。"
+    );
+  }
+
+  const sourceData =
+    documentSnapshot.data() ||
+    {};
+
+  if (
+    sourceData.isEnabled !== true
+  ) {
+    throw createCollectionError(
+      400,
+      "この情報源は停止中のため情報を集められません。"
+    );
+  }
+
+  const feedUrl =
+    typeof sourceData.feedUrl === "string"
+      ? sourceData.feedUrl.trim()
+      : "";
+
+  if (feedUrl === "") {
+    throw createCollectionError(
+      400,
+      "この情報源にはRSS URLが登録されていません。"
+    );
+  }
+
+  try {
+    await assertFeedUrlIsSafe(
+      feedUrl
+    );
+  } catch (ssrfError) {
+    throw createCollectionError(
+      400,
+      ssrfError.message
+    );
+  }
+
+  let feedXmlText;
+
+  try {
+    feedXmlText =
+      await fetchFeedContent(
+        feedUrl
+      );
+  } catch (fetchError) {
+    throw createCollectionError(
+      502,
+      fetchError.message
+    );
+  }
+
+  let candidateItems;
+
+  try {
+    candidateItems =
+      parseFeedXml(
+        feedXmlText
+      );
+  } catch (parseError) {
+    throw createCollectionError(
+      422,
+      parseError.message
+    );
+  }
+
+  try {
+    const articleCollectionReference =
+      database.collection(
+        AI_COLLECTED_ARTICLES_COLLECTION
+      );
+
+    const articleLookupEntries =
+      candidateItems.map(
+        function(candidateItem) {
+          const normalizedUrl =
+            normalizeArticleUrl(
+              candidateItem.link
+            );
+
+          const normalizedUrlHash =
+            computeNormalizedUrlHash(
+              normalizedUrl
+            );
+
+          const articleDocumentId =
+            sourceId +
+            "_" +
+            normalizedUrlHash;
+
+          return {
+            candidateItem:
+              candidateItem,
+
+            normalizedUrlHash:
+              normalizedUrlHash,
+
+            documentRef:
+              articleCollectionReference.doc(
+                articleDocumentId
+              )
+          };
+        }
+      );
+
+    if (articleLookupEntries.length > 0) {
+      const existingArticleSnapshots =
+        await database.getAll(
+          ...articleLookupEntries.map(
+            function(entry) {
+              return entry.documentRef;
+            }
+          )
+        );
+
+      const articleWriteBatch =
+        database.batch();
+
+      articleLookupEntries.forEach(
+        function(entry, entryIndex) {
+          const existingSnapshot =
+            existingArticleSnapshots[
+              entryIndex
+            ];
+
+          if (
+            existingSnapshot &&
+            existingSnapshot.exists
+          ) {
+            articleWriteBatch.update(
+              entry.documentRef,
+              {
+                lastSeenAt:
+                  FieldValue.serverTimestamp()
+              }
+            );
+          } else {
+            articleWriteBatch.set(
+              entry.documentRef,
+              {
+                sourceId:
+                  sourceId,
+
+                articleUrl:
+                  entry.candidateItem.link,
+
+                normalizedUrlHash:
+                  entry.normalizedUrlHash,
+
+                title:
+                  entry.candidateItem.title,
+
+                publishedAt:
+                  entry.candidateItem.publishedAt,
+
+                firstSeenAt:
+                  FieldValue.serverTimestamp(),
+
+                lastSeenAt:
+                  FieldValue.serverTimestamp(),
+
+                processingStatus:
+                  PROCESSING_STATUS_DISCOVERED,
+
+                processingError:
+                  ""
+              }
+            );
+          }
+        }
+      );
+
+      await articleWriteBatch.commit();
+    }
+  } catch (articleRecordError) {
+    console.error(
+      "既読記事の記録エラー：",
+      articleRecordError
+    );
+  }
+
+  const sourceName =
+    typeof sourceData.name === "string"
+      ? sourceData.name
+      : "";
+
+  const items =
+    candidateItems.map(
+      function(candidateItem) {
+        return {
+          title:
+            candidateItem.title,
+
+          link:
+            candidateItem.link,
+
+          publishedAt:
+            candidateItem.publishedAt,
+
+          summary:
+            candidateItem.summary,
+
+          sourceName:
+            sourceName
+        };
+      }
+    );
+
+  return {
+    sourceName:
+      sourceName,
+
+    items:
+      items
+  };
+}
+
+
 export default async function handler(
   request,
   response
@@ -1089,240 +1344,31 @@ export default async function handler(
     const database =
       getFirestore(app);
 
-    const documentSnapshot =
-      await database
-        .collection(
-          "aiSources"
-        )
-        .doc(
+    let collectionResult;
+
+    try {
+      collectionResult =
+        await collectFromSource(
+          database,
           documentId
-        )
-        .get();
-
-    if (
-      !documentSnapshot.exists
-    ) {
-      return response.status(404).json({
-        success: false,
-        message:
-          "対象の情報源が見つかりませんでした。"
-      });
-    }
-
-    const sourceData =
-      documentSnapshot.data() ||
-      {};
-
-    if (
-      sourceData.isEnabled !== true
-    ) {
-      return response.status(400).json({
-        success: false,
-        message:
-          "この情報源は停止中のため情報を集められません。"
-      });
-    }
-
-    const feedUrl =
-      typeof sourceData.feedUrl === "string"
-        ? sourceData.feedUrl.trim()
-        : "";
-
-    if (feedUrl === "") {
-      return response.status(400).json({
-        success: false,
-        message:
-          "この情報源にはRSS URLが登録されていません。"
-      });
-    }
-
-    try {
-      await assertFeedUrlIsSafe(
-        feedUrl
-      );
-    } catch (ssrfError) {
-      return response.status(400).json({
-        success: false,
-        message:
-          ssrfError.message
-      });
-    }
-
-    let feedXmlText;
-
-    try {
-      feedXmlText =
-        await fetchFeedContent(
-          feedUrl
         );
-    } catch (fetchError) {
-      return response.status(502).json({
-        success: false,
-        message:
-          fetchError.message
-      });
-    }
-
-    let candidateItems;
-
-    try {
-      candidateItems =
-        parseFeedXml(
-          feedXmlText
-        );
-    } catch (parseError) {
-      return response.status(422).json({
-        success: false,
-        message:
-          parseError.message
-      });
-    }
-
-    try {
-      const articleCollectionReference =
-        database.collection(
-          AI_COLLECTED_ARTICLES_COLLECTION
-        );
-
-      const articleLookupEntries =
-        candidateItems.map(
-          function(candidateItem) {
-            const normalizedUrl =
-              normalizeArticleUrl(
-                candidateItem.link
-              );
-
-            const normalizedUrlHash =
-              computeNormalizedUrlHash(
-                normalizedUrl
-              );
-
-            const articleDocumentId =
-              documentId +
-              "_" +
-              normalizedUrlHash;
-
-            return {
-              candidateItem:
-                candidateItem,
-
-              normalizedUrlHash:
-                normalizedUrlHash,
-
-              documentRef:
-                articleCollectionReference.doc(
-                  articleDocumentId
-                )
-            };
-          }
-        );
-
-      if (articleLookupEntries.length > 0) {
-        const existingArticleSnapshots =
-          await database.getAll(
-            ...articleLookupEntries.map(
-              function(entry) {
-                return entry.documentRef;
-              }
-            )
-          );
-
-        const articleWriteBatch =
-          database.batch();
-
-        articleLookupEntries.forEach(
-          function(entry, entryIndex) {
-            const existingSnapshot =
-              existingArticleSnapshots[
-                entryIndex
-              ];
-
-            if (
-              existingSnapshot &&
-              existingSnapshot.exists
-            ) {
-              articleWriteBatch.update(
-                entry.documentRef,
-                {
-                  lastSeenAt:
-                    FieldValue.serverTimestamp()
-                }
-              );
-            } else {
-              articleWriteBatch.set(
-                entry.documentRef,
-                {
-                  sourceId:
-                    documentId,
-
-                  articleUrl:
-                    entry.candidateItem.link,
-
-                  normalizedUrlHash:
-                    entry.normalizedUrlHash,
-
-                  title:
-                    entry.candidateItem.title,
-
-                  publishedAt:
-                    entry.candidateItem.publishedAt,
-
-                  firstSeenAt:
-                    FieldValue.serverTimestamp(),
-
-                  lastSeenAt:
-                    FieldValue.serverTimestamp(),
-
-                  processingStatus:
-                    PROCESSING_STATUS_DISCOVERED,
-
-                  processingError:
-                    ""
-                }
-              );
-            }
-          }
-        );
-
-        await articleWriteBatch.commit();
+    } catch (collectionError) {
+      if (
+        typeof collectionError.statusCode === "number"
+      ) {
+        return response.status(collectionError.statusCode).json({
+          success: false,
+          message:
+            collectionError.message
+        });
       }
-    } catch (articleRecordError) {
-      console.error(
-        "既読記事の記録エラー：",
-        articleRecordError
-      );
+
+      throw collectionError;
     }
-
-    const sourceName =
-      typeof sourceData.name === "string"
-        ? sourceData.name
-        : "";
-
-    const items =
-      candidateItems.map(
-        function(candidateItem) {
-          return {
-            title:
-              candidateItem.title,
-
-            link:
-              candidateItem.link,
-
-            publishedAt:
-              candidateItem.publishedAt,
-
-            summary:
-              candidateItem.summary,
-
-            sourceName:
-              sourceName
-          };
-        }
-      );
 
     return response.status(200).json({
       success: true,
-      items: items
+      items: collectionResult.items
     });
   } catch (error) {
     console.error(
