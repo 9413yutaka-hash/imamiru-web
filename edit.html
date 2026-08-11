@@ -1387,7 +1387,7 @@
 
         const response =
           await fetch(
-            "/api/edit-lookup",
+            "/api/edit-ad",
             {
               method:
                 "POST",
@@ -1400,6 +1400,9 @@
               body:
                 JSON.stringify(
                   {
+                    action:
+                      "lookup",
+
                     publicationNumber:
                       formData.publicationNumber,
 
@@ -1779,6 +1782,9 @@
               body:
                 JSON.stringify(
                   {
+                    action:
+                      "save",
+
                     publicationNumber:
                       verifiedPublicationNumber,
 

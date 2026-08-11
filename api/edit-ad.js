@@ -435,6 +435,20 @@ export default async function handler(
         request
       );
 
+    const action =
+      requestBody.action;
+
+    if (
+      action !== "lookup" &&
+      action !== "save"
+    ) {
+      return response.status(400).json({
+        success: false,
+        message:
+          "actionの指定が正しくありません。"
+      });
+    }
+
     const publicationNumber =
       normalizePublicationNumber(
         requestBody.publicationNumber
@@ -469,19 +483,22 @@ export default async function handler(
       });
     }
 
-    let editableFields;
+    let editableFields =
+      null;
 
-    try {
-      editableFields =
-        validateEditableFields(
-          requestBody
-        );
-    } catch (validationError) {
-      return response.status(400).json({
-        success: false,
-        message:
-          validationError.message
-      });
+    if (action === "save") {
+      try {
+        editableFields =
+          validateEditableFields(
+            requestBody
+          );
+      } catch (validationError) {
+        return response.status(400).json({
+          success: false,
+          message:
+            validationError.message
+        });
+      }
     }
 
     const app =
@@ -552,6 +569,31 @@ export default async function handler(
         success: false,
         message:
           "この投稿は現在編集できません。"
+      });
+    }
+
+    if (action === "lookup") {
+      return response.status(200).json({
+        success: true,
+        submission: {
+          shopName:
+            currentData.shopName || "",
+
+          title:
+            currentData.title || "",
+
+          category:
+            currentData.category || "",
+
+          content:
+            currentData.content || "",
+
+          address:
+            currentData.address || "",
+
+          websiteUrl:
+            currentData.websiteUrl || ""
+        }
       });
     }
 
