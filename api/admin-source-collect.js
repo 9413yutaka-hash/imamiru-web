@@ -1254,6 +1254,20 @@ function sourceMatchesPriorityTier(
 }
 
 
+// RSS URLを持たない情報源はcronのローテーション枠(MAX_SOURCES_PER_CRON_RUN)を
+// 無駄に消費するため、cron収集の候補選定時のみ除外する。
+// 手動収集(collectFromSource経由)には影響しない。
+// isEnabled/feedUrl自体の書き換えは行わない(候補から外すだけ)。
+function sourceHasUsableFeedUrl(
+  sourceData
+) {
+  return (
+    typeof sourceData.feedUrl === "string" &&
+    sourceData.feedUrl.trim() !== ""
+  );
+}
+
+
 const IMPORTANT_SLOT_INTERVAL_MILLISECONDS =
   15 * 60 * 1000;
 
@@ -1356,9 +1370,14 @@ async function collectFromPriorityTier(
             documentSnapshot.data() ||
             {};
 
-          return sourceMatchesPriorityTier(
-            sourceData.priority,
-            priorityTier
+          return (
+            sourceMatchesPriorityTier(
+              sourceData.priority,
+              priorityTier
+            ) &&
+            sourceHasUsableFeedUrl(
+              sourceData
+            )
           );
         }
       );
