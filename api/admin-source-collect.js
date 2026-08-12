@@ -264,6 +264,19 @@ const AI_COLLECTED_ARTICLES_COLLECTION =
   "aiCollectedArticles";
 
 
+const PRIORITY_TIER_IMPORTANT =
+  "IMPORTANT";
+
+const PRIORITY_TIER_NORMAL =
+  "NORMAL";
+
+const CRON_COLLECTION_CONCURRENCY =
+  2;
+
+const MAX_SOURCES_PER_CRON_RUN =
+  10;
+
+
 const FETCH_TIMEOUT_MILLISECONDS =
   8000;
 
@@ -1204,6 +1217,282 @@ async function collectFromSource(
 }
 
 
+function sourceMatchesPriorityTier(
+  priority,
+  priorityTier
+) {
+  if (
+    typeof priority !== "number"
+  ) {
+    return false;
+  }
+
+  if (
+    priorityTier === PRIORITY_TIER_IMPORTANT
+  ) {
+    return priority >= 4;
+  }
+
+  if (
+    priorityTier === PRIORITY_TIER_NORMAL
+  ) {
+    return priority <= 3;
+  }
+
+  return false;
+}
+
+
+const IMPORTANT_SLOT_INTERVAL_MILLISECONDS =
+  15 * 60 * 1000;
+
+const NORMAL_SLOT_INTERVAL_MILLISECONDS =
+  60 * 60 * 1000;
+
+
+function computeCronSlotNumber(
+  priorityTier,
+  nowMilliseconds
+) {
+  const slotIntervalMilliseconds =
+    priorityTier === PRIORITY_TIER_IMPORTANT
+      ? IMPORTANT_SLOT_INTERVAL_MILLISECONDS
+      : NORMAL_SLOT_INTERVAL_MILLISECONDS;
+
+  return Math.floor(
+    nowMilliseconds /
+    slotIntervalMilliseconds
+  );
+}
+
+
+function sortSourceDocumentsById(
+  sourceDocuments
+) {
+  return sourceDocuments
+    .slice()
+    .sort(
+      function(documentA, documentB) {
+        if (documentA.id < documentB.id) {
+          return -1;
+        }
+
+        if (documentA.id > documentB.id) {
+          return 1;
+        }
+
+        return 0;
+      }
+    );
+}
+
+
+function selectRotationBatch(
+  sortedSourceDocuments,
+  maxBatchSize,
+  slotNumber
+) {
+  const totalCount =
+    sortedSourceDocuments.length;
+
+  if (totalCount === 0) {
+    return [];
+  }
+
+  const batchCount =
+    Math.ceil(
+      totalCount /
+      maxBatchSize
+    );
+
+  const batchIndex =
+    slotNumber %
+    batchCount;
+
+  const startIndex =
+    batchIndex *
+    maxBatchSize;
+
+  return sortedSourceDocuments.slice(
+    startIndex,
+    startIndex +
+    maxBatchSize
+  );
+}
+
+
+async function collectFromPriorityTier(
+  database,
+  priorityTier
+) {
+  const sourcesSnapshot =
+    await database
+      .collection(
+        "aiSources"
+      )
+      .where(
+        "isEnabled",
+        "==",
+        true
+      )
+      .get();
+
+  const matchingSourceDocuments =
+    sourcesSnapshot.docs
+      .filter(
+        function(documentSnapshot) {
+          const sourceData =
+            documentSnapshot.data() ||
+            {};
+
+          return sourceMatchesPriorityTier(
+            sourceData.priority,
+            priorityTier
+          );
+        }
+      );
+
+  const sortedSourceDocuments =
+    sortSourceDocumentsById(
+      matchingSourceDocuments
+    );
+
+  const slotNumber =
+    computeCronSlotNumber(
+      priorityTier,
+      Date.now()
+    );
+
+  const rotationBatch =
+    selectRotationBatch(
+      sortedSourceDocuments,
+      MAX_SOURCES_PER_CRON_RUN,
+      slotNumber
+    );
+
+  const results =
+    [];
+
+  let nextSourceIndex =
+    0;
+
+  async function runCollectionWorker() {
+    while (
+      nextSourceIndex <
+      rotationBatch.length
+    ) {
+      const currentIndex =
+        nextSourceIndex;
+
+      nextSourceIndex +=
+        1;
+
+      const sourceDocumentSnapshot =
+        rotationBatch[
+          currentIndex
+        ];
+
+      const sourceId =
+        sourceDocumentSnapshot.id;
+
+      const sourceData =
+        sourceDocumentSnapshot.data() ||
+        {};
+
+      const fallbackSourceName =
+        typeof sourceData.name === "string"
+          ? sourceData.name
+          : "";
+
+      try {
+        const collectionResult =
+          await collectFromSource(
+            database,
+            sourceId
+          );
+
+        results.push(
+          {
+            sourceId:
+              sourceId,
+
+            sourceName:
+              collectionResult.sourceName,
+
+            success:
+              true,
+
+            itemCount:
+              collectionResult.items.length
+          }
+        );
+      } catch (sourceError) {
+        results.push(
+          {
+            sourceId:
+              sourceId,
+
+            sourceName:
+              fallbackSourceName,
+
+            success:
+              false,
+
+            message:
+              sourceError.message
+          }
+        );
+      }
+    }
+  }
+
+  const workerCount =
+    Math.min(
+      CRON_COLLECTION_CONCURRENCY,
+      rotationBatch.length
+    );
+
+  const workers =
+    [];
+
+  for (
+    let workerIndex = 0;
+    workerIndex < workerCount;
+    workerIndex += 1
+  ) {
+    workers.push(
+      runCollectionWorker()
+    );
+  }
+
+  await Promise.all(
+    workers
+  );
+
+  const succeededCount =
+    results.filter(
+      function(result) {
+        return result.success === true;
+      }
+    ).length;
+
+  return {
+    processed:
+      results.length,
+
+    succeeded:
+      succeededCount,
+
+    failed:
+      results.length -
+      succeededCount,
+
+    results:
+      results
+  };
+}
+
+
 export default async function handler(
   request,
   response
@@ -1328,6 +1617,51 @@ export default async function handler(
         request
       );
 
+    const database =
+      getFirestore(app);
+
+    if (isCronRequest) {
+      const priorityTier =
+        typeof requestBody.priorityTier === "string"
+          ? requestBody.priorityTier.trim()
+          : "";
+
+      if (
+        priorityTier !== PRIORITY_TIER_IMPORTANT &&
+        priorityTier !== PRIORITY_TIER_NORMAL
+      ) {
+        return response.status(400).json({
+          success: false,
+          message:
+            "priorityTierはIMPORTANTまたはNORMALを指定してください。"
+        });
+      }
+
+      const tierResult =
+        await collectFromPriorityTier(
+          database,
+          priorityTier
+        );
+
+      return response.status(200).json({
+        success: true,
+        priorityTier:
+          priorityTier,
+
+        processed:
+          tierResult.processed,
+
+        succeeded:
+          tierResult.succeeded,
+
+        failed:
+          tierResult.failed,
+
+        results:
+          tierResult.results
+      });
+    }
+
     const documentId =
       typeof requestBody.documentId === "string"
         ? requestBody.documentId.trim()
@@ -1340,9 +1674,6 @@ export default async function handler(
           "documentIdを指定してください。"
       });
     }
-
-    const database =
-      getFirestore(app);
 
     let collectionResult;
 
