@@ -6,6 +6,7 @@ import {
 
 import {
   FieldValue,
+  Timestamp,
   getFirestore
 } from "firebase-admin/firestore";
 
@@ -258,6 +259,13 @@ const PROCESSING_STATUS_DONE =
 
 const PROCESSING_STATUS_ERROR =
   "ERROR";
+
+const PROCESSING_STATUS_SKIPPED =
+  "SKIPPED";
+
+
+const PROCESSING_CLAIM_STALE_MILLISECONDS =
+  10 * 60 * 1000;
 
 
 const AI_COLLECTED_ARTICLES_COLLECTION =
@@ -1154,6 +1162,9 @@ async function collectFromSource(
                 publishedAt:
                   entry.candidateItem.publishedAt,
 
+                summary:
+                  entry.candidateItem.summary,
+
                 firstSeenAt:
                   FieldValue.serverTimestamp(),
 
@@ -1493,6 +1504,807 @@ async function collectFromPriorityTier(
 }
 
 
+async function claimDiscoveredArticle(
+  database,
+  articleRef
+) {
+  return database.runTransaction(
+    async function(transaction) {
+      const snapshot =
+        await transaction.get(
+          articleRef
+        );
+
+      if (!snapshot.exists) {
+        return null;
+      }
+
+      const data =
+        snapshot.data() ||
+        {};
+
+      const isDiscovered =
+        data.processingStatus === PROCESSING_STATUS_DISCOVERED;
+
+      const isStaleProcessing =
+        data.processingStatus === PROCESSING_STATUS_PROCESSING &&
+        data.processingClaimedAt &&
+        typeof data.processingClaimedAt.toMillis === "function" &&
+        (
+          Date.now() -
+          data.processingClaimedAt.toMillis()
+        ) > PROCESSING_CLAIM_STALE_MILLISECONDS;
+
+      if (!isDiscovered && !isStaleProcessing) {
+        return null;
+      }
+
+      transaction.update(
+        articleRef,
+        {
+          processingStatus:
+            PROCESSING_STATUS_PROCESSING,
+
+          processingClaimedAt:
+            FieldValue.serverTimestamp(),
+
+          processingError:
+            ""
+        }
+      );
+
+      return data;
+    }
+  );
+}
+
+
+async function finalizeArticleProcessing(
+  database,
+  articleRef,
+  finalStatus,
+  extraFields
+) {
+  await database.runTransaction(
+    async function(transaction) {
+      const snapshot =
+        await transaction.get(
+          articleRef
+        );
+
+      if (!snapshot.exists) {
+        return;
+      }
+
+      const data =
+        snapshot.data() ||
+        {};
+
+      if (
+        data.processingStatus !== PROCESSING_STATUS_PROCESSING
+      ) {
+        return;
+      }
+
+      transaction.update(
+        articleRef,
+        Object.assign(
+          {
+            processingStatus:
+              finalStatus,
+
+            processingUpdatedAt:
+              FieldValue.serverTimestamp()
+          },
+          extraFields || {}
+        )
+      );
+    }
+  );
+}
+
+
+const TRAVELER_RELEVANCE_KEYWORDS = [
+  "イベント", "祭り", "花火", "観光", "ビーチ", "海",
+  "台風", "大雨", "津波", "警報", "熱中症",
+  "通行止め", "交通規制", "バス", "ゆいレール", "フェリー",
+  "空港", "欠航", "運休", "観光施設", "営業時間",
+  "臨時休業", "首里城", "美ら海水族館"
+];
+
+const INTERNAL_RELEVANCE_KEYWORDS = [
+  "採用", "入札", "公募", "補助金", "納税", "申請書",
+  "会議", "委員会", "職員", "事業者向け", "制度", "調達"
+];
+
+const RELEVANCE_LABELS_BY_SCORE = {
+  5: "最重要",
+  4: "旅行者向け",
+  3: "要確認",
+  2: "優先度低",
+  1: "行政向け"
+};
+
+const RELEVANCE_VISIBLE_MINIMUM_SCORE = 3;
+
+
+function computeRelevance(
+  item
+) {
+  const combinedText =
+    (item.title || "") + " " + (item.summary || "");
+
+  const boostKeywords =
+    TRAVELER_RELEVANCE_KEYWORDS.filter(
+      function(keyword) {
+        return combinedText.includes(keyword);
+      }
+    );
+
+  const dropKeywords =
+    INTERNAL_RELEVANCE_KEYWORDS.filter(
+      function(keyword) {
+        return combinedText.includes(keyword);
+      }
+    );
+
+  const rawScore =
+    2 + boostKeywords.length - dropKeywords.length;
+
+  const relevanceScore =
+    Math.min(5, Math.max(1, rawScore));
+
+  const relevanceLabel =
+    RELEVANCE_LABELS_BY_SCORE[relevanceScore];
+
+  const reasonParts =
+    [];
+
+  if (boostKeywords.length > 0) {
+    reasonParts.push(
+      "旅行者向け：" + boostKeywords.join("、")
+    );
+  }
+
+  if (dropKeywords.length > 0) {
+    reasonParts.push(
+      "優先度低下：" + dropKeywords.join("、")
+    );
+  }
+
+  const relevanceReason =
+    reasonParts.length > 0
+      ? reasonParts.join(" / ")
+      : "一致する判定キーワードはありません。";
+
+  return {
+    relevanceScore: relevanceScore,
+    relevanceLabel: relevanceLabel,
+    relevanceReason: relevanceReason,
+    relevanceBoostKeywords: boostKeywords,
+    relevanceDropKeywords: dropKeywords
+  };
+}
+
+
+async function judgeArticleForAutoPost(
+  database,
+  articleData
+) {
+  const title =
+    typeof articleData.title === "string"
+      ? articleData.title.trim()
+      : "";
+
+  if (title === "") {
+    return {
+      outcome: "SKIP",
+      reason: "タイトルが空のため対象外です。"
+    };
+  }
+
+  const summary =
+    typeof articleData.summary === "string"
+      ? articleData.summary.trim()
+      : "";
+
+  if (summary === "") {
+    return {
+      outcome: "SKIP",
+      reason: "概要（summary）が保存されていないため対象外です。"
+    };
+  }
+
+  const articleUrl =
+    typeof articleData.articleUrl === "string"
+      ? articleData.articleUrl.trim()
+      : "";
+
+  if (articleUrl === "") {
+    return {
+      outcome: "SKIP",
+      reason: "記事URLが空のため対象外です。"
+    };
+  }
+
+  if (
+    !articleData.firstSeenAt ||
+    typeof articleData.firstSeenAt.toDate !== "function"
+  ) {
+    return {
+      outcome: "SKIP",
+      reason: "firstSeenAtが正しく記録されていないため対象外です。"
+    };
+  }
+
+  const sourceId =
+    typeof articleData.sourceId === "string"
+      ? articleData.sourceId
+      : "";
+
+  if (sourceId === "") {
+    return {
+      outcome: "SKIP",
+      reason: "sourceIdが記録されていないため対象外です。"
+    };
+  }
+
+  const sourceSnapshot =
+    await database
+      .collection(
+        "aiSources"
+      )
+      .doc(
+        sourceId
+      )
+      .get();
+
+  if (
+    !sourceSnapshot.exists ||
+    sourceSnapshot.data().isEnabled !== true
+  ) {
+    return {
+      outcome: "SKIP",
+      reason: "情報源が無効化されているため対象外です。"
+    };
+  }
+
+  const relevanceResult =
+    computeRelevance(
+      {
+        title: title,
+        summary: summary
+      }
+    );
+
+  if (
+    relevanceResult.relevanceScore <
+    RELEVANCE_VISIBLE_MINIMUM_SCORE
+  ) {
+    return {
+      outcome: "SKIP",
+      reason:
+        "旅行者関連度スコアが基準未満です（" +
+        relevanceResult.relevanceScore +
+        "点）。"
+    };
+  }
+
+  return {
+    outcome: "PROCEED",
+    relevanceResult: relevanceResult
+  };
+}
+
+
+const DRAFT_TITLE_SUFFIX_TRIGGER_KEYWORDS = [
+  "節水", "断水", "停電",
+  "欠航", "運休", "通行止め",
+  "警報", "避難"
+];
+
+const DRAFT_TITLE_SUFFIX_TEXT = "｜滞在中・渡航予定の方も確認を";
+
+const DRAFT_LIFELINE_KEYWORDS = ["節水", "断水", "停電"];
+
+const DRAFT_TRANSPORT_KEYWORDS = [
+  "交通", "通行止め", "交通規制", "欠航", "運休"
+];
+
+const DRAFT_EMERGENCY_KEYWORDS = [
+  "避難", "警報", "台風", "津波", "大雨", "熱中症"
+];
+
+const DRAFT_EVENT_KEYWORDS = ["イベント", "祭り", "花火"];
+
+const DRAFT_SIGHTSEEING_KEYWORDS = [
+  "ビーチ", "海", "観光施設", "首里城", "美ら海水族館"
+];
+
+const DRAFT_LIFELINE_NOTE =
+  "滞在中・渡航予定の方も、現地での生活に関わる情報として確認しておくと安心です。";
+
+const DRAFT_TRANSPORT_NOTE =
+  "移動予定がある方は、利用前に最新情報を確認してください。";
+
+const DRAFT_EMERGENCY_NOTE =
+  "滞在中・移動予定の方は、最新の公式情報を確認してください。";
+
+const DRAFT_EVENT_NOTE =
+  "滞在中・近くを訪れる予定の方は、開催情報を確認してみてください。";
+
+const DRAFT_OFFICIAL_SOURCE_NOTE =
+  "詳しい状況・最新情報は情報元ページをご確認ください。";
+
+const DRAFT_CONTENT_MAX_LENGTH = 300;
+
+
+function normalizeDraftSummaryText(text) {
+  return String(text || "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function shouldAddTravelerTitleSuffix(combinedText) {
+  return DRAFT_TITLE_SUFFIX_TRIGGER_KEYWORDS.some(
+    function(keyword) {
+      return combinedText.includes(keyword);
+    }
+  );
+}
+
+function buildDraftTitleText(baseTitle, combinedText) {
+  if (!shouldAddTravelerTitleSuffix(combinedText)) {
+    return baseTitle.slice(0, 50);
+  }
+
+  return (
+    baseTitle + DRAFT_TITLE_SUFFIX_TEXT
+  ).slice(0, 50);
+}
+
+function resolveDraftCategory(combinedText) {
+  const matchesNoticeKeepKeyword =
+    DRAFT_LIFELINE_KEYWORDS.some(function(keyword) {
+      return combinedText.includes(keyword);
+    }) ||
+    DRAFT_TRANSPORT_KEYWORDS.some(function(keyword) {
+      return combinedText.includes(keyword);
+    }) ||
+    DRAFT_EMERGENCY_KEYWORDS.some(function(keyword) {
+      return combinedText.includes(keyword);
+    });
+
+  if (matchesNoticeKeepKeyword) {
+    return "お知らせ";
+  }
+
+  const matchesEventKeyword =
+    DRAFT_EVENT_KEYWORDS.some(function(keyword) {
+      return combinedText.includes(keyword);
+    });
+
+  if (matchesEventKeyword) {
+    return "イベント";
+  }
+
+  const matchesSightseeingKeyword =
+    DRAFT_SIGHTSEEING_KEYWORDS.some(function(keyword) {
+      return combinedText.includes(keyword);
+    });
+
+  if (matchesSightseeingKeyword) {
+    return "観光・体験";
+  }
+
+  return "お知らせ";
+}
+
+function resolveDraftTravelerNote(combinedText) {
+  const matchesEmergencyKeyword =
+    DRAFT_EMERGENCY_KEYWORDS.some(function(keyword) {
+      return combinedText.includes(keyword);
+    });
+
+  if (matchesEmergencyKeyword) {
+    return DRAFT_EMERGENCY_NOTE;
+  }
+
+  const matchesLifelineKeyword =
+    DRAFT_LIFELINE_KEYWORDS.some(function(keyword) {
+      return combinedText.includes(keyword);
+    });
+
+  if (matchesLifelineKeyword) {
+    return DRAFT_LIFELINE_NOTE;
+  }
+
+  const matchesTransportKeyword =
+    DRAFT_TRANSPORT_KEYWORDS.some(function(keyword) {
+      return combinedText.includes(keyword);
+    });
+
+  if (matchesTransportKeyword) {
+    return DRAFT_TRANSPORT_NOTE;
+  }
+
+  const matchesEventKeyword =
+    DRAFT_EVENT_KEYWORDS.some(function(keyword) {
+      return combinedText.includes(keyword);
+    });
+
+  if (matchesEventKeyword) {
+    return DRAFT_EVENT_NOTE;
+  }
+
+  return "";
+}
+
+function buildDraftContentText(article, trimmedSourceUrlValue, combinedText) {
+  const travelerNote =
+    resolveDraftTravelerNote(combinedText);
+
+  const officialSourceNote =
+    trimmedSourceUrlValue !== ""
+      ? DRAFT_OFFICIAL_SOURCE_NOTE
+      : "";
+
+  const trailingParts =
+    [travelerNote, officialSourceNote].filter(
+      function(part) {
+        return part !== "";
+      }
+    );
+
+  const trailingText =
+    trailingParts.length > 0
+      ? "\n\n" + trailingParts.join("\n\n")
+      : "";
+
+  const maxSummaryLength =
+    Math.max(
+      0,
+      DRAFT_CONTENT_MAX_LENGTH - trailingText.length
+    );
+
+  const normalizedSummary =
+    normalizeDraftSummaryText(article.summary);
+
+  const truncatedSummary =
+    normalizedSummary.slice(0, maxSummaryLength);
+
+  return (
+    truncatedSummary + trailingText
+  ).slice(0, DRAFT_CONTENT_MAX_LENGTH);
+}
+
+
+function buildAutoDraftFromArticle(
+  articleData
+) {
+  const title =
+    articleData.title.trim();
+
+  const summary =
+    articleData.summary.trim();
+
+  const articleUrl =
+    typeof articleData.articleUrl === "string"
+      ? articleData.articleUrl.trim()
+      : "";
+
+  const combinedText =
+    title + " " + summary;
+
+  const draftTitle =
+    buildDraftTitleText(
+      title,
+      combinedText
+    );
+
+  const draftCategory =
+    resolveDraftCategory(
+      combinedText
+    );
+
+  const draftContent =
+    buildDraftContentText(
+      { summary: summary },
+      articleUrl,
+      combinedText
+    );
+
+  return {
+    title: draftTitle,
+    category: draftCategory,
+    content: draftContent,
+    websiteUrl: articleUrl
+  };
+}
+
+
+const AUTO_POST_EXPIRES_AT_MILLISECONDS =
+  24 * 60 * 60 * 1000;
+
+
+async function createAutoPostSubmission(
+  database,
+  draft
+) {
+  const expiresAtDate =
+    new Date(
+      Date.now() +
+      AUTO_POST_EXPIRES_AT_MILLISECONDS
+    );
+
+  const documentReference =
+    await database
+      .collection(
+        "submissions"
+      )
+      .add(
+        {
+          shopName:
+            "マチナウ運営",
+
+          title:
+            draft.title,
+
+          category:
+            draft.category,
+
+          content:
+            draft.content,
+
+          address:
+            "",
+
+          latitude:
+            null,
+
+          longitude:
+            null,
+
+          imageUrls:
+            [],
+
+          websiteUrl:
+            draft.websiteUrl,
+
+          expiresAt:
+            Timestamp.fromDate(
+              expiresAtDate
+            ),
+
+          status:
+            "approved",
+
+          postType:
+            "admin",
+
+          sourceLabel:
+            "マチナウ運営より",
+
+          createdAt:
+            FieldValue.serverTimestamp(),
+
+          updatedAt:
+            FieldValue.serverTimestamp()
+        }
+      );
+
+  return documentReference.id;
+}
+
+
+const MAX_AUTO_POSTS_PER_RUN =
+  3;
+
+const AUTO_POST_CANDIDATE_QUERY_LIMIT =
+  MAX_AUTO_POSTS_PER_RUN * 5;
+
+
+async function runAutoPostForDiscoveredArticles(
+  database,
+  maxProcessedCount
+) {
+  const candidateSnapshot =
+    await database
+      .collection(
+        AI_COLLECTED_ARTICLES_COLLECTION
+      )
+      .where(
+        "processingStatus",
+        "in",
+        [
+          PROCESSING_STATUS_DISCOVERED,
+          PROCESSING_STATUS_PROCESSING
+        ]
+      )
+      .limit(
+        AUTO_POST_CANDIDATE_QUERY_LIMIT
+      )
+      .get();
+
+  const outcomes =
+    [];
+
+  for (
+    let candidateIndex = 0;
+    candidateIndex < candidateSnapshot.docs.length;
+    candidateIndex += 1
+  ) {
+    if (
+      outcomes.length >=
+      maxProcessedCount
+    ) {
+      break;
+    }
+
+    const candidateDocument =
+      candidateSnapshot.docs[
+        candidateIndex
+      ];
+
+    const result =
+      await processDiscoveredArticleForAutoPost(
+        database,
+        candidateDocument.ref
+      );
+
+    if (result.outcome !== "NOT_CLAIMED") {
+      outcomes.push(
+        result
+      );
+    }
+  }
+
+  const postedCount =
+    outcomes.filter(
+      function(outcome) {
+        return outcome.outcome === "POSTED";
+      }
+    ).length;
+
+  const skippedCount =
+    outcomes.filter(
+      function(outcome) {
+        return outcome.outcome === "SKIPPED";
+      }
+    ).length;
+
+  const errorCount =
+    outcomes.filter(
+      function(outcome) {
+        return outcome.outcome === "ERROR";
+      }
+    ).length;
+
+  return {
+    attempted:
+      outcomes.length,
+
+    posted:
+      postedCount,
+
+    skipped:
+      skippedCount,
+
+    error:
+      errorCount,
+
+    outcomes:
+      outcomes
+  };
+}
+
+
+async function processDiscoveredArticleForAutoPost(
+  database,
+  articleRef
+) {
+  const claimedData =
+    await claimDiscoveredArticle(
+      database,
+      articleRef
+    );
+
+  if (!claimedData) {
+    return {
+      outcome: "NOT_CLAIMED"
+    };
+  }
+
+  let judgment;
+
+  try {
+    judgment =
+      await judgeArticleForAutoPost(
+        database,
+        claimedData
+      );
+  } catch (judgeError) {
+    await finalizeArticleProcessing(
+      database,
+      articleRef,
+      PROCESSING_STATUS_ERROR,
+      {
+        processingError:
+          "判定処理でエラーが発生しました。"
+      }
+    );
+
+    return {
+      outcome: "ERROR",
+      message: judgeError.message
+    };
+  }
+
+  if (judgment.outcome === "SKIP") {
+    await finalizeArticleProcessing(
+      database,
+      articleRef,
+      PROCESSING_STATUS_SKIPPED,
+      {
+        processingError:
+          judgment.reason
+      }
+    );
+
+    return {
+      outcome: "SKIPPED",
+      reason: judgment.reason
+    };
+  }
+
+  try {
+    const draft =
+      buildAutoDraftFromArticle(
+        claimedData
+      );
+
+    const submissionId =
+      await createAutoPostSubmission(
+        database,
+        draft
+      );
+
+    await finalizeArticleProcessing(
+      database,
+      articleRef,
+      PROCESSING_STATUS_DONE,
+      {
+        processingError:
+          "",
+
+        postedSubmissionId:
+          submissionId
+      }
+    );
+
+    return {
+      outcome: "POSTED",
+      submissionId: submissionId
+    };
+  } catch (postError) {
+    await finalizeArticleProcessing(
+      database,
+      articleRef,
+      PROCESSING_STATUS_ERROR,
+      {
+        processingError:
+          "自動投稿処理でエラーが発生しました。"
+      }
+    );
+
+    return {
+      outcome: "ERROR",
+      message: postError.message
+    };
+  }
+}
+
+
 export default async function handler(
   request,
   response
@@ -1643,6 +2455,22 @@ export default async function handler(
           priorityTier
         );
 
+      let autoPostSummary =
+        null;
+
+      try {
+        autoPostSummary =
+          await runAutoPostForDiscoveredArticles(
+            database,
+            MAX_AUTO_POSTS_PER_RUN
+          );
+      } catch (autoPostError) {
+        console.error(
+          "自動投稿処理エラー：",
+          autoPostError
+        );
+      }
+
       return response.status(200).json({
         success: true,
         priorityTier:
@@ -1658,7 +2486,10 @@ export default async function handler(
           tierResult.failed,
 
         results:
-          tierResult.results
+          tierResult.results,
+
+        autoPost:
+          autoPostSummary
       });
     }
 
