@@ -2,15 +2,11 @@ name: Expire Posts
 
 on:
   schedule:
-    - cron: "7 * * * *"
-    - cron: "22 * * * *"
-    - cron: "37 * * * *"
-    - cron: "52 * * * *"
+    - cron: "*/30 * * * *"
   workflow_dispatch:
 
 jobs:
   expire:
-    if: github.event.schedule == '7 * * * *' || github.event.schedule == '37 * * * *' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
 
     steps:
@@ -19,7 +15,6 @@ jobs:
           curl -L https://imamiru-web.vercel.app/api/expire
 
   collect-sources:
-    if: github.event.schedule == '7 * * * *' || github.event.schedule == '22 * * * *' || github.event.schedule == '37 * * * *' || github.event.schedule == '52 * * * *' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
@@ -32,7 +27,6 @@ jobs:
             -d '{"priorityTier":"IMPORTANT"}'
 
       - name: Collect NORMAL sources
-        if: github.event.schedule == '7 * * * *' || github.event_name == 'workflow_dispatch'
         run: |
           curl -f --max-time 90 -X POST https://imamiru-web.vercel.app/api/admin-source-collect \
             -H "Content-Type: application/json" \
