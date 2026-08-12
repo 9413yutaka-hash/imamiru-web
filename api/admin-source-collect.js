@@ -2101,7 +2101,40 @@ const MAX_AUTO_POSTS_PER_RUN =
   3;
 
 const AUTO_POST_CANDIDATE_QUERY_LIMIT =
-  MAX_AUTO_POSTS_PER_RUN * 5;
+  MAX_AUTO_POSTS_PER_RUN * 20;
+
+
+function sortArticleDocumentsByFirstSeenAtDescending(
+  articleDocuments
+) {
+  return articleDocuments
+    .slice()
+    .sort(
+      function(documentA, documentB) {
+        const dataA =
+          documentA.data() ||
+          {};
+
+        const dataB =
+          documentB.data() ||
+          {};
+
+        const millisA =
+          dataA.firstSeenAt &&
+          typeof dataA.firstSeenAt.toMillis === "function"
+            ? dataA.firstSeenAt.toMillis()
+            : 0;
+
+        const millisB =
+          dataB.firstSeenAt &&
+          typeof dataB.firstSeenAt.toMillis === "function"
+            ? dataB.firstSeenAt.toMillis()
+            : 0;
+
+        return millisB - millisA;
+      }
+    );
+}
 
 
 async function runAutoPostForDiscoveredArticles(
@@ -2126,12 +2159,17 @@ async function runAutoPostForDiscoveredArticles(
       )
       .get();
 
+  const sortedCandidateDocuments =
+    sortArticleDocumentsByFirstSeenAtDescending(
+      candidateSnapshot.docs
+    );
+
   const outcomes =
     [];
 
   for (
     let candidateIndex = 0;
-    candidateIndex < candidateSnapshot.docs.length;
+    candidateIndex < sortedCandidateDocuments.length;
     candidateIndex += 1
   ) {
     if (
@@ -2142,7 +2180,7 @@ async function runAutoPostForDiscoveredArticles(
     }
 
     const candidateDocument =
-      candidateSnapshot.docs[
+      sortedCandidateDocuments[
         candidateIndex
       ];
 
