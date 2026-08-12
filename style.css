@@ -392,6 +392,60 @@
       text-align: center;
     }
 
+    .weather-card {
+      margin-top: 13px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: var(--sky);
+      border: 1px solid rgba(7, 136, 201, 0.12);
+      overflow-wrap: break-word;
+    }
+
+    .weather-location-label {
+      display: inline-block;
+      margin-bottom: 4px;
+      color: var(--blue);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .weather-summary {
+      margin: 0;
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 800;
+      line-height: 1.4;
+    }
+
+    .weather-feels-like {
+      margin: 2px 0 0;
+      color: var(--subtext);
+      font-size: 11px;
+    }
+
+    .weather-details {
+      margin: 6px 0 0;
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.5;
+    }
+
+    .weather-advice {
+      margin: 6px 0 0;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .weather-credit {
+      display: inline-block;
+      margin-top: 8px;
+      color: var(--subtext);
+      font-size: 10px;
+      text-decoration: none;
+    }
+
     .flash-banner {
       position: relative;
       overflow: hidden;

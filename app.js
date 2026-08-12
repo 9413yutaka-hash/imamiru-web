@@ -3246,6 +3246,306 @@ function closeModalOutside(
   }
 }
 
+const NAHA_FALLBACK_LATITUDE =
+  26.2124;
+
+const NAHA_FALLBACK_LONGITUDE =
+  127.6809;
+
+const WEATHER_CACHE_STORAGE_KEY =
+  "machinauWeatherCache";
+
+const WEATHER_CACHE_MAX_AGE_MILLISECONDS =
+  15 * 60 * 1000;
+
+const WEATHER_CACHE_MAX_COORDINATE_DELTA =
+  0.05;
+
+
+function readWeatherCache(latitude, longitude) {
+  try {
+    const rawCache =
+      sessionStorage.getItem(
+        WEATHER_CACHE_STORAGE_KEY
+      );
+
+    if (!rawCache) {
+      return null;
+    }
+
+    const parsedCache =
+      JSON.parse(
+        rawCache
+      );
+
+    if (
+      !parsedCache ||
+      typeof parsedCache !== "object" ||
+      typeof parsedCache.fetchedAt !== "number" ||
+      typeof parsedCache.latitude !== "number" ||
+      typeof parsedCache.longitude !== "number" ||
+      !parsedCache.weather
+    ) {
+      return null;
+    }
+
+    if (
+      Date.now() - parsedCache.fetchedAt >
+      WEATHER_CACHE_MAX_AGE_MILLISECONDS
+    ) {
+      return null;
+    }
+
+    if (
+      Math.abs(parsedCache.latitude - latitude) >
+        WEATHER_CACHE_MAX_COORDINATE_DELTA ||
+      Math.abs(parsedCache.longitude - longitude) >
+        WEATHER_CACHE_MAX_COORDINATE_DELTA
+    ) {
+      return null;
+    }
+
+    return parsedCache.weather;
+  } catch (error) {
+    return null;
+  }
+}
+
+
+function writeWeatherCache(latitude, longitude, weather) {
+  try {
+    sessionStorage.setItem(
+      WEATHER_CACHE_STORAGE_KEY,
+      JSON.stringify({
+        fetchedAt: Date.now(),
+        latitude: latitude,
+        longitude: longitude,
+        weather: weather
+      })
+    );
+  } catch (error) {
+    // sessionStorageが利用できない環境でも天候機能自体は継続する
+  }
+}
+
+
+async function fetchWeather(latitude, longitude) {
+  const cachedWeather =
+    readWeatherCache(
+      latitude,
+      longitude
+    );
+
+  if (cachedWeather) {
+    return cachedWeather;
+  }
+
+  const response =
+    await fetch(
+      "/api/weather?lat=" +
+      encodeURIComponent(latitude) +
+      "&lon=" +
+      encodeURIComponent(longitude)
+    );
+
+  const responseData =
+    await response.json();
+
+  if (
+    !response.ok ||
+    !responseData ||
+    responseData.success !== true ||
+    !responseData.weather
+  ) {
+    throw new Error(
+      responseData && responseData.message
+        ? responseData.message
+        : "天候情報の取得に失敗しました。"
+    );
+  }
+
+  writeWeatherCache(
+    latitude,
+    longitude,
+    responseData.weather
+  );
+
+  return responseData.weather;
+}
+
+
+// WeatherAPI.comのcondition.codeに対する簡易な絵文字マッピング。
+// 未知のコードは中立の絵文字にフォールバックする(表示が壊れないことを優先)。
+function getWeatherConditionEmoji(conditionCode) {
+  if (conditionCode === 1000) {
+    return "☀️";
+  }
+
+  if ([1003, 1006, 1009].includes(conditionCode)) {
+    return "☁️";
+  }
+
+  if (
+    [
+      1063, 1150, 1153, 1180, 1183, 1186,
+      1189, 1192, 1195, 1240, 1243, 1246
+    ].includes(conditionCode)
+  ) {
+    return "☂";
+  }
+
+  if (
+    [1087, 1273, 1276, 1279, 1282].includes(
+      conditionCode
+    )
+  ) {
+    return "⛈";
+  }
+
+  if ([1030, 1135, 1147].includes(conditionCode)) {
+    return "🌫";
+  }
+
+  return "🌤";
+}
+
+
+// ここでの表示はあくまで旅行者向けの行動判断補助であり、
+// 気象庁等が発表する公式警報・避難情報ではない。
+// 「警報」「避難指示」等の表現は使用しない。
+// 優先順位は健康リスクの大きさを基準にした単純な固定順(熱→UV→雨→風)で、
+// 新しいスコアリング体系は作らない。
+function buildWeatherAdviceText(weather) {
+  const heatIndexForAdvice =
+    weather.heatIndexC !== null
+      ? weather.heatIndexC
+      : weather.temperatureC;
+
+  if (
+    heatIndexForAdvice !== null &&
+    heatIndexForAdvice >= 35
+  ) {
+    return "🌡 こまめな水分補給を";
+  }
+
+  if (
+    weather.uvIndex !== null &&
+    weather.uvIndex >= 8
+  ) {
+    return "☀️ 紫外線対策を";
+  }
+
+  if (
+    weather.chanceOfRain !== null &&
+    weather.chanceOfRain >= 50
+  ) {
+    return "☂ 傘があると安心";
+  }
+
+  if (
+    weather.windKph !== null &&
+    weather.windKph >= 20
+  ) {
+    return "🌬 強風に注意";
+  }
+
+  return "";
+}
+
+
+function updateWeatherDisplay(weather, locationLabelText) {
+  const weatherCard =
+    document.getElementById("weatherCard");
+
+  const weatherLocationLabel =
+    document.getElementById("weatherLocationLabel");
+
+  const weatherSummary =
+    document.getElementById("weatherSummary");
+
+  const weatherFeelsLike =
+    document.getElementById("weatherFeelsLike");
+
+  const weatherDetails =
+    document.getElementById("weatherDetails");
+
+  const weatherAdvice =
+    document.getElementById("weatherAdvice");
+
+  if (
+    !weatherCard ||
+    !weatherLocationLabel ||
+    !weatherSummary ||
+    !weatherFeelsLike ||
+    !weatherDetails ||
+    !weatherAdvice
+  ) {
+    return;
+  }
+
+  if (!weather) {
+    weatherCard.style.display = "none";
+    return;
+  }
+
+  weatherLocationLabel.textContent =
+    locationLabelText;
+
+  const temperatureText =
+    weather.temperatureC !== null
+      ? Math.round(weather.temperatureC) + "℃"
+      : "--℃";
+
+  weatherSummary.textContent =
+    getWeatherConditionEmoji(weather.conditionCode) +
+    " " +
+    (weather.conditionText || "") +
+    "　" +
+    temperatureText;
+
+  weatherFeelsLike.textContent =
+    weather.feelsLikeC !== null
+      ? "体感 " + Math.round(weather.feelsLikeC) + "℃"
+      : "";
+
+  const detailParts = [];
+
+  if (weather.chanceOfRain !== null) {
+    detailParts.push(
+      "☂ 降水" + weather.chanceOfRain + "%"
+    );
+  }
+
+  if (weather.windKph !== null) {
+    detailParts.push(
+      "🌬 " + Math.round(weather.windKph) + "km/h"
+    );
+  }
+
+  if (weather.uvIndex !== null) {
+    detailParts.push(
+      "UV " + weather.uvIndex
+    );
+  }
+
+  weatherDetails.textContent =
+    detailParts.join("　");
+
+  const adviceText =
+    buildWeatherAdviceText(weather);
+
+  if (adviceText) {
+    weatherAdvice.textContent = adviceText;
+    weatherAdvice.style.display = "";
+  } else {
+    weatherAdvice.textContent = "";
+    weatherAdvice.style.display = "none";
+  }
+
+  weatherCard.style.display = "";
+}
+
+
 function getLocation() {
   const locationButton =
     document.getElementById(
@@ -3275,6 +3575,17 @@ function getLocation() {
   ) {
     locationMessage.textContent =
       "このブラウザでは位置情報を利用できません。";
+
+    fetchWeather(
+      NAHA_FALLBACK_LATITUDE,
+      NAHA_FALLBACK_LONGITUDE
+    )
+      .then(function(weather) {
+        updateWeatherDisplay(weather, "那覇の天気");
+      })
+      .catch(function(error) {
+        // 天候取得の失敗は既存の位置情報エラー表示に影響させない
+      });
 
     return;
   }
@@ -3327,6 +3638,17 @@ function getLocation() {
         );
 
         renderShops();
+
+        fetchWeather(
+          userLatitude,
+          userLongitude
+        )
+          .then(function(weather) {
+            updateWeatherDisplay(weather, "現在地の天気");
+          })
+          .catch(function(error) {
+            // 天候取得の失敗はrenderShops()等の既存フローに影響させない
+          });
       },
 
       function(error) {
@@ -3365,6 +3687,17 @@ function getLocation() {
 
         locationButton.textContent =
           "もう一度試す";
+
+        fetchWeather(
+          NAHA_FALLBACK_LATITUDE,
+          NAHA_FALLBACK_LONGITUDE
+        )
+          .then(function(weather) {
+            updateWeatherDisplay(weather, "那覇の天気");
+          })
+          .catch(function(error) {
+            // 天候取得の失敗は既存の位置情報エラー表示に影響させない
+          });
       },
 
       {
