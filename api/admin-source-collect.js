@@ -1073,6 +1073,12 @@ async function collectFromSource(
     );
   }
 
+  let newItemCount =
+    0;
+
+  let existingItemCount =
+    0;
+
   try {
     const articleCollectionReference =
       database.collection(
@@ -1136,6 +1142,9 @@ async function collectFromSource(
             existingSnapshot &&
             existingSnapshot.exists
           ) {
+            existingItemCount +=
+              1;
+
             articleWriteBatch.update(
               entry.documentRef,
               {
@@ -1144,6 +1153,9 @@ async function collectFromSource(
               }
             );
           } else {
+            newItemCount +=
+              1;
+
             articleWriteBatch.set(
               entry.documentRef,
               {
@@ -1223,7 +1235,13 @@ async function collectFromSource(
       sourceName,
 
     items:
-      items
+      items,
+
+    newItemCount:
+      newItemCount,
+
+    existingItemCount:
+      existingItemCount
   };
 }
 
@@ -1453,7 +1471,13 @@ async function collectFromPriorityTier(
               true,
 
             itemCount:
-              collectionResult.items.length
+              collectionResult.items.length,
+
+            newItemCount:
+              collectionResult.newItemCount,
+
+            existingItemCount:
+              collectionResult.existingItemCount
           }
         );
       } catch (sourceError) {
@@ -1499,12 +1523,39 @@ async function collectFromPriorityTier(
     workers
   );
 
-  const succeededCount =
+  const succeededResults =
     results.filter(
       function(result) {
         return result.success === true;
       }
-    ).length;
+    );
+
+  const succeededCount =
+    succeededResults.length;
+
+  const totalItemCount =
+    succeededResults.reduce(
+      function(sum, result) {
+        return sum + result.itemCount;
+      },
+      0
+    );
+
+  const totalNewItemCount =
+    succeededResults.reduce(
+      function(sum, result) {
+        return sum + result.newItemCount;
+      },
+      0
+    );
+
+  const totalExistingItemCount =
+    succeededResults.reduce(
+      function(sum, result) {
+        return sum + result.existingItemCount;
+      },
+      0
+    );
 
   return {
     processed:
@@ -1518,7 +1569,16 @@ async function collectFromPriorityTier(
       succeededCount,
 
     results:
-      results
+      results,
+
+    totalItemCount:
+      totalItemCount,
+
+    totalNewItemCount:
+      totalNewItemCount,
+
+    totalExistingItemCount:
+      totalExistingItemCount
   };
 }
 
@@ -2546,6 +2606,15 @@ export default async function handler(
 
         results:
           tierResult.results,
+
+        totalItemCount:
+          tierResult.totalItemCount,
+
+        totalNewItemCount:
+          tierResult.totalNewItemCount,
+
+        totalExistingItemCount:
+          tierResult.totalExistingItemCount,
 
         autoPost:
           autoPostSummary
