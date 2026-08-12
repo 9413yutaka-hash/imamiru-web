@@ -440,7 +440,8 @@ export default async function handler(
 
     if (
       action !== "lookup" &&
-      action !== "save"
+      action !== "save" &&
+      action !== "end"
     ) {
       return response.status(400).json({
         success: false,
@@ -560,6 +561,50 @@ export default async function handler(
 
     const currentData =
       matchingDocument.data();
+
+    if (action === "end") {
+      if (
+        currentData.status === "expired"
+      ) {
+        return response.status(200).json({
+          success: true,
+          alreadyEnded: true,
+          message:
+            "この掲載はすでに終了しています。"
+        });
+      }
+
+      if (
+        currentData.status === "rejected"
+      ) {
+        return response.status(409).json({
+          success: false,
+          message:
+            "この掲載は運営によって却下されているため、掲載されていません。"
+        });
+      }
+
+      await matchingDocument.ref.update({
+        status:
+          "expired",
+
+        endedAt:
+          FieldValue.serverTimestamp(),
+
+        endedBy:
+          "shop",
+
+        updatedAt:
+          FieldValue.serverTimestamp()
+      });
+
+      return response.status(200).json({
+        success: true,
+        alreadyEnded: false,
+        message:
+          "掲載を終了しました。"
+      });
+    }
 
     if (
       currentData.status !== "approved" &&

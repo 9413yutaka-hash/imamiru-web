@@ -1098,6 +1098,9 @@
       }
 
       return {
+        action:
+          "end",
+
         publicationNumber:
           publicationNumber,
 
@@ -1141,7 +1144,7 @@
 
         const response =
           await fetch(
-            "/api/end-ad",
+            "/api/edit-ad",
             {
               method:
                 "POST",
