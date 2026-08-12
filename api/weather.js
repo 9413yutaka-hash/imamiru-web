@@ -229,11 +229,11 @@ export default async function handler(
   }
 
   const weatherApiKey =
-    process.env.WEATHER_API_KEY;
+    process.env.WEATHERAPI_KEY;
 
   if (!weatherApiKey) {
     console.error(
-      "WEATHER_API_KEY が設定されていません。"
+      "WEATHERAPI_KEY が設定されていません。"
     );
 
     return response.status(500).json({
