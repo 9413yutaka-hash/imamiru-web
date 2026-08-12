@@ -76,17 +76,18 @@
     <div class="hero-inner">
 
       <div class="hero-kicker">
-        🌴 沖縄の「今」を楽しもう
+        <span class="hero-kicker-dot"></span>
+        沖縄の「今」をリアルタイム配信
       </div>
 
       <h1>
-        旅先の<span>偶然</span>を、<br>
-        もっと楽しく。
+        今、沖縄で<br>
+        何が起きているか。
       </h1>
 
       <p class="hero-description">
-        近くのお店、限定イベント、タイムセール。
-        その場所で今だけ楽しめる情報を見つけよう。
+        近くのお店、今日だけのイベント、旅先の<span class="hero-description-emphasis">偶然の寄り道</span>。
+        今の沖縄が、ひと目でわかる。
       </p>
 
       <div class="hero-actions">
@@ -123,7 +124,7 @@
 
         <div class="mini-info">
           <span class="mini-info-label">
-            限定情報
+            今、配信中
           </span>
 
           <span class="mini-info-value">
@@ -192,6 +193,13 @@
 
     </section>
 
+    <section class="map-section">
+      <h2>
+        📍 今いる場所の近くを地図で見る
+      </h2>
+      <div id="google-map"></div>
+    </section>
+
     <section class="flash-banner">
 
       <span class="flash-label">
@@ -244,14 +252,16 @@
         >
           ✨ すべて
         </button>
-<button
-  class="category-button"
-  type="button"
-  data-category="お気に入り"
-  onclick="selectCategory('お気に入り', this)"
->
-  ❤️ お気に入り
-</button>
+
+        <button
+          class="category-button"
+          type="button"
+          data-category="お気に入り"
+          onclick="selectCategory('お気に入り', this)"
+        >
+          ❤️ お気に入り
+        </button>
+
         <button
           class="category-button"
           type="button"
@@ -333,11 +343,13 @@
         </div>
 
       </div>
-       </section>
-<section id="myPageSection" style="display:none;">
+
+    </section>
+
+    <section id="myPageSection" style="display:none;">
   <div class="section-header">
     <h2>👤 マイページ</h2>
-    <p>お気に入りや設定を管理できます。</p>
+    <p>お気に入りに登録した情報を確認できます。</p>
   </div>
 
   <div id="myPageContent">
@@ -351,12 +363,8 @@
 >
   ❤️ お気に入り一覧
 </button>
-    <button class="category-button">📝 投稿履歴</button>
-    <button class="category-button">🌐 言語設定</button>
-    <button class="category-button">⚙️ 設定</button>
   </div>
 </section>
-   
 
   </main>
 
@@ -482,11 +490,7 @@
     </div>
 
   </div>
-<!-- Googleマップ表示エリア -->
-<section class="map-section">
-  <h2>近くの情報を地図で見る</h2>
-  <div id="google-map"></div>
-</section>
+
   <!-- Firebase本体 -->
   <script
     src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"
