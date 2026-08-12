@@ -2,14 +2,39 @@ name: Expire Posts
 
 on:
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "0 * * * *"
+    - cron: "15 * * * *"
+    - cron: "30 * * * *"
+    - cron: "45 * * * *"
   workflow_dispatch:
 
 jobs:
   expire:
+    if: github.event.schedule == '0 * * * *' || github.event.schedule == '30 * * * *' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
 
     steps:
       - name: Call expire API
         run: |
           curl -L https://imamiru-web.vercel.app/api/expire
+
+  collect-sources:
+    if: github.event.schedule == '0 * * * *' || github.event.schedule == '15 * * * *' || github.event.schedule == '30 * * * *' || github.event.schedule == '45 * * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Collect IMPORTANT sources
+        run: |
+          curl -f --max-time 90 -X POST https://imamiru-web.vercel.app/api/admin-source-collect \
+            -H "Content-Type: application/json" \
+            -H "X-Machinau-Cron-Secret: ${{ secrets.AI_COLLECT_CRON_SECRET }}" \
+            -d '{"priorityTier":"IMPORTANT"}'
+
+      - name: Collect NORMAL sources
+        if: github.event.schedule == '0 * * * *' || github.event_name == 'workflow_dispatch'
+        run: |
+          curl -f --max-time 90 -X POST https://imamiru-web.vercel.app/api/admin-source-collect \
+            -H "Content-Type: application/json" \
+            -H "X-Machinau-Cron-Secret: ${{ secrets.AI_COLLECT_CRON_SECRET }}" \
+            -d '{"priorityTier":"NORMAL"}'
