@@ -440,6 +440,21 @@
       opacity: 0.92;
     }
 
+    .flash-banner-detail-button {
+      position: relative;
+      z-index: 2;
+      margin-top: 13px;
+      min-height: 40px;
+      padding: 9px 16px;
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.16);
+      color: var(--white);
+      font-size: 12px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
     .section {
       margin-top: 34px;
     }

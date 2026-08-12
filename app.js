@@ -1543,6 +1543,133 @@ function getSourceLinkButtonHtml(
   `;
 }
 
+// admin-source-collect.jsのDRAFT_LIFELINE_KEYWORDS/DRAFT_TRANSPORT_KEYWORDS/
+// DRAFT_EMERGENCY_KEYWORDSと同期が必要（この3配列は同じ内容を維持すること）
+const FLASH_BANNER_LIFELINE_KEYWORDS = ["節水", "断水", "停電"];
+
+const FLASH_BANNER_TRANSPORT_KEYWORDS = [
+  "交通", "通行止め", "交通規制", "欠航", "運休"
+];
+
+const FLASH_BANNER_EMERGENCY_KEYWORDS = [
+  "避難", "警報", "台風", "津波", "大雨", "熱中症"
+];
+
+const FLASH_BANNER_DEFAULT_TITLE_TEXT =
+  "今日だけの沖縄を、見逃さない。";
+
+const FLASH_BANNER_DEFAULT_MESSAGE_TEXT =
+  "タイムセールや限定イベントなど、今しか出会えない情報を配信します。";
+
+function shopMatchesFlashBannerKeywords(
+  shop
+) {
+  const combinedText =
+    (shop.title || "") +
+    " " +
+    (shop.message || "");
+
+  return (
+    FLASH_BANNER_LIFELINE_KEYWORDS.some(
+      function(keyword) {
+        return combinedText.includes(keyword);
+      }
+    ) ||
+    FLASH_BANNER_TRANSPORT_KEYWORDS.some(
+      function(keyword) {
+        return combinedText.includes(keyword);
+      }
+    ) ||
+    FLASH_BANNER_EMERGENCY_KEYWORDS.some(
+      function(keyword) {
+        return combinedText.includes(keyword);
+      }
+    )
+  );
+}
+
+function updateFlashBanner() {
+  const flashBannerTitle =
+    document.getElementById(
+      "flashBannerTitle"
+    );
+
+  const flashBannerMessage =
+    document.getElementById(
+      "flashBannerMessage"
+    );
+
+  const flashBannerDetailButton =
+    document.getElementById(
+      "flashBannerDetailButton"
+    );
+
+  if (
+    !flashBannerTitle ||
+    !flashBannerMessage ||
+    !flashBannerDetailButton
+  ) {
+    return;
+  }
+
+  const matchingShops =
+    shops.filter(
+      shopMatchesFlashBannerKeywords
+    );
+
+  if (matchingShops.length === 0) {
+    flashBannerTitle.textContent =
+      FLASH_BANNER_DEFAULT_TITLE_TEXT;
+
+    flashBannerMessage.textContent =
+      FLASH_BANNER_DEFAULT_MESSAGE_TEXT;
+
+    flashBannerDetailButton.style.display =
+      "none";
+
+    flashBannerDetailButton.onclick =
+      null;
+
+    return;
+  }
+
+  const sortedMatchingShops =
+    matchingShops
+      .slice()
+      .sort(
+        function(shopA, shopB) {
+          return (
+            getDateValue(
+              shopB.createdAt
+            ) -
+            getDateValue(
+              shopA.createdAt
+            )
+          );
+        }
+      );
+
+  const featuredShop =
+    sortedMatchingShops[0];
+
+  flashBannerTitle.textContent =
+    "🚨 速報：" +
+    featuredShop.title;
+
+  flashBannerMessage.textContent =
+    featuredShop.message;
+
+  flashBannerDetailButton.style.display =
+    "";
+
+  flashBannerDetailButton.onclick =
+    function() {
+      openShopModal(
+        featuredShop.firestoreId
+      );
+    };
+}
+
 function renderShops() {
   const shopsList =
     document.getElementById(
@@ -1557,6 +1684,8 @@ function renderShops() {
     getVisibleShops();
 
   updateShopMarkers();
+
+  updateFlashBanner();
 
   if (
     visibleShops.length ===
