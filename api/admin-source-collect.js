@@ -1627,6 +1627,8 @@ const RELEVANCE_LABELS_BY_SCORE = {
 
 const RELEVANCE_VISIBLE_MINIMUM_SCORE = 3;
 
+const AUTO_POST_MINIMUM_RELEVANCE_SCORE = 2;
+
 
 function computeRelevance(
   item
@@ -1779,7 +1781,7 @@ async function judgeArticleForAutoPost(
 
   if (
     relevanceResult.relevanceScore <
-    RELEVANCE_VISIBLE_MINIMUM_SCORE
+    AUTO_POST_MINIMUM_RELEVANCE_SCORE
   ) {
     return {
       outcome: "SKIP",
