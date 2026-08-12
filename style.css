@@ -805,6 +805,15 @@
       color: #2f68ad;
     }
 
+    .source-link-button {
+      background: #fff0f4;
+      color: #d1477e;
+    }
+
+    .shop-card.admin-post-card {
+      border-top: 3px solid #ff5f8f;
+    }
+
     .sample-notice {
       margin-top: 22px;
       padding: 15px;

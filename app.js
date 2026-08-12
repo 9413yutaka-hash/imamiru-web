@@ -1518,6 +1518,31 @@ function getMapButtonHtml(
   `;
 }
 
+function getSourceLinkButtonHtml(
+  shop
+) {
+  if (
+    shop.postType !== "admin" ||
+    shop.websiteUrl === ""
+  ) {
+    return "";
+  }
+
+  return `
+    <a
+      class="
+        shop-button
+        source-link-button
+      "
+      href="${shop.websiteUrl}"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      🔗 情報元を見る
+    </a>
+  `;
+}
+
 function renderShops() {
   const shopsList =
     document.getElementById(
@@ -1625,7 +1650,11 @@ function renderShops() {
                 );
 
           return `
-            <article class="shop-card">
+            <article class="shop-card ${
+              isAdminPost
+                ? "admin-post-card"
+                : ""
+            }">
 
               <div
                 class="
@@ -1781,11 +1810,17 @@ function renderShops() {
                     : ""
                 }
 
-                <div class="time-limit">
-                  ${escapeHtml(
-                    shop.timeMessage
-                  )}
-                </div>
+                ${
+                  isAdminPost
+                    ? ""
+                    : `
+                      <div class="time-limit">
+                        ${escapeHtml(
+                          shop.timeMessage
+                        )}
+                      </div>
+                    `
+                }
 
                 ${
                   businessClosedMessage
@@ -1819,6 +1854,10 @@ function renderShops() {
                   </button>
 
                   ${getMapButtonHtml(
+                    shop
+                  )}
+
+                  ${getSourceLinkButtonHtml(
                     shop
                   )}
 
