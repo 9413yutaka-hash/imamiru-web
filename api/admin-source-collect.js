@@ -1935,15 +1935,25 @@ async function judgeArticleForAutoPost(
       )
       .get();
 
+  const sourceData =
+    sourceSnapshot.exists
+      ? sourceSnapshot.data() || {}
+      : {};
+
   if (
     !sourceSnapshot.exists ||
-    sourceSnapshot.data().isEnabled !== true
+    sourceData.isEnabled !== true
   ) {
     return {
       outcome: "SKIP",
       reason: "情報源が無効化されているため対象外です。"
     };
   }
+
+  const sourceArea =
+    typeof sourceData.area === "string"
+      ? sourceData.area.trim()
+      : "";
 
   const relevanceResult =
     computeRelevance(
@@ -2027,7 +2037,8 @@ async function judgeArticleForAutoPost(
 
   return {
     outcome: "PROCEED",
-    relevanceResult: relevanceResult
+    relevanceResult: relevanceResult,
+    sourceArea: sourceArea
   };
 }
 
@@ -2273,7 +2284,8 @@ function buildDraftContentText(article, trimmedSourceUrlValue, combinedText) {
 
 
 function buildAutoDraftFromArticle(
-  articleData
+  articleData,
+  sourceArea
 ) {
   const title =
     articleData.title.trim();
@@ -2311,7 +2323,11 @@ function buildAutoDraftFromArticle(
     title: draftTitle,
     category: draftCategory,
     content: draftContent,
-    websiteUrl: articleUrl
+    websiteUrl: articleUrl,
+    area:
+      typeof sourceArea === "string"
+        ? sourceArea
+        : ""
   };
 }
 
@@ -2363,6 +2379,9 @@ async function createAutoPostSubmission(
 
           websiteUrl:
             draft.websiteUrl,
+
+          area:
+            draft.area,
 
           expiresAt:
             Timestamp.fromDate(
@@ -2591,7 +2610,8 @@ async function processDiscoveredArticleForAutoPost(
   try {
     const draft =
       buildAutoDraftFromArticle(
-        claimedData
+        claimedData,
+        judgment.sourceArea
       );
 
     const submissionId =
