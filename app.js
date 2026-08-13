@@ -2,6 +2,7 @@ let shops = [];
 
 let userLatitude = null;
 let userLongitude = null;
+let userAreaName = null;
 let selectedCategory = "すべて";
 
 function loadFavoriteShopIdsFromStorage() {
@@ -3546,6 +3547,82 @@ function updateWeatherDisplay(weather, locationLabelText) {
 }
 
 
+// 緯度・経度から市区町村名(locality)を取得する。
+// Geocoderが使えない/結果0件/localityが見つからない/APIエラーの
+// いずれの場合もrejectせずnullでresolveし、呼び出し側の既存処理を止めない。
+function resolveAreaNameFromCoordinates(latitude, longitude) {
+  return new Promise(function(resolve) {
+    if (
+      typeof google === "undefined" ||
+      !google.maps ||
+      !google.maps.Geocoder
+    ) {
+      resolve(null);
+      return;
+    }
+
+    try {
+      const geocoder =
+        new google.maps.Geocoder();
+
+      geocoder.geocode(
+        {
+          location: {
+            lat: latitude,
+            lng: longitude
+          }
+        },
+        function(results, status) {
+          if (
+            status !== "OK" ||
+            !Array.isArray(results) ||
+            results.length === 0
+          ) {
+            resolve(null);
+            return;
+          }
+
+          const localityResult =
+            results.find(function(result) {
+              return (
+                Array.isArray(result.address_components) &&
+                result.address_components.some(function(component) {
+                  return (
+                    Array.isArray(component.types) &&
+                    component.types.includes("locality")
+                  );
+                })
+              );
+            });
+
+          if (!localityResult) {
+            resolve(null);
+            return;
+          }
+
+          const localityComponent =
+            localityResult.address_components.find(function(component) {
+              return (
+                Array.isArray(component.types) &&
+                component.types.includes("locality")
+              );
+            });
+
+          resolve(
+            localityComponent &&
+            typeof localityComponent.long_name === "string"
+              ? localityComponent.long_name
+              : null
+          );
+        }
+      );
+    } catch (error) {
+      resolve(null);
+    }
+  });
+}
+
+
 function getLocation() {
   const locationButton =
     document.getElementById(
@@ -3648,6 +3725,19 @@ function getLocation() {
           })
           .catch(function(error) {
             // 天候取得の失敗はrenderShops()等の既存フローに影響させない
+          });
+
+        resolveAreaNameFromCoordinates(
+          userLatitude,
+          userLongitude
+        )
+          .then(function(areaName) {
+            if (areaName) {
+              userAreaName = areaName;
+            }
+          })
+          .catch(function(error) {
+            // 地域名取得の失敗は既存フローに影響させない
           });
       },
 
