@@ -1298,6 +1298,11 @@ function convertSubmissionToShop(
     sourceLabel:
       typeof data.sourceLabel === "string"
         ? data.sourceLabel.trim()
+        : "",
+
+    area:
+      typeof data.area === "string"
+        ? data.area.trim()
         : ""
   };
 }
@@ -1334,6 +1339,35 @@ function shopMatchesSelectedCategory(
     selectedCategoryValue
   );
 }
+
+const AI_AUTO_POST_WIDE_AREA_NAME =
+  "沖縄県全域";
+
+// AI自動投稿(postType==="admin")だけを対象に、現在地の地域(userAreaName)との
+// 一致度で優先順位を返す。AI自動投稿以外、またはuserAreaName未確定の場合は
+// 常に同じ値(2)を返し、既存の並び順(createdAt降順)を変えない。
+function getAiAreaPriorityRank(
+  shop
+) {
+  if (
+    shop.postType !== "admin" ||
+    userAreaName === null ||
+    userAreaName === ""
+  ) {
+    return 2;
+  }
+
+  if (shop.area === userAreaName) {
+    return 0;
+  }
+
+  if (shop.area === AI_AUTO_POST_WIDE_AREA_NAME) {
+    return 1;
+  }
+
+  return 2;
+}
+
 
 function getVisibleShops() {
   let visibleShops =
@@ -1403,6 +1437,26 @@ if (selectedCategory === "お気に入り") {
           secondShop.distanceKm ===
             null
         ) {
+          const firstAreaPriorityRank =
+            getAiAreaPriorityRank(
+              firstShop
+            );
+
+          const secondAreaPriorityRank =
+            getAiAreaPriorityRank(
+              secondShop
+            );
+
+          if (
+            firstAreaPriorityRank !==
+            secondAreaPriorityRank
+          ) {
+            return (
+              firstAreaPriorityRank -
+              secondAreaPriorityRank
+            );
+          }
+
           return (
             getDateValue(
               secondShop.createdAt
