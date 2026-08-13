@@ -935,6 +935,26 @@
 
         <div class="form-group">
 
+          <label
+            class="form-label"
+            for="area"
+          >
+            対象地域
+            <span class="optional">任意</span>
+          </label>
+
+          <input
+            id="area"
+            name="area"
+            type="text"
+            maxlength="80"
+            placeholder="那覇市、八重瀬町、沖縄県全域"
+          >
+
+        </div>
+
+        <div class="form-group">
+
           <div class="form-label">
             写真
             <span class="optional">任意・最大5枚</span>
@@ -1112,6 +1132,7 @@
     const expiresAtInput = document.getElementById("expiresAt");
     const addressInput = document.getElementById("address");
     const websiteUrlInput = document.getElementById("websiteUrl");
+    const areaInput = document.getElementById("area");
 
     const locationButton = document.getElementById("locationButton");
     const locationMessageBox = document.getElementById("locationMessageBox");
@@ -1181,6 +1202,7 @@
       expiresAtInput.disabled = submitting;
       addressInput.disabled = submitting;
       websiteUrlInput.disabled = submitting;
+      areaInput.disabled = submitting;
       locationButton.disabled = submitting;
 
       if (submitting) {
@@ -1704,7 +1726,8 @@
           latitude: capturedLatitude,
           longitude: capturedLongitude,
           imageUrls: imageUrls,
-          websiteUrl: websiteUrlInput.value.trim()
+          websiteUrl: websiteUrlInput.value.trim(),
+          area: areaInput.value.trim()
         };
 
         if (isEditMode) {

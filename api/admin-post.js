@@ -116,7 +116,8 @@ const FIELD_MAX_LENGTHS = {
   title: 50,
   content: 300,
   address: 120,
-  websiteUrl: 300
+  websiteUrl: 300,
+  area: 80
 };
 
 
@@ -224,6 +225,21 @@ function validatePostFields(
   ) {
     throw new Error(
       "ページのアドレスは「https://」または「http://」から始まる形で貼り付けてください。"
+    );
+  }
+
+  const area =
+    String(
+      requestBody.area || ""
+    )
+      .trim();
+
+  if (
+    area.length >
+    FIELD_MAX_LENGTHS.area
+  ) {
+    throw new Error(
+      "対象地域が長すぎます。"
     );
   }
 
@@ -374,6 +390,7 @@ function validatePostFields(
     content: content,
     address: address,
     websiteUrl: websiteUrl,
+    area: area,
     latitude: latitude,
     longitude: longitude,
     imageUrls: imageUrls,
@@ -522,6 +539,9 @@ export default async function handler(
 
         websiteUrl:
           postFields.websiteUrl,
+
+        area:
+          postFields.area,
 
         expiresAt:
           Timestamp.fromDate(
