@@ -1286,6 +1286,29 @@ function sourceHasUsableFeedUrl(
 }
 
 
+// targetAreaが未指定(undefined/null/空文字/trim後空文字)なら常にtrueを返し、
+// 従来通り地域による絞り込みを行わない。指定時のみ aiSources.area との
+// trim済み完全一致で判定する(部分一致・あいまい一致・正規化は行わない)。
+function sourceMatchesTargetArea(
+  sourceData,
+  targetArea
+) {
+  const trimmedTargetArea =
+    typeof targetArea === "string"
+      ? targetArea.trim()
+      : "";
+
+  if (trimmedTargetArea === "") {
+    return true;
+  }
+
+  return (
+    typeof sourceData.area === "string" &&
+    sourceData.area.trim() === trimmedTargetArea
+  );
+}
+
+
 const IMPORTANT_SLOT_INTERVAL_MILLISECONDS =
   15 * 60 * 1000;
 
@@ -1366,7 +1389,8 @@ function selectRotationBatch(
 
 async function collectFromPriorityTier(
   database,
-  priorityTier
+  priorityTier,
+  targetArea
 ) {
   const sourcesSnapshot =
     await database
@@ -1395,6 +1419,10 @@ async function collectFromPriorityTier(
             ) &&
             sourceHasUsableFeedUrl(
               sourceData
+            ) &&
+            sourceMatchesTargetArea(
+              sourceData,
+              targetArea
             )
           );
         }
