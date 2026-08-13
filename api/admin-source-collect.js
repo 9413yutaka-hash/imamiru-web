@@ -2596,10 +2596,16 @@ export default async function handler(
         });
       }
 
+      const targetArea =
+        typeof requestBody.targetArea === "string"
+          ? requestBody.targetArea.trim()
+          : "";
+
       const tierResult =
         await collectFromPriorityTier(
           database,
-          priorityTier
+          priorityTier,
+          targetArea
         );
 
       let autoPostSummary =
@@ -2643,6 +2649,9 @@ export default async function handler(
 
         totalExistingItemCount:
           tierResult.totalExistingItemCount,
+
+        targetArea:
+          targetArea || null,
 
         autoPost:
           autoPostSummary
