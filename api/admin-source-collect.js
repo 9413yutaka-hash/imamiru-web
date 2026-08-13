@@ -264,6 +264,13 @@ const PROCESSING_STATUS_SKIPPED =
   "SKIPPED";
 
 
+// judgeArticleForAutoPost()内のsummary未保存時のSKIP理由文言と
+// 完全一致させる必要がある(judgeArticleForAutoPost()は変更しないため、
+// ここでは定数を共有せず文言だけを同期させている)。
+const SUMMARY_MISSING_SKIP_REASON =
+  "概要（summary）が保存されていないため対象外です。";
+
+
 const PROCESSING_CLAIM_STALE_MILLISECONDS =
   10 * 60 * 1000;
 
@@ -1145,12 +1152,50 @@ async function collectFromSource(
             existingItemCount +=
               1;
 
-            articleWriteBatch.update(
-              entry.documentRef,
+            const existingData =
+              existingSnapshot.data() ||
+              {};
+
+            const existingSummary =
+              typeof existingData.summary === "string"
+                ? existingData.summary.trim()
+                : "";
+
+            const candidateSummary =
+              typeof entry.candidateItem.summary === "string"
+                ? entry.candidateItem.summary.trim()
+                : "";
+
+            const shouldBackfillSummary =
+              existingSummary === "" &&
+              candidateSummary !== "";
+
+            const updateFields =
               {
                 lastSeenAt:
                   FieldValue.serverTimestamp()
+              };
+
+            if (shouldBackfillSummary) {
+              updateFields.summary =
+                entry.candidateItem.summary;
+
+              const wasSkippedForMissingSummary =
+                existingData.processingStatus === PROCESSING_STATUS_SKIPPED &&
+                existingData.processingError === SUMMARY_MISSING_SKIP_REASON;
+
+              if (wasSkippedForMissingSummary) {
+                updateFields.processingStatus =
+                  PROCESSING_STATUS_DISCOVERED;
+
+                updateFields.processingError =
+                  "";
               }
+            }
+
+            articleWriteBatch.update(
+              entry.documentRef,
+              updateFields
             );
           } else {
             newItemCount +=
