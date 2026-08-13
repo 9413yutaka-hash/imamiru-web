@@ -3788,6 +3788,8 @@ function getLocation() {
           .then(function(areaName) {
             if (areaName) {
               userAreaName = areaName;
+
+              renderShops();
             }
           })
           .catch(function(error) {
