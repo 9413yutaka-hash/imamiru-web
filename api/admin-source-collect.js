@@ -1766,7 +1766,11 @@ const TRAVELER_RELEVANCE_KEYWORDS = [
 
 const INTERNAL_RELEVANCE_KEYWORDS = [
   "採用", "入札", "公募", "補助金", "納税", "申請書",
-  "会議", "委員会", "職員", "事業者向け", "制度", "調達"
+  "会議", "委員会", "職員", "事業者向け", "制度", "調達",
+  "アンケート", "住宅", "市営住宅", "県営住宅",
+  "議会", "議員", "求人", "助成金", "税金",
+  "届出", "手続き", "審議会", "子育て", "学校",
+  "教育委員会", "選挙"
 ];
 
 const RELEVANCE_LABELS_BY_SCORE = {
@@ -1795,12 +1799,30 @@ function computeRelevance(
       }
     );
 
-  const dropKeywords =
-    INTERNAL_RELEVANCE_KEYWORDS.filter(
+  // 台風・避難等の強い安全情報(DRAFT_EMERGENCY_KEYWORDS/DRAFT_TRANSPORT_KEYWORDS)を
+  // 含む記事は、行政系の除外キーワード(INTERNAL_RELEVANCE_KEYWORDS)が
+  // 同時に含まれていても減点しない。「住宅アンケートを消す」ためのキーワード追加が
+  // 「台風接近に伴う学校休校」のような安全情報まで巻き込んで除外しないための安全策。
+  const hasStrongSafetySignal =
+    DRAFT_EMERGENCY_KEYWORDS.some(
+      function(keyword) {
+        return combinedText.includes(keyword);
+      }
+    ) ||
+    DRAFT_TRANSPORT_KEYWORDS.some(
       function(keyword) {
         return combinedText.includes(keyword);
       }
     );
+
+  const dropKeywords =
+    hasStrongSafetySignal
+      ? []
+      : INTERNAL_RELEVANCE_KEYWORDS.filter(
+          function(keyword) {
+            return combinedText.includes(keyword);
+          }
+        );
 
   const rawScore =
     2 + boostKeywords.length - dropKeywords.length;
@@ -1944,6 +1966,65 @@ async function judgeArticleForAutoPost(
     };
   }
 
+  const combinedText =
+    title + " " + summary;
+
+  const freshnessCategory =
+    resolveFreshnessCategory(
+      combinedText
+    );
+
+  const freshnessMaxAgeDays =
+    FRESHNESS_MAX_AGE_DAYS_BY_CATEGORY[
+      freshnessCategory
+    ];
+
+  if (
+    typeof freshnessMaxAgeDays === "number"
+  ) {
+    const publishedAtText =
+      typeof articleData.publishedAt === "string"
+        ? articleData.publishedAt.trim()
+        : "";
+
+    if (publishedAtText !== "") {
+      const publishedAtDate =
+        new Date(
+          publishedAtText
+        );
+
+      const isPublishedAtValid =
+        !isNaN(
+          publishedAtDate.getTime()
+        );
+
+      if (isPublishedAtValid) {
+        const articleAgeMilliseconds =
+          Date.now() -
+          publishedAtDate.getTime();
+
+        const freshnessMaxAgeMilliseconds =
+          freshnessMaxAgeDays *
+          24 * 60 * 60 * 1000;
+
+        if (
+          articleAgeMilliseconds >
+          freshnessMaxAgeMilliseconds
+        ) {
+          return {
+            outcome: "SKIP",
+            reason:
+              "公開から時間が経過しているため対象外です（" +
+              freshnessCategory +
+              "、" +
+              freshnessMaxAgeDays +
+              "日基準）。"
+          };
+        }
+      }
+    }
+  }
+
   return {
     outcome: "PROCEED",
     relevanceResult: relevanceResult
@@ -1974,6 +2055,64 @@ const DRAFT_EVENT_KEYWORDS = ["イベント", "祭り", "花火"];
 const DRAFT_SIGHTSEEING_KEYWORDS = [
   "ビーチ", "海", "観光施設", "首里城", "美ら海水族館"
 ];
+
+
+// カテゴリー別の自動投稿許容日数(公開からの経過日数)。
+// EVENTは記事公開日と開催日が異なるケースがあるため、あえて含めない
+// (このマップに存在しないカテゴリーは鮮度フィルタの対象外になる)。
+// 開催日の抽出・判定は今回の対象外で別工程とする。
+const FRESHNESS_MAX_AGE_DAYS_BY_CATEGORY = {
+  EMERGENCY: 2,
+  TRANSPORT: 3,
+  SIGHTSEEING: 7,
+  OTHER: 5
+};
+
+function resolveFreshnessCategory(
+  combinedText
+) {
+  const matchesEmergencyKeyword =
+    DRAFT_EMERGENCY_KEYWORDS.some(function(keyword) {
+      return combinedText.includes(keyword);
+    }) ||
+    DRAFT_LIFELINE_KEYWORDS.some(function(keyword) {
+      return combinedText.includes(keyword);
+    });
+
+  if (matchesEmergencyKeyword) {
+    return "EMERGENCY";
+  }
+
+  const matchesTransportKeyword =
+    DRAFT_TRANSPORT_KEYWORDS.some(function(keyword) {
+      return combinedText.includes(keyword);
+    });
+
+  if (matchesTransportKeyword) {
+    return "TRANSPORT";
+  }
+
+  const matchesEventKeyword =
+    DRAFT_EVENT_KEYWORDS.some(function(keyword) {
+      return combinedText.includes(keyword);
+    });
+
+  if (matchesEventKeyword) {
+    return "EVENT";
+  }
+
+  const matchesSightseeingKeyword =
+    DRAFT_SIGHTSEEING_KEYWORDS.some(function(keyword) {
+      return combinedText.includes(keyword);
+    });
+
+  if (matchesSightseeingKeyword) {
+    return "SIGHTSEEING";
+  }
+
+  return "OTHER";
+}
+
 
 const DRAFT_LIFELINE_NOTE =
   "滞在中・渡航予定の方も、現地での生活に関わる情報として確認しておくと安心です。";
