@@ -1863,6 +1863,157 @@ function computeRelevance(
 }
 
 
+// 沖縄県内41市町村(11市・11町・19村)の正式名称。記事のtitle/summaryから
+// 記事単位のareaを判定する目的だけに使う。施設名・路線名等からの変換は
+// Ver1では行わない(市町村名の直接一致のみ)。
+const OKINAWA_MUNICIPALITY_NAMES = [
+  // 市(11)
+  "那覇市", "宜野湾市", "石垣市", "浦添市", "名護市",
+  "糸満市", "沖縄市", "豊見城市", "うるま市", "宮古島市",
+  "南城市",
+
+  // 町(11)
+  "与那原町", "南風原町", "久米島町", "八重瀬町", "嘉手納町",
+  "北谷町", "西原町", "本部町", "金武町", "竹富町",
+  "与那国町",
+
+  // 村(19)
+  "渡嘉敷村", "座間味村", "粟国村", "渡名喜村", "南大東村",
+  "北大東村", "伊平屋村", "伊是名村", "読谷村", "北中城村",
+  "中城村", "国頭村", "大宜味村", "東村", "今帰仁村",
+  "恩納村", "宜野座村", "伊江村", "多良間村"
+];
+
+
+// targetTextがcombinedText内に出現する、すべての開始・終了位置を返す。
+// 同一市町村名が複数箇所に書かれているケース(例:「北中城村と中城村」の
+// 「中城村」が2箇所に出現する)を取りこぼさないよう、重複可能な検索にする。
+function findAllOccurrenceRanges(
+  combinedText,
+  targetText
+) {
+  const occurrenceRanges =
+    [];
+
+  let searchFromIndex =
+    0;
+
+  while (true) {
+    const foundIndex =
+      combinedText.indexOf(
+        targetText,
+        searchFromIndex
+      );
+
+    if (foundIndex === -1) {
+      break;
+    }
+
+    occurrenceRanges.push(
+      {
+        start: foundIndex,
+        end: foundIndex + targetText.length
+      }
+    );
+
+    searchFromIndex =
+      foundIndex + 1;
+  }
+
+  return occurrenceRanges;
+}
+
+
+// 「北中城村」に含まれる「中城村」のように、より長い自治体名の出現範囲に
+// 完全に内包されている出現だけを、重複一致から除外するための判定。
+// 同じ短い名前でも、長い名前の範囲外に別途出現していれば内包扱いにしない
+// (例:「北中城村と中城村」の2つ目の「中城村」は内包されないため生き残る)。
+function isOccurrenceContainedByLongerMatch(
+  occurrence,
+  allOccurrences
+) {
+  return allOccurrences.some(
+    function(otherOccurrence) {
+      return (
+        otherOccurrence.name.length >
+          occurrence.name.length &&
+        occurrence.start >=
+          otherOccurrence.start &&
+        occurrence.end <=
+          otherOccurrence.end
+      );
+    }
+  );
+}
+
+
+// title+summaryにOKINAWA_MUNICIPALITY_NAMESがちょうど1つだけ含まれる場合は
+// その市町村名を返す。0件または2件以上(曖昧)の場合はsourceAreaをそのまま返し、
+// 記事側では推測しない。
+// 「北中城村」のように、長い正式自治体名に短い自治体名(「中城村」)が
+// 完全に内包される場合は、内包された側を別自治体としては数えない。
+// ただし短い名前が長い名前の範囲外に別途出現していれば、別自治体として扱う。
+function resolveArticleAreaFromText(
+  title,
+  summary,
+  sourceArea
+) {
+  const combinedText =
+    (title || "") +
+    " " +
+    (summary || "");
+
+  const allOccurrences =
+    [];
+
+  OKINAWA_MUNICIPALITY_NAMES.forEach(
+    function(municipalityName) {
+      findAllOccurrenceRanges(
+        combinedText,
+        municipalityName
+      ).forEach(
+        function(occurrenceRange) {
+          allOccurrences.push(
+            {
+              name: municipalityName,
+              start: occurrenceRange.start,
+              end: occurrenceRange.end
+            }
+          );
+        }
+      );
+    }
+  );
+
+  const survivingOccurrences =
+    allOccurrences.filter(
+      function(occurrence) {
+        return !isOccurrenceContainedByLongerMatch(
+          occurrence,
+          allOccurrences
+        );
+      }
+    );
+
+  const matchedMunicipalityNames =
+    Array.from(
+      new Set(
+        survivingOccurrences.map(
+          function(occurrence) {
+            return occurrence.name;
+          }
+        )
+      )
+    );
+
+  if (matchedMunicipalityNames.length === 1) {
+    return matchedMunicipalityNames[0];
+  }
+
+  return sourceArea;
+}
+
+
 async function judgeArticleForAutoPost(
   database,
   articleData
@@ -2035,10 +2186,17 @@ async function judgeArticleForAutoPost(
     }
   }
 
+  const articleArea =
+    resolveArticleAreaFromText(
+      title,
+      summary,
+      sourceArea
+    );
+
   return {
     outcome: "PROCEED",
     relevanceResult: relevanceResult,
-    sourceArea: sourceArea
+    sourceArea: articleArea
   };
 }
 
