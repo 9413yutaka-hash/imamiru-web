@@ -2570,8 +2570,13 @@ async function createAutoPostSubmission(
 const MAX_AUTO_POSTS_PER_RUN =
   3;
 
+// orderByなしのFirestoreクエリはドキュメントID順(記事の新しさと無関係)で
+// 打ち切られるため、この値は小さすぎると新しいDISCOVERED記事が候補から
+// 漏れる(取得後にsortArticleDocumentsByFirstSeenAtDescending()で並べ替えても、
+// そもそも取得できていなければ並べ替えでは救えない)。MAX_AUTO_POSTS_PER_RUNの
+// 数十倍程度の余裕を持たせ、情報源が増えても当面は取りこぼさない値にする。
 const AUTO_POST_CANDIDATE_QUERY_LIMIT =
-  MAX_AUTO_POSTS_PER_RUN * 20;
+  500;
 
 
 function sortArticleDocumentsByFirstSeenAtDescending(
