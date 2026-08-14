@@ -3677,6 +3677,260 @@ function resolveAreaNameFromCoordinates(latitude, longitude) {
 }
 
 
+// GPS取得1回ごとに増分するセッションID。古いGPS取得の非同期結果が
+// 後から届いても、今のGPS取得と無関係な提案生成を行わないためのガード。
+let machinauSuggestionGpsSessionId =
+  0;
+
+// 既存fetchWeather()の結果を再利用するための一時保持(再取得はしない)
+let latestWeatherForMachinauSuggestion =
+  null;
+
+// 既存resolveAreaNameFromCoordinates()が完了したかどうか(成功/失敗を問わない)
+let isAreaNameResolvedForMachinauSuggestion =
+  false;
+
+// loadApprovedSubmissions()によるshops読み込みが完了したかどうか
+// (0件で完了した場合もtrue。読み込み中はfalseのまま)
+let isShopsLoadedForMachinauSuggestion =
+  false;
+
+// 同じGPSセッションで提案を二重生成しないためのガード
+let generatedMachinauSuggestionGpsSessionId =
+  null;
+
+
+// getVisibleShops()・getAiAreaPriorityRank()・shopMatchesFlashBannerKeywords()は
+// 一切変更せず、その結果を読むだけで「マチナウからの提案」の対象を選ぶ。
+// 安全・交通・ライフライン該当の投稿があっても、現在地と無関係な地域
+// (getAiAreaPriorityRankが2を返す投稿)は安全最優先候補にしない。
+function selectSuggestionCandidate() {
+  const adminShops =
+    getVisibleShops().filter(
+      function(shop) {
+        return shop.postType === "admin";
+      }
+    );
+
+  if (adminShops.length === 0) {
+    return null;
+  }
+
+  const nearbyAdminShops =
+    adminShops.filter(
+      function(shop) {
+        const areaPriorityRank =
+          getAiAreaPriorityRank(
+            shop
+          );
+
+        return (
+          areaPriorityRank === 0 ||
+          areaPriorityRank === 1
+        );
+      }
+    );
+
+  const safetyShop =
+    nearbyAdminShops.find(
+      function(shop) {
+        return shopMatchesFlashBannerKeywords(
+          shop
+        );
+      }
+    );
+
+  if (safetyShop) {
+    return {
+      shop: safetyShop,
+      isSafety: true
+    };
+  }
+
+  return {
+    shop: adminShops[0],
+    isSafety: false
+  };
+}
+
+
+// getWeatherConditionEmoji()の分類結果と、buildWeatherAdviceText()と同じ
+// heatIndexC(なければtemperatureC)の35℃基準を再利用して天候を分類する。
+// getWeatherConditionEmoji()・buildWeatherAdviceText()自体は変更しない。
+function resolveSuggestionWeatherCategory(weather) {
+  const heatIndexForCategory =
+    weather.heatIndexC !== null
+      ? weather.heatIndexC
+      : weather.temperatureC;
+
+  if (
+    heatIndexForCategory !== null &&
+    heatIndexForCategory >= 35
+  ) {
+    return "HOT";
+  }
+
+  const conditionEmoji =
+    getWeatherConditionEmoji(
+      weather.conditionCode
+    );
+
+  if (
+    conditionEmoji === "☂" ||
+    conditionEmoji === "⛈"
+  ) {
+    return "RAIN";
+  }
+
+  if (
+    conditionEmoji === "☀️" ||
+    conditionEmoji === "☁️"
+  ) {
+    return "SUNNY";
+  }
+
+  return "OTHER";
+}
+
+
+function buildSuggestionMessageText(candidate, weather) {
+  const shopTitle =
+    candidate.shop.title;
+
+  if (candidate.isSafety) {
+    return (
+      "現在、移動や安全に関する情報があります。\n" +
+      "出発前に最新情報を確認してください。\n" +
+      "『" + shopTitle + "』"
+    );
+  }
+
+  const weatherCategory =
+    resolveSuggestionWeatherCategory(
+      weather
+    );
+
+  if (weatherCategory === "RAIN") {
+    return (
+      "☔ 今は雨です。\n" +
+      "近くで『" + shopTitle + "』があります。\n" +
+      "雨宿りも兼ねて、少し寄り道しませんか？"
+    );
+  }
+
+  if (weatherCategory === "HOT") {
+    return (
+      "🥵 暑さが厳しくなっています。\n" +
+      "無理のない移動をしながら『" + shopTitle + "』をチェックしてみませんか？"
+    );
+  }
+
+  if (weatherCategory === "SUNNY") {
+    return (
+      "☀️ 今は天気が良さそうです。\n" +
+      "『" + shopTitle + "』をチェックしてみませんか？"
+    );
+  }
+
+  return (
+    "📍 今いるエリアで『" + shopTitle + "』の情報があります。\n" +
+    "少しチェックしてみませんか？"
+  );
+}
+
+
+function updateSuggestionCard(weather) {
+  const suggestionCard =
+    document.getElementById("suggestionCard");
+
+  const suggestionMessage =
+    document.getElementById("suggestionMessage");
+
+  const suggestionDetailButton =
+    document.getElementById("suggestionDetailButton");
+
+  if (
+    !suggestionCard ||
+    !suggestionMessage ||
+    !suggestionDetailButton
+  ) {
+    return;
+  }
+
+  const candidate =
+    selectSuggestionCandidate();
+
+  if (!candidate) {
+    suggestionCard.style.display = "none";
+    suggestionDetailButton.style.display = "none";
+    suggestionDetailButton.onclick = null;
+    return;
+  }
+
+  suggestionMessage.textContent =
+    buildSuggestionMessageText(
+      candidate,
+      weather
+    );
+
+  suggestionDetailButton.style.display = "";
+
+  suggestionDetailButton.onclick =
+    function() {
+      openShopModal(
+        candidate.shop.firestoreId
+      );
+    };
+
+  suggestionCard.style.display = "";
+}
+
+
+// fetchWeather()・resolveAreaNameFromCoordinates()を再度呼び出さず、
+// GPS成功時に既に実行されている既存呼び出しの結果(latestWeatherForMachinauSuggestion・
+// isAreaNameResolvedForMachinauSuggestion)と、shops読み込み完了状態
+// (isShopsLoadedForMachinauSuggestion)の3条件がそろった時点で、
+// 今回のGPS取得(gpsSessionId)についてのみ提案を1回だけ生成する。
+function tryGenerateMachinauSuggestion(gpsSessionId) {
+  if (gpsSessionId !== machinauSuggestionGpsSessionId) {
+    return;
+  }
+
+  if (
+    latestWeatherForMachinauSuggestion === null ||
+    !isAreaNameResolvedForMachinauSuggestion ||
+    !isShopsLoadedForMachinauSuggestion
+  ) {
+    return;
+  }
+
+  if (
+    generatedMachinauSuggestionGpsSessionId ===
+    gpsSessionId
+  ) {
+    return;
+  }
+
+  generatedMachinauSuggestionGpsSessionId =
+    gpsSessionId;
+
+  updateSuggestionCard(
+    latestWeatherForMachinauSuggestion
+  );
+}
+
+// loadApprovedSubmissions()がshopsの読み込みに成功した後に呼ぶ。
+// shopsの内容やloadApprovedSubmissions()の取得処理自体は変更しない。
+function markShopsLoadedForMachinauSuggestion() {
+  isShopsLoadedForMachinauSuggestion =
+    true;
+
+  tryGenerateMachinauSuggestion(
+    machinauSuggestionGpsSessionId
+  );
+}
+
+
 function getLocation() {
   const locationButton =
     document.getElementById(
@@ -3770,12 +4024,35 @@ function getLocation() {
 
         renderShops();
 
+        machinauSuggestionGpsSessionId += 1;
+
+        const suggestionGpsSessionId =
+          machinauSuggestionGpsSessionId;
+
+        latestWeatherForMachinauSuggestion =
+          null;
+
+        isAreaNameResolvedForMachinauSuggestion =
+          false;
+
         fetchWeather(
           userLatitude,
           userLongitude
         )
           .then(function(weather) {
             updateWeatherDisplay(weather, "現在地の天気");
+
+            if (
+              suggestionGpsSessionId ===
+              machinauSuggestionGpsSessionId
+            ) {
+              latestWeatherForMachinauSuggestion =
+                weather;
+
+              tryGenerateMachinauSuggestion(
+                suggestionGpsSessionId
+              );
+            }
           })
           .catch(function(error) {
             // 天候取得の失敗はrenderShops()等の既存フローに影響させない
@@ -3790,6 +4067,18 @@ function getLocation() {
               userAreaName = areaName;
 
               renderShops();
+            }
+
+            if (
+              suggestionGpsSessionId ===
+              machinauSuggestionGpsSessionId
+            ) {
+              isAreaNameResolvedForMachinauSuggestion =
+                true;
+
+              tryGenerateMachinauSuggestion(
+                suggestionGpsSessionId
+              );
             }
           })
           .catch(function(error) {
@@ -4187,6 +4476,8 @@ async function loadApprovedSubmissions() {
     hideSampleNotice();
 
     renderShops();
+
+    markShopsLoadedForMachinauSuggestion();
 
     console.log(
       "✅ 期限内の広告を読み込みました：" +
