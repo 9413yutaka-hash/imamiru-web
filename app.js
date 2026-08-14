@@ -3747,8 +3747,12 @@ function selectSuggestionCandidate() {
     };
   }
 
+  if (nearbyAdminShops.length === 0) {
+    return null;
+  }
+
   return {
-    shop: adminShops[0],
+    shop: nearbyAdminShops[0],
     isSafety: false
   };
 }
