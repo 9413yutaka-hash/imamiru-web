@@ -39,6 +39,76 @@
     rel="stylesheet"
     href="style.css"
   >
+
+  <style>
+    /* 「地域のおすすめ」セクション専用の最小CSS。style.cssは変更しない。 */
+    .region-recommendation-section {
+      margin-top: 18px;
+      padding: 18px;
+      border-radius: 22px;
+      background: var(--white);
+      box-shadow: var(--shadow);
+      border: 1px solid rgba(23, 74, 110, 0.08);
+    }
+
+    .region-recommendation-section h2 {
+      margin: 0 0 12px;
+      font-size: 15px;
+      font-weight: 900;
+      color: var(--navy);
+    }
+
+    .region-recommendation-card {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      margin-bottom: 14px;
+    }
+
+    .region-recommendation-card img {
+      width: 100%;
+      max-height: 180px;
+      object-fit: cover;
+      display: block;
+    }
+
+    .region-recommendation-card-body {
+      padding: 12px 14px;
+    }
+
+    .region-recommendation-card-label {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--blue);
+      background: var(--sky);
+      border-radius: 999px;
+      padding: 2px 10px;
+      margin-bottom: 6px;
+    }
+
+    .region-recommendation-card-title {
+      font-size: 15px;
+      font-weight: 900;
+      color: var(--navy);
+      margin: 0 0 6px;
+    }
+
+    .region-recommendation-card-content {
+      font-size: 13px;
+      color: var(--text);
+      white-space: pre-line;
+      margin: 0 0 8px;
+    }
+
+    .region-recommendation-card-link {
+      display: inline-block;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--blue);
+      text-decoration: none;
+    }
+  </style>
 </head>
 
 <body>
@@ -262,6 +332,29 @@
         </button>
 
       </div>
+
+    </section>
+
+    <section
+      id="regionRecommendationSection"
+      class="region-recommendation-section"
+      style="display:none;"
+    >
+
+      <h2 id="regionRecommendationHeading">
+        📍 この地域のおすすめ
+      </h2>
+
+      <div id="regionRecommendationList"></div>
+
+      <button
+        id="regionRecommendationMoreButton"
+        class="location-button"
+        type="button"
+        style="display:none; width: 100%; margin-top: 4px;"
+      >
+        もっと見る
+      </button>
 
     </section>
 

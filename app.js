@@ -4458,6 +4458,10 @@ function getLocation() {
               triggerLocationBasedCollection(
                 areaName
               );
+
+              loadRegionRecommendations(
+                areaName
+              );
             }
 
             if (
@@ -5512,4 +5516,236 @@ async function searchNearbyToilets() {
     toiletButton.disabled =
       false;
   }
+}
+
+
+// 「地域のおすすめ」(regionRecommendations)の取得結果と、
+// 「もっと見る」展開状態を保持する。他のどの機能とも共有しない
+// このセクション専用の状態。
+let regionRecommendationArticles =
+  [];
+
+let isRegionRecommendationExpanded =
+  false;
+
+const REGION_RECOMMENDATION_INITIAL_COUNT =
+  3;
+
+
+// 1記事分のカードHTMLを組み立てる。画像が無い場合はimg要素自体を出さず、
+// websiteUrlが無い/安全でない場合はリンクを出さない(getSafeWebsiteUrl()を再利用)。
+function buildRegionRecommendationCardHtml(
+  article
+) {
+  const imageUrls =
+    Array.isArray(article.imageUrls)
+      ? article.imageUrls
+      : [];
+
+  const firstImageUrl =
+    imageUrls.length > 0 &&
+    typeof imageUrls[0] === "string"
+      ? imageUrls[0]
+      : "";
+
+  const safeWebsiteUrl =
+    getSafeWebsiteUrl(
+      article.websiteUrl
+    );
+
+  const regionNameLabelHtml =
+    typeof article.regionName === "string" &&
+    article.regionName.trim() !== ""
+      ? `
+        <span class="region-recommendation-card-label">
+          ${escapeHtml(article.regionName)}
+        </span>
+      `
+      : "";
+
+  const imageHtml =
+    firstImageUrl !== ""
+      ? `
+        <img
+          src="${escapeHtml(firstImageUrl)}"
+          alt="${escapeHtml(article.title || "")}"
+          loading="lazy"
+        >
+      `
+      : "";
+
+  const linkHtml =
+    safeWebsiteUrl !== ""
+      ? `
+        <a
+          class="region-recommendation-card-link"
+          href="${escapeHtml(safeWebsiteUrl)}"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          🔗 くわしく見る
+        </a>
+      `
+      : "";
+
+  return `
+    <div class="region-recommendation-card">
+      ${imageHtml}
+      <div class="region-recommendation-card-body">
+        ${regionNameLabelHtml}
+        <p class="region-recommendation-card-title">
+          ${escapeHtml(article.title || "")}
+        </p>
+        <p class="region-recommendation-card-content">
+          ${escapeHtml(article.content || "")}
+        </p>
+        ${linkHtml}
+      </div>
+    </div>
+  `;
+}
+
+
+// regionRecommendationArticles(取得済み配列)から、展開状態に応じて
+// 先頭3件だけ、または全件を描画する。追加のFirestore取得は行わない。
+function renderRegionRecommendationCards() {
+  const regionRecommendationSection =
+    document.getElementById(
+      "regionRecommendationSection"
+    );
+
+  const regionRecommendationList =
+    document.getElementById(
+      "regionRecommendationList"
+    );
+
+  const regionRecommendationMoreButton =
+    document.getElementById(
+      "regionRecommendationMoreButton"
+    );
+
+  if (
+    !regionRecommendationSection ||
+    !regionRecommendationList ||
+    !regionRecommendationMoreButton
+  ) {
+    return;
+  }
+
+  if (regionRecommendationArticles.length === 0) {
+    regionRecommendationSection.style.display =
+      "none";
+
+    return;
+  }
+
+  const visibleArticles =
+    isRegionRecommendationExpanded
+      ? regionRecommendationArticles
+      : regionRecommendationArticles.slice(
+          0,
+          REGION_RECOMMENDATION_INITIAL_COUNT
+        );
+
+  regionRecommendationList.innerHTML =
+    visibleArticles
+      .map(
+        buildRegionRecommendationCardHtml
+      )
+      .join("");
+
+  regionRecommendationMoreButton.style.display =
+    !isRegionRecommendationExpanded &&
+    regionRecommendationArticles.length >
+      REGION_RECOMMENDATION_INITIAL_COUNT
+      ? ""
+      : "none";
+
+  regionRecommendationSection.style.display =
+    "";
+}
+
+
+// userAreaName確定後にgetLocation()から呼ばれる。
+// Firestore取得に失敗しても、このセクションを非表示にするだけで
+// 他の機能(天気・地図・提案・ゲリラ情報・店舗カード等)には影響させない。
+async function loadRegionRecommendations(
+  areaName
+) {
+  const regionRecommendationHeading =
+    document.getElementById(
+      "regionRecommendationHeading"
+    );
+
+  if (
+    !window.machinauDb ||
+    typeof areaName !== "string" ||
+    areaName === ""
+  ) {
+    return;
+  }
+
+  if (regionRecommendationHeading) {
+    regionRecommendationHeading.textContent =
+      "📍 " +
+      areaName +
+      "のおすすめ";
+  }
+
+  try {
+    const querySnapshot =
+      await window.machinauDb
+        .collection("regionRecommendations")
+        .where(
+          "isPublished",
+          "==",
+          true
+        )
+        .where(
+          "targetAreas",
+          "array-contains",
+          areaName
+        )
+        .orderBy("sortOrder")
+        .get();
+
+    regionRecommendationArticles =
+      querySnapshot.docs.map(
+        function(documentSnapshot) {
+          return documentSnapshot.data();
+        }
+      );
+
+    isRegionRecommendationExpanded =
+      false;
+
+    renderRegionRecommendationCards();
+  } catch (error) {
+    console.error(
+      "地域のおすすめの取得に失敗しました：",
+      error
+    );
+
+    regionRecommendationArticles =
+      [];
+
+    renderRegionRecommendationCards();
+  }
+}
+
+const regionRecommendationMoreButtonElement =
+  document.getElementById(
+    "regionRecommendationMoreButton"
+  );
+
+if (regionRecommendationMoreButtonElement) {
+  regionRecommendationMoreButtonElement.addEventListener(
+    "click",
+    function() {
+      isRegionRecommendationExpanded =
+        true;
+
+      renderRegionRecommendationCards();
+    }
+  );
 }
