@@ -882,7 +882,8 @@ function parseFeedXml(
 
             summary:
               extractText(
-                item.description
+                item.description ||
+                item["content:encoded"]
               )
           }
         );
