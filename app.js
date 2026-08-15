@@ -5606,8 +5606,20 @@ function buildRegionRecommendationCardHtml(
 }
 
 
+// 現在表示中の地域おすすめが、現在地由来(false)か、
+// 「ほかの地域を見る」からの手動選択(true)かを保持する。
+// userAreaName自体はここでは一切書き換えない。
+let currentRegionRecommendationAreaName =
+  null;
+
+let isRegionRecommendationManualSelection =
+  false;
+
+
 // regionRecommendationArticles(取得済み配列)から、展開状態に応じて
 // 先頭3件だけ、または全件を描画する。追加のFirestore取得は行わない。
+// 手動選択で0件の場合だけ「準備中」表示にし、現在地由来の0件は
+// Phase Cと同じくセクション自体を非表示にする。
 function renderRegionRecommendationCards() {
   const regionRecommendationSection =
     document.getElementById(
@@ -5624,6 +5636,11 @@ function renderRegionRecommendationCards() {
       "regionRecommendationMoreButton"
     );
 
+  const regionRecommendationBackToCurrentButton =
+    document.getElementById(
+      "regionRecommendationBackToCurrentButton"
+    );
+
   if (
     !regionRecommendationSection ||
     !regionRecommendationList ||
@@ -5632,9 +5649,29 @@ function renderRegionRecommendationCards() {
     return;
   }
 
+  if (regionRecommendationBackToCurrentButton) {
+    regionRecommendationBackToCurrentButton.style.display =
+      isRegionRecommendationManualSelection
+        ? ""
+        : "none";
+  }
+
   if (regionRecommendationArticles.length === 0) {
-    regionRecommendationSection.style.display =
+    if (!isRegionRecommendationManualSelection) {
+      regionRecommendationSection.style.display =
+        "none";
+
+      return;
+    }
+
+    regionRecommendationList.innerHTML =
+      '<p class="region-recommendation-empty-message">この地域のおすすめは準備中です。</p>';
+
+    regionRecommendationMoreButton.style.display =
       "none";
+
+    regionRecommendationSection.style.display =
+      "";
 
     return;
   }
@@ -5666,11 +5703,14 @@ function renderRegionRecommendationCards() {
 }
 
 
-// userAreaName確定後にgetLocation()から呼ばれる。
-// Firestore取得に失敗しても、このセクションを非表示にするだけで
+// 指定した市町村名(areaName)の地域おすすめを取得・描画する共通処理。
+// isManualSelectionは「ほかの地域を見る」からの選択かどうかのフラグで、
+// userAreaName自体は一切書き換えない(GPS・地図・距離計算・店舗表示に影響なし)。
+// Firestore取得に失敗しても、このセクションの表示を変えるだけで
 // 他の機能(天気・地図・提案・ゲリラ情報・店舗カード等)には影響させない。
-async function loadRegionRecommendations(
-  areaName
+async function showRegionRecommendationsForArea(
+  areaName,
+  isManualSelection
 ) {
   const regionRecommendationHeading =
     document.getElementById(
@@ -5684,6 +5724,15 @@ async function loadRegionRecommendations(
   ) {
     return;
   }
+
+  currentRegionRecommendationAreaName =
+    areaName;
+
+  isRegionRecommendationManualSelection =
+    isManualSelection === true;
+
+  isRegionRecommendationExpanded =
+    false;
 
   if (regionRecommendationHeading) {
     regionRecommendationHeading.textContent =
@@ -5716,9 +5765,6 @@ async function loadRegionRecommendations(
         }
       );
 
-    isRegionRecommendationExpanded =
-      false;
-
     renderRegionRecommendationCards();
   } catch (error) {
     console.error(
@@ -5733,6 +5779,77 @@ async function loadRegionRecommendations(
   }
 }
 
+
+// userAreaName確定後にgetLocation()から呼ばれる、現在地由来の表示。
+// getLocation()側の呼び出し方(loadRegionRecommendations(areaName))は
+// Phase Cから変更しない。
+async function loadRegionRecommendations(
+  areaName
+) {
+  await showRegionRecommendationsForArea(
+    areaName,
+    false
+  );
+}
+
+
+// 「ほかの地域を見る」の選択肢を、既存のOKINAWA_MUNICIPALITY_TO_REGION_NAME
+// (無変更)から8広域グループの見出し付きで組み立てる。この定数自体は
+// 一切書き換えない。
+function buildRegionRecommendationAreaPickerHtml() {
+  const groupNameToMunicipalities =
+    {};
+
+  Object.keys(
+    OKINAWA_MUNICIPALITY_TO_REGION_NAME
+  ).forEach(
+    function(municipalityName) {
+      const groupName =
+        OKINAWA_MUNICIPALITY_TO_REGION_NAME[
+          municipalityName
+        ];
+
+      if (!groupNameToMunicipalities[groupName]) {
+        groupNameToMunicipalities[groupName] =
+          [];
+      }
+
+      groupNameToMunicipalities[groupName].push(
+        municipalityName
+      );
+    }
+  );
+
+  return Object.keys(groupNameToMunicipalities)
+    .map(
+      function(groupName) {
+        const optionsHtml =
+          groupNameToMunicipalities[groupName]
+            .map(
+              function(municipalityName) {
+                return (
+                  '<button type="button" class="region-recommendation-area-option" data-area="' +
+                  escapeHtml(municipalityName) +
+                  '">' +
+                  escapeHtml(municipalityName) +
+                  "</button>"
+                );
+              }
+            )
+            .join("");
+
+        return (
+          '<div class="region-recommendation-area-group-title">' +
+          escapeHtml(groupName) +
+          "</div>" +
+          optionsHtml
+        );
+      }
+    )
+    .join("");
+}
+
+
 const regionRecommendationMoreButtonElement =
   document.getElementById(
     "regionRecommendationMoreButton"
@@ -5746,6 +5863,81 @@ if (regionRecommendationMoreButtonElement) {
         true;
 
       renderRegionRecommendationCards();
+    }
+  );
+}
+
+const regionRecommendationAreaPickerElement =
+  document.getElementById(
+    "regionRecommendationAreaPicker"
+  );
+
+const regionRecommendationOtherAreaButtonElement =
+  document.getElementById(
+    "regionRecommendationOtherAreaButton"
+  );
+
+const regionRecommendationBackToCurrentButtonElement =
+  document.getElementById(
+    "regionRecommendationBackToCurrentButton"
+  );
+
+if (regionRecommendationAreaPickerElement) {
+  regionRecommendationAreaPickerElement.innerHTML =
+    buildRegionRecommendationAreaPickerHtml();
+
+  regionRecommendationAreaPickerElement.addEventListener(
+    "click",
+    function(event) {
+      const selectedAreaName =
+        event.target.getAttribute(
+          "data-area"
+        );
+
+      if (!selectedAreaName) {
+        return;
+      }
+
+      regionRecommendationAreaPickerElement.style.display =
+        "none";
+
+      showRegionRecommendationsForArea(
+        selectedAreaName,
+        true
+      );
+    }
+  );
+}
+
+if (
+  regionRecommendationOtherAreaButtonElement &&
+  regionRecommendationAreaPickerElement
+) {
+  regionRecommendationOtherAreaButtonElement.addEventListener(
+    "click",
+    function() {
+      regionRecommendationAreaPickerElement.style.display =
+        regionRecommendationAreaPickerElement.style.display ===
+        "none"
+          ? "block"
+          : "none";
+    }
+  );
+}
+
+if (regionRecommendationBackToCurrentButtonElement) {
+  regionRecommendationBackToCurrentButtonElement.addEventListener(
+    "click",
+    function() {
+      if (
+        typeof userAreaName === "string" &&
+        userAreaName !== ""
+      ) {
+        showRegionRecommendationsForArea(
+          userAreaName,
+          false
+        );
+      }
     }
   );
 }
