@@ -1289,6 +1289,11 @@ function convertSubmissionToShop(
         data.isOpen24Hours
       ),
 
+    takeout:
+      Boolean(
+        data.takeout
+      ),
+
     postType:
       typeof data.postType === "string" &&
       data.postType.trim() !== ""
@@ -1974,6 +1979,16 @@ function renderShops() {
                           ${escapeHtml(
                             businessClosingText
                           )}
+                        </span>
+                      `
+                      : ""
+                  }
+
+                  ${
+                    shop.takeout === true
+                      ? `
+                        <span class="info-chip">
+                          🥡 テイクアウトOK
                         </span>
                       `
                       : ""
@@ -3149,6 +3164,13 @@ function openShopModal(
       escapeHtml(
         selectedShop.address
       );
+  }
+
+  if (
+    selectedShop.takeout === true
+  ) {
+    modalText +=
+      "<br><br>🥡 テイクアウトOK";
   }
 
   if (

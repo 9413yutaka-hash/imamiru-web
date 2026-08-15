@@ -1433,6 +1433,31 @@
 
         <div class="form-group">
 
+          <div class="form-label">
+            テイクアウト
+          </div>
+
+          <div class="agreement-box">
+
+            <label class="agreement-label">
+
+              <input
+                id="takeout"
+                type="checkbox"
+              >
+
+              <span class="agreement-text">
+                テイクアウトができます
+              </span>
+
+            </label>
+
+          </div>
+
+        </div>
+
+        <div class="form-group">
+
           <label
             class="form-label"
             for="businessStartTime"
@@ -1741,6 +1766,11 @@
     const isOpen24HoursInput =
       document.getElementById(
         "isOpen24Hours"
+      );
+
+    const takeoutInput =
+      document.getElementById(
+        "takeout"
       );
 
     const agreementInput =
@@ -2067,6 +2097,9 @@
         isOpen24HoursInput.checked;
 
       isOpen24HoursInput.disabled =
+        submitting;
+
+      takeoutInput.disabled =
         submitting;
 
       agreementInput.disabled =
@@ -3359,6 +3392,9 @@ longitude:
 
           isOpen24Hours:
             isOpen24HoursInput.checked,
+
+          takeout:
+            takeoutInput.checked,
 
           imageUrls:
             imageUrls,

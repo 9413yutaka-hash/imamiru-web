@@ -333,6 +333,42 @@
       line-height: 1.7;
     }
 
+    .agreement-box {
+      margin-top: 26px;
+      padding:
+        17px;
+      border:
+        1px solid
+        var(--border);
+      border-radius: 15px;
+      background:
+        #f8fafc;
+    }
+
+    .agreement-label {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      cursor: pointer;
+    }
+
+    .agreement-label input {
+      width: 19px;
+      height: 19px;
+      min-height: 0;
+      flex-shrink: 0;
+      margin-top: 2px;
+      accent-color:
+        var(--blue);
+    }
+
+    .agreement-text {
+      color: #526474;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.8;
+    }
+
     .character-count {
       margin-top: 7px;
       color: #8a97a6;
@@ -1033,6 +1069,31 @@
 
         </div>
 
+        <div class="form-group">
+
+          <div class="form-label">
+            テイクアウト
+          </div>
+
+          <div class="agreement-box">
+
+            <label class="agreement-label">
+
+              <input
+                id="takeout"
+                type="checkbox"
+              >
+
+              <span class="agreement-text">
+                テイクアウトができます
+              </span>
+
+            </label>
+
+          </div>
+
+        </div>
+
         <button
           id="saveButton"
           class="save-button"
@@ -1149,6 +1210,11 @@
     const websiteUrlInput =
       document.getElementById(
         "websiteUrl"
+      );
+
+    const takeoutInput =
+      document.getElementById(
+        "takeout"
       );
 
     const saveButton =
@@ -1361,6 +1427,9 @@
       websiteUrlInput.value =
         submission.websiteUrl ||
         "";
+
+      takeoutInput.checked =
+        submission.takeout === true;
     }
 
 
@@ -1522,6 +1591,9 @@
         submitting;
 
       websiteUrlInput.disabled =
+        submitting;
+
+      takeoutInput.disabled =
         submitting;
 
       saveButton.disabled =
@@ -1728,7 +1800,8 @@
         category: category,
         content: content,
         address: address,
-        websiteUrl: websiteUrl
+        websiteUrl: websiteUrl,
+        takeout: takeoutInput.checked
       };
     }
 
@@ -1807,7 +1880,10 @@
                       formData.address,
 
                     websiteUrl:
-                      formData.websiteUrl
+                      formData.websiteUrl,
+
+                    takeout:
+                      formData.takeout
                   }
                 )
             }
@@ -1868,6 +1944,9 @@
           true;
 
         websiteUrlInput.disabled =
+          true;
+
+        takeoutInput.disabled =
           true;
 
         saveButton.disabled =

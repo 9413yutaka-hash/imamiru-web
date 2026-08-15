@@ -306,13 +306,17 @@ function validateEditableFields(
     );
   }
 
+  const takeout =
+    requestBody.takeout === true;
+
   return {
     shopName: shopName,
     title: title,
     category: category,
     content: content,
     address: address,
-    websiteUrl: websiteUrl
+    websiteUrl: websiteUrl,
+    takeout: takeout
   };
 }
 
@@ -637,7 +641,10 @@ export default async function handler(
             currentData.address || "",
 
           websiteUrl:
-            currentData.websiteUrl || ""
+            currentData.websiteUrl || "",
+
+          takeout:
+            currentData.takeout === true
         }
       });
     }
@@ -715,6 +722,9 @@ export default async function handler(
 
       websiteUrl:
         editableFields.websiteUrl,
+
+      takeout:
+        editableFields.takeout,
 
       latitude:
         latitude,
