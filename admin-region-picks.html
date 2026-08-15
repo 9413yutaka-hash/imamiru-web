@@ -1,0 +1,1111 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <meta name="robots" content="noindex, nofollow">
+
+  <title>
+    地域のおすすめ管理｜マチナウ運営
+  </title>
+
+  <style>
+    :root {
+      --navy: #071a33;
+      --blue: #0788c9;
+      --sky: #dff7ff;
+      --green: #19a96b;
+      --red: #ef5a67;
+      --white: #ffffff;
+      --text: #15233a;
+      --subtext: #697386;
+      --border: #e2eaf1;
+      --background: #f4f8fb;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Yu Gothic", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+      background: var(--background);
+      color: var(--text);
+    }
+
+    header {
+      background: var(--navy);
+      color: var(--white);
+      padding: 18px 20px;
+    }
+
+    header .page-label {
+      font-size: 12px;
+      opacity: 0.8;
+    }
+
+    header h1 {
+      margin: 4px 0 0;
+      font-size: 20px;
+    }
+
+    header a {
+      display: inline-block;
+      margin-top: 10px;
+      color: var(--sky);
+      font-size: 13px;
+      text-decoration: none;
+    }
+
+    main {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px 16px 60px;
+    }
+
+    .panel {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 24px;
+    }
+
+    .panel h2 {
+      margin: 0 0 14px;
+      font-size: 16px;
+    }
+
+    .field {
+      margin-bottom: 16px;
+    }
+
+    .field label {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .field input[type="text"],
+    .field input[type="url"],
+    .field input[type="number"],
+    .field textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    .field textarea {
+      min-height: 120px;
+      resize: vertical;
+    }
+
+    .area-group {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 10px;
+    }
+
+    .area-group-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--blue);
+      margin-bottom: 8px;
+    }
+
+    .area-checkbox-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 6px;
+    }
+
+    .area-checkbox-list label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: 400;
+    }
+
+    .image-preview-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .image-preview-item {
+      position: relative;
+      width: 96px;
+      height: 96px;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    .image-preview-item img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .image-preview-item button {
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      background: rgba(21, 35, 58, 0.75);
+      color: var(--white);
+      border: none;
+      border-radius: 6px;
+      font-size: 11px;
+      padding: 2px 6px;
+      cursor: pointer;
+    }
+
+    .primary-button {
+      background: linear-gradient(135deg, var(--blue), #04b7d7);
+      color: var(--white);
+      border: none;
+      border-radius: 12px;
+      padding: 11px 18px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .primary-button:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+    .secondary-button {
+      background: var(--white);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 16px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .danger-button {
+      background: var(--white);
+      color: var(--red);
+      border: 1px solid var(--red);
+      border-radius: 10px;
+      padding: 6px 12px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .message-box {
+      font-size: 13px;
+      margin-top: 10px;
+      min-height: 1em;
+    }
+
+    .message-box.error {
+      color: var(--red);
+    }
+
+    .message-box.success {
+      color: var(--green);
+    }
+
+    #adminArea {
+      display: none;
+    }
+
+    #adminArea.visible {
+      display: block;
+    }
+
+    .article-card {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+
+    .article-card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .article-title {
+      font-weight: 700;
+      font-size: 15px;
+    }
+
+    .status-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 999px;
+    }
+
+    .status-badge.published {
+      background: #e3f7ee;
+      color: var(--green);
+    }
+
+    .status-badge.unpublished {
+      background: #f1f2f5;
+      color: var(--subtext);
+    }
+
+    .article-meta {
+      font-size: 12px;
+      color: var(--subtext);
+      margin-top: 6px;
+    }
+
+    .article-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .empty-state {
+      color: var(--subtext);
+      font-size: 13px;
+      padding: 16px 0;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="page-label">
+      🔐 運営者専用
+    </div>
+
+    <h1>
+      地域のおすすめ管理
+    </h1>
+
+    <a href="admin.html">
+      ← 管理トップへ戻る
+    </a>
+  </header>
+
+  <main>
+
+    <section id="loginPanel" class="panel">
+      <h2>
+        管理者ログイン
+      </h2>
+
+      <form id="loginForm" novalidate>
+        <div class="field">
+          <label for="adminEmail">
+            メールアドレス
+          </label>
+
+          <input
+            id="adminEmail"
+            type="text"
+            autocomplete="email"
+            required
+          >
+        </div>
+
+        <div class="field">
+          <label for="adminPassword">
+            パスワード
+          </label>
+
+          <input
+            id="adminPassword"
+            type="password"
+            autocomplete="current-password"
+            required
+          >
+        </div>
+
+        <button id="loginButton" class="primary-button" type="submit">
+          管理画面へログイン
+        </button>
+      </form>
+
+      <div id="loginMessage" class="message-box" role="status" aria-live="polite"></div>
+    </section>
+
+    <section id="adminArea">
+
+      <div class="panel">
+        <h2 id="formTitle">
+          新規作成
+        </h2>
+
+        <form id="articleForm" novalidate>
+
+          <div class="field">
+            <label for="titleInput">
+              タイトル
+            </label>
+            <input id="titleInput" type="text" required>
+          </div>
+
+          <div class="field">
+            <label for="contentInput">
+              本文
+            </label>
+            <textarea id="contentInput" required></textarea>
+          </div>
+
+          <div class="field">
+            <label for="regionNameInput">
+              運営整理用ラベル(regionName・表示判定には使用しません)
+            </label>
+            <input id="regionNameInput" type="text" placeholder="例：南部">
+          </div>
+
+          <div class="field">
+            <label>
+              対象市町村(1つ以上選択してください)
+            </label>
+            <div id="areaGroupContainer"></div>
+          </div>
+
+          <div class="field">
+            <label for="websiteUrlInput">
+              外部リンク(任意・http(s)://から入力)
+            </label>
+            <input id="websiteUrlInput" type="url" placeholder="https://...">
+          </div>
+
+          <div class="field">
+            <label for="sortOrderInput">
+              並び順(数値・小さいほど先に表示)
+            </label>
+            <input id="sortOrderInput" type="number" value="0">
+          </div>
+
+          <div class="field">
+            <label>
+              <input id="isPublishedInput" type="checkbox">
+              公開する
+            </label>
+          </div>
+
+          <div class="field">
+            <label>
+              画像(最大5枚・1枚10MBまで・jpeg/png/webp)
+            </label>
+
+            <input id="imageInput" type="file" accept="image/jpeg,image/png,image/webp" multiple>
+
+            <div id="imagePreviewList" class="image-preview-list"></div>
+          </div>
+
+          <div id="formMessage" class="message-box" role="status" aria-live="polite"></div>
+
+          <button id="saveButton" class="primary-button" type="submit">
+            保存する
+          </button>
+
+          <button id="cancelEditButton" class="secondary-button" type="button" style="display:none; margin-left: 8px;">
+            新規作成に戻る
+          </button>
+
+        </form>
+      </div>
+
+      <div class="panel">
+        <h2>
+          登録済みの地域のおすすめ
+        </h2>
+
+        <div id="articleList">
+          <div class="empty-state">
+            読み込んでいます…
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore-compat.js"></script>
+  <script src="firebase.js"></script>
+
+  <script>
+    const ADMIN_EMAIL =
+      "9413yutaka@gmail.com";
+
+    // app.js の OKINAWA_MUNICIPALITY_TO_REGION_NAME
+    // (api/admin-source-collect.js にも同一内容が複製されている)と
+    // 内容を完全に一致させること。クライアント間でコードを共有する
+    // 仕組みがないため、この41市町村・8広域グループの対応表を
+    // このページ専用にも複製している。既存側は変更しない。
+    const OKINAWA_MUNICIPALITY_TO_REGION_NAME = {
+      "那覇市": "沖縄本島南部",
+      "糸満市": "沖縄本島南部",
+      "豊見城市": "沖縄本島南部",
+      "南城市": "沖縄本島南部",
+      "与那原町": "沖縄本島南部",
+      "南風原町": "沖縄本島南部",
+      "八重瀬町": "沖縄本島南部",
+
+      "宜野湾市": "沖縄本島中部",
+      "浦添市": "沖縄本島中部",
+      "沖縄市": "沖縄本島中部",
+      "うるま市": "沖縄本島中部",
+      "嘉手納町": "沖縄本島中部",
+      "北谷町": "沖縄本島中部",
+      "西原町": "沖縄本島中部",
+      "読谷村": "沖縄本島中部",
+      "北中城村": "沖縄本島中部",
+      "中城村": "沖縄本島中部",
+
+      "名護市": "沖縄本島北部",
+      "本部町": "沖縄本島北部",
+      "金武町": "沖縄本島北部",
+      "国頭村": "沖縄本島北部",
+      "大宜味村": "沖縄本島北部",
+      "東村": "沖縄本島北部",
+      "今帰仁村": "沖縄本島北部",
+      "恩納村": "沖縄本島北部",
+      "宜野座村": "沖縄本島北部",
+      "伊江村": "沖縄本島北部",
+
+      "渡嘉敷村": "慶良間",
+      "座間味村": "慶良間",
+
+      "久米島町": "久米島",
+
+      "宮古島市": "宮古",
+      "多良間村": "宮古",
+
+      "石垣市": "八重山",
+      "竹富町": "八重山",
+      "与那国町": "八重山",
+
+      "粟国村": "その他離島",
+      "渡名喜村": "その他離島",
+      "南大東村": "その他離島",
+      "北大東村": "その他離島",
+      "伊平屋村": "その他離島",
+      "伊是名村": "その他離島"
+    };
+
+    // 8広域グループ → 市町村名配列。表示のグルーピングにのみ使用し、
+    // targetAreasへは市町村名だけを保存する(グループ名は保存しない)。
+    const REGION_GROUP_TO_MUNICIPALITIES = {};
+
+    Object.keys(OKINAWA_MUNICIPALITY_TO_REGION_NAME).forEach(
+      function(municipalityName) {
+        const groupName =
+          OKINAWA_MUNICIPALITY_TO_REGION_NAME[municipalityName];
+
+        if (!REGION_GROUP_TO_MUNICIPALITIES[groupName]) {
+          REGION_GROUP_TO_MUNICIPALITIES[groupName] = [];
+        }
+
+        REGION_GROUP_TO_MUNICIPALITIES[groupName].push(municipalityName);
+      }
+    );
+
+    // post.html / admin-post.html と同一設定。新しいCloudinary設定は作らない。
+    const CLOUDINARY_CLOUD_NAME = "cdhyctnp";
+    const CLOUDINARY_UPLOAD_PRESET = "imamiru_upload";
+    const MAX_IMAGE_COUNT = 5;
+    const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
+    const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+
+    function getSafeWebsiteUrl(value) {
+      if (typeof value !== "string" || value.trim() === "") {
+        return "";
+      }
+
+      const websiteUrl = value.trim();
+
+      if (!/^https?:\/\//.test(websiteUrl)) {
+        return null;
+      }
+
+      return websiteUrl;
+    }
+
+    const loginPanel = document.getElementById("loginPanel");
+    const adminArea = document.getElementById("adminArea");
+    const loginForm = document.getElementById("loginForm");
+    const loginButton = document.getElementById("loginButton");
+    const loginMessage = document.getElementById("loginMessage");
+
+    const formTitle = document.getElementById("formTitle");
+    const articleForm = document.getElementById("articleForm");
+    const titleInput = document.getElementById("titleInput");
+    const contentInput = document.getElementById("contentInput");
+    const regionNameInput = document.getElementById("regionNameInput");
+    const areaGroupContainer = document.getElementById("areaGroupContainer");
+    const websiteUrlInput = document.getElementById("websiteUrlInput");
+    const sortOrderInput = document.getElementById("sortOrderInput");
+    const isPublishedInput = document.getElementById("isPublishedInput");
+    const imageInput = document.getElementById("imageInput");
+    const imagePreviewList = document.getElementById("imagePreviewList");
+    const formMessage = document.getElementById("formMessage");
+    const saveButton = document.getElementById("saveButton");
+    const cancelEditButton = document.getElementById("cancelEditButton");
+    const articleList = document.getElementById("articleList");
+
+    let selectedNewImageFiles = [];
+    let currentImages = [];
+    let editingDocumentId = null;
+    let allArticles = [];
+
+    function showLoginMessage(text, type) {
+      loginMessage.textContent = text;
+      loginMessage.className = "message-box" + (type ? " " + type : "");
+    }
+
+    function clearLoginMessage() {
+      loginMessage.textContent = "";
+      loginMessage.className = "message-box";
+    }
+
+    function showFormMessage(text, type) {
+      formMessage.textContent = text;
+      formMessage.className = "message-box" + (type ? " " + type : "");
+    }
+
+    function buildAreaCheckboxes() {
+      areaGroupContainer.innerHTML = "";
+
+      Object.keys(REGION_GROUP_TO_MUNICIPALITIES).forEach(
+        function(groupName) {
+          const groupWrapper = document.createElement("div");
+          groupWrapper.className = "area-group";
+
+          const groupTitle = document.createElement("div");
+          groupTitle.className = "area-group-title";
+          groupTitle.textContent = groupName;
+          groupWrapper.appendChild(groupTitle);
+
+          const checkboxList = document.createElement("div");
+          checkboxList.className = "area-checkbox-list";
+
+          REGION_GROUP_TO_MUNICIPALITIES[groupName].forEach(
+            function(municipalityName) {
+              const label = document.createElement("label");
+
+              const checkbox = document.createElement("input");
+              checkbox.type = "checkbox";
+              checkbox.value = municipalityName;
+              checkbox.className = "target-area-checkbox";
+
+              label.appendChild(checkbox);
+              label.appendChild(document.createTextNode(municipalityName));
+
+              checkboxList.appendChild(label);
+            }
+          );
+
+          groupWrapper.appendChild(checkboxList);
+          areaGroupContainer.appendChild(groupWrapper);
+        }
+      );
+    }
+
+    function getSelectedTargetAreas() {
+      return Array.from(
+        document.querySelectorAll(".target-area-checkbox:checked")
+      ).map(function(checkbox) {
+        return checkbox.value;
+      });
+    }
+
+    function setSelectedTargetAreas(targetAreas) {
+      const targetAreaSet = new Set(
+        Array.isArray(targetAreas) ? targetAreas : []
+      );
+
+      document.querySelectorAll(".target-area-checkbox").forEach(
+        function(checkbox) {
+          checkbox.checked = targetAreaSet.has(checkbox.value);
+        }
+      );
+    }
+
+    function renderImagePreviewList() {
+      imagePreviewList.innerHTML = "";
+
+      currentImages.forEach(function(image, index) {
+        const item = document.createElement("div");
+        item.className = "image-preview-item";
+
+        const img = document.createElement("img");
+        img.src = image.url;
+        item.appendChild(img);
+
+        const removeButton = document.createElement("button");
+        removeButton.type = "button";
+        removeButton.textContent = "削除";
+
+        removeButton.addEventListener("click", function() {
+          currentImages.splice(index, 1);
+          renderImagePreviewList();
+        });
+
+        item.appendChild(removeButton);
+        imagePreviewList.appendChild(item);
+      });
+    }
+
+    imageInput.addEventListener("change", function() {
+      const files = Array.from(imageInput.files || []);
+
+      files.forEach(function(file) {
+        if (currentImages.length + selectedNewImageFiles.length >= MAX_IMAGE_COUNT) {
+          showFormMessage(
+            "画像は最大" + MAX_IMAGE_COUNT + "枚までです。",
+            "error"
+          );
+          return;
+        }
+
+        if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+          showFormMessage(
+            "対応していない画像形式です(jpeg/png/webpのみ)。",
+            "error"
+          );
+          return;
+        }
+
+        if (file.size > MAX_IMAGE_SIZE_BYTES) {
+          showFormMessage(
+            "1枚あたり10MBまでの画像を選択してください。",
+            "error"
+          );
+          return;
+        }
+
+        selectedNewImageFiles.push(file);
+
+        const reader = new FileReader();
+
+        reader.onload = function() {
+          currentImages.push({
+            url: reader.result,
+            publicId: "",
+            isPendingUpload: true,
+            file: file
+          });
+
+          renderImagePreviewList();
+        };
+
+        reader.readAsDataURL(file);
+      });
+
+      imageInput.value = "";
+    });
+
+    async function uploadImageToCloudinary(file) {
+      const uploadUrl =
+        "https://api.cloudinary.com/v1_1/" +
+        CLOUDINARY_CLOUD_NAME +
+        "/image/upload";
+
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+
+      const response = await fetch(uploadUrl, {
+        method: "POST",
+        body: formData
+      });
+
+      let responseData = null;
+
+      try {
+        responseData = await response.json();
+      } catch (jsonError) {
+        throw new Error("画像アップロードの応答を読み取れませんでした。");
+      }
+
+      if (!response.ok) {
+        const cloudinaryMessage =
+          responseData && responseData.error && responseData.error.message
+            ? responseData.error.message
+            : "画像をアップロードできませんでした。";
+
+        throw new Error(cloudinaryMessage);
+      }
+
+      if (!responseData.secure_url) {
+        throw new Error("画像URLを取得できませんでした。");
+      }
+
+      return {
+        url: responseData.secure_url,
+        publicId: responseData.public_id || ""
+      };
+    }
+
+    function resetForm() {
+      editingDocumentId = null;
+      formTitle.textContent = "新規作成";
+      saveButton.textContent = "保存する";
+      cancelEditButton.style.display = "none";
+
+      titleInput.value = "";
+      contentInput.value = "";
+      regionNameInput.value = "";
+      websiteUrlInput.value = "";
+      sortOrderInput.value = "0";
+      isPublishedInput.checked = false;
+
+      currentImages = [];
+      selectedNewImageFiles = [];
+      renderImagePreviewList();
+
+      setSelectedTargetAreas([]);
+
+      showFormMessage("", "");
+    }
+
+    function fillFormForEdit(article) {
+      editingDocumentId = article.id;
+      formTitle.textContent = "編集：" + article.title;
+      saveButton.textContent = "更新する";
+      cancelEditButton.style.display = "inline-block";
+
+      titleInput.value = article.title || "";
+      contentInput.value = article.content || "";
+      regionNameInput.value = article.regionName || "";
+      websiteUrlInput.value = article.websiteUrl || "";
+      sortOrderInput.value =
+        typeof article.sortOrder === "number" ? String(article.sortOrder) : "0";
+      isPublishedInput.checked = article.isPublished === true;
+
+      const imageUrls = Array.isArray(article.imageUrls) ? article.imageUrls : [];
+      const imagePublicIds =
+        Array.isArray(article.imagePublicIds) ? article.imagePublicIds : [];
+
+      currentImages = imageUrls.map(function(url, index) {
+        return {
+          url: url,
+          publicId: imagePublicIds[index] || "",
+          isPendingUpload: false,
+          file: null
+        };
+      });
+
+      selectedNewImageFiles = [];
+      renderImagePreviewList();
+
+      setSelectedTargetAreas(article.targetAreas);
+
+      showFormMessage("", "");
+
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    cancelEditButton.addEventListener("click", resetForm);
+
+    function renderArticleList() {
+      if (allArticles.length === 0) {
+        articleList.innerHTML =
+          '<div class="empty-state">まだ地域のおすすめは登録されていません。</div>';
+        return;
+      }
+
+      articleList.innerHTML = "";
+
+      allArticles.forEach(function(article) {
+        const card = document.createElement("div");
+        card.className = "article-card";
+
+        const targetAreasText =
+          Array.isArray(article.targetAreas) && article.targetAreas.length > 0
+            ? article.targetAreas.join("、")
+            : "(未設定)";
+
+        const updatedAtText =
+          article.updatedAt && typeof article.updatedAt.toDate === "function"
+            ? article.updatedAt.toDate().toLocaleString("ja-JP")
+            : "-";
+
+        card.innerHTML =
+          '<div class="article-card-top">' +
+            '<div>' +
+              '<div class="article-title"></div>' +
+              '<div class="article-meta">' +
+                'regionName: ' + (article.regionName ? escapeHtmlText(article.regionName) : "(未設定)") +
+                '<br>対象市町村: ' + escapeHtmlText(targetAreasText) +
+                '<br>並び順: ' + (typeof article.sortOrder === "number" ? article.sortOrder : "-") +
+                '<br>更新日時: ' + updatedAtText +
+              '</div>' +
+            '</div>' +
+            '<span class="status-badge ' + (article.isPublished ? "published" : "unpublished") + '">' +
+              (article.isPublished ? "公開" : "非公開") +
+            '</span>' +
+          '</div>' +
+          '<div class="article-actions">' +
+            '<button type="button" class="secondary-button" data-action="edit">編集</button>' +
+            '<button type="button" class="danger-button" data-action="delete">削除</button>' +
+          '</div>';
+
+        card.querySelector(".article-title").textContent = article.title || "(タイトル未設定)";
+
+        card.querySelector('[data-action="edit"]').addEventListener("click", function() {
+          fillFormForEdit(article);
+        });
+
+        card.querySelector('[data-action="delete"]').addEventListener("click", function() {
+          handleDelete(article.id, article.title);
+        });
+
+        articleList.appendChild(card);
+      });
+    }
+
+    function escapeHtmlText(text) {
+      return String(text ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    async function loadArticles() {
+      if (!window.machinauDb) {
+        articleList.innerHTML =
+          '<div class="empty-state">Firestoreへ接続できませんでした。</div>';
+        return;
+      }
+
+      try {
+        const querySnapshot = await window.machinauDb
+          .collection("regionRecommendations")
+          .orderBy("sortOrder")
+          .get();
+
+        allArticles = querySnapshot.docs.map(function(doc) {
+          return Object.assign({ id: doc.id }, doc.data());
+        });
+
+        renderArticleList();
+      } catch (error) {
+        console.error("地域のおすすめ一覧の取得に失敗しました", error);
+
+        articleList.innerHTML =
+          '<div class="empty-state">一覧の読み込みに失敗しました。</div>';
+      }
+    }
+
+    async function handleDelete(documentId, title) {
+      const confirmed = window.confirm(
+        "「" + (title || "この記事") + "」を削除します。よろしいですか？"
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      try {
+        await window.machinauDb
+          .collection("regionRecommendations")
+          .doc(documentId)
+          .delete();
+
+        if (editingDocumentId === documentId) {
+          resetForm();
+        }
+
+        await loadArticles();
+      } catch (error) {
+        console.error("削除に失敗しました", error);
+        window.alert("削除できませんでした。時間をおいて再度お試しください。");
+      }
+    }
+
+    articleForm.addEventListener("submit", async function(event) {
+      event.preventDefault();
+
+      showFormMessage("", "");
+
+      const title = titleInput.value.trim();
+      const content = contentInput.value.trim();
+      const regionName = regionNameInput.value.trim();
+      const targetAreas = getSelectedTargetAreas();
+      const sortOrderValue = Number(sortOrderInput.value);
+      const isPublished = isPublishedInput.checked === true;
+
+      if (title === "") {
+        showFormMessage("タイトルを入力してください。", "error");
+        return;
+      }
+
+      if (content === "") {
+        showFormMessage("本文を入力してください。", "error");
+        return;
+      }
+
+      if (targetAreas.length === 0) {
+        showFormMessage("対象市町村を1つ以上選択してください。", "error");
+        return;
+      }
+
+      if (!Number.isFinite(sortOrderValue)) {
+        showFormMessage("並び順は数値で入力してください。", "error");
+        return;
+      }
+
+      const safeWebsiteUrl = getSafeWebsiteUrl(websiteUrlInput.value);
+
+      if (safeWebsiteUrl === null) {
+        showFormMessage(
+          "外部リンクはhttp://またはhttps://から入力してください。",
+          "error"
+        );
+        return;
+      }
+
+      saveButton.disabled = true;
+      saveButton.textContent = "保存しています…";
+
+      try {
+        for (const image of currentImages) {
+          if (image.isPendingUpload) {
+            const uploaded = await uploadImageToCloudinary(image.file);
+            image.url = uploaded.url;
+            image.publicId = uploaded.publicId;
+            image.isPendingUpload = false;
+            image.file = null;
+          }
+        }
+
+        const imageUrls = currentImages.map(function(image) {
+          return image.url;
+        });
+
+        const imagePublicIds = currentImages.map(function(image) {
+          return image.publicId;
+        });
+
+        const documentData = {
+          title: title,
+          content: content,
+          regionName: regionName,
+          targetAreas: targetAreas,
+          imageUrls: imageUrls,
+          imagePublicIds: imagePublicIds,
+          websiteUrl: safeWebsiteUrl,
+          sortOrder: sortOrderValue,
+          isPublished: isPublished,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        if (editingDocumentId) {
+          await window.machinauDb
+            .collection("regionRecommendations")
+            .doc(editingDocumentId)
+            .update(documentData);
+
+          showFormMessage("更新しました。", "success");
+        } else {
+          documentData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+
+          await window.machinauDb
+            .collection("regionRecommendations")
+            .add(documentData);
+
+          showFormMessage("作成しました。", "success");
+        }
+
+        resetForm();
+        await loadArticles();
+      } catch (error) {
+        console.error("保存に失敗しました", error);
+        showFormMessage("保存できませんでした。時間をおいて再度お試しください。", "error");
+      } finally {
+        saveButton.disabled = false;
+        saveButton.textContent = editingDocumentId ? "更新する" : "保存する";
+      }
+    });
+
+    loginForm.addEventListener("submit", async function(event) {
+      event.preventDefault();
+
+      clearLoginMessage();
+
+      const email = document.getElementById("adminEmail").value.trim().toLowerCase();
+      const password = document.getElementById("adminPassword").value;
+
+      if (email !== ADMIN_EMAIL.toLowerCase()) {
+        showLoginMessage("このメールアドレスには管理者権限がありません。", "error");
+        return;
+      }
+
+      loginButton.disabled = true;
+      loginButton.textContent = "ログインしています…";
+
+      try {
+        await firebase.auth().signInWithEmailAndPassword(email, password);
+      } catch (error) {
+        console.error("❌ 管理者ログインに失敗しました", error);
+        showLoginMessage("ログインできませんでした。メールアドレスとパスワードを確認してください。", "error");
+      } finally {
+        loginButton.disabled = false;
+        loginButton.textContent = "管理画面へログイン";
+      }
+    });
+
+    buildAreaCheckboxes();
+
+    // admin.htmlの管理者判定と同一パターン。Firebase Anonymous Authの
+    // ユーザーはemailを持たないため、この判定で自動的に非管理者として
+    // 扱われる(request.auth != null だけでは判定しない)。
+    firebase.auth().onAuthStateChanged(async function(user) {
+      clearLoginMessage();
+
+      if (user && user.email && user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+        loginPanel.style.display = "none";
+        adminArea.classList.add("visible");
+
+        resetForm();
+        await loadArticles();
+        return;
+      }
+
+      if (user) {
+        try {
+          await firebase.auth().signOut();
+        } catch (error) {
+          console.error("管理者以外のユーザーをログアウトできませんでした", error);
+        }
+
+        showLoginMessage("このアカウントには管理者権限がありません。", "error");
+      }
+
+      loginPanel.style.display = "block";
+      adminArea.classList.remove("visible");
+    });
+  </script>
+
+</body>
+</html>
