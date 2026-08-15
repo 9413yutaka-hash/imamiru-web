@@ -270,6 +270,21 @@
         📍 今いる場所の近くを地図で見る
       </h2>
       <div id="google-map"></div>
+
+      <button
+        id="toiletSearchButton"
+        class="location-button"
+        type="button"
+        style="margin-top: 12px; width: 100%;"
+        onclick="searchNearbyToilets()"
+      >
+        🚻 近くのトイレを探す
+      </button>
+
+      <p
+        id="toiletSearchMessage"
+        style="margin-top: 8px; display:none; font-size: 13px; color: var(--navy);"
+      ></p>
     </section>
 
     <section class="flash-banner">
@@ -593,7 +608,7 @@
   <!-- トップページの動き -->
   <script src="app.js"></script>
 <script
-  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyC7LLuNBYIXKT1YcrIaiuwyFssKQyMMjkU&callback=initGoogleMap"
+  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyC7LLuNBYIXKT1YcrIaiuwyFssKQyMMjkU&libraries=places&callback=initGoogleMap"
   async
   defer
 ></script>

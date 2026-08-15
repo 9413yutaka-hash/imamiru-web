@@ -67,6 +67,12 @@ let shopMarkers = [];
 let shopInfoWindow = null;
 let currentLocationMarker = null;
 
+let toiletMarkers = [];
+let lastToiletSearchLatitude = null;
+let lastToiletSearchLongitude = null;
+let lastToiletSearchAt = 0;
+let lastToiletPlaces = [];
+
 let expiryDisplayRefreshTimerId = null;
 
 function escapeHtml(text) {
@@ -5108,5 +5114,344 @@ function showCurrentLocationMarker(
       "現在地マーカーの表示に失敗しました：",
       error
     );
+  }
+}
+
+
+function clearToiletMarkers() {
+  toiletMarkers.forEach(
+    function(marker) {
+      marker.setMap(null);
+    }
+  );
+
+  toiletMarkers = [];
+}
+
+
+function showToiletInfoWindow(
+  toiletName,
+  toiletDistanceKm,
+  toiletMapUrl,
+  marker
+) {
+  if (
+    !googleMapInstance ||
+    !shopInfoWindow
+  ) {
+    return;
+  }
+
+  const infoWindowHtml = `
+    <div style="min-width:180px; max-width:220px;">
+      <strong style="display:block; margin-bottom:4px;">
+        🚻 ${escapeHtml(toiletName)}
+      </strong>
+      <p style="margin:0 0 8px; font-size:13px; color:#444;">
+        現在地から ${escapeHtml(formatDistance(toiletDistanceKm))}
+      </p>
+      ${
+        toiletMapUrl
+          ? `
+            <a
+              href="${escapeHtml(toiletMapUrl)}"
+              target="_blank"
+              rel="noopener noreferrer"
+              style="
+                display:block;
+                text-align:center;
+                padding:6px 10px;
+                border-radius:6px;
+                background:#0788c9;
+                color:#fff;
+                font-weight:700;
+                text-decoration:none;
+              "
+            >
+              Google Mapsで開く
+            </a>
+          `
+          : ""
+      }
+    </div>
+  `;
+
+  shopInfoWindow.setContent(
+    infoWindowHtml
+  );
+
+  shopInfoWindow.open(
+    googleMapInstance,
+    marker
+  );
+}
+
+
+// 検索結果(Placeの配列)から距離を計算してソートし、
+// トイレ専用マーカーとして地図へ描画する。
+// 店舗マーカー(shopMarkers)・現在地マーカーには一切触れない。
+function renderToiletMarkers(
+  toiletPlaces
+) {
+  const toiletMessage =
+    document.getElementById(
+      "toiletSearchMessage"
+    );
+
+  if (!googleMapInstance) {
+    return;
+  }
+
+  clearToiletMarkers();
+
+  if (toiletPlaces.length === 0) {
+    if (toiletMessage) {
+      toiletMessage.textContent =
+        "半径1km以内にトイレ情報が見つかりませんでした。";
+
+      toiletMessage.style.display =
+        "block";
+    }
+
+    return;
+  }
+
+  const toiletsWithDistance =
+    toiletPlaces
+      .filter(
+        function(place) {
+          return !!place.location;
+        }
+      )
+      .map(
+        function(place) {
+          const placeLatitude =
+            place.location.lat();
+
+          const placeLongitude =
+            place.location.lng();
+
+          return {
+            place: place,
+            latitude: placeLatitude,
+            longitude: placeLongitude,
+
+            distanceKm:
+              calculateDistance(
+                userLatitude,
+                userLongitude,
+                placeLatitude,
+                placeLongitude
+              )
+          };
+        }
+      )
+      .sort(
+        function(firstToilet, secondToilet) {
+          return (
+            firstToilet.distanceKm -
+            secondToilet.distanceKm
+          );
+        }
+      );
+
+  toiletsWithDistance.forEach(
+    function(toiletEntry) {
+      const toiletName =
+        toiletEntry.place.displayName ||
+        "トイレ";
+
+      const toiletMapUrl =
+        toiletEntry.place.googleMapsURI ||
+        createGoogleMapUrl(
+          toiletEntry.latitude,
+          toiletEntry.longitude,
+          "",
+          toiletName
+        );
+
+      const marker =
+        new google.maps.Marker({
+          position: {
+            lat: toiletEntry.latitude,
+            lng: toiletEntry.longitude
+          },
+
+          map: googleMapInstance,
+          title: toiletName,
+
+          label: {
+            text: "🚻",
+            fontSize: "18px"
+          }
+        });
+
+      marker.addListener(
+        "click",
+        function() {
+          showToiletInfoWindow(
+            toiletName,
+            toiletEntry.distanceKm,
+            toiletMapUrl,
+            marker
+          );
+        }
+      );
+
+      toiletMarkers.push(
+        marker
+      );
+    }
+  );
+
+  if (toiletMessage) {
+    toiletMessage.textContent =
+      "近くのトイレ " +
+      toiletsWithDistance.length +
+      "件が見つかりました。";
+
+    toiletMessage.style.display =
+      "block";
+  }
+}
+
+
+// 「🚻 近くのトイレを探す」ボタンから呼び出される。
+// ユーザー操作時のみPlaces API (New)のNearby Searchを実行する(自動検索はしない)。
+// 直近3分以内・直近検索地点から300m以内の場合はAPIを再呼び出しせず、
+// メモリ上に保持したlastToiletPlacesをそのまま再描画する(連打・料金対策)。
+async function searchNearbyToilets() {
+  const toiletButton =
+    document.getElementById(
+      "toiletSearchButton"
+    );
+
+  const toiletMessage =
+    document.getElementById(
+      "toiletSearchMessage"
+    );
+
+  if (
+    !toiletButton ||
+    !toiletMessage
+  ) {
+    return;
+  }
+
+  if (
+    !Number.isFinite(userLatitude) ||
+    !Number.isFinite(userLongitude)
+  ) {
+    toiletMessage.textContent =
+      "先に現在地を取得してください。";
+
+    toiletMessage.style.display =
+      "block";
+
+    return;
+  }
+
+  const nowTimestamp =
+    Date.now();
+
+  const isCacheStillValid =
+    lastToiletSearchAt > 0 &&
+    (nowTimestamp - lastToiletSearchAt) < (3 * 60 * 1000) &&
+    Number.isFinite(lastToiletSearchLatitude) &&
+    Number.isFinite(lastToiletSearchLongitude) &&
+    (
+      calculateDistance(
+        userLatitude,
+        userLongitude,
+        lastToiletSearchLatitude,
+        lastToiletSearchLongitude
+      ) * 1000
+    ) < 300;
+
+  if (isCacheStillValid) {
+    renderToiletMarkers(
+      lastToiletPlaces
+    );
+
+    return;
+  }
+
+  toiletButton.disabled =
+    true;
+
+  toiletMessage.textContent =
+    "近くのトイレを検索しています…";
+
+  toiletMessage.style.display =
+    "block";
+
+  try {
+    const { Place } =
+      await google.maps.importLibrary(
+        "places"
+      );
+
+    const searchRequest = {
+      fields: [
+        "displayName",
+        "location",
+        "googleMapsURI"
+      ],
+
+      locationRestriction: {
+        center: {
+          lat: userLatitude,
+          lng: userLongitude
+        },
+
+        radius: 1000
+      },
+
+      includedTypes: [
+        "public_bathroom"
+      ],
+
+      maxResultCount: 10
+    };
+
+    const { places } =
+      await Place.searchNearby(
+        searchRequest
+      );
+
+    const toiletPlaces =
+      Array.isArray(places)
+        ? places
+        : [];
+
+    lastToiletSearchLatitude =
+      userLatitude;
+
+    lastToiletSearchLongitude =
+      userLongitude;
+
+    lastToiletSearchAt =
+      Date.now();
+
+    lastToiletPlaces =
+      toiletPlaces;
+
+    renderToiletMarkers(
+      toiletPlaces
+    );
+  } catch (error) {
+    console.error(
+      "トイレ検索に失敗しました：",
+      error
+    );
+
+    toiletMessage.textContent =
+      "トイレ情報の取得に失敗しました。しばらくしてから再度お試しください。";
+
+    toiletMessage.style.display =
+      "block";
+  } finally {
+    toiletButton.disabled =
+      false;
   }
 }
