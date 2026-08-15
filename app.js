@@ -3943,43 +3943,6 @@ function getSuggestionAreaPriorityRank(
 }
 
 
-// 「マチナウからの提案」の通常候補(安全情報ではない候補)からのみ除外する、
-// 行政・住民向け手続き系お知らせのキーワード。
-// shopMatchesFlashBannerKeywords()による安全最優先判定より後にのみ適用し、
-// 安全情報の判定・表示には一切影響させない。
-// 「税」「募集」「申請」は単独では使わない
-// (「免税店」等の旅行者向け情報や、イベント参加募集まで誤って除外するため)。
-const SUGGESTION_EXCLUDE_KEYWORDS = [
-  "献血",
-  "入札",
-  "議会",
-  "職員採用",
-  "職員募集",
-  "委員募集",
-  "パブリックコメント",
-  "住民票",
-  "戸籍",
-  "納税",
-  "確定申告",
-  "市民検診",
-  "健康診断"
-];
-
-function shopMatchesSuggestionExcludeKeywords(
-  shop
-) {
-  const combinedText =
-    (shop.title || "") +
-    " " +
-    (shop.message || "");
-
-  return SUGGESTION_EXCLUDE_KEYWORDS.some(
-    function(keyword) {
-      return combinedText.includes(keyword);
-    }
-  );
-}
-
 // 「マチナウからの提案」の通常候補内で、同一の地域優先度
 // (getSuggestionAreaPriorityRank)を持つ候補同士だけを並べ替えるための
 // カテゴリー優先度。0:イベント 1:観光・体験 2:その他
@@ -4055,15 +4018,17 @@ function selectSuggestionCandidate() {
     };
   }
 
-  // 安全情報が無い場合だけ、行政・住民向け手続き系お知らせを除外し、
-  // 同じ地域優先度の中でイベント→観光・体験→その他の順に並べ替える。
+  // 安全情報が無い場合だけ、category が「イベント」「観光・体験」の
+  // 投稿だけをホワイトリストとして通常候補にする(「お知らせ」は対象外)。
+  // 同じ地域優先度の中ではイベント→観光・体験の順に並べ替える。
   // nearbyAdminShops自体(地域優先度の並び)は変更しない。
   const normalCandidates =
     nearbyAdminShops
       .filter(
         function(shop) {
-          return !shopMatchesSuggestionExcludeKeywords(
-            shop
+          return (
+            shop.category === "イベント" ||
+            shop.category === "観光・体験"
           );
         }
       )
