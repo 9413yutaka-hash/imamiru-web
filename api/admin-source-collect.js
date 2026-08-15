@@ -1354,6 +1354,248 @@ function sourceMatchesTargetArea(
 }
 
 
+// 位置情報起点収集(mode:"locationCollect")専用のclaim/クールダウン設定。
+// collectionClaimedAt: 収集を試みた瞬間に更新する短期ロック(同時多重
+// リクエスト対策)。collectionSucceededAt: 収集が成功した後だけ更新する
+// 長期クールダウン(RSS/Firestoreへの過度なアクセス防止)。失敗時は
+// collectionSucceededAtを更新しないため、短期ロックが切れ次第すぐに
+// 再試行できる(claimDiscoveredArticle()のstale再クレームと同じ考え方)。
+const SOURCE_COLLECTION_CLAIM_LOCK_MILLISECONDS =
+  2 * 60 * 1000;
+
+const SOURCE_COLLECTION_SUCCESS_COOLDOWN_MILLISECONDS =
+  15 * 60 * 1000;
+
+
+// claimDiscoveredArticle()と同じ考え方で、Firestore transactionにより
+// 同じ情報源への同時リクエストのうち最初の1つだけがcollectionClaimedAtを
+// 更新して収集権を取得する。collectionSucceededAtが長期クールダウン内なら
+// そもそも収集不要のためfalseを返す。
+async function claimSourceForLocationCollection(
+  database,
+  sourceId
+) {
+  const sourceRef =
+    database
+      .collection(
+        "aiSources"
+      )
+      .doc(
+        sourceId
+      );
+
+  return database.runTransaction(
+    async function(transaction) {
+      const snapshot =
+        await transaction.get(
+          sourceRef
+        );
+
+      if (!snapshot.exists) {
+        return false;
+      }
+
+      const data =
+        snapshot.data() ||
+        {};
+
+      const nowMilliseconds =
+        Date.now();
+
+      const succeededAtMillis =
+        data.collectionSucceededAt &&
+        typeof data.collectionSucceededAt.toMillis === "function"
+          ? data.collectionSucceededAt.toMillis()
+          : null;
+
+      if (
+        succeededAtMillis !== null &&
+        (
+          nowMilliseconds -
+          succeededAtMillis
+        ) < SOURCE_COLLECTION_SUCCESS_COOLDOWN_MILLISECONDS
+      ) {
+        return false;
+      }
+
+      const claimedAtMillis =
+        data.collectionClaimedAt &&
+        typeof data.collectionClaimedAt.toMillis === "function"
+          ? data.collectionClaimedAt.toMillis()
+          : null;
+
+      if (
+        claimedAtMillis !== null &&
+        (
+          nowMilliseconds -
+          claimedAtMillis
+        ) < SOURCE_COLLECTION_CLAIM_LOCK_MILLISECONDS
+      ) {
+        return false;
+      }
+
+      transaction.update(
+        sourceRef,
+        {
+          collectionClaimedAt:
+            FieldValue.serverTimestamp()
+        }
+      );
+
+      return true;
+    }
+  );
+}
+
+
+// 収集(collectFromSource())が例外を投げずに完了した場合だけ呼ぶ。
+// 失敗時はここを呼ばないため、collectionSucceededAtは更新されず、
+// 短期ロック(collectionClaimedAt)が切れ次第すぐに再試行可能になる。
+async function markSourceCollectionSucceeded(
+  database,
+  sourceId
+) {
+  await database
+    .collection(
+      "aiSources"
+    )
+    .doc(
+      sourceId
+    )
+    .update(
+      {
+        collectionSucceededAt:
+          FieldValue.serverTimestamp()
+      }
+    );
+}
+
+
+// mode:"locationCollect"専用。isEnabledかつareaがtargetAreaと完全一致する
+// 情報源だけを対象に、claimSourceForLocationCollection()で収集権を取得できた
+// ものだけ収集する。既存のcollectFromSource()・sourceHasUsableFeedUrl()は
+// 無変更のまま再利用する。近隣地域・沖縄県全域への拡張はPhase1では行わない。
+async function collectFromSourcesForLocationTrigger(
+  database,
+  targetArea
+) {
+  const sourcesSnapshot =
+    await database
+      .collection(
+        "aiSources"
+      )
+      .where(
+        "isEnabled",
+        "==",
+        true
+      )
+      .where(
+        "area",
+        "==",
+        targetArea
+      )
+      .get();
+
+  const results =
+    [];
+
+  for (
+    let sourceIndex = 0;
+    sourceIndex < sourcesSnapshot.docs.length;
+    sourceIndex += 1
+  ) {
+    const sourceDocumentSnapshot =
+      sourcesSnapshot.docs[
+        sourceIndex
+      ];
+
+    const sourceId =
+      sourceDocumentSnapshot.id;
+
+    const sourceData =
+      sourceDocumentSnapshot.data() ||
+      {};
+
+    const sourceName =
+      typeof sourceData.name === "string"
+        ? sourceData.name
+        : "";
+
+    if (
+      !sourceHasUsableFeedUrl(
+        sourceData
+      )
+    ) {
+      results.push(
+        {
+          sourceId: sourceId,
+          sourceName: sourceName,
+          claimed: false,
+          reason: "feedUrl未設定"
+        }
+      );
+
+      continue;
+    }
+
+    const claimed =
+      await claimSourceForLocationCollection(
+        database,
+        sourceId
+      );
+
+    if (!claimed) {
+      results.push(
+        {
+          sourceId: sourceId,
+          sourceName: sourceName,
+          claimed: false,
+          reason: "クールダウン中"
+        }
+      );
+
+      continue;
+    }
+
+    try {
+      const collectionResult =
+        await collectFromSource(
+          database,
+          sourceId
+        );
+
+      await markSourceCollectionSucceeded(
+        database,
+        sourceId
+      );
+
+      results.push(
+        {
+          sourceId: sourceId,
+          sourceName: collectionResult.sourceName,
+          claimed: true,
+          success: true,
+          newItemCount: collectionResult.newItemCount,
+          existingItemCount: collectionResult.existingItemCount
+        }
+      );
+    } catch (collectionError) {
+      results.push(
+        {
+          sourceId: sourceId,
+          sourceName: sourceName,
+          claimed: true,
+          success: false,
+          message: collectionError.message
+        }
+      );
+    }
+  }
+
+  return results;
+}
+
+
 const IMPORTANT_SLOT_INTERVAL_MILLISECONDS =
   15 * 60 * 1000;
 
@@ -2902,6 +3144,18 @@ export default async function handler(
     const app =
       getFirebaseAdminApp();
 
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    // mode:"locationCollect"は一般利用者(匿名認証)専用の第3モード。
+    // cronリクエストとは独立し、管理者メール一致も要求しない。
+    // requestBodyの内容だけで判定し、トークンの種類では判定しない。
+    const isLocationCollectRequest =
+      !isCronRequest &&
+      requestBody.mode === "locationCollect";
+
     if (!isCronRequest) {
       let decodedToken;
 
@@ -2919,32 +3173,91 @@ export default async function handler(
         });
       }
 
-      const decodedEmail =
-        String(
-          decodedToken.email || ""
-        )
-          .toLowerCase();
+      if (!isLocationCollectRequest) {
+        const decodedEmail =
+          String(
+            decodedToken.email || ""
+          )
+            .toLowerCase();
 
-      if (
-        decodedEmail === "" ||
-        decodedEmail !==
-          adminEmail.toLowerCase()
-      ) {
-        return response.status(403).json({
-          success: false,
-          message:
-            "管理者権限がありません。"
-        });
+        if (
+          decodedEmail === "" ||
+          decodedEmail !==
+            adminEmail.toLowerCase()
+        ) {
+          return response.status(403).json({
+            success: false,
+            message:
+              "管理者権限がありません。"
+          });
+        }
       }
     }
 
-    const requestBody =
-      readRequestBody(
-        request
-      );
-
     const database =
       getFirestore(app);
+
+    if (isLocationCollectRequest) {
+      const targetArea =
+        typeof requestBody.targetArea === "string"
+          ? requestBody.targetArea.trim()
+          : "";
+
+      if (targetArea === "") {
+        return response.status(400).json({
+          success: false,
+          message:
+            "targetAreaを指定してください。"
+        });
+      }
+
+      const collectionResults =
+        await collectFromSourcesForLocationTrigger(
+          database,
+          targetArea
+        );
+
+      const hasNewArticles =
+        collectionResults.some(
+          function(result) {
+            return (
+              result.success === true &&
+              typeof result.newItemCount === "number" &&
+              result.newItemCount > 0
+            );
+          }
+        );
+
+      let autoPostSummary =
+        null;
+
+      if (hasNewArticles) {
+        try {
+          autoPostSummary =
+            await runAutoPostForDiscoveredArticles(
+              database,
+              MAX_AUTO_POSTS_PER_RUN
+            );
+        } catch (autoPostError) {
+          console.error(
+            "自動投稿処理エラー：",
+            autoPostError
+          );
+        }
+      }
+
+      return response.status(200).json({
+        success: true,
+        targetArea:
+          targetArea,
+
+        results:
+          collectionResults,
+
+        autoPost:
+          autoPostSummary
+      });
+    }
 
     if (isCronRequest) {
       const priorityTier =

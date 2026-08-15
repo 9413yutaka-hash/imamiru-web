@@ -3935,6 +3935,79 @@ function markShopsLoadedForMachinauSuggestion() {
 }
 
 
+// 既にFirebase Anonymous Authenticationでサインイン済みならそのユーザーの
+// IDトークンをそのまま使い、未サインインの場合のみsignInAnonymously()を呼ぶ。
+// 同じ匿名セッションを使い回すことで、GPS取得のたびに新しい匿名ユーザーを
+// 作らないようにする。
+function getAnonymousIdTokenForLocationCollection() {
+  if (
+    typeof firebase === "undefined" ||
+    !firebase.auth
+  ) {
+    return Promise.reject(
+      new Error(
+        "Firebase Authenticationが利用できません。"
+      )
+    );
+  }
+
+  const auth =
+    firebase.auth();
+
+  const currentUser =
+    auth.currentUser;
+
+  if (currentUser) {
+    return currentUser.getIdToken();
+  }
+
+  return auth
+    .signInAnonymously()
+    .then(
+      function(credential) {
+        return credential.user.getIdToken();
+      }
+    );
+}
+
+// GPSで地域(areaName)が確定した直後に、その地域のaiSourcesだけを対象に
+// 既存の自動AI記者フロー(/api/admin-source-collect)を起動するための
+// 補助的なトリガー。位置情報起点収集はあくまで補助処理であり、
+// 失敗しても現在地表示・天気・地図・マチナウからの提案など、
+// 既存のトップページ機能には一切影響させない(すべてのエラーを握りつぶす)。
+function triggerLocationBasedCollection(
+  areaName
+) {
+  getAnonymousIdTokenForLocationCollection()
+    .then(
+      function(idToken) {
+        return fetch(
+          "/api/admin-source-collect",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer " + idToken
+            },
+            body: JSON.stringify(
+              {
+                mode: "locationCollect",
+                targetArea: areaName
+              }
+            )
+          }
+        );
+      }
+    )
+    .catch(
+      function(error) {
+        // 位置情報起点収集は補助処理のため、失敗しても
+        // 既存のトップページ機能には影響させない
+      }
+    );
+}
+
+
 function getLocation() {
   const locationButton =
     document.getElementById(
@@ -4071,6 +4144,10 @@ function getLocation() {
               userAreaName = areaName;
 
               renderShops();
+
+              triggerLocationBasedCollection(
+                areaName
+              );
             }
 
             if (
