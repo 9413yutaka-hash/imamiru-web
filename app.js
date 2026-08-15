@@ -1118,6 +1118,14 @@ function getCardVisualHtml(
   `;
 }
 
+// api/edit-ad.js の ALLOWED_PAYMENT_METHOD_VALUES と同じ許容値。
+// この3種類以外の値はconvertSubmissionToShop()で読み取り時に除外する。
+const ALLOWED_PAYMENT_METHOD_VALUES = [
+  "cash",
+  "card",
+  "qr"
+];
+
 function convertSubmissionToShop(
   documentSnapshot,
   index
@@ -1294,6 +1302,19 @@ function convertSubmissionToShop(
         data.takeout
       ),
 
+    paymentMethods:
+      Array.isArray(
+        data.paymentMethods
+      )
+        ? data.paymentMethods.filter(
+            function(value) {
+              return ALLOWED_PAYMENT_METHOD_VALUES.includes(
+                value
+              );
+            }
+          )
+        : [],
+
     postType:
       typeof data.postType === "string" &&
       data.postType.trim() !== ""
@@ -1310,6 +1331,66 @@ function convertSubmissionToShop(
         ? data.area.trim()
         : ""
   };
+}
+
+// shop.paymentMethods(convertSubmissionToShop()で許容値だけに絞り込み済み)から
+// カード・詳細モーダル共通の表示用バッジ文言を組み立てる。
+// paymentMethodsが空の場合は何も返さない(支払い情報なしとして扱う)。
+// cashのみが選ばれている場合だけ「現金のみ」を返し、
+// card/qrのいずれかと併用されている場合は「現金のみ」を出さない。
+function getPaymentBadgeTexts(
+  shop
+) {
+  if (
+    !Array.isArray(
+      shop.paymentMethods
+    ) ||
+    shop.paymentMethods.length === 0
+  ) {
+    return [];
+  }
+
+  const hasCash =
+    shop.paymentMethods.includes(
+      "cash"
+    );
+
+  const hasCard =
+    shop.paymentMethods.includes(
+      "card"
+    );
+
+  const hasQr =
+    shop.paymentMethods.includes(
+      "qr"
+    );
+
+  const badgeTexts =
+    [];
+
+  if (hasCard) {
+    badgeTexts.push(
+      "💳 カードOK"
+    );
+  }
+
+  if (hasQr) {
+    badgeTexts.push(
+      "📱 QR決済OK"
+    );
+  }
+
+  if (
+    hasCash &&
+    !hasCard &&
+    !hasQr
+  ) {
+    badgeTexts.push(
+      "💴 現金のみ"
+    );
+  }
+
+  return badgeTexts;
 }
 
 const CATEGORY_FILTER_ALIASES = {
@@ -1993,6 +2074,20 @@ function renderShops() {
                       `
                       : ""
                   }
+
+                  ${getPaymentBadgeTexts(
+                    shop
+                  )
+                    .map(
+                      function(paymentBadgeText) {
+                        return `
+                          <span class="info-chip">
+                            ${paymentBadgeText}
+                          </span>
+                        `;
+                      }
+                    )
+                    .join("")}
 
                 </div>
 
@@ -3171,6 +3266,19 @@ function openShopModal(
   ) {
     modalText +=
       "<br><br>🥡 テイクアウトOK";
+  }
+
+  const modalPaymentBadgeTexts =
+    getPaymentBadgeTexts(
+      selectedShop
+    );
+
+  if (modalPaymentBadgeTexts.length > 0) {
+    modalText +=
+      "<br><br>" +
+      modalPaymentBadgeTexts.join(
+        "　"
+      );
   }
 
   if (

@@ -174,6 +174,13 @@ const ALLOWED_CATEGORIES = [
 ];
 
 
+const ALLOWED_PAYMENT_METHOD_VALUES = [
+  "cash",
+  "card",
+  "qr"
+];
+
+
 const FIELD_MAX_LENGTHS = {
   shopName: 60,
   title: 50,
@@ -309,6 +316,26 @@ function validateEditableFields(
   const takeout =
     requestBody.takeout === true;
 
+  const rawPaymentMethods =
+    Array.isArray(
+      requestBody.paymentMethods
+    )
+      ? requestBody.paymentMethods
+      : [];
+
+  const paymentMethods =
+    Array.from(
+      new Set(
+        rawPaymentMethods.filter(
+          function(value) {
+            return ALLOWED_PAYMENT_METHOD_VALUES.includes(
+              value
+            );
+          }
+        )
+      )
+    );
+
   return {
     shopName: shopName,
     title: title,
@@ -316,7 +343,8 @@ function validateEditableFields(
     content: content,
     address: address,
     websiteUrl: websiteUrl,
-    takeout: takeout
+    takeout: takeout,
+    paymentMethods: paymentMethods
   };
 }
 
@@ -644,7 +672,14 @@ export default async function handler(
             currentData.websiteUrl || "",
 
           takeout:
-            currentData.takeout === true
+            currentData.takeout === true,
+
+          paymentMethods:
+            Array.isArray(
+              currentData.paymentMethods
+            )
+              ? currentData.paymentMethods
+              : []
         }
       });
     }
@@ -725,6 +760,9 @@ export default async function handler(
 
       takeout:
         editableFields.takeout,
+
+      paymentMethods:
+        editableFields.paymentMethods,
 
       latitude:
         latitude,

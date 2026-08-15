@@ -1458,6 +1458,63 @@
 
         <div class="form-group">
 
+          <div class="form-label">
+            支払い方法
+          </div>
+
+          <div class="agreement-box">
+
+            <label class="agreement-label">
+
+              <input
+                id="paymentCash"
+                type="checkbox"
+              >
+
+              <span class="agreement-text">
+                現金
+              </span>
+
+            </label>
+
+            <label
+              class="agreement-label"
+              style="margin-top: 10px;"
+            >
+
+              <input
+                id="paymentCard"
+                type="checkbox"
+              >
+
+              <span class="agreement-text">
+                クレジットカード
+              </span>
+
+            </label>
+
+            <label
+              class="agreement-label"
+              style="margin-top: 10px;"
+            >
+
+              <input
+                id="paymentQr"
+                type="checkbox"
+              >
+
+              <span class="agreement-text">
+                QR／スマホ決済
+              </span>
+
+            </label>
+
+          </div>
+
+        </div>
+
+        <div class="form-group">
+
           <label
             class="form-label"
             for="businessStartTime"
@@ -1771,6 +1828,21 @@
     const takeoutInput =
       document.getElementById(
         "takeout"
+      );
+
+    const paymentCashInput =
+      document.getElementById(
+        "paymentCash"
+      );
+
+    const paymentCardInput =
+      document.getElementById(
+        "paymentCard"
+      );
+
+    const paymentQrInput =
+      document.getElementById(
+        "paymentQr"
       );
 
     const agreementInput =
@@ -2100,6 +2172,15 @@
         submitting;
 
       takeoutInput.disabled =
+        submitting;
+
+      paymentCashInput.disabled =
+        submitting;
+
+      paymentCardInput.disabled =
+        submitting;
+
+      paymentQrInput.disabled =
         submitting;
 
       agreementInput.disabled =
@@ -3262,6 +3343,28 @@ function requestCurrentLocationForPost() {
               60 *
               1000
           );
+
+        const paymentMethods =
+          [];
+
+        if (paymentCashInput.checked) {
+          paymentMethods.push(
+            "cash"
+          );
+        }
+
+        if (paymentCardInput.checked) {
+          paymentMethods.push(
+            "card"
+          );
+        }
+
+        if (paymentQrInput.checked) {
+          paymentMethods.push(
+            "qr"
+          );
+        }
+
         const publicationNumber =
           String(
             crypto.getRandomValues(
@@ -3395,6 +3498,9 @@ longitude:
 
           takeout:
             takeoutInput.checked,
+
+          paymentMethods:
+            paymentMethods,
 
           imageUrls:
             imageUrls,

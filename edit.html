@@ -1094,6 +1094,63 @@
 
         </div>
 
+        <div class="form-group">
+
+          <div class="form-label">
+            支払い方法
+          </div>
+
+          <div class="agreement-box">
+
+            <label class="agreement-label">
+
+              <input
+                id="paymentCash"
+                type="checkbox"
+              >
+
+              <span class="agreement-text">
+                現金
+              </span>
+
+            </label>
+
+            <label
+              class="agreement-label"
+              style="margin-top: 10px;"
+            >
+
+              <input
+                id="paymentCard"
+                type="checkbox"
+              >
+
+              <span class="agreement-text">
+                クレジットカード
+              </span>
+
+            </label>
+
+            <label
+              class="agreement-label"
+              style="margin-top: 10px;"
+            >
+
+              <input
+                id="paymentQr"
+                type="checkbox"
+              >
+
+              <span class="agreement-text">
+                QR／スマホ決済
+              </span>
+
+            </label>
+
+          </div>
+
+        </div>
+
         <button
           id="saveButton"
           class="save-button"
@@ -1215,6 +1272,21 @@
     const takeoutInput =
       document.getElementById(
         "takeout"
+      );
+
+    const paymentCashInput =
+      document.getElementById(
+        "paymentCash"
+      );
+
+    const paymentCardInput =
+      document.getElementById(
+        "paymentCard"
+      );
+
+    const paymentQrInput =
+      document.getElementById(
+        "paymentQr"
       );
 
     const saveButton =
@@ -1430,6 +1502,28 @@
 
       takeoutInput.checked =
         submission.takeout === true;
+
+      const submissionPaymentMethods =
+        Array.isArray(
+          submission.paymentMethods
+        )
+          ? submission.paymentMethods
+          : [];
+
+      paymentCashInput.checked =
+        submissionPaymentMethods.includes(
+          "cash"
+        );
+
+      paymentCardInput.checked =
+        submissionPaymentMethods.includes(
+          "card"
+        );
+
+      paymentQrInput.checked =
+        submissionPaymentMethods.includes(
+          "qr"
+        );
     }
 
 
@@ -1594,6 +1688,15 @@
         submitting;
 
       takeoutInput.disabled =
+        submitting;
+
+      paymentCashInput.disabled =
+        submitting;
+
+      paymentCardInput.disabled =
+        submitting;
+
+      paymentQrInput.disabled =
         submitting;
 
       saveButton.disabled =
@@ -1794,6 +1897,27 @@
         );
       }
 
+      const paymentMethods =
+        [];
+
+      if (paymentCashInput.checked) {
+        paymentMethods.push(
+          "cash"
+        );
+      }
+
+      if (paymentCardInput.checked) {
+        paymentMethods.push(
+          "card"
+        );
+      }
+
+      if (paymentQrInput.checked) {
+        paymentMethods.push(
+          "qr"
+        );
+      }
+
       return {
         shopName: shopName,
         title: title,
@@ -1801,7 +1925,8 @@
         content: content,
         address: address,
         websiteUrl: websiteUrl,
-        takeout: takeoutInput.checked
+        takeout: takeoutInput.checked,
+        paymentMethods: paymentMethods
       };
     }
 
@@ -1883,7 +2008,10 @@
                       formData.websiteUrl,
 
                     takeout:
-                      formData.takeout
+                      formData.takeout,
+
+                    paymentMethods:
+                      formData.paymentMethods
                   }
                 )
             }
@@ -1947,6 +2075,15 @@
           true;
 
         takeoutInput.disabled =
+          true;
+
+        paymentCashInput.disabled =
+          true;
+
+        paymentCardInput.disabled =
+          true;
+
+        paymentQrInput.disabled =
           true;
 
         saveButton.disabled =
