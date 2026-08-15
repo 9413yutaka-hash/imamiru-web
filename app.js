@@ -3700,10 +3700,117 @@ let generatedMachinauSuggestionGpsSessionId =
   null;
 
 
-// getVisibleShops()・getAiAreaPriorityRank()・shopMatchesFlashBannerKeywords()は
-// 一切変更せず、その結果を読むだけで「マチナウからの提案」の対象を選ぶ。
+// 「マチナウからの提案」専用の広域グループ判定に使う41市町村→8広域グループ
+// 対応表。api/admin-source-collect.js の OKINAWA_MUNICIPALITY_TO_REGION_NAME
+// と内容を完全に一致させること。記事単位area判定用のOKINAWA_MUNICIPALITY_NAMES
+// (サーバー側、変更禁止)とは別物で、クライアント・サーバー間でコードを
+// 共有する仕組みがないため、同じ内容をこちらにも複製している。
+const OKINAWA_MUNICIPALITY_TO_REGION_NAME = {
+  // 沖縄本島南部
+  "那覇市": "沖縄本島南部",
+  "糸満市": "沖縄本島南部",
+  "豊見城市": "沖縄本島南部",
+  "南城市": "沖縄本島南部",
+  "与那原町": "沖縄本島南部",
+  "南風原町": "沖縄本島南部",
+  "八重瀬町": "沖縄本島南部",
+
+  // 沖縄本島中部
+  "宜野湾市": "沖縄本島中部",
+  "浦添市": "沖縄本島中部",
+  "沖縄市": "沖縄本島中部",
+  "うるま市": "沖縄本島中部",
+  "嘉手納町": "沖縄本島中部",
+  "北谷町": "沖縄本島中部",
+  "西原町": "沖縄本島中部",
+  "読谷村": "沖縄本島中部",
+  "北中城村": "沖縄本島中部",
+  "中城村": "沖縄本島中部",
+
+  // 沖縄本島北部
+  "名護市": "沖縄本島北部",
+  "本部町": "沖縄本島北部",
+  "金武町": "沖縄本島北部",
+  "国頭村": "沖縄本島北部",
+  "大宜味村": "沖縄本島北部",
+  "東村": "沖縄本島北部",
+  "今帰仁村": "沖縄本島北部",
+  "恩納村": "沖縄本島北部",
+  "宜野座村": "沖縄本島北部",
+  "伊江村": "沖縄本島北部",
+
+  // 慶良間
+  "渡嘉敷村": "慶良間",
+  "座間味村": "慶良間",
+
+  // 久米島
+  "久米島町": "久米島",
+
+  // 宮古
+  "宮古島市": "宮古",
+  "多良間村": "宮古",
+
+  // 八重山
+  "石垣市": "八重山",
+  "竹富町": "八重山",
+  "与那国町": "八重山",
+
+  // その他離島
+  "粟国村": "その他離島",
+  "渡名喜村": "その他離島",
+  "南大東村": "その他離島",
+  "北大東村": "その他離島",
+  "伊平屋村": "その他離島",
+  "伊是名村": "その他離島"
+};
+
+
+// 「マチナウからの提案」専用の地域優先度判定。既存のgetAiAreaPriorityRank()
+// (無変更、意味も変えない)とは完全に独立した新しい関数で、
+// selectSuggestionCandidate()だけが使う。getVisibleShops()・通常カード一覧の
+// 並び順には一切使わない。
+// 0:市町村完全一致 1:userAreaNameが属する広域グループ 2:沖縄県全域
+// 3:それ以外(空欄・未設定を含む)
+// userAreaNameがnull/空文字の場合は誤って広域一致させないよう常に3を返す。
+function getSuggestionAreaPriorityRank(
+  shop
+) {
+  if (
+    shop.postType !== "admin" ||
+    userAreaName === null ||
+    userAreaName === ""
+  ) {
+    return 3;
+  }
+
+  if (shop.area === userAreaName) {
+    return 0;
+  }
+
+  const regionNameForUserArea =
+    OKINAWA_MUNICIPALITY_TO_REGION_NAME[
+      userAreaName
+    ];
+
+  if (
+    typeof regionNameForUserArea === "string" &&
+    shop.area === regionNameForUserArea
+  ) {
+    return 1;
+  }
+
+  if (shop.area === AI_AUTO_POST_WIDE_AREA_NAME) {
+    return 2;
+  }
+
+  return 3;
+}
+
+
+// getVisibleShops()・shopMatchesFlashBannerKeywords()は一切変更せず、
+// その結果を読むだけで「マチナウからの提案」の対象を選ぶ。
 // 安全・交通・ライフライン該当の投稿があっても、現在地と無関係な地域
-// (getAiAreaPriorityRankが2を返す投稿)は安全最優先候補にしない。
+// (getSuggestionAreaPriorityRankが3を返す投稿)は安全最優先候補にしない。
 function selectSuggestionCandidate() {
   const adminShops =
     getVisibleShops().filter(
@@ -3717,19 +3824,28 @@ function selectSuggestionCandidate() {
   }
 
   const nearbyAdminShops =
-    adminShops.filter(
-      function(shop) {
-        const areaPriorityRank =
-          getAiAreaPriorityRank(
-            shop
+    adminShops
+      .filter(
+        function(shop) {
+          return (
+            getSuggestionAreaPriorityRank(
+              shop
+            ) <= 2
           );
-
-        return (
-          areaPriorityRank === 0 ||
-          areaPriorityRank === 1
-        );
-      }
-    );
+        }
+      )
+      .sort(
+        function(firstShop, secondShop) {
+          return (
+            getSuggestionAreaPriorityRank(
+              firstShop
+            ) -
+            getSuggestionAreaPriorityRank(
+              secondShop
+            )
+          );
+        }
+      );
 
   const safetyShop =
     nearbyAdminShops.find(
