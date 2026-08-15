@@ -109,6 +109,19 @@
       text-decoration: none;
     }
 
+    .region-recommendation-read-more-button {
+      display: inline-block;
+      background: none;
+      border: none;
+      padding: 0;
+      margin: 0 0 8px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--blue);
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
     .region-recommendation-switch-row {
       display: flex;
       flex-wrap: wrap;
@@ -216,60 +229,6 @@
         近くのお店、今日だけのイベント、旅先の<span class="hero-description-emphasis">偶然の寄り道</span>。
         今の沖縄が、ひと目でわかる。
       </p>
-
-      <div class="hero-actions">
-
-        <button
-          class="hero-button primary-button"
-          type="button"
-          onclick="scrollToShops()"
-        >
-          🔍 近くの情報を見る
-        </button>
-
-        <button
-          class="hero-button secondary-button"
-          type="button"
-          onclick="getLocation()"
-        >
-          📍 現在地を使う
-        </button>
-
-      </div>
-
-      <div class="hero-mini-info">
-
-        <div class="mini-info">
-          <span class="mini-info-label">
-            今日の掲載情報
-          </span>
-
-          <span class="mini-info-value">
-            0件
-          </span>
-        </div>
-
-        <div class="mini-info">
-          <span class="mini-info-label">
-            今、配信中
-          </span>
-
-          <span class="mini-info-value">
-            0件
-          </span>
-        </div>
-
-        <div class="mini-info">
-          <span class="mini-info-label">
-            対応エリア
-          </span>
-
-          <span class="mini-info-value">
-            沖縄・那覇
-          </span>
-        </div>
-
-      </div>
 
     </div>
   </section>
@@ -389,104 +348,6 @@
         </button>
 
       </div>
-
-    </section>
-
-    <section
-      id="regionRecommendationSection"
-      class="region-recommendation-section"
-      style="display:none;"
-    >
-
-      <h2 id="regionRecommendationHeading">
-        📍 この地域のおすすめ
-      </h2>
-
-      <div id="regionRecommendationList"></div>
-
-      <button
-        id="regionRecommendationMoreButton"
-        class="location-button"
-        type="button"
-        style="display:none; width: 100%; margin-top: 4px;"
-      >
-        もっと見る
-      </button>
-
-      <div class="region-recommendation-switch-row">
-
-        <button
-          id="regionRecommendationOtherAreaButton"
-          class="secondary-link-button"
-          type="button"
-        >
-          ほかの地域を見る
-        </button>
-
-        <button
-          id="regionRecommendationBackToCurrentButton"
-          class="secondary-link-button"
-          type="button"
-          style="display:none;"
-        >
-          現在地のおすすめに戻る
-        </button>
-
-      </div>
-
-      <div
-        id="regionRecommendationAreaPicker"
-        class="region-recommendation-area-picker"
-        style="display:none;"
-      ></div>
-
-    </section>
-
-    <section class="map-section">
-      <h2>
-        📍 今いる場所の近くを地図で見る
-      </h2>
-      <div id="google-map"></div>
-
-      <button
-        id="toiletSearchButton"
-        class="location-button"
-        type="button"
-        style="margin-top: 12px; width: 100%;"
-        onclick="searchNearbyToilets()"
-      >
-        🚻 近くのトイレを探す
-      </button>
-
-      <p
-        id="toiletSearchMessage"
-        style="margin-top: 8px; display:none; font-size: 13px; color: var(--navy);"
-      ></p>
-    </section>
-
-    <section class="flash-banner">
-
-      <span class="flash-label">
-        ⚡ ゲリラ情報
-      </span>
-
-      <h2 id="flashBannerTitle">
-        今日だけの沖縄を、見逃さない。
-      </h2>
-
-      <p id="flashBannerMessage">
-        タイムセールや限定イベントなど、
-        今しか出会えない情報を配信します。
-      </p>
-
-      <button
-        id="flashBannerDetailButton"
-        class="flash-banner-detail-button"
-        type="button"
-        style="display:none;"
-      >
-        詳しく見る
-      </button>
 
     </section>
 
@@ -616,6 +477,104 @@
         </div>
 
       </div>
+
+    </section>
+
+    <section
+      id="regionRecommendationSection"
+      class="region-recommendation-section"
+      style="display:none;"
+    >
+
+      <h2 id="regionRecommendationHeading">
+        📍 この地域のおすすめ
+      </h2>
+
+      <div id="regionRecommendationList"></div>
+
+      <button
+        id="regionRecommendationMoreButton"
+        class="location-button"
+        type="button"
+        style="display:none; width: 100%; margin-top: 4px;"
+      >
+        もっと見る
+      </button>
+
+      <div class="region-recommendation-switch-row">
+
+        <button
+          id="regionRecommendationOtherAreaButton"
+          class="secondary-link-button"
+          type="button"
+        >
+          ほかの地域を見る
+        </button>
+
+        <button
+          id="regionRecommendationBackToCurrentButton"
+          class="secondary-link-button"
+          type="button"
+          style="display:none;"
+        >
+          現在地のおすすめに戻る
+        </button>
+
+      </div>
+
+      <div
+        id="regionRecommendationAreaPicker"
+        class="region-recommendation-area-picker"
+        style="display:none;"
+      ></div>
+
+    </section>
+
+    <section class="map-section">
+      <h2>
+        📍 今いる場所の近くを地図で見る
+      </h2>
+      <div id="google-map"></div>
+
+      <button
+        id="toiletSearchButton"
+        class="location-button"
+        type="button"
+        style="margin-top: 12px; width: 100%;"
+        onclick="searchNearbyToilets()"
+      >
+        🚻 近くのトイレを探す
+      </button>
+
+      <p
+        id="toiletSearchMessage"
+        style="margin-top: 8px; display:none; font-size: 13px; color: var(--navy);"
+      ></p>
+    </section>
+
+    <section class="flash-banner">
+
+      <span class="flash-label">
+        ⚡ ゲリラ情報
+      </span>
+
+      <h2 id="flashBannerTitle">
+        今日だけの沖縄を、見逃さない。
+      </h2>
+
+      <p id="flashBannerMessage">
+        タイムセールや限定イベントなど、
+        今しか出会えない情報を配信します。
+      </p>
+
+      <button
+        id="flashBannerDetailButton"
+        class="flash-banner-detail-button"
+        type="button"
+        style="display:none;"
+      >
+        詳しく見る
+      </button>
 
     </section>
 

@@ -5534,6 +5534,12 @@ const REGION_RECOMMENDATION_INITIAL_COUNT =
 
 // 1記事分のカードHTMLを組み立てる。画像が無い場合はimg要素自体を出さず、
 // websiteUrlが無い/安全でない場合はリンクを出さない(getSafeWebsiteUrl()を再利用)。
+// トップカードの本文だけを短文化するための上限。Firestoreへの保存内容
+// (article.content、全文)は一切変更しない。表示だけの切り詰め。
+const REGION_RECOMMENDATION_CONTENT_PREVIEW_LENGTH =
+  150;
+
+
 function buildRegionRecommendationCardHtml(
   article
 ) {
@@ -5588,6 +5594,33 @@ function buildRegionRecommendationCardHtml(
       `
       : "";
 
+  const fullContent =
+    article.content || "";
+
+  const needsReadMore =
+    fullContent.length >
+    REGION_RECOMMENDATION_CONTENT_PREVIEW_LENGTH;
+
+  const shortContent =
+    needsReadMore
+      ? fullContent.slice(
+          0,
+          REGION_RECOMMENDATION_CONTENT_PREVIEW_LENGTH
+        ) + "…"
+      : fullContent;
+
+  const readMoreButtonHtml =
+    needsReadMore
+      ? `
+        <button
+          type="button"
+          class="region-recommendation-read-more-button"
+        >
+          続きを読む
+        </button>
+      `
+      : "";
+
   return `
     <div class="region-recommendation-card">
       ${imageHtml}
@@ -5596,13 +5629,83 @@ function buildRegionRecommendationCardHtml(
         <p class="region-recommendation-card-title">
           ${escapeHtml(article.title || "")}
         </p>
-        <p class="region-recommendation-card-content">
-          ${escapeHtml(article.content || "")}
+        <p class="region-recommendation-card-content region-recommendation-card-content-short">
+          ${escapeHtml(shortContent)}
         </p>
+        <p
+          class="region-recommendation-card-content region-recommendation-card-content-full"
+          style="display:none;"
+        >
+          ${escapeHtml(fullContent)}
+        </p>
+        ${readMoreButtonHtml}
         ${linkHtml}
       </div>
     </div>
   `;
+}
+
+
+// #regionRecommendationList内の「続きを読む」/「折りたたむ」ボタンを
+// イベント委譲で処理する。カードはrenderRegionRecommendationCards()の
+// たびに再生成されるため、リスト全体に1回だけ登録すれば、
+// 再生成後の新しいボタンにも同じリスナーがそのまま効く。
+function handleRegionRecommendationReadMoreClick(
+  event
+) {
+  if (
+    !event.target.classList ||
+    !event.target.classList.contains(
+      "region-recommendation-read-more-button"
+    )
+  ) {
+    return;
+  }
+
+  const card =
+    event.target.closest(
+      ".region-recommendation-card"
+    );
+
+  if (!card) {
+    return;
+  }
+
+  const shortContentElement =
+    card.querySelector(
+      ".region-recommendation-card-content-short"
+    );
+
+  const fullContentElement =
+    card.querySelector(
+      ".region-recommendation-card-content-full"
+    );
+
+  if (
+    !shortContentElement ||
+    !fullContentElement
+  ) {
+    return;
+  }
+
+  const isCurrentlyExpanded =
+    fullContentElement.style.display !==
+    "none";
+
+  fullContentElement.style.display =
+    isCurrentlyExpanded
+      ? "none"
+      : "";
+
+  shortContentElement.style.display =
+    isCurrentlyExpanded
+      ? ""
+      : "none";
+
+  event.target.textContent =
+    isCurrentlyExpanded
+      ? "続きを読む"
+      : "閉じる";
 }
 
 
@@ -5864,6 +5967,18 @@ if (regionRecommendationMoreButtonElement) {
 
       renderRegionRecommendationCards();
     }
+  );
+}
+
+const regionRecommendationListElement =
+  document.getElementById(
+    "regionRecommendationList"
+  );
+
+if (regionRecommendationListElement) {
+  regionRecommendationListElement.addEventListener(
+    "click",
+    handleRegionRecommendationReadMoreClick
   );
 }
 
