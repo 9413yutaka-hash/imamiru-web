@@ -3382,13 +3382,18 @@ export default async function handler(
           targetArea
         );
 
-      const hasNewArticles =
+      // summaryバックフィルによりSKIPPED→DISCOVEREDへ復帰した記事は
+      // newItemCountに反映されないため、newItemCountの有無ではなく
+      // 「実際に収集(claim→collectFromSource())が成功した情報源が
+      // 1件以上あるか」を条件にする。claimed:falseのみ(全クールダウン中)、
+      // またはclaimed:trueでもsuccess:falseのみ(RSS取得失敗のみ)の場合は
+      // 呼ばない。
+      const hasSuccessfulCollection =
         collectionResults.some(
           function(result) {
             return (
-              result.success === true &&
-              typeof result.newItemCount === "number" &&
-              result.newItemCount > 0
+              result.claimed === true &&
+              result.success === true
             );
           }
         );
@@ -3396,7 +3401,7 @@ export default async function handler(
       let autoPostSummary =
         null;
 
-      if (hasNewArticles) {
+      if (hasSuccessfulCollection) {
         try {
           autoPostSummary =
             await runAutoPostForDiscoveredArticles(
