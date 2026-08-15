@@ -1043,11 +1043,85 @@
 
     @media (max-width: 700px) {
       #shopsList {
-        grid-template-columns: 1fr;
+        display: flex;
+        grid-template-columns: unset;
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+        gap: 10px;
+        padding-bottom: 6px;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      .shop-card {
+        flex: 0 0 30%;
+        min-width: 116px;
+        scroll-snap-align: start;
+        cursor: pointer;
       }
 
       .shop-visual {
-        height: 178px;
+        height: 92px;
+      }
+
+      .shop-emoji {
+        font-size: 40px;
+      }
+
+      .shop-badges {
+        top: 8px;
+        left: 8px;
+        right: 8px;
+      }
+
+      .event-badge {
+        padding: 4px 7px;
+        font-size: 9px;
+      }
+
+      .favorite-button {
+        width: 28px;
+        height: 28px;
+        font-size: 14px;
+      }
+
+      .shop-body {
+        padding: 10px;
+      }
+
+      .shop-category {
+        font-size: 9px;
+      }
+
+      .shop-name {
+        margin: 5px 0 0;
+        font-size: 13px;
+        line-height: 1.35;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+
+      .shop-description,
+      .time-limit,
+      .shop-actions {
+        display: none;
+      }
+
+      .shop-info-row {
+        gap: 5px;
+        margin-top: 8px;
+      }
+
+      .shop-info-row .info-chip {
+        display: none;
+      }
+
+      .shop-info-row .info-chip-distance {
+        display: inline-block;
+        padding: 4px 7px;
+        font-size: 10px;
       }
     }
 

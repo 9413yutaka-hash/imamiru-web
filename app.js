@@ -1926,11 +1926,27 @@ function renderShops() {
                 );
 
           return `
-            <article class="shop-card ${
-              isAdminPost
-                ? "admin-post-card"
-                : ""
-            }">
+            <article
+              class="shop-card ${
+                isAdminPost
+                  ? "admin-post-card"
+                  : ""
+              }"
+              onclick="
+                if (
+                  event.target.closest(
+                    'button, a'
+                  )
+                ) {
+                  return;
+                }
+                openShopModal(
+                  '${escapeHtml(
+                    shop.firestoreId
+                  )}'
+                )
+              "
+            >
 
               <div
                 class="
@@ -1962,6 +1978,7 @@ function renderShops() {
                     type="button"
                     aria-label="お気に入り"
                     onclick="
+                      event.stopPropagation();
                       toggleFavorite(
                         '${escapeHtml(
                           shop.firestoreId
@@ -2042,7 +2059,7 @@ function renderShops() {
                     }
                   </span>
 
-                  <span class="info-chip">
+                  <span class="info-chip info-chip-distance">
                     📍
                     ${formatDistance(
                       shop.distanceKm
