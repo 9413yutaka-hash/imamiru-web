@@ -355,6 +355,46 @@
       color: var(--subtext);
       font-size: 12px;
       line-height: 1.6;
+      white-space: pre-line;
+    }
+
+    .location-permission-guide {
+      margin-top: 10px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--sky);
+    }
+
+    .location-permission-guide-block {
+      margin-bottom: 10px;
+    }
+
+    .location-permission-guide-block:last-of-type {
+      margin-bottom: 0;
+    }
+
+    .location-permission-guide-title {
+      margin: 0 0 3px;
+      font-size: 12px;
+      font-weight: 900;
+      color: var(--navy);
+    }
+
+    .location-permission-guide-block p:not(.location-permission-guide-title) {
+      margin: 0;
+      font-size: 12px;
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    .location-permission-guide-footer {
+      margin: 10px 0 0;
+      padding-top: 10px;
+      border-top: 1px solid rgba(23, 74, 110, 0.12);
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--navy);
     }
 
     .location-button {

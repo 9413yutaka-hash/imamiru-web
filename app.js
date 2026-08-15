@@ -4401,6 +4401,8 @@ function getLocation() {
             .coords
             .longitude;
 
+        resetLocationPermissionGuide();
+
         locationMessage.textContent =
           "現在地を取得しました。近い順に表示しています。";
 
@@ -4502,6 +4504,8 @@ function getLocation() {
         let message =
           "位置情報を取得できませんでした。";
 
+        resetLocationPermissionGuide();
+
         if (
           error.code === 1
         ) {
@@ -4510,6 +4514,8 @@ function getLocation() {
     "\n\n" +
     "① ブラウザの位置情報を「許可」に変更してください。\n" +
     "② この画面に戻って「もう一度試す」を押してください。";
+
+          showLocationPermissionGuideToggle();
         }
 
         if (
@@ -4559,6 +4565,83 @@ function getLocation() {
       }
     );
 }
+
+
+// PERMISSION_DENIED時だけ表示する「位置情報を許可する方法を見る」導線。
+// GPS取得の成功・失敗ロジック(userLatitude/userLongitude/userAreaName等)
+// には一切触れず、案内UIの表示状態だけを管理する。
+function resetLocationPermissionGuide() {
+  const locationPermissionGuideToggle =
+    document.getElementById(
+      "locationPermissionGuideToggle"
+    );
+
+  const locationPermissionGuide =
+    document.getElementById(
+      "locationPermissionGuide"
+    );
+
+  if (locationPermissionGuideToggle) {
+    locationPermissionGuideToggle.style.display =
+      "none";
+
+    locationPermissionGuideToggle.textContent =
+      "位置情報を許可する方法を見る";
+  }
+
+  if (locationPermissionGuide) {
+    locationPermissionGuide.style.display =
+      "none";
+  }
+}
+
+function showLocationPermissionGuideToggle() {
+  const locationPermissionGuideToggle =
+    document.getElementById(
+      "locationPermissionGuideToggle"
+    );
+
+  if (locationPermissionGuideToggle) {
+    locationPermissionGuideToggle.style.display =
+      "";
+  }
+}
+
+const locationPermissionGuideToggleElement =
+  document.getElementById(
+    "locationPermissionGuideToggle"
+  );
+
+if (locationPermissionGuideToggleElement) {
+  locationPermissionGuideToggleElement.addEventListener(
+    "click",
+    function() {
+      const locationPermissionGuide =
+        document.getElementById(
+          "locationPermissionGuide"
+        );
+
+      if (!locationPermissionGuide) {
+        return;
+      }
+
+      const isCurrentlyOpen =
+        locationPermissionGuide.style.display !==
+        "none";
+
+      locationPermissionGuide.style.display =
+        isCurrentlyOpen
+          ? "none"
+          : "";
+
+      locationPermissionGuideToggleElement.textContent =
+        isCurrentlyOpen
+          ? "位置情報を許可する方法を見る"
+          : "閉じる";
+    }
+  );
+}
+
 
 function scrollToShops() {
   const shopsSection =
