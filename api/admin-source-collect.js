@@ -1471,41 +1471,205 @@ async function markSourceCollectionSucceeded(
 }
 
 
-// mode:"locationCollect"専用。isEnabledかつareaがtargetAreaと完全一致する
-// 情報源だけを対象に、claimSourceForLocationCollection()で収集権を取得できた
-// ものだけ収集する。既存のcollectFromSource()・sourceHasUsableFeedUrl()は
-// 無変更のまま再利用する。近隣地域・沖縄県全域への拡張はPhase1では行わない。
+// 41市町村名 → 旅行者目線の広域グループ名の対応表。記事単位area判定専用の
+// OKINAWA_MUNICIPALITY_NAMES(変更禁止)とは完全に独立した別の定数であり、
+// locationCollectの収集対象を広げる目的だけに使う。41市町村すべてを
+// いずれか1つの広域グループへ割り当てる(非対応は作らない)。
+const OKINAWA_MUNICIPALITY_TO_REGION_NAME = {
+  // 沖縄本島南部
+  "那覇市": "沖縄本島南部",
+  "糸満市": "沖縄本島南部",
+  "豊見城市": "沖縄本島南部",
+  "南城市": "沖縄本島南部",
+  "与那原町": "沖縄本島南部",
+  "南風原町": "沖縄本島南部",
+  "八重瀬町": "沖縄本島南部",
+
+  // 沖縄本島中部
+  "宜野湾市": "沖縄本島中部",
+  "浦添市": "沖縄本島中部",
+  "沖縄市": "沖縄本島中部",
+  "うるま市": "沖縄本島中部",
+  "嘉手納町": "沖縄本島中部",
+  "北谷町": "沖縄本島中部",
+  "西原町": "沖縄本島中部",
+  "読谷村": "沖縄本島中部",
+  "北中城村": "沖縄本島中部",
+  "中城村": "沖縄本島中部",
+
+  // 沖縄本島北部
+  "名護市": "沖縄本島北部",
+  "本部町": "沖縄本島北部",
+  "金武町": "沖縄本島北部",
+  "国頭村": "沖縄本島北部",
+  "大宜味村": "沖縄本島北部",
+  "東村": "沖縄本島北部",
+  "今帰仁村": "沖縄本島北部",
+  "恩納村": "沖縄本島北部",
+  "宜野座村": "沖縄本島北部",
+  "伊江村": "沖縄本島北部",
+
+  // 慶良間
+  "渡嘉敷村": "慶良間",
+  "座間味村": "慶良間",
+
+  // 久米島
+  "久米島町": "久米島",
+
+  // 宮古
+  "宮古島市": "宮古",
+  "多良間村": "宮古",
+
+  // 八重山
+  "石垣市": "八重山",
+  "竹富町": "八重山",
+  "与那国町": "八重山",
+
+  // その他離島
+  "粟国村": "その他離島",
+  "渡名喜村": "その他離島",
+  "南大東村": "その他離島",
+  "北大東村": "その他離島",
+  "伊平屋村": "その他離島",
+  "伊是名村": "その他離島"
+};
+
+
+// locationCollect専用。app.js側のAI_AUTO_POST_WIDE_AREA_NAME("沖縄県全域")と
+// 同じ文字列だが、ファイルが独立しているため別定数として持つ。
+const PREFECTURE_WIDE_AREA_NAME =
+  "沖縄県全域";
+
+
+// targetArea(市町村)から、収集候補となるarea値を
+// [市町村, 広域グループ(該当すれば), 沖縄県全域] の順で重複なく返す。
+function resolveCandidateAreaValuesForLocationTrigger(
+  targetArea
+) {
+  const candidateAreaValues =
+    [
+      targetArea
+    ];
+
+  const regionName =
+    OKINAWA_MUNICIPALITY_TO_REGION_NAME[
+      targetArea
+    ];
+
+  if (
+    typeof regionName === "string" &&
+    !candidateAreaValues.includes(
+      regionName
+    )
+  ) {
+    candidateAreaValues.push(
+      regionName
+    );
+  }
+
+  if (
+    !candidateAreaValues.includes(
+      PREFECTURE_WIDE_AREA_NAME
+    )
+  ) {
+    candidateAreaValues.push(
+      PREFECTURE_WIDE_AREA_NAME
+    );
+  }
+
+  return candidateAreaValues;
+}
+
+
+// 指定したarea値のいずれかにisEnabled==trueで完全一致する情報源を、
+// area値ごとに独立したwhere("area","==",X)クエリ(Phase1で本番実証済みの
+// クエリ形状)で取得し、sourceIdの重複を除いて返す。where("area","in",...)
+// は使わない(Firestore複合インデックスの新規作成を避けるため)。
+async function findEnabledSourcesMatchingAreaValues(
+  database,
+  areaValues
+) {
+  const matchedSourcesById =
+    new Map();
+
+  for (
+    let areaIndex = 0;
+    areaIndex < areaValues.length;
+    areaIndex += 1
+  ) {
+    const areaValue =
+      areaValues[
+        areaIndex
+      ];
+
+    const sourcesSnapshot =
+      await database
+        .collection(
+          "aiSources"
+        )
+        .where(
+          "isEnabled",
+          "==",
+          true
+        )
+        .where(
+          "area",
+          "==",
+          areaValue
+        )
+        .get();
+
+    sourcesSnapshot.docs.forEach(
+      function(sourceDocumentSnapshot) {
+        if (
+          !matchedSourcesById.has(
+            sourceDocumentSnapshot.id
+          )
+        ) {
+          matchedSourcesById.set(
+            sourceDocumentSnapshot.id,
+            sourceDocumentSnapshot
+          );
+        }
+      }
+    );
+  }
+
+  return Array.from(
+    matchedSourcesById.values()
+  );
+}
+
+
+// mode:"locationCollect"専用。targetArea(市町村)・対応する広域グループ・
+// 沖縄県全域の3階層を常に収集候補にする。claimSourceForLocationCollection()
+// の2分ロック・15分クールダウンにより、実際のRSSアクセスは情報源単位で
+// 抑制される(候補に含めること自体はRSSアクセスを意味しない)。
 async function collectFromSourcesForLocationTrigger(
   database,
   targetArea
 ) {
-  const sourcesSnapshot =
-    await database
-      .collection(
-        "aiSources"
-      )
-      .where(
-        "isEnabled",
-        "==",
-        true
-      )
-      .where(
-        "area",
-        "==",
-        targetArea
-      )
-      .get();
+  const candidateAreaValues =
+    resolveCandidateAreaValuesForLocationTrigger(
+      targetArea
+    );
+
+  const matchedSourceDocuments =
+    await findEnabledSourcesMatchingAreaValues(
+      database,
+      candidateAreaValues
+    );
 
   const results =
     [];
 
   for (
     let sourceIndex = 0;
-    sourceIndex < sourcesSnapshot.docs.length;
+    sourceIndex < matchedSourceDocuments.length;
     sourceIndex += 1
   ) {
     const sourceDocumentSnapshot =
-      sourcesSnapshot.docs[
+      matchedSourceDocuments[
         sourceIndex
       ];
 
