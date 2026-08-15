@@ -283,19 +283,172 @@
         style="display:none;"
       >
 
-        <div class="location-permission-guide-block">
-          <p class="location-permission-guide-title">iPhone</p>
-          <p>Safari / Chromeを利用している場合は、iPhoneの設定やサイト設定から「位置情報」を許可してください。</p>
+        <button
+          class="location-permission-device-toggle"
+          type="button"
+          data-target="locationPermissionGuideIphone"
+        >
+          <span>🍎 iPhone</span>
+          <span class="location-permission-toggle-icon">▶</span>
+        </button>
+
+        <div
+          id="locationPermissionGuideIphone"
+          class="location-permission-device-panel"
+          style="display:none;"
+        >
+
+          <button
+            class="location-permission-os-toggle"
+            type="button"
+            data-target="locationPermissionGuideIphoneSafari"
+          >
+            <span>Safari</span>
+            <span class="location-permission-toggle-icon">▶</span>
+          </button>
+
+          <div
+            id="locationPermissionGuideIphoneSafari"
+            class="location-permission-os-panel"
+            style="display:none;"
+          >
+
+            <p class="location-permission-method-title">方法1：マチナウを開いたまま変更する</p>
+
+            <div class="location-permission-steps">
+              <div class="location-permission-step">① Safariで<strong>マチナウを開いたまま</strong>にします</div>
+              <div class="location-permission-step">② アドレスバー付近にある<strong>ページメニューのボタン</strong>を押します</div>
+              <div class="location-permission-step">③ <strong>「Webサイトの設定」</strong>に進みます</div>
+              <div class="location-permission-step">④ <strong>「位置情報」</strong>を押します</div>
+              <div class="location-permission-step">⑤ <strong>「許可」</strong>を選びます</div>
+              <div class="location-permission-step">⑥ マチナウの画面へ戻ります</div>
+              <div class="location-permission-step">⑦ <strong>「もう一度試す」</strong>を押します</div>
+            </div>
+
+            <p class="location-permission-note">
+              ※iOSのバージョンにより、「…」などの追加操作が入る場合があります
+            </p>
+
+            <p class="location-permission-method-title">それでも取得できない場合<br>方法2：iPhone本体の設定を確認</p>
+
+            <div class="location-permission-steps">
+              <div class="location-permission-step">① iPhoneの<strong>「設定」</strong>を開きます</div>
+              <div class="location-permission-step">② <strong>「プライバシーとセキュリティ」</strong>を押します</div>
+              <div class="location-permission-step">③ <strong>「位置情報サービス」</strong>を押します</div>
+              <div class="location-permission-step">④ 画面上部の<strong>「位置情報サービス」がON</strong>になっているか確認します</div>
+              <div class="location-permission-step">⑤ Safariに関係する位置情報設定を確認します</div>
+              <div class="location-permission-step">⑥ 位置情報を利用できる設定に変更します</div>
+              <div class="location-permission-step">⑦ マチナウへ戻ります</div>
+              <div class="location-permission-step">⑧ <strong>「もう一度試す」</strong>を押します</div>
+            </div>
+
+            <p class="location-permission-note">
+              ※iOSのバージョンにより、ボタン名や表示位置が少し異なる場合があります。
+            </p>
+
+          </div>
+
+          <button
+            class="location-permission-os-toggle"
+            type="button"
+            data-target="locationPermissionGuideIphoneChrome"
+          >
+            <span>Chrome</span>
+            <span class="location-permission-toggle-icon">▶</span>
+          </button>
+
+          <div
+            id="locationPermissionGuideIphoneChrome"
+            class="location-permission-os-panel"
+            style="display:none;"
+          >
+
+            <div class="location-permission-steps">
+              <div class="location-permission-step">① iPhoneの<strong>「設定」</strong>を開きます</div>
+              <div class="location-permission-step">② 下へスクロールして<strong>「Chrome」</strong>を探して押します</div>
+              <div class="location-permission-step">③ <strong>「位置情報」</strong>を押します</div>
+              <div class="location-permission-step">④ 位置情報を許可する設定を選びます</div>
+              <div class="location-permission-step">⑤ マチナウへ戻ります</div>
+              <div class="location-permission-step">⑥ <strong>「もう一度試す」</strong>を押します</div>
+            </div>
+
+            <p class="location-permission-note">
+              ※「位置情報」が表示されない場合は、iPhone本体の『設定 → プライバシーとセキュリティ → 位置情報サービス』も確認してください
+            </p>
+
+          </div>
+
         </div>
 
-        <div class="location-permission-guide-block">
-          <p class="location-permission-guide-title">Android</p>
-          <p>Chromeのサイト情報・権限から「位置情報」を許可してください。</p>
+        <button
+          class="location-permission-device-toggle"
+          type="button"
+          data-target="locationPermissionGuideAndroid"
+        >
+          <span>🤖 Android</span>
+          <span class="location-permission-toggle-icon">▶</span>
+        </button>
+
+        <div
+          id="locationPermissionGuideAndroid"
+          class="location-permission-device-panel"
+          style="display:none;"
+        >
+
+          <div class="location-permission-steps">
+            <div class="location-permission-step">① Chromeで<strong>マチナウを開いたまま</strong>にします</div>
+            <div class="location-permission-step">② アドレスバー左側の<strong>サイト情報アイコン</strong>を押します</div>
+            <div class="location-permission-step">③ <strong>「権限」</strong>を押します</div>
+            <div class="location-permission-step">④ <strong>「位置情報」</strong>を押します</div>
+            <div class="location-permission-step">⑤ <strong>「許可」</strong>へ変更します</div>
+            <div class="location-permission-step">⑥ マチナウへ戻ります</div>
+            <div class="location-permission-step">⑦ <strong>「もう一度試す」</strong>を押します</div>
+          </div>
+
+          <p class="location-permission-note">
+            ※端末やChromeのバージョンによって、鍵マーク・調整アイコン・サイト情報など、アイコンや名称が異なる場合があります。
+          </p>
+
+          <p class="location-permission-note">
+            それでも直らない場合は、Chromeの<strong>︙ → 設定 → サイトの設定 → 位置情報</strong>から確認する方法もあります。
+          </p>
+
         </div>
 
-        <div class="location-permission-guide-block">
-          <p class="location-permission-guide-title">PC</p>
-          <p>ブラウザのアドレスバー付近にあるサイト情報／サイトの設定から「位置情報」を許可してください。</p>
+        <button
+          class="location-permission-device-toggle"
+          type="button"
+          data-target="locationPermissionGuidePc"
+        >
+          <span>💻 パソコン</span>
+          <span class="location-permission-toggle-icon">▶</span>
+        </button>
+
+        <div
+          id="locationPermissionGuidePc"
+          class="location-permission-device-panel"
+          style="display:none;"
+        >
+
+          <div class="location-permission-steps">
+            <div class="location-permission-step">① Chromeで<strong>マチナウを開いたまま</strong>にします</div>
+            <div class="location-permission-step">② アドレスバー左側の<strong>サイト情報アイコン</strong>をクリックします</div>
+            <div class="location-permission-step">③ <strong>「サイトの設定」</strong>をクリックします</div>
+            <div class="location-permission-step">④ <strong>「位置情報」</strong>を探します</div>
+            <div class="location-permission-step">⑤ <strong>「許可」</strong>へ変更します</div>
+            <div class="location-permission-step">⑥ マチナウの画面へ戻ります</div>
+            <div class="location-permission-step">⑦ 必要であればページを再読み込みします</div>
+            <div class="location-permission-step">⑧ <strong>「もう一度試す」</strong>を押します</div>
+          </div>
+
+          <p class="location-permission-note">
+            それでも直らない場合は、Chromeの<strong>︙ → 設定 → プライバシーとセキュリティ → サイトの設定 → 位置情報</strong>も確認してください。
+          </p>
+
+          <p class="location-permission-note">
+            Windows / Mac本体の位置情報がOFFの場合は、ブラウザ側だけでは取得できない場合があるため、パソコン本体の位置情報設定も確認してください。
+          </p>
+
         </div>
 
         <p class="location-permission-guide-footer">

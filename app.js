@@ -4593,6 +4593,28 @@ function resetLocationPermissionGuide() {
     locationPermissionGuide.style.display =
       "none";
   }
+
+  document
+    .querySelectorAll(
+      ".location-permission-device-panel, .location-permission-os-panel"
+    )
+    .forEach(
+      function(panel) {
+        panel.style.display =
+          "none";
+      }
+    );
+
+  document
+    .querySelectorAll(
+      ".location-permission-device-toggle .location-permission-toggle-icon, .location-permission-os-toggle .location-permission-toggle-icon"
+    )
+    .forEach(
+      function(icon) {
+        icon.textContent =
+          "▶";
+      }
+    );
 }
 
 function showLocationPermissionGuideToggle() {
@@ -4638,6 +4660,64 @@ if (locationPermissionGuideToggleElement) {
         isCurrentlyOpen
           ? "位置情報を許可する方法を見る"
           : "閉じる";
+    }
+  );
+}
+
+const locationPermissionGuideElement =
+  document.getElementById(
+    "locationPermissionGuide"
+  );
+
+if (locationPermissionGuideElement) {
+  locationPermissionGuideElement.addEventListener(
+    "click",
+    function(event) {
+      const toggleButton =
+        event.target.closest(
+          ".location-permission-device-toggle, .location-permission-os-toggle"
+        );
+
+      if (!toggleButton) {
+        return;
+      }
+
+      const targetId =
+        toggleButton.getAttribute(
+          "data-target"
+        );
+
+      const targetPanel =
+        targetId
+          ? document.getElementById(
+              targetId
+            )
+          : null;
+
+      if (!targetPanel) {
+        return;
+      }
+
+      const toggleIcon =
+        toggleButton.querySelector(
+          ".location-permission-toggle-icon"
+        );
+
+      const isCurrentlyOpen =
+        targetPanel.style.display !==
+        "none";
+
+      targetPanel.style.display =
+        isCurrentlyOpen
+          ? "none"
+          : "";
+
+      if (toggleIcon) {
+        toggleIcon.textContent =
+          isCurrentlyOpen
+            ? "▶"
+            : "▼";
+      }
     }
   );
 }

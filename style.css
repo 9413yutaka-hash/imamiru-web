@@ -397,6 +397,79 @@
       color: var(--navy);
     }
 
+    .location-permission-device-toggle,
+    .location-permission-os-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      margin-top: 8px;
+      padding: 9px 11px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--white);
+      font-size: 13px;
+      font-weight: 900;
+      color: var(--navy);
+      cursor: pointer;
+      text-align: left;
+    }
+
+    .location-permission-os-toggle {
+      background: #eef6f9;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .location-permission-toggle-icon {
+      font-size: 10px;
+      color: var(--blue);
+    }
+
+    .location-permission-device-panel {
+      padding: 4px 0 2px 10px;
+    }
+
+    .location-permission-os-panel {
+      padding: 8px 0 2px 10px;
+    }
+
+    .location-permission-method-title {
+      margin: 10px 0 6px;
+      font-size: 12px;
+      font-weight: 900;
+      color: var(--navy);
+      line-height: 1.5;
+    }
+
+    .location-permission-steps {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .location-permission-step {
+      position: relative;
+      padding: 5px 0;
+      font-size: 12px;
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    .location-permission-step:not(:last-child)::after {
+      content: "↓";
+      display: block;
+      color: var(--blue);
+      font-size: 11px;
+      line-height: 1.4;
+    }
+
+    .location-permission-note {
+      margin: 6px 0 0;
+      font-size: 11px;
+      color: var(--subtext);
+      line-height: 1.6;
+    }
+
     .location-button {
       flex-shrink: 0;
       min-height: 43px;
