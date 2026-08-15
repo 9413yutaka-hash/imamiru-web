@@ -3943,6 +3943,62 @@ function getSuggestionAreaPriorityRank(
 }
 
 
+// 「マチナウからの提案」の通常候補(安全情報ではない候補)からのみ除外する、
+// 行政・住民向け手続き系お知らせのキーワード。
+// shopMatchesFlashBannerKeywords()による安全最優先判定より後にのみ適用し、
+// 安全情報の判定・表示には一切影響させない。
+// 「税」「募集」「申請」は単独では使わない
+// (「免税店」等の旅行者向け情報や、イベント参加募集まで誤って除外するため)。
+const SUGGESTION_EXCLUDE_KEYWORDS = [
+  "献血",
+  "入札",
+  "議会",
+  "職員採用",
+  "職員募集",
+  "委員募集",
+  "パブリックコメント",
+  "住民票",
+  "戸籍",
+  "納税",
+  "確定申告",
+  "市民検診",
+  "健康診断"
+];
+
+function shopMatchesSuggestionExcludeKeywords(
+  shop
+) {
+  const combinedText =
+    (shop.title || "") +
+    " " +
+    (shop.message || "");
+
+  return SUGGESTION_EXCLUDE_KEYWORDS.some(
+    function(keyword) {
+      return combinedText.includes(keyword);
+    }
+  );
+}
+
+// 「マチナウからの提案」の通常候補内で、同一の地域優先度
+// (getSuggestionAreaPriorityRank)を持つ候補同士だけを並べ替えるための
+// カテゴリー優先度。0:イベント 1:観光・体験 2:その他
+// 地域優先度より上位のキーとしては絶対に使わない(第2ソートキー専用)。
+function getSuggestionCategoryPriorityRank(
+  shop
+) {
+  if (shop.category === "イベント") {
+    return 0;
+  }
+
+  if (shop.category === "観光・体験") {
+    return 1;
+  }
+
+  return 2;
+}
+
+
 // getVisibleShops()・shopMatchesFlashBannerKeywords()は一切変更せず、
 // その結果を読むだけで「マチナウからの提案」の対象を選ぶ。
 // 安全・交通・ライフライン該当の投稿があっても、現在地と無関係な地域
@@ -3999,12 +4055,49 @@ function selectSuggestionCandidate() {
     };
   }
 
-  if (nearbyAdminShops.length === 0) {
+  // 安全情報が無い場合だけ、行政・住民向け手続き系お知らせを除外し、
+  // 同じ地域優先度の中でイベント→観光・体験→その他の順に並べ替える。
+  // nearbyAdminShops自体(地域優先度の並び)は変更しない。
+  const normalCandidates =
+    nearbyAdminShops
+      .filter(
+        function(shop) {
+          return !shopMatchesSuggestionExcludeKeywords(
+            shop
+          );
+        }
+      )
+      .sort(
+        function(firstShop, secondShop) {
+          const areaPriorityDifference =
+            getSuggestionAreaPriorityRank(
+              firstShop
+            ) -
+            getSuggestionAreaPriorityRank(
+              secondShop
+            );
+
+          if (areaPriorityDifference !== 0) {
+            return areaPriorityDifference;
+          }
+
+          return (
+            getSuggestionCategoryPriorityRank(
+              firstShop
+            ) -
+            getSuggestionCategoryPriorityRank(
+              secondShop
+            )
+          );
+        }
+      );
+
+  if (normalCandidates.length === 0) {
     return null;
   }
 
   return {
-    shop: nearbyAdminShops[0],
+    shop: normalCandidates[0],
     isSafety: false
   };
 }
