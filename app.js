@@ -1836,8 +1836,29 @@ function renderShops() {
 
   updateUnifiedImportantInfo();
 
+  // 店舗カード描画専用の配列。getVisibleShops()自体・updateShopMarkers()・
+  // updateFlashBanner()・updateUnifiedImportantInfo()はすべてvisibleShops
+  // (またはgetVisibleShops()の独自呼び出し)を無変更のまま使い続けるため、
+  // この配列を絞り込んでもMap・提案・重要情報には一切影響しない。
+  // postType==="admin"(AI自動投稿・運営手動投稿・authorTypeなしの旧admin投稿を
+  // 含む全て)をTOP店舗カードから除外し、先頭6件だけをTOPに表示する。
+  const topShopCardCandidates =
+    visibleShops
+      .filter(
+        function(shop) {
+          return (
+            shop.postType !==
+            "admin"
+          );
+        }
+      )
+      .slice(
+        0,
+        6
+      );
+
   if (
-    visibleShops.length ===
+    topShopCardCandidates.length ===
     0
   ) {
     shopsList.innerHTML = `
@@ -1851,7 +1872,7 @@ function renderShops() {
   }
 
   shopsList.innerHTML =
-    visibleShops
+    topShopCardCandidates
       .map(
         function(shop) {
           const isFavorite =
