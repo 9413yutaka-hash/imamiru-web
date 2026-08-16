@@ -6366,12 +6366,146 @@ function selectFlashCandidateForUnifiedInfo() {
 }
 
 
-// 優先順位：flash候補(安全・交通・ライフライン等)があれば最優先、
-// なければselectSuggestionCandidate()(本体無変更、呼び出すだけ)の
-// 結果を使う。両方無ければnullを返し、統合枠自体を非表示にする。
+// 緊急・安全・ライフライン判定専用。既存のFLASH_BANNER_EMERGENCY_KEYWORDS・
+// FLASH_BANNER_LIFELINE_KEYWORDS(いずれも無変更)を再利用するだけで、
+// 新しい複雑なキーワード集合は作らない。shopMatchesFlashBannerKeywords()
+// 本体には触れない(こちらは判定用の別関数として独立させる)。
+function matchesEmergencyOrLifelineKeywords(
+  shop
+) {
+  const combinedText =
+    (shop.title || "") +
+    " " +
+    (shop.message || "");
+
+  return (
+    FLASH_BANNER_EMERGENCY_KEYWORDS.some(
+      function(keyword) {
+        return combinedText.includes(keyword);
+      }
+    ) ||
+    FLASH_BANNER_LIFELINE_KEYWORDS.some(
+      function(keyword) {
+        return combinedText.includes(keyword);
+      }
+    )
+  );
+}
+
+
+function sortShopsByCreatedAtDescending(
+  shopList
+) {
+  return shopList
+    .slice()
+    .sort(
+      function(shopA, shopB) {
+        return (
+          getDateValue(
+            shopB.createdAt
+          ) -
+          getDateValue(
+            shopA.createdAt
+          )
+        );
+      }
+    );
+}
+
+
+// 「⚡ 今、知っておきたいこと」専用の、現在地を考慮したflash候補選定。
+// shopMatchesFlashBannerKeywords()・selectFlashCandidateForUnifiedInfo()・
+// getSuggestionAreaPriorityRank()本体はいずれも無変更のまま呼び出すだけ。
+//
+// 1. 緊急・安全・ライフライン候補があれば、地域を問わず新しい順で1件。
+// 2. GPS未取得(userAreaNameが未確定)の場合、それ以外(交通等)のflash候補は
+//    地域不明のまま無条件表示せず、ここでnullを返す。
+// 3. GPS取得後は、それ以外のflash候補のうち
+//    getSuggestionAreaPriorityRank(shop) <= 2
+//    (同一市町村・同一広域グループ・沖縄県全域)のものだけを対象にし、
+//    地域rank→新しさの順で1件選ぶ。地域rank3は除外する。
+function selectLocationAwareFlashCandidateForUnifiedInfo() {
+  const matchingShops =
+    shops.filter(
+      shopMatchesFlashBannerKeywords
+    );
+
+  if (matchingShops.length === 0) {
+    return null;
+  }
+
+  const criticalShops =
+    matchingShops.filter(
+      matchesEmergencyOrLifelineKeywords
+    );
+
+  if (criticalShops.length > 0) {
+    return sortShopsByCreatedAtDescending(
+      criticalShops
+    )[0];
+  }
+
+  const hasResolvedUserArea =
+    typeof userAreaName === "string" &&
+    userAreaName !== "";
+
+  if (!hasResolvedUserArea) {
+    return null;
+  }
+
+  const nearbyOtherShops =
+    matchingShops.filter(
+      function(shop) {
+        return (
+          getSuggestionAreaPriorityRank(
+            shop
+          ) <= 2
+        );
+      }
+    );
+
+  if (nearbyOtherShops.length === 0) {
+    return null;
+  }
+
+  const sortedNearbyOtherShops =
+    nearbyOtherShops
+      .slice()
+      .sort(
+        function(shopA, shopB) {
+          const areaPriorityDifference =
+            getSuggestionAreaPriorityRank(
+              shopA
+            ) -
+            getSuggestionAreaPriorityRank(
+              shopB
+            );
+
+          if (areaPriorityDifference !== 0) {
+            return areaPriorityDifference;
+          }
+
+          return (
+            getDateValue(
+              shopB.createdAt
+            ) -
+            getDateValue(
+              shopA.createdAt
+            )
+          );
+        }
+      );
+
+  return sortedNearbyOtherShops[0];
+}
+
+
+// 優先順位：flash候補(安全・交通・ライフライン等、現在地を考慮した選定)が
+// あれば最優先、なければselectSuggestionCandidate()(本体無変更、呼び出す
+// だけ)の結果を使う。両方無ければnullを返し、統合枠自体を非表示にする。
 function resolveUnifiedImportantInfoCandidate() {
   const flashCandidate =
-    selectFlashCandidateForUnifiedInfo();
+    selectLocationAwareFlashCandidateForUnifiedInfo();
 
   if (flashCandidate) {
     return {
