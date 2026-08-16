@@ -1834,6 +1834,8 @@ function renderShops() {
 
   updateFlashBanner();
 
+  updateUnifiedImportantInfo();
+
   if (
     visibleShops.length ===
     0
@@ -4248,6 +4250,8 @@ function tryGenerateMachinauSuggestion(gpsSessionId) {
   updateSuggestionCard(
     latestWeatherForMachinauSuggestion
   );
+
+  updateUnifiedImportantInfo();
 }
 
 // loadApprovedSubmissions()がshopsの読み込みに成功した後に呼ぶ。
@@ -6235,4 +6239,229 @@ if (regionRecommendationBackToCurrentButtonElement) {
       }
     }
   );
+}
+
+
+// 「⚡ 今、知っておきたいこと」統合表示。
+// updateFlashBanner()・shopMatchesFlashBannerKeywords()・
+// selectSuggestionCandidate()・updateSuggestionCard()のいずれの本体も
+// 変更せず、それぞれが使っている選定条件を読み取り専用で再利用して
+// 1件だけを新しい統合カードに表示する薄い調整レイヤー。
+// authorTypeの有無は一切条件にしないため、authorTypeが存在しない
+// 既存admin投稿もこれまで通り候補になれる(後方互換)。
+
+
+// updateFlashBanner()内の選定ロジック(matchingShops→createdAt降順→先頭1件)
+// と完全に同じ条件・同じ並び順を、DOM書き込みを伴わない形で再計算する。
+// shopMatchesFlashBannerKeywords()自体は呼び出すだけで変更しない。
+function selectFlashCandidateForUnifiedInfo() {
+  const matchingShops =
+    shops.filter(
+      shopMatchesFlashBannerKeywords
+    );
+
+  if (matchingShops.length === 0) {
+    return null;
+  }
+
+  const sortedMatchingShops =
+    matchingShops
+      .slice()
+      .sort(
+        function(shopA, shopB) {
+          return (
+            getDateValue(
+              shopB.createdAt
+            ) -
+            getDateValue(
+              shopA.createdAt
+            )
+          );
+        }
+      );
+
+  return sortedMatchingShops[0];
+}
+
+
+// 優先順位：flash候補(安全・交通・ライフライン等)があれば最優先、
+// なければselectSuggestionCandidate()(本体無変更、呼び出すだけ)の
+// 結果を使う。両方無ければnullを返し、統合枠自体を非表示にする。
+function resolveUnifiedImportantInfoCandidate() {
+  const flashCandidate =
+    selectFlashCandidateForUnifiedInfo();
+
+  if (flashCandidate) {
+    return {
+      shop: flashCandidate,
+      isSafety: true
+    };
+  }
+
+  const suggestionCandidate =
+    selectSuggestionCandidate();
+
+  if (suggestionCandidate) {
+    return {
+      shop: suggestionCandidate.shop,
+      isSafety:
+        suggestionCandidate.isSafety === true
+    };
+  }
+
+  return null;
+}
+
+
+// 新しい統合カード専用のラベル判定。既存のFLASH_BANNER_*_KEYWORDS
+// (無変更、読み取りのみ)とshop.categoryをそのまま利用し、新しい
+// 複雑な分類は作らない。
+function getUnifiedImportantInfoLabelText(
+  shop
+) {
+  const combinedText =
+    (shop.title || "") +
+    " " +
+    (shop.message || "");
+
+  const matchesEmergencyOrLifeline =
+    FLASH_BANNER_EMERGENCY_KEYWORDS.some(
+      function(keyword) {
+        return combinedText.includes(keyword);
+      }
+    ) ||
+    FLASH_BANNER_LIFELINE_KEYWORDS.some(
+      function(keyword) {
+        return combinedText.includes(keyword);
+      }
+    );
+
+  if (matchesEmergencyOrLifeline) {
+    return "🚨 緊急";
+  }
+
+  const matchesTransport =
+    FLASH_BANNER_TRANSPORT_KEYWORDS.some(
+      function(keyword) {
+        return combinedText.includes(keyword);
+      }
+    );
+
+  if (matchesTransport) {
+    return "🚧 交通";
+  }
+
+  if (shop.category === "イベント") {
+    return "🎵 イベント";
+  }
+
+  if (shop.category === "観光・体験") {
+    return "🏝️ 観光・体験";
+  }
+
+  return "📢 お知らせ";
+}
+
+
+// GPS取得前・カテゴリー切替・お気に入り操作・提案生成後等、
+// renderShops()とtryGenerateMachinauSuggestion()から呼ばれる。
+// #suggestionCard・.flash-bannerのDOM/更新処理には一切触れない
+// (CSS側で旅行者向け表示だけを止めている)。
+function updateUnifiedImportantInfo() {
+  const section =
+    document.getElementById(
+      "unifiedImportantInfoSection"
+    );
+
+  const labelElement =
+    document.getElementById(
+      "unifiedImportantInfoLabel"
+    );
+
+  const titleElement =
+    document.getElementById(
+      "unifiedImportantInfoTitle"
+    );
+
+  const contentElement =
+    document.getElementById(
+      "unifiedImportantInfoContent"
+    );
+
+  const areaElement =
+    document.getElementById(
+      "unifiedImportantInfoArea"
+    );
+
+  const detailButton =
+    document.getElementById(
+      "unifiedImportantInfoDetailButton"
+    );
+
+  if (
+    !section ||
+    !labelElement ||
+    !titleElement ||
+    !contentElement ||
+    !areaElement ||
+    !detailButton
+  ) {
+    return;
+  }
+
+  const candidate =
+    resolveUnifiedImportantInfoCandidate();
+
+  if (!candidate) {
+    section.style.display =
+      "none";
+
+    return;
+  }
+
+  const candidateShop =
+    candidate.shop;
+
+  labelElement.textContent =
+    getUnifiedImportantInfoLabelText(
+      candidateShop
+    );
+
+  section.classList.toggle(
+    "unified-important-info-severity-emergency",
+    candidate.isSafety === true
+  );
+
+  titleElement.textContent =
+    candidateShop.title ||
+    "";
+
+  contentElement.textContent =
+    candidateShop.message ||
+    "";
+
+  if (
+    typeof candidateShop.area === "string" &&
+    candidateShop.area.trim() !== ""
+  ) {
+    areaElement.textContent =
+      "📍 " +
+      candidateShop.area;
+
+    areaElement.style.display =
+      "";
+  } else {
+    areaElement.style.display =
+      "none";
+  }
+
+  detailButton.onclick =
+    function() {
+      openShopModal(
+        candidateShop.firestoreId
+      );
+    };
+
+  section.style.display =
+    "";
 }

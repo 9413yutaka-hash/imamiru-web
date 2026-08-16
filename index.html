@@ -178,6 +178,96 @@
       color: var(--subtext);
       padding: 10px 0;
     }
+
+    /* 旧「マチナウからの提案」「ゲリラ情報」枠は、既存の候補選定・更新
+       ロジック(selectSuggestionCandidate()/updateSuggestionCard()/
+       updateFlashBanner())をそのまま動かしつつ、DOMは維持したまま
+       旅行者画面には表示しない。「⚡ 今、知っておきたいこと」へ統合。 */
+    #suggestionCard,
+    .flash-banner {
+      display: none !important;
+    }
+
+    .unified-important-info-section {
+      margin-top: 18px;
+      padding: 16px;
+      border-radius: 22px;
+      background: var(--white);
+      box-shadow: var(--shadow);
+      border: 1px solid rgba(23, 74, 110, 0.08);
+    }
+
+    .unified-important-info-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .unified-important-info-heading {
+      font-size: 14px;
+      font-weight: 900;
+      color: var(--navy);
+    }
+
+    .unified-important-info-label {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: var(--sky);
+      color: var(--blue);
+      font-size: 11px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .unified-important-info-title {
+      margin: 10px 0 0;
+      font-size: 15px;
+      font-weight: 900;
+      color: var(--navy);
+      line-height: 1.4;
+    }
+
+    .unified-important-info-content {
+      margin: 6px 0 0;
+      font-size: 13px;
+      color: var(--text);
+      line-height: 1.6;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .unified-important-info-area {
+      margin: 6px 0 0;
+      font-size: 12px;
+      color: var(--subtext);
+    }
+
+    #unifiedImportantInfoDetailButton {
+      margin-top: 12px;
+      width: 100%;
+    }
+
+    /* 安全・緊急・交通系の候補だけ強調し、通常のイベント／観光情報とは
+       見た目を分ける(緊急=赤系、通常=既存の青系デザインのまま)。 */
+    .unified-important-info-severity-emergency {
+      border-color: rgba(239, 90, 103, 0.35);
+    }
+
+    .unified-important-info-severity-emergency
+    .unified-important-info-label {
+      background: rgba(239, 90, 103, 0.12);
+      color: var(--red);
+    }
+
+    .unified-important-info-severity-emergency
+    #unifiedImportantInfoDetailButton {
+      background: linear-gradient(135deg, #ef5a67, #ff8a7a);
+    }
   </style>
 </head>
 
@@ -666,6 +756,48 @@
         </div>
 
       </div>
+
+    </section>
+
+    <section
+      id="unifiedImportantInfoSection"
+      class="unified-important-info-section"
+      style="display:none;"
+    >
+
+      <div class="unified-important-info-header">
+        <span class="unified-important-info-heading">
+          ⚡ 今、知っておきたいこと
+        </span>
+        <span
+          id="unifiedImportantInfoLabel"
+          class="unified-important-info-label"
+        ></span>
+      </div>
+
+      <p
+        id="unifiedImportantInfoTitle"
+        class="unified-important-info-title"
+      ></p>
+
+      <p
+        id="unifiedImportantInfoContent"
+        class="unified-important-info-content"
+      ></p>
+
+      <p
+        id="unifiedImportantInfoArea"
+        class="unified-important-info-area"
+        style="display:none;"
+      ></p>
+
+      <button
+        id="unifiedImportantInfoDetailButton"
+        class="location-button"
+        type="button"
+      >
+        この情報を見る
+      </button>
 
     </section>
 
