@@ -2959,6 +2959,9 @@ async function createAutoPostSubmission(
           postType:
             "admin",
 
+          authorType:
+            "ai",
+
           sourceLabel:
             "マチナウ運営より",
 

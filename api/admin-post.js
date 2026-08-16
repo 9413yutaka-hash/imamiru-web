@@ -554,6 +554,9 @@ export default async function handler(
         postType:
           "admin",
 
+        authorType:
+          "admin",
+
         sourceLabel:
           "マチナウ運営より",
 
