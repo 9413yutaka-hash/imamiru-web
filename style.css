@@ -1238,6 +1238,91 @@
       }
     }
 
+    /* 見つける全件表示モード(#shopsSection.shops-show-all)専用。
+       スマホの圧縮3枚横スクロール(上のブロック)を解除し、
+       既存PC版に近い1列のリッチカードへ切り替える。
+       新しいカードHTMLは作らず、既存要素の表示をCSSだけで戻す。 */
+    @media (max-width: 700px) {
+      #shopsSection.shops-show-all #shopsList {
+        display: block;
+      }
+
+      #shopsSection.shops-show-all .shop-card {
+        flex: none;
+        min-width: 0;
+        width: 100%;
+        margin-bottom: 18px;
+        scroll-snap-align: none;
+      }
+
+      #shopsSection.shops-show-all .shop-card:last-child {
+        margin-bottom: 0;
+      }
+
+      #shopsSection.shops-show-all .shop-visual {
+        height: 178px;
+      }
+
+      #shopsSection.shops-show-all .shop-emoji {
+        font-size: 78px;
+      }
+
+      #shopsSection.shops-show-all .shop-badges {
+        top: 13px;
+        left: 13px;
+        right: 13px;
+      }
+
+      #shopsSection.shops-show-all .event-badge {
+        padding: 7px 10px;
+        font-size: 11px;
+      }
+
+      #shopsSection.shops-show-all .favorite-button {
+        width: 37px;
+        height: 37px;
+        font-size: 18px;
+      }
+
+      #shopsSection.shops-show-all .shop-body {
+        padding: 18px;
+      }
+
+      #shopsSection.shops-show-all .shop-category {
+        font-size: 11px;
+      }
+
+      #shopsSection.shops-show-all .shop-name {
+        margin: 7px 0 0;
+        font-size: 20px;
+        line-height: 1.4;
+        display: block;
+        overflow: visible;
+      }
+
+      #shopsSection.shops-show-all .shop-description,
+      #shopsSection.shops-show-all .time-limit {
+        display: block;
+      }
+
+      #shopsSection.shops-show-all .shop-actions {
+        display: grid;
+        grid-template-columns: 1.25fr 1fr;
+        gap: 9px;
+      }
+
+      #shopsSection.shops-show-all .shop-info-row {
+        gap: 7px;
+        margin-top: 14px;
+      }
+
+      #shopsSection.shops-show-all .shop-info-row .info-chip {
+        display: inline-block;
+        padding: 7px 9px;
+        font-size: 11px;
+      }
+    }
+
     @media (max-width: 520px) {
       .top-bar-inner {
         padding: 11px 14px;

@@ -5,6 +5,11 @@ let userLongitude = null;
 let userAreaName = null;
 let selectedCategory = "すべて";
 
+// TOP店舗カード(最大6件・横スクロール)か、見つける全件表示(1列リッチカード)かを
+// 切り替えるフラグ。selectCategory()等では変更しない(切替はもっと見る/
+// bottom-navigation「見つける」/「ホーム」からのみ)。
+let isShowingAllShopCards = false;
+
 function loadFavoriteShopIdsFromStorage() {
   let rawFavoriteShopIds = null;
 
@@ -1841,8 +1846,8 @@ function renderShops() {
   // (またはgetVisibleShops()の独自呼び出し)を無変更のまま使い続けるため、
   // この配列を絞り込んでもMap・提案・重要情報には一切影響しない。
   // postType==="admin"(AI自動投稿・運営手動投稿・authorTypeなしの旧admin投稿を
-  // 含む全て)をTOP店舗カードから除外し、先頭6件だけをTOPに表示する。
-  const topShopCardCandidates =
+  // 含む全て)を店舗一覧から除外する(TOP・見つける全件表示のどちらでも)。
+  const adminExcludedShops =
     visibleShops
       .filter(
         function(shop) {
@@ -1851,11 +1856,42 @@ function renderShops() {
             "admin"
           );
         }
-      )
-      .slice(
-        0,
-        6
       );
+
+  // isShowingAllShopCardsがfalseならTOP用に先頭6件だけ、
+  // trueなら見つける全件表示としてadminExcludedShopsをそのまま使う。
+  const topShopCardCandidates =
+    isShowingAllShopCards
+      ? adminExcludedShops
+      : adminExcludedShops.slice(
+          0,
+          6
+        );
+
+  const shopsSectionElement =
+    document.getElementById(
+      "shopsSection"
+    );
+
+  if (shopsSectionElement) {
+    shopsSectionElement.classList.toggle(
+      "shops-show-all",
+      isShowingAllShopCards
+    );
+  }
+
+  const shopMoreButton =
+    document.getElementById(
+      "shopMoreButton"
+    );
+
+  if (shopMoreButton) {
+    shopMoreButton.style.display =
+      !isShowingAllShopCards &&
+      adminExcludedShops.length > 6
+        ? ""
+        : "none";
+  }
 
   if (
     topShopCardCandidates.length ===
@@ -4764,6 +4800,30 @@ function scrollToShops() {
   });
 }
 
+
+// TOPの「もっと見る」・bottom-navigation「見つける」の共通処理。
+// scrollToShops()本体は変更せず、最後にそのまま呼び出すだけにする。
+function showAllShopCardsAndScrollToShops() {
+  isShowingAllShopCards =
+    true;
+
+  renderShops();
+
+  scrollToShops();
+}
+
+const shopMoreButtonElement =
+  document.getElementById(
+    "shopMoreButton"
+  );
+
+if (shopMoreButtonElement) {
+  shopMoreButtonElement.addEventListener(
+    "click",
+    showAllShopCardsAndScrollToShops
+  );
+}
+
 function scrollToTopPage() {
   const shopsSection =
     document.getElementById("shopsSection");
@@ -4787,6 +4847,7 @@ function scrollToTopPage() {
   }
 
   selectedCategory = "すべて";
+  isShowingAllShopCards = false;
   renderShops();
 
   window.scrollTo({
