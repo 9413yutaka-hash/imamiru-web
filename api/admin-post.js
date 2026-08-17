@@ -112,6 +112,26 @@ const ALLOWED_CATEGORIES = [
 ];
 
 
+// authorTypeが省略された場合は従来どおり"admin"として扱う(既存のadmin-post.html
+// からの呼び出しは常に省略するため、挙動は現在と完全に同じ)。AIテスト投稿の
+// ためだけに"ai"も明示的に指定できるようにするが、値はこの2つだけに限定する。
+const ALLOWED_AUTHOR_TYPES = [
+  "admin",
+  "ai"
+];
+
+// aiSourcesコレクションのsourceType(ai-sources.htmlのALLOWED_SOURCE_TYPESと
+// 同一の6値)をそのまま再利用する。新しい分類値は作らない。
+const ALLOWED_SOURCE_TYPES = [
+  "行政",
+  "観光施設",
+  "イベント",
+  "交通",
+  "防災・気象",
+  "その他"
+];
+
+
 const FIELD_MAX_LENGTHS = {
   title: 50,
   content: 300,
@@ -384,6 +404,44 @@ function validatePostFields(
     );
   }
 
+  const authorTypeRaw =
+    String(
+      requestBody.authorType || ""
+    )
+      .trim();
+
+  const authorType =
+    authorTypeRaw === ""
+      ? "admin"
+      : authorTypeRaw;
+
+  if (
+    !ALLOWED_AUTHOR_TYPES.includes(
+      authorType
+    )
+  ) {
+    throw new Error(
+      "authorTypeの値が正しくありません。"
+    );
+  }
+
+  const sourceType =
+    String(
+      requestBody.sourceType || ""
+    )
+      .trim();
+
+  if (
+    sourceType !== "" &&
+    !ALLOWED_SOURCE_TYPES.includes(
+      sourceType
+    )
+  ) {
+    throw new Error(
+      "sourceTypeの値が正しくありません。"
+    );
+  }
+
   return {
     title: title,
     category: category,
@@ -394,7 +452,9 @@ function validatePostFields(
     latitude: latitude,
     longitude: longitude,
     imageUrls: imageUrls,
-    expiresAtDate: expiresAtDate
+    expiresAtDate: expiresAtDate,
+    authorType: authorType,
+    sourceType: sourceType
   };
 }
 
@@ -508,69 +568,83 @@ export default async function handler(
     const database =
       getFirestore(app);
 
-    await database
-      .collection(
-        "submissions"
-      )
-      .add({
-        shopName:
-          "マチナウ運営",
+    const submissionData = {
+      shopName:
+        "マチナウ運営",
 
-        title:
-          postFields.title,
+      title:
+        postFields.title,
 
-        category:
-          postFields.category,
+      category:
+        postFields.category,
 
-        content:
-          postFields.content,
+      content:
+        postFields.content,
 
-        address:
-          postFields.address,
+      address:
+        postFields.address,
 
-        latitude:
-          postFields.latitude,
+      latitude:
+        postFields.latitude,
 
-        longitude:
-          postFields.longitude,
+      longitude:
+        postFields.longitude,
 
-        imageUrls:
-          postFields.imageUrls,
+      imageUrls:
+        postFields.imageUrls,
 
-        websiteUrl:
-          postFields.websiteUrl,
+      websiteUrl:
+        postFields.websiteUrl,
 
-        area:
-          postFields.area,
+      area:
+        postFields.area,
 
-        expiresAt:
-          Timestamp.fromDate(
-            postFields.expiresAtDate
-          ),
+      expiresAt:
+        Timestamp.fromDate(
+          postFields.expiresAtDate
+        ),
 
-        status:
-          "approved",
+      status:
+        "approved",
 
-        postType:
-          "admin",
+      postType:
+        "admin",
 
-        authorType:
-          "admin",
+      authorType:
+        postFields.authorType,
 
-        sourceLabel:
-          "マチナウ運営より",
+      sourceLabel:
+        "マチナウ運営より",
 
-        createdAt:
-          FieldValue.serverTimestamp(),
+      createdAt:
+        FieldValue.serverTimestamp(),
 
-        updatedAt:
-          FieldValue.serverTimestamp()
-      });
+      updatedAt:
+        FieldValue.serverTimestamp()
+    };
+
+    // sourceTypeが指定されなかった通常の運営投稿では、このフィールド自体を
+    // 書き込まない(既存投稿と同じデータ形を維持し、後方互換性を最大化する)。
+    if (postFields.sourceType !== "") {
+      submissionData.sourceType =
+        postFields.sourceType;
+    }
+
+    const documentReference =
+      await database
+        .collection(
+          "submissions"
+        )
+        .add(
+          submissionData
+        );
 
     return response.status(200).json({
       success: true,
       message:
-        "運営情報を公開しました。"
+        "運営情報を公開しました。",
+      documentId:
+        documentReference.id
     });
   } catch (error) {
     console.error(
