@@ -1857,6 +1857,10 @@ function renderShops() {
   // 変わることはない(依存関係を持たないだけで、無条件に再評価しても安全)。
   updateTravelerSuggestionCard();
 
+  // 🔥今日のマチナウもFirestore読込後・60秒更新・GPS/地域確定後のいずれでも
+  // renderShops()経由で再評価する(新しいタイマーは作らない)。
+  updateTodayMachinauCard();
+
   // 店舗カード描画専用の配列。getVisibleShops()自体・updateShopMarkers()・
   // updateFlashBanner()・updateUnifiedImportantInfo()はすべてvisibleShops
   // (またはgetVisibleShops()の独自呼び出し)を無変更のまま使い続けるため、
@@ -4168,12 +4172,17 @@ function selectSuggestionCandidate() {
 // getDateValue()はいずれも無変更のまま呼び出すだけ。
 // 緊急・防災・ライフライン・交通障害(shopMatchesFlashBannerKeywords()一致)は
 // 明示的に除外し、この枠では扱わない(将来「今、知っておきたいこと」へ集約)。
+// authorType==="admin"(運営手動投稿)も明示的に除外する(🔥今日のマチナウ専用
+// にするため、selectTodayMachinauCandidate()との重複を防ぐ)。ただし
+// authorType===""(旧admin投稿、authorType未設定)は後方互換のため
+// 自動除外しない。
 function selectTravelerSuggestionCandidate() {
   const candidates =
     shops
       .filter(function(shop) {
         return (
           shop.postType === "admin" &&
+          shop.authorType !== "admin" &&
           getSuggestionAreaPriorityRank(shop) <= 2 &&
           (
             shop.category === "イベント" ||
@@ -6894,4 +6903,119 @@ function updateUnifiedImportantInfo() {
 
   section.style.display =
     "";
+}
+
+
+// 🔥「今日のマチナウ」STEP3専用の候補選定。運営手動投稿
+// (postType==="admin" かつ authorType==="admin")だけを対象にし、
+// AI自動投稿(authorType==="ai")・一般店舗投稿は一切含めない。
+// 既存のgetSuggestionAreaPriorityRank()は無変更のまま呼び出すだけで、
+// 新しい地域判定は作らない。rank3(地域外)は候補から除外する。
+// GPS未取得(userAreaNameが未確定)の場合、getSuggestionAreaPriorityRank()が
+// 常にrank3を返す既存仕様により、この関数自体が自然にnullを返す
+// (那覇等へのフォールバックは行わない)。
+// 運営が緊急・ライフライン・交通系のキーワードを手動投稿した場合も、
+// 現段階では特例を作らずこの関数の候補として扱う(⚡への重複表示はしない、
+// ⚡はauthorType==="ai"限定のまま)。
+// 並び順：地域rank(0→1→2) → 新しさ。
+// 将来AI判定(recommendedSlot/relevanceScore/urgencyScore/areaRelevance等)へ
+// 置き換える際は、この関数の中身だけを差し替えればよい構造にしている。
+function selectTodayMachinauCandidate() {
+  const candidates =
+    shops
+      .filter(function(shop) {
+        return (
+          shop.postType === "admin" &&
+          shop.authorType === "admin" &&
+          getSuggestionAreaPriorityRank(shop) <= 2
+        );
+      })
+      .sort(function(firstShop, secondShop) {
+        const areaPriorityDifference =
+          getSuggestionAreaPriorityRank(firstShop) -
+          getSuggestionAreaPriorityRank(secondShop);
+
+        if (areaPriorityDifference !== 0) {
+          return areaPriorityDifference;
+        }
+
+        return (
+          getDateValue(secondShop.createdAt) -
+          getDateValue(firstShop.createdAt)
+        );
+      });
+
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  return candidates[0];
+}
+
+
+// 🔥「今日のマチナウ」専用の薄い更新関数。#todayMachinauSectionという
+// 専用DOMだけを操作し、✨(#suggestionCard)・⚡(#unifiedImportantInfoSection)
+// のDOM・更新関数には一切触れない。候補判定ロジックはここに直書きせず、
+// selectTodayMachinauCandidate()に閉じ込める。詳細表示は新しいモーダルを
+// 作らず、既存のopenShopModal()をそのまま再利用する。
+function updateTodayMachinauCard() {
+  const section =
+    document.getElementById("todayMachinauSection");
+
+  const titleElement =
+    document.getElementById("todayMachinauTitle");
+
+  const contentElement =
+    document.getElementById("todayMachinauContent");
+
+  const areaElement =
+    document.getElementById("todayMachinauArea");
+
+  const detailButton =
+    document.getElementById("todayMachinauDetailButton");
+
+  if (
+    !section ||
+    !titleElement ||
+    !contentElement ||
+    !areaElement ||
+    !detailButton
+  ) {
+    return;
+  }
+
+  const selectedShop =
+    selectTodayMachinauCandidate();
+
+  if (!selectedShop) {
+    section.style.display = "none";
+    return;
+  }
+
+  titleElement.textContent =
+    selectedShop.title || "";
+
+  contentElement.textContent =
+    selectedShop.message || "";
+
+  if (
+    typeof selectedShop.area === "string" &&
+    selectedShop.area.trim() !== ""
+  ) {
+    areaElement.textContent =
+      "📍 " + selectedShop.area;
+
+    areaElement.style.display = "";
+  } else {
+    areaElement.style.display = "none";
+  }
+
+  detailButton.onclick =
+    function() {
+      openShopModal(
+        selectedShop.firestoreId
+      );
+    };
+
+  section.style.display = "";
 }
