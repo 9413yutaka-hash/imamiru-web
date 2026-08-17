@@ -6636,28 +6636,106 @@ function selectLocationAwareFlashCandidateForUnifiedInfo() {
 }
 
 
-// 優先順位：flash候補(安全・交通・ライフライン等、現在地を考慮した選定)が
-// あれば最優先、なければselectSuggestionCandidate()(本体無変更、呼び出す
-// だけ)の結果を使う。両方無ければnullを返し、統合枠自体を非表示にする。
-function resolveUnifiedImportantInfoCandidate() {
-  const flashCandidate =
-    selectLocationAwareFlashCandidateForUnifiedInfo();
+// ⚡「今、知っておきたいこと」STEP2専用の候補選定。✨(あなたへの提案)とは
+// 役割を完全に分離し、事実・重大情報だけを対象にする。既存の
+// shopMatchesFlashBannerKeywords()・matchesEmergencyOrLifelineKeywords()・
+// getSuggestionAreaPriorityRank()・getDateValue()はいずれも無変更のまま
+// 呼び出すだけ。将来AI判定(例:recommendedSlot==="important"等)へ置き換える
+// 際は、この関数の中身だけを差し替えればよい構造にしている。
+//
+// 候補条件(すべて満たすもの):
+// 1. postType === "admin"
+// 2. authorType === "ai"(運営手動投稿はsourceTypeが常に空文字のため対象外。
+//    特例は追加しない。運営手動の重大情報の扱いはSTEP3以降で再設計する)
+// 3. sourceTypeが"行政"/"交通"/"防災・気象"のいずれか(発信元)
+// 4. shopMatchesFlashBannerKeywords(shop) === true(内容。発信元だけでは
+//    候補にしない。例:sourceType"行政"の祭り告知は対象外)
+// 5. 緊急/ライフライン(matchesEmergencyOrLifelineKeywords)は地域を問わず
+//    対象、それ以外の交通系はgetSuggestionAreaPriorityRank(shop) <= 2の
+//    ものだけを対象にする
+//
+// 並び順：緊急/ライフライン優先 → 地域rank → 新しさ
+const FACTUAL_IMPORTANT_INFO_SOURCE_TYPES = [
+  "行政",
+  "交通",
+  "防災・気象"
+];
 
-  if (flashCandidate) {
-    return {
-      shop: flashCandidate,
-      isSafety: true
-    };
+function selectFactualImportantInfoCandidate() {
+  const candidates =
+    shops
+      .filter(function(shop) {
+        if (shop.postType !== "admin") {
+          return false;
+        }
+
+        if (shop.authorType !== "ai") {
+          return false;
+        }
+
+        if (
+          FACTUAL_IMPORTANT_INFO_SOURCE_TYPES.includes(
+            shop.sourceType
+          ) === false
+        ) {
+          return false;
+        }
+
+        if (shopMatchesFlashBannerKeywords(shop) === false) {
+          return false;
+        }
+
+        if (matchesEmergencyOrLifelineKeywords(shop)) {
+          return true;
+        }
+
+        return getSuggestionAreaPriorityRank(shop) <= 2;
+      })
+      .sort(function(firstShop, secondShop) {
+        const importanceDifference =
+          Number(matchesEmergencyOrLifelineKeywords(secondShop)) -
+          Number(matchesEmergencyOrLifelineKeywords(firstShop));
+
+        if (importanceDifference !== 0) {
+          return importanceDifference;
+        }
+
+        const areaPriorityDifference =
+          getSuggestionAreaPriorityRank(firstShop) -
+          getSuggestionAreaPriorityRank(secondShop);
+
+        if (areaPriorityDifference !== 0) {
+          return areaPriorityDifference;
+        }
+
+        return (
+          getDateValue(secondShop.createdAt) -
+          getDateValue(firstShop.createdAt)
+        );
+      });
+
+  if (candidates.length === 0) {
+    return null;
   }
 
-  const suggestionCandidate =
-    selectSuggestionCandidate();
+  return candidates[0];
+}
 
-  if (suggestionCandidate) {
+
+// ⚡「今、知っておきたいこと」はSTEP2でselectFactualImportantInfoCandidate()
+// (事実・重大情報専用)のみを対象にする。selectSuggestionCandidate()への
+// フォールバックはSTEP2で廃止した(✨と⚡の役割を完全に分離するため)。
+// 該当する事実・重大情報が無ければnullを返し、統合枠自体を非表示にする。
+// selectLocationAwareFlashCandidateForUnifiedInfo()・selectSuggestionCandidate()
+// 本体はいずれも無変更のまま保持する(未使用)。
+function resolveUnifiedImportantInfoCandidate() {
+  const factualCandidate =
+    selectFactualImportantInfoCandidate();
+
+  if (factualCandidate) {
     return {
-      shop: suggestionCandidate.shop,
-      isSafety:
-        suggestionCandidate.isSafety === true
+      shop: factualCandidate,
+      isSafety: true
     };
   }
 
