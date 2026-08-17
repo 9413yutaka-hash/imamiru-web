@@ -1851,6 +1851,12 @@ function renderShops() {
 
   updateUnifiedImportantInfo();
 
+  // ✨あなたへの提案は60秒更新・カテゴリー切替・お気に入り切替・ホーム復帰の
+  // いずれでもrenderShops()経由で再評価する。selectTravelerSuggestionCandidate()
+  // 自体はselectedCategoryに依存しないため、カテゴリー切替等で候補が
+  // 変わることはない(依存関係を持たないだけで、無条件に再評価しても安全)。
+  updateTravelerSuggestionCard();
+
   // 店舗カード描画専用の配列。getVisibleShops()自体・updateShopMarkers()・
   // updateFlashBanner()・updateUnifiedImportantInfo()はすべてvisibleShops
   // (またはgetVisibleShops()の独自呼び出し)を無変更のまま使い続けるため、
@@ -4154,6 +4160,59 @@ function selectSuggestionCandidate() {
 }
 
 
+// ✨「あなたへの提案」専用の候補選定。selectSuggestionCandidate()本体には
+// 一切触れず、店舗一覧のselectedCategoryにも依存しない(getVisibleShops()
+// ではなくグローバルshops配列全体を対象にするため、カテゴリー切替・
+// お気に入り切替の影響を受けない)。既存のgetSuggestionAreaPriorityRank()・
+// getSuggestionCategoryPriorityRank()・shopMatchesFlashBannerKeywords()・
+// getDateValue()はいずれも無変更のまま呼び出すだけ。
+// 緊急・防災・ライフライン・交通障害(shopMatchesFlashBannerKeywords()一致)は
+// 明示的に除外し、この枠では扱わない(将来「今、知っておきたいこと」へ集約)。
+function selectTravelerSuggestionCandidate() {
+  const candidates =
+    shops
+      .filter(function(shop) {
+        return (
+          shop.postType === "admin" &&
+          getSuggestionAreaPriorityRank(shop) <= 2 &&
+          (
+            shop.category === "イベント" ||
+            shop.category === "観光・体験"
+          ) &&
+          shopMatchesFlashBannerKeywords(shop) === false
+        );
+      })
+      .sort(function(firstShop, secondShop) {
+        const areaPriorityDifference =
+          getSuggestionAreaPriorityRank(firstShop) -
+          getSuggestionAreaPriorityRank(secondShop);
+
+        if (areaPriorityDifference !== 0) {
+          return areaPriorityDifference;
+        }
+
+        const categoryPriorityDifference =
+          getSuggestionCategoryPriorityRank(firstShop) -
+          getSuggestionCategoryPriorityRank(secondShop);
+
+        if (categoryPriorityDifference !== 0) {
+          return categoryPriorityDifference;
+        }
+
+        return (
+          getDateValue(secondShop.createdAt) -
+          getDateValue(firstShop.createdAt)
+        );
+      });
+
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  return candidates[0];
+}
+
+
 // getWeatherConditionEmoji()の分類結果と、buildWeatherAdviceText()と同じ
 // heatIndexC(なければtemperatureC)の35℃基準を再利用して天候を分類する。
 // getWeatherConditionEmoji()・buildWeatherAdviceText()自体は変更しない。
@@ -4286,6 +4345,72 @@ function updateSuggestionCard(weather) {
 }
 
 
+// ✨「あなたへの提案」専用の薄い更新関数。updateSuggestionCard()本体には
+// 一切触れず、#suggestionCardのDOMだけを再利用する。候補選定は
+// selectTravelerSuggestionCandidate()(selectedCategoryに非依存)、
+// メッセージ生成は既存buildSuggestionMessageText()をそのまま再利用する
+// (isSafetyは常にfalseを渡す。selectTravelerSuggestionCandidate()が
+// 安全系を候補から除外済みのため)。
+// userAreaName未確定(GPS未取得)、または天候未取得の場合は必ず非表示にする。
+// 那覇等へのフォールバック表示は行わない。
+function updateTravelerSuggestionCard() {
+  const suggestionCard =
+    document.getElementById("suggestionCard");
+
+  const suggestionMessage =
+    document.getElementById("suggestionMessage");
+
+  const suggestionDetailButton =
+    document.getElementById("suggestionDetailButton");
+
+  if (
+    !suggestionCard ||
+    !suggestionMessage ||
+    !suggestionDetailButton
+  ) {
+    return;
+  }
+
+  if (
+    typeof userAreaName !== "string" ||
+    userAreaName === "" ||
+    latestWeatherForMachinauSuggestion === null
+  ) {
+    suggestionCard.style.display = "none";
+    suggestionDetailButton.style.display = "none";
+    suggestionDetailButton.onclick = null;
+    return;
+  }
+
+  const selectedShop =
+    selectTravelerSuggestionCandidate();
+
+  if (!selectedShop) {
+    suggestionCard.style.display = "none";
+    suggestionDetailButton.style.display = "none";
+    suggestionDetailButton.onclick = null;
+    return;
+  }
+
+  suggestionMessage.textContent =
+    buildSuggestionMessageText(
+      { shop: selectedShop, isSafety: false },
+      latestWeatherForMachinauSuggestion
+    );
+
+  suggestionDetailButton.style.display = "";
+
+  suggestionDetailButton.onclick =
+    function() {
+      openShopModal(
+        selectedShop.firestoreId
+      );
+    };
+
+  suggestionCard.style.display = "";
+}
+
+
 // fetchWeather()・resolveAreaNameFromCoordinates()を再度呼び出さず、
 // GPS成功時に既に実行されている既存呼び出しの結果(latestWeatherForMachinauSuggestion・
 // isAreaNameResolvedForMachinauSuggestion)と、shops読み込み完了状態
@@ -4314,9 +4439,10 @@ function tryGenerateMachinauSuggestion(gpsSessionId) {
   generatedMachinauSuggestionGpsSessionId =
     gpsSessionId;
 
-  updateSuggestionCard(
-    latestWeatherForMachinauSuggestion
-  );
+  // ✨あなたへの提案はupdateSuggestionCard()(旧ロジック、安全系候補を含む)
+  // ではなく、新しいupdateTravelerSuggestionCard()を使う。
+  // updateSuggestionCard()本体は無変更のまま保持する(未使用)。
+  updateTravelerSuggestionCard();
 
   updateUnifiedImportantInfo();
 }

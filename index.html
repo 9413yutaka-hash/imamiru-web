@@ -179,11 +179,10 @@
       padding: 10px 0;
     }
 
-    /* 旧「マチナウからの提案」「ゲリラ情報」枠は、既存の候補選定・更新
-       ロジック(selectSuggestionCandidate()/updateSuggestionCard()/
-       updateFlashBanner())をそのまま動かしつつ、DOMは維持したまま
-       旅行者画面には表示しない。「⚡ 今、知っておきたいこと」へ統合。 */
-    #suggestionCard,
+    /* #suggestionCardは✨「あなたへの提案」として独立表示する(STEP1)。
+       旧「ゲリラ情報」枠(.flash-banner)は、既存の候補選定・更新ロジック
+       (updateFlashBanner())をそのまま動かしつつ、DOMは維持したまま
+       旅行者画面には引き続き表示しない。「⚡ 今、知っておきたいこと」へ統合。 */
     .flash-banner {
       display: none !important;
     }
@@ -608,7 +607,7 @@
       >
 
         <span class="weather-location-label">
-          マチナウからの提案
+          ✨ あなたへの提案
         </span>
 
         <p
