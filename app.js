@@ -1340,6 +1340,16 @@ function convertSubmissionToShop(
     area:
       typeof data.area === "string"
         ? data.area.trim()
+        : "",
+
+    authorType:
+      typeof data.authorType === "string"
+        ? data.authorType.trim()
+        : "",
+
+    sourceType:
+      typeof data.sourceType === "string"
+        ? data.sourceType.trim()
         : ""
   };
 }

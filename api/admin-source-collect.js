@@ -2513,6 +2513,11 @@ async function judgeArticleForAutoPost(
       ? sourceData.area.trim()
       : "";
 
+  const sourceType =
+    typeof sourceData.sourceType === "string"
+      ? sourceData.sourceType.trim()
+      : "";
+
   const relevanceResult =
     computeRelevance(
       {
@@ -2603,7 +2608,8 @@ async function judgeArticleForAutoPost(
   return {
     outcome: "PROCEED",
     relevanceResult: relevanceResult,
-    sourceArea: articleArea
+    sourceArea: articleArea,
+    sourceType: sourceType
   };
 }
 
@@ -2850,7 +2856,8 @@ function buildDraftContentText(article, trimmedSourceUrlValue, combinedText) {
 
 function buildAutoDraftFromArticle(
   articleData,
-  sourceArea
+  sourceArea,
+  sourceType
 ) {
   const title =
     articleData.title.trim();
@@ -2892,6 +2899,10 @@ function buildAutoDraftFromArticle(
     area:
       typeof sourceArea === "string"
         ? sourceArea
+        : "",
+    sourceType:
+      typeof sourceType === "string"
+        ? sourceType
         : ""
   };
 }
@@ -2964,6 +2975,9 @@ async function createAutoPostSubmission(
 
           sourceLabel:
             "マチナウ運営より",
+
+          sourceType:
+            draft.sourceType,
 
           createdAt:
             FieldValue.serverTimestamp(),
@@ -3184,7 +3198,8 @@ async function processDiscoveredArticleForAutoPost(
     const draft =
       buildAutoDraftFromArticle(
         claimedData,
-        judgment.sourceArea
+        judgment.sourceArea,
+        judgment.sourceType
       );
 
     const submissionId =
