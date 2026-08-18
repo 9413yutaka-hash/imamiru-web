@@ -340,7 +340,7 @@
 <body>
 
   <header class="top-bar">
-    <div class="top-bar-inner">
+    <div class="top-bar-inner" style="flex-wrap:wrap;">
 
       <div class="brand-area">
 
@@ -365,6 +365,28 @@
         今を配信中
       </div>
 
+      <div
+        id="languageSwitcher"
+        style="display:inline-flex; align-items:center; gap:4px; padding:3px; border-radius:999px; background:var(--background);"
+      >
+        <button
+          type="button"
+          class="language-switch-button"
+          data-language="ja"
+          style="border:none; background:var(--white); padding:6px 10px; border-radius:999px; font-size:11px; font-weight:800; color:var(--blue); cursor:pointer; white-space:nowrap; box-shadow:0 2px 6px rgba(20, 52, 82, 0.12);"
+        >
+          🌐 日本語
+        </button>
+        <button
+          type="button"
+          class="language-switch-button"
+          data-language="en"
+          style="border:none; background:transparent; padding:6px 10px; border-radius:999px; font-size:11px; font-weight:800; color:var(--subtext); cursor:pointer; white-space:nowrap;"
+        >
+          🌐 English
+        </button>
+      </div>
+
     </div>
   </header>
 
@@ -376,7 +398,7 @@
         沖縄の「今」をリアルタイム配信
       </div>
 
-      <h1>
+      <h1 data-i18n="hero_heading">
         今、沖縄で<br>
         何が起きているか。
       </h1>
@@ -402,7 +424,7 @@
           </div>
 
           <div>
-            <h2>
+            <h2 data-i18n="location_heading">
               あなたの現在地
             </h2>
 
@@ -418,6 +440,7 @@
           class="location-button"
           type="button"
           onclick="getLocation()"
+          data-i18n="location_button_get"
         >
           現在地を取得
         </button>
@@ -673,7 +696,7 @@
         style="display:none;"
       >
 
-        <span class="weather-location-label">
+        <span class="weather-location-label" data-i18n="suggestion_heading">
           ✨ あなたへの提案
         </span>
 
@@ -688,6 +711,7 @@
           class="location-button"
           type="button"
           style="display:none; margin-top: 12px;"
+          data-i18n="detail_button"
         >
           この情報を見る
         </button>
@@ -705,11 +729,11 @@
 
         <div class="section-title-area">
 
-          <h2>
+          <h2 data-i18n="shops_heading">
             今、近くで楽しめる場所
           </h2>
 
-          <p>
+          <p data-i18n="shops_description">
             気になるカテゴリーを選んでください。
           </p>
 
@@ -729,7 +753,7 @@
           data-category="すべて"
           onclick="selectCategory('すべて', this)"
         >
-          ✨ すべて
+          ✨ <span data-i18n="category_all">すべて</span>
         </button>
 
         <button
@@ -738,7 +762,7 @@
           data-category="お気に入り"
           onclick="selectCategory('お気に入り', this)"
         >
-          ❤️ お気に入り
+          ❤️ <span data-i18n="category_favorite">お気に入り</span>
         </button>
 
         <button
@@ -747,7 +771,7 @@
           data-category="グルメ"
           onclick="selectCategory('グルメ', this)"
         >
-          🍜 グルメ
+          🍜 <span data-i18n="category_gourmet">グルメ</span>
         </button>
 
         <button
@@ -756,7 +780,7 @@
           data-category="カフェ・スイーツ"
           onclick="selectCategory('カフェ・スイーツ', this)"
         >
-          🥭 カフェ・スイーツ
+          🥭 <span data-i18n="category_cafe_sweets">カフェ・スイーツ</span>
         </button>
 
         <button
@@ -765,7 +789,7 @@
           data-category="ショッピング"
           onclick="selectCategory('ショッピング', this)"
         >
-          🛍️ ショッピング
+          🛍️ <span data-i18n="category_shopping">ショッピング</span>
         </button>
 
         <button
@@ -774,7 +798,7 @@
           data-category="イベント"
           onclick="selectCategory('イベント', this)"
         >
-          🎵 イベント
+          🎵 <span data-i18n="category_event">イベント</span>
         </button>
 
         <button
@@ -783,7 +807,7 @@
           data-category="観光・体験"
           onclick="selectCategory('観光・体験', this)"
         >
-          🏝️ 観光・体験
+          🏝️ <span data-i18n="category_sightseeing">観光・体験</span>
         </button>
 
         <button
@@ -792,7 +816,7 @@
           data-category="ナイトスポット"
           onclick="selectCategory('ナイトスポット', this)"
         >
-          🌃 ナイトスポット
+          🌃 <span data-i18n="category_nightlife">ナイトスポット</span>
         </button>
 
         <button
@@ -801,7 +825,7 @@
           data-category="美容・リラクゼーション"
           onclick="selectCategory('美容・リラクゼーション', this)"
         >
-          💆 美容・リラクゼーション
+          💆 <span data-i18n="category_beauty">美容・リラクゼーション</span>
         </button>
 
         <button
@@ -810,7 +834,7 @@
           data-category="宿泊"
           onclick="selectCategory('宿泊', this)"
         >
-          🏨 宿泊
+          🏨 <span data-i18n="category_lodging">宿泊</span>
         </button>
 
       </div>
@@ -841,7 +865,7 @@
     >
 
       <div class="unified-important-info-header">
-        <span class="unified-important-info-heading">
+        <span class="unified-important-info-heading" data-i18n="factual_heading">
           ⚡ 今、知っておきたいこと
         </span>
         <span
@@ -870,6 +894,7 @@
         id="unifiedImportantInfoDetailButton"
         class="location-button"
         type="button"
+        data-i18n="detail_button"
       >
         この情報を見る
       </button>
@@ -883,10 +908,10 @@
     >
 
       <div class="today-machinau-header">
-        <span class="today-machinau-heading">
+        <span class="today-machinau-heading" data-i18n="today_machinau_heading">
           🔥 今日のマチナウ
         </span>
-        <span class="today-machinau-label">
+        <span class="today-machinau-label" data-i18n="today_machinau_label">
           運営情報
         </span>
       </div>
@@ -911,6 +936,7 @@
         id="todayMachinauDetailButton"
         class="location-button"
         type="button"
+        data-i18n="detail_button"
       >
         この情報を見る
       </button>
@@ -1054,7 +1080,7 @@
         🏠
       </span>
 
-      ホーム
+      <span data-i18n="nav_home">ホーム</span>
     </button>
 
     <button
@@ -1066,7 +1092,7 @@
         🔍
       </span>
 
-      見つける
+      <span data-i18n="nav_find">見つける</span>
     </button>
 
     <button
@@ -1078,7 +1104,7 @@
         📍
       </span>
 
-      現在地
+      <span data-i18n="nav_location">現在地</span>
     </button>
 
     <button
@@ -1090,7 +1116,7 @@
         👤
       </span>
 
-      マイページ
+      <span data-i18n="nav_mypage">マイページ</span>
     </button>
 
   </nav>
@@ -1177,6 +1203,9 @@
 
   <!-- マチナウのFirebase接続設定 -->
   <script src="firebase.js"></script>
+
+  <!-- 固定UI文言専用の翻訳辞書(投稿本文は扱わない)。app.jsより先に読み込む -->
+  <script src="translations.js"></script>
 
   <!-- トップページの動き -->
   <script src="app.js"></script>

@@ -10,6 +10,130 @@ let selectedCategory = "すべて";
 // bottom-navigation「見つける」/「ホーム」からのみ)。
 let isShowingAllShopCards = false;
 
+// ---- Ver1.7｜多言語化の器(固定UI文言専用) ----
+// ここで扱うのは画面の固定UI文言(見出し・ボタン・カテゴリー表示ラベル等)だけ。
+// category / area / sourceType / postType / authorType / selectedCategory と
+// いった内部判定用の値、およびFirestore由来の投稿本文(title/content/
+// shopName等)には一切触れない。翻訳データそのものはtranslations.js
+// (MACHINAU_TRANSLATIONS / MACHINAU_SUPPORTED_LANGUAGES / MACHINAU_DEFAULT_LANGUAGE /
+// getMachinauTranslation())側に定義されており、app.jsより先に読み込まれる。
+
+const MACHINAU_LANGUAGE_STORAGE_KEY = "machinauLanguage";
+
+// localStorageの値が未保存・不正・利用不可な場合は必ずMACHINAU_DEFAULT_LANGUAGEへ
+// フォールバックする(空表示・エラーを避ける)。
+function getCurrentMachinauLanguage() {
+  let storedLanguage = null;
+
+  try {
+    storedLanguage = localStorage.getItem(MACHINAU_LANGUAGE_STORAGE_KEY);
+  } catch (error) {
+    storedLanguage = null;
+  }
+
+  if (
+    typeof storedLanguage === "string" &&
+    MACHINAU_SUPPORTED_LANGUAGES.includes(storedLanguage)
+  ) {
+    return storedLanguage;
+  }
+
+  return MACHINAU_DEFAULT_LANGUAGE;
+}
+
+function saveMachinauLanguage(language) {
+  try {
+    localStorage.setItem(MACHINAU_LANGUAGE_STORAGE_KEY, language);
+  } catch (error) {
+    // localStorageが使えない環境でも、表示切替自体は継続する。
+  }
+}
+
+// #locationButtonはgetLocation()(本体は変更しない)がGPS成功時に
+// 文言を直接書き換えるため、data-i18n属性の一括置換だけでは正しい状態を
+// 追従できない。userLatitudeの有無で現在の状態を判定し、ここでだけ
+// 個別に文言を決める(getLocation()本体には一切触れない)。
+function updateLocationButtonLanguage(language) {
+  const locationButton = document.getElementById("locationButton");
+
+  if (!locationButton) {
+    return;
+  }
+
+  const translationKey =
+    userLatitude !== null
+      ? "location_button_update"
+      : "location_button_get";
+
+  const translatedText =
+    getMachinauTranslation(translationKey, language);
+
+  if (translatedText) {
+    locationButton.textContent = translatedText;
+  }
+}
+
+function updateLanguageSwitcherUi(language) {
+  const switcherButtons =
+    document.querySelectorAll(
+      "#languageSwitcher .language-switch-button"
+    );
+
+  switcherButtons.forEach(function (button) {
+    const isActive =
+      button.getAttribute("data-language") === language;
+
+    button.style.background = isActive ? "var(--white)" : "transparent";
+    button.style.color = isActive ? "var(--blue)" : "var(--subtext)";
+    button.style.boxShadow =
+      isActive ? "0 2px 6px rgba(20, 52, 82, 0.12)" : "none";
+  });
+}
+
+// 固定UI文言(data-i18n属性を持つ要素)だけを選択言語へ差し替える。
+// Firestore由来の投稿本文・category等の内部値には一切触れない。
+// GPS状態・スクロール位置・カテゴリー選択状態は変更しない(何も再取得・
+// 再描画しないため自然に維持される)。
+function applyMachinauLanguage(language) {
+  document.documentElement.lang = language;
+
+  document.querySelectorAll("[data-i18n]").forEach(function (element) {
+    const key = element.getAttribute("data-i18n");
+    const translatedText = getMachinauTranslation(key, language);
+
+    if (translatedText) {
+      element.innerHTML = translatedText;
+    }
+  });
+
+  updateLocationButtonLanguage(language);
+  updateLanguageSwitcherUi(language);
+}
+
+function switchMachinauLanguage(language) {
+  if (!MACHINAU_SUPPORTED_LANGUAGES.includes(language)) {
+    return;
+  }
+
+  saveMachinauLanguage(language);
+  applyMachinauLanguage(language);
+}
+
+function initializeMachinauLanguageSwitcher() {
+  applyMachinauLanguage(getCurrentMachinauLanguage());
+
+  const switcherButtons =
+    document.querySelectorAll(
+      "#languageSwitcher .language-switch-button"
+    );
+
+  switcherButtons.forEach(function (button) {
+    button.addEventListener("click", function () {
+      switchMachinauLanguage(button.getAttribute("data-language"));
+    });
+  });
+}
+
 function loadFavoriteShopIdsFromStorage() {
   let rawFavoriteShopIds = null;
 
@@ -219,6 +343,24 @@ function createGoogleMapUrl(
 }
  
 
+// getCategoryDisplay()のcategoryText表示ラベルだけをtranslations.jsの
+// 辞書キーへ対応させるための表(内部category値そのものは変更しない)。
+// カフェ/居酒屋は旧カテゴリーのエイリアスのため、現行カテゴリーと同じ
+// キーへ揃えている。
+const CATEGORY_TRANSLATION_KEYS_BY_INTERNAL_CATEGORY = {
+  グルメ: "category_gourmet",
+  カフェ: "category_cafe_sweets",
+  "カフェ・スイーツ": "category_cafe_sweets",
+  ショッピング: "category_shopping",
+  イベント: "category_event",
+  "観光・体験": "category_sightseeing",
+  ナイトスポット: "category_nightlife",
+  居酒屋: "category_nightlife",
+  "美容・リラクゼーション": "category_beauty",
+  宿泊: "category_lodging",
+  お知らせ: "category_notice"
+};
+
 function getCategoryDisplay(
   category
 ) {
@@ -345,7 +487,7 @@ function getCategoryDisplay(
     }
   };
 
-  return (
+  const baseDisplay =
     categorySettings[category] ||
     {
       categoryText:
@@ -357,8 +499,39 @@ function getCategoryDisplay(
 
       visualClass:
         "visual-event"
+    };
+
+  // 表示ラベル(categoryText)だけを選択言語の辞書で差し替える。内部の
+  // category値・emoji・visualClassには一切触れない(translations.js未読込・
+  // 未対応カテゴリーの場合は何もせず日本語のまま返す)。
+  // 選択言語が日本語(正本)の場合は、既存のcategoryText(「グルメ・飲食店」等の
+  // 詳しい表記)をそのまま使い続けるため上書きしない。翻訳辞書のja値は
+  // カテゴリーボタン等の短いラベル用であり、この長い表記とは別物のため。
+  const translationKey =
+    CATEGORY_TRANSLATION_KEYS_BY_INTERNAL_CATEGORY[category];
+
+  if (
+    translationKey &&
+    typeof getMachinauTranslation === "function" &&
+    typeof getCurrentMachinauLanguage === "function" &&
+    getCurrentMachinauLanguage() !== MACHINAU_DEFAULT_LANGUAGE
+  ) {
+    const translatedCategoryText =
+      getMachinauTranslation(
+        translationKey,
+        getCurrentMachinauLanguage()
+      );
+
+    if (translatedCategoryText) {
+      return Object.assign(
+        {},
+        baseDisplay,
+        { categoryText: translatedCategoryText }
+      );
     }
-  );
+  }
+
+  return baseDisplay;
 }
 
 function getDateValue(
@@ -5383,6 +5556,8 @@ document.addEventListener(
     loadApprovedSubmissions();
 
     startExpiryDisplayRefreshTimer();
+
+    initializeMachinauLanguageSwitcher();
   }
 );
 // Googleマップを表示する
