@@ -5377,6 +5377,138 @@ function waitForFirebase(
   );
 }
 
+const SUBMISSIONS_CACHE_STORAGE_KEY =
+  "machinauSubmissionsCache";
+
+// マチナウは「今」の情報が価値のアプリのため、既存のWEATHER_CACHE(15分)より
+// 大幅に短いTTLとする。目的は同一タブでの短時間の連続リロード等による
+// 無駄なFirestore再読み込みを防ぐことのみ(新しいタブ・新規訪問者には
+// sessionStorageの性質上まったく影響しない)。⚡の防災・気象情報等、
+// 鮮度が重要な情報を1分以上古いまま表示し続けないよう60秒とする。
+const SUBMISSIONS_CACHE_MAX_AGE_MILLISECONDS =
+  60 * 1000;
+
+
+function readSubmissionsCache() {
+  try {
+    const rawCache =
+      sessionStorage.getItem(
+        SUBMISSIONS_CACHE_STORAGE_KEY
+      );
+
+    if (!rawCache) {
+      return null;
+    }
+
+    const parsedCache =
+      JSON.parse(
+        rawCache
+      );
+
+    if (
+      !parsedCache ||
+      typeof parsedCache !== "object" ||
+      typeof parsedCache.cachedAt !== "number" ||
+      !Array.isArray(parsedCache.shops) ||
+      (parsedCache.nearestExpiryTime !== null &&
+        typeof parsedCache.nearestExpiryTime !== "number")
+    ) {
+      return null;
+    }
+
+    if (
+      Date.now() - parsedCache.cachedAt >
+      SUBMISSIONS_CACHE_MAX_AGE_MILLISECONDS
+    ) {
+      return null;
+    }
+
+    return {
+      shops:
+        parsedCache.shops,
+      nearestExpiryTime:
+        parsedCache.nearestExpiryTime
+    };
+  } catch (error) {
+    return null;
+  }
+}
+
+
+function writeSubmissionsCache(
+  shopsToCache,
+  nearestExpiryTime
+) {
+  try {
+    sessionStorage.setItem(
+      SUBMISSIONS_CACHE_STORAGE_KEY,
+      JSON.stringify({
+        cachedAt: Date.now(),
+        shops: shopsToCache,
+        nearestExpiryTime: nearestExpiryTime
+      })
+    );
+  } catch (error) {
+    // sessionStorageが利用できない環境でも掲載情報表示自体は継続する
+  }
+}
+
+
+// loadApprovedSubmissions()のFirestore取得経路・キャッシュ復元経路の
+// 両方から呼ばれる共通の反映処理。shops配列への反映・再描画・期限タイマー
+// 設定という既存ロジックを1箇所にまとめ、2つの経路で処理内容が
+// ずれないようにする。renderShops()等の既存関数自体は一切変更しない。
+function applyLoadedSubmissions(
+  loadedShops,
+  nearestExpiryTime
+) {
+  shops =
+    loadedShops;
+
+  updateTopCounts(
+    shops.length
+  );
+
+  hideSampleNotice();
+
+  renderShops();
+
+  markShopsLoadedForMachinauSuggestion();
+
+  console.log(
+    "✅ 期限内の広告を読み込みました：" +
+    shops.length +
+    "件"
+  );
+
+  if (
+    nearestExpiryTime !== null
+  ) {
+    const millisecondsUntilExpiry =
+      Math.max(
+        1000,
+        nearestExpiryTime -
+          Date.now() +
+          1000
+      );
+
+    window.machinauExpiryTimer =
+      window.setTimeout(
+        function() {
+          console.log(
+            "⏰ 掲載期限を確認し直します。"
+          );
+
+          closeShopModal();
+
+          loadApprovedSubmissions();
+        },
+        millisecondsUntilExpiry
+      );
+  }
+}
+
+
 async function loadApprovedSubmissions() {
   renderLoading();
 
@@ -5387,6 +5519,24 @@ async function loadApprovedSubmissions() {
 
     window.machinauExpiryTimer =
       null;
+  }
+
+  const cachedSubmissions =
+    readSubmissionsCache();
+
+  if (cachedSubmissions) {
+    console.log(
+      "🗂️ セッションキャッシュから掲載情報を復元しました：" +
+      cachedSubmissions.shops.length +
+      "件"
+    );
+
+    applyLoadedSubmissions(
+      cachedSubmissions.shops,
+      cachedSubmissions.nearestExpiryTime
+    );
+
+    return;
   }
 
   try {
@@ -5404,6 +5554,11 @@ async function loadApprovedSubmissions() {
           "status",
           "==",
           "approved"
+        )
+        .where(
+          "expiresAt",
+          ">",
+          firebase.firestore.Timestamp.now()
         )
         .get();
 
@@ -5479,50 +5634,15 @@ async function loadApprovedSubmissions() {
       }
     );
 
-    shops =
-      approvedShops;
-
-    updateTopCounts(
-      shops.length
+    writeSubmissionsCache(
+      approvedShops,
+      nearestExpiryTime
     );
 
-    hideSampleNotice();
-
-    renderShops();
-
-    markShopsLoadedForMachinauSuggestion();
-
-    console.log(
-      "✅ 期限内の広告を読み込みました：" +
-      shops.length +
-      "件"
+    applyLoadedSubmissions(
+      approvedShops,
+      nearestExpiryTime
     );
-
-    if (
-      nearestExpiryTime !== null
-    ) {
-      const millisecondsUntilExpiry =
-        Math.max(
-          1000,
-          nearestExpiryTime -
-            Date.now() +
-            1000
-        );
-
-      window.machinauExpiryTimer =
-        window.setTimeout(
-          function() {
-            console.log(
-              "⏰ 掲載期限を確認し直します。"
-            );
-
-            closeShopModal();
-
-            loadApprovedSubmissions();
-          },
-          millisecondsUntilExpiry
-        );
-    }
   } catch (error) {
     console.error(
       "❌ 掲載情報の読み込みに失敗しました。",
