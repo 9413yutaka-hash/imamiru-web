@@ -5558,8 +5558,131 @@ document.addEventListener(
     startExpiryDisplayRefreshTimer();
 
     initializeMachinauLanguageSwitcher();
+
+    initializeMapLazyLoadObserver();
   }
 );
+
+// ---- Ver1.7｜Google Maps遅延ロード ----
+// ページを開いただけではGoogle Maps JavaScript APIを読み込まず、地図セクションが
+// 画面に近づいた時、またはGPS/トイレ検索操作時にだけ初回読み込みする。
+// initGoogleMap()本体・updateShopMarkers()・showCurrentLocationMarker()・
+// showShopInfoWindow()・getLocation()には一切触れない。
+
+const GOOGLE_MAPS_SCRIPT_URL =
+  "https://maps.googleapis.com/maps/api/js?key=AIzaSyC7LLuNBYIXKT1YcrIaiuwyFssKQyMMjkU&libraries=places";
+
+let googleMapsLoadPromise = null;
+
+// 1回だけ読み込む(既に読み込み中/読み込み済みなら同じPromiseを返す＝二重ロード防止)。
+// 失敗時も例外を投げず必ずresolveする(onclick属性から await せず呼んでも
+// 未処理のPromise拒否でconsoleエラーにならないようにするため)。失敗時は
+// googleMapsLoadPromiseをリセットし、次回呼び出しで再試行できるようにする。
+function ensureGoogleMapsLoaded() {
+  if (googleMapsLoadPromise) {
+    return googleMapsLoadPromise;
+  }
+
+  if (
+    typeof google !== "undefined" &&
+    google.maps &&
+    google.maps.Map
+  ) {
+    googleMapsLoadPromise = Promise.resolve(true);
+    return googleMapsLoadPromise;
+  }
+
+  googleMapsLoadPromise = new Promise(function (resolve) {
+    window.__machinauHandleGoogleMapsLoaded = function () {
+      try {
+        initGoogleMap();
+
+        // GPS取得がGoogle Maps読み込み完了より先に成功していた場合、
+        // 現在地マーカーを後追いで表示する(getLocation()本体は変更しない、
+        // showCurrentLocationMarker()本体も無変更のまま呼び出すだけ)。
+        if (
+          userLatitude !== null &&
+          userLongitude !== null
+        ) {
+          showCurrentLocationMarker(
+            userLatitude,
+            userLongitude
+          );
+        }
+      } catch (error) {
+        console.error(
+          "Google Mapsの初期化に失敗しました：",
+          error
+        );
+      }
+
+      resolve(true);
+    };
+
+    const script = document.createElement("script");
+
+    script.src =
+      GOOGLE_MAPS_SCRIPT_URL +
+      "&callback=__machinauHandleGoogleMapsLoaded";
+
+    script.async = true;
+    script.defer = true;
+
+    script.onerror = function () {
+      console.error(
+        "Google Maps JavaScript APIの読み込みに失敗しました。"
+      );
+
+      googleMapsLoadPromise = null;
+      resolve(false);
+    };
+
+    document.head.appendChild(script);
+  });
+
+  return googleMapsLoadPromise;
+}
+
+// 地図セクションがビューポート付近(300px手前)へ近づいたら自動的に読み込む。
+// IntersectionObserverが無い古いブラウザでは、フォールバックとして
+// ページ読み込みから少し待ってから読み込む(常時即ロードよりは遅延させる)。
+function initializeMapLazyLoadObserver() {
+  const mapSectionElement =
+    document.querySelector(".map-section");
+
+  if (!mapSectionElement) {
+    return;
+  }
+
+  if (typeof IntersectionObserver === "undefined") {
+    window.setTimeout(
+      ensureGoogleMapsLoaded,
+      2000
+    );
+
+    return;
+  }
+
+  const observer = new IntersectionObserver(
+    function (entries) {
+      const isNearViewport =
+        entries.some(function (entry) {
+          return entry.isIntersecting;
+        });
+
+      if (isNearViewport) {
+        ensureGoogleMapsLoaded();
+        observer.disconnect();
+      }
+    },
+    {
+      rootMargin: "300px 0px"
+    }
+  );
+
+  observer.observe(mapSectionElement);
+}
+
 // Googleマップを表示する
 function initGoogleMap() {
   const mapElement = document.getElementById("google-map");
@@ -5998,6 +6121,12 @@ async function searchNearbyToilets() {
 
     return;
   }
+
+  // Google Mapsが未読込(地図セクション未到達)の場合はここで初回読み込みを待つ。
+  // ensureGoogleMapsLoaded()本体は失敗時も例外を投げず必ずresolveするため、
+  // このawait自体が失敗することはない(読み込み失敗時はこの後のgoogle参照で
+  // 検知され、既存のcatchブロックで案内される)。
+  await ensureGoogleMapsLoaded();
 
   const nowTimestamp =
     Date.now();
