@@ -3721,6 +3721,30 @@ const WEATHER_CACHE_MAX_AGE_MILLISECONDS =
 const WEATHER_CACHE_MAX_COORDINATE_DELTA =
   0.05;
 
+// /api/weather へのリクエストURLを作る直前にのみ使う丸め桁数。
+// api/weather.js側のCOORDINATE_ROUNDING_DECIMAL_PLACESと同じ値(2桁)にすることで、
+// 近接する生GPS座標が同一のリクエストURLになり、Vercel/CDNの共有キャッシュで
+// 同じ地域の複数ユーザーのリクエストを集約できるようにする。
+// userLatitude/userLongitude等の元座標そのものは一切変更しない(現在地表示・
+// Google Maps・地域判定・距離計算・✨⚡🔥等は引き続き生座標を使用する)。
+const WEATHER_REQUEST_COORDINATE_ROUNDING_DECIMAL_PLACES =
+  2;
+
+
+function roundCoordinateForWeatherRequest(value) {
+  const roundingFactor =
+    Math.pow(
+      10,
+      WEATHER_REQUEST_COORDINATE_ROUNDING_DECIMAL_PLACES
+    );
+
+  return (
+    Math.round(
+      value * roundingFactor
+    ) / roundingFactor
+  );
+}
+
 
 function readWeatherCache(latitude, longitude) {
   try {
@@ -3800,12 +3824,22 @@ async function fetchWeather(latitude, longitude) {
     return cachedWeather;
   }
 
+  const requestLatitude =
+    roundCoordinateForWeatherRequest(
+      latitude
+    );
+
+  const requestLongitude =
+    roundCoordinateForWeatherRequest(
+      longitude
+    );
+
   const response =
     await fetch(
       "/api/weather?lat=" +
-      encodeURIComponent(latitude) +
+      encodeURIComponent(requestLatitude) +
       "&lon=" +
-      encodeURIComponent(longitude)
+      encodeURIComponent(requestLongitude)
     );
 
   const responseData =
