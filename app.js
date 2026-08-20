@@ -5540,27 +5540,46 @@ async function loadApprovedSubmissions() {
   }
 
   try {
-    const database =
-      await waitForFirebase(
-        10000
+    // 層3：Firestoreへ直接クエリするのをやめ、Vercel CDN共有キャッシュが
+    // 効く公開GETエンドポイント(api/moderate-submission.js、認証不要)経由で
+    // 取得する。既存のconvertSubmissionToShop()はdocumentSnapshot.data()・
+    // documentSnapshot.idしか参照しないため、その形だけを再現する最小限の
+    // ラッパーを都度作って渡す(convertSubmissionToShop自体は無変更)。
+    const response =
+      await fetch(
+        "/api/moderate-submission",
+        {
+          method: "GET"
+        }
       );
 
-    const querySnapshot =
-      await database
-        .collection(
-          "submissions"
-        )
-        .where(
-          "status",
-          "==",
-          "approved"
-        )
-        .where(
-          "expiresAt",
-          ">",
-          firebase.firestore.Timestamp.now()
-        )
-        .get();
+    let responseData =
+      null;
+
+    try {
+      responseData =
+        await response.json();
+    } catch (jsonError) {
+      throw new Error(
+        "掲載情報の解析に失敗しました。"
+      );
+    }
+
+    if (
+      !response.ok ||
+      !responseData ||
+      responseData.success !== true ||
+      !Array.isArray(
+        responseData.submissions
+      )
+    ) {
+      throw new Error(
+        responseData &&
+        responseData.message
+          ? responseData.message
+          : "掲載情報を取得できませんでした。"
+      );
+    }
 
     const approvedShops =
       [];
@@ -5571,10 +5590,30 @@ async function loadApprovedSubmissions() {
     let nearestExpiryTime =
       null;
 
-    querySnapshot.forEach(
+    responseData.submissions.forEach(
       function(
-        documentSnapshot
+        submissionItem
       ) {
+        const documentSnapshot =
+          {
+            id:
+              submissionItem &&
+              typeof submissionItem.id === "string"
+                ? submissionItem.id
+                : "",
+
+            data:
+              function() {
+                return (
+                  submissionItem &&
+                  submissionItem.fields &&
+                  typeof submissionItem.fields === "object"
+                )
+                  ? submissionItem.fields
+                  : {};
+              }
+          };
+
         const submissionData =
           documentSnapshot.data() ||
           {};

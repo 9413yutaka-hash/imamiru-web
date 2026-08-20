@@ -670,6 +670,144 @@ async function handleCloudinarySignatureRequest(
 }
 
 
+// TOP画面のFirestore資金防衛「層3」用。weather.js(commit 2068ce3)で本番実証済みの
+// Vercel CDN共有キャッシュ方式を再利用するが、TTLの値はそのまま流用しない。
+// ⚡(防災・気象・交通情報)は天気予報よりも鮮度の許容幅が狭いため、weather.jsの
+// 900秒ではなく、代表確認済みの「投稿反映の遅延は最大30秒程度まで許容」という
+// 判断に基づき30秒とする。
+const SUBMISSIONS_PUBLIC_LIST_SHARED_CACHE_MAX_AGE_SECONDS =
+  30;
+
+const SUBMISSIONS_PUBLIC_LIST_STALE_WHILE_REVALIDATE_SECONDS =
+  30;
+
+
+// Admin SDKのFirestore Timestampは、getter(seconds/nanoseconds)がクラス上で
+// 列挙不可(non-enumerable)なため、JSON.stringify()すると生のプライベート
+// フィールド{_seconds, _nanoseconds}がそのまま漏れてしまう(toJSON()も未定義)。
+// クライアント側app.jsのgetDateValue()はこの形を認識できないため、ここで
+// 明示的にISO文字列へ変換してから返す。Timestamp以外の値はそのまま通す。
+function convertFirestoreValueForPublicResponse(
+  value
+) {
+  if (
+    value &&
+    typeof value === "object" &&
+    typeof value.toDate === "function"
+  ) {
+    return value.toDate().toISOString();
+  }
+
+  return value;
+}
+
+
+// クライアントのconvertSubmissionToShop(documentSnapshot, index)が
+// documentSnapshot.data()・documentSnapshot.idのみを参照する作りであるため、
+// 同じ形(id / data相当のfields)で返せるよう、生ドキュメントの全フィールドを
+// 変換するだけに留める。カテゴリ・地域等によるサーバー側の絞り込みは行わない
+// (CDNで全訪問者に共有されるレスポンスのため、特定ユーザー向けの加工はしない)。
+function serializeSubmissionForPublicList(
+  documentSnapshot
+) {
+  const rawData =
+    documentSnapshot.data() ||
+    {};
+
+  const sanitizedFields =
+    {};
+
+  Object.keys(
+    rawData
+  ).forEach(
+    function(key) {
+      sanitizedFields[key] =
+        convertFirestoreValueForPublicResponse(
+          rawData[key]
+        );
+    }
+  );
+
+  return {
+    id:
+      documentSnapshot.id,
+
+    fields:
+      sanitizedFields
+  };
+}
+
+
+// TOP画面のloadApprovedSubmissions()から呼ばれる、認証不要の公開一覧取得。
+// 特定訪問者の位置情報・地域・カテゴリ・お気に入り等による絞り込みは行わない
+// (全訪問者で同一レスポンスを共有できるようにするため)。層1(既存の
+// status=="approved" && expiresAt>nowクエリ)と全く同じ条件をAdmin SDK側でも
+// 維持する。エラー時はこの関数内で完結させ、呼び出し元のCache-Control
+// no-storeデフォルトをそのまま活かす(成功時のみ後段でCache-Controlを上書き)。
+async function handlePublicSubmissionsListRequest(
+  request,
+  response
+) {
+  try {
+    const app =
+      getFirebaseAdminApp();
+
+    const database =
+      getFirestore(
+        app
+      );
+
+    const querySnapshot =
+      await database
+        .collection(
+          "submissions"
+        )
+        .where(
+          "status",
+          "==",
+          "approved"
+        )
+        .where(
+          "expiresAt",
+          ">",
+          Timestamp.now()
+        )
+        .get();
+
+    const submissions =
+      querySnapshot.docs.map(
+        serializeSubmissionForPublicList
+      );
+
+    // 成功時のみCDN共有キャッシュを許可する。エラー応答は呼び出し元で
+    // 設定済みのno-storeのままとし、失敗結果が他の訪問者へ配信されるのを防ぐ。
+    response.setHeader(
+      "Cache-Control",
+      "public, max-age=0, s-maxage=" +
+        SUBMISSIONS_PUBLIC_LIST_SHARED_CACHE_MAX_AGE_SECONDS +
+        ", stale-while-revalidate=" +
+        SUBMISSIONS_PUBLIC_LIST_STALE_WHILE_REVALIDATE_SECONDS
+    );
+
+    return response.status(200).json({
+      success: true,
+      submissions: submissions
+    });
+  } catch (error) {
+    console.error(
+      "公開submissions一覧取得エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message:
+        "掲載情報を取得できませんでした。時間をおいて、もう一度お試しください。"
+    });
+  }
+}
+
+
 export default async function handler(
   request,
   response
@@ -679,18 +817,30 @@ export default async function handler(
     "no-store"
   );
 
+  // GET: TOP画面向けの公開submissions一覧取得(認証不要、CDN共有キャッシュ対象)。
+  // 既存のPOST専用処理(投稿審査・Cloudinary署名発行)より前に分岐させ、
+  // 互いに影響しないようにする。
+  if (
+    request.method === "GET"
+  ) {
+    return handlePublicSubmissionsListRequest(
+      request,
+      response
+    );
+  }
+
   if (
     request.method !== "POST"
   ) {
     response.setHeader(
       "Allow",
-      "POST"
+      "GET, POST"
     );
 
     return response.status(405).json({
       success: false,
       message:
-        "POSTのみ利用できます。"
+        "GETまたはPOSTのみ利用できます。"
     });
   }
 
