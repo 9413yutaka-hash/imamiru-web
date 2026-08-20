@@ -1713,6 +1713,11 @@
     src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"
   ></script>
 
+  <!-- Cloudinary署名付きアップロード用の匿名認証(Authentication) -->
+  <script
+    src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"
+  ></script>
+
   <!-- マチナウのFirebase接続設定 -->
   <script src="firebase.js"></script>
 <!-- 住所を緯度・経度へ変換するGoogle Maps -->
@@ -1730,7 +1735,7 @@
       "cdhyctnp";
 
     const CLOUDINARY_UPLOAD_PRESET =
-      "imamiru_upload";
+      "machinau_signed_upload";
 
     const MAX_IMAGE_COUNT =
       5;
@@ -2657,6 +2662,113 @@
         }
       );
     }
+    // 既にFirebase Anonymous Authenticationでサインイン済みならそのユーザーの
+    // IDトークンをそのまま使い、未サインインの場合のみsignInAnonymously()を呼ぶ。
+    // (app.jsのgetAnonymousIdTokenForLocationCollection()と同じ考え方)
+    // 複数枚の画像を同時アップロードする際にsignInAnonymously()が
+    // 何回も並行実行されないよう、進行中のサインイン処理を1つの
+    // Promiseにまとめて使い回す(single-flight)。失敗時は次回リトライ
+    // できるようリセットする。
+    let cloudinaryAnonymousAuthPromise =
+      null;
+
+    function getAnonymousIdTokenForImageUpload() {
+      if (
+        typeof firebase === "undefined" ||
+        !firebase.auth
+      ) {
+        return Promise.reject(
+          new Error(
+            "画像アップロードの準備ができませんでした。"
+          )
+        );
+      }
+
+      const auth =
+        firebase.auth();
+
+      if (auth.currentUser) {
+        return auth.currentUser.getIdToken();
+      }
+
+      if (!cloudinaryAnonymousAuthPromise) {
+        cloudinaryAnonymousAuthPromise =
+          auth
+            .signInAnonymously()
+            .then(
+              function(credential) {
+                return credential.user;
+              }
+            )
+            .catch(
+              function(error) {
+                cloudinaryAnonymousAuthPromise =
+                  null;
+
+                throw error;
+              }
+            );
+      }
+
+      return cloudinaryAnonymousAuthPromise.then(
+        function(user) {
+          return user.getIdToken();
+        }
+      );
+    }
+
+    // Vercel Function(/api/moderate-submission、mode:"cloudinarySignature")
+    // からCloudinary signed upload用の短命な署名を取得する。画像1枚ごとに
+    // 都度取得し、使い回さない。
+    async function getCloudinaryUploadSignature() {
+      const idToken =
+        await getAnonymousIdTokenForImageUpload();
+
+      const response =
+        await fetch(
+          "/api/moderate-submission",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer " + idToken
+            },
+            body: JSON.stringify(
+              {
+                mode: "cloudinarySignature"
+              }
+            )
+          }
+        );
+
+      let responseData =
+        null;
+
+      try {
+        responseData =
+          await response.json();
+      } catch (jsonError) {
+        throw new Error(
+          "画像アップロードの準備に失敗しました。"
+        );
+      }
+
+      if (
+        !response.ok ||
+        !responseData ||
+        responseData.success !== true
+      ) {
+        throw new Error(
+          responseData &&
+          responseData.message
+            ? responseData.message
+            : "画像アップロードの準備に失敗しました。"
+        );
+      }
+
+      return responseData;
+    }
+
     async function uploadImageToCloudinary(
       file
     ) {
@@ -2693,14 +2805,38 @@
         "KB"
       );
 
+      const uploadSignature =
+        await getCloudinaryUploadSignature();
+
       formData.append(
         "file",
         compressedFile
       );
 
       formData.append(
+        "api_key",
+        uploadSignature.apiKey
+      );
+
+      formData.append(
+        "timestamp",
+        uploadSignature.timestamp
+      );
+
+      formData.append(
+        "signature",
+        uploadSignature.signature
+      );
+
+      formData.append(
         "upload_preset",
-        CLOUDINARY_UPLOAD_PRESET
+        uploadSignature.uploadPreset ||
+          CLOUDINARY_UPLOAD_PRESET
+      );
+
+      formData.append(
+        "folder",
+        uploadSignature.folder
       );
 
       const response =

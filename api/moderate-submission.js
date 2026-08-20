@@ -11,6 +11,10 @@ import {
 } from "firebase-admin/firestore";
 
 import {
+  getAuth
+} from "firebase-admin/auth";
+
+import {
   createHash,
   timingSafeEqual
 } from "node:crypto";
@@ -117,6 +121,32 @@ function readRequestBody(
   }
 
   return {};
+}
+
+
+function readBearerToken(
+  request
+) {
+  const authorizationHeader =
+    request.headers &&
+    request.headers.authorization;
+
+  if (
+    typeof authorizationHeader !== "string"
+  ) {
+    return "";
+  }
+
+  const match =
+    authorizationHeader.match(
+      /^Bearer\s+(.+)$/
+    );
+
+  if (!match) {
+    return "";
+  }
+
+  return match[1].trim();
 }
 
 
@@ -491,6 +521,155 @@ function buildReviewReason(
 }
 
 
+// post.htmlの既存unsigned upload preset(cloud name: cdhyctnp)と同じ値。
+// signed uploadへ移行後もpreset自体は流用する(preset側のsigning modeは
+// Cloudinary管理画面側の設定であり、signatureが正しければpresetが
+// unsignedのままでも署名付きリクエストは受理される)。
+const CLOUDINARY_UPLOAD_PRESET =
+  "machinau_signed_upload";
+
+// signed upload移行にあわせて新設する固定フォルダ。署名をアップロード
+// 以外の用途(任意のfolder・presetへの流用)に悪用しにくくするための
+// 追加防御。既存の表示ロジックはURLをそのまま使うだけでpath構造を
+// 解析していないため、フォルダの追加はimageUrls等の表示に影響しない。
+const CLOUDINARY_UPLOAD_FOLDER =
+  "machinau_submissions";
+
+
+function buildCloudinaryUploadSignature(
+  paramsToSign,
+  apiSecret
+) {
+  const sortedParamString =
+    Object.keys(
+      paramsToSign
+    )
+      .sort()
+      .map(
+        function(key) {
+          return (
+            key +
+            "=" +
+            paramsToSign[key]
+          );
+        }
+      )
+      .join("&");
+
+  return createHash("sha1")
+    .update(
+      sortedParamString + apiSecret,
+      "utf8"
+    )
+    .digest("hex");
+}
+
+
+// post.htmlの画像アップロード用。Firebase匿名認証のIDトークンを検証した
+// 上で、短命なCloudinary signed upload用の署名を発行する。Cloudinary
+// API secretはここでのみ使用し、レスポンスへは一切含めない。
+// エラーはこの関数の中で完結させ、呼び出し元のtry/catchには伝播させない。
+async function handleCloudinarySignatureRequest(
+  request,
+  response
+) {
+  try {
+    const idToken =
+      readBearerToken(
+        request
+      );
+
+    if (idToken === "") {
+      return response.status(401).json({
+        success: false,
+        message:
+          "認証情報がありません。"
+      });
+    }
+
+    const app =
+      getFirebaseAdminApp();
+
+    try {
+      await getAuth(app)
+        .verifyIdToken(
+          idToken
+        );
+    } catch (verifyError) {
+      return response.status(401).json({
+        success: false,
+        message:
+          "認証情報が正しくありません。"
+      });
+    }
+
+    const cloudinaryApiKey =
+      process.env.CLOUDINARY_API_KEY;
+
+    const cloudinaryApiSecret =
+      process.env.CLOUDINARY_API_SECRET;
+
+    if (
+      !cloudinaryApiKey ||
+      !cloudinaryApiSecret
+    ) {
+      console.error(
+        "CLOUDINARY_API_KEY または CLOUDINARY_API_SECRET が設定されていません。"
+      );
+
+      return response.status(500).json({
+        success: false,
+        message:
+          "画像アップロードの準備ができませんでした。時間をおいて、もう一度お試しください。"
+      });
+    }
+
+    const timestampSeconds =
+      Math.floor(
+        Date.now() / 1000
+      );
+
+    const paramsToSign =
+      {
+        folder:
+          CLOUDINARY_UPLOAD_FOLDER,
+
+        timestamp:
+          timestampSeconds,
+
+        upload_preset:
+          CLOUDINARY_UPLOAD_PRESET
+      };
+
+    const signature =
+      buildCloudinaryUploadSignature(
+        paramsToSign,
+        cloudinaryApiSecret
+      );
+
+    return response.status(200).json({
+      success: true,
+      signature: signature,
+      timestamp: timestampSeconds,
+      apiKey: cloudinaryApiKey,
+      uploadPreset: CLOUDINARY_UPLOAD_PRESET,
+      folder: CLOUDINARY_UPLOAD_FOLDER
+    });
+  } catch (error) {
+    console.error(
+      "Cloudinary署名発行エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message:
+        "画像アップロードの準備ができませんでした。時間をおいて、もう一度お試しください。"
+    });
+  }
+}
+
+
 export default async function handler(
   request,
   response
@@ -515,12 +694,21 @@ export default async function handler(
     });
   }
 
-  try {
-    const requestBody =
-      readRequestBody(
-        request
-      );
+  const requestBody =
+    readRequestBody(
+      request
+    );
 
+  if (
+    requestBody.mode === "cloudinarySignature"
+  ) {
+    return handleCloudinarySignatureRequest(
+      request,
+      response
+    );
+  }
+
+  try {
     const publicationNumber =
       normalizePublicationNumber(
         requestBody.publicationNumber

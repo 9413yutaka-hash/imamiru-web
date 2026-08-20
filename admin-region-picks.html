@@ -529,7 +529,7 @@
 
     // post.html / admin-post.html と同一設定。新しいCloudinary設定は作らない。
     const CLOUDINARY_CLOUD_NAME = "cdhyctnp";
-    const CLOUDINARY_UPLOAD_PRESET = "imamiru_upload";
+    const CLOUDINARY_UPLOAD_PRESET = "machinau_signed_upload";
     const MAX_IMAGE_COUNT = 5;
     const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
     const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -722,15 +722,65 @@
       imageInput.value = "";
     });
 
+    // post.html・admin-post.htmlに実装済みの署名取得方式と同じ考え方。
+    // この画面は既にfirebase.auth().onAuthStateChangedでADMIN_EMAILのみ
+    // 操作可能にゲートされているため、匿名認証は使わず既存のログイン済み
+    // ユーザーのIDトークンを取得する処理だけを追加する(認証設計そのものは
+    // 変更しない)。
+    async function getCloudinaryUploadSignature() {
+      const currentUser = firebase.auth().currentUser;
+
+      if (!currentUser) {
+        throw new Error(
+          "ログイン状態を確認できませんでした。管理画面から再度ログインしてください。"
+        );
+      }
+
+      const idToken = await currentUser.getIdToken();
+
+      const response = await fetch("/api/moderate-submission", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + idToken
+        },
+        body: JSON.stringify({ mode: "cloudinarySignature" })
+      });
+
+      let responseData = null;
+
+      try {
+        responseData = await response.json();
+      } catch (jsonError) {
+        throw new Error("画像アップロードの準備に失敗しました。");
+      }
+
+      if (!response.ok || !responseData || responseData.success !== true) {
+        throw new Error(
+          responseData && responseData.message
+            ? responseData.message
+            : "画像アップロードの準備に失敗しました。"
+        );
+      }
+
+      return responseData;
+    }
+
     async function uploadImageToCloudinary(file) {
       const uploadUrl =
         "https://api.cloudinary.com/v1_1/" +
         CLOUDINARY_CLOUD_NAME +
         "/image/upload";
 
+      const uploadSignature = await getCloudinaryUploadSignature();
+
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+      formData.append("api_key", uploadSignature.apiKey);
+      formData.append("timestamp", uploadSignature.timestamp);
+      formData.append("signature", uploadSignature.signature);
+      formData.append("upload_preset", uploadSignature.uploadPreset || CLOUDINARY_UPLOAD_PRESET);
+      formData.append("folder", uploadSignature.folder);
 
       const response = await fetch(uploadUrl, {
         method: "POST",
