@@ -106,8 +106,61 @@ function applyMachinauLanguage(language) {
     }
   });
 
+  // innerHTML一括置換と同じ考え方をaria-label属性にも適用する(工程2)。
+  // 対象はdata-i18n-aria-label属性を持つ要素のみで、既存のdata-i18n(innerHTML)
+  // の挙動には一切影響しない。
+  document.querySelectorAll("[data-i18n-aria-label]").forEach(function (element) {
+    const key = element.getAttribute("data-i18n-aria-label");
+    const translatedText = getMachinauTranslation(key, language);
+
+    if (translatedText) {
+      element.setAttribute("aria-label", translatedText);
+    }
+  });
+
   updateLocationButtonLanguage(language);
   updateLanguageSwitcherUi(language);
+}
+
+// 言語切替のためだけにFirestore再取得を発生させないよう、既にメモリ上にある
+// shops配列のcategoryText(表示用ラベル)だけを現在言語で再計算する。
+// shop.category(内部値・フィルタ条件で使用)は一切変更しない。
+// getCategoryDisplay()・renderShops()自体も変更しない(既存関数の再利用のみ)。
+function refreshShopCategoryTextForCurrentLanguage() {
+  shops.forEach(function (shop) {
+    const categoryDisplay = getCategoryDisplay(shop.category);
+    shop.categoryText = categoryDisplay.categoryText;
+  });
+
+  renderShops();
+}
+
+// 地域おすすめの見出し(📍 {地域}のおすすめ)だけを、Firestore再取得なしで
+// 現在言語へ再計算する。currentRegionRecommendationAreaNameは
+// showRegionRecommendationsForArea()が既に保持している値をそのまま使う
+// (地域名自体・showRegionRecommendationsForArea()本体には一切触れない)。
+function refreshRegionRecommendationHeadingForCurrentLanguage() {
+  const regionRecommendationHeading =
+    document.getElementById(
+      "regionRecommendationHeading"
+    );
+
+  if (
+    !regionRecommendationHeading ||
+    typeof currentRegionRecommendationAreaName !== "string" ||
+    currentRegionRecommendationAreaName === ""
+  ) {
+    return;
+  }
+
+  regionRecommendationHeading.textContent =
+    getMachinauTranslation(
+      "region_recommendation_heading_dynamic",
+      getCurrentMachinauLanguage()
+    ).replace(
+      "{AREA}",
+      currentRegionRecommendationAreaName
+    );
 }
 
 function switchMachinauLanguage(language) {
@@ -117,6 +170,16 @@ function switchMachinauLanguage(language) {
 
   saveMachinauLanguage(language);
   applyMachinauLanguage(language);
+
+  // shops配列のcategoryText再計算(内部でrenderShops()を呼ぶため、
+  // renderShops()経由で✨⚡🔥も既存ロジックのまま再評価・再描画される)。
+  refreshShopCategoryTextForCurrentLanguage();
+
+  // 地域おすすめはrenderShops()の対象外の独立セクションのため、
+  // 別途Firestore再取得なしで再描画する(regionRecommendationArticlesは
+  // 既に取得済みの配列をそのまま使う)。
+  renderRegionRecommendationCards();
+  refreshRegionRecommendationHeadingForCurrentLanguage();
 }
 
 function initializeMachinauLanguageSwitcher() {
@@ -266,7 +329,10 @@ function formatDistance(distanceKm) {
     distanceKm === null ||
     !Number.isFinite(distanceKm)
   ) {
-    return "現在地を取得";
+    return getMachinauTranslation(
+      "location_button_get",
+      getCurrentMachinauLanguage()
+    );
   }
 
   if (distanceKm < 1) {
@@ -290,7 +356,10 @@ function estimateWalkingTime(
     distanceKm === null ||
     !Number.isFinite(distanceKm)
   ) {
-    return "距離を確認";
+    return getMachinauTranslation(
+      "shop_walking_distance_unknown",
+      getCurrentMachinauLanguage()
+    );
   }
 
   const walkingMinutes =
@@ -302,13 +371,18 @@ function estimateWalkingTime(
     );
 
   if (walkingMinutes >= 120) {
-    return "車での移動推奨";
+    return getMachinauTranslation(
+      "shop_walking_car_recommended",
+      getCurrentMachinauLanguage()
+    );
   }
 
-  return (
-    "徒歩 約" +
-    walkingMinutes +
-    "分"
+  return getMachinauTranslation(
+    "shop_walking_minutes",
+    getCurrentMachinauLanguage()
+  ).replace(
+    "{N}",
+    walkingMinutes
   );
 }
 
@@ -623,7 +697,10 @@ function getExpiryDisplayText(
     expiryMilliseconds <= 0 ||
     remainingMilliseconds <= 0
   ) {
-    return "🆕 新着";
+    return getMachinauTranslation(
+      "shop_expiry_new",
+      getCurrentMachinauLanguage()
+    );
   }
 
   if (
@@ -639,10 +716,12 @@ function getExpiryDisplayText(
         )
       );
 
-    return (
-      "⚡ あと" +
-      remainingMinutesTotal +
-      "分"
+    return getMachinauTranslation(
+      "shop_expiry_minutes_left",
+      getCurrentMachinauLanguage()
+    ).replace(
+      "{N}",
+      remainingMinutesTotal
     );
   }
 
@@ -650,10 +729,16 @@ function getExpiryDisplayText(
     remainingMilliseconds <=
     24 * 60 * 60 * 1000
   ) {
-    return "🔥 今日だけ";
+    return getMachinauTranslation(
+      "shop_expiry_today_only",
+      getCurrentMachinauLanguage()
+    );
   }
 
-  return "🆕 新着";
+  return getMachinauTranslation(
+    "shop_expiry_new",
+    getCurrentMachinauLanguage()
+  );
 }
 
 function getJstMinutesSinceMidnight(
@@ -704,7 +789,10 @@ function getBusinessStatus(
 ) {
   if (shop.isOpen24Hours === true) {
     return {
-      text: "営業中",
+      text: getMachinauTranslation(
+        "shop_status_open",
+        getCurrentMachinauLanguage()
+      ),
       isOpen: true
     };
   }
@@ -720,7 +808,10 @@ function getBusinessStatus(
     businessEndTime === ""
   ) {
     return {
-      text: "掲載中",
+      text: getMachinauTranslation(
+        "shop_status_listed",
+        getCurrentMachinauLanguage()
+      ),
       isOpen: null
     };
   }
@@ -740,14 +831,20 @@ function getBusinessStatus(
     endMinutes === null
   ) {
     return {
-      text: "掲載中",
+      text: getMachinauTranslation(
+        "shop_status_listed",
+        getCurrentMachinauLanguage()
+      ),
       isOpen: null
     };
   }
 
   if (startMinutes === endMinutes) {
     return {
-      text: "営業中",
+      text: getMachinauTranslation(
+        "shop_status_open",
+        getCurrentMachinauLanguage()
+      ),
       isOpen: true
     };
   }
@@ -772,8 +869,14 @@ function getBusinessStatus(
   return {
     text:
       isOpen ?
-        "営業中" :
-        "営業時間外",
+        getMachinauTranslation(
+          "shop_status_open",
+          getCurrentMachinauLanguage()
+        ) :
+        getMachinauTranslation(
+          "shop_status_closed",
+          getCurrentMachinauLanguage()
+        ),
 
     isOpen: isOpen
   };
@@ -854,10 +957,12 @@ function getBusinessClosingText(
         )
       );
 
-    return (
-      "⚡ 営業終了まであと" +
-      remainingMinutesTotal +
-      "分"
+    return getMachinauTranslation(
+      "shop_closing_minutes",
+      getCurrentMachinauLanguage()
+    ).replace(
+      "{N}",
+      remainingMinutesTotal
     );
   }
 
@@ -869,10 +974,12 @@ function getBusinessClosingText(
       )
     );
 
-  return (
-    "⏰ 営業終了まであと" +
-    remainingHoursTotal +
-    "時間"
+  return getMachinauTranslation(
+    "shop_closing_hours",
+    getCurrentMachinauLanguage()
+  ).replace(
+    "{N}",
+    remainingHoursTotal
   );
 }
 
@@ -1004,15 +1111,20 @@ function getBusinessClosedMessage(
 
   if (startMinutes < endMinutes) {
     if (nowMinutes < startMinutes) {
-      return (
-        "🕘 本日は" +
-        businessStartTime +
-        "から営業します"
+      return getMachinauTranslation(
+        "shop_opens_today_at",
+        getCurrentMachinauLanguage()
+      ).replace(
+        "{START}",
+        businessStartTime
       );
     }
 
     if (nowMinutes >= endMinutes) {
-      return "🌙 本日の営業は終了しました";
+      return getMachinauTranslation(
+        "shop_closed_today",
+        getCurrentMachinauLanguage()
+      );
     }
 
     return "";
@@ -1022,7 +1134,10 @@ function getBusinessClosedMessage(
     endMinutes <= nowMinutes &&
     nowMinutes < startMinutes
   ) {
-    return "🌙 本日の営業は終了しました";
+    return getMachinauTranslation(
+      "shop_closed_today",
+      getCurrentMachinauLanguage()
+    );
   }
 
   return "";
@@ -1036,7 +1151,10 @@ function getBusinessHoursDisplayText(
   }
 
   if (shop.isOpen24Hours === true) {
-    return "🕘 24時間営業";
+    return getMachinauTranslation(
+      "shop_hours_24",
+      getCurrentMachinauLanguage()
+    );
   }
 
   const businessStartTime =
@@ -1070,15 +1188,24 @@ function getBusinessHoursDisplayText(
   }
 
   if (startMinutes === endMinutes) {
-    return "🕘 24時間営業";
+    return getMachinauTranslation(
+      "shop_hours_24",
+      getCurrentMachinauLanguage()
+    );
   }
 
-  return (
-    "🕘 営業時間 " +
-    businessStartTime +
-    "〜" +
-    businessEndTime
-  );
+  return getMachinauTranslation(
+    "shop_hours_range",
+    getCurrentMachinauLanguage()
+  )
+    .replace(
+      "{START}",
+      businessStartTime
+    )
+    .replace(
+      "{END}",
+      businessEndTime
+    );
 }
 
 function startExpiryDisplayRefreshTimer() {
@@ -1285,9 +1412,13 @@ function getCardVisualHtml(
       src="${escapeHtml(
         firstImageUrl
       )}"
-      alt="${escapeHtml(
-        shop.name
-      )}の掲載写真"
+      alt="${getMachinauTranslation(
+        "shop_image_alt",
+        getCurrentMachinauLanguage()
+      ).replace(
+        "{SHOP_NAME}",
+        escapeHtml(shop.name)
+      )}"
       loading="lazy"
       style="
         position: absolute;
@@ -1340,7 +1471,10 @@ function convertSubmissionToShop(
         data.name,
         data.businessName
       ],
-      "店舗名未登録"
+      getMachinauTranslation(
+        "shop_name_fallback",
+        getCurrentMachinauLanguage()
+      )
     );
 
   const title =
@@ -1350,7 +1484,10 @@ function convertSubmissionToShop(
         data.adTitle,
         data.headline
       ],
-      "今だけの情報"
+      getMachinauTranslation(
+        "shop_title_fallback",
+        getCurrentMachinauLanguage()
+      )
     );
 
   const content =
@@ -1361,7 +1498,10 @@ function convertSubmissionToShop(
         data.description,
         data.details
       ],
-      "詳しい情報は店舗へご確認ください。"
+      getMachinauTranslation(
+        "shop_content_fallback",
+        getCurrentMachinauLanguage()
+      )
     );
 
   const address =
@@ -1392,7 +1532,10 @@ function convertSubmissionToShop(
         data.eventTime,
         data.openingHours
       ],
-      "⚡ マチナウ掲載中"
+      getMachinauTranslation(
+        "shop_time_message_fallback",
+        getCurrentMachinauLanguage()
+      )
     );
 
   return {
@@ -1564,13 +1707,19 @@ function getPaymentBadgeTexts(
 
   if (hasCard) {
     badgeTexts.push(
-      "💳 カードOK"
+      getMachinauTranslation(
+        "shop_payment_card",
+        getCurrentMachinauLanguage()
+      )
     );
   }
 
   if (hasQr) {
     badgeTexts.push(
-      "📱 QR決済OK"
+      getMachinauTranslation(
+        "shop_payment_qr",
+        getCurrentMachinauLanguage()
+      )
     );
   }
 
@@ -1580,7 +1729,10 @@ function getPaymentBadgeTexts(
     !hasQr
   ) {
     badgeTexts.push(
-      "💴 現金のみ"
+      getMachinauTranslation(
+        "shop_payment_cash_only",
+        getCurrentMachinauLanguage()
+      )
     );
   }
 
@@ -1784,7 +1936,10 @@ function renderLoading() {
 
   shopsList.innerHTML = `
     <div class="sample-notice">
-      掲載中の情報を読み込んでいます…
+      ${getMachinauTranslation(
+        "shops_loading",
+        getCurrentMachinauLanguage()
+      )}
     </div>
   `;
 }
@@ -1803,9 +1958,10 @@ function renderLoadError(
 
   shopsList.innerHTML = `
     <div class="sample-notice">
-      掲載情報を読み込めませんでした。<br>
-      少し時間を置いて、
-      もう一度ページを更新してください。
+      ${getMachinauTranslation(
+        "shop_load_error",
+        getCurrentMachinauLanguage()
+      )}
       ${
         errorMessage
           ? `
@@ -1848,7 +2004,10 @@ function getMapButtonHtml(
       target="_blank"
       rel="noopener noreferrer"
     >
-      📍 地図
+      ${getMachinauTranslation(
+        "shop_map_button",
+        getCurrentMachinauLanguage()
+      )}
     </a>
   `;
 }
@@ -1873,7 +2032,10 @@ function getSourceLinkButtonHtml(
       target="_blank"
       rel="noopener noreferrer"
     >
-      🔗 情報元を見る
+      ${getMachinauTranslation(
+        "shop_source_link_button",
+        getCurrentMachinauLanguage()
+      )}
     </a>
   `;
 }
@@ -1889,12 +2051,6 @@ const FLASH_BANNER_TRANSPORT_KEYWORDS = [
 const FLASH_BANNER_EMERGENCY_KEYWORDS = [
   "避難", "警報", "台風", "津波", "大雨", "熱中症"
 ];
-
-const FLASH_BANNER_DEFAULT_TITLE_TEXT =
-  "今日だけの沖縄を、見逃さない。";
-
-const FLASH_BANNER_DEFAULT_MESSAGE_TEXT =
-  "タイムセールや限定イベントなど、今しか出会えない情報を配信します。";
 
 function shopMatchesFlashBannerKeywords(
   shop
@@ -1954,10 +2110,16 @@ function updateFlashBanner() {
 
   if (matchingShops.length === 0) {
     flashBannerTitle.textContent =
-      FLASH_BANNER_DEFAULT_TITLE_TEXT;
+      getMachinauTranslation(
+        "flash_banner_default_title",
+        getCurrentMachinauLanguage()
+      );
 
     flashBannerMessage.textContent =
-      FLASH_BANNER_DEFAULT_MESSAGE_TEXT;
+      getMachinauTranslation(
+        "flash_banner_default_message",
+        getCurrentMachinauLanguage()
+      );
 
     flashBannerDetailButton.style.display =
       "none";
@@ -1988,7 +2150,10 @@ function updateFlashBanner() {
     sortedMatchingShops[0];
 
   flashBannerTitle.textContent =
-    "🚨 速報：" +
+    getMachinauTranslation(
+      "flash_banner_breaking_prefix",
+      getCurrentMachinauLanguage()
+    ) +
     featuredShop.title;
 
   flashBannerMessage.textContent =
@@ -2092,8 +2257,10 @@ function renderShops() {
   ) {
     shopsList.innerHTML = `
       <div class="sample-notice">
-        現在、このカテゴリーに
-        掲載中の情報はありません。
+        ${getMachinauTranslation(
+          "shop_empty_category_notice",
+          getCurrentMachinauLanguage()
+        )}
       </div>
     `;
 
@@ -2228,7 +2395,10 @@ function renderShops() {
                       }
                     "
                     type="button"
-                    aria-label="お気に入り"
+                    aria-label="${getMachinauTranslation(
+                      "shop_favorite_aria_label",
+                      getCurrentMachinauLanguage()
+                    )}"
                     onclick="
                       event.stopPropagation();
                       toggleFavorite(
@@ -2267,7 +2437,10 @@ function renderShops() {
                     isAdminPost
                       ? `
                         <span class="admin-post-badge">
-                          🌺 マチナウ運営より
+                          ${getMachinauTranslation(
+                            "shop_admin_badge",
+                            getCurrentMachinauLanguage()
+                          )}
                         </span>
                       `
                       : businessStatus.text
@@ -2307,7 +2480,12 @@ function renderShops() {
                         ? escapeHtml(
                             expiryDisplayText
                           )
-                        : "🆕 新着"
+                        : escapeHtml(
+                            getMachinauTranslation(
+                              "shop_expiry_new",
+                              getCurrentMachinauLanguage()
+                            )
+                          )
                     }
                   </span>
 
@@ -2344,7 +2522,10 @@ function renderShops() {
                     shop.takeout === true
                       ? `
                         <span class="info-chip">
-                          🥡 テイクアウトOK
+                          ${getMachinauTranslation(
+                            "shop_takeout_ok",
+                            getCurrentMachinauLanguage()
+                          )}
                         </span>
                       `
                       : ""
@@ -2419,7 +2600,10 @@ function renderShops() {
                       )
                     "
                   >
-                    今の情報を見る
+                    ${getMachinauTranslation(
+                      "shop_detail_button",
+                      getCurrentMachinauLanguage()
+                    )}
                   </button>
 
                   ${getMapButtonHtml(
@@ -2458,7 +2642,12 @@ function renderFavoriteList() {
 
   if (favoriteShops.length === 0) {
     favoriteList.innerHTML =
-      "<p>まだお気に入りはありません。</p>";
+      "<p>" +
+      getMachinauTranslation(
+        "mypage_favorite_empty",
+        getCurrentMachinauLanguage()
+      ) +
+      "</p>";
     return;
   }
 
@@ -2475,7 +2664,13 @@ function renderFavoriteList() {
           ? `
             <img
               src="${escapeHtml(firstImageUrl)}"
-              alt="${escapeHtml(shop.name)}の掲載写真"
+              alt="${getMachinauTranslation(
+                "shop_image_alt",
+                getCurrentMachinauLanguage()
+              ).replace(
+                "{SHOP_NAME}",
+                escapeHtml(shop.name)
+              )}"
               loading="lazy"
               style="
                 width: 100%;
@@ -2516,7 +2711,10 @@ function renderFavoriteList() {
                   )
                 "
               >
-                今の情報を見る
+                ${getMachinauTranslation(
+                  "shop_detail_button",
+                  getCurrentMachinauLanguage()
+                )}
               </button>
             </div>
           </div>
@@ -2789,7 +2987,10 @@ function createModalSlider() {
     "machinauModalSlideImage";
 
   image.alt =
-    "店舗の掲載写真";
+    getMachinauTranslation(
+      "modal_slider_image_alt",
+      getCurrentMachinauLanguage()
+    );
 
   image.draggable =
     false;
@@ -2917,9 +3118,13 @@ function createModalSlider() {
 
       dot.setAttribute(
         "aria-label",
-        "写真" +
-        (index + 1) +
-        "を表示"
+        getMachinauTranslation(
+          "slider_dot_button",
+          getCurrentMachinauLanguage()
+        ).replace(
+          "{N}",
+          index + 1
+        )
       );
 
       dot.dataset.index =
@@ -2994,7 +3199,10 @@ function createModalSlider() {
     const previousButton =
       createSliderButton(
         "‹",
-        "前の写真",
+        getMachinauTranslation(
+          "slider_prev_button",
+          getCurrentMachinauLanguage()
+        ),
         "left"
       );
 
@@ -3017,7 +3225,10 @@ function createModalSlider() {
     const nextButton =
       createSliderButton(
         "›",
-        "次の写真",
+        getMachinauTranslation(
+          "slider_next_button",
+          getCurrentMachinauLanguage()
+        ),
         "right"
       );
 
@@ -3369,13 +3580,18 @@ function getOrCreateModalWebsiteButton(
     modalWebsiteButton.rel =
       "noopener noreferrer";
 
-    modalWebsiteButton.textContent =
-      "🔗 お店のページを見る";
-
     modalMapButtonElement.parentNode.insertBefore(
       modalWebsiteButton,
       modalMapButtonElement.nextSibling
     );
+  }
+
+  if (modalWebsiteButton) {
+    modalWebsiteButton.textContent =
+      getMachinauTranslation(
+        "modal_website_button",
+        getCurrentMachinauLanguage()
+      );
   }
 
   return modalWebsiteButton;
@@ -3540,7 +3756,11 @@ function openShopModal(
     selectedShop.takeout === true
   ) {
     modalText +=
-      "<br><br>🥡 テイクアウトOK";
+      "<br><br>" +
+      getMachinauTranslation(
+        "shop_takeout_ok",
+        getCurrentMachinauLanguage()
+      );
   }
 
   const modalPaymentBadgeTexts =
@@ -3919,31 +4139,85 @@ function buildWeatherAdviceText(weather) {
     heatIndexForAdvice !== null &&
     heatIndexForAdvice >= 35
   ) {
-    return "🌡 こまめな水分補給を";
+    return getMachinauTranslation(
+      "weather_advice_heat",
+      getCurrentMachinauLanguage()
+    );
   }
 
   if (
     weather.uvIndex !== null &&
     weather.uvIndex >= 8
   ) {
-    return "☀️ 紫外線対策を";
+    return getMachinauTranslation(
+      "weather_advice_uv",
+      getCurrentMachinauLanguage()
+    );
   }
 
   if (
     weather.chanceOfRain !== null &&
     weather.chanceOfRain >= 50
   ) {
-    return "☂ 傘があると安心";
+    return getMachinauTranslation(
+      "weather_advice_rain",
+      getCurrentMachinauLanguage()
+    );
   }
 
   if (
     weather.windKph !== null &&
     weather.windKph >= 20
   ) {
-    return "🌬 強風に注意";
+    return getMachinauTranslation(
+      "weather_advice_wind",
+      getCurrentMachinauLanguage()
+    );
   }
 
   return "";
+}
+
+
+// WeatherAPI.comへのリクエストはapi/weather.js側でlang=ja固定のまま維持する
+// (WeatherAPI資金防衛・15分CDN共有キャッシュ・座標2桁正規化・沖縄範囲判定は
+// 一切変更しない。言語ごとにWeatherAPIへ別リクエストを送るとCDNキャッシュキーが
+// 分裂し、同じ地域の利用者間でのキャッシュ共有が効かなくなり実アクセスが
+// 増えるため、そのような設計は採用しない)。
+// 日本語以外を選択した場合は、既存のgetWeatherConditionEmoji()と全く同じ
+// conditionCode分類を再利用し、天候概況だけをクライアント側で翻訳する。
+// これはAPIレスポンスに既に含まれるconditionCodeを再利用するだけであり、
+// WeatherAPIへの追加リクエストは一切発生しない。
+// getWeatherConditionEmoji()自体は無変更のまま呼び出すだけ。
+function getWeatherConditionDisplayText(weather) {
+  const language =
+    getCurrentMachinauLanguage();
+
+  if (language === MACHINAU_DEFAULT_LANGUAGE) {
+    return weather.conditionText || "";
+  }
+
+  const emoji =
+    getWeatherConditionEmoji(
+      weather.conditionCode
+    );
+
+  const conditionTranslationKeysByEmoji = {
+    "☀️": "weather_condition_sunny",
+    "☁️": "weather_condition_cloudy",
+    "☂": "weather_condition_rainy",
+    "⛈": "weather_condition_stormy",
+    "🌫": "weather_condition_foggy"
+  };
+
+  const translationKey =
+    conditionTranslationKeysByEmoji[emoji] ||
+    "weather_condition_fair";
+
+  return getMachinauTranslation(
+    translationKey,
+    language
+  );
 }
 
 
@@ -3993,20 +4267,26 @@ function updateWeatherDisplay(weather, locationLabelText) {
   weatherSummary.textContent =
     getWeatherConditionEmoji(weather.conditionCode) +
     " " +
-    (weather.conditionText || "") +
+    getWeatherConditionDisplayText(weather) +
     "　" +
     temperatureText;
 
   weatherFeelsLike.textContent =
     weather.feelsLikeC !== null
-      ? "体感 " + Math.round(weather.feelsLikeC) + "℃"
+      ? getMachinauTranslation(
+          "weather_feels_like_prefix",
+          getCurrentMachinauLanguage()
+        ) + Math.round(weather.feelsLikeC) + "℃"
       : "";
 
   const detailParts = [];
 
   if (weather.chanceOfRain !== null) {
     detailParts.push(
-      "☂ 降水" + weather.chanceOfRain + "%"
+      getMachinauTranslation(
+        "weather_rain_chance_prefix",
+        getCurrentMachinauLanguage()
+      ) + weather.chanceOfRain + "%"
     );
   }
 
@@ -4473,10 +4753,12 @@ function buildSuggestionMessageText(candidate, weather) {
     candidate.shop.title;
 
   if (candidate.isSafety) {
-    return (
-      "現在、移動や安全に関する情報があります。\n" +
-      "出発前に最新情報を確認してください。\n" +
-      "『" + shopTitle + "』"
+    return getMachinauTranslation(
+      "suggestion_safety",
+      getCurrentMachinauLanguage()
+    ).replace(
+      "{TITLE}",
+      shopTitle
     );
   }
 
@@ -4486,30 +4768,41 @@ function buildSuggestionMessageText(candidate, weather) {
     );
 
   if (weatherCategory === "RAIN") {
-    return (
-      "☔ 今は雨です。\n" +
-      "近くで『" + shopTitle + "』があります。\n" +
-      "雨宿りも兼ねて、少し寄り道しませんか？"
+    return getMachinauTranslation(
+      "suggestion_rain",
+      getCurrentMachinauLanguage()
+    ).replace(
+      "{TITLE}",
+      shopTitle
     );
   }
 
   if (weatherCategory === "HOT") {
-    return (
-      "🥵 暑さが厳しくなっています。\n" +
-      "無理のない移動をしながら『" + shopTitle + "』をチェックしてみませんか？"
+    return getMachinauTranslation(
+      "suggestion_hot",
+      getCurrentMachinauLanguage()
+    ).replace(
+      "{TITLE}",
+      shopTitle
     );
   }
 
   if (weatherCategory === "SUNNY") {
-    return (
-      "☀️ 今は天気が良さそうです。\n" +
-      "『" + shopTitle + "』をチェックしてみませんか？"
+    return getMachinauTranslation(
+      "suggestion_sunny",
+      getCurrentMachinauLanguage()
+    ).replace(
+      "{TITLE}",
+      shopTitle
     );
   }
 
-  return (
-    "📍 今いるエリアで『" + shopTitle + "』の情報があります。\n" +
-    "少しチェックしてみませんか？"
+  return getMachinauTranslation(
+    "suggestion_general",
+    getCurrentMachinauLanguage()
+  ).replace(
+    "{TITLE}",
+    shopTitle
   );
 }
 
@@ -4776,14 +5069,23 @@ function getLocation() {
     !navigator.geolocation
   ) {
     locationMessage.textContent =
-      "このブラウザでは位置情報を利用できません。";
+      getMachinauTranslation(
+        "location_geolocation_unsupported",
+        getCurrentMachinauLanguage()
+      );
 
     fetchWeather(
       NAHA_FALLBACK_LATITUDE,
       NAHA_FALLBACK_LONGITUDE
     )
       .then(function(weather) {
-        updateWeatherDisplay(weather, "那覇の天気");
+        updateWeatherDisplay(
+          weather,
+          getMachinauTranslation(
+            "weather_location_naha",
+            getCurrentMachinauLanguage()
+          )
+        );
       })
       .catch(function(error) {
         // 天候取得の失敗は既存の位置情報エラー表示に影響させない
@@ -4796,10 +5098,16 @@ function getLocation() {
     true;
 
   locationButton.textContent =
-    "確認しています…";
+    getMachinauTranslation(
+      "location_button_checking",
+      getCurrentMachinauLanguage()
+    );
 
   locationMessage.textContent =
-    "GPSから現在地を取得しています。";
+    getMachinauTranslation(
+      "location_message_fetching",
+      getCurrentMachinauLanguage()
+    );
 
   navigator.geolocation
     .getCurrentPosition(
@@ -4817,7 +5125,10 @@ function getLocation() {
         resetLocationPermissionGuide();
 
         locationMessage.textContent =
-          "現在地を取得しました。近い順に表示しています。";
+          getMachinauTranslation(
+            "location_message_success",
+            getCurrentMachinauLanguage()
+          );
 
         currentMapLink.href =
           createGoogleMapUrl(
@@ -4834,7 +5145,10 @@ function getLocation() {
           false;
 
         locationButton.textContent =
-          "現在地を更新";
+          getMachinauTranslation(
+            "location_button_update",
+            getCurrentMachinauLanguage()
+          );
 
         showCurrentLocationMarker(
           userLatitude,
@@ -4859,7 +5173,13 @@ function getLocation() {
           userLongitude
         )
           .then(function(weather) {
-            updateWeatherDisplay(weather, "現在地の天気");
+            updateWeatherDisplay(
+              weather,
+              getMachinauTranslation(
+                "weather_location_current",
+                getCurrentMachinauLanguage()
+              )
+            );
 
             if (
               suggestionGpsSessionId ===
@@ -4915,7 +5235,10 @@ function getLocation() {
 
       function(error) {
         let message =
-          "位置情報を取得できませんでした。";
+          getMachinauTranslation(
+            "location_error_generic",
+            getCurrentMachinauLanguage()
+          );
 
         resetLocationPermissionGuide();
 
@@ -4925,8 +5248,10 @@ function getLocation() {
          message =
     message +
     "\n\n" +
-    "① ブラウザの位置情報を「許可」に変更してください。\n" +
-    "② この画面に戻って「もう一度試す」を押してください。";
+    getMachinauTranslation(
+      "location_error_permission_denied_guide",
+      getCurrentMachinauLanguage()
+    );
 
           showLocationPermissionGuideToggle();
         }
@@ -4935,14 +5260,20 @@ function getLocation() {
           error.code === 2
         ) {
           message =
-            "現在地を確認できませんでした。";
+            getMachinauTranslation(
+              "location_error_position_unavailable",
+              getCurrentMachinauLanguage()
+            );
         }
 
         if (
           error.code === 3
         ) {
           message =
-            "取得に時間がかかりました。もう一度お試しください。";
+            getMachinauTranslation(
+              "location_error_timeout",
+              getCurrentMachinauLanguage()
+            );
         }
 
         locationMessage.textContent =
@@ -4952,14 +5283,23 @@ function getLocation() {
           false;
 
         locationButton.textContent =
-          "もう一度試す";
+          getMachinauTranslation(
+            "location_button_retry",
+            getCurrentMachinauLanguage()
+          );
 
         fetchWeather(
           NAHA_FALLBACK_LATITUDE,
           NAHA_FALLBACK_LONGITUDE
         )
           .then(function(weather) {
-            updateWeatherDisplay(weather, "那覇の天気");
+            updateWeatherDisplay(
+              weather,
+              getMachinauTranslation(
+                "weather_location_naha",
+                getCurrentMachinauLanguage()
+              )
+            );
           })
           .catch(function(error) {
             // 天候取得の失敗は既存の位置情報エラー表示に影響させない
@@ -4999,7 +5339,10 @@ function resetLocationPermissionGuide() {
       "none";
 
     locationPermissionGuideToggle.textContent =
-      "位置情報を許可する方法を見る";
+      getMachinauTranslation(
+        "location_permission_toggle_show",
+        getCurrentMachinauLanguage()
+      );
   }
 
   if (locationPermissionGuide) {
@@ -5071,8 +5414,14 @@ if (locationPermissionGuideToggleElement) {
 
       locationPermissionGuideToggleElement.textContent =
         isCurrentlyOpen
-          ? "位置情報を許可する方法を見る"
-          : "閉じる";
+          ? getMachinauTranslation(
+              "location_permission_toggle_show",
+              getCurrentMachinauLanguage()
+            )
+          : getMachinauTranslation(
+              "location_permission_toggle_close",
+              getCurrentMachinauLanguage()
+            );
     }
   );
 }
@@ -5359,7 +5708,10 @@ function waitForFirebase(
         ) {
           reject(
             new Error(
-              "Firebaseの準備が完了しませんでした。"
+              getMachinauTranslation(
+                "firebase_not_ready_error",
+                getCurrentMachinauLanguage()
+              )
             )
           );
 
@@ -5956,7 +6308,10 @@ function showShopInfoWindow(
           cursor:pointer;
         "
       >
-        今の情報を見る
+        ${getMachinauTranslation(
+          "shop_detail_button",
+          getCurrentMachinauLanguage()
+        )}
       </button>
     </div>
   `;
@@ -6054,7 +6409,10 @@ function showCurrentLocationMarker(
         new google.maps.Marker({
           position: position,
           map: googleMapInstance,
-          title: "現在地",
+          title: getMachinauTranslation(
+            "current_location_marker_title",
+            getCurrentMachinauLanguage()
+          ),
 
           icon: {
             path:
@@ -6112,7 +6470,10 @@ function showToiletInfoWindow(
         🚻 ${escapeHtml(toiletName)}
       </strong>
       <p style="margin:0 0 8px; font-size:13px; color:#444;">
-        現在地から ${escapeHtml(formatDistance(toiletDistanceKm))}
+        ${getMachinauTranslation(
+          "toilet_distance_from_current_location_prefix",
+          getCurrentMachinauLanguage()
+        )}${escapeHtml(formatDistance(toiletDistanceKm))}
       </p>
       ${
         toiletMapUrl
@@ -6132,7 +6493,10 @@ function showToiletInfoWindow(
                 text-decoration:none;
               "
             >
-              Google Mapsで開く
+              ${getMachinauTranslation(
+                "toilet_open_in_google_maps",
+                getCurrentMachinauLanguage()
+              )}
             </a>
           `
           : ""
@@ -6171,7 +6535,10 @@ function renderToiletMarkers(
   if (toiletPlaces.length === 0) {
     if (toiletMessage) {
       toiletMessage.textContent =
-        "半径1km以内にトイレ情報が見つかりませんでした。";
+        getMachinauTranslation(
+          "toilet_not_found",
+          getCurrentMachinauLanguage()
+        );
 
       toiletMessage.style.display =
         "block";
@@ -6223,7 +6590,10 @@ function renderToiletMarkers(
     function(toiletEntry) {
       const toiletName =
         toiletEntry.place.displayName ||
-        "トイレ";
+        getMachinauTranslation(
+          "toilet_default_name",
+          getCurrentMachinauLanguage()
+        );
 
       const toiletMapUrl =
         toiletEntry.place.googleMapsURI ||
@@ -6270,9 +6640,13 @@ function renderToiletMarkers(
 
   if (toiletMessage) {
     toiletMessage.textContent =
-      "近くのトイレ " +
-      toiletsWithDistance.length +
-      "件が見つかりました。";
+      getMachinauTranslation(
+        "toilet_found_count",
+        getCurrentMachinauLanguage()
+      ).replace(
+        "{N}",
+        toiletsWithDistance.length
+      );
 
     toiletMessage.style.display =
       "block";
@@ -6307,7 +6681,10 @@ async function searchNearbyToilets() {
     !Number.isFinite(userLongitude)
   ) {
     toiletMessage.textContent =
-      "先に現在地を取得してください。";
+      getMachinauTranslation(
+        "toilet_precondition_location",
+        getCurrentMachinauLanguage()
+      );
 
     toiletMessage.style.display =
       "block";
@@ -6350,7 +6727,10 @@ async function searchNearbyToilets() {
     true;
 
   toiletMessage.textContent =
-    "近くのトイレを検索しています…";
+    getMachinauTranslation(
+      "toilet_searching",
+      getCurrentMachinauLanguage()
+    );
 
   toiletMessage.style.display =
     "block";
@@ -6416,7 +6796,10 @@ async function searchNearbyToilets() {
     );
 
     toiletMessage.textContent =
-      "トイレ情報の取得に失敗しました。しばらくしてから再度お試しください。";
+      getMachinauTranslation(
+        "toilet_search_error",
+        getCurrentMachinauLanguage()
+      );
 
     toiletMessage.style.display =
       "block";
@@ -6497,7 +6880,10 @@ function buildRegionRecommendationCardHtml(
           target="_blank"
           rel="noopener noreferrer"
         >
-          🔗 くわしく見る
+          ${getMachinauTranslation(
+            "region_recommendation_link_button",
+            getCurrentMachinauLanguage()
+          )}
         </a>
       `
       : "";
@@ -6524,7 +6910,10 @@ function buildRegionRecommendationCardHtml(
           type="button"
           class="region-recommendation-read-more-button"
         >
-          続きを読む
+          ${getMachinauTranslation(
+            "region_recommendation_read_more_button",
+            getCurrentMachinauLanguage()
+          )}
         </button>
       `
       : "";
@@ -6612,8 +7001,14 @@ function handleRegionRecommendationReadMoreClick(
 
   event.target.textContent =
     isCurrentlyExpanded
-      ? "続きを読む"
-      : "閉じる";
+      ? getMachinauTranslation(
+          "region_recommendation_read_more_button",
+          getCurrentMachinauLanguage()
+        )
+      : getMachinauTranslation(
+          "region_recommendation_collapse_button",
+          getCurrentMachinauLanguage()
+        );
 }
 
 
@@ -6676,7 +7071,12 @@ function renderRegionRecommendationCards() {
     }
 
     regionRecommendationList.innerHTML =
-      '<p class="region-recommendation-empty-message">この地域のおすすめは準備中です。</p>';
+      '<p class="region-recommendation-empty-message">' +
+      getMachinauTranslation(
+        "region_recommendation_empty_manual",
+        getCurrentMachinauLanguage()
+      ) +
+      '</p>';
 
     regionRecommendationMoreButton.style.display =
       "none";
@@ -6747,9 +7147,13 @@ async function showRegionRecommendationsForArea(
 
   if (regionRecommendationHeading) {
     regionRecommendationHeading.textContent =
-      "📍 " +
-      areaName +
-      "のおすすめ";
+      getMachinauTranslation(
+        "region_recommendation_heading_dynamic",
+        getCurrentMachinauLanguage()
+      ).replace(
+        "{AREA}",
+        areaName
+      );
   }
 
   try {
@@ -7273,7 +7677,10 @@ function getUnifiedImportantInfoLabelText(
     );
 
   if (matchesEmergencyOrLifeline) {
-    return "🚨 緊急";
+    return getMachinauTranslation(
+      "unified_info_label_emergency",
+      getCurrentMachinauLanguage()
+    );
   }
 
   const matchesTransport =
@@ -7284,18 +7691,30 @@ function getUnifiedImportantInfoLabelText(
     );
 
   if (matchesTransport) {
-    return "🚧 交通";
+    return getMachinauTranslation(
+      "unified_info_label_transport",
+      getCurrentMachinauLanguage()
+    );
   }
 
   if (shop.category === "イベント") {
-    return "🎵 イベント";
+    return getMachinauTranslation(
+      "unified_info_label_event",
+      getCurrentMachinauLanguage()
+    );
   }
 
   if (shop.category === "観光・体験") {
-    return "🏝️ 観光・体験";
+    return getMachinauTranslation(
+      "unified_info_label_sightseeing",
+      getCurrentMachinauLanguage()
+    );
   }
 
-  return "📢 お知らせ";
+  return getMachinauTranslation(
+    "unified_info_label_notice",
+    getCurrentMachinauLanguage()
+  );
 }
 
 
