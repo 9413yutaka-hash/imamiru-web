@@ -504,6 +504,21 @@ const MACHINAU_TRANSLATIONS = {
     en: "Discover what's happening right now."
   },
 
+  footer_terms_link: {
+    ja: "利用規約",
+    en: "Terms of Service"
+  },
+
+  footer_privacy_link: {
+    ja: "プライバシーポリシー",
+    en: "Privacy Policy"
+  },
+
+  footer_contact_link: {
+    ja: "お問い合わせ",
+    en: "Contact Us"
+  },
+
   location_geolocation_unsupported: {
     ja: "このブラウザでは位置情報を利用できません。",
     en: "This browser doesn't support location access."

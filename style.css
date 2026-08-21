@@ -1207,6 +1207,21 @@
       font-size: 11px;
     }
 
+    .footer-links {
+      margin-top: 14px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .footer-links a {
+      color: #8897a6;
+      font-size: 11px;
+      text-decoration: underline;
+    }
+
     @media (max-width: 700px) {
       .hero-inner {
         flex-direction: column;
