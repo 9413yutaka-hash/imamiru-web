@@ -393,22 +393,43 @@
   <section class="hero">
     <div class="hero-inner">
 
-      <div class="hero-kicker">
-        <span class="hero-kicker-dot"></span>
-        <span data-i18n="hero_kicker">沖縄の「今」をリアルタイム配信</span>
+      <div class="hero-copy">
+
+        <div class="hero-kicker">
+          <span class="hero-kicker-dot"></span>
+          <span data-i18n="hero_kicker">沖縄の「今」をリアルタイム配信</span>
+        </div>
+
+        <h1 data-i18n="hero_heading">
+          今、沖縄で<br>
+          何が起きているか。
+        </h1>
+
+        <p class="hero-description" data-i18n="hero_description">
+          近くのお店、今日だけのイベント、旅先の<span class="hero-description-emphasis">偶然の寄り道</span>。
+          今の沖縄が、ひと目でわかる。
+        </p>
+
       </div>
 
-      <h1 data-i18n="hero_heading">
-        今、沖縄で<br>
-        何が起きているか。
-      </h1>
-
-      <p class="hero-description" data-i18n="hero_description">
-        近くのお店、今日だけのイベント、旅先の<span class="hero-description-emphasis">偶然の寄り道</span>。
-        今の沖縄が、ひと目でわかる。
-      </p>
+      <div id="heroPhotoWrapper" class="hero-photo-wrapper" style="display:none;">
+        <button
+          id="heroPhotoButton"
+          type="button"
+          class="hero-photo-button"
+        >
+          <img
+            id="heroPhotoImage"
+            class="hero-photo-image"
+            src=""
+            alt=""
+          >
+        </button>
+      </div>
 
     </div>
+
+    <div class="hero-wave" aria-hidden="true"></div>
   </section>
 
   <main>

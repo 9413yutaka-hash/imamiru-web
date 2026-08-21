@@ -180,6 +180,10 @@ function switchMachinauLanguage(language) {
   // 既に取得済みの配列をそのまま使う)。
   renderRegionRecommendationCards();
   refreshRegionRecommendationHeadingForCurrentLanguage();
+
+  // Hero写真のalt文言(shop_image_altキー)を現在言語へ即時反映する。
+  // 候補選定・画像URL・Firestore再取得は発生しない(既存候補を再利用するだけ)。
+  updateHeroPhoto();
 }
 
 function initializeMachinauLanguageSwitcher() {
@@ -1923,6 +1927,194 @@ if (selectedCategory === "お気に入り") {
 
   return visibleShops;
 }
+
+// Hero写真の候補選定。getVisibleShops()は変更せず、selectedCategory(カテゴリータブ)に
+// 依存しない別ロジックとして、距離/エリア優先度/新しさの考え方だけを再利用する。
+// 追加Firestore read・追加GPS取得・追加APIは一切発生しない
+// (shops配列・userLatitude/userLongitudeとも既存の値をそのまま読むだけ)。
+function selectHeroPhotoCandidate() {
+  const candidatesWithPhoto =
+    shops.filter(
+      function(shop) {
+        return (
+          Array.isArray(shop.imageUrls) &&
+          shop.imageUrls.length > 0
+        );
+      }
+    );
+
+  if (candidatesWithPhoto.length === 0) {
+    return null;
+  }
+
+  const annotatedCandidates =
+    candidatesWithPhoto.map(
+      function(shop) {
+        let distanceKm =
+          null;
+
+        if (
+          userLatitude !== null &&
+          userLongitude !== null &&
+          Number.isFinite(shop.latitude) &&
+          Number.isFinite(shop.longitude)
+        ) {
+          distanceKm =
+            calculateDistance(
+              userLatitude,
+              userLongitude,
+              shop.latitude,
+              shop.longitude
+            );
+        }
+
+        return {
+          ...shop,
+
+          distanceKm:
+            distanceKm
+        };
+      }
+    );
+
+  annotatedCandidates.sort(
+    function(firstShop, secondShop) {
+      if (
+        userLatitude !== null &&
+        userLongitude !== null
+      ) {
+        if (
+          firstShop.distanceKm === null &&
+          secondShop.distanceKm === null
+        ) {
+          return (
+            getDateValue(secondShop.createdAt) -
+            getDateValue(firstShop.createdAt)
+          );
+        }
+
+        if (firstShop.distanceKm === null) {
+          return 1;
+        }
+
+        if (secondShop.distanceKm === null) {
+          return -1;
+        }
+
+        return (
+          firstShop.distanceKm -
+          secondShop.distanceKm
+        );
+      }
+
+      const firstAreaPriorityRank =
+        getAiAreaPriorityRank(firstShop);
+
+      const secondAreaPriorityRank =
+        getAiAreaPriorityRank(secondShop);
+
+      if (firstAreaPriorityRank !== secondAreaPriorityRank) {
+        return (
+          firstAreaPriorityRank -
+          secondAreaPriorityRank
+        );
+      }
+
+      return (
+        getDateValue(secondShop.createdAt) -
+        getDateValue(firstShop.createdAt)
+      );
+    }
+  );
+
+  return annotatedCandidates[0];
+}
+
+// Hero写真表示の更新。候補が0件の場合は既存のグラデーション+波のHeroへ
+// フォールバックし、エラー表示・ダミー画像は一切出さない。クリック時は
+// 既存のopenShopModal()をそのまま呼び出すだけで、新しいモーダルは作らない。
+function updateHeroPhoto() {
+  const heroPhotoWrapper =
+    document.getElementById("heroPhotoWrapper");
+
+  const heroPhotoButton =
+    document.getElementById("heroPhotoButton");
+
+  const heroPhotoImage =
+    document.getElementById("heroPhotoImage");
+
+  if (
+    !heroPhotoWrapper ||
+    !heroPhotoButton ||
+    !heroPhotoImage
+  ) {
+    return;
+  }
+
+  const candidate =
+    selectHeroPhotoCandidate();
+
+  if (!candidate) {
+    heroPhotoWrapper.style.display = "none";
+    heroPhotoButton.onclick = null;
+    return;
+  }
+
+  const photoUrl =
+    candidate.imageUrls[0];
+
+  if (heroPhotoImage.src !== photoUrl) {
+    heroPhotoImage.src = photoUrl;
+  }
+
+  heroPhotoImage.alt =
+    getMachinauTranslation(
+      "shop_image_alt",
+      getCurrentMachinauLanguage()
+    ).replace(
+      "{SHOP_NAME}",
+      escapeHtml(candidate.name)
+    );
+
+  heroPhotoButton.onclick =
+    function() {
+      openShopModal(candidate.firestoreId);
+    };
+
+  heroPhotoWrapper.style.display = "";
+}
+
+// shops配列・GPS(userLatitude)は、getLocation()・applyLoadedSubmissions()等の
+// 既存保護関数の内部で更新される。それらの関数自体には一切手を加えず、
+// 変化を検知した時だけHero写真を再評価する軽量ポーリング
+// (ネットワーク通信は発生しない、値の比較のみ)。
+let heroPhotoLastCheckedShopsLength =
+  -1;
+
+let heroPhotoLastCheckedLatitude =
+  null;
+
+function checkAndUpdateHeroPhotoIfChanged() {
+  if (
+    shops.length === heroPhotoLastCheckedShopsLength &&
+    userLatitude === heroPhotoLastCheckedLatitude
+  ) {
+    return;
+  }
+
+  heroPhotoLastCheckedShopsLength =
+    shops.length;
+
+  heroPhotoLastCheckedLatitude =
+    userLatitude;
+
+  updateHeroPhoto();
+}
+
+window.setInterval(
+  checkAndUpdateHeroPhotoIfChanged,
+  1000
+);
 
 function renderLoading() {
   const shopsList =
