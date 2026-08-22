@@ -9,6 +9,70 @@ import {
   getFirestore
 } from "firebase-admin/firestore";
 
+import {
+  timingSafeEqual
+} from "node:crypto";
+
+// admin-source-collect.jsのcron認証(X-Machinau-Cron-Secret)と同じ考え方・
+// 同じSecret(AI_COLLECT_CRON_SECRET)を再利用する。新規Secretは作らない。
+function readCronSecretHeader(
+  request
+) {
+  const headerValue =
+    request.headers &&
+    request.headers["x-machinau-cron-secret"];
+
+  if (
+    typeof headerValue !== "string"
+  ) {
+    return "";
+  }
+
+  return headerValue;
+}
+
+function cronSecretsMatch(
+  providedSecret,
+  expectedSecret
+) {
+  if (
+    typeof providedSecret !== "string" ||
+    typeof expectedSecret !== "string" ||
+    providedSecret === "" ||
+    expectedSecret === ""
+  ) {
+    return false;
+  }
+
+  const providedBuffer =
+    Buffer.from(
+      providedSecret,
+      "utf8"
+    );
+
+  const expectedBuffer =
+    Buffer.from(
+      expectedSecret,
+      "utf8"
+    );
+
+  if (
+    providedBuffer.length !==
+    expectedBuffer.length
+  ) {
+    return false;
+  }
+
+  try {
+    return timingSafeEqual(
+      providedBuffer,
+      expectedBuffer
+    );
+  } catch (error) {
+    return false;
+  }
+}
+
 function getFirebaseAdminApp() {
   if (getApps().length > 0) {
     return getApps()[0];
@@ -57,6 +121,27 @@ export default async function handler(
       success: false,
       message:
         "GETまたはPOSTのみ利用できます。"
+    });
+  }
+
+  const cronSecretHeaderValue =
+    readCronSecretHeader(
+      request
+    );
+
+  const expectedCronSecret =
+    process.env.AI_COLLECT_CRON_SECRET;
+
+  if (
+    !cronSecretsMatch(
+      cronSecretHeaderValue,
+      expectedCronSecret
+    )
+  ) {
+    return response.status(401).json({
+      success: false,
+      message:
+        "認証情報が正しくありません。"
     });
   }
 

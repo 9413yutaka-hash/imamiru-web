@@ -12,7 +12,8 @@ jobs:
     steps:
       - name: Call expire API
         run: |
-          curl -L https://imamiru-web.vercel.app/api/expire
+          curl -L https://imamiru-web.vercel.app/api/expire \
+            -H "X-Machinau-Cron-Secret: ${{ secrets.AI_COLLECT_CRON_SECRET }}"
 
   collect-sources:
     runs-on: ubuntu-latest
