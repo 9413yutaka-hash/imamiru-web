@@ -207,6 +207,40 @@ const AI_REVIEW_VERSION =
   "openai-omni-moderation-v1";
 
 
+// Ver1.8 Phase1｜AIコンシェルジュ。モデル名はここ1箇所のみで管理し、
+// 他の箇所へハードコードしない。AI_CONCIERGE_MODEL環境変数があれば
+// それを優先する(未設定時のみ既定値を使う)。
+const AI_CONCIERGE_MODEL =
+  process.env.AI_CONCIERGE_MODEL ||
+  "gpt-4o-mini";
+
+const AI_CONCIERGE_ENDPOINT =
+  "https://api.openai.com/v1/chat/completions";
+
+// Moderation(OPENAI_MODERATION_TIMEOUT_MS=20000、バックグラウンド処理)より
+// 短くする。こちらはユーザーが画面で待つ経路のため、体感速度を優先する。
+const AI_CONCIERGE_TIMEOUT_MS =
+  8000;
+
+const AI_CONCIERGE_MAX_CANDIDATES =
+  5;
+
+const AI_CONCIERGE_FIELD_MAX_LENGTHS =
+  {
+    title: 50,
+    category: 30,
+    area: 80,
+    availabilityHint: 60,
+    conditionText: 40
+  };
+
+const AI_CONCIERGE_CURRENT_TIME_MAX_LENGTH =
+  16;
+
+const AI_CONCIERGE_REASON_MAX_LENGTH =
+  200;
+
+
 const CATEGORY_LABELS = {
   "harassment":
     "嫌がらせ的な内容",
@@ -460,6 +494,533 @@ async function callOpenAiModeration(
   }
 
   return responseData.results;
+}
+
+
+// Ver1.8 Phase1｜候補1件分の入力値をサニタイズする。文字列は最大長で
+// 切り詰め、想定外の型は空文字/nullへ落とす。ここを通った値だけが
+// AIへのプロンプトに含まれる。
+function sanitizeAiConciergeCandidate(
+  rawCandidate
+) {
+  if (
+    !rawCandidate ||
+    typeof rawCandidate !== "object"
+  ) {
+    return null;
+  }
+
+  const id =
+    typeof rawCandidate.id === "string"
+      ? rawCandidate.id.trim()
+      : "";
+
+  if (id === "") {
+    return null;
+  }
+
+  function clippedText(value, maxLength) {
+    return typeof value === "string"
+      ? value.trim().slice(0, maxLength)
+      : "";
+  }
+
+  const distanceKm =
+    typeof rawCandidate.distanceKm === "number" &&
+    Number.isFinite(rawCandidate.distanceKm)
+      ? Math.round(rawCandidate.distanceKm * 10) / 10
+      : null;
+
+  return {
+    id: id,
+
+    title: clippedText(
+      rawCandidate.title,
+      AI_CONCIERGE_FIELD_MAX_LENGTHS.title
+    ),
+
+    category: clippedText(
+      rawCandidate.category,
+      AI_CONCIERGE_FIELD_MAX_LENGTHS.category
+    ),
+
+    area: clippedText(
+      rawCandidate.area,
+      AI_CONCIERGE_FIELD_MAX_LENGTHS.area
+    ),
+
+    availabilityHint: clippedText(
+      rawCandidate.availabilityHint,
+      AI_CONCIERGE_FIELD_MAX_LENGTHS.availabilityHint
+    ),
+
+    distanceKm: distanceKm
+  };
+}
+
+
+function sanitizeAiConciergeCandidateList(
+  rawCandidates
+) {
+  if (!Array.isArray(rawCandidates)) {
+    return [];
+  }
+
+  const sanitizedCandidates =
+    [];
+
+  for (
+    let candidateIndex = 0;
+    candidateIndex < rawCandidates.length &&
+      sanitizedCandidates.length < AI_CONCIERGE_MAX_CANDIDATES;
+    candidateIndex += 1
+  ) {
+    const sanitizedCandidate =
+      sanitizeAiConciergeCandidate(
+        rawCandidates[candidateIndex]
+      );
+
+    if (sanitizedCandidate) {
+      sanitizedCandidates.push(
+        sanitizedCandidate
+      );
+    }
+  }
+
+  return sanitizedCandidates;
+}
+
+
+function sanitizeAiConciergeWeather(
+  rawWeather
+) {
+  if (
+    !rawWeather ||
+    typeof rawWeather !== "object"
+  ) {
+    return null;
+  }
+
+  function numberOrNull(value) {
+    return typeof value === "number" &&
+      Number.isFinite(value)
+      ? value
+      : null;
+  }
+
+  return {
+    temperatureC: numberOrNull(rawWeather.temperatureC),
+    feelsLikeC: numberOrNull(rawWeather.feelsLikeC),
+    chanceOfRain: numberOrNull(rawWeather.chanceOfRain),
+    windKph: numberOrNull(rawWeather.windKph),
+    uvIndex: numberOrNull(rawWeather.uvIndex),
+
+    conditionText:
+      typeof rawWeather.conditionText === "string"
+        ? rawWeather.conditionText
+            .trim()
+            .slice(0, AI_CONCIERGE_FIELD_MAX_LENGTHS.conditionText)
+        : ""
+  };
+}
+
+
+// Ver1.8 Phase1｜候補外の場所を生成させないための指示を明記する。
+// 「候補リストの中からIDで1件選ぶ」以外の振る舞いを許可しない。
+function buildAiConciergePrompt(
+  payload
+) {
+  const languageLabel =
+    payload.language === "en" ? "English" : "Japanese";
+
+  const systemInstruction =
+    "You are Machinau's travel concierge. You must choose exactly ONE candidate " +
+    "from the JSON \"candidates\" array in the user message that is most meaningful " +
+    "for this traveler right now, considering the provided area, current time, " +
+    "weather, distance, category, and availability hint. " +
+    "You must NEVER invent, rename, or describe a place, shop, or event that is " +
+    "not in the candidates list. The value of \"suggestedShopId\" in your response " +
+    "MUST be exactly one of the \"id\" values in the candidates array, copied " +
+    "verbatim. Do not state specific facts (hours, prices, distance) that are not " +
+    "present in the matching candidate's data. " +
+    "Reply with a single JSON object only, with exactly these keys: " +
+    "\"suggestedShopId\" (string, one of the candidate ids), " +
+    "\"reasonShort\" (string, one short sentence written in " + languageLabel + "), " +
+    "\"cautionNote\" (string in " + languageLabel + ", or null). " +
+    "No extra text before or after the JSON object.";
+
+  const userContent =
+    JSON.stringify({
+      area: payload.area,
+      currentTime: payload.currentTime,
+      weather: payload.weather,
+      candidates: payload.candidates
+    });
+
+  return {
+    systemInstruction: systemInstruction,
+    userContent: userContent
+  };
+}
+
+
+// callOpenAiModeration()と同じfetchベースの呼び出し方式(SDK不使用、
+// AbortControllerによるタイムアウト)を踏襲する。エンドポイント・モデル・
+// レスポンス形式(json_object)のみ異なる。
+async function callOpenAiConcierge(
+  payload
+) {
+  const apiKey =
+    process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    const configError =
+      new Error(
+        "OPENAI_API_KEY が設定されていません。"
+      );
+
+    configError.isMissingApiKey =
+      true;
+
+    throw configError;
+  }
+
+  const prompt =
+    buildAiConciergePrompt(
+      payload
+    );
+
+  const controller =
+    new AbortController();
+
+  const timeoutId =
+    setTimeout(
+      function() {
+        controller.abort();
+      },
+      AI_CONCIERGE_TIMEOUT_MS
+    );
+
+  let response;
+
+  try {
+    response =
+      await fetch(
+        AI_CONCIERGE_ENDPOINT,
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+
+            "Authorization":
+              "Bearer " + apiKey
+          },
+
+          body:
+            JSON.stringify({
+              model:
+                AI_CONCIERGE_MODEL,
+
+              response_format:
+                { type: "json_object" },
+
+              messages: [
+                {
+                  role: "system",
+                  content: prompt.systemInstruction
+                },
+                {
+                  role: "user",
+                  content: prompt.userContent
+                }
+              ]
+            }),
+
+          signal:
+            controller.signal
+        }
+      );
+  } finally {
+    clearTimeout(
+      timeoutId
+    );
+  }
+
+  if (!response.ok) {
+    const httpError =
+      new Error(
+        "OpenAI APIがエラーを返しました。status=" +
+          response.status
+      );
+
+    httpError.isHttpError =
+      true;
+
+    throw httpError;
+  }
+
+  let responseData;
+
+  try {
+    responseData =
+      await response.json();
+  } catch (jsonError) {
+    const parseError =
+      new Error(
+        "OpenAI APIの応答を解析できませんでした。"
+      );
+
+    parseError.isJsonError =
+      true;
+
+    throw parseError;
+  }
+
+  const messageContent =
+    responseData &&
+    Array.isArray(responseData.choices) &&
+    responseData.choices[0] &&
+    responseData.choices[0].message &&
+    typeof responseData.choices[0].message.content === "string"
+      ? responseData.choices[0].message.content
+      : "";
+
+  if (messageContent === "") {
+    const shapeError =
+      new Error(
+        "OpenAI APIの応答形式が不正です。"
+      );
+
+    shapeError.isJsonError =
+      true;
+
+    throw shapeError;
+  }
+
+  try {
+    return JSON.parse(
+      messageContent
+    );
+  } catch (contentParseError) {
+    const invalidJsonError =
+      new Error(
+        "AI応答のJSON解析に失敗しました。"
+      );
+
+    invalidJsonError.isJsonError =
+      true;
+
+    throw invalidJsonError;
+  }
+}
+
+
+// サーバー側での候補ID一致検証(必須)。ここを通らない応答は一切採用せず、
+// 呼び出し元がsuccess:falseを返してクライアント側のルールベース
+// フォールバックへ委ねる。
+function isValidAiConciergeSuggestion(
+  suggestion,
+  candidates
+) {
+  if (
+    !suggestion ||
+    typeof suggestion !== "object"
+  ) {
+    return false;
+  }
+
+  if (
+    typeof suggestion.suggestedShopId !== "string" ||
+    suggestion.suggestedShopId === ""
+  ) {
+    return false;
+  }
+
+  const matchesCandidate =
+    candidates.some(
+      function(candidate) {
+        return (
+          candidate.id ===
+          suggestion.suggestedShopId
+        );
+      }
+    );
+
+  if (!matchesCandidate) {
+    return false;
+  }
+
+  if (
+    typeof suggestion.reasonShort !== "string" ||
+    suggestion.reasonShort.trim() === ""
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+
+// Ver1.8 Phase1｜AIコンシェルジュ本体。認証はhandleCloudinarySignatureRequest()
+// と同じ匿名Firebase AuthenticationのBearer Token検証をそのまま再利用する。
+// AI呼び出し・応答検証のいずれかで失敗しても、常にsuccess:falseのJSONを
+// 返すだけにとどめ(500エラーの詳細を露出しない)、呼び出し元(app.js)側で
+// 既存のルールベース提案へ静かにフォールバックできるようにする。
+async function handleAiConciergeRequest(
+  request,
+  response
+) {
+  try {
+    const idToken =
+      readBearerToken(
+        request
+      );
+
+    if (idToken === "") {
+      return response.status(401).json({
+        success: false,
+        message:
+          "認証情報がありません。"
+      });
+    }
+
+    const app =
+      getFirebaseAdminApp();
+
+    try {
+      await getAuth(app)
+        .verifyIdToken(
+          idToken
+        );
+    } catch (verifyError) {
+      return response.status(401).json({
+        success: false,
+        message:
+          "認証情報が正しくありません。"
+      });
+    }
+
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    const language =
+      requestBody.language === "en" ? "en" : "ja";
+
+    const currentTime =
+      typeof requestBody.currentTime === "string"
+        ? requestBody.currentTime
+            .trim()
+            .slice(0, AI_CONCIERGE_CURRENT_TIME_MAX_LENGTH)
+        : "";
+
+    const contextInput =
+      requestBody.context &&
+      typeof requestBody.context === "object"
+        ? requestBody.context
+        : {};
+
+    const area =
+      typeof contextInput.area === "string"
+        ? contextInput.area
+            .trim()
+            .slice(0, AI_CONCIERGE_FIELD_MAX_LENGTHS.area)
+        : "";
+
+    const weather =
+      sanitizeAiConciergeWeather(
+        contextInput.weather
+      );
+
+    const candidates =
+      sanitizeAiConciergeCandidateList(
+        requestBody.candidates
+      );
+
+    if (candidates.length === 0) {
+      return response.status(400).json({
+        success: false,
+        message:
+          "候補が指定されていません。"
+      });
+    }
+
+    let aiSuggestion;
+
+    try {
+      aiSuggestion =
+        await callOpenAiConcierge(
+          {
+            language: language,
+            currentTime: currentTime,
+            area: area,
+            weather: weather,
+            candidates: candidates
+          }
+        );
+    } catch (aiError) {
+      console.error(
+        "AIコンシェルジュ呼び出しエラー：",
+        aiError
+      );
+
+      return response.status(200).json({
+        success: false,
+        message:
+          "AI判断を利用できませんでした。"
+      });
+    }
+
+    if (
+      !isValidAiConciergeSuggestion(
+        aiSuggestion,
+        candidates
+      )
+    ) {
+      return response.status(200).json({
+        success: false,
+        message:
+          "AI判断結果を利用できませんでした。"
+      });
+    }
+
+    const cautionNote =
+      typeof aiSuggestion.cautionNote === "string" &&
+      aiSuggestion.cautionNote.trim() !== ""
+        ? aiSuggestion.cautionNote
+            .trim()
+            .slice(0, AI_CONCIERGE_REASON_MAX_LENGTH)
+        : null;
+
+    return response.status(200).json({
+      success: true,
+      suggestion: {
+        suggestedShopId:
+          aiSuggestion.suggestedShopId,
+
+        reasonShort:
+          String(aiSuggestion.reasonShort)
+            .trim()
+            .slice(0, AI_CONCIERGE_REASON_MAX_LENGTH),
+
+        cautionNote: cautionNote
+      }
+    });
+  } catch (error) {
+    console.error(
+      "AIコンシェルジュ処理エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message:
+        "AI判断中にエラーが発生しました。"
+    });
+  }
 }
 
 
@@ -853,6 +1414,18 @@ export default async function handler(
     requestBody.mode === "cloudinarySignature"
   ) {
     return handleCloudinarySignatureRequest(
+      request,
+      response
+    );
+  }
+
+  // Ver1.8 Phase1｜AIコンシェルジュ。既存のcloudinarySignatureモードと
+  // 同じ位置(モード判定)に追加するだけで、GET一覧取得・cloudinarySignature・
+  // 既定の投稿審査(この先のtry節)のいずれにも一切触れない。
+  if (
+    requestBody.mode === "aiConcierge"
+  ) {
+    return handleAiConciergeRequest(
       request,
       response
     );

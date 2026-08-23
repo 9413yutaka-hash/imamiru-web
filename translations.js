@@ -124,6 +124,11 @@ const MACHINAU_TRANSLATIONS = {
     en: "Get a suggestion near me"
   },
 
+  suggestion_ai_loading: {
+    ja: "AIが今のあなたに合う提案を考えています…",
+    en: "Machinau AI is finding a suggestion for you…"
+  },
+
   factual_heading: {
     ja: "⚡ 今、知っておきたいこと",
     en: "⚡ Good to Know"

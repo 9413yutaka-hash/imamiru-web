@@ -4610,6 +4610,18 @@ let isShopsLoadedForMachinauSuggestion =
 let generatedMachinauSuggestionGpsSessionId =
   null;
 
+// Ver1.8 Phase1｜AIコンシェルジュの状態。GPSセッションが変わる、または
+// ページを開き直すとリセットされる(sessionStorageキャッシュとは別に、
+// 現在の画面表示用に保持する一時状態)。
+// status: "idle" | "loading" | "success" | "unavailable"
+// gpsSessionIdがmachinauSuggestionGpsSessionIdと一致する間だけ有効とみなす。
+let aiConciergeState =
+  {
+    gpsSessionId: null,
+    status: "idle",
+    suggestionsByLanguage: {}
+  };
+
 
 // 「マチナウからの提案」専用の広域グループ判定に使う41市町村→8広域グループ
 // 対応表。api/admin-source-collect.js の OKINAWA_MUNICIPALITY_TO_REGION_NAME
@@ -4901,6 +4913,53 @@ function selectTravelerSuggestionCandidate() {
 }
 
 
+// Ver1.8 Phase1｜AIコンシェルジュへ渡す候補一覧。selectTravelerSuggestionCandidate()
+// と全く同じ絞り込み条件・並び順を使うが、先頭1件だけでなく最大
+// AI_CONCIERGE_MAX_CANDIDATES件を返す点だけが異なる。selectTravelerSuggestionCandidate()
+// 自体は無変更のまま保持し、フォールバック用の候補選定として引き続き使う。
+const AI_CONCIERGE_MAX_CANDIDATES =
+  5;
+
+function selectAiConciergeCandidates() {
+  return shops
+    .filter(function(shop) {
+      return (
+        shop.postType === "admin" &&
+        shop.authorType !== "admin" &&
+        getSuggestionAreaPriorityRank(shop) <= 2 &&
+        (
+          shop.category === "イベント" ||
+          shop.category === "観光・体験"
+        ) &&
+        shopMatchesFlashBannerKeywords(shop) === false
+      );
+    })
+    .sort(function(firstShop, secondShop) {
+      const areaPriorityDifference =
+        getSuggestionAreaPriorityRank(firstShop) -
+        getSuggestionAreaPriorityRank(secondShop);
+
+      if (areaPriorityDifference !== 0) {
+        return areaPriorityDifference;
+      }
+
+      const categoryPriorityDifference =
+        getSuggestionCategoryPriorityRank(firstShop) -
+        getSuggestionCategoryPriorityRank(secondShop);
+
+      if (categoryPriorityDifference !== 0) {
+        return categoryPriorityDifference;
+      }
+
+      return (
+        getDateValue(secondShop.createdAt) -
+        getDateValue(firstShop.createdAt)
+      );
+    })
+    .slice(0, AI_CONCIERGE_MAX_CANDIDATES);
+}
+
+
 // getWeatherConditionEmoji()の分類結果と、buildWeatherAdviceText()と同じ
 // heatIndexC(なければtemperatureC)の35℃基準を再利用して天候を分類する。
 // getWeatherConditionEmoji()・buildWeatherAdviceText()自体は変更しない。
@@ -5117,6 +5176,53 @@ function updateTravelerSuggestionCard() {
     return;
   }
 
+  // Ver1.8 Phase1｜AIコンシェルジュの状態がこのGPSセッションのものであれば、
+  // ルールベースより先に確認する。この先のルールベース処理
+  // (selectTravelerSuggestionCandidate()以降)は一切変更しない。AI側が
+  // loading/success以外(unavailable・古いセッション・対象言語の結果なし)
+  // の場合は、必ずこの先のルールベース処理まで到達してフォールバックする。
+  const currentLanguageForAiConcierge =
+    getCurrentMachinauLanguage();
+
+  if (
+    aiConciergeState.gpsSessionId ===
+    machinauSuggestionGpsSessionId
+  ) {
+    if (aiConciergeState.status === "loading") {
+      suggestionMessage.textContent =
+        getMachinauTranslation(
+          "suggestion_ai_loading",
+          currentLanguageForAiConcierge
+        );
+
+      suggestionDetailButton.style.display = "none";
+      suggestionDetailButton.onclick = null;
+      suggestionCard.style.display = "";
+      return;
+    }
+
+    if (aiConciergeState.status === "success") {
+      const cachedAiSuggestion =
+        aiConciergeState.suggestionsByLanguage[
+          currentLanguageForAiConcierge
+        ];
+
+      if (cachedAiSuggestion) {
+        const didRenderAiSuggestion =
+          renderAiConciergeSuggestionContent(
+            cachedAiSuggestion,
+            suggestionMessage,
+            suggestionDetailButton
+          );
+
+        if (didRenderAiSuggestion) {
+          suggestionCard.style.display = "";
+          return;
+        }
+      }
+    }
+  }
+
   const selectedShop =
     selectTravelerSuggestionCandidate();
 
@@ -5143,6 +5249,422 @@ function updateTravelerSuggestionCard() {
     };
 
   suggestionCard.style.display = "";
+}
+
+
+// Ver1.8 Phase1｜AIコンシェルジュがcandidates内から選んだIDを、実際の
+// shops配列(Firestore実データ)と突き合わせてから描画する。サーバー側の
+// 検証済みの上で、クライアント側でも独立して再検証する(Firestore実データを
+// 正本とし、候補外・存在しないIDは描画しない)。事実情報(タイトル等)は
+// AIの文章ではなくshopデータから取得する。
+function renderAiConciergeSuggestionContent(
+  aiSuggestion,
+  suggestionMessage,
+  suggestionDetailButton
+) {
+  if (
+    !aiSuggestion ||
+    typeof aiSuggestion.suggestedShopId !== "string" ||
+    aiSuggestion.suggestedShopId === ""
+  ) {
+    return false;
+  }
+
+  const matchedShop =
+    shops.find(function(shop) {
+      return (
+        shop.firestoreId ===
+        aiSuggestion.suggestedShopId
+      );
+    });
+
+  if (!matchedShop) {
+    return false;
+  }
+
+  const reasonText =
+    typeof aiSuggestion.reasonShort === "string"
+      ? aiSuggestion.reasonShort.trim()
+      : "";
+
+  if (reasonText === "") {
+    return false;
+  }
+
+  suggestionMessage.textContent =
+    matchedShop.title +
+    "\n" +
+    reasonText;
+
+  suggestionDetailButton.style.display = "";
+
+  suggestionDetailButton.onclick =
+    function() {
+      openShopModal(
+        matchedShop.firestoreId
+      );
+    };
+
+  return true;
+}
+
+
+// Ver1.8 Phase1｜AIコンシェルジュの1GPSセッション1回のsessionStorageキャッシュ。
+// 既存WEATHER_CACHE_*と同じTTL・座標近似判定パターンを踏襲する
+// (WEATHER_CACHE_MAX_COORDINATE_DELTAをそのまま再利用)。言語ごとに結果を
+// 分離して保持し、既に取得済みの言語への切り替えではAIを再実行しない。
+const AI_CONCIERGE_CACHE_STORAGE_KEY =
+  "machinauAiConciergeCache";
+
+// 天気(latestWeatherForMachinauSuggestion、既存15分キャッシュ)がAI判断の
+// 主要な入力の1つであるため、同じ15分ウィンドウを踏襲する。
+const AI_CONCIERGE_CACHE_MAX_AGE_MILLISECONDS =
+  15 * 60 * 1000;
+
+function readAiConciergeCache(
+  latitude,
+  longitude,
+  language
+) {
+  try {
+    const rawCache =
+      sessionStorage.getItem(
+        AI_CONCIERGE_CACHE_STORAGE_KEY
+      );
+
+    if (!rawCache) {
+      return null;
+    }
+
+    const parsedCache =
+      JSON.parse(
+        rawCache
+      );
+
+    if (
+      !parsedCache ||
+      typeof parsedCache !== "object" ||
+      typeof parsedCache.cachedAt !== "number" ||
+      typeof parsedCache.latitude !== "number" ||
+      typeof parsedCache.longitude !== "number" ||
+      !parsedCache.suggestionsByLanguage ||
+      typeof parsedCache.suggestionsByLanguage !== "object"
+    ) {
+      return null;
+    }
+
+    if (
+      Date.now() - parsedCache.cachedAt >
+      AI_CONCIERGE_CACHE_MAX_AGE_MILLISECONDS
+    ) {
+      return null;
+    }
+
+    if (
+      Math.abs(parsedCache.latitude - latitude) >
+        WEATHER_CACHE_MAX_COORDINATE_DELTA ||
+      Math.abs(parsedCache.longitude - longitude) >
+        WEATHER_CACHE_MAX_COORDINATE_DELTA
+    ) {
+      return null;
+    }
+
+    return (
+      parsedCache.suggestionsByLanguage[language] ||
+      null
+    );
+  } catch (error) {
+    return null;
+  }
+}
+
+
+function writeAiConciergeCache(
+  latitude,
+  longitude,
+  language,
+  suggestion
+) {
+  try {
+    let existingCache =
+      null;
+
+    try {
+      const rawExistingCache =
+        sessionStorage.getItem(
+          AI_CONCIERGE_CACHE_STORAGE_KEY
+        );
+
+      if (rawExistingCache) {
+        existingCache =
+          JSON.parse(
+            rawExistingCache
+          );
+      }
+    } catch (readError) {
+      existingCache = null;
+    }
+
+    const isSameLocationAndFreshCache =
+      existingCache &&
+      typeof existingCache.cachedAt === "number" &&
+      typeof existingCache.latitude === "number" &&
+      typeof existingCache.longitude === "number" &&
+      existingCache.suggestionsByLanguage &&
+      typeof existingCache.suggestionsByLanguage === "object" &&
+      (Date.now() - existingCache.cachedAt) <=
+        AI_CONCIERGE_CACHE_MAX_AGE_MILLISECONDS &&
+      Math.abs(existingCache.latitude - latitude) <=
+        WEATHER_CACHE_MAX_COORDINATE_DELTA &&
+      Math.abs(existingCache.longitude - longitude) <=
+        WEATHER_CACHE_MAX_COORDINATE_DELTA;
+
+    const suggestionsByLanguage =
+      isSameLocationAndFreshCache
+        ? Object.assign(
+            {},
+            existingCache.suggestionsByLanguage
+          )
+        : {};
+
+    suggestionsByLanguage[language] =
+      suggestion;
+
+    sessionStorage.setItem(
+      AI_CONCIERGE_CACHE_STORAGE_KEY,
+      JSON.stringify({
+        cachedAt: Date.now(),
+        latitude: latitude,
+        longitude: longitude,
+        suggestionsByLanguage: suggestionsByLanguage
+      })
+    );
+  } catch (error) {
+    // sessionStorageが利用できない環境でもAIコンシェルジュ機能自体は継続する
+  }
+}
+
+
+// Ver1.8 Phase1｜候補1件をAIコンシェルジュへ送る最小フィールドへ変換する。
+// 本文全文(shop.message)・生の緯度経度は送らない。距離は既存calculateDistance()
+// をそのまま再利用する。
+function buildAiConciergeCandidatePayload(shop) {
+  const distanceKm =
+    Number.isFinite(userLatitude) &&
+    Number.isFinite(userLongitude) &&
+    Number.isFinite(shop.latitude) &&
+    Number.isFinite(shop.longitude)
+      ? calculateDistance(
+          userLatitude,
+          userLongitude,
+          shop.latitude,
+          shop.longitude
+        )
+      : null;
+
+  let availabilityHint =
+    "";
+
+  if (shop.isOpen24Hours) {
+    availabilityHint =
+      "24時間";
+  } else if (
+    shop.businessStartTime &&
+    shop.businessEndTime
+  ) {
+    availabilityHint =
+      shop.businessStartTime +
+      "〜" +
+      shop.businessEndTime;
+  }
+
+  return {
+    id: shop.firestoreId,
+    title: shop.title,
+    category: shop.category,
+    area: shop.area,
+    distanceKm:
+      distanceKm !== null
+        ? Math.round(distanceKm * 10) / 10
+        : null,
+    availabilityHint: availabilityHint
+  };
+}
+
+
+// ブラウザのローカル時刻を"HH:MM"形式(24時間表記)で返す。タイムゾーン変換・
+// サーバー側時刻取得は行わない(利用者の体感時刻をそのまま使う)。
+function formatCurrentTimeForAiConcierge() {
+  const now =
+    new Date();
+
+  function pad(number) {
+    return number < 10 ? "0" + number : String(number);
+  }
+
+  return (
+    pad(now.getHours()) +
+    ":" +
+    pad(now.getMinutes())
+  );
+}
+
+
+// Ver1.8 Phase1｜AIコンシェルジュ本体。既存のselectTravelerSuggestionCandidate()
+// (ルールベース)は一切変更せず、AIが使えない場合の最終フォールバックとして
+// updateTravelerSuggestionCard()内にそのまま残る。ここでの役割は、
+// (1)候補が無ければ即座にルールベースへ委ねる、(2)ローディング状態を表示する、
+// (3)sessionStorageキャッシュを確認する、(4)無ければAPIを呼び、成功なら
+// aiConciergeStateへ結果を格納してupdateTravelerSuggestionCard()を再実行する、
+// (5)失敗時は必ずstatus="unavailable"にしてルールベースへフォールバックする、
+// の5点のみ。
+async function attemptAiConciergeSuggestion(
+  gpsSessionId
+) {
+  const candidates =
+    selectAiConciergeCandidates();
+
+  if (candidates.length === 0) {
+    aiConciergeState =
+      {
+        gpsSessionId: gpsSessionId,
+        status: "unavailable",
+        suggestionsByLanguage: {}
+      };
+
+    updateTravelerSuggestionCard();
+    return;
+  }
+
+  aiConciergeState =
+    {
+      gpsSessionId: gpsSessionId,
+      status: "loading",
+      suggestionsByLanguage: {}
+    };
+
+  updateTravelerSuggestionCard();
+
+  const language =
+    getCurrentMachinauLanguage();
+
+  const cachedSuggestion =
+    readAiConciergeCache(
+      userLatitude,
+      userLongitude,
+      language
+    );
+
+  if (cachedSuggestion) {
+    aiConciergeState =
+      {
+        gpsSessionId: gpsSessionId,
+        status: "success",
+        suggestionsByLanguage: {
+          [language]: cachedSuggestion
+        }
+      };
+
+    updateTravelerSuggestionCard();
+    return;
+  }
+
+  let responseSuggestion =
+    null;
+
+  try {
+    const idToken =
+      await getAnonymousIdTokenForLocationCollection();
+
+    const response =
+      await fetch(
+        "/api/moderate-submission",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + idToken
+          },
+          body: JSON.stringify({
+            mode: "aiConcierge",
+            language: language,
+            currentTime: formatCurrentTimeForAiConcierge(),
+            context: {
+              area: userAreaName,
+              weather: {
+                temperatureC:
+                  latestWeatherForMachinauSuggestion.temperatureC,
+                feelsLikeC:
+                  latestWeatherForMachinauSuggestion.feelsLikeC,
+                chanceOfRain:
+                  latestWeatherForMachinauSuggestion.chanceOfRain,
+                windKph:
+                  latestWeatherForMachinauSuggestion.windKph,
+                uvIndex:
+                  latestWeatherForMachinauSuggestion.uvIndex,
+                conditionText:
+                  latestWeatherForMachinauSuggestion.conditionText
+              }
+            },
+            candidates:
+              candidates.map(
+                buildAiConciergeCandidatePayload
+              )
+          })
+        }
+      );
+
+    const responseData =
+      await response.json();
+
+    if (
+      response.ok &&
+      responseData &&
+      responseData.success === true &&
+      responseData.suggestion
+    ) {
+      responseSuggestion =
+        responseData.suggestion;
+    }
+  } catch (error) {
+    responseSuggestion =
+      null;
+  }
+
+  // 別のGPS取得が既に始まっていれば、古い応答は反映しない
+  if (
+    gpsSessionId !==
+    machinauSuggestionGpsSessionId
+  ) {
+    return;
+  }
+
+  if (responseSuggestion) {
+    aiConciergeState =
+      {
+        gpsSessionId: gpsSessionId,
+        status: "success",
+        suggestionsByLanguage: {
+          [language]: responseSuggestion
+        }
+      };
+
+    writeAiConciergeCache(
+      userLatitude,
+      userLongitude,
+      language,
+      responseSuggestion
+    );
+  } else {
+    aiConciergeState =
+      {
+        gpsSessionId: gpsSessionId,
+        status: "unavailable",
+        suggestionsByLanguage: {}
+      };
+  }
+
+  updateTravelerSuggestionCard();
 }
 
 
@@ -5174,10 +5696,15 @@ function tryGenerateMachinauSuggestion(gpsSessionId) {
   generatedMachinauSuggestionGpsSessionId =
     gpsSessionId;
 
-  // ✨あなたへの提案はupdateSuggestionCard()(旧ロジック、安全系候補を含む)
-  // ではなく、新しいupdateTravelerSuggestionCard()を使う。
-  // updateSuggestionCard()本体は無変更のまま保持する(未使用)。
-  updateTravelerSuggestionCard();
+  // Ver1.8 Phase1｜✨あなたへの提案は、まずAIコンシェルジュ
+  // (attemptAiConciergeSuggestion())を試み、候補が無い/AI応答が使えない
+  // 場合はupdateTravelerSuggestionCard()内のルールベース処理へ必ず
+  // フォールバックする。updateSuggestionCard()本体は無変更のまま保持する
+  // (未使用)。selectTravelerSuggestionCandidate()・✨⚡🔥3枠分離ロジックは
+  // 一切変更しない。
+  attemptAiConciergeSuggestion(
+    gpsSessionId
+  );
 
   updateUnifiedImportantInfo();
 }
