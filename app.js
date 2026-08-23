@@ -5072,14 +5072,48 @@ function updateTravelerSuggestionCard() {
     return;
   }
 
+  // Ver1.8｜GPS取得前を独立カードとして見せるための追加専用の要素参照。
+  // この先の本物の提案ロジック(selectedShop以降)には一切関与しない。
+  const suggestionPlaceholderMain =
+    document.getElementById("suggestionPlaceholderMain");
+
+  const suggestionPlaceholderCtaButton =
+    document.getElementById("suggestionPlaceholderCtaButton");
+
+  if (suggestionPlaceholderMain) {
+    suggestionPlaceholderMain.style.display = "none";
+  }
+
+  if (suggestionPlaceholderCtaButton) {
+    suggestionPlaceholderCtaButton.style.display = "none";
+  }
+
   if (
     typeof userAreaName !== "string" ||
     userAreaName === "" ||
     latestWeatherForMachinauSuggestion === null
   ) {
-    suggestionCard.style.display = "none";
+    // Ver1.8｜GPS未取得時は非表示にせず、マチナウの提案機能そのものを
+    // 独立カードとして案内する。候補選定・表示条件(userAreaName/weather)
+    // 自体は一切変更しない。GPS取得成功後はこのifを通らなくなり、
+    // 既存ロジックがそのまま本来の提案へ置き換える。
+    if (suggestionPlaceholderMain) {
+      suggestionPlaceholderMain.style.display = "";
+    }
+
+    if (suggestionPlaceholderCtaButton) {
+      suggestionPlaceholderCtaButton.style.display = "";
+    }
+
+    suggestionMessage.textContent =
+      getMachinauTranslation(
+        "suggestion_placeholder_message",
+        getCurrentMachinauLanguage()
+      );
+
     suggestionDetailButton.style.display = "none";
     suggestionDetailButton.onclick = null;
+    suggestionCard.style.display = "";
     return;
   }
 

@@ -109,6 +109,21 @@ const MACHINAU_TRANSLATIONS = {
     en: "✨ Suggested for You"
   },
 
+  suggestion_placeholder_main: {
+    ja: "このあと、どうする？",
+    en: "What should you do next?"
+  },
+
+  suggestion_placeholder_message: {
+    ja: "現在地を取得すると、今いる場所・天気・周辺の「今」から、あなたに合った行き先を提案します。",
+    en: "Share your location and Machinau will suggest what to do next based on where you are, the weather, and what's happening nearby."
+  },
+
+  suggestion_placeholder_cta: {
+    ja: "現在地から提案してもらう",
+    en: "Get a suggestion near me"
+  },
+
   factual_heading: {
     ja: "⚡ 今、知っておきたいこと",
     en: "⚡ Good to Know"
