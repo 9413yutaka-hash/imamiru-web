@@ -519,6 +519,11 @@ const MACHINAU_TRANSLATIONS = {
     en: "Contact Us"
   },
 
+  footer_shop_entry_link: {
+    ja: "お店・施設の方へ｜今の情報を掲載する",
+    en: "For shops & venues: Post your latest info"
+  },
+
   location_geolocation_unsupported: {
     ja: "このブラウザでは位置情報を利用できません。",
     en: "This browser doesn't support location access."
