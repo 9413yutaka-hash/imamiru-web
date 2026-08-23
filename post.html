@@ -3473,6 +3473,15 @@ function requestCurrentLocationForPost() {
         const uploadedImages =
           await uploadSelectedImages();
 
+        // 画像なし投稿ではuploadSelectedImages()がCloudinary処理を行わないため
+        // 匿名認証を経由しない。Firestore Security Rules側でsubmissions createに
+        // request.auth != nullを必須化するのに合わせ、画像の有無に関係なく
+        // ここで匿名認証済みであることを保証する。既存のgetAnonymousIdTokenForImageUpload()
+        // (single-flight・既にサインイン済みなら即時返る)をそのまま再利用し、
+        // 新しい認証方式は作らない。画像ありの場合はCloudinary署名取得時点で
+        // 既に認証済みのため、ここでは実質的に何も起こらない。
+        await getAnonymousIdTokenForImageUpload();
+
         setProgress(
           "広告情報をマチナウへ送信しています…",
           82
