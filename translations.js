@@ -129,6 +129,11 @@ const MACHINAU_TRANSLATIONS = {
     en: "Machinau AI is finding a suggestion for you…"
   },
 
+  suggestion_no_candidates_message: {
+    ja: "今は近くに提案できる情報を見つけられませんでした。\n新しい情報が入り次第、ここから提案します。",
+    en: "We couldn't find anything nearby to suggest right now.\nWe'll share a suggestion here as soon as new information comes in."
+  },
+
   factual_heading: {
     ja: "⚡ 今、知っておきたいこと",
     en: "⚡ Good to Know"

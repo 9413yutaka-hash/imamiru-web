@@ -4920,6 +4920,12 @@ function selectTravelerSuggestionCandidate() {
 const AI_CONCIERGE_MAX_CANDIDATES =
   5;
 
+// Ver1.8 Phase1(重要情報優先の確認・修正)｜"factual_info"候補にのみ付与する
+// 短い事実要約(shop.messageの先頭のみ)の最大文字数。全文送信は行わず、
+// トークン増加を抑えるため短く保つ。
+const AI_CONCIERGE_FACT_SUMMARY_MAX_LENGTH =
+  80;
+
 function selectAiConciergeCandidates() {
   return shops
     .filter(function(shop) {
@@ -4957,6 +4963,449 @@ function selectAiConciergeCandidates() {
       );
     })
     .slice(0, AI_CONCIERGE_MAX_CANDIDATES);
+}
+
+
+// Ver1.8 Phase1(設計修正)｜以下4つは、それぞれ⚡🔥の既存候補選定関数
+// (selectFactualImportantInfoCandidate()・selectTodayMachinauCandidate())と
+// 全く同じ絞り込み条件・並び順を使うが、先頭1件だけでなく複数件を返す点だけが
+// 異なる。selectFactualImportantInfoCandidate()・selectTodayMachinauCandidate()
+// 自体は無変更のまま保持し、⚡🔥表示用の候補選定として引き続き使う。
+
+// Ver1.8 Phase1(重要情報優先の確認・修正)｜AIコンシェルジュの候補プール
+//構築にのみ使う「重要情報」判定。既存のFLASH_BANNER_*_KEYWORDS・
+// FACTUAL_IMPORTANT_INFO_SOURCE_TYPESはadmin-source-collect.jsの
+// DRAFT_*_KEYWORDSと同期が必要な既存資産のため変更しない。実際の⚡カード
+// 表示(selectFactualImportantInfoCandidate())にも一切影響しない。
+// 台風・警報等の既存キーワードに加え、休園・臨時休業等の閉鎖・臨時変更を
+// 示す語も対象に含め、情報源sourceTypeも「観光施設」(施設公式発表)を
+// 追加で許容する(ジャングリア沖縄等の公式発表が「観光施設」区分で
+// 登録される可能性があるため)。
+const AI_CONCIERGE_IMPORTANT_SOURCE_TYPES =
+  FACTUAL_IMPORTANT_INFO_SOURCE_TYPES.concat(
+    ["観光施設"]
+  );
+
+const AI_CONCIERGE_CLOSURE_KEYWORDS =
+  [
+    "休園", "休館", "臨時休業", "閉園", "閉館",
+    "営業時間変更", "時間変更", "中止", "延期"
+  ];
+
+function matchesAiConciergeImportantKeywords(
+  shop
+) {
+  const combinedText =
+    (shop.title || "") +
+    " " +
+    (shop.message || "");
+
+  return (
+    FLASH_BANNER_EMERGENCY_KEYWORDS.some(
+      function(keyword) {
+        return combinedText.includes(keyword);
+      }
+    ) ||
+    FLASH_BANNER_LIFELINE_KEYWORDS.some(
+      function(keyword) {
+        return combinedText.includes(keyword);
+      }
+    ) ||
+    FLASH_BANNER_TRANSPORT_KEYWORDS.some(
+      function(keyword) {
+        return combinedText.includes(keyword);
+      }
+    ) ||
+    AI_CONCIERGE_CLOSURE_KEYWORDS.some(
+      function(keyword) {
+        return combinedText.includes(keyword);
+      }
+    )
+  );
+}
+
+function selectFactualImportantInfoCandidatesForAiConcierge() {
+  return shops
+    .filter(function(shop) {
+      if (shop.postType !== "admin") {
+        return false;
+      }
+
+      if (shop.authorType !== "ai") {
+        return false;
+      }
+
+      if (
+        AI_CONCIERGE_IMPORTANT_SOURCE_TYPES.includes(
+          shop.sourceType
+        ) === false
+      ) {
+        return false;
+      }
+
+      // Ver1.8 Phase1(重要情報優先の確認・修正)｜AIコンシェルジュ候補プールでは
+      // 「重要情報」であることを示すキーワードに一致した場合のみ対象とする
+      // (地域優先度によるフォールバック採用はしない。台風・警報・休園等は
+      // 地域が多少ずれていても優先して検討させたいため)。
+      return matchesAiConciergeImportantKeywords(
+        shop
+      );
+    })
+    .sort(function(firstShop, secondShop) {
+      const areaPriorityDifference =
+        getSuggestionAreaPriorityRank(firstShop) -
+        getSuggestionAreaPriorityRank(secondShop);
+
+      if (areaPriorityDifference !== 0) {
+        return areaPriorityDifference;
+      }
+
+      return (
+        getDateValue(secondShop.createdAt) -
+        getDateValue(firstShop.createdAt)
+      );
+    });
+}
+
+
+function selectTodayMachinauCandidatesForAiConcierge() {
+  return shops
+    .filter(function(shop) {
+      return (
+        shop.postType === "admin" &&
+        shop.authorType === "admin" &&
+        getSuggestionAreaPriorityRank(shop) <= 2
+      );
+    })
+    .sort(function(firstShop, secondShop) {
+      const areaPriorityDifference =
+        getSuggestionAreaPriorityRank(firstShop) -
+        getSuggestionAreaPriorityRank(secondShop);
+
+      if (areaPriorityDifference !== 0) {
+        return areaPriorityDifference;
+      }
+
+      return (
+        getDateValue(secondShop.createdAt) -
+        getDateValue(firstShop.createdAt)
+      );
+    });
+}
+
+
+// 一般店舗・施設用。getSuggestionAreaPriorityRank()はpostType!=="admin"の
+// shopには常に3(最低)を返す設計(admin/AIコンテンツ専用の地域優先度判定)
+// のため、一般店舗の絞り込みには使えない。post.html経由の投稿はarea
+// フィールドを持たないことが多いため、既存calculateDistance()による
+// 距離順ソートのみを用いる(新しいスコアリングは作らない)。緯度経度が
+// 双方とも取得できない店舗は「明らかに無関係かどうか判定できない」ため
+// 候補に含めない。
+function selectGeneralShopCandidatesForAiConcierge() {
+  if (
+    !Number.isFinite(userLatitude) ||
+    !Number.isFinite(userLongitude)
+  ) {
+    return [];
+  }
+
+  return shops
+    .filter(function(shop) {
+      return (
+        shop.postType !== "admin" &&
+        Number.isFinite(shop.latitude) &&
+        Number.isFinite(shop.longitude)
+      );
+    })
+    .sort(function(firstShop, secondShop) {
+      return (
+        calculateDistance(
+          userLatitude,
+          userLongitude,
+          firstShop.latitude,
+          firstShop.longitude
+        ) -
+        calculateDistance(
+          userLatitude,
+          userLongitude,
+          secondShop.latitude,
+          secondShop.longitude
+        )
+      );
+    });
+}
+
+
+// 地域おすすめ用。showRegionRecommendationsForArea()が既にisPublished・
+// targetAreas(userAreaName一致)で絞り込み済みのregionRecommendationArticles
+// をそのまま使う(追加のFirestore読み取り・追加フィルタは行わない)。
+function selectRegionRecommendationCandidatesForAiConcierge() {
+  return Array.isArray(regionRecommendationArticles)
+    ? regionRecommendationArticles
+    : [];
+}
+
+
+// Ver1.8 Phase1(設計修正)｜候補1件(shop)をAIコンシェルジュ用の共通形式へ
+// 変換する。sourceTypeはAIへの説明用ラベルであり、内部の3枠分離条件には
+// 一切使わない(条件は各select...ForAiConcierge()側で既に確定済み)。
+function buildAiConciergeCandidateFromShop(
+  shop,
+  sourceType
+) {
+  const distanceKm =
+    Number.isFinite(userLatitude) &&
+    Number.isFinite(userLongitude) &&
+    Number.isFinite(shop.latitude) &&
+    Number.isFinite(shop.longitude)
+      ? calculateDistance(
+          userLatitude,
+          userLongitude,
+          shop.latitude,
+          shop.longitude
+        )
+      : null;
+
+  let availabilityHint =
+    "";
+
+  if (shop.isOpen24Hours) {
+    availabilityHint =
+      "24時間";
+  } else if (
+    shop.businessStartTime &&
+    shop.businessEndTime
+  ) {
+    availabilityHint =
+      shop.businessStartTime +
+      "〜" +
+      shop.businessEndTime;
+  }
+
+  // Ver1.8 Phase1(重要情報優先の確認・修正)｜title/category/availabilityHintだけ
+  // では「休園」等の事実が欠落し得るため、"factual_info"(重要情報)候補に限り、
+  // 既存shop.message(本文、追加のFirestore取得なし)の先頭のみを短い事実要約
+  // として付与する。本文全文は送らず、他のsourceType(shop/traveler_suggestion等、
+  // 通常は件数も多い)には付けないことでトークン増加を抑える。
+  const factSummary =
+    sourceType === "factual_info" &&
+    typeof shop.message === "string"
+      ? shop.message
+          .trim()
+          .slice(0, AI_CONCIERGE_FACT_SUMMARY_MAX_LENGTH)
+      : "";
+
+  return {
+    id: "shop:" + shop.firestoreId,
+    sourceType: sourceType,
+    title: shop.title,
+    category: shop.category,
+    area: shop.area,
+    distanceKm:
+      distanceKm !== null
+        ? Math.round(distanceKm * 10) / 10
+        : null,
+    availabilityHint: availabilityHint,
+    factSummary: factSummary
+  };
+}
+
+
+// 地域おすすめ1件をAIコンシェルジュ用の共通形式へ変換する。idが
+// 取得できない記事(showRegionRecommendationsForArea()の変更前に
+// 取得された等)はnullを返し、呼び出し元で除外する。
+function buildAiConciergeCandidateFromRegionArticle(
+  article
+) {
+  if (
+    !article ||
+    typeof article.id !== "string" ||
+    article.id === ""
+  ) {
+    return null;
+  }
+
+  return {
+    id: "region:" + article.id,
+    sourceType: "region_recommendation",
+    title:
+      typeof article.title === "string"
+        ? article.title
+        : "",
+    category: "",
+    area:
+      typeof article.regionName === "string"
+        ? article.regionName
+        : "",
+    distanceKm: null,
+    availabilityHint: ""
+  };
+}
+
+
+// Ver1.8 Phase1(設計修正)｜AIコンシェルジュ専用の候補プール。
+// マチナウが既に持っている安全な情報源(⚡→🔥→✨→地域おすすめ→一般店舗の順)
+// から、既存の各選定関数(いずれも無変更)をそのまま使って集め、
+// 最大AI_CONCIERGE_MAX_CANDIDATES件になった時点で打ち切る。新しい
+// スコアリング式は作らず、各情報源が既に持つ並び順(地域優先・緊急度・
+// 距離・新しさ)と、この優先順(タプル)だけで絞り込む。IDが重複した場合
+// のみ後続を捨てる(実際にはid種別・条件が排他的なため通常は発生しない)。
+function buildAiConciergeCandidatePool() {
+  const pooledCandidates =
+    [];
+
+  const seenCandidateIds =
+    {};
+
+  function addCandidateIfRoom(candidate) {
+    if (
+      !candidate ||
+      pooledCandidates.length >= AI_CONCIERGE_MAX_CANDIDATES
+    ) {
+      return;
+    }
+
+    if (seenCandidateIds[candidate.id]) {
+      return;
+    }
+
+    seenCandidateIds[candidate.id] =
+      true;
+
+    pooledCandidates.push(
+      candidate
+    );
+  }
+
+  selectFactualImportantInfoCandidatesForAiConcierge().forEach(
+    function(shop) {
+      addCandidateIfRoom(
+        buildAiConciergeCandidateFromShop(
+          shop,
+          "factual_info"
+        )
+      );
+    }
+  );
+
+  selectTodayMachinauCandidatesForAiConcierge().forEach(
+    function(shop) {
+      addCandidateIfRoom(
+        buildAiConciergeCandidateFromShop(
+          shop,
+          "official_today"
+        )
+      );
+    }
+  );
+
+  selectAiConciergeCandidates().forEach(
+    function(shop) {
+      addCandidateIfRoom(
+        buildAiConciergeCandidateFromShop(
+          shop,
+          "traveler_suggestion"
+        )
+      );
+    }
+  );
+
+  selectRegionRecommendationCandidatesForAiConcierge().forEach(
+    function(article) {
+      addCandidateIfRoom(
+        buildAiConciergeCandidateFromRegionArticle(
+          article
+        )
+      );
+    }
+  );
+
+  selectGeneralShopCandidatesForAiConcierge().forEach(
+    function(shop) {
+      addCandidateIfRoom(
+        buildAiConciergeCandidateFromShop(
+          shop,
+          "shop"
+        )
+      );
+    }
+  );
+
+  return pooledCandidates;
+}
+
+
+// Ver1.8 Phase1(設計修正)｜AIが返したsuggestedCandidateId(プレフィックス付き)
+// から、実在データを解決する。"shop:"はshops配列(Firestore submissions)、
+// "region:"はregionRecommendationArticlesを正本とし、いずれも見つからなければ
+// nullを返す(呼び出し元が描画を諦めてルールベースへ委ねる)。
+function resolveAiConciergeCandidateRealData(
+  candidateId
+) {
+  if (typeof candidateId !== "string") {
+    return null;
+  }
+
+  if (candidateId.indexOf("shop:") === 0) {
+    const firestoreId =
+      candidateId.slice("shop:".length);
+
+    const matchedShop =
+      shops.find(function(shop) {
+        return (
+          shop.firestoreId ===
+          firestoreId
+        );
+      });
+
+    if (!matchedShop) {
+      return null;
+    }
+
+    return {
+      title: matchedShop.title,
+
+      openDetail: function() {
+        openShopModal(
+          matchedShop.firestoreId
+        );
+      }
+    };
+  }
+
+  if (candidateId.indexOf("region:") === 0) {
+    const articleId =
+      candidateId.slice("region:".length);
+
+    const matchedArticle =
+      Array.isArray(regionRecommendationArticles)
+        ? regionRecommendationArticles.find(
+            function(article) {
+              return (
+                article &&
+                article.id === articleId
+              );
+            }
+          )
+        : null;
+
+    if (!matchedArticle) {
+      return null;
+    }
+
+    return {
+      title:
+        typeof matchedArticle.title === "string"
+          ? matchedArticle.title
+          : "",
+
+      // 地域おすすめには既存の詳細モーダルが無いため、詳細ボタンは
+      // 表示しない(新しいモーダルは作らない)。
+      openDetail: null
+    };
+  }
+
+  return null;
 }
 
 
@@ -5201,6 +5650,24 @@ function updateTravelerSuggestionCard() {
       return;
     }
 
+    // Ver1.8 Phase1(設計修正)｜候補プールが0件だった専用状態。
+    // GPS取得前のプレースホルダー(userAreaName未確定時の分岐)へは
+    // 戻さず、✨カードを維持したまま専用の案内文を表示する。
+    // ルールベースへは進まない(候補プールにはselectTravelerSuggestionCandidate()
+    // の対象も含まれているため、ここが0件ならルールベースも通常0件になる)。
+    if (aiConciergeState.status === "empty") {
+      suggestionMessage.textContent =
+        getMachinauTranslation(
+          "suggestion_no_candidates_message",
+          currentLanguageForAiConcierge
+        );
+
+      suggestionDetailButton.style.display = "none";
+      suggestionDetailButton.onclick = null;
+      suggestionCard.style.display = "";
+      return;
+    }
+
     if (aiConciergeState.status === "success") {
       const cachedAiSuggestion =
         aiConciergeState.suggestionsByLanguage[
@@ -5264,21 +5731,18 @@ function renderAiConciergeSuggestionContent(
 ) {
   if (
     !aiSuggestion ||
-    typeof aiSuggestion.suggestedShopId !== "string" ||
-    aiSuggestion.suggestedShopId === ""
+    typeof aiSuggestion.suggestedCandidateId !== "string" ||
+    aiSuggestion.suggestedCandidateId === ""
   ) {
     return false;
   }
 
-  const matchedShop =
-    shops.find(function(shop) {
-      return (
-        shop.firestoreId ===
-        aiSuggestion.suggestedShopId
-      );
-    });
+  const resolvedCandidate =
+    resolveAiConciergeCandidateRealData(
+      aiSuggestion.suggestedCandidateId
+    );
 
-  if (!matchedShop) {
+  if (!resolvedCandidate) {
     return false;
   }
 
@@ -5292,18 +5756,19 @@ function renderAiConciergeSuggestionContent(
   }
 
   suggestionMessage.textContent =
-    matchedShop.title +
+    resolvedCandidate.title +
     "\n" +
     reasonText;
 
-  suggestionDetailButton.style.display = "";
-
-  suggestionDetailButton.onclick =
-    function() {
-      openShopModal(
-        matchedShop.firestoreId
-      );
-    };
+  if (
+    typeof resolvedCandidate.openDetail === "function"
+  ) {
+    suggestionDetailButton.style.display = "";
+    suggestionDetailButton.onclick = resolvedCandidate.openDetail;
+  } else {
+    suggestionDetailButton.style.display = "none";
+    suggestionDetailButton.onclick = null;
+  }
 
   return true;
 }
@@ -5445,53 +5910,6 @@ function writeAiConciergeCache(
 }
 
 
-// Ver1.8 Phase1｜候補1件をAIコンシェルジュへ送る最小フィールドへ変換する。
-// 本文全文(shop.message)・生の緯度経度は送らない。距離は既存calculateDistance()
-// をそのまま再利用する。
-function buildAiConciergeCandidatePayload(shop) {
-  const distanceKm =
-    Number.isFinite(userLatitude) &&
-    Number.isFinite(userLongitude) &&
-    Number.isFinite(shop.latitude) &&
-    Number.isFinite(shop.longitude)
-      ? calculateDistance(
-          userLatitude,
-          userLongitude,
-          shop.latitude,
-          shop.longitude
-        )
-      : null;
-
-  let availabilityHint =
-    "";
-
-  if (shop.isOpen24Hours) {
-    availabilityHint =
-      "24時間";
-  } else if (
-    shop.businessStartTime &&
-    shop.businessEndTime
-  ) {
-    availabilityHint =
-      shop.businessStartTime +
-      "〜" +
-      shop.businessEndTime;
-  }
-
-  return {
-    id: shop.firestoreId,
-    title: shop.title,
-    category: shop.category,
-    area: shop.area,
-    distanceKm:
-      distanceKm !== null
-        ? Math.round(distanceKm * 10) / 10
-        : null,
-    availabilityHint: availabilityHint
-  };
-}
-
-
 // ブラウザのローカル時刻を"HH:MM"形式(24時間表記)で返す。タイムゾーン変換・
 // サーバー側時刻取得は行わない(利用者の体感時刻をそのまま使う)。
 function formatCurrentTimeForAiConcierge() {
@@ -5522,13 +5940,28 @@ async function attemptAiConciergeSuggestion(
   gpsSessionId
 ) {
   const candidates =
-    selectAiConciergeCandidates();
+    buildAiConciergeCandidatePool();
+
+  // Preview検証用デバッグログ(本番mainへ入れるかは代表判断・後で削除可)。
+  // Secret・Token・詳細な緯度経度・個人情報は一切出力しない。
+  console.log(
+    "[AIConcierge Debug] candidatePool size=" +
+      candidates.length
+  );
 
   if (candidates.length === 0) {
+    // Ver1.8 Phase1(設計修正)｜候補が1件も無い場合はAI APIを呼ばず、
+    // かつGPS取得前のプレースホルダーへも戻さない。専用の
+    // status="empty"を使い、updateTravelerSuggestionCard()側で
+    // ✨カードを維持したまま専用文言を表示する。
+    console.log(
+      "[AIConcierge Debug] fallback reason=empty_pool"
+    );
+
     aiConciergeState =
       {
         gpsSessionId: gpsSessionId,
-        status: "unavailable",
+        status: "empty",
         suggestionsByLanguage: {}
       };
 
@@ -5572,6 +6005,10 @@ async function attemptAiConciergeSuggestion(
   let responseSuggestion =
     null;
 
+  console.log(
+    "[AIConcierge Debug] AI request started"
+  );
+
   try {
     const idToken =
       await getAnonymousIdTokenForLocationCollection();
@@ -5606,10 +6043,11 @@ async function attemptAiConciergeSuggestion(
                   latestWeatherForMachinauSuggestion.conditionText
               }
             },
-            candidates:
-              candidates.map(
-                buildAiConciergeCandidatePayload
-              )
+            // Ver1.8 Phase1(設計修正)｜buildAiConciergeCandidatePool()の
+            // 各要素は既にAIへ送る最終形(id/sourceType/title/category/
+            // area/distanceKm/availabilityHint)になっているため、
+            // ここで改めて変換しない。
+            candidates: candidates
           })
         }
       );
@@ -5625,8 +6063,16 @@ async function attemptAiConciergeSuggestion(
     ) {
       responseSuggestion =
         responseData.suggestion;
+    } else {
+      console.log(
+        "[AIConcierge Debug] fallback reason=api_response_not_success"
+      );
     }
   } catch (error) {
+    console.log(
+      "[AIConcierge Debug] fallback reason=network_error_or_exception"
+    );
+
     responseSuggestion =
       null;
   }
@@ -5677,6 +6123,20 @@ function tryGenerateMachinauSuggestion(gpsSessionId) {
   if (gpsSessionId !== machinauSuggestionGpsSessionId) {
     return;
   }
+
+  // Preview検証用デバッグログ(本番mainへ入れるかは代表判断・後で削除可)。
+  // Secret・Token・詳細な緯度経度・個人情報は一切出力しない。3条件ゲートが
+  // どの時点で揃っていないかを追跡するためだけの真偽値・件数のみ。
+  console.log(
+    "[AIConcierge Debug] gate check weatherReady=" +
+      (latestWeatherForMachinauSuggestion !== null) +
+      " areaReady=" +
+      isAreaNameResolvedForMachinauSuggestion +
+      " shopsReady=" +
+      isShopsLoadedForMachinauSuggestion +
+      " shopsCount=" +
+      shops.length
+  );
 
   if (
     latestWeatherForMachinauSuggestion === null ||
@@ -7929,7 +8389,14 @@ async function showRegionRecommendationsForArea(
     regionRecommendationArticles =
       querySnapshot.docs.map(
         function(documentSnapshot) {
-          return documentSnapshot.data();
+          // Ver1.8 Phase1｜AIコンシェルジュが実データへ戻れるよう、
+          // 既存のdocumentSnapshot.data()に加えてdocumentSnapshot.idも
+          // 保持する(追加フィールドのみ、既存フィールド・呼び出し元の
+          // 描画ロジックには一切影響しない)。
+          return Object.assign(
+            { id: documentSnapshot.id },
+            documentSnapshot.data()
+          );
         }
       );
 

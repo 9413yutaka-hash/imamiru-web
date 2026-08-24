@@ -231,7 +231,9 @@ const AI_CONCIERGE_FIELD_MAX_LENGTHS =
     category: 30,
     area: 80,
     availabilityHint: 60,
-    conditionText: 40
+    conditionText: 40,
+    sourceType: 30,
+    factSummary: 80
   };
 
 const AI_CONCIERGE_CURRENT_TIME_MAX_LENGTH =
@@ -534,6 +536,15 @@ function sanitizeAiConciergeCandidate(
   return {
     id: id,
 
+    // Ver1.8 Phase1(設計修正)｜候補プールが一般店舗・地域おすすめ・⚡・🔥・
+    // ✨の複数情報源から構成されるため、AIへの説明用ラベルとしてsourceTypeを
+    // 追加する。値の妥当性(候補選定条件)はクライアント側の各select...ForAiConcierge()
+    // で既に確定済みのため、ここでは文字列としての最大長切り詰めのみ行う。
+    sourceType: clippedText(
+      rawCandidate.sourceType,
+      AI_CONCIERGE_FIELD_MAX_LENGTHS.sourceType
+    ),
+
     title: clippedText(
       rawCandidate.title,
       AI_CONCIERGE_FIELD_MAX_LENGTHS.title
@@ -552,6 +563,13 @@ function sanitizeAiConciergeCandidate(
     availabilityHint: clippedText(
       rawCandidate.availabilityHint,
       AI_CONCIERGE_FIELD_MAX_LENGTHS.availabilityHint
+    ),
+
+    // Ver1.8 Phase1(重要情報優先の確認・修正)｜"factual_info"候補にのみ
+    // クライアント側で付与される短い事実要約。他のsourceTypeでは空文字。
+    factSummary: clippedText(
+      rawCandidate.factSummary,
+      AI_CONCIERGE_FIELD_MAX_LENGTHS.factSummary
     ),
 
     distanceKm: distanceKm
@@ -634,17 +652,42 @@ function buildAiConciergePrompt(
     payload.language === "en" ? "English" : "Japanese";
 
   const systemInstruction =
-    "You are Machinau's travel concierge. You must choose exactly ONE candidate " +
-    "from the JSON \"candidates\" array in the user message that is most meaningful " +
-    "for this traveler right now, considering the provided area, current time, " +
-    "weather, distance, category, and availability hint. " +
+    "You are Machinau's travel concierge. Each candidate in the JSON " +
+    "\"candidates\" array has a \"sourceType\" describing what kind of " +
+    "information it is: \"factual_info\" (safety/important real-time info, " +
+    "such as typhoons, warnings, evacuation notices, transport suspensions, " +
+    "facility closures, or last-minute schedule changes; it may include a " +
+    "short \"factSummary\" field with a brief factual excerpt), " +
+    "\"official_today\" (official Machinau operator post), " +
+    "\"traveler_suggestion\" (curated event/sightseeing pick), " +
+    "\"region_recommendation\" (editorial regional recommendation), or " +
+    "\"shop\" (a regular shop/venue listing). " +
+    "PRIORITY RULE: if any \"factual_info\" candidate is relevant to the " +
+    "traveler's area or plans right now, you MUST treat it as higher " +
+    "priority than any regular shop, sightseeing, or event candidate, even " +
+    "if a regular candidate would otherwise seem like a nicer suggestion. " +
+    "Do not ignore a relevant closure, warning, or safety notice just to " +
+    "recommend something more appealing. Stay calm and factual — do not " +
+    "exaggerate risk or cause unnecessary alarm. " +
+    "You must choose exactly ONE candidate from the array that is most " +
+    "meaningful for this traveler right now, considering the provided area, " +
+    "current time, weather, distance, category, and availability hint. " +
     "You must NEVER invent, rename, or describe a place, shop, or event that is " +
-    "not in the candidates list. The value of \"suggestedShopId\" in your response " +
-    "MUST be exactly one of the \"id\" values in the candidates array, copied " +
-    "verbatim. Do not state specific facts (hours, prices, distance) that are not " +
-    "present in the matching candidate's data. " +
+    "not in the candidates list. The value of \"suggestedCandidateId\" in your " +
+    "response MUST be exactly one of the \"id\" values in the candidates array, " +
+    "copied verbatim (do not strip or alter its prefix). Do not state specific " +
+    "facts (hours, prices, distance) that are not present in the matching " +
+    "candidate's data (for \"factual_info\", you may restate its own " +
+    "\"factSummary\" in your own words, but do not add facts beyond it). " +
+    "ANSWER SHAPE when you choose a \"factual_info\" candidate: \"reasonShort\" " +
+    "should state the key fact plainly and what it means for the traveler's " +
+    "plans right now (fact -> what to do). If, and only if, another candidate " +
+    "in the array is a reasonable nearby alternative, you may name it in " +
+    "\"cautionNote\" by copying its exact \"title\" text from the candidates " +
+    "array — never invent an alternative name that is not one of the " +
+    "provided candidates' titles. Otherwise set \"cautionNote\" to null. " +
     "Reply with a single JSON object only, with exactly these keys: " +
-    "\"suggestedShopId\" (string, one of the candidate ids), " +
+    "\"suggestedCandidateId\" (string, one of the candidate ids), " +
     "\"reasonShort\" (string, one short sentence written in " + languageLabel + "), " +
     "\"cautionNote\" (string in " + languageLabel + ", or null). " +
     "No extra text before or after the JSON object.";
@@ -832,8 +875,8 @@ function isValidAiConciergeSuggestion(
   }
 
   if (
-    typeof suggestion.suggestedShopId !== "string" ||
-    suggestion.suggestedShopId === ""
+    typeof suggestion.suggestedCandidateId !== "string" ||
+    suggestion.suggestedCandidateId === ""
   ) {
     return false;
   }
@@ -843,7 +886,7 @@ function isValidAiConciergeSuggestion(
       function(candidate) {
         return (
           candidate.id ===
-          suggestion.suggestedShopId
+          suggestion.suggestedCandidateId
         );
       }
     );
@@ -940,7 +983,18 @@ async function handleAiConciergeRequest(
         requestBody.candidates
       );
 
+    // Preview検証用デバッグログ(本番mainへ入れるかは代表判断・後で削除可)。
+    // Secret・Token・詳細な緯度経度・個人情報は一切出力しない。
+    console.log(
+      "[AIConcierge Debug] request received candidateCount=" +
+        candidates.length
+    );
+
     if (candidates.length === 0) {
+      console.log(
+        "[AIConcierge Debug] fallback reason=no_candidates_in_request"
+      );
+
       return response.status(400).json({
         success: false,
         message:
@@ -951,6 +1005,10 @@ async function handleAiConciergeRequest(
     let aiSuggestion;
 
     try {
+      console.log(
+        "[AIConcierge Debug] AI request started"
+      );
+
       aiSuggestion =
         await callOpenAiConcierge(
           {
@@ -967,6 +1025,10 @@ async function handleAiConciergeRequest(
         aiError
       );
 
+      console.log(
+        "[AIConcierge Debug] fallback reason=ai_call_error"
+      );
+
       return response.status(200).json({
         success: false,
         message:
@@ -980,12 +1042,20 @@ async function handleAiConciergeRequest(
         candidates
       )
     ) {
+      console.log(
+        "[AIConcierge Debug] fallback reason=invalid_ai_suggestion"
+      );
+
       return response.status(200).json({
         success: false,
         message:
           "AI判断結果を利用できませんでした。"
       });
     }
+
+    console.log(
+      "[AIConcierge Debug] AI suggestion accepted"
+    );
 
     const cautionNote =
       typeof aiSuggestion.cautionNote === "string" &&
@@ -998,8 +1068,8 @@ async function handleAiConciergeRequest(
     return response.status(200).json({
       success: true,
       suggestion: {
-        suggestedShopId:
-          aiSuggestion.suggestedShopId,
+        suggestedCandidateId:
+          aiSuggestion.suggestedCandidateId,
 
         reasonShort:
           String(aiSuggestion.reasonShort)
