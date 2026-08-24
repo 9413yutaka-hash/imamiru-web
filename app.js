@@ -5690,30 +5690,80 @@ function updateTravelerSuggestionCard() {
     }
   }
 
-  const selectedShop =
-    selectTravelerSuggestionCandidate();
+  // Ver1.8 Phase1(カード非表示禁止の修正)｜ここに到達するのは、AI状態が
+  // このセッションにまだ紐付いていない・AI応答が失敗/不正だった・言語別
+  // キャッシュが無い等、理由を問わずAI経路で描画できなかった場合。
+  // 以前はここで既存の狭いselectTravelerSuggestionCandidate()(postType==="admin"
+  // かつイベント/観光・体験限定)だけを見てcandidate無しならカードを
+  // display:noneにしていたが、AIコンシェルジュの候補プールが一般店舗・
+  // 地域おすすめまで広がった現在、この狭いフォールバックだけでは
+  // 「候補は実在するのにカードが消える」状態になり得る。
+  // selectTravelerSuggestionCandidate()本体・buildSuggestionMessageText()は
+  // 一切変更せず、単にこの最終フォールバックでの呼び出しをやめ、AI
+  // コンシェルジュ用の候補プール(buildAiConciergeCandidatePool()、
+  // factual_info→今日のマチナウ→従来✨候補→地域おすすめ→一般店舗の
+  // 優先順、新しいスコアリングは追加しない)の先頭候補を、AI生成文を
+  // 使わず安全に表示する。GPS取得後にこの経路でカードを非表示にする
+  // ことはない。
+  const fallbackCandidates =
+    buildAiConciergeCandidatePool();
 
-  if (!selectedShop) {
-    suggestionCard.style.display = "none";
+  // Preview検証用デバッグログ(本番mainへ入れるかは代表判断・後で削除可)。
+  // Secret・Token・座標詳細・個人情報は一切出力しない。
+  console.log(
+    "[AIConcierge Debug] fallback pool size=" +
+      fallbackCandidates.length
+  );
+
+  if (fallbackCandidates.length === 0) {
+    console.log(
+      "[AIConcierge Debug] fallbackCandidateFound=false finalCardState=empty"
+    );
+
+    suggestionMessage.textContent =
+      getMachinauTranslation(
+        "suggestion_no_candidates_message",
+        currentLanguageForAiConcierge
+      );
+
     suggestionDetailButton.style.display = "none";
     suggestionDetailButton.onclick = null;
+    suggestionCard.style.display = "";
     return;
   }
 
-  suggestionMessage.textContent =
-    buildSuggestionMessageText(
-      { shop: selectedShop, isSafety: false },
-      latestWeatherForMachinauSuggestion
+  const fallbackCandidate =
+    fallbackCandidates[0];
+
+  console.log(
+    "[AIConcierge Debug] fallbackSourceType=" +
+      fallbackCandidate.sourceType +
+      " fallbackCandidateFound=true"
+  );
+
+  const didRenderFallback =
+    renderAiConciergeFallbackContent(
+      fallbackCandidate,
+      currentLanguageForAiConcierge,
+      suggestionMessage,
+      suggestionDetailButton
     );
 
-  suggestionDetailButton.style.display = "";
+  console.log(
+    "[AIConcierge Debug] finalCardState=" +
+      (didRenderFallback ? "fallback_rendered" : "empty_unresolvable")
+  );
 
-  suggestionDetailButton.onclick =
-    function() {
-      openShopModal(
-        selectedShop.firestoreId
+  if (!didRenderFallback) {
+    suggestionMessage.textContent =
+      getMachinauTranslation(
+        "suggestion_no_candidates_message",
+        currentLanguageForAiConcierge
       );
-    };
+
+    suggestionDetailButton.style.display = "none";
+    suggestionDetailButton.onclick = null;
+  }
 
   suggestionCard.style.display = "";
 }
@@ -5759,6 +5809,87 @@ function renderAiConciergeSuggestionContent(
     resolvedCandidate.title +
     "\n" +
     reasonText;
+
+  if (
+    typeof resolvedCandidate.openDetail === "function"
+  ) {
+    suggestionDetailButton.style.display = "";
+    suggestionDetailButton.onclick = resolvedCandidate.openDetail;
+  } else {
+    suggestionDetailButton.style.display = "none";
+    suggestionDetailButton.onclick = null;
+  }
+
+  return true;
+}
+
+
+// Ver1.8 Phase1(カード非表示禁止の修正)｜AI応答が使えない場合の安全な
+// フォールバック描画。AI生成文は一切使わず、候補プールが既に持っている
+// 事実(title・factSummary)だけで表示する。新しい事実は生成しない・
+// 過度な言い換えもしない。
+// - sourceType==="factual_info"(重要情報): title + factSummaryをそのまま
+//   短く提示する。factSummaryが無ければtitleのみ。
+// - それ以外: 既存事実を超えない汎用の案内文(suggestion_fallback_generic_note)
+//   をtitleに添える。
+function renderAiConciergeFallbackContent(
+  candidate,
+  language,
+  suggestionMessage,
+  suggestionDetailButton
+) {
+  if (
+    !candidate ||
+    typeof candidate.id !== "string" ||
+    candidate.id === ""
+  ) {
+    return false;
+  }
+
+  const resolvedCandidate =
+    resolveAiConciergeCandidateRealData(
+      candidate.id
+    );
+
+  if (!resolvedCandidate) {
+    return false;
+  }
+
+  const titleText =
+    typeof resolvedCandidate.title === "string" &&
+    resolvedCandidate.title.trim() !== ""
+      ? resolvedCandidate.title.trim()
+      : "";
+
+  if (titleText === "") {
+    return false;
+  }
+
+  let messageText;
+
+  if (candidate.sourceType === "factual_info") {
+    const factLine =
+      typeof candidate.factSummary === "string" &&
+      candidate.factSummary.trim() !== ""
+        ? candidate.factSummary.trim()
+        : "";
+
+    messageText =
+      factLine !== ""
+        ? titleText + "\n" + factLine
+        : titleText;
+  } else {
+    messageText =
+      titleText +
+      "\n" +
+      getMachinauTranslation(
+        "suggestion_fallback_generic_note",
+        language
+      );
+  }
+
+  suggestionMessage.textContent =
+    messageText;
 
   if (
     typeof resolvedCandidate.openDetail === "function"

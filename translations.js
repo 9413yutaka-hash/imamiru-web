@@ -134,6 +134,11 @@ const MACHINAU_TRANSLATIONS = {
     en: "We couldn't find anything nearby to suggest right now.\nWe'll share a suggestion here as soon as new information comes in."
   },
 
+  suggestion_fallback_generic_note: {
+    ja: "現在地の近くにある情報です。",
+    en: "This is information near your current location."
+  },
+
   factual_heading: {
     ja: "⚡ 今、知っておきたいこと",
     en: "⚡ Good to Know"
