@@ -5563,6 +5563,13 @@ function updateSuggestionCard(weather) {
 // userAreaName未確定(GPS未取得)、または天候未取得の場合は必ず非表示にする。
 // 那覇等へのフォールバック表示は行わない。
 function updateTravelerSuggestionCard() {
+  // Preview診断用ログ(本番mainへ入れるかは代表判断・後で削除可)。
+  // Secret・Token・座標詳細・個人情報は一切出力しない。
+  console.log(
+    "[AIConcierge Debug] updateTravelerSuggestionCard start status=" +
+      aiConciergeState.status
+  );
+
   const suggestionCard =
     document.getElementById("suggestionCard");
 
@@ -5705,67 +5712,98 @@ function updateTravelerSuggestionCard() {
   // 優先順、新しいスコアリングは追加しない)の先頭候補を、AI生成文を
   // 使わず安全に表示する。GPS取得後にこの経路でカードを非表示にする
   // ことはない。
-  const fallbackCandidates =
-    buildAiConciergeCandidatePool();
-
-  // Preview検証用デバッグログ(本番mainへ入れるかは代表判断・後で削除可)。
-  // Secret・Token・座標詳細・個人情報は一切出力しない。
+  //
+  // Preview診断用｜buildAiConciergeCandidatePool()〜renderAiConciergeFallbackContent()
+  // だけをtry/catchで保護する。未捕捉のJavaScript例外があった場合でも
+  // ✨カードを消さず、内部事情を含まない安全な専用文言(suggestion_fallback_error_message)
+  // へ切り替える。catchした例外はconsole.errorへ出力し、次回の実機確認で
+  // 原因を確定できるようにする(Secret・Token・座標詳細・個人情報は出さない)。
   console.log(
-    "[AIConcierge Debug] fallback pool size=" +
-      fallbackCandidates.length
+    "[AIConcierge Debug] fallback start"
   );
 
-  if (fallbackCandidates.length === 0) {
+  try {
+    const fallbackCandidates =
+      buildAiConciergeCandidatePool();
+
     console.log(
-      "[AIConcierge Debug] fallbackCandidateFound=false finalCardState=empty"
+      "[AIConcierge Debug] candidatePool build success size=" +
+        fallbackCandidates.length
+    );
+
+    if (fallbackCandidates.length === 0) {
+      console.log(
+        "[AIConcierge Debug] fallbackCandidateFound=false finalCardState=empty"
+      );
+
+      suggestionMessage.textContent =
+        getMachinauTranslation(
+          "suggestion_no_candidates_message",
+          currentLanguageForAiConcierge
+        );
+
+      suggestionDetailButton.style.display = "none";
+      suggestionDetailButton.onclick = null;
+      suggestionCard.style.display = "";
+      return;
+    }
+
+    const fallbackCandidate =
+      fallbackCandidates[0];
+
+    console.log(
+      "[AIConcierge Debug] fallbackSourceType=" +
+        fallbackCandidate.sourceType +
+        " fallbackCandidateFound=true"
+    );
+
+    console.log(
+      "[AIConcierge Debug] render start"
+    );
+
+    const didRenderFallback =
+      renderAiConciergeFallbackContent(
+        fallbackCandidate,
+        currentLanguageForAiConcierge,
+        suggestionMessage,
+        suggestionDetailButton
+      );
+
+    console.log(
+      "[AIConcierge Debug] render " +
+        (didRenderFallback ? "success" : "failed") +
+        " finalCardState=" +
+        (didRenderFallback ? "fallback_rendered" : "empty_unresolvable")
+    );
+
+    if (!didRenderFallback) {
+      suggestionMessage.textContent =
+        getMachinauTranslation(
+          "suggestion_no_candidates_message",
+          currentLanguageForAiConcierge
+        );
+
+      suggestionDetailButton.style.display = "none";
+      suggestionDetailButton.onclick = null;
+    }
+
+    suggestionCard.style.display = "";
+  } catch (fallbackError) {
+    console.error(
+      "[AIConcierge Debug] fallback exception:",
+      fallbackError
     );
 
     suggestionMessage.textContent =
       getMachinauTranslation(
-        "suggestion_no_candidates_message",
+        "suggestion_fallback_error_message",
         currentLanguageForAiConcierge
       );
 
     suggestionDetailButton.style.display = "none";
     suggestionDetailButton.onclick = null;
     suggestionCard.style.display = "";
-    return;
   }
-
-  const fallbackCandidate =
-    fallbackCandidates[0];
-
-  console.log(
-    "[AIConcierge Debug] fallbackSourceType=" +
-      fallbackCandidate.sourceType +
-      " fallbackCandidateFound=true"
-  );
-
-  const didRenderFallback =
-    renderAiConciergeFallbackContent(
-      fallbackCandidate,
-      currentLanguageForAiConcierge,
-      suggestionMessage,
-      suggestionDetailButton
-    );
-
-  console.log(
-    "[AIConcierge Debug] finalCardState=" +
-      (didRenderFallback ? "fallback_rendered" : "empty_unresolvable")
-  );
-
-  if (!didRenderFallback) {
-    suggestionMessage.textContent =
-      getMachinauTranslation(
-        "suggestion_no_candidates_message",
-        currentLanguageForAiConcierge
-      );
-
-    suggestionDetailButton.style.display = "none";
-    suggestionDetailButton.onclick = null;
-  }
-
-  suggestionCard.style.display = "";
 }
 
 

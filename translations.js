@@ -139,6 +139,11 @@ const MACHINAU_TRANSLATIONS = {
     en: "This is information near your current location."
   },
 
+  suggestion_fallback_error_message: {
+    ja: "現在、提案を準備できませんでした。少し時間をおいて、もう一度現在地を更新してください。",
+    en: "We couldn't prepare a suggestion right now. Please wait a moment and refresh your location again."
+  },
+
   factual_heading: {
     ja: "⚡ 今、知っておきたいこと",
     en: "⚡ Good to Know"
