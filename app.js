@@ -4920,6 +4920,105 @@ function selectTravelerSuggestionCandidate() {
 const AI_CONCIERGE_MAX_CANDIDATES =
   5;
 
+// Ver1.8 Phase1(実機不具合調査用・Preview専用診断)｜代表がDevTools/Consoleを
+// 開かなくても、スマホ画面を見るだけでAIコンシェルジュの内部状態を判定
+// できるようにするための一時的な画面内診断。本番mainへは絶対に入れない
+// (このブロックごと削除してからmainへマージする)。Secret・Token・座標・
+// 市町村名・個人情報は一切表示しない(真偽値・件数・状態名のみ)。
+// このID文字列はgitのcommit hashとは別に、診断コードそのものの版を表す
+// (commit前にhashが分からないため)。
+const PREVIEW_DIAGNOSTIC_BUILD_LABEL =
+  "diag-2026-08-26-01";
+
+function renderPreviewDiagnosticOverlay() {
+  let overlay =
+    document.getElementById(
+      "machinauPreviewDiagnosticOverlay"
+    );
+
+  if (!overlay) {
+    overlay =
+      document.createElement(
+        "div"
+      );
+
+    overlay.id =
+      "machinauPreviewDiagnosticOverlay";
+
+    overlay.style.position =
+      "fixed";
+    overlay.style.bottom =
+      "0";
+    overlay.style.left =
+      "0";
+    overlay.style.right =
+      "0";
+    overlay.style.zIndex =
+      "999999";
+    overlay.style.background =
+      "rgba(0, 0, 0, 0.78)";
+    overlay.style.color =
+      "#00ff90";
+    overlay.style.fontSize =
+      "10px";
+    overlay.style.lineHeight =
+      "1.4";
+    overlay.style.fontFamily =
+      "monospace";
+    overlay.style.padding =
+      "4px 6px";
+    overlay.style.whiteSpace =
+      "pre-wrap";
+    overlay.style.pointerEvents =
+      "none";
+
+    document.body.appendChild(
+      overlay
+    );
+  }
+
+  const gpsReadyText =
+    Number.isFinite(userLatitude) &&
+    Number.isFinite(userLongitude)
+      ? "ready"
+      : "not-ready";
+
+  const weatherReadyText =
+    latestWeatherForMachinauSuggestion !== null
+      ? "ready"
+      : "not-ready";
+
+  const areaText =
+    !isAreaNameResolvedForMachinauSuggestion
+      ? "pending"
+      : (typeof userAreaName === "string" && userAreaName !== ""
+          ? "ready"
+          : "resolved-but-unavailable");
+
+  const shopsReadyText =
+    isShopsLoadedForMachinauSuggestion
+      ? "ready(" + shops.length + ")"
+      : "not-ready";
+
+  overlay.textContent =
+    "build:" +
+    PREVIEW_DIAGNOSTIC_BUILD_LABEL +
+    " gps:" +
+    gpsReadyText +
+    " weather:" +
+    weatherReadyText +
+    " area:" +
+    areaText +
+    " shops:" +
+    shopsReadyText +
+    " gpsSession:" +
+    machinauSuggestionGpsSessionId +
+    " aiStatus:" +
+    aiConciergeState.status +
+    " aiSession:" +
+    aiConciergeState.gpsSessionId;
+}
+
 // Ver1.8 Phase1(実機不具合調査・修正)｜クライアントから/api/moderate-submission
 // (mode=aiConcierge)へのfetch()には元々タイムアウトが無く、実ブラウザでの
 // 検証で、接続が途中で切れる状況下ではfetch()が拒否されるまで15秒以上かかる
@@ -5642,6 +5741,8 @@ function updateTravelerSuggestionCard() {
       " status=" +
       aiConciergeState.status
   );
+
+  renderPreviewDiagnosticOverlay();
 
   if (
     !isGpsAcquiredForSuggestion ||
@@ -6368,6 +6469,8 @@ function tryGenerateMachinauSuggestion(gpsSessionId) {
       isShopsLoadedForMachinauSuggestion
   );
 
+  renderPreviewDiagnosticOverlay();
+
   if (gpsSessionId !== machinauSuggestionGpsSessionId) {
     return;
   }
@@ -6408,6 +6511,8 @@ function tryGenerateMachinauSuggestion(gpsSessionId) {
   console.log(
     "[AIConcierge Trace] gatesPassed"
   );
+
+  renderPreviewDiagnosticOverlay();
 
   // Ver1.8 Phase1｜✨あなたへの提案は、まずAIコンシェルジュ
   // (attemptAiConciergeSuggestion())を試み、候補が無い/AI応答が使えない
@@ -6634,6 +6739,8 @@ function getLocation() {
             suggestionGpsSessionId
         );
 
+        renderPreviewDiagnosticOverlay();
+
         latestWeatherForMachinauSuggestion =
           null;
 
@@ -6661,6 +6768,8 @@ function getLocation() {
                 " weatherAvailable=" +
                 (weather !== null && weather !== undefined)
             );
+
+            renderPreviewDiagnosticOverlay();
 
             if (
               suggestionGpsSessionId ===
@@ -6691,6 +6800,8 @@ function getLocation() {
                 " areaAvailable=" +
                 (typeof areaName === "string" && areaName !== "")
             );
+
+            renderPreviewDiagnosticOverlay();
 
             if (areaName) {
               userAreaName = areaName;
@@ -6725,6 +6836,8 @@ function getLocation() {
                 (suggestionGpsSessionId ===
                   machinauSuggestionGpsSessionId)
             );
+
+            renderPreviewDiagnosticOverlay();
 
             // 地域名取得の失敗は既存フローに影響させない
           });
@@ -7602,6 +7715,10 @@ document.addEventListener(
     initializeMachinauLanguageSwitcher();
 
     initializeMapLazyLoadObserver();
+
+    // Ver1.8 Phase1(実機不具合調査用・Preview専用診断)｜ページ読み込み直後、
+    // GPS操作前から画面下部に診断表示を出す(本番mainへは入れない)。
+    renderPreviewDiagnosticOverlay();
   }
 );
 
