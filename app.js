@@ -5603,14 +5603,29 @@ function updateTravelerSuggestionCard() {
     suggestionPlaceholderCtaButton.style.display = "none";
   }
 
+  // Ver1.8 Phase1(プレースホルダー固着修正)｜GPS未取得かどうかは、既存の
+  // userLatitude/userLongitude(getLocation()成功時にのみ設定される、
+  // getLocation()自体は無変更)で判定する。userAreaNameは地域名解決
+  // (resolveAreaNameFromCoordinates())が失敗した場合に空のまま残り得るが、
+  // これはGPS未取得とは別の状態のため、プレースホルダー判定には使わない
+  // (地域名がnullでもGPS取得済みならAIコンシェルジュ/フォールバックへ進む)。
+  const isGpsAcquiredForSuggestion =
+    Number.isFinite(userLatitude) &&
+    Number.isFinite(userLongitude);
+
+  console.log(
+    "[AIConcierge Debug] placeholder gate gpsReady=" +
+      isGpsAcquiredForSuggestion +
+      " areaNameAvailable=" +
+      (typeof userAreaName === "string" && userAreaName !== "")
+  );
+
   if (
-    typeof userAreaName !== "string" ||
-    userAreaName === "" ||
+    !isGpsAcquiredForSuggestion ||
     latestWeatherForMachinauSuggestion === null
   ) {
     // Ver1.8｜GPS未取得時は非表示にせず、マチナウの提案機能そのものを
-    // 独立カードとして案内する。候補選定・表示条件(userAreaName/weather)
-    // 自体は一切変更しない。GPS取得成功後はこのifを通らなくなり、
+    // 独立カードとして案内する。GPS取得成功後はこのifを通らなくなり、
     // 既存ロジックがそのまま本来の提案へ置き換える。
     if (suggestionPlaceholderMain) {
       suggestionPlaceholderMain.style.display = "";
@@ -6196,7 +6211,14 @@ async function attemptAiConciergeSuggestion(
             language: language,
             currentTime: formatCurrentTimeForAiConcierge(),
             context: {
-              area: userAreaName,
+              // Ver1.8 Phase1(プレースホルダー固着修正)｜地域名解決に失敗した
+              // 場合(userAreaNameがnull)でもAIコンシェルジュ処理は継続するため、
+              // nullをそのまま送らず安全な空文字にする。サーバー側は元々
+              // 非文字列を空文字として扱う設計のため実質的な挙動は変わらない。
+              area:
+                typeof userAreaName === "string"
+                  ? userAreaName
+                  : "",
               weather: {
                 temperatureC:
                   latestWeatherForMachinauSuggestion.temperatureC,
