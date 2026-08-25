@@ -5620,6 +5620,17 @@ function updateTravelerSuggestionCard() {
       (typeof userAreaName === "string" && userAreaName !== "")
   );
 
+  // Ver1.8 Phase1(診断ログ・実機切り分け用)｜個人情報・Secret・Token・
+  // 緯度経度・市町村名は出さない。
+  console.log(
+    "[AIConcierge Trace] cardUpdate gpsReady=" +
+      isGpsAcquiredForSuggestion +
+      " weatherReady=" +
+      (latestWeatherForMachinauSuggestion !== null) +
+      " status=" +
+      aiConciergeState.status
+  );
+
   if (
     !isGpsAcquiredForSuggestion ||
     latestWeatherForMachinauSuggestion === null
@@ -6311,6 +6322,20 @@ async function attemptAiConciergeSuggestion(
 // (isShopsLoadedForMachinauSuggestion)の3条件がそろった時点で、
 // 今回のGPS取得(gpsSessionId)についてのみ提案を1回だけ生成する。
 function tryGenerateMachinauSuggestion(gpsSessionId) {
+  // Ver1.8 Phase1(診断ログ・実機切り分け用)｜早期returnより前に置き、この
+  // 関数自体が呼ばれたかどうか(sessionMatch=falseで弾かれた場合も含め)を
+  // 必ず記録する。個人情報・Secret・Token・緯度経度・市町村名は出さない。
+  console.log(
+    "[AIConcierge Trace] tryGenerate sessionMatch=" +
+      (gpsSessionId === machinauSuggestionGpsSessionId) +
+      " weatherReady=" +
+      (latestWeatherForMachinauSuggestion !== null) +
+      " areaReady=" +
+      isAreaNameResolvedForMachinauSuggestion +
+      " shopsReady=" +
+      isShopsLoadedForMachinauSuggestion
+  );
+
   if (gpsSessionId !== machinauSuggestionGpsSessionId) {
     return;
   }
@@ -6346,6 +6371,11 @@ function tryGenerateMachinauSuggestion(gpsSessionId) {
 
   generatedMachinauSuggestionGpsSessionId =
     gpsSessionId;
+
+  // Ver1.8 Phase1(診断ログ・実機切り分け用)
+  console.log(
+    "[AIConcierge Trace] gatesPassed"
+  );
 
   // Ver1.8 Phase1｜✨あなたへの提案は、まずAIコンシェルジュ
   // (attemptAiConciergeSuggestion())を試み、候補が無い/AI応答が使えない
@@ -6566,6 +6596,12 @@ function getLocation() {
         const suggestionGpsSessionId =
           machinauSuggestionGpsSessionId;
 
+        // Ver1.8 Phase1(診断ログ・実機切り分け用)｜緯度経度は出さない。
+        console.log(
+          "[AIConcierge Trace] gpsSuccess session=" +
+            suggestionGpsSessionId
+        );
+
         latestWeatherForMachinauSuggestion =
           null;
 
@@ -6583,6 +6619,15 @@ function getLocation() {
                 "weather_location_current",
                 getCurrentMachinauLanguage()
               )
+            );
+
+            // Ver1.8 Phase1(診断ログ・実機切り分け用)｜天気の具体的な値は出さない。
+            console.log(
+              "[AIConcierge Trace] weatherResolved sessionMatch=" +
+                (suggestionGpsSessionId ===
+                  machinauSuggestionGpsSessionId) +
+                " weatherAvailable=" +
+                (weather !== null && weather !== undefined)
             );
 
             if (
@@ -6606,6 +6651,15 @@ function getLocation() {
           userLongitude
         )
           .then(function(areaName) {
+            // Ver1.8 Phase1(診断ログ・実機切り分け用)｜市町村名・緯度経度は出さない。
+            console.log(
+              "[AIConcierge Trace] areaResolved sessionMatch=" +
+                (suggestionGpsSessionId ===
+                  machinauSuggestionGpsSessionId) +
+                " areaAvailable=" +
+                (typeof areaName === "string" && areaName !== "")
+            );
+
             if (areaName) {
               userAreaName = areaName;
 
@@ -6633,6 +6687,13 @@ function getLocation() {
             }
           })
           .catch(function(error) {
+            // Ver1.8 Phase1(診断ログ・実機切り分け用)
+            console.log(
+              "[AIConcierge Trace] areaRejected sessionMatch=" +
+                (suggestionGpsSessionId ===
+                  machinauSuggestionGpsSessionId)
+            );
+
             // 地域名取得の失敗は既存フローに影響させない
           });
       },
