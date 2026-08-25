@@ -4920,6 +4920,18 @@ function selectTravelerSuggestionCandidate() {
 const AI_CONCIERGE_MAX_CANDIDATES =
   5;
 
+// Ver1.8 Phase1(実機不具合調査・修正)｜クライアントから/api/moderate-submission
+// (mode=aiConcierge)へのfetch()には元々タイムアウトが無く、実ブラウザでの
+// 検証で、接続が途中で切れる状況下ではfetch()が拒否されるまで15秒以上かかる
+// ことを確認した(サーバー側のAI_CONCIERGE_TIMEOUT_MS=8000より大幅に長い)。
+// その間aiConciergeState.statusは"loading"のまま固着し、✨カードが
+// 「AIが今のあなたに合う提案を考えています…」表示から進まなくなる。
+// サーバー側の時間予算(8秒)に余裕を持たせた値でクライアント側にも
+// タイムアウトを設け、必ずunavailable状態へ遷移してフォールバック
+// 表示へ進めるようにする。
+const AI_CONCIERGE_CLIENT_FETCH_TIMEOUT_MS =
+  12000;
+
 // Ver1.8 Phase1(重要情報優先の確認・修正)｜"factual_info"候補にのみ付与する
 // 短い事実要約(shop.messageの先頭のみ)の最大文字数。全文送信は行わず、
 // トークン増加を抑えるため短く保つ。
@@ -6204,6 +6216,20 @@ async function attemptAiConciergeSuggestion(
     "[AIConcierge Debug] AI request started"
   );
 
+  // Ver1.8 Phase1(実機不具合調査・修正)｜接続が途中で切れる等の実ブラウザ
+  // 検証で確認した長時間停止を防ぐためのタイムアウト。AbortControllerの
+  // 使い方はサーバー側callOpenAiConcierge()と同じパターンを踏襲する。
+  const fetchAbortController =
+    new AbortController();
+
+  const fetchTimeoutId =
+    setTimeout(
+      function() {
+        fetchAbortController.abort();
+      },
+      AI_CONCIERGE_CLIENT_FETCH_TIMEOUT_MS
+    );
+
   try {
     const idToken =
       await getAnonymousIdTokenForLocationCollection();
@@ -6217,6 +6243,8 @@ async function attemptAiConciergeSuggestion(
             "Content-Type": "application/json",
             "Authorization": "Bearer " + idToken
           },
+          signal:
+            fetchAbortController.signal,
           body: JSON.stringify({
             mode: "aiConcierge",
             language: language,
@@ -6277,6 +6305,10 @@ async function attemptAiConciergeSuggestion(
 
     responseSuggestion =
       null;
+  } finally {
+    clearTimeout(
+      fetchTimeoutId
+    );
   }
 
   // 別のGPS取得が既に始まっていれば、古い応答は反映しない
