@@ -4981,10 +4981,10 @@ function selectAiConciergeCandidates() {
 // 示す語も対象に含め、情報源sourceTypeも「観光施設」(施設公式発表)を
 // 追加で許容する(ジャングリア沖縄等の公式発表が「観光施設」区分で
 // 登録される可能性があるため)。
-const AI_CONCIERGE_IMPORTANT_SOURCE_TYPES =
-  FACTUAL_IMPORTANT_INFO_SOURCE_TYPES.concat(
-    ["観光施設"]
-  );
+// Ver1.8 Phase1(GPSボタン不具合修正)｜AI_CONCIERGE_IMPORTANT_SOURCE_TYPESは
+// FACTUAL_IMPORTANT_INFO_SOURCE_TYPES(このファイル下方で定義)を参照するため、
+// 定義前参照(TDZ)を避けるためFACTUAL_IMPORTANT_INFO_SOURCE_TYPESの定義直後に
+// 移設している(このファイル下方を参照)。
 
 const AI_CONCIERGE_CLOSURE_KEYWORDS =
   [
@@ -8959,6 +8959,15 @@ const FACTUAL_IMPORTANT_INFO_SOURCE_TYPES = [
   "交通",
   "防災・気象"
 ];
+
+// Ver1.8 Phase1(GPSボタン不具合修正)｜AI_CONCIERGE_IMPORTANT_SOURCE_TYPESは
+// FACTUAL_IMPORTANT_INFO_SOURCE_TYPESの定義後でないとTDZ(定義前参照)エラーに
+// なるため、定義直後に配置している。中身はAIコンシェルジュ候補プール構築
+// 専用で、selectFactualImportantInfoCandidate()の判定には使用しない(無変更)。
+const AI_CONCIERGE_IMPORTANT_SOURCE_TYPES =
+  FACTUAL_IMPORTANT_INFO_SOURCE_TYPES.concat(
+    ["観光施設"]
+  );
 
 function selectFactualImportantInfoCandidate() {
   const candidates =
