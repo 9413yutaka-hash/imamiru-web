@@ -4949,105 +4949,6 @@ function selectTravelerSuggestionCandidate() {
 const AI_CONCIERGE_MAX_CANDIDATES =
   5;
 
-// Ver1.8 Phase1(実機不具合調査用・Preview専用診断)｜代表がDevTools/Consoleを
-// 開かなくても、スマホ画面を見るだけでAIコンシェルジュの内部状態を判定
-// できるようにするための一時的な画面内診断。本番mainへは絶対に入れない
-// (このブロックごと削除してからmainへマージする)。Secret・Token・座標・
-// 市町村名・個人情報は一切表示しない(真偽値・件数・状態名のみ)。
-// このID文字列はgitのcommit hashとは別に、診断コードそのものの版を表す
-// (commit前にhashが分からないため)。
-const PREVIEW_DIAGNOSTIC_BUILD_LABEL =
-  "diag-2026-08-26-01";
-
-function renderPreviewDiagnosticOverlay() {
-  let overlay =
-    document.getElementById(
-      "machinauPreviewDiagnosticOverlay"
-    );
-
-  if (!overlay) {
-    overlay =
-      document.createElement(
-        "div"
-      );
-
-    overlay.id =
-      "machinauPreviewDiagnosticOverlay";
-
-    overlay.style.position =
-      "fixed";
-    overlay.style.bottom =
-      "0";
-    overlay.style.left =
-      "0";
-    overlay.style.right =
-      "0";
-    overlay.style.zIndex =
-      "999999";
-    overlay.style.background =
-      "rgba(0, 0, 0, 0.78)";
-    overlay.style.color =
-      "#00ff90";
-    overlay.style.fontSize =
-      "10px";
-    overlay.style.lineHeight =
-      "1.4";
-    overlay.style.fontFamily =
-      "monospace";
-    overlay.style.padding =
-      "4px 6px";
-    overlay.style.whiteSpace =
-      "pre-wrap";
-    overlay.style.pointerEvents =
-      "none";
-
-    document.body.appendChild(
-      overlay
-    );
-  }
-
-  const gpsReadyText =
-    Number.isFinite(userLatitude) &&
-    Number.isFinite(userLongitude)
-      ? "ready"
-      : "not-ready";
-
-  const weatherReadyText =
-    latestWeatherForMachinauSuggestion !== null
-      ? "ready"
-      : "not-ready";
-
-  const areaText =
-    !isAreaNameResolvedForMachinauSuggestion
-      ? "pending"
-      : (typeof userAreaName === "string" && userAreaName !== ""
-          ? "ready"
-          : "resolved-but-unavailable");
-
-  const shopsReadyText =
-    isShopsLoadedForMachinauSuggestion
-      ? "ready(" + shops.length + ")"
-      : "not-ready";
-
-  overlay.textContent =
-    "build:" +
-    PREVIEW_DIAGNOSTIC_BUILD_LABEL +
-    " gps:" +
-    gpsReadyText +
-    " weather:" +
-    weatherReadyText +
-    " area:" +
-    areaText +
-    " shops:" +
-    shopsReadyText +
-    " gpsSession:" +
-    machinauSuggestionGpsSessionId +
-    " aiStatus:" +
-    aiConciergeState.status +
-    " aiSession:" +
-    aiConciergeState.gpsSessionId;
-}
-
 // Ver1.8 Phase1(実機不具合調査・修正)｜クライアントから/api/moderate-submission
 // (mode=aiConcierge)へのfetch()には元々タイムアウトが無く、実ブラウザでの
 // 検証で、接続が途中で切れる状況下ではfetch()が拒否されるまで15秒以上かかる
@@ -5703,13 +5604,6 @@ function updateSuggestionCard(weather) {
 // userAreaName未確定(GPS未取得)、または天候未取得の場合は必ず非表示にする。
 // 那覇等へのフォールバック表示は行わない。
 function updateTravelerSuggestionCard() {
-  // Preview診断用ログ(本番mainへ入れるかは代表判断・後で削除可)。
-  // Secret・Token・座標詳細・個人情報は一切出力しない。
-  console.log(
-    "[AIConcierge Debug] updateTravelerSuggestionCard start status=" +
-      aiConciergeState.status
-  );
-
   const suggestionCard =
     document.getElementById("suggestionCard");
 
@@ -5752,26 +5646,6 @@ function updateTravelerSuggestionCard() {
   const isGpsAcquiredForSuggestion =
     Number.isFinite(userLatitude) &&
     Number.isFinite(userLongitude);
-
-  console.log(
-    "[AIConcierge Debug] placeholder gate gpsReady=" +
-      isGpsAcquiredForSuggestion +
-      " areaNameAvailable=" +
-      (typeof userAreaName === "string" && userAreaName !== "")
-  );
-
-  // Ver1.8 Phase1(診断ログ・実機切り分け用)｜個人情報・Secret・Token・
-  // 緯度経度・市町村名は出さない。
-  console.log(
-    "[AIConcierge Trace] cardUpdate gpsReady=" +
-      isGpsAcquiredForSuggestion +
-      " weatherReady=" +
-      (latestWeatherForMachinauSuggestion !== null) +
-      " status=" +
-      aiConciergeState.status
-  );
-
-  renderPreviewDiagnosticOverlay();
 
   if (
     !isGpsAcquiredForSuggestion ||
@@ -5881,29 +5755,16 @@ function updateTravelerSuggestionCard() {
   // 使わず安全に表示する。GPS取得後にこの経路でカードを非表示にする
   // ことはない。
   //
-  // Preview診断用｜buildAiConciergeCandidatePool()〜renderAiConciergeFallbackContent()
-  // だけをtry/catchで保護する。未捕捉のJavaScript例外があった場合でも
-  // ✨カードを消さず、内部事情を含まない安全な専用文言(suggestion_fallback_error_message)
-  // へ切り替える。catchした例外はconsole.errorへ出力し、次回の実機確認で
-  // 原因を確定できるようにする(Secret・Token・座標詳細・個人情報は出さない)。
-  console.log(
-    "[AIConcierge Debug] fallback start"
-  );
-
+  // buildAiConciergeCandidatePool()〜renderAiConciergeFallbackContent()だけを
+  // try/catchで保護する。未捕捉のJavaScript例外があった場合でも✨カードを
+  // 消さず、内部事情を含まない安全な専用文言(suggestion_fallback_error_message)
+  // へ切り替える。catchした例外はconsole.errorへ出力し、障害発生時に原因を
+  // 追えるようにする(Secret・Token・座標詳細・個人情報は出さない)。
   try {
     const fallbackCandidates =
       buildAiConciergeCandidatePool();
 
-    console.log(
-      "[AIConcierge Debug] candidatePool build success size=" +
-        fallbackCandidates.length
-    );
-
     if (fallbackCandidates.length === 0) {
-      console.log(
-        "[AIConcierge Debug] fallbackCandidateFound=false finalCardState=empty"
-      );
-
       suggestionMessage.textContent =
         getMachinauTranslation(
           "suggestion_no_candidates_message",
@@ -5919,16 +5780,6 @@ function updateTravelerSuggestionCard() {
     const fallbackCandidate =
       fallbackCandidates[0];
 
-    console.log(
-      "[AIConcierge Debug] fallbackSourceType=" +
-        fallbackCandidate.sourceType +
-        " fallbackCandidateFound=true"
-    );
-
-    console.log(
-      "[AIConcierge Debug] render start"
-    );
-
     const didRenderFallback =
       renderAiConciergeFallbackContent(
         fallbackCandidate,
@@ -5936,13 +5787,6 @@ function updateTravelerSuggestionCard() {
         suggestionMessage,
         suggestionDetailButton
       );
-
-    console.log(
-      "[AIConcierge Debug] render " +
-        (didRenderFallback ? "success" : "failed") +
-        " finalCardState=" +
-        (didRenderFallback ? "fallback_rendered" : "empty_unresolvable")
-    );
 
     if (!didRenderFallback) {
       suggestionMessage.textContent =
@@ -6279,22 +6123,11 @@ async function attemptAiConciergeSuggestion(
   const candidates =
     buildAiConciergeCandidatePool();
 
-  // Preview検証用デバッグログ(本番mainへ入れるかは代表判断・後で削除可)。
-  // Secret・Token・詳細な緯度経度・個人情報は一切出力しない。
-  console.log(
-    "[AIConcierge Debug] candidatePool size=" +
-      candidates.length
-  );
-
   if (candidates.length === 0) {
     // Ver1.8 Phase1(設計修正)｜候補が1件も無い場合はAI APIを呼ばず、
     // かつGPS取得前のプレースホルダーへも戻さない。専用の
     // status="empty"を使い、updateTravelerSuggestionCard()側で
     // ✨カードを維持したまま専用文言を表示する。
-    console.log(
-      "[AIConcierge Debug] fallback reason=empty_pool"
-    );
-
     aiConciergeState =
       {
         gpsSessionId: gpsSessionId,
@@ -6341,10 +6174,6 @@ async function attemptAiConciergeSuggestion(
 
   let responseSuggestion =
     null;
-
-  console.log(
-    "[AIConcierge Debug] AI request started"
-  );
 
   // Ver1.8 Phase1(実機不具合調査・修正)｜接続が途中で切れる等の実ブラウザ
   // 検証で確認した長時間停止を防ぐためのタイムアウト。AbortControllerの
@@ -6484,39 +6313,9 @@ async function attemptAiConciergeSuggestion(
 // (isShopsLoadedForMachinauSuggestion)の3条件がそろった時点で、
 // 今回のGPS取得(gpsSessionId)についてのみ提案を1回だけ生成する。
 function tryGenerateMachinauSuggestion(gpsSessionId) {
-  // Ver1.8 Phase1(診断ログ・実機切り分け用)｜早期returnより前に置き、この
-  // 関数自体が呼ばれたかどうか(sessionMatch=falseで弾かれた場合も含め)を
-  // 必ず記録する。個人情報・Secret・Token・緯度経度・市町村名は出さない。
-  console.log(
-    "[AIConcierge Trace] tryGenerate sessionMatch=" +
-      (gpsSessionId === machinauSuggestionGpsSessionId) +
-      " weatherReady=" +
-      (latestWeatherForMachinauSuggestion !== null) +
-      " areaReady=" +
-      isAreaNameResolvedForMachinauSuggestion +
-      " shopsReady=" +
-      isShopsLoadedForMachinauSuggestion
-  );
-
-  renderPreviewDiagnosticOverlay();
-
   if (gpsSessionId !== machinauSuggestionGpsSessionId) {
     return;
   }
-
-  // Preview検証用デバッグログ(本番mainへ入れるかは代表判断・後で削除可)。
-  // Secret・Token・詳細な緯度経度・個人情報は一切出力しない。3条件ゲートが
-  // どの時点で揃っていないかを追跡するためだけの真偽値・件数のみ。
-  console.log(
-    "[AIConcierge Debug] gate check weatherReady=" +
-      (latestWeatherForMachinauSuggestion !== null) +
-      " areaReady=" +
-      isAreaNameResolvedForMachinauSuggestion +
-      " shopsReady=" +
-      isShopsLoadedForMachinauSuggestion +
-      " shopsCount=" +
-      shops.length
-  );
 
   if (
     latestWeatherForMachinauSuggestion === null ||
@@ -6535,13 +6334,6 @@ function tryGenerateMachinauSuggestion(gpsSessionId) {
 
   generatedMachinauSuggestionGpsSessionId =
     gpsSessionId;
-
-  // Ver1.8 Phase1(診断ログ・実機切り分け用)
-  console.log(
-    "[AIConcierge Trace] gatesPassed"
-  );
-
-  renderPreviewDiagnosticOverlay();
 
   // Ver1.8 Phase1｜✨あなたへの提案は、まずAIコンシェルジュ
   // (attemptAiConciergeSuggestion())を試み、候補が無い/AI応答が使えない
@@ -6762,14 +6554,6 @@ function getLocation() {
         const suggestionGpsSessionId =
           machinauSuggestionGpsSessionId;
 
-        // Ver1.8 Phase1(診断ログ・実機切り分け用)｜緯度経度は出さない。
-        console.log(
-          "[AIConcierge Trace] gpsSuccess session=" +
-            suggestionGpsSessionId
-        );
-
-        renderPreviewDiagnosticOverlay();
-
         latestWeatherForMachinauSuggestion =
           null;
 
@@ -6788,17 +6572,6 @@ function getLocation() {
                 getCurrentMachinauLanguage()
               )
             );
-
-            // Ver1.8 Phase1(診断ログ・実機切り分け用)｜天気の具体的な値は出さない。
-            console.log(
-              "[AIConcierge Trace] weatherResolved sessionMatch=" +
-                (suggestionGpsSessionId ===
-                  machinauSuggestionGpsSessionId) +
-                " weatherAvailable=" +
-                (weather !== null && weather !== undefined)
-            );
-
-            renderPreviewDiagnosticOverlay();
 
             if (
               suggestionGpsSessionId ===
@@ -6821,17 +6594,6 @@ function getLocation() {
           userLongitude
         )
           .then(function(areaName) {
-            // Ver1.8 Phase1(診断ログ・実機切り分け用)｜市町村名・緯度経度は出さない。
-            console.log(
-              "[AIConcierge Trace] areaResolved sessionMatch=" +
-                (suggestionGpsSessionId ===
-                  machinauSuggestionGpsSessionId) +
-                " areaAvailable=" +
-                (typeof areaName === "string" && areaName !== "")
-            );
-
-            renderPreviewDiagnosticOverlay();
-
             if (areaName) {
               userAreaName = areaName;
 
@@ -6865,8 +6627,6 @@ function getLocation() {
                 (suggestionGpsSessionId ===
                   machinauSuggestionGpsSessionId)
             );
-
-            renderPreviewDiagnosticOverlay();
 
             // 地域名取得の失敗は既存フローに影響させない
           });
@@ -7744,10 +7504,6 @@ document.addEventListener(
     initializeMachinauLanguageSwitcher();
 
     initializeMapLazyLoadObserver();
-
-    // Ver1.8 Phase1(実機不具合調査用・Preview専用診断)｜ページ読み込み直後、
-    // GPS操作前から画面下部に診断表示を出す(本番mainへは入れない)。
-    renderPreviewDiagnosticOverlay();
   }
 );
 
