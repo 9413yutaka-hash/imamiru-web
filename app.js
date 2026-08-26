@@ -4515,6 +4515,16 @@ function updateWeatherDisplay(weather, locationLabelText) {
 // 緯度・経度から市区町村名(locality)を取得する。
 // Geocoderが使えない/結果0件/localityが見つからない/APIエラーの
 // いずれの場合もrejectせずnullでresolveし、呼び出し側の既存処理を止めない。
+// Ver1.8 Phase1(実機不具合調査・修正)｜実スマホ(モバイルUA・低速回線相当)での
+// 実機検証で、Google Maps APIキーのreferrer制限(RefererNotAllowedMapError)発生時に
+// geocoder.geocode()のコールバックが一度も呼ばれず、resolveAreaNameFromCoordinates()の
+// Promiseが無期限にハングすることを確認した(デスクトップ環境では同エラーでも
+// 数秒以内にコールバックが呼ばれていたため、これまでの調査では再現しなかった)。
+// これによりisAreaNameResolvedForMachinauSuggestionが永久にfalseのままとなり、
+// ✨カードがGPS前プレースホルダーに固着する。
+const AREA_NAME_RESOLUTION_TIMEOUT_MS =
+  6000;
+
 function resolveAreaNameFromCoordinates(latitude, longitude) {
   return new Promise(function(resolve) {
     if (
@@ -4525,6 +4535,17 @@ function resolveAreaNameFromCoordinates(latitude, longitude) {
       resolve(null);
       return;
     }
+
+    // geocode()のコールバックが一定時間内に呼ばれなければnullで確定させる。
+    // Promiseは最初のresolve()以降は無視される仕様のため、後から本物の
+    // コールバックが届いても安全(二重解決にはならない)。
+    const timeoutId =
+      setTimeout(
+        function() {
+          resolve(null);
+        },
+        AREA_NAME_RESOLUTION_TIMEOUT_MS
+      );
 
     try {
       const geocoder =
@@ -4538,6 +4559,10 @@ function resolveAreaNameFromCoordinates(latitude, longitude) {
           }
         },
         function(results, status) {
+          clearTimeout(
+            timeoutId
+          );
+
           if (
             status !== "OK" ||
             !Array.isArray(results) ||
@@ -4582,6 +4607,10 @@ function resolveAreaNameFromCoordinates(latitude, longitude) {
         }
       );
     } catch (error) {
+      clearTimeout(
+        timeoutId
+      );
+
       resolve(null);
     }
   });
