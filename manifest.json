@@ -1,0 +1,29 @@
+{
+  "name": "マチナウ",
+  "short_name": "マチナウ",
+  "description": "沖縄の今だけ楽しめる店舗情報、イベント、タイムセールを見つけられるリアルタイム観光コンシェルジュです。",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#dff7ff",
+  "theme_color": "#0788c9",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
