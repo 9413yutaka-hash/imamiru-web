@@ -211,6 +211,31 @@
       color: var(--text);
     }
 
+    /* Phase2 STEP2-C｜編集後記。本文と少し区別するが、派手な装飾・新配色・
+       巨大カードは使わず、上部の罫線と控えめな文字色だけで静かに区切る。 */
+    .editors-note {
+      margin: 34px 0 0;
+      padding-top: 22px;
+      border-top: 1px solid var(--border);
+    }
+
+    .editors-note h2 {
+      margin: 0 0 10px;
+    }
+
+    .editors-note p {
+      font-size: 13px;
+      line-height: 2;
+      color: var(--subtext);
+    }
+
+    .editors-note-sign {
+      margin: 10px 0 0;
+      font-size: 13px;
+      color: var(--subtext);
+      text-align: right;
+    }
+
     .cta-section {
       margin-top: 36px;
       padding: 24px 20px;
@@ -305,6 +330,18 @@
       <p>
         マチナウは、「今、自分がいる場所で、今何が起きているか」を届けることを目指しているサービスです。台風のように状況が刻々と変わる場面ほど、旅行者にとっても地元の人にとっても、同じ「今」の情報が必要になります。安全に関わる情報は、通常のおすすめよりも優先して届けるようにしています。
       </p>
+
+      <div class="editors-note">
+        <h2>編集後記</h2>
+        <p>
+          台風が近づくと、沖縄に住んでいても「明日はどうなるかな」と何度も空を見ます。<br>
+          旅行で来ている人なら、もっと不安だと思います。<br>
+          マチナウが、そんな時に少しでも「今、どうしよう？」を考えるための判断材料を届けられる存在になれたらと思っています。
+        </p>
+        <p class="editors-note-sign">
+          ―― マチナウ編集部
+        </p>
+      </div>
 
       <div class="cta-section">
         <p>天気・交通・地域の「今」を確認して、このあとの判断材料に。</p>
