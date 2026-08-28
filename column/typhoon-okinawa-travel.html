@@ -1,6 +1,34 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
+  <!-- Ver1.8 Phase2 STEP3-A(最初のシナプス計測)｜コラムを読んだ人が
+       マチナウの「今」へ進もうとしたかを測るための最小計測。
+       Production(imamiru-web.vercel.app)以外(Preview・localhost等)では
+       GA4スクリプト自体を読み込まない。緯度経度・地域名・個人情報は
+       一切送信しない。index.html・app.jsの既存GA4実装は今回変更しない。 -->
+  <script>
+    (function () {
+      if (location.hostname !== "imamiru-web.vercel.app") {
+        return;
+      }
+
+      window.dataLayer = window.dataLayer || [];
+
+      window.gtag = function () {
+        dataLayer.push(arguments);
+      };
+
+      gtag("js", new Date());
+      gtag("config", "G-PGM7GNVQX8");
+
+      const gaScript = document.createElement("script");
+      gaScript.async = true;
+      gaScript.src =
+        "https://www.googletagmanager.com/gtag/js?id=G-PGM7GNVQX8";
+      document.head.appendChild(gaScript);
+    })();
+  </script>
+
   <meta charset="UTF-8">
 
   <meta
@@ -345,7 +373,11 @@
 
       <div class="cta-section">
         <p>天気・交通・地域の「今」を確認して、このあとの判断材料に。</p>
-        <a class="cta-button" href="../">今の沖縄をマチナウで見る</a>
+        <a
+          class="cta-button"
+          href="../"
+          onclick="if (typeof gtag === 'function') { gtag('event', 'column_cta_click', { article_slug: 'typhoon-okinawa-travel' }); }"
+        >今の沖縄をマチナウで見る</a>
       </div>
 
       <p class="byline">
