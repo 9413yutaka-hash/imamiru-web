@@ -499,6 +499,26 @@ const MACHINAU_TRANSLATIONS = {
     en: "📍 Recommended in This Area"
   },
 
+  column_entry_heading: {
+    ja: "📖 マチナウ読みもの",
+    en: "📖 Machinau Reads"
+  },
+
+  column_entry_lead: {
+    ja: "沖縄の「今」を楽しむためのヒント",
+    en: "Tips for enjoying Okinawa's \"now\""
+  },
+
+  column_entry_language_note: {
+    ja: "",
+    en: "(Article currently available in Japanese)"
+  },
+
+  column_entry_read_more: {
+    ja: "読む →",
+    en: "Read →"
+  },
+
   region_recommendation_other_area_button: {
     ja: "ほかの地域を見る",
     en: "See Other Areas"
