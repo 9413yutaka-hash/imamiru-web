@@ -579,6 +579,11 @@ const MACHINAU_TRANSLATIONS = {
     en: "For shops & venues: Post your latest info"
   },
 
+  footer_general_post_entry_link: {
+    ja: "📍 今ここで何か見つけた？｜地元の人も旅行中の人も情報を届ける",
+    en: "📍 Seen something here? Locals & travelers welcome to share"
+  },
+
   location_geolocation_unsupported: {
     ja: "このブラウザでは位置情報を利用できません。",
     en: "This browser doesn't support location access."
@@ -762,6 +767,51 @@ const MACHINAU_TRANSLATIONS = {
   shop_admin_badge: {
     ja: "🌺 マチナウ運営より",
     en: "🌺 From Machinau"
+  },
+
+  shop_user_post_badge: {
+    ja: "マチナウユーザーからの情報",
+    en: "Shared by a Machinau user"
+  },
+
+  report_toggle_button: {
+    ja: "🚩 気になる情報を報告",
+    en: "🚩 Report this info"
+  },
+
+  report_reason_old_or_wrong: {
+    ja: "情報が古い/間違っている",
+    en: "Outdated or incorrect"
+  },
+
+  report_reason_inappropriate: {
+    ja: "不適切な内容",
+    en: "Inappropriate content"
+  },
+
+  report_reason_spam: {
+    ja: "スパム・広告",
+    en: "Spam or advertising"
+  },
+
+  report_reason_other: {
+    ja: "その他",
+    en: "Other"
+  },
+
+  report_submitted_message: {
+    ja: "報告を受け付けました。ご協力ありがとうございます。",
+    en: "Thanks — your report has been received."
+  },
+
+  report_error_message: {
+    ja: "報告を送信できませんでした。時間をおいてもう一度お試しください。",
+    en: "Couldn't send the report. Please try again later."
+  },
+
+  report_already_submitted_message: {
+    ja: "この情報はすでに報告済みです。",
+    en: "You've already reported this."
   },
 
   shop_detail_button: {

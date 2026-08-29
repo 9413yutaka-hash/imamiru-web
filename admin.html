@@ -1212,6 +1212,11 @@
     let searchQuery = "";
     let inactiveDisplayLimit = 50;
 
+    // Ver1.8 Phase2 STEP5-D｜通報一覧。submissionId毎に理由の配列を持つ
+    // だけの最小構造。reportsコレクションの読み取りに失敗しても
+    // (Security Rules未整備等)、既存の審査フロー自体は継続させる。
+    let reportsBySubmissionId = {};
+
     function escapeHtml(value) {
       return String(value ?? "")
         .replaceAll("&", "&amp;")
@@ -1219,6 +1224,34 @@
         .replaceAll(">", "&gt;")
         .replaceAll('"', "&quot;")
         .replaceAll("'", "&#039;");
+    }
+
+    // Ver1.8 Phase2 STEP5-D｜通報がある投稿だけに小さなバッジを表示する。
+    // 巨大な管理画面は作らず、対象投稿・通報件数・理由が分かる最小限に
+    // 留める(自動非表示・自動削除は行わない、あくまで確認用の目印)。
+    function getReportBadgeHtml(
+      submissionId
+    ) {
+      const reasons =
+        reportsBySubmissionId[
+          submissionId
+        ];
+
+      if (
+        !Array.isArray(reasons) ||
+        reasons.length === 0
+      ) {
+        return "";
+      }
+
+      return `
+        <div class="ai-review-note">
+          <span class="ai-review-badge review">🚩 通報あり(${reasons.length}件)</span>
+          <span class="ai-review-reason">${escapeHtml(
+            reasons.join("、")
+          )}</span>
+        </div>
+      `;
     }
 
     function showLoginMessage(
@@ -1511,6 +1544,10 @@
                             `
                     }
 
+                    ${getReportBadgeHtml(
+                      submission.id
+                    )}
+
                     <div class="submission-actions">
 
                       <button
@@ -1628,6 +1665,10 @@
                       </span>
 
                     </div>
+
+                    ${getReportBadgeHtml(
+                      submission.id
+                    )}
 
                     ${
                       isAdminPost
@@ -1917,6 +1958,56 @@
           inactiveSubmissions;
 
         inactiveDisplayLimit = 50;
+
+        // Ver1.8 Phase2 STEP5-D｜通報一覧の取得。既存の申請一覧取得とは
+        // 独立したtry/catchとし、reportsコレクションが未整備(Security
+        // Rules未追加等)で読み取りに失敗しても、既存の審査フロー自体は
+        // 継続させる。
+        reportsBySubmissionId =
+          {};
+
+        try {
+          const reportsSnapshot =
+            await window.machinauDb
+              .collection("reports")
+              .get();
+
+          reportsSnapshot.forEach(
+            function(reportDoc) {
+              const reportData =
+                reportDoc.data();
+
+              if (
+                typeof reportData.submissionId !== "string"
+              ) {
+                return;
+              }
+
+              if (
+                !reportsBySubmissionId[
+                  reportData.submissionId
+                ]
+              ) {
+                reportsBySubmissionId[
+                  reportData.submissionId
+                ] = [];
+              }
+
+              reportsBySubmissionId[
+                reportData.submissionId
+              ].push(
+                typeof reportData.reason === "string"
+                  ? reportData.reason
+                  : "その他"
+              );
+            }
+          );
+        } catch (reportsError) {
+          console.error(
+            "通報一覧を読み込めませんでした(既存の審査フローには影響しません)：",
+            reportsError
+          );
+        }
 
         updateSummary();
 

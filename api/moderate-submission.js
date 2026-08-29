@@ -203,8 +203,52 @@ const OPENAI_MODERATION_TIMEOUT_MS =
 const MAX_MODERATION_IMAGE_COUNT =
   5;
 
-const AI_REVIEW_VERSION =
+export const AI_REVIEW_VERSION =
   "openai-omni-moderation-v1";
+
+
+// Ver1.8 Phase2 STEP5-D｜安全・災害・交通に関わる可能性のある投稿は、
+// OpenAI Moderationがsafe判定でも自動承認せず、必ず人間の確認を経由させる。
+// ここではAIによる事実確認(本当に津波が来ているか等)は一切行わず、
+// ルールベースのキーワード一致による「人間確認ルートへ倒す」判定のみを
+// 行う。過検知(無関係な投稿がpending行きになる)は許容し、危険情報が
+// 誤って自動公開されることを避けることを優先する。日本語のみで判定する
+// (投稿本文自体の多言語入力は別軸の未着手工程のため)。
+export const SAFETY_CRITICAL_KEYWORDS =
+  [
+    "津波", "避難", "台風", "警報", "地震", "火災", "事故",
+    "通行止め", "欠航", "運休", "土砂", "浸水", "停電", "断水",
+    "行方不明", "遭難"
+  ];
+
+export function matchesSafetyCriticalKeywords(
+  currentData
+) {
+  const combinedText =
+    [
+      currentData.shopName,
+      currentData.title,
+      currentData.content
+    ]
+      .map(
+        function(value) {
+          return String(
+            value || ""
+          );
+        }
+      )
+      .join("\n");
+
+  return SAFETY_CRITICAL_KEYWORDS.some(
+    function(keyword) {
+      return (
+        combinedText.indexOf(
+          keyword
+        ) !== -1
+      );
+    }
+  );
+}
 
 
 // Ver1.8 Phase1｜AIコンシェルジュ。モデル名はここ1箇所のみで管理し、
@@ -285,7 +329,7 @@ const CATEGORY_LABELS = {
 };
 
 
-function buildModerationInput(
+export function buildModerationInput(
   currentData
 ) {
   const textParts =
@@ -348,7 +392,7 @@ function buildModerationInput(
 }
 
 
-function classifyModerationError(
+export function classifyModerationError(
   error
 ) {
   if (
@@ -383,7 +427,7 @@ function classifyModerationError(
 }
 
 
-async function callOpenAiModeration(
+export async function callOpenAiModeration(
   inputItems
 ) {
   const apiKey =
@@ -1094,7 +1138,7 @@ async function handleAiConciergeRequest(
 }
 
 
-function buildReviewReason(
+export function buildReviewReason(
   moderationResults
 ) {
   const flaggedCategoryKeys =
@@ -1718,9 +1762,17 @@ export default async function handler(
         }
       );
 
+    // Ver1.8 Phase2 STEP5-D｜安全・災害・交通に関わる可能性のある投稿は、
+    // Moderationがsafeでも自動承認せず、必ず人間の確認を経由させる。
+    const isSafetyCriticalContent =
+      matchesSafetyCriticalKeywords(
+        currentData
+      );
+
     if (
       allSafe &&
-      durationHoursValue !== null
+      durationHoursValue !== null &&
+      !isSafetyCriticalContent
     ) {
       await database.runTransaction(
         async function(transaction) {
@@ -1787,11 +1839,13 @@ export default async function handler(
     }
 
     const reasonText =
-      allSafe
-        ? "掲載時間の情報が正しく設定されていないため、自動承認できません。"
-        : buildReviewReason(
-            moderationResults
-          );
+      allSafe && isSafetyCriticalContent
+        ? "安全・災害・交通に関する情報の可能性があるため、内容を人間が確認します。"
+        : allSafe
+          ? "掲載時間の情報が正しく設定されていないため、自動承認できません。"
+          : buildReviewReason(
+              moderationResults
+            );
 
     await database.runTransaction(
       async function(transaction) {

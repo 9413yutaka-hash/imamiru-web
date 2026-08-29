@@ -15,11 +15,11 @@
 
   <meta
     name="description"
-    content="マチナウへ店舗・イベントのリアルタイム情報を投稿するページです。"
+    content="マチナウへ、今の街の情報を投稿するページです。店舗・イベントの方も、街で見つけた情報がある方も。"
   >
 
   <title>
-    広告を投稿する｜マチナウ
+    今の情報を投稿する｜マチナウ
   </title>
 
   <link
@@ -1069,17 +1069,18 @@
     <div class="page-hero-inner">
 
       <div class="hero-label">
-        📢 店舗・イベント運営者様
+        📍 街の「今」を届ける
       </div>
 
       <h1>
         沖縄の「今」を、<br>
-        旅人へ届けよう。
+        みんなへ届けよう。
       </h1>
 
       <p>
-        タイムセール、限定メニュー、イベントなど、
-        今だからこそ伝えたい情報を投稿できます。
+        タイムセール、限定メニュー、イベントだけでなく、
+        街で見つけた出来事の共有もできます。
+        地元の人も、旅行中の人も。
       </p>
 
     </div>
@@ -1092,7 +1093,7 @@
       <div class="form-heading">
 
         <h2>
-          広告掲載のお申し込み
+          今の情報を届ける
         </h2>
 
         <p>
@@ -1145,6 +1146,7 @@
 
           <p class="form-help">
             お客様に表示される正式な名称を入力してください。
+            お店・イベント名だけでなく、見つけた場所や出来事の名前でも構いません。
           </p>
 
         </div>
@@ -1155,7 +1157,7 @@
             class="form-label"
             for="title"
           >
-            広告タイトル
+            タイトル
 
             <span class="required">
               必須
@@ -1243,7 +1245,7 @@
             class="form-label"
             for="durationHours"
           >
-            掲載時間
+            いつまで役立つ情報ですか？
 
             <span class="required">
               必須
@@ -1272,15 +1274,15 @@
             </option>
 
             <option value="24">
-              24時間
+              24時間（今日いっぱい）
             </option>
           </select>
 
           <p class="form-help">
-            運営による承認後、選択した掲載時間が経過すると、
+            運営による承認後、選択した時間が経過すると、
             トップページから自動で非表示になります。
             <br>
-            ※掲載時間と営業時間は別です。実際のお店の営業時間は、下の「店舗の営業時間」で設定してください。
+            ※この時間と営業時間は別です。実際のお店の営業時間は、下の「店舗の営業時間」で設定してください。
           </p>
 
         </div>
@@ -1291,7 +1293,7 @@
             class="form-label"
             for="content"
           >
-            広告内容
+            内容
 
             <span class="required">
               必須
@@ -1347,7 +1349,7 @@
         <div class="form-group">
 
           <div class="form-label">
-            現在地から取得
+            この情報がある場所
 
             <span class="optional">
               任意
@@ -1355,7 +1357,8 @@
           </div>
 
           <p class="form-help">
-            現在地を取得すると、住所入力を省略できます。
+            現在地から設定すると、住所入力を省略できます。
+            ここで設定するのは「この情報がある場所」であり、投稿者本人の居場所を公開するものではありません。
           </p>
 
           <button
@@ -1363,7 +1366,7 @@
             class="location-button"
             type="button"
           >
-            📍 現在地を取得
+            📍 この場所を現在地から設定
           </button>
 
           <div
@@ -1593,12 +1596,13 @@
             </div>
 
             <p class="image-upload-title">
-              広告に掲載する写真を選択
+              写真を選択（任意）
             </p>
 
             <p class="image-upload-description">
               JPG・PNG・WEBPに対応しています。<br>
-              1枚につき10MB以内、最大5枚まで選択できます。
+              1枚につき10MB以内、最大5枚まで選択できます。<br>
+              自分で撮影した写真、または掲載する権利のある写真のみご利用ください。
             </p>
 
             <input
@@ -1726,7 +1730,7 @@
   <footer>
     マチナウ Web Version 1.2
     <br>
-    沖縄の「今」を、旅人へ。
+    沖縄の「今」を、みんなへ。
   </footer>
 
   <!-- Firebase本体 -->
@@ -3180,7 +3184,7 @@ function requestCurrentLocationForPost() {
           false;
 
         locationButton.textContent =
-          "📍 現在地を取得";
+          "📍 この場所を現在地から設定";
       },
 
       {
@@ -3238,7 +3242,7 @@ function requestCurrentLocationForPost() {
       ) {
         validationErrors.push({
           message:
-            "広告タイトルを入力してください。",
+            "タイトルを入力してください。",
 
           element:
             titleInput
@@ -3284,7 +3288,7 @@ function requestCurrentLocationForPost() {
       ) {
         validationErrors.push({
           message:
-            "広告内容を入力してください。",
+            "内容を入力してください。",
 
           element:
             contentInput
@@ -3483,7 +3487,7 @@ function requestCurrentLocationForPost() {
         await getAnonymousIdTokenForImageUpload();
 
         setProgress(
-          "広告情報をマチナウへ送信しています…",
+          "情報をマチナウへ送信しています…",
           82
         );
 
@@ -3804,7 +3808,7 @@ longitude:
         false;
 
       locationButton.textContent =
-        "📍 現在地を取得";
+        "📍 この場所を現在地から設定";
 
       locationMessageBox.className =
         "message-box";

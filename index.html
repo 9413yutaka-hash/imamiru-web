@@ -1263,6 +1263,7 @@
       <a href="privacy.html" data-i18n="footer_privacy_link">プライバシーポリシー</a>
       <a href="mailto:yutaka9413@gmail.com" data-i18n="footer_contact_link">お問い合わせ</a>
       <a href="post.html" data-i18n="footer_shop_entry_link">お店・施設の方へ｜今の情報を掲載する</a>
+      <a href="post.html" data-i18n="footer_general_post_entry_link">📍 今ここで何か見つけた？｜地元の人も旅行中の人も情報を届ける</a>
     </div>
   </footer>
 
@@ -1381,6 +1382,42 @@
         >
           📍 Googleマップで場所を見る
         </a>
+
+        <div
+          id="modalReportSection"
+          class="modal-report-section"
+          style="display:none;"
+        >
+
+          <button
+            id="modalReportToggleButton"
+            type="button"
+            class="modal-report-toggle"
+            data-i18n="report_toggle_button"
+            onclick="toggleModalReportReasons()"
+          >
+            🚩 気になる情報を報告
+          </button>
+
+          <div
+            id="modalReportReasons"
+            class="modal-report-reasons"
+            style="display:none;"
+          >
+            <button type="button" class="modal-report-reason-button" data-i18n="report_reason_old_or_wrong" onclick="submitModalReport('old_or_wrong')">情報が古い/間違っている</button>
+            <button type="button" class="modal-report-reason-button" data-i18n="report_reason_inappropriate" onclick="submitModalReport('inappropriate')">不適切な内容</button>
+            <button type="button" class="modal-report-reason-button" data-i18n="report_reason_spam" onclick="submitModalReport('spam')">スパム・広告</button>
+            <button type="button" class="modal-report-reason-button" data-i18n="report_reason_other" onclick="submitModalReport('other')">その他</button>
+          </div>
+
+          <div
+            id="modalReportStatus"
+            class="modal-report-status"
+            role="status"
+            aria-live="polite"
+          ></div>
+
+        </div>
 
       </div>
 

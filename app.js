@@ -256,6 +256,12 @@ let currentModalImages = [];
 let currentModalImageIndex = 0;
 let modalTouchStartX = null;
 let modalTouchEndX = null;
+
+// Ver1.8 Phase2 STEP5-D｜通報機能用。現在開いているモーダルの投稿IDと、
+// 一般投稿(postType!=="admin")かどうかを保持する。admin投稿は通報対象外。
+let currentModalReportShopId = null;
+let currentModalReportIsGeneralPost = false;
+let hasSubmittedReportThisModalSession = false;
 let modalSlideChanging = false;
 
 let googleMapInstance = null;
@@ -2652,6 +2658,21 @@ function renderShops() {
 
                 </div>
 
+                ${
+                  isAdminPost
+                    ? ""
+                    : `
+                      <div class="user-post-badge-row">
+                        <span class="user-post-badge">
+                          ${getMachinauTranslation(
+                            "shop_user_post_badge",
+                            getCurrentMachinauLanguage()
+                          )}
+                        </span>
+                      </div>
+                    `
+                }
+
                 <h3 class="shop-name">
                   ${escapeHtml(
                     shop.name
@@ -3901,6 +3922,50 @@ function openShopModal(
     selectedShop.postType ===
     "admin";
 
+  // Ver1.8 Phase2 STEP5-D｜通報導線は一般投稿のみに表示する
+  // (admin/AI収集投稿は対象外)。モーダルを開き直すたびに
+  // 通報導線の表示状態と理由リストの開閉状態をリセットする。
+  currentModalReportShopId =
+    selectedShop.firestoreId;
+
+  currentModalReportIsGeneralPost =
+    !isAdminPost;
+
+  hasSubmittedReportThisModalSession =
+    false;
+
+  const modalReportSection =
+    document.getElementById(
+      "modalReportSection"
+    );
+
+  const modalReportReasons =
+    document.getElementById(
+      "modalReportReasons"
+    );
+
+  const modalReportStatus =
+    document.getElementById(
+      "modalReportStatus"
+    );
+
+  if (modalReportSection) {
+    modalReportSection.style.display =
+      currentModalReportIsGeneralPost
+        ? ""
+        : "none";
+  }
+
+  if (modalReportReasons) {
+    modalReportReasons.style.display =
+      "none";
+  }
+
+  if (modalReportStatus) {
+    modalReportStatus.textContent =
+      "";
+  }
+
   const modalBusinessStatus =
     isAdminPost
       ? { text: "", isOpen: null }
@@ -3931,6 +3996,20 @@ function openShopModal(
       "<br><br>🌺 " +
       escapeHtml(
         selectedShop.sourceLabel
+      );
+  } else if (
+    !isAdminPost
+  ) {
+    // Ver1.8 Phase2 STEP5-D｜一般利用者投稿には店舗公式・運営公式と
+    // 誤認させないラベルを表示する(sourceLabelがある admin投稿とは
+    // 排他的、一般投稿にsourceLabelが設定されることは無いため衝突しない)。
+    modalText +=
+      "<br><br>" +
+      escapeHtml(
+        getMachinauTranslation(
+          "shop_user_post_badge",
+          getCurrentMachinauLanguage()
+        )
       );
   }
 
@@ -4116,6 +4195,193 @@ function closeModalOutside(
   ) {
     closeShopModal();
   }
+}
+
+// Ver1.8 Phase2 STEP5-D｜通報機能。「気になる情報を報告」を押した時に
+// 理由選択を開閉するだけの表示切替。まだFirestoreへは書き込まない。
+function toggleModalReportReasons() {
+  const modalReportReasons =
+    document.getElementById(
+      "modalReportReasons"
+    );
+
+  if (!modalReportReasons) {
+    return;
+  }
+
+  modalReportReasons.style.display =
+    modalReportReasons.style.display ===
+    "none"
+      ? "flex"
+      : "none";
+}
+
+// getAnonymousIdTokenForLocationCollection()と同じ「既にサインイン済みなら
+// 使い回す」方針だが、通報にはIDトークン自体は不要でuidのみ使うため、
+// signInAnonymously()の完了を待ってauth.currentUserを返す専用関数とする。
+function getAnonymousUserForReport() {
+  if (
+    typeof firebase === "undefined" ||
+    !firebase.auth
+  ) {
+    return Promise.reject(
+      new Error(
+        "Firebase Authenticationが利用できません。"
+      )
+    );
+  }
+
+  const auth =
+    firebase.auth();
+
+  if (auth.currentUser) {
+    return Promise.resolve(
+      auth.currentUser
+    );
+  }
+
+  return auth
+    .signInAnonymously()
+    .then(
+      function(credential) {
+        return credential.user;
+      }
+    );
+}
+
+// 通報をFirestoreの`reports`コレクションへ保存する。ドキュメントIDを
+// "{submissionId}_{uid}"に固定することで、同一匿名ユーザーが同じ投稿を
+// 複数回通報してもドキュメントが1件のまま上書きされるだけになり、
+// 新しいカウント/重複防止ロジックを追加しなくても「1人1回」を強制できる。
+// 通報された投稿自体はここでは一切変更しない(自動非表示・自動削除はしない、
+// STEP5-C仕様の「1件の悪意ある通報で正常投稿を消せない設計」を踏襲)。
+//
+// 【重要・代表への申し送り事項】このコードはFirestoreの`reports`
+// コレクションへの新規書き込みを行う。既存の`submissions`コレクションと
+// 同様に、Firestore Security Rules側で
+// `match /reports/{reportId} { allow create: if request.auth != null; }`
+// 相当のルールが無いと、この書き込みは権限エラーで失敗する。このルール
+// 追加はFirebase Console側の作業であり、本ラウンドのコード変更には
+// 含まれていない(コードからは変更・確認ができないため)。
+function submitModalReport(
+  reason
+) {
+  if (
+    !currentModalReportShopId ||
+    !currentModalReportIsGeneralPost
+  ) {
+    return;
+  }
+
+  const modalReportStatus =
+    document.getElementById(
+      "modalReportStatus"
+    );
+
+  if (
+    hasSubmittedReportThisModalSession
+  ) {
+    if (modalReportStatus) {
+      modalReportStatus.textContent =
+        getMachinauTranslation(
+          "report_already_submitted_message",
+          getCurrentMachinauLanguage()
+        );
+    }
+
+    return;
+  }
+
+  if (
+    !window.machinauDb ||
+    typeof firebase === "undefined"
+  ) {
+    if (modalReportStatus) {
+      modalReportStatus.textContent =
+        getMachinauTranslation(
+          "report_error_message",
+          getCurrentMachinauLanguage()
+        );
+    }
+
+    return;
+  }
+
+  const submissionIdAtSubmitTime =
+    currentModalReportShopId;
+
+  getAnonymousUserForReport()
+    .then(
+      function(user) {
+        const reportDocId =
+          submissionIdAtSubmitTime +
+          "_" +
+          user.uid;
+
+        return window.machinauDb
+          .collection(
+            "reports"
+          )
+          .doc(
+            reportDocId
+          )
+          .set(
+            {
+              submissionId:
+                submissionIdAtSubmitTime,
+
+              reporterUid:
+                user.uid,
+
+              reason:
+                reason,
+
+              createdAt:
+                firebase.firestore.FieldValue.serverTimestamp()
+            }
+          );
+      }
+    )
+    .then(
+      function() {
+        hasSubmittedReportThisModalSession =
+          true;
+
+        const modalReportReasons =
+          document.getElementById(
+            "modalReportReasons"
+          );
+
+        if (modalReportReasons) {
+          modalReportReasons.style.display =
+            "none";
+        }
+
+        if (modalReportStatus) {
+          modalReportStatus.textContent =
+            getMachinauTranslation(
+              "report_submitted_message",
+              getCurrentMachinauLanguage()
+            );
+        }
+      }
+    )
+    .catch(
+      function(error) {
+        console.error(
+          "通報の送信に失敗しました：",
+          error
+        );
+
+        if (modalReportStatus) {
+          modalReportStatus.textContent =
+            getMachinauTranslation(
+              "report_error_message",
+              getCurrentMachinauLanguage()
+            );
+        }
+      }
+    );
 }
 
 const NAHA_FALLBACK_LATITUDE =

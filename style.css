@@ -962,6 +962,26 @@
       white-space: nowrap;
     }
 
+    /* Ver1.8 Phase2 STEP5-D｜一般利用者投稿を店舗公式・運営公式と誤認させない
+       ための最小ラベル。既存.admin-post-badgeとは配色を分け、警戒感を
+       与えない中立トーンにする(STEP5-C仕様の「通常投稿は信用できないと
+       感じさせない」方針)。 */
+    .user-post-badge-row {
+      margin-top: 4px;
+    }
+
+    .user-post-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: rgba(7, 136, 201, 0.08);
+      color: var(--subtext);
+      font-size: 10px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
     .shop-name {
       margin: 7px 0 0;
       font-size: 20px;
@@ -1198,6 +1218,48 @@
       color: var(--white);
       font-size: 14px;
       font-weight: 900;
+    }
+
+    /* Ver1.8 Phase2 STEP5-D｜一般投稿の通報導線。目立たせすぎない小さな
+       リンクとして配置し、既存モーダルデザインを壊さない。 */
+    .modal-report-section {
+      margin-top: 14px;
+      text-align: center;
+    }
+
+    .modal-report-toggle {
+      background: none;
+      border: none;
+      color: var(--subtext);
+      font-size: 11px;
+      text-decoration: underline;
+      cursor: pointer;
+      padding: 4px;
+    }
+
+    .modal-report-reasons {
+      margin-top: 8px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: center;
+    }
+
+    .modal-report-reason-button {
+      background: var(--background);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--text);
+      font-size: 11px;
+      padding: 6px 10px;
+      cursor: pointer;
+    }
+
+    .modal-report-status {
+      margin-top: 8px;
+      font-size: 11px;
+      color: var(--subtext);
+      min-height: 14px;
     }
 
     footer {

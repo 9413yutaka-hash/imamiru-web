@@ -14,6 +14,15 @@ import {
   timingSafeEqual
 } from "node:crypto";
 
+import {
+  AI_REVIEW_VERSION,
+  buildModerationInput,
+  buildReviewReason,
+  callOpenAiModeration,
+  classifyModerationError,
+  matchesSafetyCriticalKeywords
+} from "./moderate-submission.js";
+
 
 function getFirebaseAdminApp() {
   if (getApps().length > 0) {
@@ -739,45 +748,174 @@ export default async function handler(
         coordinates.longitude;
     }
 
-    await matchingDocument.ref.update({
-      shopName:
-        editableFields.shopName,
+    // Ver1.8 Phase2 STEP5-D｜承認済み投稿が編集で無審査のまま
+    // 危険な内容へ書き換えられる抜け穴を塞ぐため、編集内容を既存の
+    // Moderationフローへ必ず再度通す。新規投稿は従来通りModeration
+    // 1回のみで、編集した場合だけ追加で1回実行される(新規投稿の
+    // 呼び出し回数は変わらない)。新しいVercel Functionは作らず、
+    // api/moderate-submission.jsのexport済み関数をそのまま再利用する。
+    const editedDataForModeration =
+      {
+        shopName:
+          editableFields.shopName,
 
-      title:
-        editableFields.title,
+        title:
+          editableFields.title,
 
-      category:
-        editableFields.category,
+        content:
+          editableFields.content,
 
-      content:
-        editableFields.content,
+        imageUrls:
+          Array.isArray(
+            currentData.imageUrls
+          )
+            ? currentData.imageUrls
+            : []
+      };
 
-      address:
-        editableFields.address,
+    let editAiReviewStatus =
+      "ERROR";
 
-      websiteUrl:
-        editableFields.websiteUrl,
+    let editAiReviewReason =
+      "編集内容の再確認中にエラーが発生しました。";
 
-      takeout:
-        editableFields.takeout,
+    try {
+      const editModerationInputItems =
+        buildModerationInput(
+          editedDataForModeration
+        );
 
-      paymentMethods:
-        editableFields.paymentMethods,
+      const editModerationResults =
+        await callOpenAiModeration(
+          editModerationInputItems
+        );
 
-      latitude:
-        latitude,
+      const editAllSafe =
+        editModerationResults.every(
+          function(result) {
+            return (
+              result &&
+              result.flagged === false
+            );
+          }
+        );
 
-      longitude:
-        longitude,
+      const editIsSafetyCriticalContent =
+        matchesSafetyCriticalKeywords(
+          editedDataForModeration
+        );
 
-      updatedAt:
-        FieldValue.serverTimestamp()
-    });
+      if (
+        editAllSafe &&
+        !editIsSafetyCriticalContent
+      ) {
+        editAiReviewStatus =
+          "SAFE";
+
+        editAiReviewReason =
+          "";
+      } else if (
+        editAllSafe &&
+        editIsSafetyCriticalContent
+      ) {
+        editAiReviewStatus =
+          "REVIEW";
+
+        editAiReviewReason =
+          "安全・災害・交通に関する情報の可能性があるため、内容を人間が確認します。";
+      } else {
+        editAiReviewStatus =
+          "REVIEW";
+
+        editAiReviewReason =
+          buildReviewReason(
+            editModerationResults
+          );
+      }
+    } catch (editModerationError) {
+      console.error(
+        "編集内容の再Moderationエラー：",
+        editModerationError
+      );
+
+      editAiReviewStatus =
+        "ERROR";
+
+      editAiReviewReason =
+        classifyModerationError(
+          editModerationError
+        );
+    }
+
+    // 安全側fallback：SAFE以外(REVIEW/ERRORいずれも)は、承認済みのまま
+    // 新しい内容を公開し続けない。既にpendingの投稿はそのままpendingに
+    // 留まる(admin通常審査へ委ねる)。
+    const updatePayload =
+      {
+        shopName:
+          editableFields.shopName,
+
+        title:
+          editableFields.title,
+
+        category:
+          editableFields.category,
+
+        content:
+          editableFields.content,
+
+        address:
+          editableFields.address,
+
+        websiteUrl:
+          editableFields.websiteUrl,
+
+        takeout:
+          editableFields.takeout,
+
+        paymentMethods:
+          editableFields.paymentMethods,
+
+        latitude:
+          latitude,
+
+        longitude:
+          longitude,
+
+        aiReviewStatus:
+          editAiReviewStatus,
+
+        aiReviewReason:
+          editAiReviewReason,
+
+        aiReviewedAt:
+          FieldValue.serverTimestamp(),
+
+        aiReviewVersion:
+          AI_REVIEW_VERSION,
+
+        updatedAt:
+          FieldValue.serverTimestamp()
+      };
+
+    if (
+      editAiReviewStatus !== "SAFE" &&
+      currentData.status === "approved"
+    ) {
+      updatePayload.status =
+        "pending";
+    }
+
+    await matchingDocument.ref.update(
+      updatePayload
+    );
 
     return response.status(200).json({
       success: true,
       message:
-        "投稿内容を更新しました。"
+        editAiReviewStatus === "SAFE"
+          ? "投稿内容を更新しました。"
+          : "投稿内容を更新しました。内容を確認のうえ、運営が再度確認します。"
     });
   } catch (error) {
     console.error(
