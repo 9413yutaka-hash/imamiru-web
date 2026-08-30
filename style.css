@@ -1255,6 +1255,13 @@
       cursor: pointer;
     }
 
+    /* Ver1.8 Phase2 STEP5-D(不具合修正)｜送信中は押せないことを
+       見た目でも分かるようにする(クリック直後の無反応に見える問題対策)。 */
+    .modal-report-reason-button:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+
     .modal-report-status {
       margin-top: 8px;
       font-size: 11px;

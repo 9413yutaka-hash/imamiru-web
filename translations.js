@@ -799,6 +799,11 @@ const MACHINAU_TRANSLATIONS = {
     en: "Other"
   },
 
+  report_sending_message: {
+    ja: "送信しています…",
+    en: "Sending…"
+  },
+
   report_submitted_message: {
     ja: "報告を受け付けました。ご協力ありがとうございます。",
     en: "Thanks — your report has been received."

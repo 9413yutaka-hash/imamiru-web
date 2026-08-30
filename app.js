@@ -4307,6 +4307,31 @@ function submitModalReport(
     return;
   }
 
+  const reportReasonButtons =
+    document.querySelectorAll(
+      ".modal-report-reason-button"
+    );
+
+  // Ver1.8 Phase2 STEP5-D(不具合修正)｜匿名Firebase Authのサインイン
+  // 往復に数秒かかり、その間ボタン押下直後は画面上何も変化しないため
+  // 「反応していない」ように見えていた(代表実機確認で判明)。クリック
+  // 直後に即座に「送信しています…」を表示し、理由ボタンを一時的に
+  // 無効化することで、押下が受理されたことを即時に伝える。
+  if (modalReportStatus) {
+    modalReportStatus.textContent =
+      getMachinauTranslation(
+        "report_sending_message",
+        getCurrentMachinauLanguage()
+      );
+  }
+
+  reportReasonButtons.forEach(
+    function(button) {
+      button.disabled =
+        true;
+    }
+  );
+
   const submissionIdAtSubmitTime =
     currentModalReportShopId;
 
@@ -4380,6 +4405,15 @@ function submitModalReport(
               getCurrentMachinauLanguage()
             );
         }
+
+        // 送信に失敗した場合のみ再試行できるようボタンを復帰させる
+        // (成功時は理由セクション自体を非表示にするため復帰不要)。
+        reportReasonButtons.forEach(
+          function(button) {
+            button.disabled =
+              false;
+          }
+        );
       }
     );
 }
