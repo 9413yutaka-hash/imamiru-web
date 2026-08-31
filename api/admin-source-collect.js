@@ -660,6 +660,50 @@ async function fetchFeedContent(
 }
 
 
+// Ver1.8 Phase2 STEP6-C｜RSSのdescription/content:encodedはCDATA
+// (<![CDATA[...]]>)で囲まれていることが多く、CDATA内部はXML仕様上
+// パーサーがエンティティ解釈を行わない領域のため、XMLParserの
+// htmlEntitiesオプションだけでは&#160;や&#x1f389;等がデコードされずに
+// 残ってしまう(実データで確認済み)。ここでは数値文字参照(10進・16進)
+// のみを対象に、抽出済みのプレーンテキストへ直接デコードを適用する。
+// 名前付きエンティティ(&amp;や&lt;等)はfast-xml-parserが既に解決済みの
+// はずなのでここでは扱わない。stripHtmlTags()より前に実行することで、
+// "&#60;script&#62;"のようなタグの数値文字参照エンコードがあっても
+// デコード後にHTMLタグ除去の対象として正しく拾われる(タグの復活には
+// つながらない)。
+function decodeNumericCharacterReferences(
+  text
+) {
+  return String(
+    text ?? ""
+  )
+    .replace(
+      /&#x([0-9a-fA-F]+);/g,
+      function(matchedText, hexDigits) {
+        try {
+          return String.fromCodePoint(
+            parseInt(hexDigits, 16)
+          );
+        } catch (decodeError) {
+          return matchedText;
+        }
+      }
+    )
+    .replace(
+      /&#([0-9]+);/g,
+      function(matchedText, decimalDigits) {
+        try {
+          return String.fromCodePoint(
+            parseInt(decimalDigits, 10)
+          );
+        } catch (decodeError) {
+          return matchedText;
+        }
+      }
+    );
+}
+
+
 function stripHtmlTags(
   text
 ) {
@@ -704,14 +748,34 @@ function truncateText(
 }
 
 
+// Ver1.8 Phase2 STEP6-C｜WordPressの全文フィードが自動付与する
+// "The post [記事タイトル] first appeared on [サイト名]." という定型文を除去する。
+// 記事タイトル・サイト名が変わっても対応できるよう、末尾の固定パターンのみを
+// 対象とする(本文中の一般的な英文を誤って削除しないよう、文字列の最後尾に
+// 限定するため$アンカーを使う。normalizeWhitespace後の1スペース区切り
+// テキストに対して適用する前提)。
+function stripWordpressAutoExcerptFooter(
+  text
+) {
+  return text.replace(
+    /\s*The post .+? first appeared on .+?\.$/,
+    ""
+  );
+}
+
+
 function cleanText(
   rawValue,
   maxLength
 ) {
   return truncateText(
-    normalizeWhitespace(
-      stripHtmlTags(
-        rawValue
+    stripWordpressAutoExcerptFooter(
+      normalizeWhitespace(
+        stripHtmlTags(
+          decodeNumericCharacterReferences(
+            rawValue
+          )
+        )
       )
     ),
     maxLength
@@ -827,7 +891,15 @@ function parseFeedXml(
           "@_",
 
         textNodeName:
-          "#text"
+          "#text",
+
+        // Ver1.8 Phase2 STEP6-C｜RSS本文中の数値文字参照(&#160;や&#x1f389;等)を
+        // 読める文字へ戻す。fast-xml-parserの既存オプションを有効化するだけで、
+        // <, >, &, ", 'といったHTML構造上重要な文字は元からこのオプションに
+        // 関係なく常に解決される(lastEntities/ampEntityとして別枠処理される
+        // ためタグの再構成にはつながらない)。新規ライブラリは追加しない。
+        htmlEntities:
+          true
       }
     );
 
@@ -2547,52 +2619,123 @@ async function judgeArticleForAutoPost(
       combinedText
     );
 
-  const freshnessMaxAgeDays =
-    FRESHNESS_MAX_AGE_DAYS_BY_CATEGORY[
-      freshnessCategory
-    ];
+  // Ver1.8 Phase2 STEP6-C｜EVENT分類は「記事公開日」ではなく
+  // 「本文中に書かれた開催日」で鮮度を判定する。開催日を安全に抽出できた
+  // 場合はそれを優先し、抽出できない場合のみ保守的な上限日数(公開日基準)へ
+  // フォールバックする。未来の開催予定を誤って消さないことを最優先する。
+  if (freshnessCategory === "EVENT") {
+    const explicitEventEndDate =
+      extractLatestExplicitDateFromText(
+        combinedText
+      );
 
-  if (
-    typeof freshnessMaxAgeDays === "number"
-  ) {
-    const publishedAtText =
-      typeof articleData.publishedAt === "string"
-        ? articleData.publishedAt.trim()
-        : "";
+    if (explicitEventEndDate) {
+      const eventGraceMilliseconds =
+        24 * 60 * 60 * 1000;
 
-    if (publishedAtText !== "") {
-      const publishedAtDate =
-        new Date(
-          publishedAtText
-        );
+      if (
+        Date.now() -
+          explicitEventEndDate.getTime() >
+        eventGraceMilliseconds
+      ) {
+        return {
+          outcome: "SKIP",
+          reason:
+            "本文中の開催日(" +
+            explicitEventEndDate.toISOString().slice(0, 10) +
+            ")が既に終了しているため対象外です。"
+        };
+      }
 
-      const isPublishedAtValid =
-        !isNaN(
-          publishedAtDate.getTime()
-        );
+      // 開催日が未来、または開催中(猶予1日以内)なので鮮度チェックを通過する。
+    } else {
+      const publishedAtText =
+        typeof articleData.publishedAt === "string"
+          ? articleData.publishedAt.trim()
+          : "";
 
-      if (isPublishedAtValid) {
-        const articleAgeMilliseconds =
-          Date.now() -
-          publishedAtDate.getTime();
-
-        const freshnessMaxAgeMilliseconds =
-          freshnessMaxAgeDays *
-          24 * 60 * 60 * 1000;
+      if (publishedAtText !== "") {
+        const publishedAtDate =
+          new Date(
+            publishedAtText
+          );
 
         if (
-          articleAgeMilliseconds >
-          freshnessMaxAgeMilliseconds
+          !isNaN(
+            publishedAtDate.getTime()
+          )
         ) {
-          return {
-            outcome: "SKIP",
-            reason:
-              "公開から時間が経過しているため対象外です（" +
-              freshnessCategory +
-              "、" +
-              freshnessMaxAgeDays +
-              "日基準）。"
-          };
+          const articleAgeMilliseconds =
+            Date.now() -
+            publishedAtDate.getTime();
+
+          const eventFallbackMaxAgeMilliseconds =
+            EVENT_FALLBACK_MAX_AGE_DAYS *
+            24 * 60 * 60 * 1000;
+
+          if (
+            articleAgeMilliseconds >
+            eventFallbackMaxAgeMilliseconds
+          ) {
+            return {
+              outcome: "SKIP",
+              reason:
+                "開催日を本文から特定できず、公開から" +
+                EVENT_FALLBACK_MAX_AGE_DAYS +
+                "日以上経過しているため対象外です。"
+            };
+          }
+        }
+      }
+    }
+  } else {
+    const freshnessMaxAgeDays =
+      FRESHNESS_MAX_AGE_DAYS_BY_CATEGORY[
+        freshnessCategory
+      ];
+
+    if (
+      typeof freshnessMaxAgeDays === "number"
+    ) {
+      const publishedAtText =
+        typeof articleData.publishedAt === "string"
+          ? articleData.publishedAt.trim()
+          : "";
+
+      if (publishedAtText !== "") {
+        const publishedAtDate =
+          new Date(
+            publishedAtText
+          );
+
+        const isPublishedAtValid =
+          !isNaN(
+            publishedAtDate.getTime()
+          );
+
+        if (isPublishedAtValid) {
+          const articleAgeMilliseconds =
+            Date.now() -
+            publishedAtDate.getTime();
+
+          const freshnessMaxAgeMilliseconds =
+            freshnessMaxAgeDays *
+            24 * 60 * 60 * 1000;
+
+          if (
+            articleAgeMilliseconds >
+            freshnessMaxAgeMilliseconds
+          ) {
+            return {
+              outcome: "SKIP",
+              reason:
+                "公開から時間が経過しているため対象外です（" +
+                freshnessCategory +
+                "、" +
+                freshnessMaxAgeDays +
+                "日基準）。"
+            };
+          }
         }
       }
     }
@@ -2640,15 +2783,99 @@ const DRAFT_SIGHTSEEING_KEYWORDS = [
 
 
 // カテゴリー別の自動投稿許容日数(公開からの経過日数)。
-// EVENTは記事公開日と開催日が異なるケースがあるため、あえて含めない
-// (このマップに存在しないカテゴリーは鮮度フィルタの対象外になる)。
-// 開催日の抽出・判定は今回の対象外で別工程とする。
+// EVENTは記事公開日と開催日が異なるケースがあるため、このマップでは扱わず、
+// judgeArticleForAutoPost()内で本文中の明示的な開催日を抽出して個別に判定する
+// (Ver1.8 Phase2 STEP6-C)。このマップに存在しないカテゴリーは、
+// このマップによる鮮度チェックの対象外になる。
 const FRESHNESS_MAX_AGE_DAYS_BY_CATEGORY = {
   EMERGENCY: 2,
   TRANSPORT: 3,
   SIGHTSEEING: 7,
   OTHER: 5
 };
+
+
+// Ver1.8 Phase2 STEP6-C｜EVENT分類記事のみに使う、開催日が本文から
+// 特定できない場合の保守的な上限日数。イベント告知は他カテゴリーより
+// 早めに公開される傾向があるため、他カテゴリー(2〜7日)よりは長めだが、
+// 無期限に候補として残さないための最終防衛ライン。
+const EVENT_FALLBACK_MAX_AGE_DAYS = 60;
+
+
+// Ver1.8 Phase2 STEP6-C｜本文・タイトルから「明示的な年を伴う」日付表記
+// (2026年9月10日／令和8年9月10日)だけを安全に抽出する。年が書かれていない
+// 「9月10日」「9/10」「毎週日曜日」等は、どの年・どの回を指すか記事だけからは
+// 確定できないため、意図的に対象外とする(誤った推測をしないため)。
+// 複数の日付が見つかった場合は、開催期間(◯日〜◯日)の終了日を安全側に
+// 倒して判定できるよう、最も遅い日付を採用する。
+function extractLatestExplicitDateFromText(
+  combinedText
+) {
+  const datePattern =
+    /(?:令和(\d{1,2})年|(\d{4})年)(\d{1,2})月(\d{1,2})日/g;
+
+  let match;
+
+  let latestDate =
+    null;
+
+  while (
+    (match = datePattern.exec(combinedText)) !==
+    null
+  ) {
+    const reiwaYearNumber =
+      match[1] !== undefined
+        ? Number(match[1])
+        : null;
+
+    const westernYearNumber =
+      match[2] !== undefined
+        ? Number(match[2])
+        : null;
+
+    const month =
+      Number(match[3]);
+
+    const day =
+      Number(match[4]);
+
+    const year =
+      reiwaYearNumber !== null
+        ? reiwaYearNumber + 2018
+        : westernYearNumber;
+
+    if (
+      !Number.isFinite(year) ||
+      month < 1 ||
+      month > 12 ||
+      day < 1 ||
+      day > 31
+    ) {
+      continue;
+    }
+
+    const candidateDate =
+      new Date(
+        year,
+        month - 1,
+        day,
+        23,
+        59,
+        59
+      );
+
+    if (
+      !latestDate ||
+      candidateDate.getTime() >
+        latestDate.getTime()
+    ) {
+      latestDate =
+        candidateDate;
+    }
+  }
+
+  return latestDate;
+}
 
 function resolveFreshnessCategory(
   combinedText
