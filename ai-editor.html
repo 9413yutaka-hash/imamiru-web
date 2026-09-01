@@ -1307,6 +1307,115 @@
       ).slice(0, DRAFT_CONTENT_MAX_LENGTH);
     }
 
+
+    // Ver1.8 Phase2 STEP6-P｜「元情報」欄はai-sources.htmlのhandoffCandidateToAiEditor()が
+    // 「タイトル：」「概要：」「公開日時：」「情報源：」という固定ラベル付きテンプレートで
+    // 初期値を入れる。代表がsourceTextへ1文字でも入力すると(下記の"input"リスナーにより)
+    // currentCollectedArticleがnullになり、下書き生成はこのテンプレート込みのsourceText.value
+    // 自体を使う経路へ切り替わる。その経路が単純な先頭300文字切り詰めのままだと、代表が
+    // 末尾に追記した確認済み事実(開催期間・場所等)より先に、この固定ラベル行だけで300文字の
+    // 大半を消費してしまう不具合があった。既知の4ラベルだけを機械的に取り除き、実質的な
+    // 本文(概要＋追記事実)へ300文字を使えるようにする。新しい要約・言い換えは一切行わない
+    // (該当ラベル行の除去のみ、内容の書き換えはしない)。
+    const SOURCE_TEXT_TITLE_LABEL = "タイトル：";
+    const SOURCE_TEXT_SUMMARY_LABEL = "概要：";
+    const SOURCE_TEXT_PUBLISHED_AT_LABEL = "公開日時：";
+    const SOURCE_TEXT_SOURCE_NAME_LABEL = "情報源：";
+
+    function parseKnownSourceTextMetadata(rawSourceText) {
+      const lines =
+        rawSourceText.split("\n");
+
+      let extractedTitle =
+        "";
+
+      const remainingLines =
+        [];
+
+      lines.forEach(function(line) {
+        const trimmedLine =
+          line.trim();
+
+        if (
+          extractedTitle === "" &&
+          trimmedLine.indexOf(SOURCE_TEXT_TITLE_LABEL) === 0
+        ) {
+          extractedTitle =
+            trimmedLine
+              .slice(SOURCE_TEXT_TITLE_LABEL.length)
+              .trim();
+
+          return;
+        }
+
+        if (
+          trimmedLine.indexOf(SOURCE_TEXT_PUBLISHED_AT_LABEL) === 0 ||
+          trimmedLine.indexOf(SOURCE_TEXT_SOURCE_NAME_LABEL) === 0
+        ) {
+          return;
+        }
+
+        if (
+          trimmedLine.indexOf(SOURCE_TEXT_SUMMARY_LABEL) === 0
+        ) {
+          remainingLines.push(
+            trimmedLine.slice(SOURCE_TEXT_SUMMARY_LABEL.length)
+          );
+
+          return;
+        }
+
+        remainingLines.push(line);
+      });
+
+      return {
+        title: extractedTitle,
+        bodyText: remainingLines.join("\n").trim()
+      };
+    }
+
+    function buildDraftContentTextFromSourceText(
+      bodyText,
+      trimmedSourceUrlValue
+    ) {
+      const travelerNote =
+        resolveDraftTravelerNote(bodyText);
+
+      const officialSourceNote =
+        trimmedSourceUrlValue !== ""
+          ? DRAFT_OFFICIAL_SOURCE_NOTE
+          : "";
+
+      const trailingParts =
+        [travelerNote, officialSourceNote].filter(
+          function(part) {
+            return part !== "";
+          }
+        );
+
+      const trailingText =
+        trailingParts.length > 0
+          ? "\n\n" + trailingParts.join("\n\n")
+          : "";
+
+      const maxBodyLength =
+        Math.max(
+          0,
+          DRAFT_CONTENT_MAX_LENGTH - trailingText.length
+        );
+
+      const normalizedBodyText =
+        normalizeDraftSummaryText(bodyText);
+
+      const truncatedBodyText =
+        normalizedBodyText.slice(0, maxBodyLength);
+
+      return (
+        truncatedBodyText + trailingText
+      ).slice(0, DRAFT_CONTENT_MAX_LENGTH);
+    }
+
+
     function createDraftFromSource() {
       clearSourceMessage();
 
@@ -1363,12 +1472,19 @@
             currentCollectedArticle.summary
           : "";
 
+      const manualSourceTextFields =
+        parseKnownSourceTextMetadata(
+          trimmedSourceText
+        );
+
       draftTitle.value = hasStructuredTitle
         ? buildDraftTitleText(
             currentCollectedArticle.title,
             combinedArticleText
           )
-        : trimmedSourceText.slice(0, 50);
+        : manualSourceTextFields.title !== ""
+          ? manualSourceTextFields.title.slice(0, 50)
+          : trimmedSourceText.slice(0, 50);
 
       draftCategory.value =
         currentCollectedArticle !== null
@@ -1383,7 +1499,10 @@
             trimmedSourceUrl,
             combinedArticleText
           )
-        : trimmedSourceText.slice(0, 300);
+        : buildDraftContentTextFromSourceText(
+            manualSourceTextFields.bodyText,
+            trimmedSourceUrl
+          );
 
       draftWebsiteUrl.value = trimmedSourceUrl;
 
