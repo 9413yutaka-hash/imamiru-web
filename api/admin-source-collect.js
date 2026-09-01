@@ -1066,6 +1066,306 @@ function createCollectionError(
 }
 
 
+// ============================================================
+// Ver1.8 Phase2 STEP6-W (Phase A)｜構造化ページからの事実自動取得
+// ============================================================
+// RSSのsummary/content:encodedが空の候補について、記事自身の公式ページURL
+// (candidateItem.link)を安全に取得し、既知のサイト構造(アダプター)に一致する
+// 場合のみ、機械的に事実(開催日・時間・場所・主催・問い合わせ等)を抽出する。
+// AIは一切使わない(Phase Aの明示的な制約)。対応アダプターが無いサイトは
+// 何もせず、既存の空summaryのまま返す(安全側フォールバック、既存動作を壊さない)。
+// この処理はsummaryフィールド自体を書き換えない。judgeArticleForAutoPost()の
+// 鮮度・関連度判定、自動投稿(runAutoPostForDiscoveredArticles())の対象可否には
+// 一切影響しない(この事実補強だけを理由に自動公開が増えることを防ぐため、
+// 意図的に分離している)。呼び出し箇所も手動の個別「情報を集める」
+// (documentId指定の単一情報源collect)のみに限定し、cron・locationCollectの
+// 定期実行では実行しない(itemsフィールド自体を使わないため、無駄なHTTP
+// リクエストを増やさない)。
+
+
+// 本部町観光協会 event_info の<dl><dt>ラベル</dt><dd>値</dd></dl>構造で使われる
+// 既知のラベルだけを対象にする。未知のラベルは無視する(安全側、推測しない)。
+const MOTOBU_EVENT_INFO_FIELD_LABEL_MAP = {
+  "開催日": "eventDate",
+  "開場/開始時間": "eventTime",
+  "開催時間": "eventTime",
+  "開催場所": "eventLocation",
+  "料金": "price",
+  "参加費": "price",
+  "予約": "reservation",
+  "主催": "organizer",
+  "お問合せ": "contact",
+  "お問い合わせ": "contact"
+};
+
+// motobu-ka.com/event_info/配下の記事ページから<dl>構造を抽出する。
+// 値はHTML本文からそのまま切り出すだけで、要約・言い換え・推測は一切行わない。
+// <dl>構造自体が見つからない、または既知ラベルが1つも無い場合はnullを返す
+// (推測で埋めない、呼び出し側が安全にフォールバックできるようにする)。
+function extractMotobuEventInfoFacts(html) {
+  const entryMatch =
+    html.match(
+      /<div class="entry[^"]*"[\s\S]*?<dl>([\s\S]*?)<\/dl>/
+    );
+
+  if (!entryMatch) {
+    return null;
+  }
+
+  const dlContent =
+    entryMatch[1];
+
+  const dtDdPattern =
+    /<dt>([\s\S]*?)<\/dt>\s*<dd>([\s\S]*?)<\/dd>/g;
+
+  const facts =
+    {};
+
+  let match;
+
+  while (
+    (match = dtDdPattern.exec(dlContent)) !==
+    null
+  ) {
+    const label =
+      decodeNumericCharacterReferences(
+        stripHtmlTags(match[1])
+      ).trim();
+
+    const value =
+      decodeNumericCharacterReferences(
+        stripHtmlTags(match[2])
+      ).trim();
+
+    const mappedKey =
+      MOTOBU_EVENT_INFO_FIELD_LABEL_MAP[label];
+
+    if (mappedKey && value !== "") {
+      facts[mappedKey] = value;
+    }
+  }
+
+  if (Object.keys(facts).length === 0) {
+    return null;
+  }
+
+  return facts;
+}
+
+
+// 対応済みサイトの一覧。新しいサイトへ対応する場合はここへアダプターを
+// 追加するだけでよく、収集本体(collectFromSource等)へは手を入れない設計。
+const STRUCTURED_ARTICLE_ADAPTERS = [
+  {
+    matches: function(parsedUrl) {
+      return (
+        parsedUrl.hostname === "www.motobu-ka.com" &&
+        parsedUrl.pathname.indexOf("/event_info/") === 0
+      );
+    },
+
+    extract: extractMotobuEventInfoFacts
+  }
+];
+
+// サイトのホスト名・パスから対応するアダプターを選ぶ。未対応サイトはnullを返し、
+// 呼び出し側は安全に「何もしない」へフォールバックする。
+function selectStructuredArticleAdapter(articleUrl) {
+  let parsedUrl;
+
+  try {
+    parsedUrl =
+      new URL(
+        articleUrl
+      );
+  } catch (parseError) {
+    return null;
+  }
+
+  return (
+    STRUCTURED_ARTICLE_ADAPTERS.find(
+      function(adapter) {
+        return adapter.matches(
+          parsedUrl
+        );
+      }
+    ) ||
+    null
+  );
+}
+
+
+// 構造化事実から、AIを使わず決定的ロジックで300字以内の下書き素材を組み立てる。
+// 優先順位: 開催日→場所→料金→予約→時間→主催→問い合わせ。単純な先頭300文字
+// 切り詰めではなく、フィールド単位で「300字に収まるものだけ」を優先順位順に
+// 採用する(重要事実の途中で切れることを防ぐ)。取得できなかった項目は出力に
+// 含めない(推測で埋めない)。
+const STRUCTURED_CONTENT_DRAFT_MAX_LENGTH = 300;
+
+const STRUCTURED_FACT_FIELD_ORDER = [
+  { key: "eventDate", label: "開催日" },
+  { key: "eventLocation", label: "場所" },
+  { key: "price", label: "料金" },
+  { key: "reservation", label: "予約" },
+  { key: "eventTime", label: "時間" },
+  { key: "organizer", label: "主催" },
+  { key: "contact", label: "問い合わせ" }
+];
+
+function buildStructuredFactsContentDraft(facts) {
+  const includedLines =
+    [];
+
+  let usedLength =
+    0;
+
+  STRUCTURED_FACT_FIELD_ORDER.forEach(
+    function(field) {
+      const value =
+        facts[field.key];
+
+      if (
+        typeof value !== "string" ||
+        value === ""
+      ) {
+        return;
+      }
+
+      const line =
+        field.label + "：" + value;
+
+      const separatorLength =
+        includedLines.length > 0 ? 1 : 0;
+
+      if (
+        usedLength + separatorLength + line.length >
+        STRUCTURED_CONTENT_DRAFT_MAX_LENGTH
+      ) {
+        return;
+      }
+
+      includedLines.push(
+        line
+      );
+
+      usedLength +=
+        separatorLength + line.length;
+    }
+  );
+
+  return includedLines.join(
+    "\n"
+  );
+}
+
+
+// summaryが空の候補1件について、公式ページ(candidateItem.link)を安全に取得し
+// 事実補強を試みる。対応アダプターが無い、取得に失敗した、既知ラベルが1つも
+// 見つからない、のいずれの場合もnullを返し、呼び出し側は既存の空summaryのまま
+// 何も変えずに済ませる(安全側フォールバック)。
+async function enrichCandidateWithStructuredFacts(candidateItem) {
+  if (candidateItem.summary !== "") {
+    return null;
+  }
+
+  const adapter =
+    selectStructuredArticleAdapter(
+      candidateItem.link
+    );
+
+  if (!adapter) {
+    return null;
+  }
+
+  let html;
+
+  try {
+    await assertFeedUrlIsSafe(
+      candidateItem.link
+    );
+
+    html =
+      await fetchFeedContent(
+        candidateItem.link
+      );
+  } catch (fetchError) {
+    console.error(
+      "構造化事実の取得に失敗しました：",
+      fetchError
+    );
+
+    return null;
+  }
+
+  let facts;
+
+  try {
+    facts =
+      adapter.extract(
+        html
+      );
+  } catch (extractError) {
+    console.error(
+      "構造化事実の抽出に失敗しました：",
+      extractError
+    );
+
+    return null;
+  }
+
+  if (!facts) {
+    return null;
+  }
+
+  return {
+    structuredFacts:
+      facts,
+
+    structuredContentDraft:
+      buildStructuredFactsContentDraft(
+        facts
+      )
+  };
+}
+
+
+// 手動の個別「情報を集める」(documentId指定)でのみ呼び出す。cron・
+// locationCollectはitemsを使わないため対象外(呼び出し箇所を意図的に限定する)。
+// 1件の補強が失敗しても他の候補・収集結果全体には影響させない。
+async function enrichCandidateItemsWithStructuredFacts(items) {
+  return Promise.all(
+    items.map(
+      async function(item) {
+        let enrichment =
+          null;
+
+        try {
+          enrichment =
+            await enrichCandidateWithStructuredFacts(
+              item
+            );
+        } catch (enrichmentError) {
+          console.error(
+            "構造化事実補強エラー：",
+            enrichmentError
+          );
+        }
+
+        if (!enrichment) {
+          return item;
+        }
+
+        return Object.assign(
+          {},
+          item,
+          enrichment
+        );
+      }
+    )
+  );
+}
+
+
 async function collectFromSource(
   database,
   sourceId
@@ -3788,9 +4088,27 @@ export default async function handler(
       throw collectionError;
     }
 
+    let responseItems =
+      collectionResult.items;
+
+    try {
+      responseItems =
+        await enrichCandidateItemsWithStructuredFacts(
+          collectionResult.items
+        );
+    } catch (enrichmentError) {
+      console.error(
+        "構造化事実補強エラー(全体)：",
+        enrichmentError
+      );
+
+      responseItems =
+        collectionResult.items;
+    }
+
     return response.status(200).json({
       success: true,
-      items: collectionResult.items
+      items: responseItems
     });
   } catch (error) {
     console.error(
