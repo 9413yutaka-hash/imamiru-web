@@ -580,6 +580,12 @@
       word-break: break-word;
     }
 
+    .collected-item-structured-note {
+      margin-top: 8px;
+      font-size: 11px;
+      color: #7a8a99;
+    }
+
     .collected-item-actions {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -2493,8 +2499,32 @@
       const safeTitle = escapeHtml(item.title || "(タイトルなし)");
       const safeSourceName = escapeHtml(item.sourceName || "");
       const safePublishedAt = escapeHtml(item.publishedAt || "公開日時不明");
-      const safeSummary = escapeHtml(item.summary || "");
       const safeLink = escapeHtml(item.link || "");
+
+      // Ver1.8 Phase2 STEP6-Y｜RSSのsummaryが空でも、STEP6-Wで公式ページから
+      // 機械的に取得したstructuredContentDraftがあれば、代わりに表示する。
+      // structuredFacts/structuredContentDraftに存在しない情報(料金・予約等)は
+      // ここで補完しない。summaryもstructuredContentDraftも無ければ、
+      // 従来どおり本文なし(空)のまま。
+      const hasSummary =
+        typeof item.summary === "string" && item.summary !== "";
+
+      const hasStructuredContentDraft =
+        !hasSummary &&
+        typeof item.structuredContentDraft === "string" &&
+        item.structuredContentDraft !== "";
+
+      const safeSummary =
+        hasSummary
+          ? escapeHtml(item.summary)
+          : hasStructuredContentDraft
+            ? escapeHtml(item.structuredContentDraft).replace(/\n/g, "<br>")
+            : "";
+
+      const structuredSourceNoteHtml =
+        hasStructuredContentDraft
+          ? '<div class="collected-item-structured-note">🔧 公式ページから自動取得</div>'
+          : "";
 
       const relevanceScore =
         item.relevanceScore || RELEVANCE_VISIBLE_MINIMUM_SCORE;
@@ -2535,6 +2565,7 @@
         "・" +
         safePublishedAt +
         "</div>" +
+        structuredSourceNoteHtml +
         '<div class="collected-item-summary">' +
         safeSummary +
         "</div>" +
@@ -3126,9 +3157,31 @@
         return;
       }
 
+      // Ver1.8 Phase2 STEP6-Y｜RSSのsummaryが空でも、STEP6-Wで公式ページから
+      // 機械的に取得したstructuredContentDraftがあれば、「概要：」相当として
+      // 元情報へ含める。structuredFacts/structuredContentDraftに存在しない
+      // 情報(料金・予約等)はここで補完しない。ai-editor.html側の
+      // parseKnownSourceTextMetadata()(STEP6-P)は無変更のまま、この文字列を
+      // 既知ラベル形式(タイトル：/概要：/公開日時：/情報源：)として受け取り、
+      // 既知ラベル行だけを除去して残りを下書き本文の元にする。
+      const hasSummary =
+        typeof item.summary === "string" && item.summary !== "";
+
+      const hasStructuredContentDraft =
+        !hasSummary &&
+        typeof item.structuredContentDraft === "string" &&
+        item.structuredContentDraft !== "";
+
+      const effectiveSummaryText =
+        hasSummary
+          ? item.summary
+          : hasStructuredContentDraft
+            ? item.structuredContentDraft
+            : "";
+
       const sourceTextValue =
         "タイトル：" + (item.title || "") + "\n\n" +
-        "概要：" + (item.summary || "") + "\n\n" +
+        "概要：" + effectiveSummaryText + "\n\n" +
         "公開日時：" + (item.publishedAt || "") + "\n" +
         "情報源：" + (item.sourceName || "");
 
