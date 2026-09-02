@@ -1259,21 +1259,550 @@ function buildStructuredFactsContentDraft(facts) {
 }
 
 
-// summaryが空の候補1件について、公式ページ(candidateItem.link)を安全に取得し
-// 事実補強を試みる。対応アダプターが無い、取得に失敗した、既知ラベルが1つも
-// 見つからない、のいずれの場合もnullを返し、呼び出し側は既存の空summaryのまま
-// 何も変えずに済ませる(安全側フォールバック)。
-async function enrichCandidateWithStructuredFacts(candidateItem) {
-  if (candidateItem.summary !== "") {
+// ============================================================
+// Ver1.8 Phase2 STEP6-AC (Phase B)｜非構造化ページのAI事実抽出
+// ============================================================
+// Phase A(構造化アダプター)が使えないサイトについて、AIを最大1回だけ使い、
+// 公式ページ本文から事実を抽出する。AIの出力はそのまま信用せず、必ず
+// 正規化した本文へ実在するかをコード側で検証してから採用する(本文に無い
+// 値は黙ってnullへ落とす)。1回の手動収集あたりのAI呼び出しは
+// AI_FACT_EXTRACTION_MAX_PER_COLLECTION_RUN件までに制限する(コスト安全弁)。
+// area/source/URLはAIの出力対象に一切含めない(既存データをそのまま使う)。
+// 呼び出し箇所はPhase Aと同じく手動の個別「情報を集める」ハンドラのみ。
+
+const AI_FACT_EXTRACTION_MODEL =
+  process.env.AI_FACT_EXTRACTION_MODEL ||
+  "gpt-4o-mini";
+
+const AI_FACT_EXTRACTION_ENDPOINT =
+  "https://api.openai.com/v1/chat/completions";
+
+const AI_FACT_EXTRACTION_TIMEOUT_MS =
+  6000;
+
+const AI_FACT_EXTRACTION_MAX_INPUT_LENGTH =
+  2000;
+
+const AI_FACT_EXTRACTION_MAX_PER_COLLECTION_RUN =
+  3;
+
+const AI_FACT_EXTRACTION_MIN_PAGE_TEXT_LENGTH =
+  50;
+
+const AI_FACT_EXTRACTION_MAX_ARTICLE_AGE_DAYS =
+  365;
+
+const AI_FACT_EXTRACTION_FIELD_KEYS = [
+  "eventDateOrPeriod",
+  "time",
+  "location",
+  "price",
+  "reservation",
+  "organizer",
+  "contact",
+  "actionableDetails"
+];
+
+const AI_EXTRACTED_FACTS_FIELD_ORDER = [
+  { key: "eventDateOrPeriod", label: "開催日・期間" },
+  { key: "location", label: "場所" },
+  { key: "price", label: "料金" },
+  { key: "reservation", label: "予約" },
+  { key: "time", label: "時間" },
+  { key: "actionableDetails", label: "詳細" },
+  { key: "organizer", label: "主催" },
+  { key: "contact", label: "問い合わせ" }
+];
+
+
+// script/style除去→既存のタグ除去・数値文字参照デコード・空白正規化
+// (いずれもRSS処理と同じ既存関数を再利用)→最大文字数で切り詰め。
+// 公式ページ全HTMLはAIへ送らない。
+function buildAiFactExtractionInputText(html) {
+  const withoutScriptsAndStyles =
+    String(html || "")
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ");
+
+  const plainText =
+    normalizeWhitespace(
+      stripHtmlTags(
+        decodeNumericCharacterReferences(
+          withoutScriptsAndStyles
+        )
+      )
+    );
+
+  return truncateText(
+    plainText,
+    AI_FACT_EXTRACTION_MAX_INPUT_LENGTH
+  );
+}
+
+
+// 本文実在チェック専用の正規化(表記揺れ吸収のみが目的で、内容の言い換えは
+// 一切行わない)。全角/半角(NFKC)・波ダッシュ・ハイフン類・空白の違いだけを
+// 吸収する。
+function normalizeTextForFactVerification(text) {
+  return String(text || "")
+    .normalize("NFKC")
+    .replace(/[〜～]/g, "~")
+    .replace(/[‐‑‒–—−]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+
+function buildAiFactExtractionPrompt(pageText) {
+  const systemInstruction =
+    "You are a strict fact-extraction tool, not a writer. You will be " +
+    "given the plain text of an official Japanese web page. Extract ONLY " +
+    "facts that are explicitly and literally written in the given text. " +
+    "Do not use any outside knowledge. Do not paraphrase, translate, " +
+    "summarize, or reformat dates/prices into a different style. Every " +
+    "non-null field value you return MUST be an exact verbatim substring " +
+    "copied from the given text (same characters, same order). If a fact " +
+    "is not explicitly stated in the text, return null for that field — " +
+    "never guess, infer, or fill in a typical/default value. In " +
+    "particular: do NOT write anything meaning 'free'/'no charge' for " +
+    "\"price\" unless the text explicitly states there is no fee. Do NOT " +
+    "write anything meaning 'no reservation needed' for \"reservation\" " +
+    "unless the text explicitly states so. Reply with a single JSON " +
+    "object only, with exactly these keys: \"eventDateOrPeriod\" (string " +
+    "or null), \"time\" (string or null), \"location\" (string or null), " +
+    "\"price\" (string or null), \"reservation\" (string or null), " +
+    "\"organizer\" (string or null), \"contact\" (string or null), " +
+    "\"actionableDetails\" (string or null, a short verbatim excerpt " +
+    "describing what a visitor can concretely do), \"confidence\" " +
+    "(\"high\", \"medium\", or \"low\": your own confidence that the " +
+    "extracted facts are complete and correctly scoped to a single " +
+    "event/notice). No extra text before or after the JSON object.";
+
+  return {
+    systemInstruction: systemInstruction,
+    userContent: pageText
+  };
+}
+
+
+// callOpenAiConcierge()(moderate-submission.js)と同じfetchベースの
+// 呼び出し方式(SDK不使用、AbortControllerタイムアウト、response_format
+// json_object)を踏襲する。既存関数自体には一切手を入れない。
+// エラーにisTransient(一時的失敗)フラグを付け、呼び出し側がFirestore
+// キャッシュへ「確定的失敗」として保存すべきでないことを判定できるようにする。
+async function callOpenAiFactExtraction(pageText) {
+  const apiKey =
+    process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    const configError =
+      new Error("OPENAI_API_KEY が設定されていません。");
+
+    configError.isMissingApiKey =
+      true;
+
+    throw configError;
+  }
+
+  const prompt =
+    buildAiFactExtractionPrompt(
+      pageText
+    );
+
+  const controller =
+    new AbortController();
+
+  const timeoutId =
+    setTimeout(
+      function() {
+        controller.abort();
+      },
+      AI_FACT_EXTRACTION_TIMEOUT_MS
+    );
+
+  let response;
+
+  try {
+    try {
+      response =
+        await fetch(
+          AI_FACT_EXTRACTION_ENDPOINT,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer " + apiKey
+            },
+
+            body: JSON.stringify({
+              model: AI_FACT_EXTRACTION_MODEL,
+              response_format: { type: "json_object" },
+              messages: [
+                { role: "system", content: prompt.systemInstruction },
+                { role: "user", content: prompt.userContent }
+              ]
+            }),
+
+            signal: controller.signal
+          }
+        );
+    } catch (fetchError) {
+      if (fetchError.name === "AbortError") {
+        const timeoutError =
+          new Error("AI事実抽出がタイムアウトしました。");
+
+        timeoutError.isTransient =
+          true;
+
+        timeoutError.isTimeout =
+          true;
+
+        throw timeoutError;
+      }
+
+      const networkError =
+        new Error("AI事実抽出の呼び出しに失敗しました。");
+
+      networkError.isTransient =
+        true;
+
+      networkError.isNetworkError =
+        true;
+
+      throw networkError;
+    }
+  } finally {
+    clearTimeout(
+      timeoutId
+    );
+  }
+
+  if (!response.ok) {
+    const httpError =
+      new Error(
+        "OpenAI APIがエラーを返しました。status=" + response.status
+      );
+
+    httpError.isHttpError =
+      true;
+
+    httpError.httpStatus =
+      response.status;
+
+    // Ver1.8 Phase2 STEP6-AC｜5xx/429は一時的な問題の可能性が高い。
+    // 4xx(429以外)もAPIキー・アカウント設定等、記事の内容とは無関係な
+    // 問題である可能性が高いため、いずれも記事単位ではキャッシュしない
+    // (1回の収集あたり最大3件という上限が既にあるため無限リトライにはならない)。
+    httpError.isTransient =
+      true;
+
+    throw httpError;
+  }
+
+  let responseData;
+
+  try {
+    responseData =
+      await response.json();
+  } catch (jsonError) {
+    const parseError =
+      new Error("OpenAI APIの応答を解析できませんでした。");
+
+    parseError.isJsonError =
+      true;
+
+    parseError.isTransient =
+      true;
+
+    throw parseError;
+  }
+
+  const messageContent =
+    responseData &&
+    Array.isArray(responseData.choices) &&
+    responseData.choices[0] &&
+    responseData.choices[0].message &&
+    typeof responseData.choices[0].message.content === "string"
+      ? responseData.choices[0].message.content
+      : "";
+
+  if (messageContent === "") {
+    const shapeError =
+      new Error("OpenAI APIの応答形式が不正です。");
+
+    shapeError.isJsonError =
+      true;
+
+    shapeError.isTransient =
+      true;
+
+    throw shapeError;
+  }
+
+  try {
+    return JSON.parse(
+      messageContent
+    );
+  } catch (contentParseError) {
+    // AIがJSONとして不正な応答を返した場合、モデル側の一時的な不調である
+    // 可能性を考慮し、記事単位ではキャッシュしない(次回再試行を許す)。
+    const invalidJsonError =
+      new Error("AI応答のJSON解析に失敗しました。");
+
+    invalidJsonError.isJsonError =
+      true;
+
+    invalidJsonError.isTransient =
+      true;
+
+    throw invalidJsonError;
+  }
+}
+
+
+// AI出力をそのまま信用しない。null以外の各値が、正規化済み本文中に
+// 部分文字列として実在するかを検証し、存在しない値は黙ってnullへ落とす。
+// area/source/URLはAIの出力対象に含めていないため、ここでの検証対象にもならない。
+function verifyAiExtractedFactsAgainstPageText(rawFacts, pageText) {
+  if (
+    !rawFacts ||
+    typeof rawFacts !== "object"
+  ) {
     return null;
   }
 
-  const adapter =
-    selectStructuredArticleAdapter(
+  const normalizedPageText =
+    normalizeTextForFactVerification(
+      pageText
+    );
+
+  const verifiedFacts =
+    {};
+
+  AI_FACT_EXTRACTION_FIELD_KEYS.forEach(
+    function(key) {
+      const value =
+        rawFacts[key];
+
+      if (
+        typeof value !== "string" ||
+        value.trim() === ""
+      ) {
+        return;
+      }
+
+      const normalizedValue =
+        normalizeTextForFactVerification(
+          value
+        );
+
+      if (
+        normalizedValue !== "" &&
+        normalizedPageText.includes(
+          normalizedValue
+        )
+      ) {
+        verifiedFacts[key] =
+          value.trim();
+      }
+    }
+  );
+
+  const confidenceRaw =
+    typeof rawFacts.confidence === "string"
+      ? rawFacts.confidence
+      : "";
+
+  const confidence =
+    ["high", "medium", "low"].includes(confidenceRaw)
+      ? confidenceRaw
+      : "low";
+
+  if (Object.keys(verifiedFacts).length === 0) {
+    return {
+      facts: null,
+      confidence: confidence
+    };
+  }
+
+  return {
+    facts: verifiedFacts,
+    confidence: confidence
+  };
+}
+
+
+// Phase Aと同じ決定的ロジック(優先順位順にフィールド単位で採用、単純な
+// 先頭スライスはしない)でPhase B用の300字下書き素材を組み立てる。
+// 取得できなかった項目は出力に含めない(推測で埋めない)。
+function buildAiExtractedFactsContentDraft(facts) {
+  const includedLines =
+    [];
+
+  let usedLength =
+    0;
+
+  AI_EXTRACTED_FACTS_FIELD_ORDER.forEach(
+    function(field) {
+      const value =
+        facts[field.key];
+
+      if (
+        typeof value !== "string" ||
+        value === ""
+      ) {
+        return;
+      }
+
+      const line =
+        field.label + "：" + value;
+
+      const separatorLength =
+        includedLines.length > 0 ? 1 : 0;
+
+      if (
+        usedLength + separatorLength + line.length >
+        STRUCTURED_CONTENT_DRAFT_MAX_LENGTH
+      ) {
+        return;
+      }
+
+      includedLines.push(
+        line
+      );
+
+      usedLength +=
+        separatorLength + line.length;
+    }
+  );
+
+  return includedLines.join(
+    "\n"
+  );
+}
+
+
+// Ver1.8 Phase2 STEP6-AC｜安全・災害系キーワードに一致する場合、Phase Bで
+// 事実抽出できてもUI上で明確に確認対象だと分かるようにするためのフラグ。
+// DRAFT_EMERGENCY_KEYWORDS等はこのファイル内で既存(このファイル下方で定義、
+// 関数本体は呼び出し時にしか実行されないためTDZの問題はない)。
+function matchesSafetyRelevantKeywords(combinedText) {
+  return (
+    DRAFT_EMERGENCY_KEYWORDS.some(function(keyword) { return combinedText.includes(keyword); }) ||
+    DRAFT_LIFELINE_KEYWORDS.some(function(keyword) { return combinedText.includes(keyword); }) ||
+    DRAFT_TRANSPORT_KEYWORDS.some(function(keyword) { return combinedText.includes(keyword); })
+  );
+}
+
+
+// adapter不一致の記事についてのみ呼ばれる(summary空・adapter不一致は
+// 呼び出し元で確認済み)。Firestoreキャッシュ(sourceId+normalizedUrlHash、
+// 既存のcollectFromSource()と同じドキュメントID)を必ず確認し、既にAI抽出
+// 済み(成功・確定的失敗いずれも)なら再度AIを呼ばない。1回の手動収集
+// あたりの呼び出し件数はrunState.usedCountで管理し、上限に達したら
+// 以降は何もせずnullを返す(安全側フォールバック)。
+async function enrichCandidateWithAiFactExtraction(
+  candidateItem,
+  database,
+  sourceId,
+  runState
+) {
+  if (
+    !database ||
+    typeof sourceId !== "string" ||
+    sourceId === ""
+  ) {
+    return null;
+  }
+
+  const publishedAtDate =
+    new Date(candidateItem.publishedAt || "");
+
+  if (!isNaN(publishedAtDate.getTime())) {
+    const ageDays =
+      (Date.now() - publishedAtDate.getTime()) / 86400000;
+
+    if (ageDays > AI_FACT_EXTRACTION_MAX_ARTICLE_AGE_DAYS) {
+      return null;
+    }
+  }
+
+  const normalizedUrl =
+    normalizeArticleUrl(
       candidateItem.link
     );
 
-  if (!adapter) {
+  const normalizedUrlHash =
+    computeNormalizedUrlHash(
+      normalizedUrl
+    );
+
+  const articleDocumentId =
+    sourceId + "_" + normalizedUrlHash;
+
+  // 同一収集リクエスト内での二重AI呼び出しを防ぐ(念のための追加防御)。
+  if (runState.processedArticleIds.has(articleDocumentId)) {
+    return null;
+  }
+
+  runState.processedArticleIds.add(
+    articleDocumentId
+  );
+
+  const articleDocumentRef =
+    database
+      .collection(AI_COLLECTED_ARTICLES_COLLECTION)
+      .doc(articleDocumentId);
+
+  let existingSnapshot;
+
+  try {
+    existingSnapshot =
+      await articleDocumentRef.get();
+  } catch (readError) {
+    console.error(
+      "AI事実抽出キャッシュの読み取りに失敗しました：",
+      readError
+    );
+
+    return null;
+  }
+
+  const existingData =
+    existingSnapshot.exists
+      ? (existingSnapshot.data() || {})
+      : {};
+
+  if (
+    existingData.aiFactExtractionAttemptedAt &&
+    typeof existingData.aiFactExtractionAttemptedAt.toDate === "function"
+  ) {
+    if (
+      existingData.aiExtractedFacts &&
+      typeof existingData.aiExtractedFacts === "object"
+    ) {
+      const cachedDraft =
+        buildAiExtractedFactsContentDraft(
+          existingData.aiExtractedFacts
+        );
+
+      return {
+        structuredFacts: existingData.aiExtractedFacts,
+        structuredContentDraft: cachedDraft,
+        structuredFactsSource: "aiExtraction",
+        structuredFactsConfidence:
+          typeof existingData.aiExtractedFactsConfidence === "string"
+            ? existingData.aiExtractedFactsConfidence
+            : "low",
+        structuredFactsSafetyFlag:
+          matchesSafetyRelevantKeywords(
+            (candidateItem.title || "") + " " + cachedDraft
+          )
+      };
+    }
+
+    // 確定的失敗としてキャッシュ済み(有効な事実0件) → 何もしない。
     return null;
   }
 
@@ -1290,49 +1819,218 @@ async function enrichCandidateWithStructuredFacts(candidateItem) {
       );
   } catch (fetchError) {
     console.error(
-      "構造化事実の取得に失敗しました：",
+      "AI事実抽出用ページ取得に失敗しました：",
       fetchError
     );
 
     return null;
   }
 
-  let facts;
-
-  try {
-    facts =
-      adapter.extract(
-        html
-      );
-  } catch (extractError) {
-    console.error(
-      "構造化事実の抽出に失敗しました：",
-      extractError
+  const pageText =
+    buildAiFactExtractionInputText(
+      html
     );
 
+  if (pageText.length < AI_FACT_EXTRACTION_MIN_PAGE_TEXT_LENGTH) {
+    // 本文がほぼ無い(PDF/画像依存等) → AIを呼んでも無駄なので対象外。
     return null;
   }
 
-  if (!facts) {
+  // コスト安全弁：判定(usedCount比較)と予約(usedCount+=1)の間にawaitを
+  // 挟まないことで、Promise.allによる並行処理下でも上限を超えないようにする。
+  if (runState.usedCount >= AI_FACT_EXTRACTION_MAX_PER_COLLECTION_RUN) {
     return null;
   }
+
+  runState.usedCount +=
+    1;
+
+  let rawFacts;
+
+  try {
+    rawFacts =
+      await callOpenAiFactExtraction(
+        pageText
+      );
+  } catch (aiError) {
+    console.error(
+      "AI事実抽出に失敗しました：",
+      aiError
+    );
+
+    // isTransient(timeout/HTTPエラー/JSON不正等)はFirestoreへ何も
+    // 書き込まない(次回再試行できるようにする)。
+    return null;
+  }
+
+  const verified =
+    verifyAiExtractedFactsAgainstPageText(
+      rawFacts,
+      pageText
+    );
+
+  if (!verified) {
+    return null;
+  }
+
+  if (!verified.facts) {
+    // 確定的失敗：AI応答は正常だが有効な事実が0件 → キャッシュして
+    // 次回以降は再AIしない。
+    try {
+      await articleDocumentRef.set(
+        {
+          aiFactExtractionAttemptedAt: FieldValue.serverTimestamp(),
+          aiExtractedFacts: null,
+          aiExtractedFactsConfidence: verified.confidence
+        },
+        { merge: true }
+      );
+    } catch (writeError) {
+      console.error(
+        "AI事実抽出結果(確定的失敗)の保存に失敗しました：",
+        writeError
+      );
+    }
+
+    return null;
+  }
+
+  try {
+    await articleDocumentRef.set(
+      {
+        aiFactExtractionAttemptedAt: FieldValue.serverTimestamp(),
+        aiExtractedFacts: verified.facts,
+        aiExtractedFactsConfidence: verified.confidence
+      },
+      { merge: true }
+    );
+  } catch (writeError) {
+    console.error(
+      "AI事実抽出結果の保存に失敗しました：",
+      writeError
+    );
+
+    // 保存に失敗しても、今回取得できた結果自体はそのまま返す。
+  }
+
+  const contentDraft =
+    buildAiExtractedFactsContentDraft(
+      verified.facts
+    );
 
   return {
-    structuredFacts:
-      facts,
-
-    structuredContentDraft:
-      buildStructuredFactsContentDraft(
-        facts
+    structuredFacts: verified.facts,
+    structuredContentDraft: contentDraft,
+    structuredFactsSource: "aiExtraction",
+    structuredFactsConfidence: verified.confidence,
+    structuredFactsSafetyFlag:
+      matchesSafetyRelevantKeywords(
+        (candidateItem.title || "") + " " + contentDraft
       )
   };
+}
+
+
+// summaryが空の候補1件について、公式ページ(candidateItem.link)を安全に取得し
+// 事実補強を試みる。まずPhase A(構造化アダプター、AI 0回)を試し、対応
+// アダプターが無い場合のみPhase B(AI最大1回)へ進む。取得に失敗した、
+// 有効な事実が1つも見つからない、のいずれの場合もnullを返し、呼び出し側は
+// 既存の空summaryのまま何も変えずに済ませる(安全側フォールバック)。
+async function enrichCandidateWithStructuredFacts(
+  candidateItem,
+  database,
+  sourceId,
+  aiExtractionRunState
+) {
+  if (candidateItem.summary !== "") {
+    return null;
+  }
+
+  const adapter =
+    selectStructuredArticleAdapter(
+      candidateItem.link
+    );
+
+  if (adapter) {
+    let html;
+
+    try {
+      await assertFeedUrlIsSafe(
+        candidateItem.link
+      );
+
+      html =
+        await fetchFeedContent(
+          candidateItem.link
+        );
+    } catch (fetchError) {
+      console.error(
+        "構造化事実の取得に失敗しました：",
+        fetchError
+      );
+
+      return null;
+    }
+
+    let facts;
+
+    try {
+      facts =
+        adapter.extract(
+          html
+        );
+    } catch (extractError) {
+      console.error(
+        "構造化事実の抽出に失敗しました：",
+        extractError
+      );
+
+      return null;
+    }
+
+    if (!facts) {
+      return null;
+    }
+
+    const contentDraft =
+      buildStructuredFactsContentDraft(
+        facts
+      );
+
+    return {
+      structuredFacts: facts,
+      structuredContentDraft: contentDraft,
+      structuredFactsSource: "codeAdapter",
+      structuredFactsSafetyFlag:
+        matchesSafetyRelevantKeywords(
+          (candidateItem.title || "") + " " + contentDraft
+        )
+    };
+  }
+
+  return enrichCandidateWithAiFactExtraction(
+    candidateItem,
+    database,
+    sourceId,
+    aiExtractionRunState
+  );
 }
 
 
 // 手動の個別「情報を集める」(documentId指定)でのみ呼び出す。cron・
 // locationCollectはitemsを使わないため対象外(呼び出し箇所を意図的に限定する)。
 // 1件の補強が失敗しても他の候補・収集結果全体には影響させない。
-async function enrichCandidateItemsWithStructuredFacts(items) {
+async function enrichCandidateItemsWithStructuredFacts(
+  items,
+  database,
+  sourceId
+) {
+  const aiExtractionRunState =
+    {
+      usedCount: 0,
+      processedArticleIds: new Set()
+    };
+
   return Promise.all(
     items.map(
       async function(item) {
@@ -1342,7 +2040,10 @@ async function enrichCandidateItemsWithStructuredFacts(items) {
         try {
           enrichment =
             await enrichCandidateWithStructuredFacts(
-              item
+              item,
+              database,
+              sourceId,
+              aiExtractionRunState
             );
         } catch (enrichmentError) {
           console.error(
@@ -4094,7 +4795,9 @@ export default async function handler(
     try {
       responseItems =
         await enrichCandidateItemsWithStructuredFacts(
-          collectionResult.items
+          collectionResult.items,
+          database,
+          documentId
         );
     } catch (enrichmentError) {
       console.error(

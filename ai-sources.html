@@ -586,6 +586,13 @@
       color: #7a8a99;
     }
 
+    .collected-item-safety-note {
+      margin-top: 6px;
+      font-size: 11px;
+      font-weight: bold;
+      color: #b3261e;
+    }
+
     .collected-item-actions {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -2521,9 +2528,29 @@
             ? escapeHtml(item.structuredContentDraft).replace(/\n/g, "<br>")
             : "";
 
+      // Ver1.8 Phase2 STEP6-AC｜Phase A(コードのみ抽出)とPhase B(AI抽出、
+      // 要確認)を代表が区別できるよう、structuredFactsSourceに応じて
+      // 注記文言を変える。安全・災害系キーワードに一致する場合は、
+      // AI抽出でも人間確認が必須であることが分かる警告を追加表示する。
+      const isAiExtractedContentDraft =
+        hasStructuredContentDraft &&
+        item.structuredFactsSource === "aiExtraction";
+
       const structuredSourceNoteHtml =
         hasStructuredContentDraft
-          ? '<div class="collected-item-structured-note">🔧 公式ページから自動取得</div>'
+          ? '<div class="collected-item-structured-note">' +
+            (
+              isAiExtractedContentDraft
+                ? "🤖 AIが公式ページから事実抽出・要確認"
+                : "🔧 公式ページから自動取得"
+            ) +
+            "</div>"
+          : "";
+
+      const safetyNoteHtml =
+        hasStructuredContentDraft &&
+        item.structuredFactsSafetyFlag === true
+          ? '<div class="collected-item-safety-note">⚠️ 安全・災害関連の可能性があります。必ず内容を確認してください</div>'
           : "";
 
       const relevanceScore =
@@ -2566,6 +2593,7 @@
         safePublishedAt +
         "</div>" +
         structuredSourceNoteHtml +
+        safetyNoteHtml +
         '<div class="collected-item-summary">' +
         safeSummary +
         "</div>" +
