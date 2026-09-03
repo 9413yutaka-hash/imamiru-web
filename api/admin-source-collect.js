@@ -1315,7 +1315,41 @@ const AI_EXTRACTED_FACTS_FIELD_ORDER = [
 ];
 
 
-// script/style除去→既存のタグ除去・数値文字参照デコード・空白正規化
+// Ver1.8 Phase2 STEP6-AE｜実AI 1記事テスト(STEP6-AD)で、サイト共通の
+// header/nav/footer/aside(電話番号・法人名等のサイト共通表記)がAI入力へ
+// そのまま渡り、記事固有の情報であるかのように抽出されてしまう不具合が
+// 実データで確認された。<header>/<nav>/<footer>/<aside>タグはHTML5の
+// 標準的な意味を持つ領域であり、特定サイト固有の文字列を個別に除外するの
+// ではなく、この4タグをまとめて除去することで汎用的に対処する
+// (motobu-ka.com以外のWordPressサイトでも同様の構造は多い)。この関数は
+// Phase B(AI抽出)専用であり、Phase Aのアダプター(adapter.extract())は
+// 生HTMLをそのまま解析するため、この変更の影響を受けない。
+function stripPageChromeSections(html) {
+  return String(html || "")
+    .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, " ")
+    .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, " ")
+    .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, " ")
+    .replace(/<aside[^>]*>[\s\S]*?<\/aside>/gi, " ");
+}
+
+
+// Ver1.8 Phase2 STEP6-AE｜同じくSTEP6-ADで、記事の投稿日/更新日
+// (よくあるWordPressテンプレートの「class名にdate/posted/published/updatedを
+// 含む要素が<time>を包む」パターン)を、AIが開催日と誤認する不具合が実データで
+// 確認された。本文中の任意の日付表記まで一律には消さない(「単純に日付文字列を
+// 全部消す」ことは意図的に避ける。本文中に開催日として明記された日付は
+// このあとの処理でそのまま残る)。この投稿日メタ情報パターンに一致する要素だけを
+// 対象にする、控えめな除去。
+function stripArticleMetadataDateElements(html) {
+  return String(html || "").replace(
+    /<([a-z]+)\b[^>]*\bclass="[^"]*\b(?:date|posted|published|updated)\b[^"]*"[^>]*>[\s\S]*?<\/\1>/gi,
+    " "
+  );
+}
+
+
+// script/style除去→サイト共通chrome(header/nav/footer/aside)除去→
+// 投稿日メタ情報除去→既存のタグ除去・数値文字参照デコード・空白正規化
 // (いずれもRSS処理と同じ既存関数を再利用)→最大文字数で切り詰め。
 // 公式ページ全HTMLはAIへ送らない。
 function buildAiFactExtractionInputText(html) {
@@ -1324,11 +1358,21 @@ function buildAiFactExtractionInputText(html) {
       .replace(/<script[\s\S]*?<\/script>/gi, " ")
       .replace(/<style[\s\S]*?<\/style>/gi, " ");
 
+  const withoutChromeSections =
+    stripPageChromeSections(
+      withoutScriptsAndStyles
+    );
+
+  const withoutMetadataDates =
+    stripArticleMetadataDateElements(
+      withoutChromeSections
+    );
+
   const plainText =
     normalizeWhitespace(
       stripHtmlTags(
         decodeNumericCharacterReferences(
-          withoutScriptsAndStyles
+          withoutMetadataDates
         )
       )
     );
@@ -1367,7 +1411,17 @@ function buildAiFactExtractionPrompt(pageText) {
     "particular: do NOT write anything meaning 'free'/'no charge' for " +
     "\"price\" unless the text explicitly states there is no fee. Do NOT " +
     "write anything meaning 'no reservation needed' for \"reservation\" " +
-    "unless the text explicitly states so. Reply with a single JSON " +
+    "unless the text explicitly states so. IMPORTANT: a page often shows " +
+    "its own article publish date or last-updated date (for example near " +
+    "the title, or in a byline). That publish/update date is metadata " +
+    "about the page itself, NOT the date of the event or notice it " +
+    "describes. Do NOT put a publish/update date into \"eventDateOrPeriod\" " +
+    "unless the text itself explicitly presents that same date as the " +
+    "date of the event/notice (for example, labeled as \"開催日\", " +
+    "\"開催期間\", \"実施日\", or clearly described as when the event " +
+    "happens). If no date is explicitly presented as the event's own " +
+    "date, return null for \"eventDateOrPeriod\" even if a publish/update " +
+    "date is visible elsewhere in the text. Reply with a single JSON " +
     "object only, with exactly these keys: \"eventDateOrPeriod\" (string " +
     "or null), \"time\" (string or null), \"location\" (string or null), " +
     "\"price\" (string or null), \"reservation\" (string or null), " +
