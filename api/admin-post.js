@@ -14,6 +14,10 @@ import {
   getAuth
 } from "firebase-admin/auth";
 
+import {
+  createHash
+} from "node:crypto";
+
 
 function getFirebaseAdminApp() {
   if (getApps().length > 0) {
@@ -137,13 +141,264 @@ const FIELD_MAX_LENGTHS = {
   content: 300,
   address: 120,
   websiteUrl: 300,
-  area: 80
+  area: 80,
+  sourceId: 128,
+  sourceArticleUrl: 300
 };
+
+
+// Ver1.8 Phase2 STEP7-D｜sourceId/sourceArticleUrlはクライアント(ai-editor.html
+// 経由)から届く値であり、投稿本体とは無関係な付随的な重複防止用の識別情報に
+// すぎない。そのため、想定外の値が来た場合は投稿全体を失敗させず「元記事と
+// 紐付けない(空文字として扱う)」という安全側にフォールバックする。
+// aiSourcesのdocumentIdは常に英数字・ハイフン・アンダースコアのみのため、
+// それ以外の文字が混入した値はFirestoreドキュメントパスとして使わない。
+function sanitizeOptionalSourceId(
+  rawValue
+) {
+  const value =
+    String(
+      rawValue || ""
+    )
+      .trim();
+
+  if (value === "") {
+    return "";
+  }
+
+  if (
+    value.length >
+    FIELD_MAX_LENGTHS.sourceId
+  ) {
+    return "";
+  }
+
+  if (
+    !/^[A-Za-z0-9_-]+$/.test(
+      value
+    )
+  ) {
+    return "";
+  }
+
+  return value;
+}
+
+
+function sanitizeOptionalSourceArticleUrl(
+  rawValue
+) {
+  const value =
+    String(
+      rawValue || ""
+    )
+      .trim();
+
+  if (value === "") {
+    return "";
+  }
+
+  if (
+    value.length >
+    FIELD_MAX_LENGTHS.sourceArticleUrl
+  ) {
+    return "";
+  }
+
+  if (
+    !/^https?:\/\//.test(
+      value
+    )
+  ) {
+    return "";
+  }
+
+  return value;
+}
 
 
 const MAX_IMAGE_COUNT = 5;
 
 const MAX_EXPIRES_AT_DAYS = 90;
+
+
+// Ver1.8 Phase2 STEP7-D｜以下3つは api/admin-source-collect.js の同名関数・
+// 定数と挙動を完全一致させるための複製(このファイルからはimportしない、
+// 既存の各api/*.jsファイルがgetFirebaseAdminApp()等を個別に複製している
+// 方針に合わせる)。aiCollectedArticlesのdocumentId計算式
+// (sourceId + "_" + computeNormalizedUrlHash(normalizeArticleUrl(url)))
+// が食い違うと、存在するはずの元記事を取り違えてしまうため、変更する際は
+// 両ファイルを必ず同時に確認すること。
+const TRACKING_QUERY_PARAM_NAMES = [
+  "utm_source",
+  "utm_medium",
+  "utm_campaign",
+  "utm_term",
+  "utm_content"
+];
+
+
+function normalizeArticleUrl(
+  rawUrl
+) {
+  const originalUrl =
+    String(
+      rawUrl || ""
+    )
+      .trim();
+
+  let parsedUrl;
+
+  try {
+    parsedUrl =
+      new URL(
+        originalUrl
+      );
+  } catch (error) {
+    return originalUrl;
+  }
+
+  parsedUrl.hostname =
+    parsedUrl.hostname.toLowerCase();
+
+  parsedUrl.hash =
+    "";
+
+  TRACKING_QUERY_PARAM_NAMES.forEach(
+    function(paramName) {
+      parsedUrl.searchParams.delete(
+        paramName
+      );
+    }
+  );
+
+  let pathname =
+    parsedUrl.pathname;
+
+  if (
+    pathname.length > 1 &&
+    pathname.endsWith("/")
+  ) {
+    pathname =
+      pathname.slice(
+        0,
+        -1
+      );
+  }
+
+  parsedUrl.pathname =
+    pathname;
+
+  return parsedUrl.toString();
+}
+
+
+function computeNormalizedUrlHash(
+  normalizedUrl
+) {
+  return createHash("sha256")
+    .update(
+      normalizedUrl,
+      "utf8"
+    )
+    .digest("hex");
+}
+
+
+const AI_COLLECTED_ARTICLES_COLLECTION =
+  "aiCollectedArticles";
+
+const PROCESSING_STATUS_DISCOVERED =
+  "DISCOVERED";
+
+const PROCESSING_STATUS_PROCESSING =
+  "PROCESSING";
+
+const PROCESSING_STATUS_DONE =
+  "DONE";
+
+
+// 元記事(aiCollectedArticles)を「人間が確認のうえ公開済み」としてマークする。
+// submissionsへの新規作成が成功した後にだけ呼び出すこと(呼び出し側で保証)。
+// このマーク処理自体が失敗しても、既に成功している投稿処理には一切影響
+// させない(呼び出し側でtry/catchすること)。
+//
+// 安全のための分岐：
+// ・ドキュメントが存在しない(RSS由来でない通常のadmin投稿、または該当記事が
+// 　まだ収集されていない場合) → 何もしない
+// ・processingStatusがDISCOVERED/PROCESSING以外(既にDONE/ERROR/SKIPPED) →
+// 　上書きしない(自動投稿側の処理結果や、既存のマーク済み状態を壊さない)
+async function markCollectedArticleAsManuallyPublished(
+  database,
+  sourceId,
+  sourceArticleUrl,
+  submissionId
+) {
+  const normalizedUrl =
+    normalizeArticleUrl(
+      sourceArticleUrl
+    );
+
+  const normalizedUrlHash =
+    computeNormalizedUrlHash(
+      normalizedUrl
+    );
+
+  const articleDocumentId =
+    sourceId +
+    "_" +
+    normalizedUrlHash;
+
+  const articleRef =
+    database
+      .collection(
+        AI_COLLECTED_ARTICLES_COLLECTION
+      )
+      .doc(
+        articleDocumentId
+      );
+
+  await database.runTransaction(
+    async function(transaction) {
+      const snapshot =
+        await transaction.get(
+          articleRef
+        );
+
+      if (!snapshot.exists) {
+        return;
+      }
+
+      const data =
+        snapshot.data() ||
+        {};
+
+      if (
+        data.processingStatus !== PROCESSING_STATUS_DISCOVERED &&
+        data.processingStatus !== PROCESSING_STATUS_PROCESSING
+      ) {
+        return;
+      }
+
+      transaction.update(
+        articleRef,
+        {
+          processingStatus:
+            PROCESSING_STATUS_DONE,
+
+          processingError:
+            "",
+
+          postedSubmissionId:
+            submissionId,
+
+          postedVia:
+            "manual"
+        }
+      );
+    }
+  );
+}
 
 
 function validatePostFields(
@@ -454,7 +709,15 @@ function validatePostFields(
     imageUrls: imageUrls,
     expiresAtDate: expiresAtDate,
     authorType: authorType,
-    sourceType: sourceType
+    sourceType: sourceType,
+    sourceId:
+      sanitizeOptionalSourceId(
+        requestBody.sourceId
+      ),
+    sourceArticleUrl:
+      sanitizeOptionalSourceArticleUrl(
+        requestBody.sourceArticleUrl
+      )
   };
 }
 
@@ -638,6 +901,30 @@ export default async function handler(
         .add(
           submissionData
         );
+
+    // Ver1.8 Phase2 STEP7-D｜submissionsへの公開保存が成功した後にだけ実行する
+    // (公開保存より前に元記事をDONE化してはいけない)。sourceId/sourceArticleUrl
+    // が両方とも空文字の場合(通常のadmin投稿、またはRSS由来でない投稿)は
+    // 呼び出さない。このマーク処理自体が失敗しても、投稿は既に成功している
+    // ため、代表への応答には一切影響させない(エラーはログにのみ残す)。
+    if (
+      postFields.sourceId !== "" &&
+      postFields.sourceArticleUrl !== ""
+    ) {
+      try {
+        await markCollectedArticleAsManuallyPublished(
+          database,
+          postFields.sourceId,
+          postFields.sourceArticleUrl,
+          documentReference.id
+        );
+      } catch (markError) {
+        console.error(
+          "元記事の公開済みマークに失敗しました：",
+          markError
+        );
+      }
+    }
 
     return response.status(200).json({
       success: true,

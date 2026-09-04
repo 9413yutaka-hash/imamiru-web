@@ -1114,6 +1114,12 @@
     let hasSubmittedSuccessfully = false;
     let existingImageUrls = [];
 
+    // Ver1.8 Phase2 STEP7-D｜AI編集部から引き継いだ元記事識別情報(RSS由来で
+    // ない通常のadmin投稿では空文字のまま)。新規投稿時のみ/api/admin-postへの
+    // payloadに含める。編集更新(/api/admin-submission-update)には送らない。
+    let collectedSourceId = "";
+    let collectedSourceArticleUrl = "";
+
     const editDocumentId =
       new URLSearchParams(window.location.search).get("id");
 
@@ -1781,6 +1787,15 @@
 
         if (isEditMode) {
           payload.documentId = editDocumentId;
+        } else if (
+          collectedSourceId !== "" &&
+          collectedSourceArticleUrl !== ""
+        ) {
+          // Ver1.8 Phase2 STEP7-D｜新規投稿時のみ、AI編集部から引き継いだ
+          // 元記事識別情報を送る。編集更新(/api/admin-submission-update)には
+          // 送らない(このifブロックはisEditModeがfalseのときだけ通る)。
+          payload.sourceId = collectedSourceId;
+          payload.sourceArticleUrl = collectedSourceArticleUrl;
         }
 
         const endpoint = isEditMode
@@ -2026,6 +2041,14 @@
         if (!Number.isNaN(draftExpiresAtDate.getTime())) {
           expiresAtInput.value = formatDatetimeLocalValue(draftExpiresAtDate);
         }
+      }
+
+      if (typeof draft.sourceId === "string") {
+        collectedSourceId = draft.sourceId;
+      }
+
+      if (typeof draft.sourceArticleUrl === "string") {
+        collectedSourceArticleUrl = draft.sourceArticleUrl;
       }
 
       updateCharacterCounts();

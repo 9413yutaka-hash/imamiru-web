@@ -1062,6 +1062,17 @@
 
     let currentCollectedArticle = null;
 
+    // Ver1.8 Phase2 STEP7-D｜currentCollectedArticleはsourceText編集時にnullへ
+    // リセットされる(元情報欄への事実追記は既存の運用手順のため)。一方、
+    // 重複自動投稿防止のための元記事識別(sourceId/sourceUrl)は、sourceTextを
+    // 編集しても失われてはならないため、currentCollectedArticleとは独立した
+    // 永続参照として別途保持する。通常のadmin投稿相当(RSS由来でない)の場合は
+    // 両方とも空文字のままにする。
+    let collectedArticleOriginRef = {
+      sourceId: "",
+      sourceUrl: ""
+    };
+
     function escapeHtml(text) {
       return String(text ?? "")
         .replaceAll("&", "&amp;")
@@ -1962,7 +1973,15 @@
         category: draftCategory.value,
         content: contentValue,
         websiteUrl: websiteUrlValue,
-        expiresAt: expiresAtDate.toISOString()
+        expiresAt: expiresAtDate.toISOString(),
+
+        // Ver1.8 Phase2 STEP7-D｜必ずcollectedArticleOriginRefから取得する
+        // (currentCollectedArticleはsourceText編集でnullになるため使わない)。
+        // 通常のadmin投稿相当(RSS由来でない)の場合は空文字のまま。
+        sourceId:
+          collectedArticleOriginRef.sourceId,
+        sourceArticleUrl:
+          collectedArticleOriginRef.sourceUrl
       };
     }
 
@@ -2329,6 +2348,26 @@
                 : ""
           }
         : null;
+
+      // Ver1.8 Phase2 STEP7-D｜currentCollectedArticleとは別に、sourceTextを
+      // 編集しても消えない永続参照へ元記事識別情報を保持する。ここでしか
+      // 書き込まないため、以後sourceTextを編集してcurrentCollectedArticleが
+      // nullになっても、この値はそのまま残る。
+      collectedArticleOriginRef = hasStructuredFields
+        ? {
+            sourceId:
+              typeof collectedItem.sourceId === "string"
+                ? collectedItem.sourceId
+                : "",
+            sourceUrl:
+              typeof collectedItem.sourceUrl === "string"
+                ? collectedItem.sourceUrl
+                : ""
+          }
+        : {
+            sourceId: "",
+            sourceUrl: ""
+          };
 
       if (typeof collectedItem.sourceText === "string") {
         sourceText.value = collectedItem.sourceText;
