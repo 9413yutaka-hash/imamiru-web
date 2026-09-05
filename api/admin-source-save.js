@@ -216,6 +216,19 @@ function validateSourceFields(
     );
   }
 
+  // Ver1.8 Phase2 STEP7-E｜isEnabled(この情報源を利用するか)とは完全に別の値。
+  // ai-sources.htmlのフォームは常に明示的なtrue/falseを送るため、isEnabledと
+  // 同様に必須のbooleanとして扱う(未設定を許容すると、後方互換のための
+  // 「フィールド未設定=ON」という意味と、代表が明示的にfalseを選んだ状態が
+  // 区別できなくなるため)。
+  if (
+    typeof requestBody.autoPostEnabled !== "boolean"
+  ) {
+    throw new Error(
+      "自動公開の許可設定の値が正しくありません。"
+    );
+  }
+
   const feedUrl =
     String(
       requestBody.feedUrl || ""
@@ -261,6 +274,7 @@ function validateSourceFields(
     sourceType: sourceType,
     area: area,
     isEnabled: requestBody.isEnabled,
+    autoPostEnabled: requestBody.autoPostEnabled,
     feedUrl: feedUrl,
     priority: priority
   };
@@ -350,6 +364,9 @@ async function createSource(
 
       isEnabled:
         sourceFields.isEnabled,
+
+      autoPostEnabled:
+        sourceFields.autoPostEnabled,
 
       feedUrl:
         sourceFields.feedUrl,
@@ -461,6 +478,9 @@ async function updateSource(
 
     isEnabled:
       sourceFields.isEnabled,
+
+    autoPostEnabled:
+      sourceFields.autoPostEnabled,
 
     feedUrl:
       sourceFields.feedUrl,

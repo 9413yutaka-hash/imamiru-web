@@ -122,6 +122,11 @@ const DEFAULT_SOURCE_PRIORITY = 3;
 
 const DEFAULT_IS_ENABLED = true;
 
+// Ver1.8 Phase2 STEP7-E｜一括登録は安全側に倒し、値を明示しない新規sourceは
+// 自動公開を許可しない(false)状態で登録する。DEFAULT_IS_ENABLEDとは意図的に
+// 異なる値(こちらはtrue)であり、混同しないこと。
+const DEFAULT_AUTO_POST_ENABLED = false;
+
 
 const MAX_SOURCE_COUNT = 100;
 
@@ -267,6 +272,23 @@ function validateBulkItemFields(
     );
   }
 
+  let autoPostEnabled;
+
+  if (
+    itemBody.autoPostEnabled === undefined ||
+    itemBody.autoPostEnabled === null
+  ) {
+    autoPostEnabled = DEFAULT_AUTO_POST_ENABLED;
+  } else if (
+    typeof itemBody.autoPostEnabled === "boolean"
+  ) {
+    autoPostEnabled = itemBody.autoPostEnabled;
+  } else {
+    throw new Error(
+      "自動公開の許可設定の値が正しくありません。"
+    );
+  }
+
   let priority;
 
   if (
@@ -292,6 +314,7 @@ function validateBulkItemFields(
     sourceType: sourceType,
     area: area,
     isEnabled: isEnabled,
+    autoPostEnabled: autoPostEnabled,
     feedUrl: feedUrl,
     priority: priority
   };
@@ -667,6 +690,9 @@ export default async function handler(
 
             isEnabled:
               pendingRow.fields.isEnabled,
+
+            autoPostEnabled:
+              pendingRow.fields.autoPostEnabled,
 
             feedUrl:
               pendingRow.fields.feedUrl,

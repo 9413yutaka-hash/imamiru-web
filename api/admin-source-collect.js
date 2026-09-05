@@ -3635,6 +3635,19 @@ async function judgeArticleForAutoPost(
     };
   }
 
+  // Ver1.8 Phase2 STEP7-E｜isEnabled(この情報源を利用するか)とは別に、
+  // autoPostEnabled(人間確認なしで自動公開してよいか)をsource単位で判定する。
+  // falseのときだけSKIPし、undefined(フィールド未設定＝既存source)は
+  // 従来通りON扱いとする(既存Productionの自動AI記者を突然停止させないため)。
+  // RSS収集・aiCollectedArticlesへの保存・Phase A/B・管理者手動収集は
+  // この判定より前の別経路で完結しており、一切影響を受けない。
+  if (sourceData.autoPostEnabled === false) {
+    return {
+      outcome: "SKIP",
+      reason: "この情報源は人間確認なしの自動公開が許可されていないため対象外です。"
+    };
+  }
+
   const sourceArea =
     typeof sourceData.area === "string"
       ? sourceData.area.trim()

@@ -218,6 +218,13 @@ export default async function handler(
             isEnabled:
               data.isEnabled === true,
 
+            // Ver1.8 Phase2 STEP7-E｜フィールド未設定(既存source)は自動投稿
+            // 判定側(judgeArticleForAutoPost、autoPostEnabled === falseの
+            // ときだけSKIP)と同じ意味になるよう、!== falseでON相当として返す。
+            // 画面上OFF表示なのに実際はON、という食い違いを防ぐ。
+            autoPostEnabled:
+              data.autoPostEnabled !== false,
+
             feedUrl:
               data.feedUrl || "",
 
