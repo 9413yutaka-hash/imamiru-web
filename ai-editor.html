@@ -1067,10 +1067,15 @@
     // 重複自動投稿防止のための元記事識別(sourceId/sourceUrl)は、sourceTextを
     // 編集しても失われてはならないため、currentCollectedArticleとは独立した
     // 永続参照として別途保持する。通常のadmin投稿相当(RSS由来でない)の場合は
-    // 両方とも空文字のままにする。
+    // いずれも空文字のままにする。
+    // Ver1.8 Phase2 STEP7-G2B｜areaもこの永続参照へ追加する。sourceId/sourceUrl
+    // と同じ理由(sourceText編集・AI回答読み込みで消えてはならない)で、かつ
+    // source確定値をそのまま保持するだけの値(AI推論・推測は行わない)という
+    // 性質もsourceId/sourceUrlと同じため、意味を混同せず同じ器で管理する。
     let collectedArticleOriginRef = {
       sourceId: "",
-      sourceUrl: ""
+      sourceUrl: "",
+      area: ""
     };
 
     function escapeHtml(text) {
@@ -1981,7 +1986,12 @@
         sourceId:
           collectedArticleOriginRef.sourceId,
         sourceArticleUrl:
-          collectedArticleOriginRef.sourceUrl
+          collectedArticleOriginRef.sourceUrl,
+
+        // Ver1.8 Phase2 STEP7-G2B｜同じくcollectedArticleOriginRefから取得。
+        // AI回答文からの抽出・sourceTextからの推測はしない。
+        area:
+          collectedArticleOriginRef.area
       };
     }
 
@@ -2362,11 +2372,19 @@
             sourceUrl:
               typeof collectedItem.sourceUrl === "string"
                 ? collectedItem.sourceUrl
+                : "",
+
+            // Ver1.8 Phase2 STEP7-G2B｜machinauCollectedSourceItem.areaを
+            // そのまま保持する。AI推論・推測は行わない。
+            area:
+              typeof collectedItem.area === "string"
+                ? collectedItem.area
                 : ""
           }
         : {
             sourceId: "",
-            sourceUrl: ""
+            sourceUrl: "",
+            area: ""
           };
 
       if (typeof collectedItem.sourceText === "string") {

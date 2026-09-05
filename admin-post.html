@@ -2040,6 +2040,14 @@
         websiteUrlInput.value = draft.websiteUrl;
       }
 
+      // Ver1.8 Phase2 STEP7-G2B｜AI編集部から引き継いだsource確定値のareaを
+      // 対象地域欄へ反映する。draft.areaが文字列でない場合(旧draft形式等)は
+      // 何もしない(既存挙動を壊さない、空欄のまま)。人間はこの後も自由に
+      // 修正できる。
+      if (typeof draft.area === "string") {
+        areaInput.value = draft.area;
+      }
+
       if (typeof draft.expiresAt === "string") {
         const draftExpiresAtDate = new Date(draft.expiresAt);
 

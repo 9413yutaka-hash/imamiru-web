@@ -2976,12 +2976,26 @@
           );
         }
 
+        // Ver1.8 Phase2 STEP7-G2B｜サーバー応答(title/link/publishedAt/summary/
+        // sourceNameのみ)にはsourceId/areaが含まれないため、ここでcachedSources
+        // から該当sourceを検索し機械的に付与する。AI推論・URL/sourceNameからの
+        // 地域推測はいずれも行わない。sourceIdは引数のsourceIdをそのまま使い、
+        // areaはmatchedSource.areaが存在しない場合は空文字にする(source側が
+        // area未設定/空文字の場合も同じ扱い)。
+        const matchedSource = cachedSources.find(function(source) {
+          return source.id === sourceId;
+        });
+
         lastCollectedItems = Array.isArray(responseData.items)
           ? responseData.items.map(function(item) {
               return Object.assign(
                 {},
                 item,
-                computeRelevance(item)
+                computeRelevance(item),
+                {
+                  sourceId: sourceId,
+                  area: matchedSource ? (matchedSource.area || "") : ""
+                }
               );
             })
           : [];
@@ -3161,7 +3175,12 @@
                     item,
                     {
                       sourceId: source.id,
-                      sourcePriority: source.priority
+                      sourcePriority: source.priority,
+
+                      // Ver1.8 Phase2 STEP7-G2B｜単一source経路(collectSourceItems)
+                      // と同じ理由でareaを合わせて付与する(一括収集側は元々
+                      // areaを持っていなかったため、既存挙動を壊す変更ではない)。
+                      area: source.area || ""
                     }
                   )
                 );
@@ -3312,7 +3331,11 @@
           typeof item.sourcePriority === "number"
             ? item.sourcePriority
             : null,
-        sourceId: item.sourceId || ""
+        sourceId: item.sourceId || "",
+
+        // Ver1.8 Phase2 STEP7-G2B｜source確定値のareaをそのまま引き継ぐ。
+        // AI推論・sourceName/URLからの推測はしない。
+        area: item.area || ""
       };
 
       try {
