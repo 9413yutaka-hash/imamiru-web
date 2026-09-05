@@ -1924,6 +1924,11 @@
       addressInput.value = submission.address || "";
       websiteUrlInput.value = submission.websiteUrl || "";
 
+      // Ver1.8 Phase2 STEP7-G2A｜このAPI追加より前に作成された投稿(area
+      // フィールド自体が存在しない)でも編集画面が壊れないよう、文字列以外は
+      // 空欄にする。新規投稿時のsourceAreaInput相当のロジックには触れない。
+      areaInput.value = submission.area || "";
+
       if (typeof submission.latitude === "number") {
         capturedLatitude = submission.latitude;
       }

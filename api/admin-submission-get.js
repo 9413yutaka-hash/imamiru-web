@@ -237,6 +237,14 @@ export default async function handler(
         address:
           data.address || "",
 
+        // Ver1.8 Phase2 STEP7-G2A｜既存投稿にareaフィールドが無い場合
+        // (このAPI追加より前に作成された投稿等)でも編集画面が壊れないよう、
+        // 文字列以外は空文字へ正規化する(address等の既存フィールドと同じ
+        // 「|| ""」パターンで統一)。新規Firestore readは追加していない
+        // (documentSnapshotから既に取得済みのdataを参照するだけ)。
+        area:
+          data.area || "",
+
         latitude:
           typeof data.latitude === "number"
             ? data.latitude
