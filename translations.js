@@ -49,6 +49,11 @@ const MACHINAU_TRANSLATIONS = {
     en: "Choose a category to explore."
   },
 
+  shops_general_post_entry_link: {
+    ja: "📍 今ここで見つけた？ みんなに知らせる →",
+    en: "📍 Seen something here? Let others know →"
+  },
+
   category_all: {
     ja: "すべて",
     en: "All"
