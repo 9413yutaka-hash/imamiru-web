@@ -341,6 +341,50 @@
       line-height: 1.8;
     }
 
+    /* Ver1.8 Phase2 STEP7-M(街で見つけた！投稿)｜最初に「情報の種類」を選ぶ
+       2択UIの専用スタイル。ボタン自体は既存.location-button、注意文は既存
+       .form-helpをそのまま再利用し、新規に追加するのはレイアウト用の
+       この数クラスのみ。 */
+    .post-mode-question {
+      margin: 0 0 14px;
+      font-size: 15px;
+      font-weight: 900;
+      color: var(--navy);
+    }
+
+    .post-mode-options {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+
+    .post-mode-selected-indicator {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 20px;
+      padding: 10px 14px;
+      border-radius: 12px;
+      background: var(--sky);
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--navy);
+    }
+
+    .post-mode-reselect-button {
+      flex-shrink: 0;
+      background: none;
+      border: none;
+      padding: 0;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--blue);
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
     .form-group {
       margin-top: 22px;
     }
@@ -1103,7 +1147,61 @@
 
       </div>
 
-      <div class="notice-box">
+      <!-- Ver1.8 Phase2 STEP7-M(街で見つけた！投稿)｜第三者実証で「カテゴリーが
+           店舗のことしかない」という実フィードバックを受け、最初に「情報の種類」
+           だけを選んでもらう画面を追加する。地元の人/旅行者/店舗という人物属性
+           では分岐せず、あくまで情報の種類での分岐。選ぶまではnotice-box・
+           form本体を表示しない(店舗投稿フォームを見て「自分向けではない」と
+           判断されることを防ぐため)。 -->
+      <div id="postModeSelector">
+
+        <p class="post-mode-question">
+          どんな「今」を届けますか？
+        </p>
+
+        <div class="post-mode-options">
+
+          <button
+            id="postModeShopButton"
+            type="button"
+            class="location-button"
+          >
+            🏪 お店・施設からのお知らせ
+          </button>
+
+          <button
+            id="postModeStreetButton"
+            type="button"
+            class="location-button"
+          >
+            📍 街で見つけた！
+          </button>
+
+        </div>
+
+      </div>
+
+      <div
+        id="postModeSelectedIndicator"
+        class="post-mode-selected-indicator"
+        style="display:none;"
+      >
+        <span id="postModeSelectedLabel"></span>
+
+        <button
+          id="postModeReselectButton"
+          type="button"
+          class="post-mode-reselect-button"
+        >
+          選び直す
+        </button>
+      </div>
+
+      <div
+        id="photoNoticeBox"
+        class="notice-box"
+        style="display:none;"
+      >
         💡 写真は最大5枚まで選択できます。
         1枚目の写真がトップページのメイン画像になります。
         写真を付けずに投稿することもできます。
@@ -1112,6 +1210,7 @@
       <form
         id="submissionForm"
         novalidate
+        style="display:none;"
       >
 
         <div
@@ -1127,7 +1226,7 @@
             class="form-label"
             for="shopName"
           >
-            店舗・イベント名
+            <span id="shopNameLabelText">店舗・イベント名</span>
 
             <span class="required">
               必須
@@ -1151,7 +1250,10 @@
 
         </div>
 
-        <div class="form-group">
+        <div
+          id="titleFormGroup"
+          class="form-group"
+        >
 
           <label
             class="form-label"
@@ -1182,7 +1284,10 @@
 
         </div>
 
-        <div class="form-group">
+        <div
+          id="categoryFormGroup"
+          class="form-group"
+        >
 
           <label
             class="form-label"
@@ -1234,6 +1339,14 @@
 
             <option value="宿泊">
               🏨 宿泊
+            </option>
+
+            <!-- 街の発見モード専用。ユーザーには選択させず、街モード選択時に
+                 JSがこの値を自動設定する(hidden属性でこのoption自体は
+                 ドロップダウンの選択肢一覧には出さない)。既存8カテゴリーへの
+                 偽装(イベント/観光・体験等の流用)は行わない。 -->
+            <option value="街の発見" hidden>
+              街の発見
             </option>
           </select>
 
@@ -1293,7 +1406,7 @@
             class="form-label"
             for="content"
           >
-            内容
+            <span id="contentLabelText">内容</span>
 
             <span class="required">
               必須
@@ -1361,6 +1474,14 @@
             ここで設定するのは「この情報がある場所」であり、投稿者本人の居場所を公開するものではありません。
           </p>
 
+          <p
+            id="streetModeLocationHint"
+            class="form-help"
+            style="display:none;"
+          >
+            場所を入れると、近くにいる人に見つけてもらいやすくなります。
+          </p>
+
           <button
             id="locationButton"
             class="location-button"
@@ -1377,6 +1498,11 @@
           ></div>
 
         </div>
+
+        <!-- Ver1.8 Phase2 STEP7-M(街で見つけた！投稿)｜店舗専用フィールドを
+             まとめて1ブロックにし、街モード選択時にこのブロックごと非表示に
+             する。既存DOM自体は削除せず、店舗モードへ戻せば従来通り復元する。 -->
+        <div id="shopOnlyExtraFields">
 
         <div class="form-group">
 
@@ -1576,6 +1702,8 @@
 
         </div>
 
+        </div>
+
         <div class="form-group">
 
           <div class="form-label">
@@ -1655,6 +1783,14 @@
           </label>
 
         </div>
+
+        <p
+          id="streetModeSafetyNote"
+          class="form-help"
+          style="display:none; margin-top: 10px;"
+        >
+          人の顔や子ども、車のナンバー、個人のお宅など、個人が特定できるものの掲載にはご注意ください。
+        </p>
 
         <p class="legal-links-note">
           投稿することで、
@@ -1949,6 +2085,217 @@
       document.getElementById(
         "afterSubmitActions"
       );
+
+    // Ver1.8 Phase2 STEP7-M(街で見つけた！投稿)｜最初に「情報の種類」を
+    // 選んでもらうためのUI一式。地元の人/旅行者/店舗という人物属性ではなく
+    // 情報の種類で分岐する(理念維持)。既存の店舗投稿フィールド自体は
+    // 削除せず、表示/非表示の切り替えのみ行う。
+    const postModeSelector =
+      document.getElementById(
+        "postModeSelector"
+      );
+
+    const postModeShopButton =
+      document.getElementById(
+        "postModeShopButton"
+      );
+
+    const postModeStreetButton =
+      document.getElementById(
+        "postModeStreetButton"
+      );
+
+    const postModeSelectedIndicator =
+      document.getElementById(
+        "postModeSelectedIndicator"
+      );
+
+    const postModeSelectedLabel =
+      document.getElementById(
+        "postModeSelectedLabel"
+      );
+
+    const postModeReselectButton =
+      document.getElementById(
+        "postModeReselectButton"
+      );
+
+    const photoNoticeBox =
+      document.getElementById(
+        "photoNoticeBox"
+      );
+
+    const titleFormGroup =
+      document.getElementById(
+        "titleFormGroup"
+      );
+
+    const categoryFormGroup =
+      document.getElementById(
+        "categoryFormGroup"
+      );
+
+    const shopOnlyExtraFields =
+      document.getElementById(
+        "shopOnlyExtraFields"
+      );
+
+    const streetModeLocationHint =
+      document.getElementById(
+        "streetModeLocationHint"
+      );
+
+    const streetModeSafetyNote =
+      document.getElementById(
+        "streetModeSafetyNote"
+      );
+
+    const shopNameLabelText =
+      document.getElementById(
+        "shopNameLabelText"
+      );
+
+    const contentLabelText =
+      document.getElementById(
+        "contentLabelText"
+      );
+
+    const STREET_DISCOVERY_CATEGORY_VALUE =
+      "街の発見";
+
+    const SHOP_NAME_LABEL_TEXT_SHOP =
+      "店舗・イベント名";
+
+    const SHOP_NAME_LABEL_TEXT_STREET =
+      "何を見つけた？";
+
+    const SHOP_NAME_PLACEHOLDER_SHOP =
+      "例：南国食堂";
+
+    const SHOP_NAME_PLACEHOLDER_STREET =
+      "例：きれいなハイビスカス";
+
+    const CONTENT_LABEL_TEXT_SHOP =
+      "内容";
+
+    const CONTENT_LABEL_TEXT_STREET =
+      "ひとこと";
+
+    let currentPostMode =
+      null;
+
+    function applyPostMode(
+      mode
+    ) {
+      currentPostMode =
+        mode;
+
+      postModeSelector.style.display =
+        "none";
+
+      postModeSelectedIndicator.style.display =
+        "flex";
+
+      photoNoticeBox.style.display =
+        "";
+
+      submissionForm.style.display =
+        "";
+
+      if (
+        mode ===
+        "street"
+      ) {
+        postModeSelectedLabel.textContent =
+          "選択中：📍 街で見つけた！";
+
+        titleFormGroup.style.display =
+          "none";
+
+        categoryFormGroup.style.display =
+          "none";
+
+        shopOnlyExtraFields.style.display =
+          "none";
+
+        streetModeLocationHint.style.display =
+          "";
+
+        streetModeSafetyNote.style.display =
+          "";
+
+        shopNameLabelText.textContent =
+          SHOP_NAME_LABEL_TEXT_STREET;
+
+        shopNameInput.placeholder =
+          SHOP_NAME_PLACEHOLDER_STREET;
+
+        contentLabelText.textContent =
+          CONTENT_LABEL_TEXT_STREET;
+      } else {
+        postModeSelectedLabel.textContent =
+          "選択中：🏪 お店・施設からのお知らせ";
+
+        titleFormGroup.style.display =
+          "";
+
+        categoryFormGroup.style.display =
+          "";
+
+        shopOnlyExtraFields.style.display =
+          "";
+
+        streetModeLocationHint.style.display =
+          "none";
+
+        streetModeSafetyNote.style.display =
+          "none";
+
+        shopNameLabelText.textContent =
+          SHOP_NAME_LABEL_TEXT_SHOP;
+
+        shopNameInput.placeholder =
+          SHOP_NAME_PLACEHOLDER_SHOP;
+
+        contentLabelText.textContent =
+          CONTENT_LABEL_TEXT_SHOP;
+      }
+    }
+
+    postModeShopButton.addEventListener(
+      "click",
+      function() {
+        applyPostMode(
+          "shop"
+        );
+      }
+    );
+
+    postModeStreetButton.addEventListener(
+      "click",
+      function() {
+        applyPostMode(
+          "street"
+        );
+      }
+    );
+
+    postModeReselectButton.addEventListener(
+      "click",
+      function() {
+        postModeSelectedIndicator.style.display =
+          "none";
+
+        photoNoticeBox.style.display =
+          "none";
+
+        submissionForm.style.display =
+          "none";
+
+        postModeSelector.style.display =
+          "";
+      }
+    );
 
     const newPostButton =
       document.getElementById(
@@ -3458,6 +3805,21 @@ function requestCurrentLocationForPost() {
       );
 
       try {
+        // Ver1.8 Phase2 STEP7-M(街で見つけた！投稿)｜街モードではユーザーに
+        // title/categoryを直接入力・選択させない。validateForm()の既存必須
+        // チェックを変更せず、送信直前にだけshopNameをtitleへ複製し、
+        // categoryへ内部固定値を設定する(イベント/観光・体験等への偽装はしない)。
+        if (
+          currentPostMode ===
+          "street"
+        ) {
+          titleInput.value =
+            shopNameInput.value;
+
+          categoryInput.value =
+            STREET_DISCOVERY_CATEGORY_VALUE;
+        }
+
         validateForm();
 
         setSubmitting(
