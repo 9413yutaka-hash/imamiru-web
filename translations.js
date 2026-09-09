@@ -50,8 +50,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   shops_general_post_entry_link: {
-    ja: "📍 今ここで見つけた？ みんなに知らせる →",
-    en: "📍 Seen something here? Let others know →"
+    ja: "👀 今ここで見つけた？ みんなに知らせる →",
+    en: "👀 Seen something here? Let others know →"
   },
 
   category_all: {
@@ -585,8 +585,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   footer_general_post_entry_link: {
-    ja: "📍 今ここで何か見つけた？｜地元の人も旅行中の人も情報を届ける",
-    en: "📍 Seen something here? Locals & travelers welcome to share"
+    ja: "👀 今ここで何か見つけた？｜地元の人も旅行中の人も情報を届ける",
+    en: "👀 Seen something here? Locals & travelers welcome to share"
   },
 
   location_geolocation_unsupported: {
