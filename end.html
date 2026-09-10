@@ -1202,6 +1202,11 @@
           "掲載を終了しました。"
         );
 
+        // Ver1.8 Phase2 集客前ゲート(投稿管理導線)｜掲載終了が成功した投稿の
+        // 一時情報はもう使う必要がないため、ここでsessionStorageから削除する。
+        // 編集(save)成功時は削除しない(終了操作にまだ使う可能性があるため)。
+        clearPostManagementSessionStorage();
+
         endButton.style.display =
           "none";
 
@@ -1281,6 +1286,90 @@
       "submit",
       endAdvertisement
     );
+
+
+    // Ver1.8 Phase2 集客前ゲート(投稿管理導線)｜post.htmlの投稿完了直後に
+    // 保存されたsessionStorageがあれば、掲載番号・終了番号欄へ事前入力する。
+    // 自動終了はしない(ユーザーが同意チェック＋確認ダイアログを経て押す)。
+    // 値が存在しない・壊れている・形式が不正な場合は何もせず、
+    // 従来通りの手動入力のまま。
+    const POST_MANAGEMENT_STORAGE_KEY =
+      "machinauPostManagement";
+
+    function clearPostManagementSessionStorage() {
+      try {
+        sessionStorage.removeItem(
+          POST_MANAGEMENT_STORAGE_KEY
+        );
+      } catch (error) {
+        // sessionStorageが利用できない環境でも、終了処理自体は継続する。
+      }
+    }
+
+    function prefillEndFormFromSessionStorage() {
+      let rawStoredValue = null;
+
+      try {
+        rawStoredValue =
+          sessionStorage.getItem(
+            POST_MANAGEMENT_STORAGE_KEY
+          );
+      } catch (error) {
+        return;
+      }
+
+      if (!rawStoredValue) {
+        return;
+      }
+
+      let storedPostManagement = null;
+
+      try {
+        storedPostManagement =
+          JSON.parse(
+            rawStoredValue
+          );
+      } catch (error) {
+        return;
+      }
+
+      if (
+        !storedPostManagement ||
+        typeof storedPostManagement !== "object"
+      ) {
+        return;
+      }
+
+      const storedPublicationNumber =
+        normalizePublicationNumber(
+          storedPostManagement.publicationNumber
+        );
+
+      const storedEndCode =
+        normalizeEndCode(
+          storedPostManagement.endCode
+        );
+
+      if (
+        !/^\d{8}$/.test(
+          storedPublicationNumber
+        ) ||
+        !/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{12}$/.test(
+          storedEndCode
+        )
+      ) {
+        return;
+      }
+
+      publicationNumberInput.value =
+        storedPublicationNumber;
+
+      endCodeInput.value =
+        storedEndCode;
+    }
+
+
+    prefillEndFormFromSessionStorage();
   </script>
 
 </body>

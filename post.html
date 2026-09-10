@@ -985,6 +985,27 @@
       cursor: pointer;
     }
 
+    /* Ver1.8 Phase2 集客前ゲート(投稿管理導線)｜投稿完了直後にshop.htmlを
+       経由せず、自分のこの投稿を直接編集/終了できるようにするための
+       追加2ボタン。既存.after-actionの土台をそのまま使い、色だけ変える。 */
+    .edit-post-button {
+      border:
+        1px solid
+        var(--border);
+      background:
+        var(--white);
+      color: var(--navy);
+    }
+
+    .end-post-button {
+      border:
+        1px solid
+        rgba(239, 90, 103, 0.35);
+      background:
+        var(--white);
+      color: var(--red);
+    }
+
     .security-note {
       margin-top: 22px;
       padding-top: 18px;
@@ -1849,6 +1870,22 @@
           >
             続けて投稿する
           </button>
+
+          <a
+            id="editPostLink"
+            class="after-action edit-post-button"
+            href="edit.html"
+          >
+            ✏️ 内容を編集する
+          </a>
+
+          <a
+            id="endPostLink"
+            class="after-action end-post-button"
+            href="end.html"
+          >
+            🛑 掲載を終了する
+          </a>
 
         </div>
 
@@ -3793,6 +3830,39 @@ function requestCurrentLocationForPost() {
     }
 
 
+    // Ver1.8 Phase2 集客前ゲート(投稿管理導線)｜投稿完了直後、shop.htmlを
+    // 経由せずに自分のこの投稿をedit.html/end.htmlへ直接進めるための一時保持。
+    // endCodeはURLへは一切載せない(ブラウザ履歴等に残さない)。
+    // localStorage・Firestore・サーバーへの新規永続保存も行わない
+    // (同一タブのsessionStorageのみ、タブを閉じれば自動的に消える)。
+    // 既存の「終了番号は保存してください」という手動保存の必要性は
+    // 変えない(後日・別タブ・別端末からの再訪では引き続き手入力が必要)。
+    const POST_MANAGEMENT_STORAGE_KEY =
+      "machinauPostManagement";
+
+    function savePostManagementInfoToSessionStorage(
+      publicationNumber,
+      endCode
+    ) {
+      try {
+        sessionStorage.setItem(
+          POST_MANAGEMENT_STORAGE_KEY,
+          JSON.stringify(
+            {
+              publicationNumber:
+                publicationNumber,
+
+              endCode:
+                endCode
+            }
+          )
+        );
+      } catch (error) {
+        // sessionStorageが利用できない環境でも、投稿自体は継続する。
+      }
+    }
+
+
     async function submitAdvertisement(
       event
     ) {
@@ -4096,7 +4166,12 @@ longitude:
         hasSubmittedSuccessfully =
           true;
 
-                showSubmissionSuccessMessage(
+        savePostManagementInfoToSessionStorage(
+          publicationNumber,
+          endCode
+        );
+
+        showSubmissionSuccessMessage(
           publicationNumber,
           endCode
         );

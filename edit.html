@@ -930,7 +930,10 @@
 
         </div>
 
-        <div class="form-group">
+        <div
+          id="categoryFormGroup"
+          class="form-group"
+        >
 
           <label
             class="form-label"
@@ -982,6 +985,13 @@
 
             <option value="宿泊">
               🏨 宿泊
+            </option>
+
+            <!-- 街の発見モード専用。post.htmlと同じく、ユーザーには選択させず
+                 街の発見投稿を読み込んだ場合はcategoryFormGroup自体を非表示
+                 にする(hidden属性でこのoption自体は選択肢一覧に出さない)。 -->
+            <option value="街の発見" hidden>
+              街の発見
             </option>
 
             <optgroup label="旧カテゴリー(互換表示用)">
@@ -1260,6 +1270,11 @@
         "category"
       );
 
+    const categoryFormGroup =
+      document.getElementById(
+        "categoryFormGroup"
+      );
+
     const contentInput =
       document.getElementById(
         "content"
@@ -1326,8 +1341,12 @@
       "美容・リラクゼーション",
       "宿泊",
       "カフェ",
-      "居酒屋"
+      "居酒屋",
+      "街の発見"
     ];
+
+    const STREET_DISCOVERY_CATEGORY_VALUE =
+      "街の発見";
 
 
     let isLookupInProgress =
@@ -1493,6 +1512,18 @@
       categoryInput.value =
         submission.category ||
         "";
+
+      // Ver1.8 Phase2 集客前ゲート(投稿管理導線)｜街の発見投稿(category:"街の発見")を
+      // 読み込んだ場合、post.htmlの街モードと同じく、店舗カテゴリーを
+      // 選ばせないためカテゴリー欄自体を非表示にする。既存の店舗投稿
+      // (街の発見以外)ではこれまで通りカテゴリー欄を表示する。
+      if (categoryFormGroup) {
+        categoryFormGroup.style.display =
+          submission.category ===
+          STREET_DISCOVERY_CATEGORY_VALUE
+            ? "none"
+            : "";
+      }
 
       contentInput.value =
         submission.content ||
@@ -2155,6 +2186,81 @@
       "submit",
       saveSubmission
     );
+
+
+    // Ver1.8 Phase2 集客前ゲート(投稿管理導線)｜post.htmlの投稿完了直後に
+    // 保存されたsessionStorageがあれば、掲載番号・終了番号欄へ事前入力する。
+    // 自動lookup・自動saveはしない(ユーザーが内容を確認してボタンを押す)。
+    // 値が存在しない・壊れている・形式が不正な場合は何もせず、
+    // 従来通りの手動入力のまま(POST_MANAGEMENT_STORAGE_KEYはpost.htmlと
+    // 共通の文字列だが、モジュール共有はしておらずこのファイル内で独立定義)。
+    const POST_MANAGEMENT_STORAGE_KEY =
+      "machinauPostManagement";
+
+    function prefillLookupFormFromSessionStorage() {
+      let rawStoredValue = null;
+
+      try {
+        rawStoredValue =
+          sessionStorage.getItem(
+            POST_MANAGEMENT_STORAGE_KEY
+          );
+      } catch (error) {
+        return;
+      }
+
+      if (!rawStoredValue) {
+        return;
+      }
+
+      let storedPostManagement = null;
+
+      try {
+        storedPostManagement =
+          JSON.parse(
+            rawStoredValue
+          );
+      } catch (error) {
+        return;
+      }
+
+      if (
+        !storedPostManagement ||
+        typeof storedPostManagement !== "object"
+      ) {
+        return;
+      }
+
+      const storedPublicationNumber =
+        normalizePublicationNumber(
+          storedPostManagement.publicationNumber
+        );
+
+      const storedEndCode =
+        normalizeEndCode(
+          storedPostManagement.endCode
+        );
+
+      if (
+        !/^\d{8}$/.test(
+          storedPublicationNumber
+        ) ||
+        !/^[A-Z0-9]{12}$/.test(
+          storedEndCode
+        )
+      ) {
+        return;
+      }
+
+      publicationNumberInput.value =
+        storedPublicationNumber;
+
+      endCodeInput.value =
+        storedEndCode;
+    }
+
+
+    prefillLookupFormFromSessionStorage();
   </script>
 
 </body>
