@@ -198,8 +198,12 @@ export default async function handler(
       documentSnapshot.data() ||
       {};
 
+    // 常設店舗広告(isPermanentAd:true)はpostTypeを設定しない設計のため、
+    // 通常のpostType==="admin"チェックに加えてこちらも許可する
+    // (api/admin-submission-update.jsの許可チェックと同じパターン)。
     if (
-      data.postType !== "admin"
+      data.postType !== "admin" &&
+      data.isPermanentAd !== true
     ) {
       return response.status(403).json({
         success: false,
@@ -269,7 +273,10 @@ export default async function handler(
           data.sourceLabel || "",
 
         postType:
-          data.postType || ""
+          data.postType || "",
+
+        isPermanentAd:
+          data.isPermanentAd === true
       }
     });
   } catch (error) {

@@ -126,8 +126,12 @@ const MAX_IMAGE_COUNT = 5;
 const MAX_EXPIRES_AT_DAYS = 90;
 
 
+// isExistingPermanentAdは、編集対象のドキュメントが既にisPermanentAd:true
+// である場合にのみtrueを渡す(リクエストボディ側からこの値を切り替えることは
+// できない設計。通常投稿↔常設広告のトグル機能は今回の実装範囲外)。
 function validatePostFields(
-  requestBody
+  requestBody,
+  isExistingPermanentAd
 ) {
   const title =
     String(
@@ -331,60 +335,67 @@ function validatePostFields(
     }
   );
 
-  const expiresAtRawValue =
-    requestBody.expiresAt;
+  // 常設店舗広告(isExistingPermanentAd:true)はexpiresAtを持たないため、
+  // このブロック自体を丸ごとスキップする(通常のadmin投稿の編集挙動は
+  // 一切変更しない)。
+  let expiresAtDate = null;
 
-  if (
-    !expiresAtRawValue ||
-    typeof expiresAtRawValue !== "string"
-  ) {
-    throw new Error(
-      "掲載終了日時を指定してください。"
-    );
-  }
+  if (!isExistingPermanentAd) {
+    const expiresAtRawValue =
+      requestBody.expiresAt;
 
-  const expiresAtDate =
-    new Date(
-      expiresAtRawValue
-    );
+    if (
+      !expiresAtRawValue ||
+      typeof expiresAtRawValue !== "string"
+    ) {
+      throw new Error(
+        "掲載終了日時を指定してください。"
+      );
+    }
 
-  if (
-    Number.isNaN(
-      expiresAtDate.getTime()
-    )
-  ) {
-    throw new Error(
-      "掲載終了日時を正しく指定してください。"
-    );
-  }
+    expiresAtDate =
+      new Date(
+        expiresAtRawValue
+      );
 
-  const nowMilliseconds =
-    Date.now();
+    if (
+      Number.isNaN(
+        expiresAtDate.getTime()
+      )
+    ) {
+      throw new Error(
+        "掲載終了日時を正しく指定してください。"
+      );
+    }
 
-  if (
-    expiresAtDate.getTime() <=
-    nowMilliseconds
-  ) {
-    throw new Error(
-      "掲載終了日時は現在より未来の日時を指定してください。"
-    );
-  }
+    const nowMilliseconds =
+      Date.now();
 
-  const maxExpiresAtMilliseconds =
-    nowMilliseconds +
-    MAX_EXPIRES_AT_DAYS *
-      24 *
-      60 *
-      60 *
-      1000;
+    if (
+      expiresAtDate.getTime() <=
+      nowMilliseconds
+    ) {
+      throw new Error(
+        "掲載終了日時は現在より未来の日時を指定してください。"
+      );
+    }
 
-  if (
-    expiresAtDate.getTime() >
-    maxExpiresAtMilliseconds
-  ) {
-    throw new Error(
-      "掲載終了日時は90日以内で指定してください。"
-    );
+    const maxExpiresAtMilliseconds =
+      nowMilliseconds +
+      MAX_EXPIRES_AT_DAYS *
+        24 *
+        60 *
+        60 *
+        1000;
+
+    if (
+      expiresAtDate.getTime() >
+      maxExpiresAtMilliseconds
+    ) {
+      throw new Error(
+        "掲載終了日時は90日以内で指定してください。"
+      );
+    }
   }
 
   return {
@@ -535,8 +546,14 @@ export default async function handler(
       documentSnapshot.data() ||
       {};
 
+    // 常設店舗広告(isPermanentAd:true)はpostTypeを設定しない設計のため、
+    // 通常のpostType==="admin"チェックに加えてこちらも許可する。
+    const isExistingPermanentAd =
+      currentData.isPermanentAd === true;
+
     if (
-      currentData.postType !== "admin"
+      currentData.postType !== "admin" &&
+      !isExistingPermanentAd
     ) {
       return response.status(403).json({
         success: false,
@@ -550,7 +567,8 @@ export default async function handler(
     try {
       postFields =
         validatePostFields(
-          requestBody
+          requestBody,
+          isExistingPermanentAd
         );
     } catch (validationError) {
       return response.status(400).json({
@@ -560,7 +578,7 @@ export default async function handler(
       });
     }
 
-    await documentReference.update({
+    const updateData = {
       title:
         postFields.title,
 
@@ -588,14 +606,20 @@ export default async function handler(
       area:
         postFields.area,
 
-      expiresAt:
-        Timestamp.fromDate(
-          postFields.expiresAtDate
-        ),
-
       updatedAt:
         FieldValue.serverTimestamp()
-    });
+    };
+
+    if (!isExistingPermanentAd) {
+      updateData.expiresAt =
+        Timestamp.fromDate(
+          postFields.expiresAtDate
+        );
+    }
+
+    await documentReference.update(
+      updateData
+    );
 
     return response.status(200).json({
       success: true,

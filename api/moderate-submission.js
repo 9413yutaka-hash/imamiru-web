@@ -1419,6 +1419,17 @@ function serializeSubmissionForPublicList(
 // status=="approved" && expiresAt>nowクエリ)と全く同じ条件をAdmin SDK側でも
 // 維持する。エラー時はこの関数内で完結させ、呼び出し元のCache-Control
 // no-storeデフォルトをそのまま活かす(成功時のみ後段でCache-Controlを上書き)。
+//
+// 運営管理型・常設店舗広告(isPermanentAd:true、expiresAtを保存しない)は、
+// Firestoreの仕様上、上記の不等号クエリ(expiresAt>now)の対象に含まれない
+// (対象フィールドが存在しない文書は不等号クエリの結果から除外される)。
+// そのため別クエリ(status=="approved" && isPermanentAd==true、等価条件のみ
+// のため新規の複合indexは不要)で取得し、結果をコード側でマージする。
+// 1クエリのOR条件(Filter.or())はSDK上は利用可能だが、不等号を含む分岐と
+// 組み合わせた場合に実際のProduction環境の既存indexだけで動作するかを
+// 確認する手段がなかったため、安全側としてこの2クエリ方式を採用する。
+// 常設広告クエリが失敗しても、既存の期限内投稿の取得・表示には影響しない
+// (catchして空扱いにするのみ)。
 async function handlePublicSubmissionsListRequest(
   request,
   response
@@ -1432,7 +1443,7 @@ async function handlePublicSubmissionsListRequest(
         app
       );
 
-    const querySnapshot =
+    const unexpiredQuerySnapshot =
       await database
         .collection(
           "submissions"
@@ -1449,8 +1460,60 @@ async function handlePublicSubmissionsListRequest(
         )
         .get();
 
+    let permanentAdQuerySnapshot =
+      null;
+
+    try {
+      permanentAdQuerySnapshot =
+        await database
+          .collection(
+            "submissions"
+          )
+          .where(
+            "status",
+            "==",
+            "approved"
+          )
+          .where(
+            "isPermanentAd",
+            "==",
+            true
+          )
+          .get();
+    } catch (permanentAdQueryError) {
+      console.error(
+        "常設広告一覧の取得に失敗しました（既存の期限内投稿の表示には影響しません）：",
+        permanentAdQueryError
+      );
+    }
+
+    const submissionDocumentsById =
+      new Map();
+
+    unexpiredQuerySnapshot.docs.forEach(
+      function(documentSnapshot) {
+        submissionDocumentsById.set(
+          documentSnapshot.id,
+          documentSnapshot
+        );
+      }
+    );
+
+    if (permanentAdQuerySnapshot) {
+      permanentAdQuerySnapshot.docs.forEach(
+        function(documentSnapshot) {
+          submissionDocumentsById.set(
+            documentSnapshot.id,
+            documentSnapshot
+          );
+        }
+      );
+    }
+
     const submissions =
-      querySnapshot.docs.map(
+      Array.from(
+        submissionDocumentsById.values()
+      ).map(
         serializeSubmissionForPublicList
       );
 

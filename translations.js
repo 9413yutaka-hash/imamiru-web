@@ -779,6 +779,11 @@ const MACHINAU_TRANSLATIONS = {
     en: "Shared by a Machinau user"
   },
 
+  shop_permanent_ad_badge: {
+    ja: "店舗広告",
+    en: "Shop advertisement"
+  },
+
   report_toggle_button: {
     ja: "🚩 気になる情報を報告",
     en: "🚩 Report this info"

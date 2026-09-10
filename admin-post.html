@@ -836,6 +836,26 @@
 
         <div class="form-group">
 
+          <label class="form-label" for="isPermanentAd">
+            <input
+              id="isPermanentAd"
+              name="isPermanentAd"
+              type="checkbox"
+            >
+            常設店舗広告として掲載
+          </label>
+
+          <p class="form-help">
+            ONにすると掲載終了日時の指定が不要になり、この画面から終了操作をするまで掲載され続けます。新規投稿時のみ選択できます(編集時は変更できません)。
+          </p>
+
+        </div>
+
+        <div
+          class="form-group"
+          id="expiresAtFormGroup"
+        >
+
           <label
             class="form-label"
             for="expiresAt"
@@ -1135,6 +1155,8 @@
     const titleInput = document.getElementById("title");
     const categoryInput = document.getElementById("category");
     const contentInput = document.getElementById("content");
+    const isPermanentAdCheckbox = document.getElementById("isPermanentAd");
+    const expiresAtFormGroup = document.getElementById("expiresAtFormGroup");
     const expiresAtInput = document.getElementById("expiresAt");
     const addressInput = document.getElementById("address");
     const websiteUrlInput = document.getElementById("websiteUrl");
@@ -1205,6 +1227,7 @@
       titleInput.disabled = submitting;
       categoryInput.disabled = submitting;
       contentInput.disabled = submitting;
+      isPermanentAdCheckbox.disabled = submitting || isEditMode;
       expiresAtInput.disabled = submitting;
       addressInput.disabled = submitting;
       websiteUrlInput.disabled = submitting;
@@ -1643,6 +1666,16 @@
       expiresAtInput.max = formatDatetimeLocalValue(getMaxExpiresAtDate());
     }
 
+    // 常設店舗広告(isPermanentAdチェックON)のときは掲載終了日時欄そのものを
+    // 隠し、必須属性も外す(送信時にexpiresAtを一切含めないため)。OFFの
+    // ときの挙動は従来と完全に同じ。
+    function updateExpiresAtVisibility() {
+      const isPermanentAd = isPermanentAdCheckbox.checked;
+
+      expiresAtFormGroup.style.display = isPermanentAd ? "none" : "";
+      expiresAtInput.required = !isPermanentAd;
+    }
+
     function validateForm() {
       const validationErrors = [];
 
@@ -1667,31 +1700,33 @@
         });
       }
 
-      const expiresAtValue = expiresAtInput.value;
+      if (!isPermanentAdCheckbox.checked) {
+        const expiresAtValue = expiresAtInput.value;
 
-      if (expiresAtValue === "") {
-        validationErrors.push({
-          message: "掲載終了日時を指定してください。",
-          element: expiresAtInput
-        });
-      } else {
-        const expiresAtDate = new Date(expiresAtValue);
+        if (expiresAtValue === "") {
+          validationErrors.push({
+            message: "掲載終了日時を指定してください。",
+            element: expiresAtInput
+          });
+        } else {
+          const expiresAtDate = new Date(expiresAtValue);
 
-        if (Number.isNaN(expiresAtDate.getTime())) {
-          validationErrors.push({
-            message: "掲載終了日時を正しく指定してください。",
-            element: expiresAtInput
-          });
-        } else if (expiresAtDate.getTime() <= Date.now()) {
-          validationErrors.push({
-            message: "掲載終了日時は現在より未来の日時を指定してください。",
-            element: expiresAtInput
-          });
-        } else if (expiresAtDate.getTime() > getMaxExpiresAtDate().getTime()) {
-          validationErrors.push({
-            message: "掲載終了日時は90日以内で指定してください。",
-            element: expiresAtInput
-          });
+          if (Number.isNaN(expiresAtDate.getTime())) {
+            validationErrors.push({
+              message: "掲載終了日時を正しく指定してください。",
+              element: expiresAtInput
+            });
+          } else if (expiresAtDate.getTime() <= Date.now()) {
+            validationErrors.push({
+              message: "掲載終了日時は現在より未来の日時を指定してください。",
+              element: expiresAtInput
+            });
+          } else if (expiresAtDate.getTime() > getMaxExpiresAtDate().getTime()) {
+            validationErrors.push({
+              message: "掲載終了日時は90日以内で指定してください。",
+              element: expiresAtInput
+            });
+          }
         }
       }
 
@@ -1760,8 +1795,6 @@
               ? existingImageUrls
               : [];
 
-        const expiresAtDate = new Date(expiresAtInput.value);
-
         const currentUser = firebase.auth().currentUser;
 
         if (!currentUser) {
@@ -1776,7 +1809,6 @@
           title: titleInput.value.trim(),
           category: categoryInput.value,
           content: contentInput.value.trim(),
-          expiresAt: expiresAtDate.toISOString(),
           address: addressInput.value.trim(),
           latitude: capturedLatitude,
           longitude: capturedLongitude,
@@ -1784,6 +1816,20 @@
           websiteUrl: websiteUrlInput.value.trim(),
           area: areaInput.value.trim()
         };
+
+        // 常設店舗広告(isPermanentAdチェックON)はexpiresAtを送らない
+        // (新規投稿時のみisPermanentAd:trueを送る。編集時はサーバー側が
+        // 既存ドキュメントのisPermanentAdだけを見て判断するため送らない。
+        // 通常投稿↔常設広告のトグルは編集時には提供しない)。
+        if (isPermanentAdCheckbox.checked) {
+          if (!isEditMode) {
+            payload.isPermanentAd = true;
+          }
+        } else {
+          const expiresAtDate = new Date(expiresAtInput.value);
+
+          payload.expiresAt = expiresAtDate.toISOString();
+        }
 
         if (isEditMode) {
           payload.documentId = editDocumentId;
@@ -1872,6 +1918,7 @@
       locationMessageBox.textContent = "";
 
       refreshExpiresAtBounds();
+      updateExpiresAtVisibility();
       renderImagePreviews();
       updateCharacterCounts();
       clearMessage();
@@ -1944,6 +1991,13 @@
           expiresAtInput.value = formatDatetimeLocalValue(expiresAtDate);
         }
       }
+
+      // 常設店舗広告(isPermanentAd:true)の編集時は、チェック状態を実データに
+      // 合わせて表示するだけで、変更はできないようにする(通常投稿↔常設広告の
+      // トグル機能は編集時には提供しない)。
+      isPermanentAdCheckbox.checked = submission.isPermanentAd === true;
+      isPermanentAdCheckbox.disabled = true;
+      updateExpiresAtVisibility();
 
       existingImageUrls = Array.isArray(submission.imageUrls)
         ? submission.imageUrls
@@ -2097,6 +2151,8 @@
       addSelectedFiles(event.dataTransfer.files);
     });
 
+    isPermanentAdCheckbox.addEventListener("change", updateExpiresAtVisibility);
+
     adminPostForm.addEventListener("submit", submitAdminPost);
 
     newPostButton.addEventListener("click", function() {
@@ -2104,6 +2160,7 @@
     });
 
     refreshExpiresAtBounds();
+    updateExpiresAtVisibility();
     updateCharacterCounts();
 
     firebase.auth().onAuthStateChanged(function(user) {

@@ -1676,7 +1676,10 @@ function convertSubmissionToShop(
     sourceType:
       typeof data.sourceType === "string"
         ? data.sourceType.trim()
-        : ""
+        : "",
+
+    isPermanentAd:
+      data.isPermanentAd === true
   };
 }
 
@@ -2661,7 +2664,18 @@ function renderShops() {
                 ${
                   isAdminPost
                     ? ""
-                    : `
+                    : shop.isPermanentAd
+                      ? `
+                        <div class="user-post-badge-row">
+                          <span class="user-post-badge">
+                            ${getMachinauTranslation(
+                              "shop_permanent_ad_badge",
+                              getCurrentMachinauLanguage()
+                            )}
+                          </span>
+                        </div>
+                      `
+                      : `
                       <div class="user-post-badge-row">
                         <span class="user-post-badge">
                           ${getMachinauTranslation(
@@ -3996,6 +4010,17 @@ function openShopModal(
       "<br><br>🌺 " +
       escapeHtml(
         selectedShop.sourceLabel
+      );
+  } else if (
+    selectedShop.isPermanentAd
+  ) {
+    modalText +=
+      "<br><br>" +
+      escapeHtml(
+        getMachinauTranslation(
+          "shop_permanent_ad_badge",
+          getCurrentMachinauLanguage()
+        )
       );
   } else if (
     !isAdminPost

@@ -124,6 +124,13 @@ const ALLOWED_AUTHOR_TYPES = [
   "ai"
 ];
 
+// 運営管理型・常設店舗広告(isPermanentAd:true)専用のauthorType識別値。
+// 既存の"admin"/"ai"とは異なる値にすることで、🔥(admin+admin)・
+// ⚡(admin+ai)のいずれの選定条件にも一致させない(postTypeを未設定のまま
+// にする設計と合わせて、既存の選定ロジックを一切変更せずに除外できる)。
+const PERMANENT_AD_AUTHOR_TYPE =
+  "shopAd";
+
 // aiSourcesコレクションのsourceType(ai-sources.htmlのALLOWED_SOURCE_TYPESと
 // 同一の6値)をそのまま再利用する。新しい分類値は作らない。
 const ALLOWED_SOURCE_TYPES = [
@@ -603,62 +610,77 @@ function validatePostFields(
     }
   );
 
-  const expiresAtRawValue =
-    requestBody.expiresAt;
+  // 運営管理型・常設店舗広告(isPermanentAd:true)は、90日上限の自動終了日時
+  // 指定を持たない(運営が任意のタイミングで手動終了する)ため、この場合だけ
+  // 掲載終了日時の必須チェック・90日上限チェックを丸ごとスキップする。
+  // isPermanentAdが指定されない(false/未指定)既存の通常運営投稿の挙動は
+  // 一切変更しない。
+  const isPermanentAd =
+    requestBody.isPermanentAd === true;
 
-  if (
-    !expiresAtRawValue ||
-    typeof expiresAtRawValue !== "string"
-  ) {
-    throw new Error(
-      "掲載終了日時を指定してください。"
-    );
+  let expiresAtDate = null;
+
+  if (!isPermanentAd) {
+    const expiresAtRawValue =
+      requestBody.expiresAt;
+
+    if (
+      !expiresAtRawValue ||
+      typeof expiresAtRawValue !== "string"
+    ) {
+      throw new Error(
+        "掲載終了日時を指定してください。"
+      );
+    }
+
+    expiresAtDate =
+      new Date(
+        expiresAtRawValue
+      );
+
+    if (
+      Number.isNaN(
+        expiresAtDate.getTime()
+      )
+    ) {
+      throw new Error(
+        "掲載終了日時を正しく指定してください。"
+      );
+    }
+
+    const nowMilliseconds =
+      Date.now();
+
+    if (
+      expiresAtDate.getTime() <=
+      nowMilliseconds
+    ) {
+      throw new Error(
+        "掲載終了日時は現在より未来の日時を指定してください。"
+      );
+    }
+
+    const maxExpiresAtMilliseconds =
+      nowMilliseconds +
+      MAX_EXPIRES_AT_DAYS *
+        24 *
+        60 *
+        60 *
+        1000;
+
+    if (
+      expiresAtDate.getTime() >
+      maxExpiresAtMilliseconds
+    ) {
+      throw new Error(
+        "掲載終了日時は90日以内で指定してください。"
+      );
+    }
   }
 
-  const expiresAtDate =
-    new Date(
-      expiresAtRawValue
-    );
-
-  if (
-    Number.isNaN(
-      expiresAtDate.getTime()
-    )
-  ) {
-    throw new Error(
-      "掲載終了日時を正しく指定してください。"
-    );
-  }
-
-  const nowMilliseconds =
-    Date.now();
-
-  if (
-    expiresAtDate.getTime() <=
-    nowMilliseconds
-  ) {
-    throw new Error(
-      "掲載終了日時は現在より未来の日時を指定してください。"
-    );
-  }
-
-  const maxExpiresAtMilliseconds =
-    nowMilliseconds +
-    MAX_EXPIRES_AT_DAYS *
-      24 *
-      60 *
-      60 *
-      1000;
-
-  if (
-    expiresAtDate.getTime() >
-    maxExpiresAtMilliseconds
-  ) {
-    throw new Error(
-      "掲載終了日時は90日以内で指定してください。"
-    );
-  }
-
+  // 常設店舗広告のauthorTypeはクライアント入力に依存させず、サーバー側で
+  // 固定値(PERMANENT_AD_AUTHOR_TYPE)にする(ALLOWED_AUTHOR_TYPESのチェックも
+  // 経由しない、既存の"admin"/"ai"とは独立した専用の識別値のため)。
   const authorTypeRaw =
     String(
       requestBody.authorType || ""
@@ -666,11 +688,14 @@ function validatePostFields(
       .trim();
 
   const authorType =
-    authorTypeRaw === ""
-      ? "admin"
-      : authorTypeRaw;
+    isPermanentAd
+      ? PERMANENT_AD_AUTHOR_TYPE
+      : authorTypeRaw === ""
+        ? "admin"
+        : authorTypeRaw;
 
   if (
+    !isPermanentAd &&
     !ALLOWED_AUTHOR_TYPES.includes(
       authorType
     )
@@ -708,6 +733,7 @@ function validatePostFields(
     longitude: longitude,
     imageUrls: imageUrls,
     expiresAtDate: expiresAtDate,
+    isPermanentAd: isPermanentAd,
     authorType: authorType,
     sourceType: sourceType,
     sourceId:
@@ -862,16 +888,8 @@ export default async function handler(
       area:
         postFields.area,
 
-      expiresAt:
-        Timestamp.fromDate(
-          postFields.expiresAtDate
-        ),
-
       status:
         "approved",
-
-      postType:
-        "admin",
 
       authorType:
         postFields.authorType,
@@ -891,6 +909,25 @@ export default async function handler(
     if (postFields.sourceType !== "") {
       submissionData.sourceType =
         postFields.sourceType;
+    }
+
+    if (postFields.isPermanentAd) {
+      // 常設店舗広告：postTypeは設定しない(未設定のまま=読み取り時に"shop"
+      // 扱いとなり、店舗一覧・✨の一般枠には表示され、🔥・⚡・✨の
+      // official_today枠(いずれもpostType==="admin"が条件)には一致しない)。
+      // expiresAtも保存しない(Firestoreの不等号クエリの仕様により、
+      // フィールド自体が無い文書は対象外となるため、既存の期限管理クエリや
+      // api/expire.jsの自動終了クエリの対象に一切含まれない)。
+      submissionData.isPermanentAd =
+        true;
+    } else {
+      submissionData.postType =
+        "admin";
+
+      submissionData.expiresAt =
+        Timestamp.fromDate(
+          postFields.expiresAtDate
+        );
     }
 
     const documentReference =
