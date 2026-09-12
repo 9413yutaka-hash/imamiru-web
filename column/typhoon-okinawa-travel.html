@@ -306,6 +306,145 @@
       color: var(--blue);
       text-decoration: none;
     }
+
+    /* Ver1.8 Phase2(マチナウ読み物コメント機能MVP)｜既存の.editors-note・
+       .cta-sectionと同じ「上部の罫線＋控えめな配色」で区切り、新しい配色や
+       巨大カードは追加しない。 */
+    .comment-section {
+      margin: 34px 0 0;
+      padding-top: 22px;
+      border-top: 1px solid var(--border);
+    }
+
+    .comment-section h2 {
+      margin: 0 0 10px;
+    }
+
+    .comment-form {
+      display: grid;
+      gap: 10px;
+      margin: 14px 0 0;
+    }
+
+    .comment-form label {
+      display: block;
+      margin: 0 0 5px;
+      color: var(--navy);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .comment-form input,
+    .comment-form textarea {
+      width: 100%;
+      padding: 11px 13px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      outline: none;
+      color: var(--text);
+      background: #fbfdfe;
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    .comment-form input:focus,
+    .comment-form textarea:focus {
+      border-color: var(--cyan);
+      background: var(--white);
+    }
+
+    .comment-form textarea {
+      min-height: 90px;
+      resize: vertical;
+    }
+
+    /* ハニーポット欄。人間の利用者には見えない位置へ飛ばすだけで、
+       display:noneではなくフォーカス可能な形にしておく(単純なdisplay:none
+       検出を回避する簡易bot対策のため)。 */
+    .comment-honeypot-field {
+      position: absolute;
+      left: -9999px;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+    }
+
+    .comment-submit-button {
+      justify-self: start;
+      min-height: 44px;
+      padding: 11px 22px;
+      border: none;
+      border-radius: 999px;
+      color: var(--white);
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      font-size: 13px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .comment-submit-button:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+    .comment-status-message {
+      margin: 2px 0 0;
+      font-size: 12px;
+      line-height: 1.7;
+      min-height: 1em;
+    }
+
+    .comment-status-message.success {
+      color: #146e4a;
+    }
+
+    .comment-status-message.error {
+      color: #a93d3d;
+    }
+
+    .comment-list {
+      display: grid;
+      gap: 12px;
+      margin: 20px 0 0;
+    }
+
+    .comment-item {
+      padding: 13px 14px;
+      border-radius: 13px;
+      background: #f4f8fa;
+    }
+
+    .comment-item-nickname {
+      margin: 0;
+      color: var(--navy);
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .comment-item-body {
+      margin: 6px 0 0;
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.8;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .comment-item-time {
+      margin: 6px 0 0;
+      color: var(--subtext);
+      font-size: 10px;
+    }
+
+    .comment-empty-state {
+      margin: 16px 0 0;
+      padding: 16px;
+      border: 1px dashed var(--border);
+      border-radius: 13px;
+      color: var(--subtext);
+      font-size: 12px;
+      text-align: center;
+    }
   </style>
 </head>
 <body>
@@ -384,10 +523,252 @@
         マチナウ運営
       </p>
 
+      <div class="comment-section">
+        <h2>この記事にコメントする</h2>
+
+        <form id="commentForm" class="comment-form" novalidate>
+
+          <div>
+            <label for="commentNicknameInput">ニックネーム</label>
+            <input
+              id="commentNicknameInput"
+              type="text"
+              maxlength="20"
+              placeholder="例：旅好き"
+              autocomplete="off"
+            >
+          </div>
+
+          <div>
+            <label for="commentTextInput">コメント</label>
+            <textarea
+              id="commentTextInput"
+              maxlength="500"
+              placeholder="この記事についてのご感想や、実際に体験したことなどをどうぞ"
+            ></textarea>
+          </div>
+
+          <!-- ハニーポット欄。人間には見えない(CSSで画面外へ配置)ため、
+               通常の利用者が入力することはない。 -->
+          <div class="comment-honeypot-field" aria-hidden="true">
+            <label for="commentContactField">ウェブサイト</label>
+            <input
+              id="commentContactField"
+              type="text"
+              tabindex="-1"
+              autocomplete="off"
+            >
+          </div>
+
+          <button
+            id="commentSubmitButton"
+            class="comment-submit-button"
+            type="submit"
+          >
+            コメントを投稿する
+          </button>
+
+          <p
+            id="commentStatusMessage"
+            class="comment-status-message"
+            role="status"
+            aria-live="polite"
+          ></p>
+
+        </form>
+
+        <div id="commentList" class="comment-list">
+          <div class="comment-empty-state">
+            コメントを読み込んでいます…
+          </div>
+        </div>
+      </div>
+
       <a class="back-link" href="../">← マチナウTOPへ戻る</a>
 
     </div>
   </main>
+
+  <script>
+    // Ver1.8 Phase2(マチナウ読み物コメント機能MVP)｜新しいVercel Functionは
+    // 追加せず、既存の/api/moderate-submission.js(mode追加のみ)を再利用する。
+    // このページはFirebase SDKを一切読み込まない(コメントの読み書きは常に
+    // このFunction経由のAdmin SDKで行うため、クライアント側にFirestore
+    // アクセス手段を持たせる必要がない)。
+    const ARTICLE_SLUG =
+      "typhoon-okinawa-travel";
+
+    const commentForm =
+      document.getElementById("commentForm");
+
+    const commentNicknameInput =
+      document.getElementById("commentNicknameInput");
+
+    const commentTextInput =
+      document.getElementById("commentTextInput");
+
+    const commentContactField =
+      document.getElementById("commentContactField");
+
+    const commentSubmitButton =
+      document.getElementById("commentSubmitButton");
+
+    const commentStatusMessage =
+      document.getElementById("commentStatusMessage");
+
+    const commentList =
+      document.getElementById("commentList");
+
+    function escapeCommentHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function showCommentStatus(message, type) {
+      commentStatusMessage.textContent = message;
+      commentStatusMessage.className =
+        "comment-status-message" + (type ? " " + type : "");
+    }
+
+    function formatCommentTime(isoString) {
+      if (typeof isoString !== "string" || isoString === "") {
+        return "";
+      }
+
+      const parsedDate = new Date(isoString);
+
+      if (Number.isNaN(parsedDate.getTime())) {
+        return "";
+      }
+
+      return parsedDate.toLocaleString("ja-JP");
+    }
+
+    function renderCommentItemHtml(comment) {
+      const timeText = formatCommentTime(comment.createdAt);
+
+      return (
+        '<div class="comment-item">' +
+          '<p class="comment-item-nickname">' +
+            escapeCommentHtml(comment.nickname) +
+          '</p>' +
+          '<p class="comment-item-body">' +
+            escapeCommentHtml(comment.comment) +
+          '</p>' +
+          (
+            timeText !== ""
+              ? '<p class="comment-item-time">' + escapeCommentHtml(timeText) + '</p>'
+              : ""
+          ) +
+        '</div>'
+      );
+    }
+
+    function renderComments(comments) {
+      if (!Array.isArray(comments) || comments.length === 0) {
+        commentList.innerHTML =
+          '<div class="comment-empty-state">まだコメントはありません。最初のコメントを投稿してみませんか？</div>';
+        return;
+      }
+
+      commentList.innerHTML = comments.map(renderCommentItemHtml).join("");
+    }
+
+    async function loadComments() {
+      try {
+        const response = await fetch(
+          "/api/moderate-submission?mode=articleComments&articleSlug=" +
+            encodeURIComponent(ARTICLE_SLUG)
+        );
+
+        const responseData = await response.json();
+
+        if (!response.ok || !responseData || responseData.success !== true) {
+          throw new Error("コメントを取得できませんでした。");
+        }
+
+        renderComments(responseData.comments);
+      } catch (error) {
+        console.error("コメント一覧の取得に失敗しました：", error);
+        commentList.innerHTML =
+          '<div class="comment-empty-state">コメントを読み込めませんでした。時間をおいて再度お試しください。</div>';
+      }
+    }
+
+    commentForm.addEventListener("submit", async function(event) {
+      event.preventDefault();
+
+      showCommentStatus("", "");
+
+      commentSubmitButton.disabled = true;
+      commentSubmitButton.textContent = "投稿しています…";
+
+      try {
+        const response = await fetch("/api/moderate-submission", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            mode: "postArticleComment",
+            articleSlug: ARTICLE_SLUG,
+            nickname: commentNicknameInput.value,
+            comment: commentTextInput.value,
+            contactField: commentContactField.value
+          })
+        });
+
+        let responseData = null;
+
+        try {
+          responseData = await response.json();
+        } catch (jsonError) {
+          throw new Error("応答を読み取れませんでした。");
+        }
+
+        if (!responseData || responseData.success !== true) {
+          showCommentStatus(
+            (responseData && responseData.message) ||
+              "コメントを投稿できませんでした。",
+            "error"
+          );
+          return;
+        }
+
+        if (responseData.comment) {
+          const existingEmptyState =
+            commentList.querySelector(".comment-empty-state");
+
+          if (existingEmptyState) {
+            commentList.innerHTML = "";
+          }
+
+          commentList.insertAdjacentHTML(
+            "afterbegin",
+            renderCommentItemHtml(responseData.comment)
+          );
+        }
+
+        commentTextInput.value = "";
+        showCommentStatus("コメントを投稿しました。", "success");
+      } catch (error) {
+        console.error("コメント投稿に失敗しました：", error);
+        showCommentStatus(
+          "コメントの投稿に失敗しました。時間をおいて、もう一度お試しください。",
+          "error"
+        );
+      } finally {
+        commentSubmitButton.disabled = false;
+        commentSubmitButton.textContent = "コメントを投稿する";
+      }
+    });
+
+    loadComments();
+  </script>
 
 </body>
 </html>

@@ -287,6 +287,50 @@ const AI_CONCIERGE_REASON_MAX_LENGTH =
   200;
 
 
+// Ver1.8 Phase2(マチナウ読み物コメント機能MVP)｜新しいVercel Functionは
+// 追加せず、既存のこのFunction(api/moderate-submission.js)へmode追加のみで
+// 実装する(Functions 12/12を維持)。新規Firestoreコレクションは
+// クライアントから直接読み書きさせず、常にAdmin SDK経由(このFunction経由)
+// のみでアクセスする設計とし、Firestore Security Rulesの変更を一切
+// 不要にする(既存のsubmissions/aiCollectedArticles等と同じ、コードだけで
+// 完結する安全設計)。対象記事は事前登録制のホワイトリストとし、
+// 存在しないarticleSlugでの無差別なドキュメント量産を防ぐ。将来コラムを
+// 追加する際は、このリストへの追記が必要(自動検出は行わない)。
+const ARTICLE_COMMENTS_COLLECTION =
+  "articleComments";
+
+const ALLOWED_ARTICLE_COMMENT_SLUGS =
+  [
+    "typhoon-okinawa-travel"
+  ];
+
+const COMMENT_NICKNAME_MAX_LENGTH =
+  20;
+
+const COMMENT_TEXT_MAX_LENGTH =
+  500;
+
+const COMMENT_FALLBACK_NICKNAME =
+  "名無しさん";
+
+const COMMENTS_LIST_MAX_COUNT =
+  200;
+
+// 個人情報(生IP)を保存しない。ハッシュ化した値だけをスパム対策の
+// クールダウン判定に使い、逆算で元のIPへ戻せないようにする。
+const COMMENT_RATE_LIMITS_COLLECTION =
+  "commentRateLimits";
+
+const COMMENT_RATE_LIMIT_COOLDOWN_MILLISECONDS =
+  30 * 1000;
+
+const COMMENTS_LIST_SHARED_CACHE_MAX_AGE_SECONDS =
+  15;
+
+const COMMENTS_LIST_STALE_WHILE_REVALIDATE_SECONDS =
+  30;
+
+
 const CATEGORY_LABELS = {
   "harassment":
     "嫌がらせ的な内容",
@@ -1546,6 +1590,476 @@ async function handlePublicSubmissionsListRequest(
 }
 
 
+function sanitizeCommentNickname(
+  rawValue
+) {
+  const value =
+    String(
+      rawValue || ""
+    )
+      .trim()
+      .slice(
+        0,
+        COMMENT_NICKNAME_MAX_LENGTH
+      );
+
+  return value === ""
+    ? COMMENT_FALLBACK_NICKNAME
+    : value;
+}
+
+
+// クライアントのIPアドレスは保存しない。スパム対策のクールダウン判定
+// キーとしてのみハッシュ値を使い、生IPはFirestoreへ一切書き込まない。
+// x-forwarded-forが取得できない場合は空文字を返し、呼び出し側は
+// レート制限自体をスキップする(安全側はモデレーションが担うため、
+// IP不明を理由に投稿自体を止めることはしない)。
+function hashClientIpAddress(
+  request
+) {
+  const forwardedForHeader =
+    request.headers &&
+    request.headers["x-forwarded-for"];
+
+  const rawIp =
+    typeof forwardedForHeader === "string"
+      ? forwardedForHeader
+          .split(",")[0]
+          .trim()
+      : "";
+
+  if (rawIp === "") {
+    return "";
+  }
+
+  return createHash("sha256")
+    .update(
+      rawIp,
+      "utf8"
+    )
+    .digest("hex");
+}
+
+
+// claimSourceForLocationCollection()(api/admin-source-collect.js)と同じ
+// Firestore transactionによるクールダウン判定の考え方を、コメント投稿の
+// 簡易スパム対策に転用したもの。ipHashが空(IP不明)の場合は判定自体を
+// スキップしtrue(投稿許可)を返す。
+async function claimCommentRateLimit(
+  database,
+  ipHash
+) {
+  if (ipHash === "") {
+    return true;
+  }
+
+  const rateLimitRef =
+    database
+      .collection(
+        COMMENT_RATE_LIMITS_COLLECTION
+      )
+      .doc(
+        ipHash
+      );
+
+  return database.runTransaction(
+    async function(transaction) {
+      const snapshot =
+        await transaction.get(
+          rateLimitRef
+        );
+
+      const data =
+        snapshot.exists
+          ? snapshot.data() || {}
+          : {};
+
+      const lastSubmittedAtMillis =
+        data.lastSubmittedAt &&
+        typeof data.lastSubmittedAt.toMillis === "function"
+          ? data.lastSubmittedAt.toMillis()
+          : null;
+
+      const nowMilliseconds =
+        Date.now();
+
+      if (
+        lastSubmittedAtMillis !== null &&
+        (
+          nowMilliseconds -
+          lastSubmittedAtMillis
+        ) < COMMENT_RATE_LIMIT_COOLDOWN_MILLISECONDS
+      ) {
+        return false;
+      }
+
+      transaction.set(
+        rateLimitRef,
+        {
+          lastSubmittedAt:
+            FieldValue.serverTimestamp()
+        }
+      );
+
+      return true;
+    }
+  );
+}
+
+
+// マチナウ読み物(コラム)の記事下コメント投稿。新しいVercel Functionは
+// 追加せず、既存のこのFunctionへmode追加のみで実装する。
+// ①articleSlugをホワイトリストで検証→②ハニーポット欄(bot対策、人間には
+// 見えないCSSで隠すだけで新しいUIコンポーネントは作らない)→③文字数検証→
+// ④IPハッシュによる簡易クールダウン→⑤既存のOpenAI Moderation
+// (callOpenAiModeration()、投稿審査と同一のAPI・モデル)で安全性確認、
+// という順で処理し、コストがかかる④⑤より前に無料の①②③で弾けるものは
+// 弾く。既存submissionsの「pending→人間確認」のような掲載待ちキューは
+// 今回のMVPでは作らない(シンプルにする指示のため)。そのため判定は
+// 「安全→即時approved掲載」「不安全・エラー→保存しない」の二択のみとし、
+// 判定に迷う場合(モデレーションAPIエラー等)は安全側に倒して保存しない。
+async function handlePostArticleCommentRequest(
+  request,
+  response
+) {
+  try {
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    const articleSlug =
+      typeof requestBody.articleSlug === "string"
+        ? requestBody.articleSlug.trim()
+        : "";
+
+    if (
+      !ALLOWED_ARTICLE_COMMENT_SLUGS.includes(
+        articleSlug
+      )
+    ) {
+      return response.status(400).json({
+        success: false,
+        message:
+          "対象の記事が見つかりません。"
+      });
+    }
+
+    // ハニーポット欄。人間の利用者には見えない(column側でCSS非表示にする)
+    // ため、値が入っている場合はbotによる自動投稿とみなす。botへ「検知した」
+    // ことを教えないため、保存はせず成功したふりの応答だけ返す。
+    const honeypotValue =
+      typeof requestBody.contactField === "string"
+        ? requestBody.contactField.trim()
+        : "";
+
+    if (honeypotValue !== "") {
+      return response.status(200).json({
+        success: true,
+        comment: null
+      });
+    }
+
+    const nickname =
+      sanitizeCommentNickname(
+        requestBody.nickname
+      );
+
+    const commentText =
+      typeof requestBody.comment === "string"
+        ? requestBody.comment.trim()
+        : "";
+
+    if (commentText === "") {
+      return response.status(400).json({
+        success: false,
+        message:
+          "コメントを入力してください。"
+      });
+    }
+
+    if (
+      commentText.length >
+      COMMENT_TEXT_MAX_LENGTH
+    ) {
+      return response.status(400).json({
+        success: false,
+        message:
+          "コメントが長すぎます（" +
+          COMMENT_TEXT_MAX_LENGTH +
+          "文字以内でご入力ください）。"
+      });
+    }
+
+    const app =
+      getFirebaseAdminApp();
+
+    const database =
+      getFirestore(
+        app
+      );
+
+    const ipHash =
+      hashClientIpAddress(
+        request
+      );
+
+    const rateLimitOk =
+      await claimCommentRateLimit(
+        database,
+        ipHash
+      );
+
+    if (!rateLimitOk) {
+      return response.status(429).json({
+        success: false,
+        message:
+          "少し時間をおいてから、もう一度お試しください。"
+      });
+    }
+
+    let moderationResults =
+      null;
+
+    try {
+      const inputItems =
+        buildModerationInput(
+          {
+            title: nickname,
+            content: commentText
+          }
+        );
+
+      moderationResults =
+        await callOpenAiModeration(
+          inputItems
+        );
+    } catch (moderationError) {
+      console.error(
+        "コメントAI審査エラー：",
+        moderationError
+      );
+
+      return response.status(200).json({
+        success: false,
+        message:
+          "現在コメントを投稿できません。時間をおいて再度お試しください。"
+      });
+    }
+
+    const allSafe =
+      moderationResults.every(
+        function(result) {
+          return (
+            result &&
+            result.flagged === false
+          );
+        }
+      );
+
+    if (!allSafe) {
+      return response.status(200).json({
+        success: false,
+        message:
+          "コメント内容を確認できませんでした。表現を見直して投稿してください。"
+      });
+    }
+
+    await database
+      .collection(
+        ARTICLE_COMMENTS_COLLECTION
+      )
+      .add(
+        {
+          articleSlug:
+            articleSlug,
+
+          nickname:
+            nickname,
+
+          comment:
+            commentText,
+
+          status:
+            "approved",
+
+          aiReviewVersion:
+            AI_REVIEW_VERSION,
+
+          createdAt:
+            FieldValue.serverTimestamp()
+        }
+      );
+
+    return response.status(200).json({
+      success: true,
+      comment: {
+        nickname:
+          nickname,
+
+        comment:
+          commentText,
+
+        createdAt:
+          new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error(
+      "コメント投稿エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message:
+        "コメントの投稿に失敗しました。時間をおいて、もう一度お試しください。"
+    });
+  }
+}
+
+
+// 記事別コメント一覧の公開取得(認証不要)。status=="approved"のみを対象と
+// し、articleSlugで記事ごとに完全分離する。既存の公開submissions一覧
+// (handlePublicSubmissionsListRequest())と同じく、エラー時はCache-Control
+// no-storeのデフォルトのまま返し、成功時のみ短いCDN共有キャッシュを許可する
+// (投稿直後の反映速度を優先し、submissions一覧より短いTTLにする)。
+async function handleArticleCommentsListRequest(
+  request,
+  response
+) {
+  try {
+    const articleSlug =
+      request.query &&
+      typeof request.query.articleSlug === "string"
+        ? request.query.articleSlug.trim()
+        : "";
+
+    if (
+      !ALLOWED_ARTICLE_COMMENT_SLUGS.includes(
+        articleSlug
+      )
+    ) {
+      return response.status(400).json({
+        success: false,
+        message:
+          "対象の記事が見つかりません。"
+      });
+    }
+
+    const app =
+      getFirebaseAdminApp();
+
+    const database =
+      getFirestore(
+        app
+      );
+
+    // 2つの等価条件(articleSlug/status)のみで絞り込み、orderByは付けない。
+    // 等価条件と別フィールドのorderByを組み合わせるとFirestoreの複合indexが
+    // 新規に必要になり、初回アクセス時にFAILED_PRECONDITIONで失敗する
+    // (代表によるFirebase Console操作が別途必要になる)ため、それを避け、
+    // 並び替えはこの関数内のJavaScript側(取得件数はCOMMENTS_LIST_MAX_COUNT
+    // 件までのため負荷は軽微)で行う。新着順(createdAt降順)は、既存の
+    // admin.html等の一覧表示(createdAt降順)と同じ並び順に揃えたもの。
+    const commentsSnapshot =
+      await database
+        .collection(
+          ARTICLE_COMMENTS_COLLECTION
+        )
+        .where(
+          "articleSlug",
+          "==",
+          articleSlug
+        )
+        .where(
+          "status",
+          "==",
+          "approved"
+        )
+        .limit(
+          COMMENTS_LIST_MAX_COUNT
+        )
+        .get();
+
+    const comments =
+      commentsSnapshot.docs
+        .map(
+          function(documentSnapshot) {
+            const data =
+              documentSnapshot.data() ||
+              {};
+
+            return {
+              nickname:
+                typeof data.nickname === "string"
+                  ? data.nickname
+                  : COMMENT_FALLBACK_NICKNAME,
+
+              comment:
+                typeof data.comment === "string"
+                  ? data.comment
+                  : "",
+
+              createdAtMillis:
+                data.createdAt &&
+                typeof data.createdAt.toMillis === "function"
+                  ? data.createdAt.toMillis()
+                  : 0,
+
+              createdAt:
+                data.createdAt &&
+                typeof data.createdAt.toDate === "function"
+                  ? data.createdAt.toDate().toISOString()
+                  : null
+            };
+          }
+        )
+        .sort(
+          function(firstComment, secondComment) {
+            return (
+              secondComment.createdAtMillis -
+              firstComment.createdAtMillis
+            );
+          }
+        )
+        .map(
+          function(comment) {
+            return {
+              nickname: comment.nickname,
+              comment: comment.comment,
+              createdAt: comment.createdAt
+            };
+          }
+        );
+
+    response.setHeader(
+      "Cache-Control",
+      "public, max-age=0, s-maxage=" +
+        COMMENTS_LIST_SHARED_CACHE_MAX_AGE_SECONDS +
+        ", stale-while-revalidate=" +
+        COMMENTS_LIST_STALE_WHILE_REVALIDATE_SECONDS
+    );
+
+    return response.status(200).json({
+      success: true,
+      comments: comments
+    });
+  } catch (error) {
+    console.error(
+      "コメント一覧取得エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message:
+        "コメントを取得できませんでした。"
+    });
+  }
+}
+
+
 export default async function handler(
   request,
   response
@@ -1561,6 +2075,19 @@ export default async function handler(
   if (
     request.method === "GET"
   ) {
+    // マチナウ読み物コメント機能MVP｜既存のsubmissions一覧取得(query無し)とは
+    // 別のquery(mode=articleComments)でのみ分岐させ、既存の呼び出し(query無し)
+    // には一切影響させない。
+    if (
+      request.query &&
+      request.query.mode === "articleComments"
+    ) {
+      return handleArticleCommentsListRequest(
+        request,
+        response
+      );
+    }
+
     return handlePublicSubmissionsListRequest(
       request,
       response
@@ -1591,6 +2118,19 @@ export default async function handler(
     requestBody.mode === "cloudinarySignature"
   ) {
     return handleCloudinarySignatureRequest(
+      request,
+      response
+    );
+  }
+
+  // マチナウ読み物コメント機能MVP｜既存のcloudinarySignature/aiConciergeと
+  // 同じ位置(モード判定)に追加するだけで、GET一覧取得・既定の投稿審査
+  // (この先のtry節、publicationNumber/endCodeによるAI自動審査トリガー)の
+  // いずれにも一切触れない。
+  if (
+    requestBody.mode === "postArticleComment"
+  ) {
+    return handlePostArticleCommentRequest(
       request,
       response
     );
