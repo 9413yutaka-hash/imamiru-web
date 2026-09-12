@@ -2060,6 +2060,354 @@ async function handleArticleCommentsListRequest(
 }
 
 
+// マチナウ読み物コメントMVP・最小管理機能｜api/admin-post.js・
+// api/admin-submission-update.jsと全く同じ「Bearer IDトークンを検証し、
+// email が process.env.ADMIN_EMAIL と一致するか」だけを見る既存の管理者
+// 認証方式をそのまま再利用する。新しい認証方式(APIキー・別の秘密鍵等)は
+// 一切作らない。一般ユーザーがこの経路でコメントを非表示にすることは
+// できない(有効なFirebase管理者アカウントのIDトークンが必須のため)。
+async function verifyAdminBearerToken(
+  app,
+  request
+) {
+  const adminEmail =
+    process.env.ADMIN_EMAIL;
+
+  if (!adminEmail) {
+    return {
+      ok: false,
+      status: 500,
+      message:
+        "管理者メールアドレスが設定されていません。"
+    };
+  }
+
+  const idToken =
+    readBearerToken(
+      request
+    );
+
+  if (idToken === "") {
+    return {
+      ok: false,
+      status: 401,
+      message:
+        "認証情報がありません。"
+    };
+  }
+
+  let decodedToken;
+
+  try {
+    decodedToken =
+      await getAuth(app)
+        .verifyIdToken(
+          idToken
+        );
+  } catch (verifyError) {
+    return {
+      ok: false,
+      status: 401,
+      message:
+        "認証情報が正しくありません。"
+    };
+  }
+
+  const decodedEmail =
+    String(
+      decodedToken.email || ""
+    )
+      .toLowerCase();
+
+  if (
+    decodedEmail === "" ||
+    decodedEmail !==
+      adminEmail.toLowerCase()
+  ) {
+    return {
+      ok: false,
+      status: 403,
+      message:
+        "管理者権限がありません。"
+    };
+  }
+
+  return {
+    ok: true,
+    adminEmail: decodedEmail
+  };
+}
+
+
+// マチナウ読み物コメント管理(最小機能)｜指定articleSlugの全コメントを、
+// status(approved/hidden)を問わず一覧取得する。公開用のGET(status==="approved"
+// のみ)とは完全に別の関数・別のmodeであり、この関数自体が管理者認証必須
+// のため一般ユーザーは呼び出せない。
+async function handleAdminListArticleCommentsRequest(
+  request,
+  response
+) {
+  try {
+    const app =
+      getFirebaseAdminApp();
+
+    const authResult =
+      await verifyAdminBearerToken(
+        app,
+        request
+      );
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({
+        success: false,
+        message:
+          authResult.message
+      });
+    }
+
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    const articleSlug =
+      typeof requestBody.articleSlug === "string"
+        ? requestBody.articleSlug.trim()
+        : "";
+
+    if (
+      !ALLOWED_ARTICLE_COMMENT_SLUGS.includes(
+        articleSlug
+      )
+    ) {
+      return response.status(400).json({
+        success: false,
+        message:
+          "対象の記事が見つかりません。"
+      });
+    }
+
+    const database =
+      getFirestore(
+        app
+      );
+
+    const commentsSnapshot =
+      await database
+        .collection(
+          ARTICLE_COMMENTS_COLLECTION
+        )
+        .where(
+          "articleSlug",
+          "==",
+          articleSlug
+        )
+        .limit(
+          COMMENTS_LIST_MAX_COUNT
+        )
+        .get();
+
+    const comments =
+      commentsSnapshot.docs
+        .map(
+          function(documentSnapshot) {
+            const data =
+              documentSnapshot.data() ||
+              {};
+
+            return {
+              id:
+                documentSnapshot.id,
+
+              nickname:
+                typeof data.nickname === "string"
+                  ? data.nickname
+                  : COMMENT_FALLBACK_NICKNAME,
+
+              comment:
+                typeof data.comment === "string"
+                  ? data.comment
+                  : "",
+
+              status:
+                typeof data.status === "string"
+                  ? data.status
+                  : "",
+
+              createdAtMillis:
+                data.createdAt &&
+                typeof data.createdAt.toMillis === "function"
+                  ? data.createdAt.toMillis()
+                  : 0,
+
+              createdAt:
+                data.createdAt &&
+                typeof data.createdAt.toDate === "function"
+                  ? data.createdAt.toDate().toISOString()
+                  : null
+            };
+          }
+        )
+        .sort(
+          function(firstComment, secondComment) {
+            return (
+              secondComment.createdAtMillis -
+              firstComment.createdAtMillis
+            );
+          }
+        )
+        .map(
+          function(comment) {
+            return {
+              id: comment.id,
+              nickname: comment.nickname,
+              comment: comment.comment,
+              status: comment.status,
+              createdAt: comment.createdAt
+            };
+          }
+        );
+
+    return response.status(200).json({
+      success: true,
+      comments: comments
+    });
+  } catch (error) {
+    console.error(
+      "コメント管理一覧取得エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message:
+        "コメント一覧を取得できませんでした。"
+    });
+  }
+}
+
+
+// マチナウ読み物コメント管理(最小機能)｜物理削除ではなくstatusを"hidden"へ
+// 変更するだけの非表示化。既存のsubmissions(status:"approved"→"expired"/
+// "rejected")と同じ「物理削除しない」設計を踏襲し、監査性(いつ・誰が)を
+// 残す。公開GET(handleArticleCommentsListRequest())はstatus==="approved"
+// のみを返す設計を無変更のまま維持しているため、statusを変えるだけで
+// 自動的に公開一覧から消える。既にhidden済みの場合は再書き込みせず
+// 成功扱いで返す(冪等)。
+async function handleAdminHideArticleCommentRequest(
+  request,
+  response
+) {
+  try {
+    const app =
+      getFirebaseAdminApp();
+
+    const authResult =
+      await verifyAdminBearerToken(
+        app,
+        request
+      );
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({
+        success: false,
+        message:
+          authResult.message
+      });
+    }
+
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    const documentId =
+      typeof requestBody.documentId === "string"
+        ? requestBody.documentId.trim()
+        : "";
+
+    if (documentId === "") {
+      return response.status(400).json({
+        success: false,
+        message:
+          "documentIdを指定してください。"
+      });
+    }
+
+    const database =
+      getFirestore(
+        app
+      );
+
+    const documentReference =
+      database
+        .collection(
+          ARTICLE_COMMENTS_COLLECTION
+        )
+        .doc(
+          documentId
+        );
+
+    const documentSnapshot =
+      await documentReference.get();
+
+    if (
+      !documentSnapshot.exists
+    ) {
+      return response.status(404).json({
+        success: false,
+        message:
+          "対象のコメントが見つかりませんでした。"
+      });
+    }
+
+    const currentData =
+      documentSnapshot.data() ||
+      {};
+
+    if (
+      currentData.status === "hidden"
+    ) {
+      return response.status(200).json({
+        success: true,
+        message:
+          "このコメントは既に非表示です。"
+      });
+    }
+
+    await documentReference.update(
+      {
+        status:
+          "hidden",
+
+        hiddenAt:
+          FieldValue.serverTimestamp(),
+
+        hiddenBy:
+          authResult.adminEmail
+      }
+    );
+
+    return response.status(200).json({
+      success: true,
+      message:
+        "コメントを非表示にしました。"
+    });
+  } catch (error) {
+    console.error(
+      "コメント非表示化エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message:
+        "コメントを非表示にできませんでした。"
+    });
+  }
+}
+
+
 export default async function handler(
   request,
   response
@@ -2131,6 +2479,27 @@ export default async function handler(
     requestBody.mode === "postArticleComment"
   ) {
     return handlePostArticleCommentRequest(
+      request,
+      response
+    );
+  }
+
+  // マチナウ読み物コメント管理(最小機能)｜管理者認証必須の2モード。
+  // 一般ユーザー向けpostArticleComment/GET一覧とは別のmodeのため、
+  // 既存の一般公開経路には一切影響しない。
+  if (
+    requestBody.mode === "adminListArticleComments"
+  ) {
+    return handleAdminListArticleCommentsRequest(
+      request,
+      response
+    );
+  }
+
+  if (
+    requestBody.mode === "adminHideArticleComment"
+  ) {
+    return handleAdminHideArticleCommentRequest(
       request,
       response
     );

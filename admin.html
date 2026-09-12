@@ -1094,6 +1094,51 @@
         もっと見る
       </button>
 
+      <div class="panel-header" style="margin-top: 30px;">
+        <div class="panel-title">
+          <h2>
+            コメント管理（マチナウ読み物）
+          </h2>
+
+          <p>
+            記事下コメントの一覧確認と非表示化のみ行えます（返信・編集機能はありません）。
+          </p>
+        </div>
+      </div>
+
+      <div class="form-field search-field">
+        <label for="commentArticleSelect">対象記事</label>
+        <select id="commentArticleSelect">
+          <option value="typhoon-okinawa-travel">台風接近時、沖縄旅行はどう判断する？（typhoon-okinawa-travel）</option>
+        </select>
+      </div>
+
+      <div class="toolbar">
+        <button
+          id="loadCommentsButton"
+          class="refresh-button"
+          type="button"
+        >
+          🔄 コメントを読み込む
+        </button>
+
+        <div
+          id="commentAdminMessage"
+          class="message-box"
+          role="status"
+          aria-live="polite"
+        ></div>
+      </div>
+
+      <div
+        id="commentAdminList"
+        class="submission-list"
+      >
+        <div class="empty-state">
+          「コメントを読み込む」を押してください。
+        </div>
+      </div>
+
     </section>
 
   </main>
@@ -2534,6 +2579,337 @@
           50;
 
         renderInactiveSubmissions();
+      }
+    );
+
+    // マチナウ読み物コメント管理(最小機能)｜api/moderate-submission.jsの
+    // mode:"adminListArticleComments"/"adminHideArticleComment"を、既存の
+    // ログイン中Firebaseユーザーのidトークン(admin-region-picks.html等と
+    // 同じ取得方法)で呼び出す。新しい認証方式は作らない。物理削除ではなく
+    // status:"hidden"化のみ(非表示にする)を行う。
+    const commentArticleSelect =
+      document.getElementById(
+        "commentArticleSelect"
+      );
+
+    const loadCommentsButton =
+      document.getElementById(
+        "loadCommentsButton"
+      );
+
+    const commentAdminMessage =
+      document.getElementById(
+        "commentAdminMessage"
+      );
+
+    const commentAdminList =
+      document.getElementById(
+        "commentAdminList"
+      );
+
+    function showCommentAdminMessage(
+      message,
+      type
+    ) {
+      commentAdminMessage.textContent =
+        message;
+
+      commentAdminMessage.className =
+        "message-box " + type;
+    }
+
+    function clearCommentAdminMessage() {
+      commentAdminMessage.textContent =
+        "";
+
+      commentAdminMessage.className =
+        "message-box";
+    }
+
+    async function getAdminIdToken() {
+      const currentUser =
+        firebase.auth().currentUser;
+
+      if (!currentUser) {
+        throw new Error(
+          "ログイン状態を確認できませんでした。再度ログインしてください。"
+        );
+      }
+
+      return currentUser.getIdToken();
+    }
+
+    function formatCommentAdminCreatedAt(
+      isoString
+    ) {
+      if (
+        typeof isoString !== "string" ||
+        isoString === ""
+      ) {
+        return "投稿日時不明";
+      }
+
+      const parsedDate =
+        new Date(
+          isoString
+        );
+
+      if (
+        Number.isNaN(
+          parsedDate.getTime()
+        )
+      ) {
+        return "投稿日時不明";
+      }
+
+      return parsedDate.toLocaleString(
+        "ja-JP"
+      );
+    }
+
+    function renderCommentAdminList(
+      comments
+    ) {
+      if (
+        !Array.isArray(comments) ||
+        comments.length === 0
+      ) {
+        commentAdminList.innerHTML = `
+          <div class="empty-state">
+            この記事へのコメントはまだありません。
+          </div>
+        `;
+
+        return;
+      }
+
+      commentAdminList.innerHTML =
+        comments
+          .map(
+            function(comment) {
+              const isHidden =
+                comment.status ===
+                "hidden";
+
+              return `
+                <article class="submission-card">
+                  <div class="submission-top">
+                    <span class="submission-category">
+                      ${escapeHtml(
+                        comment.nickname
+                      )}
+                    </span>
+
+                    <span class="${
+                      isHidden
+                        ? "expired-badge"
+                        : "approved-badge"
+                    }">
+                      ${
+                        isHidden
+                          ? "非表示"
+                          : "公開中"
+                      }
+                    </span>
+                  </div>
+
+                  <div class="submission-body">
+                    <div class="submission-content">
+                      ${escapeHtml(
+                        comment.comment
+                      )}
+                    </div>
+
+                    <div class="submission-meta">
+                      <span>
+                        投稿日時：${escapeHtml(
+                          formatCommentAdminCreatedAt(
+                            comment.createdAt
+                          )
+                        )}
+                      </span>
+                    </div>
+
+                    ${
+                      isHidden
+                        ? ""
+                        : `
+                          <button
+                            class="end-button"
+                            type="button"
+                            data-comment-id="${escapeHtml(
+                              comment.id
+                            )}"
+                          >
+                            🙈 非表示にする
+                          </button>
+                        `
+                    }
+                  </div>
+                </article>
+              `;
+            }
+          )
+          .join("");
+    }
+
+    async function loadCommentAdminList() {
+      clearCommentAdminMessage();
+
+      loadCommentsButton.disabled =
+        true;
+
+      loadCommentsButton.textContent =
+        "読み込み中…";
+
+      try {
+        const idToken =
+          await getAdminIdToken();
+
+        const response =
+          await fetch(
+            "/api/moderate-submission",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + idToken
+              },
+              body: JSON.stringify({
+                mode: "adminListArticleComments",
+                articleSlug: commentArticleSelect.value
+              })
+            }
+          );
+
+        const responseData =
+          await response.json();
+
+        if (
+          !response.ok ||
+          !responseData ||
+          responseData.success !== true
+        ) {
+          throw new Error(
+            (responseData && responseData.message) ||
+              "コメント一覧を取得できませんでした。"
+          );
+        }
+
+        renderCommentAdminList(
+          responseData.comments
+        );
+
+        showCommentAdminMessage(
+          "コメント一覧を更新しました。",
+          "success"
+        );
+      } catch (error) {
+        console.error(
+          "❌ コメント一覧を取得できませんでした",
+          error
+        );
+
+        showCommentAdminMessage(
+          error.message ||
+            "コメント一覧を取得できませんでした。",
+          "error"
+        );
+      } finally {
+        loadCommentsButton.disabled =
+          false;
+
+        loadCommentsButton.textContent =
+          "🔄 コメントを読み込む";
+      }
+    }
+
+    async function hideComment(
+      documentId
+    ) {
+      const confirmed =
+        window.confirm(
+          "このコメントを非表示にしますか？"
+        );
+
+      if (!confirmed) {
+        return;
+      }
+
+      try {
+        const idToken =
+          await getAdminIdToken();
+
+        const response =
+          await fetch(
+            "/api/moderate-submission",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + idToken
+              },
+              body: JSON.stringify({
+                mode: "adminHideArticleComment",
+                documentId: documentId
+              })
+            }
+          );
+
+        const responseData =
+          await response.json();
+
+        if (
+          !response.ok ||
+          !responseData ||
+          responseData.success !== true
+        ) {
+          throw new Error(
+            (responseData && responseData.message) ||
+              "コメントを非表示にできませんでした。"
+          );
+        }
+
+        await loadCommentAdminList();
+
+        showCommentAdminMessage(
+          "🙈 コメントを非表示にしました。",
+          "success"
+        );
+      } catch (error) {
+        console.error(
+          "❌ コメントを非表示にできませんでした",
+          error
+        );
+
+        showCommentAdminMessage(
+          error.message ||
+            "コメントを非表示にできませんでした。",
+          "error"
+        );
+      }
+    }
+
+    loadCommentsButton.addEventListener(
+      "click",
+      loadCommentAdminList
+    );
+
+    commentAdminList.addEventListener(
+      "click",
+      function(event) {
+        const button =
+          event.target.closest(
+            "button[data-comment-id]"
+          );
+
+        if (!button) {
+          return;
+        }
+
+        hideComment(
+          button.dataset.commentId
+        );
       }
     );
 
