@@ -3,12 +3,12 @@
 <head>
   <!-- Ver1.8 Phase2 STEP3-A(最初のシナプス計測)｜コラムを読んだ人が
        マチナウの「今」へ進もうとしたかを測るための最小計測。
-       Production(imamiru-web.vercel.app)以外(Preview・localhost等)では
+       Production(machinau.jp / imamiru-web.vercel.app)以外(Preview・localhost等)では
        GA4スクリプト自体を読み込まない。緯度経度・地域名・個人情報は
        一切送信しない。index.html・app.jsの既存GA4実装は今回変更しない。 -->
   <script>
     (function () {
-      if (location.hostname !== "imamiru-web.vercel.app") {
+      if (location.hostname !== "machinau.jp" && location.hostname !== "imamiru-web.vercel.app") {
         return;
       }
 
@@ -52,7 +52,7 @@
 
   <link
     rel="canonical"
-    href="https://imamiru-web.vercel.app/column/typhoon-okinawa-travel.html"
+    href="https://machinau.jp/column/typhoon-okinawa-travel.html"
   >
 
   <link
@@ -85,14 +85,14 @@
 
   <meta
     property="og:url"
-    content="https://imamiru-web.vercel.app/column/typhoon-okinawa-travel.html"
+    content="https://machinau.jp/column/typhoon-okinawa-travel.html"
   >
 
   <!-- Phase2 STEP2-B｜専用OG画像は未作成のため、既存ブランドアイコン(icon-512.png)を
        暫定利用する。将来、記事専用の画像を用意した場合はこの1行のみ差し替えればよい。 -->
   <meta
     property="og:image"
-    content="https://imamiru-web.vercel.app/icon-512.png"
+    content="https://machinau.jp/icon-512.png"
   >
 
   <meta name="twitter:card" content="summary">
@@ -105,7 +105,7 @@
     "@type": "Article",
     "headline": "台風接近時、沖縄旅行はどう判断する？",
     "description": "沖縄旅行中に台風が近づいたとき、何を確認してどう判断すればよいか。「即キャンセル」でも「まだ大丈夫」でもない、そのときどきで自分なりに判断するための考え方を整理します。",
-    "image": "https://imamiru-web.vercel.app/icon-512.png",
+    "image": "https://machinau.jp/icon-512.png",
     "author": {
       "@type": "Organization",
       "name": "マチナウ運営"
@@ -115,14 +115,14 @@
       "name": "マチナウ",
       "logo": {
         "@type": "ImageObject",
-        "url": "https://imamiru-web.vercel.app/icon-512.png"
+        "url": "https://machinau.jp/icon-512.png"
       }
     },
     "datePublished": "2026-08-27",
     "dateModified": "2026-08-27",
     "mainEntityOfPage": {
       "@type": "WebPage",
-      "@id": "https://imamiru-web.vercel.app/column/typhoon-okinawa-travel.html"
+      "@id": "https://machinau.jp/column/typhoon-okinawa-travel.html"
     }
   }
   </script>
