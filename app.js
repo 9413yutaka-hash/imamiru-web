@@ -5209,6 +5209,40 @@ function selectSuggestionCandidate() {
 }
 
 
+// Ver1.8 Phase2 STEP4-D｜常設店舗広告(isPermanentAd:true)が✨の一般候補に
+// なれるかを判定する専用関数。postType!=="admin"のため既存の
+// getSuggestionAreaPriorityRank()(admin専用ゲート)は使わず、この関数だけで
+// 独立して判定する。新しい地域判定体系は作らず、既存のuserAreaName解決結果
+// (resolveAreaNameFromCoordinates()、Google Geocoderのlocality名)と
+// shop.area(convertSubmissionToShop()で既にtrim済み)を、既存の
+// getSuggestionAreaPriorityRank()と同じ「文字列の完全一致」だけで比較する。
+// admin投稿のlatitude/longitudeは店舗所在地を保証しない(運営担当者が
+// 投稿作成時にいた場所になり得る)ため、意図的に緯度経度・距離計算は
+// 一切使わない。areaが空、または広域を示す特別値
+// AI_AUTO_POST_WIDE_AREA_NAME("沖縄県全域")の場合は、単一店舗の常設広告としては
+// 現在地との関連を確認できないため、安全側(候補外)に倒す。
+function isPermanentAdRelevantToUserArea(shop) {
+  if (
+    typeof userAreaName !== "string" ||
+    userAreaName === ""
+  ) {
+    return false;
+  }
+
+  if (
+    typeof shop.area !== "string" ||
+    shop.area === ""
+  ) {
+    return false;
+  }
+
+  if (shop.area === AI_AUTO_POST_WIDE_AREA_NAME) {
+    return false;
+  }
+
+  return shop.area === userAreaName;
+}
+
 // ✨「あなたへの提案」専用の候補選定。selectSuggestionCandidate()本体には
 // 一切触れず、店舗一覧のselectedCategoryにも依存しない(getVisibleShops()
 // ではなくグローバルshops配列全体を対象にするため、カテゴリー切替・
@@ -5221,6 +5255,10 @@ function selectSuggestionCandidate() {
 // にするため、selectTodayMachinauCandidate()との重複を防ぐ)。ただし
 // authorType===""(旧admin投稿、authorType未設定)は後方互換のため
 // 自動除外しない。
+// Ver1.8 Phase2 STEP4-D｜上記の公式イベント/観光候補が1件も無い場合に限り、
+// 常設店舗広告(isPermanentAd:true かつisPermanentAdRelevantToUserArea()が
+// true)をフォールバック候補にする。公式候補が既にある場合は常設広告を
+// 一切見ない(常設広告が公式候補を押し退けることはない)。
 function selectTravelerSuggestionCandidate() {
   const candidates =
     shops
@@ -5259,11 +5297,30 @@ function selectTravelerSuggestionCandidate() {
         );
       });
 
-  if (candidates.length === 0) {
+  if (candidates.length > 0) {
+    return candidates[0];
+  }
+
+  const permanentAdCandidates =
+    shops
+      .filter(function(shop) {
+        return (
+          shop.isPermanentAd === true &&
+          isPermanentAdRelevantToUserArea(shop)
+        );
+      })
+      .sort(function(firstShop, secondShop) {
+        return (
+          getDateValue(secondShop.createdAt) -
+          getDateValue(firstShop.createdAt)
+        );
+      });
+
+  if (permanentAdCandidates.length === 0) {
     return null;
   }
 
-  return candidates[0];
+  return permanentAdCandidates[0];
 }
 
 
@@ -5292,8 +5349,13 @@ const AI_CONCIERGE_CLIENT_FETCH_TIMEOUT_MS =
 const AI_CONCIERGE_FACT_SUMMARY_MAX_LENGTH =
   80;
 
+// Ver1.8 Phase2 STEP4-D｜selectTravelerSuggestionCandidate()と同じ思想で、
+// 公式のイベント/観光候補を優先し、その件数がAI_CONCIERGE_MAX_CANDIDATESに
+// 満たない場合だけ、残り枠を常設店舗広告(isPermanentAdRelevantToUserArea()が
+// trueのもの)で埋める。公式候補を後ろへ押し出すことはなく、常時
+// 常設広告だけでAIコンシェルジュ候補を占有することもない。
 function selectAiConciergeCandidates() {
-  return shops
+  const officialCandidates = shops
     .filter(function(shop) {
       return (
         shop.postType === "admin" &&
@@ -5327,7 +5389,28 @@ function selectAiConciergeCandidates() {
         getDateValue(secondShop.createdAt) -
         getDateValue(firstShop.createdAt)
       );
+    });
+
+  if (officialCandidates.length >= AI_CONCIERGE_MAX_CANDIDATES) {
+    return officialCandidates.slice(0, AI_CONCIERGE_MAX_CANDIDATES);
+  }
+
+  const permanentAdCandidates = shops
+    .filter(function(shop) {
+      return (
+        shop.isPermanentAd === true &&
+        isPermanentAdRelevantToUserArea(shop)
+      );
     })
+    .sort(function(firstShop, secondShop) {
+      return (
+        getDateValue(secondShop.createdAt) -
+        getDateValue(firstShop.createdAt)
+      );
+    });
+
+  return officialCandidates
+    .concat(permanentAdCandidates)
     .slice(0, AI_CONCIERGE_MAX_CANDIDATES);
 }
 

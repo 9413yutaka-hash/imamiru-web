@@ -960,7 +960,10 @@
             for="area"
           >
             対象地域
-            <span class="optional">任意</span>
+            <span
+              id="areaRequirementLabel"
+              class="optional"
+            >任意</span>
           </label>
 
           <input
@@ -1127,6 +1130,14 @@
     const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
     const MAX_EXPIRES_AT_DAYS = 90;
 
+    // Ver1.8 Phase2 STEP4-D｜常設店舗広告(単一店舗)では「沖縄県全域」を
+    // 対象地域として認めない(✨候補判定が現在地の市町村と完全一致でしか
+    // 関連ありと見なさないため、この値のままでは常に候補外になり、また
+    // 単一店舗の広告として意味も成さない)。通常のadmin投稿(お知らせ等)で
+    // この値を使う既存仕様はここでは変更しない(isPermanentAdチェックが
+    // OFFのときはこの定数を一切参照しない)。
+    const PERMANENT_AD_DISALLOWED_AREA_VALUE = "沖縄県全域";
+
     let selectedImageFiles = [];
     let capturedLatitude = null;
     let capturedLongitude = null;
@@ -1161,6 +1172,7 @@
     const addressInput = document.getElementById("address");
     const websiteUrlInput = document.getElementById("websiteUrl");
     const areaInput = document.getElementById("area");
+    const areaRequirementLabel = document.getElementById("areaRequirementLabel");
 
     const locationButton = document.getElementById("locationButton");
     const locationMessageBox = document.getElementById("locationMessageBox");
@@ -1669,11 +1681,24 @@
     // 常設店舗広告(isPermanentAdチェックON)のときは掲載終了日時欄そのものを
     // 隠し、必須属性も外す(送信時にexpiresAtを一切含めないため)。OFFの
     // ときの挙動は従来と完全に同じ。
+    // Ver1.8 Phase2 STEP4-D｜同じON/OFF切り替えのタイミングで、対象地域欄の
+    // プレースホルダーと「任意」表示も切り替える。常設店舗広告は✨候補判定で
+    // 市町村の完全一致が必須になったため、プレースホルダーから「沖縄県全域」の
+    // 例を外し、ラベルを「必須」にする(通常のadmin投稿では従来通り「任意」・
+    // 「沖縄県全域」の例を残す)。
     function updateExpiresAtVisibility() {
       const isPermanentAd = isPermanentAdCheckbox.checked;
 
       expiresAtFormGroup.style.display = isPermanentAd ? "none" : "";
       expiresAtInput.required = !isPermanentAd;
+
+      if (isPermanentAd) {
+        areaInput.placeholder = "那覇市、八重瀬町";
+        areaRequirementLabel.textContent = "必須";
+      } else {
+        areaInput.placeholder = "那覇市、八重瀬町、沖縄県全域";
+        areaRequirementLabel.textContent = "任意";
+      }
     }
 
     function validateForm() {
@@ -1698,6 +1723,25 @@
           message: "内容を入力してください。",
           element: contentInput
         });
+      }
+
+      if (isPermanentAdCheckbox.checked) {
+        const areaValue = areaInput.value.trim();
+
+        if (areaValue === "") {
+          validationErrors.push({
+            message: "常設店舗広告では対象地域(市町村)の入力が必須です。",
+            element: areaInput
+          });
+        } else if (areaValue === PERMANENT_AD_DISALLOWED_AREA_VALUE) {
+          validationErrors.push({
+            message:
+              "常設店舗広告では「" +
+              PERMANENT_AD_DISALLOWED_AREA_VALUE +
+              "」を対象地域にできません。具体的な市町村名を入力してください。",
+            element: areaInput
+          });
+        }
       }
 
       if (!isPermanentAdCheckbox.checked) {
