@@ -3633,6 +3633,84 @@ function resolveArticleAreaFromText(
 }
 
 
+// Ver1.8 Phase2 STEP5-M｜judgeArticleForAutoPost()内にあったsourceId検証・
+// aiSources取得・isEnabled/autoPostEnabled判定を、そのまま(reasonの文言・
+// 判定順序を一切変えず)切り出しただけの関数。summary救済(このファイル下方の
+// attemptSummaryRescueForAutoPost())が「高コストなページ取得・AI呼び出しの
+// 前に、無効化されたsource / autoPostEnabled=falseのsourceを弾く」ために
+// judgeArticleForAutoPost()と全く同じ判定を再利用する必要があり、同じ
+// ルールを2箇所に別々にコピーして将来ズレることを避けるために抽出した。
+// 判定内容自体はSTEP7-E時点から一切変更していない。
+async function resolveEnabledSourceForAutoPost(
+  database,
+  rawSourceId
+) {
+  const sourceId =
+    typeof rawSourceId === "string"
+      ? rawSourceId
+      : "";
+
+  if (sourceId === "") {
+    return {
+      eligible: false,
+      reason: "sourceIdが記録されていないため対象外です。"
+    };
+  }
+
+  const sourceSnapshot =
+    await database
+      .collection(
+        "aiSources"
+      )
+      .doc(
+        sourceId
+      )
+      .get();
+
+  const sourceData =
+    sourceSnapshot.exists
+      ? sourceSnapshot.data() || {}
+      : {};
+
+  if (
+    !sourceSnapshot.exists ||
+    sourceData.isEnabled !== true
+  ) {
+    return {
+      eligible: false,
+      reason: "情報源が無効化されているため対象外です。"
+    };
+  }
+
+  // Ver1.8 Phase2 STEP7-E｜isEnabled(この情報源を利用するか)とは別に、
+  // autoPostEnabled(人間確認なしで自動公開してよいか)をsource単位で判定する。
+  // falseのときだけ対象外とし、undefined(フィールド未設定＝既存source)は
+  // 従来通りON扱いとする(既存Productionの自動AI記者を突然停止させないため)。
+  // RSS収集・aiCollectedArticlesへの保存・Phase A/B・管理者手動収集は
+  // この判定より前の別経路で完結しており、一切影響を受けない。
+  if (sourceData.autoPostEnabled === false) {
+    return {
+      eligible: false,
+      reason: "この情報源は人間確認なしの自動公開が許可されていないため対象外です。"
+    };
+  }
+
+  return {
+    eligible: true,
+
+    sourceArea:
+      typeof sourceData.area === "string"
+        ? sourceData.area.trim()
+        : "",
+
+    sourceType:
+      typeof sourceData.sourceType === "string"
+        ? sourceData.sourceType.trim()
+        : ""
+  };
+}
+
+
 async function judgeArticleForAutoPost(
   database,
   articleData
@@ -3683,65 +3761,24 @@ async function judgeArticleForAutoPost(
     };
   }
 
-  const sourceId =
-    typeof articleData.sourceId === "string"
-      ? articleData.sourceId
-      : "";
+  const sourceResolution =
+    await resolveEnabledSourceForAutoPost(
+      database,
+      articleData.sourceId
+    );
 
-  if (sourceId === "") {
+  if (!sourceResolution.eligible) {
     return {
       outcome: "SKIP",
-      reason: "sourceIdが記録されていないため対象外です。"
-    };
-  }
-
-  const sourceSnapshot =
-    await database
-      .collection(
-        "aiSources"
-      )
-      .doc(
-        sourceId
-      )
-      .get();
-
-  const sourceData =
-    sourceSnapshot.exists
-      ? sourceSnapshot.data() || {}
-      : {};
-
-  if (
-    !sourceSnapshot.exists ||
-    sourceData.isEnabled !== true
-  ) {
-    return {
-      outcome: "SKIP",
-      reason: "情報源が無効化されているため対象外です。"
-    };
-  }
-
-  // Ver1.8 Phase2 STEP7-E｜isEnabled(この情報源を利用するか)とは別に、
-  // autoPostEnabled(人間確認なしで自動公開してよいか)をsource単位で判定する。
-  // falseのときだけSKIPし、undefined(フィールド未設定＝既存source)は
-  // 従来通りON扱いとする(既存Productionの自動AI記者を突然停止させないため)。
-  // RSS収集・aiCollectedArticlesへの保存・Phase A/B・管理者手動収集は
-  // この判定より前の別経路で完結しており、一切影響を受けない。
-  if (sourceData.autoPostEnabled === false) {
-    return {
-      outcome: "SKIP",
-      reason: "この情報源は人間確認なしの自動公開が許可されていないため対象外です。"
+      reason: sourceResolution.reason
     };
   }
 
   const sourceArea =
-    typeof sourceData.area === "string"
-      ? sourceData.area.trim()
-      : "";
+    sourceResolution.sourceArea;
 
   const sourceType =
-    typeof sourceData.sourceType === "string"
-      ? sourceData.sourceType.trim()
-      : "";
+    sourceResolution.sourceType;
 
   const relevanceResult =
     computeRelevance(
@@ -4648,6 +4685,18 @@ async function runAutoPostForDiscoveredArticles(
   const outcomes =
     [];
 
+  // Ver1.8 Phase2 STEP5-M｜summary救済(Phase A/B)のAI呼び出し上限
+  // (AI_FACT_EXTRACTION_MAX_PER_COLLECTION_RUN)を、この
+  // runAutoPostForDiscoveredArticles()の呼び出し1回(=1 priorityTier分)
+  // につき共有する。記事ごとに新規生成すると上限が実質機能しなくなるため、
+  // ループの外で1回だけ生成し、processDiscoveredArticleForAutoPost()を
+  // 経由してattemptSummaryRescueForAutoPost()まで同じ参照を渡す。
+  const aiExtractionRunState =
+    {
+      usedCount: 0,
+      processedArticleIds: new Set()
+    };
+
   for (
     let candidateIndex = 0;
     candidateIndex < sortedCandidateDocuments.length;
@@ -4668,7 +4717,8 @@ async function runAutoPostForDiscoveredArticles(
     const result =
       await processDiscoveredArticleForAutoPost(
         database,
-        candidateDocument.ref
+        candidateDocument.ref,
+        aiExtractionRunState
       );
 
     if (result.outcome !== "NOT_CLAIMED") {
@@ -4699,6 +4749,17 @@ async function runAutoPostForDiscoveredArticles(
       }
     ).length;
 
+  // Ver1.8 Phase2 STEP5-M｜summary救済が一時エラー・AI上限到達等で
+  // 確定できなかった記事の件数。SKIPPEDとは明確に区別する
+  // (このファイル内のresolveEnabledSourceForAutoPost()・
+  // attemptSummaryRescueForAutoPost()のコメント参照)。
+  const deferredCount =
+    outcomes.filter(
+      function(outcome) {
+        return outcome.outcome === "DEFERRED";
+      }
+    ).length;
+
   return {
     attempted:
       outcomes.length,
@@ -4712,15 +4773,148 @@ async function runAutoPostForDiscoveredArticles(
     error:
       errorCount,
 
+    deferred:
+      deferredCount,
+
     outcomes:
       outcomes
   };
 }
 
 
+// Ver1.8 Phase2 STEP5-M｜RSSのdescription/content:encodedが空のため
+// summaryが空文字のまま保存されている記事について、既存のPhase A/B
+// (enrichCandidateWithStructuredFacts())をそのまま再利用し、安全に
+// 判定可能なテキストが得られる場合だけ自動投稿判定へ戻す。
+//
+// 高コストな処理(ページ取得・AI呼び出し)より前に、必ずsourceの
+// isEnabled/autoPostEnabledを確認する(judgeArticleForAutoPost()と同じ
+// resolveEnabledSourceForAutoPost()を再利用し、判定基準が2箇所でズレる
+// ことを防ぐ)。無効化されたsource・autoPostEnabled=falseのsourceでは
+// ページ取得・AI呼び出しは一切発生しない。
+//
+// 戻り値は3種類:
+// - RESCUED: 検証済みの事実だけで構成された安全なテキストが得られた
+//   (aiCollectedArticles.summary自体は書き換えない。呼び出し元が
+//   メモリ上でのみ判定用テキストとして使う)
+// - INSUFFICIENT: 恒久的に事実が確認できないと既に確定・キャッシュ済み
+//   (aiFactExtractionAttemptedAtが元々存在し、かつ有効な事実が無い場合)。
+//   通常のsummary空SKIP経路へ安全に委ねてよい
+// - DEFER: 今回は確定できなかった(ページ取得の一時的失敗、AI呼び出し
+//   自体の一時的失敗、本文がAI_FACT_EXTRACTION_MIN_PAGE_TEXT_LENGTH未満、
+//   AI_FACT_EXTRACTION_MAX_PER_COLLECTION_RUN到達、のいずれか)。
+//   既存のenrichCandidateWithAiFactExtraction()はこれらをすべて同じnullで
+//   返す設計であり、ページ再取得なしにこれ以上細かく区別することは
+//   できない(1記事1runで記事ページを2回取得することになるため)。
+//   区別できない以上、SKIPPEDのような確定的な状態にはせず、安全側に
+//   倒してDEFERとする(呼び出し元は記事をfinalizeせずPROCESSINGのまま
+//   残し、既存のclaimDiscoveredArticle()の停滞回復ルール
+//   (PROCESSING_CLAIM_STALE_MILLISECONDS超過で再claim可能)により
+//   次回以降のcollection runで自然に再試行される。新しいstatusは
+//   作らない)。
+async function attemptSummaryRescueForAutoPost(
+  database,
+  claimedData,
+  aiExtractionRunState
+) {
+  const sourceResolution =
+    await resolveEnabledSourceForAutoPost(
+      database,
+      claimedData.sourceId
+    );
+
+  if (!sourceResolution.eligible) {
+    // source側の理由で対象外。ページ取得・AI呼び出しは発生させず、
+    // 通常のjudgeArticleForAutoPost()に同じ理由でSKIPさせる。
+    return {
+      status: "INSUFFICIENT"
+    };
+  }
+
+  const alreadyAttempted =
+    Boolean(
+      claimedData.aiFactExtractionAttemptedAt &&
+      typeof claimedData.aiFactExtractionAttemptedAt.toDate === "function"
+    );
+
+  const candidateItemLike =
+    {
+      title:
+        typeof claimedData.title === "string"
+          ? claimedData.title
+          : "",
+
+      summary:
+        "",
+
+      link:
+        typeof claimedData.articleUrl === "string"
+          ? claimedData.articleUrl
+          : "",
+
+      publishedAt:
+        typeof claimedData.publishedAt === "string"
+          ? claimedData.publishedAt
+          : ""
+    };
+
+  let enrichment;
+
+  try {
+    enrichment =
+      await enrichCandidateWithStructuredFacts(
+        candidateItemLike,
+        database,
+        claimedData.sourceId,
+        aiExtractionRunState
+      );
+  } catch (enrichmentError) {
+    console.error(
+      "summary救済処理でエラーが発生しました：",
+      enrichmentError
+    );
+
+    return {
+      status: "DEFER"
+    };
+  }
+
+  const safeText =
+    enrichment &&
+    typeof enrichment.structuredContentDraft === "string"
+      ? enrichment.structuredContentDraft.trim()
+      : "";
+
+  if (safeText !== "") {
+    return {
+      status: "RESCUED",
+      safeText: safeText
+    };
+  }
+
+  if (alreadyAttempted) {
+    // 以前(手動収集等)の試行で、既に「有効な事実0件」として確定・
+    // キャッシュ済みだった。今回のenrichCandidateWithStructuredFacts()
+    // 呼び出しはそのキャッシュを読んだだけで、新規のページ取得・AI呼び出しは
+    // 発生していない。恒久的な内容不足として扱ってよい。
+    return {
+      status: "INSUFFICIENT"
+    };
+  }
+
+  // 今回はじめて試行し、有効な事実が得られなかった。原因(一時的な
+  // 取得失敗／本文不足／AI上限到達／AI呼び出し自体の失敗)を安全に
+  // 区別できないため、DEFERとする。
+  return {
+    status: "DEFER"
+  };
+}
+
+
 async function processDiscoveredArticleForAutoPost(
   database,
-  articleRef
+  articleRef,
+  aiExtractionRunState
 ) {
   const claimedData =
     await claimDiscoveredArticle(
@@ -4734,13 +4928,65 @@ async function processDiscoveredArticleForAutoPost(
     };
   }
 
+  let articleDataForJudgment =
+    claimedData;
+
+  const summary =
+    typeof claimedData.summary === "string"
+      ? claimedData.summary.trim()
+      : "";
+
+  if (summary === "") {
+    let rescueResult;
+
+    try {
+      rescueResult =
+        await attemptSummaryRescueForAutoPost(
+          database,
+          claimedData,
+          aiExtractionRunState
+        );
+    } catch (rescueError) {
+      console.error(
+        "summary救済処理で予期しないエラーが発生しました：",
+        rescueError
+      );
+
+      rescueResult =
+        { status: "DEFER" };
+    }
+
+    if (rescueResult.status === "DEFER") {
+      // finalizeArticleProcessing()を呼ばず、PROCESSINGのまま残す。
+      // 既存のclaimDiscoveredArticle()の停滞回復ルールにより、
+      // 次回以降のcollection runで自然に再claim・再試行される。
+      return {
+        outcome: "DEFERRED"
+      };
+    }
+
+    if (rescueResult.status === "RESCUED") {
+      articleDataForJudgment =
+        Object.assign(
+          {},
+          claimedData,
+          { summary: rescueResult.safeText }
+        );
+    }
+
+    // status === "INSUFFICIENT"の場合はarticleDataForJudgmentを
+    // claimedDataのまま(summary空のまま)にし、既存のjudgeArticleForAutoPost()
+    // による通常のSKIP("概要（summary）が保存されていないため対象外です。")
+    // へ委ねる。
+  }
+
   let judgment;
 
   try {
     judgment =
       await judgeArticleForAutoPost(
         database,
-        claimedData
+        articleDataForJudgment
       );
   } catch (judgeError) {
     await finalizeArticleProcessing(
@@ -4777,9 +5023,14 @@ async function processDiscoveredArticleForAutoPost(
   }
 
   try {
+    // Ver1.8 Phase2 STEP5-M｜summary救済(RESCUED)の場合は、判定に使った
+    // 安全なテキスト(articleDataForJudgment.summary)を投稿本文の生成にも
+    // 使う(claimedDataの元summaryは空のままのため、そちらを使うと投稿内容が
+    // 空になってしまう)。RESCUEDでない場合はarticleDataForJudgment===
+    // claimedDataなので挙動は従来と完全に同じ。
     const draft =
       buildAutoDraftFromArticle(
-        claimedData,
+        articleDataForJudgment,
         judgment.sourceArea,
         judgment.sourceType
       );
