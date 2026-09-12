@@ -155,8 +155,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   today_machinau_heading: {
-    ja: "🔥 今日のマチナウ",
-    en: "🔥 Today's Machinau"
+    ja: "🔥 今、見てほしい",
+    en: "🔥 Worth a Look Now"
   },
 
   today_machinau_label: {
