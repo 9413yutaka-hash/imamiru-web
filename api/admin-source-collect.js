@@ -2368,6 +2368,91 @@ async function collectFromSource(
       );
 
       await articleWriteBatch.commit();
+
+      // Ver1.8 Phase2 STEP5-D｜再確認型TTL(ローリング更新)。既に自動投稿
+      // 済み(processingStatus:"DONE")の記事が、今回のRSS取得でも
+      // 再検出された(=公式ソースで今も確認できる)場合だけ、対応する
+      // submissionの掲載期限を再確認する。articleWriteBatch.commit()の
+      // 後に行うことで、上記の既存の記事記録処理(lastSeenAt更新・
+      // summaryバックフィル)には一切影響しない。ここで例外が発生しても
+      // 記事記録自体は既に成功しているため、専用のtry/catchで
+      // ログに残すだけにとどめ、収集処理全体を失敗させない。
+      try {
+        const rollingEventCheckPromises =
+          [];
+
+        articleLookupEntries.forEach(
+          function(entry, entryIndex) {
+            const existingSnapshot =
+              existingArticleSnapshots[
+                entryIndex
+              ];
+
+            if (
+              !existingSnapshot ||
+              !existingSnapshot.exists
+            ) {
+              return;
+            }
+
+            const existingData =
+              existingSnapshot.data() ||
+              {};
+
+            if (
+              existingData.processingStatus !== PROCESSING_STATUS_DONE ||
+              typeof existingData.postedSubmissionId !== "string" ||
+              existingData.postedSubmissionId === ""
+            ) {
+              return;
+            }
+
+            // articleWriteBatch側でsummaryバックフィルが行われた場合に
+            // 備え、既存summaryが空ならこの取得分のsummaryを使う
+            // (再判定の対象テキストが最新の状態を反映するようにする)。
+            const existingSummary =
+              typeof existingData.summary === "string"
+                ? existingData.summary.trim()
+                : "";
+
+            const candidateSummary =
+              typeof entry.candidateItem.summary === "string"
+                ? entry.candidateItem.summary.trim()
+                : "";
+
+            const latestSummary =
+              existingSummary !== ""
+                ? existingSummary
+                : candidateSummary;
+
+            const articleDataForJudgment =
+              Object.assign(
+                {},
+                existingData,
+                { summary: latestSummary }
+              );
+
+            rollingEventCheckPromises.push(
+              reconfirmAndUpdateRollingEventSubmission(
+                database,
+                articleDataForJudgment,
+                existingData.postedSubmissionId
+              )
+            );
+          }
+        );
+
+        if (rollingEventCheckPromises.length > 0) {
+          await Promise.all(
+            rollingEventCheckPromises
+          );
+        }
+      } catch (rollingEventCheckError) {
+        console.error(
+          "ローリングTTL再確認処理でエラーが発生しました：",
+          rollingEventCheckError
+        );
+      }
     }
   } catch (articleRecordError) {
     console.error(
@@ -3711,12 +3796,21 @@ async function judgeArticleForAutoPost(
           explicitEventEndDate.getTime() >
         eventGraceMilliseconds
       ) {
+        // Ver1.8 Phase2 STEP5-D｜再確認型TTL(ローリング更新)が、この
+        // 「開催日が確定して過去になった」ケースだけを文字列reasonの
+        // 部分一致に頼らず安全に識別できるよう、構造化されたコードを返す。
+        // 既存の呼び出し元(processDiscoveredArticleForAutoPost)は
+        // outcome/reasonしか読まないため、フィールド追加は既存動作に
+        // 影響しない。
         return {
           outcome: "SKIP",
           reason:
             "本文中の開催日(" +
             explicitEventEndDate.toISOString().slice(0, 10) +
-            ")が既に終了しているため対象外です。"
+            ")が既に終了しているため対象外です。",
+          skipReasonCode: "EVENT_DATE_PASSED",
+          freshnessCategory: freshnessCategory,
+          explicitEventEndDate: explicitEventEndDate
         };
       }
 
@@ -3753,12 +3847,16 @@ async function judgeArticleForAutoPost(
         explicitEventEndDate.getTime() >
       eventGraceMilliseconds
     ) {
+      // Ver1.8 Phase2 STEP5-D｜EVENT分岐と同じ理由でskipReasonCodeを付与する。
       return {
         outcome: "SKIP",
         reason:
           "本文中の開催日(" +
           explicitEventEndDate.toISOString().slice(0, 10) +
-          ")が既に終了しているため対象外です。"
+          ")が既に終了しているため対象外です。",
+        skipReasonCode: "EVENT_DATE_PASSED",
+        freshnessCategory: freshnessCategory,
+        explicitEventEndDate: explicitEventEndDate
       };
     }
 
@@ -3823,11 +3921,19 @@ async function judgeArticleForAutoPost(
       sourceArea
     );
 
+  // Ver1.8 Phase2 STEP5-D｜freshnessCategory・explicitEventEndDateも
+  // 返すようにする(再確認型TTLが、既存呼び出し元を変えずに「EVENT、または
+  // 明示的開催日を伴うSIGHTSEEING」だけを安全に識別するため)。既存の
+  // 呼び出し元(processDiscoveredArticleForAutoPost)はsourceArea・
+  // sourceType・relevanceResultしか読まないため、フィールド追加は
+  // 既存動作に影響しない。
   return {
     outcome: "PROCEED",
     relevanceResult: relevanceResult,
     sourceArea: articleArea,
-    sourceType: sourceType
+    sourceType: sourceType,
+    freshnessCategory: freshnessCategory,
+    explicitEventEndDate: explicitEventEndDate
   };
 }
 
@@ -4284,6 +4390,170 @@ async function createAutoPostSubmission(
       );
 
   return documentReference.id;
+}
+
+
+// Ver1.8 Phase2 STEP5-D｜再確認型TTL(ローリング更新)の更新閾値。
+// 収集cronは30分毎(.github/workflows/main.yml)、自動投稿の基本TTLは
+// AUTO_POST_EXPIRES_AT_MILLISECONDS(24時間)。残り時間がこの閾値を
+// 下回った時だけexpiresAtを書き直すことで、Firestore
+// writeを1記事あたり1日およそ1回程度に抑える(24時間 - 2時間 = 22時間毎に
+// 1回書き込まれる計算)。cronの実行遅延・欠落があっても、実際の期限まで
+// 最低30分サイクル4回分(2時間)の余裕を残す。
+const ROLLING_EVENT_TTL_RENEWAL_THRESHOLD_MILLISECONDS =
+  2 * 60 * 60 * 1000;
+
+
+// Ver1.8 Phase2 STEP5-D｜同一の公式RSS記事が再検出された際に、既に
+// 自動投稿済み(processingStatus:"DONE")のsubmissionの掲載期限を
+// 安全に再確認・更新する。judgeArticleForAutoPost()をそのまま再利用し
+// (OpenAI呼び出し・ページ再取得は一切発生しない、deterministicな
+// キーワード/正規表現判定のみ)、以下の3ケースだけを区別して扱う。
+// A. 現在もPROCEED(EVENT、または明示的開催日を伴うSIGHTSEEING)
+//    → 残りTTLが閾値未満の場合のみexpiresAtをnow+24時間へ更新する。
+// B. skipReasonCode==="EVENT_DATE_PASSED"(開催日が確定して過去になった)
+//    → expiresAtをnow(現在時刻)へ更新し、速やかに非公開へ回す
+//      (status自体はapi/expire.jsの既存cronが後で"expired"に変える)。
+// C. それ以外の全て(情報源が無効化された、relevance低下、開催日を
+//    確定できないEVENT、EMERGENCY/TRANSPORT/OTHER等)
+//    → 何もしない。既存のexpiresAtのまま自然に減衰させる(断定できない
+//      場合に手を出さない、という安全側の判断)。
+// 手動admin投稿・一般ユーザー投稿・常設店舗広告は、この関数の呼び出し元
+// (collectFromSource())がaiCollectedArticlesのprocessingStatus:"DONE"
+// かつpostedSubmissionIdを持つ記事だけを対象にしているため、原理的に
+// この関数へは到達しない。
+async function reconfirmAndUpdateRollingEventSubmission(
+  database,
+  articleDataForJudgment,
+  postedSubmissionId
+) {
+  let judgment;
+
+  try {
+    judgment =
+      await judgeArticleForAutoPost(
+        database,
+        articleDataForJudgment
+      );
+  } catch (judgeError) {
+    console.error(
+      "ローリングTTL再判定でエラーが発生しました：",
+      judgeError
+    );
+
+    return;
+  }
+
+  const isStillValidRollingCandidate =
+    judgment.outcome === "PROCEED" &&
+    (
+      judgment.freshnessCategory === "EVENT" ||
+      (
+        judgment.freshnessCategory === "SIGHTSEEING" &&
+        Boolean(judgment.explicitEventEndDate)
+      )
+    );
+
+  const isConfirmedPastEventDate =
+    judgment.outcome === "SKIP" &&
+    judgment.skipReasonCode === "EVENT_DATE_PASSED";
+
+  if (
+    !isStillValidRollingCandidate &&
+    !isConfirmedPastEventDate
+  ) {
+    return;
+  }
+
+  let submissionSnapshot;
+
+  try {
+    submissionSnapshot =
+      await database
+        .collection("submissions")
+        .doc(postedSubmissionId)
+        .get();
+  } catch (readError) {
+    console.error(
+      "ローリングTTL対象submissionの読み取りに失敗しました：",
+      readError
+    );
+
+    return;
+  }
+
+  if (!submissionSnapshot.exists) {
+    return;
+  }
+
+  const submissionData =
+    submissionSnapshot.data() ||
+    {};
+
+  if (
+    submissionData.authorType !== "ai" ||
+    submissionData.status !== "approved"
+  ) {
+    return;
+  }
+
+  const currentExpiresAt =
+    submissionData.expiresAt;
+
+  const currentExpiresAtMilliseconds =
+    currentExpiresAt &&
+    typeof currentExpiresAt.toMillis === "function"
+      ? currentExpiresAt.toMillis()
+      : null;
+
+  if (currentExpiresAtMilliseconds === null) {
+    return;
+  }
+
+  const nowMilliseconds =
+    Date.now();
+
+  if (isConfirmedPastEventDate) {
+    if (currentExpiresAtMilliseconds <= nowMilliseconds) {
+      return;
+    }
+
+    await submissionSnapshot.ref.update({
+      expiresAt:
+        Timestamp.fromDate(
+          new Date(nowMilliseconds)
+        ),
+
+      updatedAt:
+        FieldValue.serverTimestamp()
+    });
+
+    return;
+  }
+
+  const remainingMilliseconds =
+    currentExpiresAtMilliseconds -
+    nowMilliseconds;
+
+  if (
+    remainingMilliseconds >=
+    ROLLING_EVENT_TTL_RENEWAL_THRESHOLD_MILLISECONDS
+  ) {
+    return;
+  }
+
+  await submissionSnapshot.ref.update({
+    expiresAt:
+      Timestamp.fromDate(
+        new Date(
+          nowMilliseconds +
+          AUTO_POST_EXPIRES_AT_MILLISECONDS
+        )
+      ),
+
+    updatedAt:
+      FieldValue.serverTimestamp()
+  });
 }
 
 
