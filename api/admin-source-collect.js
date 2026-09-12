@@ -3689,14 +3689,19 @@ async function judgeArticleForAutoPost(
 
   // Ver1.8 Phase2 STEP6-C｜EVENT分類は「記事公開日」ではなく
   // 「本文中に書かれた開催日」で鮮度を判定する。開催日を安全に抽出できた
-  // 場合はそれを優先し、抽出できない場合のみ保守的な上限日数(公開日基準)へ
-  // フォールバックする。未来の開催予定を誤って消さないことを最優先する。
-  if (freshnessCategory === "EVENT") {
-    const explicitEventEndDate =
-      extractLatestExplicitDateFromText(
-        combinedText
-      );
+  // 場合はそれを優先し、未来の開催予定を誤って消さないことを最優先する。
+  // Ver1.8 Phase2 STEP5-A｜EVENTキーワード(イベント/祭り/花火)を含まない
+  // 未来イベント記事が、キーワード不一致のままSIGHTSEEING等へ分類され、
+  // 本来無関係なpublishedAt基準のcutoffで落とされる問題(鮮度監査①)へ
+  // 対処するため、カテゴリー判定の結果に関わらず、本文の明示的な開催日を
+  // 先に抽出しておく。抽出処理自体(extractLatestExplicitDateFromText)は
+  // 無変更で、年を伴う明示的な日付表記のみを対象にする安全側の設計のまま。
+  const explicitEventEndDate =
+    extractLatestExplicitDateFromText(
+      combinedText
+    );
 
+  if (freshnessCategory === "EVENT") {
     if (explicitEventEndDate) {
       const eventGraceMilliseconds =
         24 * 60 * 60 * 1000;
@@ -3717,45 +3722,47 @@ async function judgeArticleForAutoPost(
 
       // 開催日が未来、または開催中(猶予1日以内)なので鮮度チェックを通過する。
     } else {
-      const publishedAtText =
-        typeof articleData.publishedAt === "string"
-          ? articleData.publishedAt.trim()
-          : "";
-
-      if (publishedAtText !== "") {
-        const publishedAtDate =
-          new Date(
-            publishedAtText
-          );
-
-        if (
-          !isNaN(
-            publishedAtDate.getTime()
-          )
-        ) {
-          const articleAgeMilliseconds =
-            Date.now() -
-            publishedAtDate.getTime();
-
-          const eventFallbackMaxAgeMilliseconds =
-            EVENT_FALLBACK_MAX_AGE_DAYS *
-            24 * 60 * 60 * 1000;
-
-          if (
-            articleAgeMilliseconds >
-            eventFallbackMaxAgeMilliseconds
-          ) {
-            return {
-              outcome: "SKIP",
-              reason:
-                "開催日を本文から特定できず、公開から" +
-                EVENT_FALLBACK_MAX_AGE_DAYS +
-                "日以上経過しているため対象外です。"
-            };
-          }
-        }
-      }
+      // Ver1.8 Phase2 STEP5-A(鮮度監査③)｜開催日を本文から確定できない
+      // EVENT記事を「公開から60日以内だから」という理由だけで自動公開する
+      // 従来仕様をやめる。開催日が不明なまま「今、行けるイベント」として
+      // 自動公開することは曖昧な推測に当たるため、常にSKIPする。
+      // 収集自体(aiCollectedArticles、processingStatus:"SKIPPED")は
+      // 維持されるため記事の記録は残る。
+      return {
+        outcome: "SKIP",
+        reason:
+          "開催日を本文から確定できないため、自動公開を見送りました。"
+      };
     }
+  } else if (
+    freshnessCategory === "SIGHTSEEING" &&
+    explicitEventEndDate
+  ) {
+    // Ver1.8 Phase2 STEP5-A(鮮度監査①)｜EVENTキーワードには一致しないが、
+    // 本文に安全に抽出できる明示的な開催日があるSIGHTSEEING記事は、
+    // publishedAt基準のSIGHTSEEING cutoff(7日)を使わず、EVENT分類と同じ
+    // 「開催日基準」で判定する。EMERGENCY・TRANSPORT・OTHERはこの分岐の
+    // 対象外のまま(本文中の無関係な日付の言及だけで鮮度チェックが無効化
+    // される危険を避けるため、単一の観光地キーワードに一致した記事だけに
+    // 限定する)。
+    const eventGraceMilliseconds =
+      24 * 60 * 60 * 1000;
+
+    if (
+      Date.now() -
+        explicitEventEndDate.getTime() >
+      eventGraceMilliseconds
+    ) {
+      return {
+        outcome: "SKIP",
+        reason:
+          "本文中の開催日(" +
+          explicitEventEndDate.toISOString().slice(0, 10) +
+          ")が既に終了しているため対象外です。"
+      };
+    }
+
+    // 開催日が未来、または開催中(猶予1日以内)なので鮮度チェックを通過する。
   } else {
     const freshnessMaxAgeDays =
       FRESHNESS_MAX_AGE_DAYS_BY_CATEGORY[
@@ -3862,12 +3869,6 @@ const FRESHNESS_MAX_AGE_DAYS_BY_CATEGORY = {
   OTHER: 5
 };
 
-
-// Ver1.8 Phase2 STEP6-C｜EVENT分類記事のみに使う、開催日が本文から
-// 特定できない場合の保守的な上限日数。イベント告知は他カテゴリーより
-// 早めに公開される傾向があるため、他カテゴリー(2〜7日)よりは長めだが、
-// 無期限に候補として残さないための最終防衛ライン。
-const EVENT_FALLBACK_MAX_AGE_DAYS = 60;
 
 
 // Ver1.8 Phase2 STEP6-C｜本文・タイトルから「明示的な年を伴う」日付表記
