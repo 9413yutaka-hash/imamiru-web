@@ -19,7 +19,7 @@
   >
 
   <title>
-    運営情報を投稿する｜マチナウ管理
+    地域情報を投稿する｜マチナウ管理
   </title>
 
   <style>
@@ -678,11 +678,11 @@
       </div>
 
       <h1>
-        運営情報を投稿する
+        地域情報を投稿する
       </h1>
 
       <p>
-        店舗投稿とは別に、マチナウ運営からのお知らせや現地情報を公開できます。
+        店舗投稿とは別に、街の「今」（イベント・休業・変更・お知らせ・安全情報等）を公開できます。
         入力後、すぐに公開されます。
       </p>
 
@@ -728,7 +728,7 @@
     >
 
       <div class="form-heading">
-        <h2 id="formHeadingTitle">運営情報の投稿</h2>
+        <h2 id="formHeadingTitle">地域情報の投稿</h2>
         <p>
           店舗の終了番号のような自己申告用の番号は発行されません。
         </p>
@@ -1802,8 +1802,8 @@
     function showAdminPostSuccessMessage() {
       messageBox.className = "message-box visible success";
       messageBox.textContent = isEditMode
-        ? "運営情報を更新しました。"
-        : "運営情報を公開しました。";
+        ? "地域情報を更新しました。"
+        : "地域情報を公開しました。";
     }
 
     async function submitAdminPost(event) {
@@ -1825,8 +1825,8 @@
 
         setProgress(
           isEditMode
-            ? "運営情報を更新しています…"
-            : "運営情報をマチナウへ送信しています…",
+            ? "地域情報を更新しています…"
+            : "地域情報をマチナウへ送信しています…",
           82
         );
 
@@ -1935,7 +1935,7 @@
           hideProgress();
         }, 900);
       } catch (error) {
-        console.error("運営情報の投稿エラー：", error);
+        console.error("地域情報の投稿エラー：", error);
 
         hideProgress();
         setSubmitting(false);
@@ -2061,7 +2061,7 @@
     }
 
     async function initializeEditMode(currentUser) {
-      formHeadingTitle.textContent = "運営情報を編集する";
+      formHeadingTitle.textContent = "地域情報を編集する";
       newPostButton.style.display = "none";
       afterSubmitActions.style.gridTemplateColumns = "1fr";
 

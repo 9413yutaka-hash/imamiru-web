@@ -930,7 +930,20 @@
             justify-content: center;
           "
         >
-          🌺 運営情報を投稿する
+          🏙️ 地域情報を投稿する
+        </a>
+
+        <a
+          id="columnEditorLink"
+          class="primary-button secondary-entry-button"
+          href="admin-column.html"
+          style="
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+          "
+        >
+          📖 マチナウ読み物を書く
         </a>
 
         <a
@@ -2890,6 +2903,68 @@
       }
     }
 
+    // マチナウ読み物投稿機能(Phase1)｜既存の静的記事(typhoon-okinawa-travel、
+    // <option>としてHTMLに直接記述済み、無変更)に追加して、公開済みの
+    // Firestore読み物を動的に選択肢へ追加する。取得に失敗しても既存の
+    // 静的オプションの表示には影響しない(catchのみ)。新しい読み物を
+    // 公開するたびにこのファイルを編集する必要をなくすための対応。
+    async function populateCommentArticleOptions() {
+      try {
+        const response =
+          await fetch(
+            "/api/moderate-submission?mode=publicListPublishedColumns"
+          );
+
+        const responseData =
+          await response.json();
+
+        if (
+          !response.ok ||
+          !responseData ||
+          responseData.success !== true ||
+          !Array.isArray(
+            responseData.articles
+          )
+        ) {
+          return;
+        }
+
+        responseData.articles.forEach(
+          function(article) {
+            const slug =
+              typeof article.slug === "string"
+                ? article.slug
+                : "";
+
+            if (slug === "") {
+              return;
+            }
+
+            const optionElement =
+              document.createElement(
+                "option"
+              );
+
+            optionElement.value =
+              slug;
+
+            optionElement.textContent =
+              (article.title || slug) +
+              "（" + slug + "）";
+
+            commentArticleSelect.appendChild(
+              optionElement
+            );
+          }
+        );
+      } catch (error) {
+        console.error(
+          "読み物の選択肢を取得できませんでした(既存の選択肢には影響しません)：",
+          error
+        );
+      }
+    }
+
     loadCommentsButton.addEventListener(
       "click",
       loadCommentAdminList
@@ -2942,6 +3017,8 @@
               " でログインしています。";
 
             await loadSubmissions();
+
+            populateCommentArticleOptions();
 
             return;
           }

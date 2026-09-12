@@ -293,16 +293,85 @@ const AI_CONCIERGE_REASON_MAX_LENGTH =
 // クライアントから直接読み書きさせず、常にAdmin SDK経由(このFunction経由)
 // のみでアクセスする設計とし、Firestore Security Rulesの変更を一切
 // 不要にする(既存のsubmissions/aiCollectedArticles等と同じ、コードだけで
-// 完結する安全設計)。対象記事は事前登録制のホワイトリストとし、
-// 存在しないarticleSlugでの無差別なドキュメント量産を防ぐ。将来コラムを
-// 追加する際は、このリストへの追記が必要(自動検出は行わない)。
+// 完結する安全設計)。
 const ARTICLE_COMMENTS_COLLECTION =
   "articleComments";
 
-const ALLOWED_ARTICLE_COMMENT_SLUGS =
+// マチナウ読み物投稿機能(Phase1)導入前から存在する唯一の静的HTML記事
+// (column/typhoon-okinawa-travel.html)専用の互換リスト。この記事は
+// Firestore columnArticlesへ一切登録せず(URLも本文もコメントも壊さない
+// という指示のため、既存の仕組みへ一切手を触れない)、コメント対象判定
+// でだけ「常に許可」として扱う。新しい静的コラムを今後手作業で追加する
+// 予定はないため、このリストへの追記は原則発生しない想定(通常の新規記事は
+// すべてadmin-column.html経由のFirestore記事として作成され、
+// isColumnSlugEligibleForComments()が自動的にコメント対象として扱う)。
+const LEGACY_STATIC_COLUMN_SLUGS =
   [
     "typhoon-okinawa-travel"
   ];
+
+// マチナウ読み物投稿機能(Phase1)｜Firestore columnArticlesのドキュメントID
+// そのものをslug(URLの一部)として使う(別途slugフィールドを持たない、
+// IDとslugが食い違う不整合を構造的に無くすため)。
+const COLUMN_ARTICLES_COLLECTION =
+  "columnArticles";
+
+const COLUMN_STATUS_DRAFT =
+  "draft";
+
+const COLUMN_STATUS_PUBLISHED =
+  "published";
+
+// Phase1では少数の分かりやすいカテゴリーのみを用意する(大量のカテゴリーを
+// 作らない指示のため)。将来増やす場合はこの配列に追記するだけでよく、
+// admin-column.html側の同名配列と両方を更新する(既存のOKINAWA_MUNICIPALITY_
+// TO_REGION_NAME等と同じ、複製管理の方針を踏襲)。
+const ALLOWED_COLUMN_CATEGORIES =
+  [
+    "文化・背景",
+    "楽しみ方",
+    "安全・備え",
+    "マチナウの想い"
+  ];
+
+const COLUMN_TITLE_MAX_LENGTH =
+  60;
+
+const COLUMN_DESCRIPTION_MAX_LENGTH =
+  120;
+
+const COLUMN_CONTENT_MAX_LENGTH =
+  6000;
+
+// 代表が任意でURL識別子(slug)を指定できる場合の形式。指定しない場合は
+// Firestoreの自動採番IDをそのままslugとして使うため、代表が英語slugを
+// 考える必要はない。
+const COLUMN_CUSTOM_SLUG_PATTERN =
+  /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+const COLUMN_CUSTOM_SLUG_MAX_LENGTH =
+  60;
+
+const COLUMN_LIST_MAX_COUNT =
+  200;
+
+const COLUMN_ARTICLE_PAGE_SHARED_CACHE_MAX_AGE_SECONDS =
+  300;
+
+const COLUMN_ARTICLE_PAGE_STALE_WHILE_REVALIDATE_SECONDS =
+  600;
+
+const COLUMN_LIST_SHARED_CACHE_MAX_AGE_SECONDS =
+  60;
+
+const COLUMN_LIST_STALE_WHILE_REVALIDATE_SECONDS =
+  120;
+
+const SITEMAP_SHARED_CACHE_MAX_AGE_SECONDS =
+  300;
+
+const SITEMAP_STALE_WHILE_REVALIDATE_SECONDS =
+  600;
 
 const COMMENT_NICKNAME_MAX_LENGTH =
   20;
@@ -1707,6 +1776,48 @@ async function claimCommentRateLimit(
 }
 
 
+// マチナウ読み物投稿機能(Phase1)｜コメント対象記事の判定を、旧来の
+// 静的コラム(LEGACY_STATIC_COLUMN_SLUGS、既存の1記事専用の互換維持)と、
+// Firestore columnArticlesに実在しstatus==="published"の記事、の
+// どちらかであればtrueとする。後者により、admin-column.html経由で新しく
+// 公開された読み物は、コード変更なしに自動でコメント対象になる
+// (「記事を追加するたびコード変更をなくす」という指示に対応)。
+async function isColumnSlugEligibleForComments(
+  database,
+  articleSlug
+) {
+  if (
+    articleSlug === ""
+  ) {
+    return false;
+  }
+
+  if (
+    LEGACY_STATIC_COLUMN_SLUGS.includes(
+      articleSlug
+    )
+  ) {
+    return true;
+  }
+
+  const articleSnapshot =
+    await database
+      .collection(
+        COLUMN_ARTICLES_COLLECTION
+      )
+      .doc(
+        articleSlug
+      )
+      .get();
+
+  return (
+    articleSnapshot.exists &&
+    articleSnapshot.data().status ===
+      COLUMN_STATUS_PUBLISHED
+  );
+}
+
+
 // マチナウ読み物(コラム)の記事下コメント投稿。新しいVercel Functionは
 // 追加せず、既存のこのFunctionへmode追加のみで実装する。
 // ①articleSlugをホワイトリストで検証→②ハニーポット欄(bot対策、人間には
@@ -1733,10 +1844,19 @@ async function handlePostArticleCommentRequest(
         ? requestBody.articleSlug.trim()
         : "";
 
+    const app =
+      getFirebaseAdminApp();
+
+    const database =
+      getFirestore(
+        app
+      );
+
     if (
-      !ALLOWED_ARTICLE_COMMENT_SLUGS.includes(
+      !(await isColumnSlugEligibleForComments(
+        database,
         articleSlug
-      )
+      ))
     ) {
       return response.status(400).json({
         success: false,
@@ -1790,14 +1910,6 @@ async function handlePostArticleCommentRequest(
           "文字以内でご入力ください）。"
       });
     }
-
-    const app =
-      getFirebaseAdminApp();
-
-    const database =
-      getFirestore(
-        app
-      );
 
     const ipHash =
       hashClientIpAddress(
@@ -1935,18 +2047,6 @@ async function handleArticleCommentsListRequest(
         ? request.query.articleSlug.trim()
         : "";
 
-    if (
-      !ALLOWED_ARTICLE_COMMENT_SLUGS.includes(
-        articleSlug
-      )
-    ) {
-      return response.status(400).json({
-        success: false,
-        message:
-          "対象の記事が見つかりません。"
-      });
-    }
-
     const app =
       getFirebaseAdminApp();
 
@@ -1954,6 +2054,19 @@ async function handleArticleCommentsListRequest(
       getFirestore(
         app
       );
+
+    if (
+      !(await isColumnSlugEligibleForComments(
+        database,
+        articleSlug
+      ))
+    ) {
+      return response.status(400).json({
+        success: false,
+        message:
+          "対象の記事が見つかりません。"
+      });
+    }
 
     // 2つの等価条件(articleSlug/status)のみで絞り込み、orderByは付けない。
     // 等価条件と別フィールドのorderByを組み合わせるとFirestoreの複合indexが
@@ -2175,10 +2288,16 @@ async function handleAdminListArticleCommentsRequest(
         ? requestBody.articleSlug.trim()
         : "";
 
+    const database =
+      getFirestore(
+        app
+      );
+
     if (
-      !ALLOWED_ARTICLE_COMMENT_SLUGS.includes(
+      !(await isColumnSlugEligibleForComments(
+        database,
         articleSlug
-      )
+      ))
     ) {
       return response.status(400).json({
         success: false,
@@ -2186,11 +2305,6 @@ async function handleAdminListArticleCommentsRequest(
           "対象の記事が見つかりません。"
       });
     }
-
-    const database =
-      getFirestore(
-        app
-      );
 
     const commentsSnapshot =
       await database
@@ -2408,6 +2522,1647 @@ async function handleAdminHideArticleCommentRequest(
 }
 
 
+// ==========================================================================
+// マチナウ読み物投稿機能(Phase1)
+// 新しいVercel Functionは追加せず、既存のこのFunctionへmode追加のみで
+// 実装する(Functions 12/12を維持)。columnArticlesコレクションはクライアント
+// から直接読み書きさせず、常にAdmin SDK経由(このFunction経由)のみで
+// アクセスするため、Firestore Security Rulesの変更は一切不要。
+// column/typhoon-okinawa-travel.html(既存の唯一の静的記事)には一切触れず、
+// URL・本文・コメント・GA4いずれも無変更のまま独立して残す。
+// ==========================================================================
+
+function escapeHtmlForRender(
+  value
+) {
+  return String(
+    value ?? ""
+  )
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+
+function toDateFromFirestoreValue(
+  value
+) {
+  if (
+    value &&
+    typeof value.toDate === "function"
+  ) {
+    return value.toDate();
+  }
+
+  return null;
+}
+
+
+function formatDateForDisplay(
+  date
+) {
+  if (
+    !(date instanceof Date) ||
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return "";
+  }
+
+  return (
+    date.getFullYear() +
+    "年" +
+    (date.getMonth() + 1) +
+    "月" +
+    date.getDate() +
+    "日"
+  );
+}
+
+
+function formatDateForAttribute(
+  date
+) {
+  if (
+    !(date instanceof Date) ||
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return "";
+  }
+
+  const twoDigits =
+    function(numberValue) {
+      return String(
+        numberValue
+      ).padStart(
+        2,
+        "0"
+      );
+    };
+
+  return (
+    date.getFullYear() +
+    "-" +
+    twoDigits(
+      date.getMonth() + 1
+    ) +
+    "-" +
+    twoDigits(
+      date.getDate()
+    )
+  );
+}
+
+
+// 本文(プレーンテキスト、admin-column.htmlのtextareaからそのまま届く)を
+// 空行区切りの段落として扱い、各段落をエスケープした<p>へ変換する。
+// 管理者入力であってもHTMLタグは一切許可しない(admin-post.js等、既存の
+// マチナウ運営コンテンツもすべてプレーンテキスト入力のみで、リッチテキスト
+// 入力欄を持たせる既存資産が無いため、この方針を踏襲する)。
+function buildColumnArticleParagraphsHtml(
+  content
+) {
+  const paragraphs =
+    String(
+      content || ""
+    )
+      .split(
+        /\n\s*\n/
+      )
+      .map(
+        function(paragraph) {
+          return paragraph.trim();
+        }
+      )
+      .filter(
+        function(paragraph) {
+          return paragraph !== "";
+        }
+      );
+
+  return paragraphs
+    .map(
+      function(paragraph) {
+        return (
+          "<p>" +
+          escapeHtmlForRender(
+            paragraph
+          ).replaceAll(
+            "\n",
+            "<br>"
+          ) +
+          "</p>"
+        );
+      }
+    )
+    .join(
+      "\n      "
+    );
+}
+
+
+// column/typhoon-okinawa-travel.htmlと同じCSS変数・カード構造・GA4呼び出し
+// 方式・コメントセクション構造を再利用する(見た目を統一するため、既存の
+// 静的HTMLからCSSブロックを複製している。既存ファイル自体は変更しない)。
+function buildColumnArticleHtml(
+  article
+) {
+  const canonicalUrl =
+    "https://machinau.jp/column/" +
+    article.slug +
+    ".html";
+
+  const publishedDisplay =
+    formatDateForDisplay(
+      article.publishedAtDate
+    );
+
+  const updatedDisplay =
+    formatDateForDisplay(
+      article.updatedAtDate ||
+        article.publishedAtDate
+    );
+
+  const publishedAttribute =
+    formatDateForAttribute(
+      article.publishedAtDate
+    );
+
+  const updatedAttribute =
+    formatDateForAttribute(
+      article.updatedAtDate ||
+        article.publishedAtDate
+    );
+
+  const escapedTitle =
+    escapeHtmlForRender(
+      article.title
+    );
+
+  const escapedDescription =
+    escapeHtmlForRender(
+      article.description
+    );
+
+  const escapedCategory =
+    escapeHtmlForRender(
+      article.category
+    );
+
+  const escapedSlugForJs =
+    JSON.stringify(
+      article.slug
+    );
+
+  return `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <script>
+    (function () {
+      if (location.hostname !== "machinau.jp" && location.hostname !== "imamiru-web.vercel.app") {
+        return;
+      }
+
+      window.dataLayer = window.dataLayer || [];
+
+      window.gtag = function () {
+        dataLayer.push(arguments);
+      };
+
+      gtag("js", new Date());
+      gtag("config", "G-PGM7GNVQX8");
+
+      const gaScript = document.createElement("script");
+      gaScript.async = true;
+      gaScript.src =
+        "https://www.googletagmanager.com/gtag/js?id=G-PGM7GNVQX8";
+      document.head.appendChild(gaScript);
+    })();
+  </script>
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0788c9">
+  <meta name="description" content="${escapedDescription}">
+  <title>${escapedTitle}｜マチナウ</title>
+  <link rel="canonical" href="${canonicalUrl}">
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg">
+  <link rel="manifest" href="../manifest.json">
+  <link rel="apple-touch-icon" href="../apple-touch-icon.png">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="${escapedTitle}｜マチナウ">
+  <meta property="og:description" content="${escapedDescription}">
+  <meta property="og:url" content="${canonicalUrl}">
+  <meta property="og:image" content="https://machinau.jp/icon-512.png">
+  <meta name="twitter:card" content="summary">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": ${JSON.stringify(article.title)},
+    "description": ${JSON.stringify(article.description)},
+    "image": "https://machinau.jp/icon-512.png",
+    "author": { "@type": "Organization", "name": "マチナウ運営" },
+    "publisher": {
+      "@type": "Organization",
+      "name": "マチナウ",
+      "logo": { "@type": "ImageObject", "url": "https://machinau.jp/icon-512.png" }
+    },
+    "datePublished": "${publishedAttribute}",
+    "dateModified": "${updatedAttribute}",
+    "mainEntityOfPage": { "@type": "WebPage", "@id": "${canonicalUrl}" }
+  }
+  </script>
+
+  <style>
+    :root {
+      --navy: #071a33;
+      --blue: #0788c9;
+      --cyan: #04b7d7;
+      --white: #ffffff;
+      --text: #15233a;
+      --subtext: #697386;
+      --border: #e7edf3;
+      --background: #f4f8fb;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 0 0 60px;
+      font-family: "Yu Gothic", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+      background: var(--background);
+      color: var(--text);
+    }
+    .page-header {
+      padding: 28px 18px;
+      background: linear-gradient(135deg, #0788c9, #04b7d7);
+      color: var(--white);
+      text-align: center;
+    }
+    .brand-mini {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-weight: 900; font-size: 15px; margin-bottom: 14px;
+    }
+    .brand-mini-icon {
+      width: 28px; height: 28px; display: grid; place-items: center;
+      border-radius: 9px; background: rgba(255, 255, 255, 0.2); font-size: 15px;
+    }
+    .page-header h1 { margin: 0; font-size: 22px; line-height: 1.5; }
+    main { width: min(100%, 680px); margin: -20px auto 0; padding: 0 18px; }
+    .card {
+      background: var(--white); border-radius: 22px;
+      box-shadow: 0 16px 45px rgba(20, 52, 82, 0.12); padding: 30px 22px;
+    }
+    .article-meta { margin: 0 0 12px; color: var(--subtext); font-size: 12px; }
+    .article-category {
+      display: inline-block; margin: 0 0 14px; padding: 5px 12px;
+      border-radius: 999px; background: #eef7fb; color: var(--blue);
+      font-size: 11px; font-weight: 900;
+    }
+    .lede { margin: 0 0 28px; font-size: 15px; line-height: 2; color: var(--text); }
+    p { font-size: 14px; line-height: 2; color: var(--text); }
+    .cta-section {
+      margin-top: 36px; padding: 24px 20px; border-radius: 18px;
+      background: linear-gradient(135deg, #0788c9, #04b7d7);
+      color: var(--white); text-align: center;
+    }
+    .cta-section p { color: rgba(255, 255, 255, 0.92); margin: 0 0 16px; font-size: 13px; }
+    .cta-button {
+      display: inline-block; padding: 13px 28px; border-radius: 999px;
+      background: var(--white); color: var(--blue); font-weight: 700;
+      font-size: 14px; text-decoration: none;
+    }
+    .byline {
+      margin-top: 30px; padding-top: 18px; border-top: 1px solid var(--border);
+      font-size: 12px; color: var(--subtext);
+    }
+    .back-link {
+      display: inline-block; margin-top: 24px; font-size: 13px;
+      font-weight: 700; color: var(--blue); text-decoration: none;
+    }
+    .comment-section { margin: 34px 0 0; padding-top: 22px; border-top: 1px solid var(--border); }
+    .comment-section h2 { margin: 0 0 10px; font-size: 16px; color: var(--navy); }
+    .comment-form { display: grid; gap: 10px; margin: 14px 0 0; }
+    .comment-form label { display: block; margin: 0 0 5px; color: var(--navy); font-size: 12px; font-weight: 700; }
+    .comment-form input, .comment-form textarea {
+      width: 100%; padding: 11px 13px; border: 1px solid var(--border); border-radius: 12px;
+      outline: none; color: var(--text); background: #fbfdfe; font-size: 14px; font-family: inherit;
+    }
+    .comment-form input:focus, .comment-form textarea:focus { border-color: var(--cyan); background: var(--white); }
+    .comment-form textarea { min-height: 90px; resize: vertical; }
+    .comment-honeypot-field { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+    .comment-submit-button {
+      justify-self: start; min-height: 44px; padding: 11px 22px; border: none; border-radius: 999px;
+      color: var(--white); background: linear-gradient(135deg, var(--blue), var(--cyan));
+      font-size: 13px; font-weight: 900; cursor: pointer;
+    }
+    .comment-submit-button:disabled { opacity: 0.6; cursor: wait; }
+    .comment-status-message { margin: 2px 0 0; font-size: 12px; line-height: 1.7; min-height: 1em; }
+    .comment-status-message.success { color: #146e4a; }
+    .comment-status-message.error { color: #a93d3d; }
+    .comment-list { display: grid; gap: 12px; margin: 20px 0 0; }
+    .comment-item { padding: 13px 14px; border-radius: 13px; background: #f4f8fa; }
+    .comment-item-nickname { margin: 0; color: var(--navy); font-size: 12px; font-weight: 900; }
+    .comment-item-body { margin: 6px 0 0; color: var(--text); font-size: 13px; line-height: 1.8; white-space: pre-wrap; word-break: break-word; }
+    .comment-item-time { margin: 6px 0 0; color: var(--subtext); font-size: 10px; }
+    .comment-empty-state {
+      margin: 16px 0 0; padding: 16px; border: 1px dashed var(--border); border-radius: 13px;
+      color: var(--subtext); font-size: 12px; text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="page-header">
+    <div class="brand-mini"><span class="brand-mini-icon">🌺</span>マチナウ</div>
+    <h1>${escapedTitle}</h1>
+  </div>
+
+  <main>
+    <div class="card">
+
+      <span class="article-category">${escapedCategory}</span>
+
+      <p class="article-meta">
+        公開日：<time datetime="${publishedAttribute}">${publishedDisplay}</time>／更新日：<time datetime="${updatedAttribute}">${updatedDisplay}</time>
+      </p>
+
+      <p class="lede">${escapedDescription}</p>
+
+      ${buildColumnArticleParagraphsHtml(
+        article.content
+      )}
+
+      <div class="cta-section">
+        <p>天気・交通・地域の「今」を確認して、このあとの判断材料に。</p>
+        <a class="cta-button" href="../" onclick="if (typeof gtag === 'function') { gtag('event', 'column_cta_click', { article_slug: ${escapedSlugForJs} }); }">今の沖縄をマチナウで見る</a>
+      </div>
+
+      <p class="byline">マチナウ運営</p>
+
+      <div class="comment-section">
+        <h2>この記事にコメントする</h2>
+
+        <form id="commentForm" class="comment-form" novalidate>
+          <div>
+            <label for="commentNicknameInput">ニックネーム</label>
+            <input id="commentNicknameInput" type="text" maxlength="20" placeholder="例：旅好き" autocomplete="off">
+          </div>
+          <div>
+            <label for="commentTextInput">コメント</label>
+            <textarea id="commentTextInput" maxlength="500" placeholder="この記事についてのご感想や、実際に体験したことなどをどうぞ"></textarea>
+          </div>
+          <div class="comment-honeypot-field" aria-hidden="true">
+            <label for="commentContactField">ウェブサイト</label>
+            <input id="commentContactField" type="text" tabindex="-1" autocomplete="off">
+          </div>
+          <button id="commentSubmitButton" class="comment-submit-button" type="submit">コメントを投稿する</button>
+          <p id="commentStatusMessage" class="comment-status-message" role="status" aria-live="polite"></p>
+        </form>
+
+        <div id="commentList" class="comment-list">
+          <div class="comment-empty-state">コメントを読み込んでいます…</div>
+        </div>
+      </div>
+
+      <a class="back-link" href="../">← マチナウTOPへ戻る</a>
+
+    </div>
+  </main>
+
+  <script>
+    const ARTICLE_SLUG = ${escapedSlugForJs};
+    const commentForm = document.getElementById("commentForm");
+    const commentNicknameInput = document.getElementById("commentNicknameInput");
+    const commentTextInput = document.getElementById("commentTextInput");
+    const commentContactField = document.getElementById("commentContactField");
+    const commentSubmitButton = document.getElementById("commentSubmitButton");
+    const commentStatusMessage = document.getElementById("commentStatusMessage");
+    const commentList = document.getElementById("commentList");
+
+    function escapeCommentHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function showCommentStatus(message, type) {
+      commentStatusMessage.textContent = message;
+      commentStatusMessage.className = "comment-status-message" + (type ? " " + type : "");
+    }
+
+    function formatCommentTime(isoString) {
+      if (typeof isoString !== "string" || isoString === "") return "";
+      const parsedDate = new Date(isoString);
+      if (Number.isNaN(parsedDate.getTime())) return "";
+      return parsedDate.toLocaleString("ja-JP");
+    }
+
+    function renderCommentItemHtml(comment) {
+      const timeText = formatCommentTime(comment.createdAt);
+      return (
+        '<div class="comment-item">' +
+          '<p class="comment-item-nickname">' + escapeCommentHtml(comment.nickname) + '</p>' +
+          '<p class="comment-item-body">' + escapeCommentHtml(comment.comment) + '</p>' +
+          (timeText !== "" ? '<p class="comment-item-time">' + escapeCommentHtml(timeText) + '</p>' : "") +
+        '</div>'
+      );
+    }
+
+    function renderComments(comments) {
+      if (!Array.isArray(comments) || comments.length === 0) {
+        commentList.innerHTML = '<div class="comment-empty-state">まだコメントはありません。最初のコメントを投稿してみませんか？</div>';
+        return;
+      }
+      commentList.innerHTML = comments.map(renderCommentItemHtml).join("");
+    }
+
+    async function loadComments() {
+      try {
+        const response = await fetch("/api/moderate-submission?mode=articleComments&articleSlug=" + encodeURIComponent(ARTICLE_SLUG));
+        const responseData = await response.json();
+        if (!response.ok || !responseData || responseData.success !== true) {
+          throw new Error("コメントを取得できませんでした。");
+        }
+        renderComments(responseData.comments);
+      } catch (error) {
+        console.error("コメント一覧の取得に失敗しました：", error);
+        commentList.innerHTML = '<div class="comment-empty-state">コメントを読み込めませんでした。時間をおいて再度お試しください。</div>';
+      }
+    }
+
+    commentForm.addEventListener("submit", async function(event) {
+      event.preventDefault();
+      showCommentStatus("", "");
+      commentSubmitButton.disabled = true;
+      commentSubmitButton.textContent = "投稿しています…";
+      try {
+        const response = await fetch("/api/moderate-submission", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mode: "postArticleComment",
+            articleSlug: ARTICLE_SLUG,
+            nickname: commentNicknameInput.value,
+            comment: commentTextInput.value,
+            contactField: commentContactField.value
+          })
+        });
+        let responseData = null;
+        try { responseData = await response.json(); } catch (jsonError) { throw new Error("応答を読み取れませんでした。"); }
+        if (!responseData || responseData.success !== true) {
+          showCommentStatus((responseData && responseData.message) || "コメントを投稿できませんでした。", "error");
+          return;
+        }
+        if (responseData.comment) {
+          const existingEmptyState = commentList.querySelector(".comment-empty-state");
+          if (existingEmptyState) { commentList.innerHTML = ""; }
+          commentList.insertAdjacentHTML("afterbegin", renderCommentItemHtml(responseData.comment));
+        }
+        commentTextInput.value = "";
+        showCommentStatus("コメントを投稿しました。", "success");
+      } catch (error) {
+        console.error("コメント投稿に失敗しました：", error);
+        showCommentStatus("コメントの投稿に失敗しました。時間をおいて、もう一度お試しください。", "error");
+      } finally {
+        commentSubmitButton.disabled = false;
+        commentSubmitButton.textContent = "コメントを投稿する";
+      }
+    });
+
+    loadComments();
+  </script>
+
+</body>
+</html>
+`;
+}
+
+
+function buildColumnNotFoundHtml() {
+  return `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex">
+  <title>記事が見つかりません｜マチナウ</title>
+</head>
+<body style="font-family: sans-serif; text-align: center; padding: 60px 20px; color: #15233a;">
+  <p>お探しの記事は見つかりませんでした。</p>
+  <p><a href="/" style="color: #0788c9;">マチナウTOPへ戻る</a></p>
+</body>
+</html>
+`;
+}
+
+
+// 記事本体のHTMLを動的レンダリングする(vercel.jsonのrewriteにより、
+// 実在する静的ファイルが無い/column/*.htmlへのアクセスだけがここへ届く。
+// 既存の/column/typhoon-okinawa-travel.html(実ファイルとして存在)は
+// Vercelの仕様上、静的ファイルの一致がrewriteより優先されるため、この
+// 関数には一切到達しない＝無変更のまま維持される)。
+async function handleRenderColumnArticleRequest(
+  request,
+  response
+) {
+  try {
+    const slug =
+      request.query &&
+      typeof request.query.slug === "string"
+        ? request.query.slug.trim()
+        : "";
+
+    if (
+      slug === "" ||
+      LEGACY_STATIC_COLUMN_SLUGS.includes(
+        slug
+      )
+    ) {
+      response.setHeader(
+        "Content-Type",
+        "text/html; charset=utf-8"
+      );
+
+      return response.status(404).send(
+        buildColumnNotFoundHtml()
+      );
+    }
+
+    const app =
+      getFirebaseAdminApp();
+
+    const database =
+      getFirestore(
+        app
+      );
+
+    const documentSnapshot =
+      await database
+        .collection(
+          COLUMN_ARTICLES_COLLECTION
+        )
+        .doc(
+          slug
+        )
+        .get();
+
+    if (
+      !documentSnapshot.exists ||
+      documentSnapshot.data().status !==
+        COLUMN_STATUS_PUBLISHED
+    ) {
+      response.setHeader(
+        "Content-Type",
+        "text/html; charset=utf-8"
+      );
+
+      return response.status(404).send(
+        buildColumnNotFoundHtml()
+      );
+    }
+
+    const data =
+      documentSnapshot.data();
+
+    const html =
+      buildColumnArticleHtml(
+        {
+          slug: slug,
+          title: data.title,
+          category: data.category,
+          description: data.description,
+          content: data.content,
+          publishedAtDate:
+            toDateFromFirestoreValue(
+              data.publishedAt
+            ),
+          updatedAtDate:
+            toDateFromFirestoreValue(
+              data.updatedAt
+            )
+        }
+      );
+
+    response.setHeader(
+      "Content-Type",
+      "text/html; charset=utf-8"
+    );
+
+    response.setHeader(
+      "Cache-Control",
+      "public, max-age=0, s-maxage=" +
+        COLUMN_ARTICLE_PAGE_SHARED_CACHE_MAX_AGE_SECONDS +
+        ", stale-while-revalidate=" +
+        COLUMN_ARTICLE_PAGE_STALE_WHILE_REVALIDATE_SECONDS
+    );
+
+    return response.status(200).send(
+      html
+    );
+  } catch (error) {
+    console.error(
+      "読み物ページのレンダリングエラー：",
+      error
+    );
+
+    response.setHeader(
+      "Content-Type",
+      "text/html; charset=utf-8"
+    );
+
+    return response.status(500).send(
+      buildColumnNotFoundHtml()
+    );
+  }
+}
+
+
+// 公開済みマチナウ読み物の一覧(TOPの動的カード表示用)。既存の静的カード
+// (index.html内のtyphoon-okinawa-travel専用マークアップ)はそのまま残し、
+// このAPIはそれに追加するFirestore由来の記事だけを返す(既存カードとの
+// 重複は発生しない設計)。
+async function handlePublicListPublishedColumnArticlesRequest(
+  request,
+  response
+) {
+  try {
+    const app =
+      getFirebaseAdminApp();
+
+    const database =
+      getFirestore(
+        app
+      );
+
+    const articlesSnapshot =
+      await database
+        .collection(
+          COLUMN_ARTICLES_COLLECTION
+        )
+        .where(
+          "status",
+          "==",
+          COLUMN_STATUS_PUBLISHED
+        )
+        .limit(
+          COLUMN_LIST_MAX_COUNT
+        )
+        .get();
+
+    const articles =
+      articlesSnapshot.docs
+        .map(
+          function(documentSnapshot) {
+            const data =
+              documentSnapshot.data() ||
+              {};
+
+            const publishedAtDate =
+              toDateFromFirestoreValue(
+                data.publishedAt
+              );
+
+            return {
+              slug:
+                documentSnapshot.id,
+
+              title:
+                typeof data.title === "string"
+                  ? data.title
+                  : "",
+
+              description:
+                typeof data.description === "string"
+                  ? data.description
+                  : "",
+
+              publishedAtMillis:
+                publishedAtDate
+                  ? publishedAtDate.getTime()
+                  : 0
+            };
+          }
+        )
+        .sort(
+          function(firstArticle, secondArticle) {
+            return (
+              secondArticle.publishedAtMillis -
+              firstArticle.publishedAtMillis
+            );
+          }
+        )
+        .map(
+          function(article) {
+            return {
+              slug: article.slug,
+              title: article.title,
+              description: article.description
+            };
+          }
+        );
+
+    response.setHeader(
+      "Cache-Control",
+      "public, max-age=0, s-maxage=" +
+        COLUMN_LIST_SHARED_CACHE_MAX_AGE_SECONDS +
+        ", stale-while-revalidate=" +
+        COLUMN_LIST_STALE_WHILE_REVALIDATE_SECONDS
+    );
+
+    return response.status(200).json({
+      success: true,
+      articles: articles
+    });
+  } catch (error) {
+    console.error(
+      "読み物一覧取得エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message:
+        "読み物一覧を取得できませんでした。"
+    });
+  }
+}
+
+
+// sitemap.xmlを動的生成する(vercel.jsonのrewriteで/sitemap.xml自体を
+// このFunctionへ向ける。静的ファイルsitemap.xmlは今回削除し、既存の
+// TOP・既存コラム記事のURLをこの関数内に固定で含めることで、既存の
+// SEO資産(2件)を維持しつつ、公開済みのFirestore記事を自動で追加する)。
+async function handleRenderSitemapRequest(
+  request,
+  response
+) {
+  try {
+    const app =
+      getFirebaseAdminApp();
+
+    const database =
+      getFirestore(
+        app
+      );
+
+    const urlEntries =
+      [
+        {
+          loc: "https://machinau.jp/",
+          lastmod: null
+        },
+        {
+          loc: "https://machinau.jp/column/typhoon-okinawa-travel.html",
+          lastmod: "2026-08-27"
+        }
+      ];
+
+    try {
+      const articlesSnapshot =
+        await database
+          .collection(
+            COLUMN_ARTICLES_COLLECTION
+          )
+          .where(
+            "status",
+            "==",
+            COLUMN_STATUS_PUBLISHED
+          )
+          .limit(
+            COLUMN_LIST_MAX_COUNT
+          )
+          .get();
+
+      articlesSnapshot.docs.forEach(
+        function(documentSnapshot) {
+          const data =
+            documentSnapshot.data() ||
+            {};
+
+          const updatedAtDate =
+            toDateFromFirestoreValue(
+              data.updatedAt
+            ) ||
+            toDateFromFirestoreValue(
+              data.publishedAt
+            );
+
+          urlEntries.push(
+            {
+              loc:
+                "https://machinau.jp/column/" +
+                documentSnapshot.id +
+                ".html",
+
+              lastmod:
+                formatDateForAttribute(
+                  updatedAtDate
+                ) || null
+            }
+          );
+        }
+      );
+    } catch (articlesError) {
+      console.error(
+        "sitemap生成時の読み物一覧取得に失敗しました(TOP・既存コラムのみで生成を継続)：",
+        articlesError
+      );
+    }
+
+    const xmlBody =
+      urlEntries
+        .map(
+          function(entry) {
+            return (
+              "  <url>\n" +
+              "    <loc>" +
+              escapeHtmlForRender(
+                entry.loc
+              ) +
+              "</loc>\n" +
+              (
+                entry.lastmod
+                  ? "    <lastmod>" +
+                    entry.lastmod +
+                    "</lastmod>\n"
+                  : ""
+              ) +
+              "  </url>"
+            );
+          }
+        )
+        .join(
+          "\n"
+        );
+
+    const xml =
+      '<?xml version="1.0" encoding="UTF-8"?>\n' +
+      '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+      xmlBody +
+      "\n</urlset>\n";
+
+    response.setHeader(
+      "Content-Type",
+      "application/xml; charset=utf-8"
+    );
+
+    response.setHeader(
+      "Cache-Control",
+      "public, max-age=0, s-maxage=" +
+        SITEMAP_SHARED_CACHE_MAX_AGE_SECONDS +
+        ", stale-while-revalidate=" +
+        SITEMAP_STALE_WHILE_REVALIDATE_SECONDS
+    );
+
+    return response.status(200).send(
+      xml
+    );
+  } catch (error) {
+    console.error(
+      "sitemap生成エラー：",
+      error
+    );
+
+    response.setHeader(
+      "Content-Type",
+      "application/xml; charset=utf-8"
+    );
+
+    return response.status(500).send(
+      '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>\n'
+    );
+  }
+}
+
+
+function validateColumnArticleFields(
+  requestBody
+) {
+  const title =
+    String(
+      requestBody.title || ""
+    )
+      .trim();
+
+  if (title === "") {
+    throw new Error(
+      "タイトルを入力してください。"
+    );
+  }
+
+  if (
+    title.length >
+    COLUMN_TITLE_MAX_LENGTH
+  ) {
+    throw new Error(
+      "タイトルが長すぎます（" +
+      COLUMN_TITLE_MAX_LENGTH +
+      "文字以内）。"
+    );
+  }
+
+  const category =
+    String(
+      requestBody.category || ""
+    )
+      .trim();
+
+  if (
+    !ALLOWED_COLUMN_CATEGORIES.includes(
+      category
+    )
+  ) {
+    throw new Error(
+      "カテゴリーを選択してください。"
+    );
+  }
+
+  const description =
+    String(
+      requestBody.description || ""
+    )
+      .trim();
+
+  if (description === "") {
+    throw new Error(
+      "概要・説明文を入力してください。"
+    );
+  }
+
+  if (
+    description.length >
+    COLUMN_DESCRIPTION_MAX_LENGTH
+  ) {
+    throw new Error(
+      "概要・説明文が長すぎます（" +
+      COLUMN_DESCRIPTION_MAX_LENGTH +
+      "文字以内）。"
+    );
+  }
+
+  const content =
+    String(
+      requestBody.content || ""
+    )
+      .trim();
+
+  if (content === "") {
+    throw new Error(
+      "本文を入力してください。"
+    );
+  }
+
+  if (
+    content.length >
+    COLUMN_CONTENT_MAX_LENGTH
+  ) {
+    throw new Error(
+      "本文が長すぎます（" +
+      COLUMN_CONTENT_MAX_LENGTH +
+      "文字以内）。"
+    );
+  }
+
+  const isPublished =
+    requestBody.isPublished === true;
+
+  return {
+    title: title,
+    category: category,
+    description: description,
+    content: content,
+    isPublished: isPublished
+  };
+}
+
+
+// 代表が任意でURL識別子を指定した場合はその値(重複チェック済み)を、
+// 指定しなかった場合はFirestoreの自動採番IDを、そのままドキュメントID
+// (=slug)として使う。作成後にslugを変更する機能は用意しない
+// (一度公開したURLを変えない、という既存コラムと同じSEO安全設計)。
+async function resolveColumnArticleSlugForCreate(
+  database,
+  requestBody
+) {
+  const customSlug =
+    typeof requestBody.customSlug === "string"
+      ? requestBody.customSlug.trim().toLowerCase()
+      : "";
+
+  if (customSlug === "") {
+    return database
+      .collection(
+        COLUMN_ARTICLES_COLLECTION
+      )
+      .doc()
+      .id;
+  }
+
+  if (
+    customSlug.length >
+    COLUMN_CUSTOM_SLUG_MAX_LENGTH ||
+    !COLUMN_CUSTOM_SLUG_PATTERN.test(
+      customSlug
+    )
+  ) {
+    throw new Error(
+      "URL識別子は半角小文字英数字とハイフンのみ、" +
+      COLUMN_CUSTOM_SLUG_MAX_LENGTH +
+      "文字以内で入力してください。空欄なら自動生成されます。"
+    );
+  }
+
+  if (
+    LEGACY_STATIC_COLUMN_SLUGS.includes(
+      customSlug
+    )
+  ) {
+    throw new Error(
+      "このURL識別子は既存の記事と重複するため使用できません。"
+    );
+  }
+
+  const existingSnapshot =
+    await database
+      .collection(
+        COLUMN_ARTICLES_COLLECTION
+      )
+      .doc(
+        customSlug
+      )
+      .get();
+
+  if (
+    existingSnapshot.exists
+  ) {
+    throw new Error(
+      "このURL識別子は既に使用されています。別の識別子を指定してください。"
+    );
+  }
+
+  return customSlug;
+}
+
+
+// マチナウ読み物の新規作成・編集(管理者のみ)。documentIdが指定されていれば
+// 既存記事の更新(slugは不変のまま内容のみ更新)、無ければ新規作成。
+// 新規作成時のみpublishedAtを設定し(下書き→公開へ変わったタイミングを
+// 明確にするため)、既に一度公開済みの記事を編集してもpublishedAtは
+// 上書きしない(公開日が変わらないようにする)。
+async function handleAdminSaveColumnArticleRequest(
+  request,
+  response
+) {
+  try {
+    const app =
+      getFirebaseAdminApp();
+
+    const authResult =
+      await verifyAdminBearerToken(
+        app,
+        request
+      );
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({
+        success: false,
+        message:
+          authResult.message
+      });
+    }
+
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    let fields;
+
+    try {
+      fields =
+        validateColumnArticleFields(
+          requestBody
+        );
+    } catch (validationError) {
+      return response.status(400).json({
+        success: false,
+        message:
+          validationError.message
+      });
+    }
+
+    const database =
+      getFirestore(
+        app
+      );
+
+    const documentId =
+      typeof requestBody.documentId === "string"
+        ? requestBody.documentId.trim()
+        : "";
+
+    if (documentId !== "") {
+      const documentReference =
+        database
+          .collection(
+            COLUMN_ARTICLES_COLLECTION
+          )
+          .doc(
+            documentId
+          );
+
+      const existingSnapshot =
+        await documentReference.get();
+
+      if (
+        !existingSnapshot.exists
+      ) {
+        return response.status(404).json({
+          success: false,
+          message:
+            "対象の記事が見つかりませんでした。"
+        });
+      }
+
+      const existingData =
+        existingSnapshot.data() ||
+        {};
+
+      const updateData = {
+        title: fields.title,
+        category: fields.category,
+        description: fields.description,
+        content: fields.content,
+
+        status:
+          fields.isPublished
+            ? COLUMN_STATUS_PUBLISHED
+            : COLUMN_STATUS_DRAFT,
+
+        updatedAt:
+          FieldValue.serverTimestamp()
+      };
+
+      if (
+        fields.isPublished &&
+        existingData.status !==
+          COLUMN_STATUS_PUBLISHED
+      ) {
+        updateData.publishedAt =
+          FieldValue.serverTimestamp();
+      }
+
+      await documentReference.update(
+        updateData
+      );
+
+      return response.status(200).json({
+        success: true,
+        message:
+          "マチナウ読み物を更新しました。",
+        slug:
+          documentId
+      });
+    }
+
+    let newSlug;
+
+    try {
+      newSlug =
+        await resolveColumnArticleSlugForCreate(
+          database,
+          requestBody
+        );
+    } catch (slugError) {
+      return response.status(400).json({
+        success: false,
+        message:
+          slugError.message
+      });
+    }
+
+    const newDocumentData = {
+      title: fields.title,
+      category: fields.category,
+      description: fields.description,
+      content: fields.content,
+
+      status:
+        fields.isPublished
+          ? COLUMN_STATUS_PUBLISHED
+          : COLUMN_STATUS_DRAFT,
+
+      createdAt:
+        FieldValue.serverTimestamp(),
+
+      updatedAt:
+        FieldValue.serverTimestamp(),
+
+      publishedAt:
+        fields.isPublished
+          ? FieldValue.serverTimestamp()
+          : null
+    };
+
+    await database
+      .collection(
+        COLUMN_ARTICLES_COLLECTION
+      )
+      .doc(
+        newSlug
+      )
+      .set(
+        newDocumentData
+      );
+
+    return response.status(200).json({
+      success: true,
+      message:
+        "マチナウ読み物を保存しました。",
+      slug:
+        newSlug
+    });
+  } catch (error) {
+    console.error(
+      "マチナウ読み物の保存エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message:
+        "保存に失敗しました。時間をおいて、もう一度お試しください。"
+    });
+  }
+}
+
+
+async function handleAdminListColumnArticlesRequest(
+  request,
+  response
+) {
+  try {
+    const app =
+      getFirebaseAdminApp();
+
+    const authResult =
+      await verifyAdminBearerToken(
+        app,
+        request
+      );
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({
+        success: false,
+        message:
+          authResult.message
+      });
+    }
+
+    const database =
+      getFirestore(
+        app
+      );
+
+    const articlesSnapshot =
+      await database
+        .collection(
+          COLUMN_ARTICLES_COLLECTION
+        )
+        .limit(
+          COLUMN_LIST_MAX_COUNT
+        )
+        .get();
+
+    const articles =
+      articlesSnapshot.docs
+        .map(
+          function(documentSnapshot) {
+            const data =
+              documentSnapshot.data() ||
+              {};
+
+            const updatedAtDate =
+              toDateFromFirestoreValue(
+                data.updatedAt
+              );
+
+            return {
+              id:
+                documentSnapshot.id,
+
+              title:
+                typeof data.title === "string"
+                  ? data.title
+                  : "",
+
+              category:
+                typeof data.category === "string"
+                  ? data.category
+                  : "",
+
+              status:
+                typeof data.status === "string"
+                  ? data.status
+                  : "",
+
+              updatedAtMillis:
+                updatedAtDate
+                  ? updatedAtDate.getTime()
+                  : 0,
+
+              updatedAt:
+                updatedAtDate
+                  ? updatedAtDate.toISOString()
+                  : null
+            };
+          }
+        )
+        .sort(
+          function(firstArticle, secondArticle) {
+            return (
+              secondArticle.updatedAtMillis -
+              firstArticle.updatedAtMillis
+            );
+          }
+        )
+        .map(
+          function(article) {
+            return {
+              id: article.id,
+              title: article.title,
+              category: article.category,
+              status: article.status,
+              updatedAt: article.updatedAt
+            };
+          }
+        );
+
+    return response.status(200).json({
+      success: true,
+      articles: articles
+    });
+  } catch (error) {
+    console.error(
+      "マチナウ読み物一覧取得エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message:
+        "一覧を取得できませんでした。"
+    });
+  }
+}
+
+
+async function handleAdminGetColumnArticleRequest(
+  request,
+  response
+) {
+  try {
+    const app =
+      getFirebaseAdminApp();
+
+    const authResult =
+      await verifyAdminBearerToken(
+        app,
+        request
+      );
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({
+        success: false,
+        message:
+          authResult.message
+      });
+    }
+
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    const documentId =
+      typeof requestBody.documentId === "string"
+        ? requestBody.documentId.trim()
+        : "";
+
+    if (documentId === "") {
+      return response.status(400).json({
+        success: false,
+        message:
+          "documentIdを指定してください。"
+      });
+    }
+
+    const database =
+      getFirestore(
+        app
+      );
+
+    const documentSnapshot =
+      await database
+        .collection(
+          COLUMN_ARTICLES_COLLECTION
+        )
+        .doc(
+          documentId
+        )
+        .get();
+
+    if (
+      !documentSnapshot.exists
+    ) {
+      return response.status(404).json({
+        success: false,
+        message:
+          "対象の記事が見つかりませんでした。"
+      });
+    }
+
+    const data =
+      documentSnapshot.data() ||
+      {};
+
+    return response.status(200).json({
+      success: true,
+      article: {
+        id: documentId,
+
+        title:
+          typeof data.title === "string"
+            ? data.title
+            : "",
+
+        category:
+          typeof data.category === "string"
+            ? data.category
+            : "",
+
+        description:
+          typeof data.description === "string"
+            ? data.description
+            : "",
+
+        content:
+          typeof data.content === "string"
+            ? data.content
+            : "",
+
+        status:
+          typeof data.status === "string"
+            ? data.status
+            : ""
+      }
+    });
+  } catch (error) {
+    console.error(
+      "マチナウ読み物取得エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message:
+        "記事を取得できませんでした。"
+    });
+  }
+}
+
+
+// 公開/下書きへの切り替えだけを行う軽量モード(コメントのhide機能と同じ
+// 考え方)。フォーム全体を再送信しなくても一覧画面から即座に切り替えられる。
+async function handleAdminSetColumnArticleStatusRequest(
+  request,
+  response
+) {
+  try {
+    const app =
+      getFirebaseAdminApp();
+
+    const authResult =
+      await verifyAdminBearerToken(
+        app,
+        request
+      );
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({
+        success: false,
+        message:
+          authResult.message
+      });
+    }
+
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    const documentId =
+      typeof requestBody.documentId === "string"
+        ? requestBody.documentId.trim()
+        : "";
+
+    const isPublished =
+      requestBody.isPublished === true;
+
+    if (documentId === "") {
+      return response.status(400).json({
+        success: false,
+        message:
+          "documentIdを指定してください。"
+      });
+    }
+
+    const database =
+      getFirestore(
+        app
+      );
+
+    const documentReference =
+      database
+        .collection(
+          COLUMN_ARTICLES_COLLECTION
+        )
+        .doc(
+          documentId
+        );
+
+    const existingSnapshot =
+      await documentReference.get();
+
+    if (
+      !existingSnapshot.exists
+    ) {
+      return response.status(404).json({
+        success: false,
+        message:
+          "対象の記事が見つかりませんでした。"
+      });
+    }
+
+    const existingData =
+      existingSnapshot.data() ||
+      {};
+
+    const updateData = {
+      status:
+        isPublished
+          ? COLUMN_STATUS_PUBLISHED
+          : COLUMN_STATUS_DRAFT,
+
+      updatedAt:
+        FieldValue.serverTimestamp()
+    };
+
+    if (
+      isPublished &&
+      existingData.status !==
+        COLUMN_STATUS_PUBLISHED
+    ) {
+      updateData.publishedAt =
+        FieldValue.serverTimestamp();
+    }
+
+    await documentReference.update(
+      updateData
+    );
+
+    return response.status(200).json({
+      success: true,
+      message:
+        isPublished
+          ? "公開しました。"
+          : "下書きに戻しました。"
+    });
+  } catch (error) {
+    console.error(
+      "マチナウ読み物のステータス変更エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message:
+        "状態を変更できませんでした。"
+    });
+  }
+}
+
+
 export default async function handler(
   request,
   response
@@ -2431,6 +4186,39 @@ export default async function handler(
       request.query.mode === "articleComments"
     ) {
       return handleArticleCommentsListRequest(
+        request,
+        response
+      );
+    }
+
+    // マチナウ読み物投稿機能(Phase1)｜vercel.jsonのrewrite経由で
+    // /column/*.html(実在する静的ファイルが無いものだけ)がここへ届く。
+    if (
+      request.query.mode === "renderColumn"
+    ) {
+      return handleRenderColumnArticleRequest(
+        request,
+        response
+      );
+    }
+
+    // vercel.jsonのrewrite経由で/sitemap.xmlがここへ届く
+    // (静的sitemap.xmlは削除済み)。
+    if (
+      request.query.mode === "renderSitemap"
+    ) {
+      return handleRenderSitemapRequest(
+        request,
+        response
+      );
+    }
+
+    // TOPの「マチナウ読みもの」セクションが、既存の静的カードに追加して
+    // Firestore由来の公開済み記事を動的に読み込むための一覧取得。
+    if (
+      request.query.mode === "publicListPublishedColumns"
+    ) {
+      return handlePublicListPublishedColumnArticlesRequest(
         request,
         response
       );
@@ -2500,6 +4288,44 @@ export default async function handler(
     requestBody.mode === "adminHideArticleComment"
   ) {
     return handleAdminHideArticleCommentRequest(
+      request,
+      response
+    );
+  }
+
+  // マチナウ読み物投稿機能(Phase1)｜管理者認証必須の4モード。
+  // 一般公開経路(renderColumn等)には一切影響しない。
+  if (
+    requestBody.mode === "adminSaveColumnArticle"
+  ) {
+    return handleAdminSaveColumnArticleRequest(
+      request,
+      response
+    );
+  }
+
+  if (
+    requestBody.mode === "adminListColumnArticles"
+  ) {
+    return handleAdminListColumnArticlesRequest(
+      request,
+      response
+    );
+  }
+
+  if (
+    requestBody.mode === "adminGetColumnArticle"
+  ) {
+    return handleAdminGetColumnArticleRequest(
+      request,
+      response
+    );
+  }
+
+  if (
+    requestBody.mode === "adminSetColumnArticleStatus"
+  ) {
+    return handleAdminSetColumnArticleStatusRequest(
       request,
       response
     );

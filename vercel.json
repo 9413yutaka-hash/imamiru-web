@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/column/:slug.html",
+      "destination": "/api/moderate-submission?mode=renderColumn&slug=:slug"
+    },
+    {
+      "source": "/sitemap.xml",
+      "destination": "/api/moderate-submission?mode=renderSitemap"
+    }
+  ]
+}

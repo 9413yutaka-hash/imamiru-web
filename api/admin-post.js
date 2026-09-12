@@ -966,13 +966,13 @@ export default async function handler(
     return response.status(200).json({
       success: true,
       message:
-        "運営情報を公開しました。",
+        "地域情報を公開しました。",
       documentId:
         documentReference.id
     });
   } catch (error) {
     console.error(
-      "運営情報の投稿エラー：",
+      "地域情報の投稿エラー：",
       error
     );
 

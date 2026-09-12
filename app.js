@@ -7926,8 +7926,100 @@ document.addEventListener(
     initializeMachinauLanguageSwitcher();
 
     initializeMapLazyLoadObserver();
+
+    loadDynamicColumnEntries();
   }
 );
+
+
+// マチナウ読み物投稿機能(Phase1)｜既存の静的カード(typhoon-okinawa-travel、
+// index.html内に直接記述、無変更)に追加して、admin-column.html経由で
+// Firestoreへ公開されたマチナウ読み物のカードを動的に追加する。取得に
+// 失敗しても既存の静的カードの表示には一切影響させない(catchのみ)。
+// 新しい読み物を追加するたびにindex.htmlを編集する必要をなくすための対応。
+async function loadDynamicColumnEntries() {
+  const columnEntryCardList =
+    document.getElementById(
+      "columnEntryCardList"
+    );
+
+  if (!columnEntryCardList) {
+    return;
+  }
+
+  try {
+    const response =
+      await fetch(
+        "/api/moderate-submission?mode=publicListPublishedColumns"
+      );
+
+    const responseData =
+      await response.json();
+
+    if (
+      !response.ok ||
+      !responseData ||
+      responseData.success !== true ||
+      !Array.isArray(
+        responseData.articles
+      )
+    ) {
+      return;
+    }
+
+    responseData.articles.forEach(
+      function(article) {
+        const slug =
+          typeof article.slug === "string"
+            ? article.slug
+            : "";
+
+        if (slug === "") {
+          return;
+        }
+
+        const cardElement =
+          document.createElement(
+            "div"
+          );
+
+        cardElement.className =
+          "region-recommendation-card";
+
+        cardElement.innerHTML = `
+          <div class="region-recommendation-card-body">
+            <p class="region-recommendation-card-title">
+              ${escapeHtml(
+                article.title
+              )}
+            </p>
+            <p class="region-recommendation-card-content">
+              ${escapeHtml(
+                article.description
+              )}
+            </p>
+            <a
+              class="region-recommendation-card-link"
+              href="column/${encodeURIComponent(
+                slug
+              )}.html"
+              onclick="if (typeof gtag === 'function' && (location.hostname === 'machinau.jp' || location.hostname === 'imamiru-web.vercel.app')) { gtag('event', 'column_entry_click', { article_slug: '${slug}' }); }"
+            >読む →</a>
+          </div>
+        `;
+
+        columnEntryCardList.appendChild(
+          cardElement
+        );
+      }
+    );
+  } catch (error) {
+    console.error(
+      "マチナウ読み物の動的一覧取得に失敗しました(既存の表示には影響しません)：",
+      error
+    );
+  }
+}
 
 // ---- Ver1.7｜Google Maps遅延ロード ----
 // ページを開いただけではGoogle Maps JavaScript APIを読み込まず、地図セクションが

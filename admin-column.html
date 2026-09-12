@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <meta name="robots" content="noindex, nofollow">
+
+  <title>
+    マチナウ読み物を書く｜マチナウ運営
+  </title>
+
+  <style>
+    :root {
+      --navy: #071a33;
+      --blue: #0788c9;
+      --sky: #dff7ff;
+      --green: #19a96b;
+      --red: #ef5a67;
+      --white: #ffffff;
+      --text: #15233a;
+      --subtext: #697386;
+      --border: #e2eaf1;
+      --background: #f4f8fb;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Yu Gothic", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+      background: var(--background);
+      color: var(--text);
+    }
+
+    header {
+      background: var(--navy);
+      color: var(--white);
+      padding: 18px 20px;
+    }
+
+    header .page-label {
+      font-size: 12px;
+      opacity: 0.8;
+    }
+
+    header h1 {
+      margin: 4px 0 0;
+      font-size: 20px;
+    }
+
+    header a {
+      display: inline-block;
+      margin-top: 10px;
+      color: var(--sky);
+      font-size: 13px;
+      text-decoration: none;
+    }
+
+    main {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px 16px 60px;
+    }
+
+    .panel {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 24px;
+    }
+
+    .panel h2 {
+      margin: 0 0 14px;
+      font-size: 16px;
+    }
+
+    .field {
+      margin-bottom: 16px;
+    }
+
+    .field label {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .field-hint {
+      margin: 4px 0 0;
+      font-size: 11px;
+      color: var(--subtext);
+    }
+
+    .field input[type="text"],
+    .field select,
+    .field textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    .field textarea {
+      min-height: 100px;
+      resize: vertical;
+    }
+
+    #contentInput {
+      min-height: 260px;
+    }
+
+    .primary-button {
+      background: linear-gradient(135deg, var(--blue), #04b7d7);
+      color: var(--white);
+      border: none;
+      border-radius: 12px;
+      padding: 11px 18px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .primary-button:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+    .secondary-button {
+      background: var(--white);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 16px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .status-toggle-button {
+      background: var(--white);
+      color: var(--blue);
+      border: 1px solid var(--blue);
+      border-radius: 10px;
+      padding: 6px 12px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .message-box {
+      font-size: 13px;
+      margin-top: 10px;
+      min-height: 1em;
+    }
+
+    .message-box.error {
+      color: var(--red);
+    }
+
+    .message-box.success {
+      color: var(--green);
+    }
+
+    #adminArea {
+      display: none;
+    }
+
+    #adminArea.visible {
+      display: block;
+    }
+
+    .article-card {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+
+    .article-card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .article-title {
+      font-weight: 700;
+      font-size: 15px;
+    }
+
+    .status-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 999px;
+      flex-shrink: 0;
+    }
+
+    .status-badge.published {
+      background: #e3f7ee;
+      color: var(--green);
+    }
+
+    .status-badge.draft {
+      background: #f1f2f5;
+      color: var(--subtext);
+    }
+
+    .article-meta {
+      font-size: 12px;
+      color: var(--subtext);
+      margin-top: 6px;
+    }
+
+    .article-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .empty-state {
+      color: var(--subtext);
+      font-size: 13px;
+      padding: 16px 0;
+      text-align: center;
+    }
+
+    @media (max-width: 520px) {
+      .article-actions {
+        flex-direction: column;
+      }
+
+      .article-actions button {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="page-label">
+      🔐 運営者専用
+    </div>
+
+    <h1>
+      📖 マチナウ読み物を書く
+    </h1>
+
+    <a href="admin.html">
+      ← 管理トップへ戻る
+    </a>
+  </header>
+
+  <main>
+
+    <section id="loginPanel" class="panel">
+      <h2>
+        管理者ログイン
+      </h2>
+
+      <form id="loginForm" novalidate>
+        <div class="field">
+          <label for="adminEmail">
+            メールアドレス
+          </label>
+
+          <input
+            id="adminEmail"
+            type="text"
+            autocomplete="email"
+            required
+          >
+        </div>
+
+        <div class="field">
+          <label for="adminPassword">
+            パスワード
+          </label>
+
+          <input
+            id="adminPassword"
+            type="password"
+            autocomplete="current-password"
+            required
+          >
+        </div>
+
+        <button id="loginButton" class="primary-button" type="submit">
+          管理画面へログイン
+        </button>
+      </form>
+
+      <div id="loginMessage" class="message-box" role="status" aria-live="polite"></div>
+    </section>
+
+    <section id="adminArea">
+
+      <div class="panel">
+        <h2 id="formTitle">
+          新規作成
+        </h2>
+
+        <form id="articleForm" novalidate>
+
+          <div class="field">
+            <label for="titleInput">
+              タイトル
+            </label>
+            <input id="titleInput" type="text" maxlength="60" required>
+          </div>
+
+          <div class="field">
+            <label for="categoryInput">
+              カテゴリー
+            </label>
+            <select id="categoryInput" required>
+              <option value="">選択してください</option>
+              <option value="文化・背景">文化・背景</option>
+              <option value="楽しみ方">楽しみ方</option>
+              <option value="安全・備え">安全・備え</option>
+              <option value="マチナウの想い">マチナウの想い</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="descriptionInput">
+              概要・説明文（記事一覧やSNSシェア時に表示されます）
+            </label>
+            <textarea id="descriptionInput" maxlength="120" required></textarea>
+          </div>
+
+          <div class="field">
+            <label for="contentInput">
+              本文
+            </label>
+            <textarea id="contentInput" maxlength="6000" required></textarea>
+            <p class="field-hint">
+              段落を分けたいところで空行（Enterを2回）を入れてください。HTMLタグは使えません（自動的にそのまま文字として表示されます）。
+            </p>
+          </div>
+
+          <div class="field">
+            <label for="customSlugInput">
+              URL識別子（任意）
+            </label>
+            <input id="customSlugInput" type="text" maxlength="60" placeholder="空欄で自動生成されます（例：typhoon-2）">
+            <p class="field-hint">
+              半角小文字英数字とハイフンのみ。空欄のままで問題ありません（自動的にURLが割り当てられます）。一度公開すると変更できません。
+            </p>
+          </div>
+
+          <div class="field">
+            <label>
+              <input id="isPublishedInput" type="checkbox">
+              公開する（チェックを外すと下書きとして保存されます）
+            </label>
+          </div>
+
+          <div id="formMessage" class="message-box" role="status" aria-live="polite"></div>
+
+          <button id="saveButton" class="primary-button" type="submit">
+            保存する
+          </button>
+
+          <button id="cancelEditButton" class="secondary-button" type="button" style="display:none; margin-left: 8px;">
+            新規作成に戻る
+          </button>
+
+        </form>
+      </div>
+
+      <div class="panel">
+        <h2>
+          これまでのマチナウ読み物
+        </h2>
+
+        <div id="articleList">
+          <div class="empty-state">
+            読み込んでいます…
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore-compat.js"></script>
+  <script src="firebase.js"></script>
+
+  <script>
+    const ADMIN_EMAIL =
+      "9413yutaka@gmail.com";
+
+    const loginPanel = document.getElementById("loginPanel");
+    const adminArea = document.getElementById("adminArea");
+    const loginForm = document.getElementById("loginForm");
+    const loginButton = document.getElementById("loginButton");
+    const loginMessage = document.getElementById("loginMessage");
+
+    const formTitle = document.getElementById("formTitle");
+    const articleForm = document.getElementById("articleForm");
+    const titleInput = document.getElementById("titleInput");
+    const categoryInput = document.getElementById("categoryInput");
+    const descriptionInput = document.getElementById("descriptionInput");
+    const contentInput = document.getElementById("contentInput");
+    const customSlugInput = document.getElementById("customSlugInput");
+    const isPublishedInput = document.getElementById("isPublishedInput");
+    const formMessage = document.getElementById("formMessage");
+    const saveButton = document.getElementById("saveButton");
+    const cancelEditButton = document.getElementById("cancelEditButton");
+    const articleList = document.getElementById("articleList");
+
+    let editingDocumentId = null;
+    let allArticles = [];
+
+    function showLoginMessage(text, type) {
+      loginMessage.textContent = text;
+      loginMessage.className = "message-box" + (type ? " " + type : "");
+    }
+
+    function clearLoginMessage() {
+      loginMessage.textContent = "";
+      loginMessage.className = "message-box";
+    }
+
+    function showFormMessage(text, type) {
+      formMessage.textContent = text;
+      formMessage.className = "message-box" + (type ? " " + type : "");
+    }
+
+    function escapeHtmlText(text) {
+      return String(text ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    async function getAdminIdToken() {
+      const currentUser = firebase.auth().currentUser;
+
+      if (!currentUser) {
+        throw new Error(
+          "ログイン状態を確認できませんでした。再度ログインしてください。"
+        );
+      }
+
+      return currentUser.getIdToken();
+    }
+
+    async function callColumnApi(mode, payload) {
+      const idToken = await getAdminIdToken();
+
+      const response = await fetch("/api/moderate-submission", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + idToken
+        },
+        body: JSON.stringify(Object.assign({ mode: mode }, payload || {}))
+      });
+
+      let responseData = null;
+
+      try {
+        responseData = await response.json();
+      } catch (jsonError) {
+        throw new Error("応答を読み取れませんでした。");
+      }
+
+      if (!response.ok || !responseData || responseData.success !== true) {
+        throw new Error(
+          (responseData && responseData.message) || "処理に失敗しました。"
+        );
+      }
+
+      return responseData;
+    }
+
+    function resetForm() {
+      editingDocumentId = null;
+      formTitle.textContent = "新規作成";
+      saveButton.textContent = "保存する";
+      cancelEditButton.style.display = "none";
+
+      titleInput.value = "";
+      categoryInput.value = "";
+      descriptionInput.value = "";
+      contentInput.value = "";
+      customSlugInput.value = "";
+      customSlugInput.disabled = false;
+      isPublishedInput.checked = false;
+
+      showFormMessage("", "");
+    }
+
+    async function fillFormForEdit(documentId) {
+      showFormMessage("読み込んでいます…", "");
+
+      try {
+        const responseData = await callColumnApi("adminGetColumnArticle", {
+          documentId: documentId
+        });
+
+        const article = responseData.article;
+
+        editingDocumentId = documentId;
+        formTitle.textContent = "編集：" + (article.title || "");
+        saveButton.textContent = "更新する";
+        cancelEditButton.style.display = "inline-block";
+
+        titleInput.value = article.title || "";
+        categoryInput.value = article.category || "";
+        descriptionInput.value = article.description || "";
+        contentInput.value = article.content || "";
+        customSlugInput.value = documentId;
+        customSlugInput.disabled = true;
+        isPublishedInput.checked = article.status === "published";
+
+        showFormMessage("", "");
+
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      } catch (error) {
+        console.error("記事の読み込みに失敗しました", error);
+        showFormMessage(error.message || "記事を読み込めませんでした。", "error");
+      }
+    }
+
+    cancelEditButton.addEventListener("click", resetForm);
+
+    function renderArticleList() {
+      if (allArticles.length === 0) {
+        articleList.innerHTML =
+          '<div class="empty-state">まだマチナウ読み物は作成されていません。</div>';
+        return;
+      }
+
+      articleList.innerHTML = "";
+
+      allArticles.forEach(function(article) {
+        const isPublished = article.status === "published";
+
+        const card = document.createElement("div");
+        card.className = "article-card";
+
+        const updatedAtText =
+          article.updatedAt
+            ? new Date(article.updatedAt).toLocaleString("ja-JP")
+            : "-";
+
+        card.innerHTML =
+          '<div class="article-card-top">' +
+            '<div>' +
+              '<div class="article-title"></div>' +
+              '<div class="article-meta">' +
+                'カテゴリー: ' + escapeHtmlText(article.category || "(未設定)") +
+                '<br>URL: /column/' + escapeHtmlText(article.id) + '.html' +
+                '<br>更新日時: ' + escapeHtmlText(updatedAtText) +
+              '</div>' +
+            '</div>' +
+            '<span class="status-badge ' + (isPublished ? "published" : "draft") + '">' +
+              (isPublished ? "公開中" : "下書き") +
+            '</span>' +
+          '</div>' +
+          '<div class="article-actions">' +
+            '<button type="button" class="secondary-button" data-action="edit">編集</button>' +
+            '<button type="button" class="status-toggle-button" data-action="toggle">' +
+              (isPublished ? "下書きに戻す" : "公開する") +
+            '</button>' +
+          '</div>';
+
+        card.querySelector(".article-title").textContent = article.title || "(タイトル未設定)";
+
+        card.querySelector('[data-action="edit"]').addEventListener("click", function() {
+          fillFormForEdit(article.id);
+        });
+
+        card.querySelector('[data-action="toggle"]').addEventListener("click", function() {
+          toggleArticleStatus(article.id, !isPublished);
+        });
+
+        articleList.appendChild(card);
+      });
+    }
+
+    async function loadArticles() {
+      try {
+        const responseData = await callColumnApi("adminListColumnArticles", {});
+        allArticles = responseData.articles || [];
+        renderArticleList();
+      } catch (error) {
+        console.error("読み物一覧の取得に失敗しました", error);
+        articleList.innerHTML =
+          '<div class="empty-state">一覧の読み込みに失敗しました。</div>';
+      }
+    }
+
+    async function toggleArticleStatus(documentId, nextIsPublished) {
+      const confirmed = window.confirm(
+        nextIsPublished
+          ? "この記事を公開しますか？"
+          : "この記事を下書きに戻しますか？（公開ページから見えなくなります）"
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      try {
+        await callColumnApi("adminSetColumnArticleStatus", {
+          documentId: documentId,
+          isPublished: nextIsPublished
+        });
+
+        await loadArticles();
+      } catch (error) {
+        console.error("状態の変更に失敗しました", error);
+        window.alert(error.message || "状態を変更できませんでした。");
+      }
+    }
+
+    articleForm.addEventListener("submit", async function(event) {
+      event.preventDefault();
+
+      showFormMessage("", "");
+
+      const title = titleInput.value.trim();
+      const category = categoryInput.value;
+      const description = descriptionInput.value.trim();
+      const content = contentInput.value.trim();
+      const customSlug = customSlugInput.value.trim();
+      const isPublished = isPublishedInput.checked === true;
+
+      if (title === "") {
+        showFormMessage("タイトルを入力してください。", "error");
+        return;
+      }
+
+      if (category === "") {
+        showFormMessage("カテゴリーを選択してください。", "error");
+        return;
+      }
+
+      if (description === "") {
+        showFormMessage("概要・説明文を入力してください。", "error");
+        return;
+      }
+
+      if (content === "") {
+        showFormMessage("本文を入力してください。", "error");
+        return;
+      }
+
+      saveButton.disabled = true;
+      saveButton.textContent = "保存しています…";
+
+      try {
+        const payload = {
+          title: title,
+          category: category,
+          description: description,
+          content: content,
+          isPublished: isPublished
+        };
+
+        if (editingDocumentId) {
+          payload.documentId = editingDocumentId;
+        } else if (customSlug !== "") {
+          payload.customSlug = customSlug;
+        }
+
+        await callColumnApi("adminSaveColumnArticle", payload);
+
+        showFormMessage(
+          editingDocumentId ? "更新しました。" : "保存しました。",
+          "success"
+        );
+
+        resetForm();
+        await loadArticles();
+      } catch (error) {
+        console.error("保存に失敗しました", error);
+        showFormMessage(error.message || "保存できませんでした。", "error");
+      } finally {
+        saveButton.disabled = false;
+        saveButton.textContent = editingDocumentId ? "更新する" : "保存する";
+      }
+    });
+
+    loginForm.addEventListener("submit", async function(event) {
+      event.preventDefault();
+
+      clearLoginMessage();
+
+      const email = document.getElementById("adminEmail").value.trim().toLowerCase();
+      const password = document.getElementById("adminPassword").value;
+
+      if (email !== ADMIN_EMAIL.toLowerCase()) {
+        showLoginMessage("このメールアドレスには管理者権限がありません。", "error");
+        return;
+      }
+
+      loginButton.disabled = true;
+      loginButton.textContent = "ログインしています…";
+
+      try {
+        await firebase.auth().signInWithEmailAndPassword(email, password);
+      } catch (error) {
+        console.error("❌ 管理者ログインに失敗しました", error);
+        showLoginMessage("ログインできませんでした。メールアドレスとパスワードを確認してください。", "error");
+      } finally {
+        loginButton.disabled = false;
+        loginButton.textContent = "管理画面へログイン";
+      }
+    });
+
+    // admin.html・admin-region-picks.htmlの管理者判定と同一パターン。
+    // Firebase Anonymous Authのユーザーはemailを持たないため、この判定で
+    // 自動的に非管理者として扱われる(request.auth != null だけでは判定しない)。
+    firebase.auth().onAuthStateChanged(async function(user) {
+      clearLoginMessage();
+
+      if (user && user.email && user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+        loginPanel.style.display = "none";
+        adminArea.classList.add("visible");
+
+        resetForm();
+        await loadArticles();
+        return;
+      }
+
+      if (user) {
+        try {
+          await firebase.auth().signOut();
+        } catch (error) {
+          console.error("管理者以外のユーザーをログアウトできませんでした", error);
+        }
+
+        showLoginMessage("このアカウントには管理者権限がありません。", "error");
+      }
+
+      loginPanel.style.display = "block";
+      adminArea.classList.remove("visible");
+    });
+  </script>
+
+</body>
+</html>
