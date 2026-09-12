@@ -7699,7 +7699,16 @@ async function loadApprovedSubmissions() {
             submissionData.expiresAt
           );
 
+        // 常設店舗広告(isPermanentAd:true)はexpiresAtを保存しないため、
+        // expiryTimeが常に0になる。expiryTime > currentTimeだけで判定すると
+        // 常設広告が無条件で除外されてしまう(api/moderate-submission.jsは
+        // isPermanentAd==trueを別クエリで正しく取得しているにも関わらず)ため、
+        // isPermanentAdの場合はexpiresAtの有無に関わらず掲載対象とする。
+        const isPermanentAd =
+          submissionData.isPermanentAd === true;
+
         const isStillPublished =
+          isPermanentAd ||
           expiryTime > currentTime;
 
         if (!isStillPublished) {
@@ -7713,9 +7722,14 @@ async function loadApprovedSubmissions() {
           )
         );
 
+        // 常設広告はexpiryTimeが実際の期限ではない(常に0)ため、次回の
+        // 期限再確認タイマー(nearestExpiryTime)の算出対象からは除外する。
+        // 含めてしまうとnearestExpiryTimeが0に固定され、再取得タイマーが
+        // 1秒間隔で回り続けてしまう。
         if (
-          nearestExpiryTime === null ||
-          expiryTime < nearestExpiryTime
+          !isPermanentAd &&
+          (nearestExpiryTime === null ||
+            expiryTime < nearestExpiryTime)
         ) {
           nearestExpiryTime =
             expiryTime;
