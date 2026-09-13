@@ -3948,7 +3948,7 @@ function buildColumnArticleHtml(
   const ogImageUrl =
     hasMainImage
       ? article.imageUrl
-      : "https://machinau.jp/icon-512.png";
+      : "https://machinau.jp/icon-512.png?v=2";
 
   const mainImageHtml =
     hasMainImage
@@ -3996,9 +3996,9 @@ function buildColumnArticleHtml(
   <meta name="description" content="${escapedDescription}">
   <title>${escapedTitle}｜マチナウ</title>
   <link rel="canonical" href="${canonicalUrl}">
-  <link rel="icon" type="image/svg+xml" href="../favicon.svg">
-  <link rel="manifest" href="../manifest.json">
-  <link rel="apple-touch-icon" href="../apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="/favicon.png?v=2">
+  <link rel="manifest" href="/manifest.json?v=2">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2">
   <meta property="og:type" content="article">
   <meta property="og:title" content="${escapedTitle}｜マチナウ">
   <meta property="og:description" content="${escapedDescription}">
@@ -4017,7 +4017,7 @@ function buildColumnArticleHtml(
     "publisher": {
       "@type": "Organization",
       "name": "マチナウ",
-      "logo": { "@type": "ImageObject", "url": "https://machinau.jp/icon-512.png" }
+      "logo": { "@type": "ImageObject", "url": "https://machinau.jp/icon-512.png?v=2" }
     },
     "datePublished": "${publishedAttribute}",
     "dateModified": "${updatedAttribute}",
@@ -4134,7 +4134,7 @@ function buildColumnArticleHtml(
 <body>
 
   <div class="page-header">
-    <div class="brand-mini"><span class="brand-mini-icon">🌺</span>マチナウ</div>
+    <div class="brand-mini"><span class="brand-mini-icon"><img src="/icon-192.png?v=2" alt="" style="width:100%;height:100%;object-fit:contain;border-radius:inherit;"></span>マチナウ</div>
     <h1>${escapedTitle}</h1>
   </div>
 

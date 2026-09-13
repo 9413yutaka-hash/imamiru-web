@@ -37,21 +37,22 @@
 
   <link
     rel="icon"
-    type="image/svg+xml"
-    href="favicon.svg"
+    type="image/png"
+    href="/favicon.png?v=2"
   >
 
-  <!-- Ver1.8 Phase2 STEP1(旅あとへの入口・PWA最小対応)｜ホーム画面追加用。
-       既存favicon.svg(青→シアングラデーション+🌺)をそのまま使い、
-       新しいブランド・配色は作らない。 -->
+  <!-- マチナウ正式ロゴ・アイコン統一｜旧favicon.svg(青→シアングラデーション+🌺)は
+       ファイル自体は残すが、manifest.json・全ページのfaviconリンクからは
+       正式ロゴ由来のPNG(favicon.png/icon-192.png/icon-512.png)へ切り替え済み。
+       ?v=2はPWA/favicon特有の強いキャッシュ対策(キャッシュバスト)。 -->
   <link
     rel="manifest"
-    href="manifest.json"
+    href="/manifest.json?v=2"
   >
 
   <link
     rel="apple-touch-icon"
-    href="apple-touch-icon.png"
+    href="/apple-touch-icon.png?v=2"
   >
 
   <meta
@@ -86,7 +87,15 @@
     content="https://machinau.jp/"
   >
 
-  <meta name="twitter:card" content="summary">
+  <!-- マチナウ正式ロゴ・アイコン統一｜以前は未設定だったTOPのog:imageを、
+       正式ロゴ原本の派生画像(icon-512.png)を使って追加する。SNS専用の
+       新規デザイン画像は作らない。 -->
+  <meta
+    property="og:image"
+    content="https://machinau.jp/icon-512.png?v=2"
+  >
+
+  <meta name="twitter:card" content="summary_large_image">
 
   <link
     rel="stylesheet"
@@ -510,14 +519,14 @@
       <div class="brand-area">
 
         <div class="brand-icon">
-          🌺
+          <img
+            src="/icon-192.png?v=2"
+            alt="マチナウ"
+            style="width:100%;height:100%;object-fit:contain;border-radius:inherit;"
+          >
         </div>
 
         <div>
-          <p class="brand-name">
-            マチナウ
-          </p>
-
           <p class="brand-caption" data-i18n="brand_caption">
             リアルタイム観光コンシェルジュ
           </p>
