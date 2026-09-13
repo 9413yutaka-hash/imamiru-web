@@ -4550,6 +4550,78 @@ function writeWeatherCache(latitude, longitude, weather) {
 }
 
 
+// AIコンシェルジュ Phase2｜沖縄本島 北部/中部/南部の代表地点。
+// 「市町村ごとの正確な天気」として断定表示するものではなく、AIが
+// 「移動する/しない」を判断するための広域の目安として扱う(プロンプト側にも
+// 明記)。離島は今回対象外。選定理由(完了報告に記載)：
+// 北部＝名護市(本島北部の行政的中心地)、中部＝沖縄市(本島中部の主要都市、
+// 名称もそのまま「本島中部側」の目安として分かりやすい)、
+// 南部＝那覇市(県庁所在地、本島南部の代表地点として最も自然)。
+// 過度な細分化(市町村ごと等)はしない。
+const WEATHER_REGIONAL_POINTS =
+  [
+    { region: "北部", label: "本島北部側", latitude: 26.5911, longitude: 127.9761 },
+    { region: "中部", label: "本島中部側", latitude: 26.3344, longitude: 127.8056 },
+    { region: "南部", label: "本島南部側", latitude: 26.2124, longitude: 127.6809 }
+  ];
+
+// 地域天気は利用者ごとの現在地キャッシュ(readWeatherCache/writeWeatherCache、
+// 1件しか保持しない設計)とは別物として扱う。固定3地点の座標をそのまま
+// /api/weather.jsへ渡すため、Vercel/CDN側の共有キャッシュ(15分)が
+// 全利用者で自然に共有され、利用者ごとのセッションキャッシュを新たに
+// 作る必要がない(PV増がAPIコール数増に直結しない設計)。
+async function fetchRegionalWeatherForAiConcierge() {
+  const results =
+    await Promise.all(
+      WEATHER_REGIONAL_POINTS.map(
+        async function(point) {
+          try {
+            const response =
+              await fetch(
+                "/api/weather?lat=" +
+                encodeURIComponent(point.latitude) +
+                "&lon=" +
+                encodeURIComponent(point.longitude)
+              );
+
+            const responseData =
+              await response.json();
+
+            if (
+              !response.ok ||
+              !responseData ||
+              responseData.success !== true ||
+              !responseData.weather
+            ) {
+              return null;
+            }
+
+            return {
+              region: point.label,
+              conditionText:
+                typeof responseData.weather.conditionText === "string"
+                  ? responseData.weather.conditionText
+                  : "",
+              chanceOfRain: responseData.weather.chanceOfRain,
+              temperatureC: responseData.weather.temperatureC
+            };
+          } catch (error) {
+            // 1地点の取得に失敗しても他の地点・現在地天気・AI提案全体には
+            // 影響させない(段階的劣化、地域比較なしで提案を続行する)。
+            return null;
+          }
+        }
+      )
+    );
+
+  return results.filter(
+    function(regionResult) {
+      return regionResult !== null;
+    }
+  );
+}
+
+
 async function fetchWeather(latitude, longitude) {
   const cachedWeather =
     readWeatherCache(
@@ -5549,6 +5621,15 @@ const AI_CONCIERGE_CLIENT_FETCH_TIMEOUT_MS =
 const AI_CONCIERGE_FACT_SUMMARY_MAX_LENGTH =
   80;
 
+// AIコンシェルジュ Phase2｜api/moderate-submission.jsのAI_CONCIERGE_FIELD_
+// MAX_LENGTHSと同じ値(サーバー側で再度クリップされるための安全網であり、
+// ここでの値はネットワーク送信量を抑えるための1次的な切り詰め)。
+const AI_CONCIERGE_CONTENT_EXCERPT_MAX_LENGTH =
+  180;
+
+const AI_CONCIERGE_LOCATION_LABEL_MAX_LENGTH =
+  60;
+
 // Ver1.8 Phase2 STEP4-D｜selectTravelerSuggestionCandidate()と同じ思想で、
 // 公式のイベント/観光候補を優先し、その件数がAI_CONCIERGE_MAX_CANDIDATESに
 // 満たない場合だけ、残り枠を常設店舗広告(isPermanentAdRelevantToUserArea()が
@@ -5844,6 +5925,31 @@ function buildAiConciergeCandidateFromShop(
           .slice(0, AI_CONCIERGE_FACT_SUMMARY_MAX_LENGTH)
       : "";
 
+  // AIコンシェルジュ Phase2｜候補の「事実落ち」対策。既存のshop.message
+  // (本文)・shop.address(場所)・shop.websiteUrl(情報元)・shop.expiresAt
+  // (有効期限)は、いずれもconvertSubmissionToShop()が既に持っている
+  // 実在のフィールドで、新しいデータは作らない。factSummaryとは異なり
+  // sourceTypeを問わず付与する(factSummaryはfactual_info専用のまま
+  // 無変更で残す)。
+  const contentExcerpt =
+    typeof shop.message === "string"
+      ? shop.message
+          .trim()
+          .slice(0, AI_CONCIERGE_CONTENT_EXCERPT_MAX_LENGTH)
+      : "";
+
+  const locationLabel =
+    typeof shop.address === "string"
+      ? shop.address
+          .trim()
+          .slice(0, AI_CONCIERGE_LOCATION_LABEL_MAX_LENGTH)
+      : "";
+
+  const sourceUrl =
+    typeof shop.websiteUrl === "string"
+      ? shop.websiteUrl
+      : "";
+
   return {
     id: "shop:" + shop.firestoreId,
     sourceType: sourceType,
@@ -5855,8 +5961,64 @@ function buildAiConciergeCandidateFromShop(
         ? Math.round(distanceKm * 10) / 10
         : null,
     availabilityHint: availabilityHint,
-    factSummary: factSummary
+    factSummary: factSummary,
+    shopName:
+      typeof shop.name === "string"
+        ? shop.name
+        : "",
+    contentExcerpt: contentExcerpt,
+    locationLabel: locationLabel,
+    validUntilHint:
+      buildAiConciergeValidUntilHint(
+        shop.expiresAt
+      ),
+    sourceUrl: sourceUrl
   };
+}
+
+
+// AIコンシェルジュ Phase2｜期限切れの除外自体は既存の候補選定ロジック
+// (getVisibleShops()等、この関数より前の段階)で完了済み。ここで作るのは
+// 「あとどれくらい有効か」という付随ヒントのみで、AI自身に有効/無効の
+// 判定をさせるためのものではない(プロンプト側にも明記)。既存の
+// getDateValue()をそのまま再利用し、新しい日付解析ロジックは作らない。
+function buildAiConciergeValidUntilHint(
+  expiresAt
+) {
+  const expiresAtMillis =
+    getDateValue(
+      expiresAt
+    );
+
+  if (expiresAtMillis === 0) {
+    return "";
+  }
+
+  const remainingMillis =
+    expiresAtMillis -
+    Date.now();
+
+  if (remainingMillis <= 0) {
+    return "";
+  }
+
+  const remainingHours =
+    remainingMillis /
+    (60 * 60 * 1000);
+
+  if (remainingHours < 24) {
+    return (
+      "あと約" +
+      Math.max(1, Math.round(remainingHours)) +
+      "時間"
+    );
+  }
+
+  return (
+    "あと約" +
+    Math.round(remainingHours / 24) +
+    "日"
+  );
 }
 
 
@@ -5874,6 +6036,23 @@ function buildAiConciergeCandidateFromRegionArticle(
     return null;
   }
 
+  // AIコンシェルジュ Phase2｜地域おすすめにはexpiresAt相当のフィールドが
+  // 存在しない(既存調査で確認済み)ため、validUntilHintは付与しない
+  // (存在しないフィールドを推測で作らない)。content/websiteUrlは
+  // Firestoreの実フィールド(admin-region-picks.htmlが保存)であり、
+  // showRegionRecommendationsForArea()が取得したarticleに既に含まれている。
+  const contentExcerpt =
+    typeof article.content === "string"
+      ? article.content
+          .trim()
+          .slice(0, AI_CONCIERGE_CONTENT_EXCERPT_MAX_LENGTH)
+      : "";
+
+  const sourceUrl =
+    typeof article.websiteUrl === "string"
+      ? article.websiteUrl
+      : "";
+
   return {
     id: "region:" + article.id,
     sourceType: "region_recommendation",
@@ -5887,7 +6066,9 @@ function buildAiConciergeCandidateFromRegionArticle(
         ? article.regionName
         : "",
     distanceKm: null,
-    availabilityHint: ""
+    availabilityHint: "",
+    contentExcerpt: contentExcerpt,
+    sourceUrl: sourceUrl
   };
 }
 
@@ -6295,9 +6476,15 @@ function updateTravelerSuggestionCard() {
     machinauSuggestionGpsSessionId
   ) {
     if (aiConciergeState.status === "loading") {
+      // AIコンシェルジュ Phase2｜GPS→天気→AI判断という複数ステップの
+      // 待機中に「マチナウが今どうするか考えている」ことが伝わるよう、
+      // 2段階の文言に分ける(大規模なレイアウト変更は行わず、既存の
+      // suggestionMessage 1箇所のテキストだけを差し替える)。
       suggestionMessage.textContent =
         getMachinauTranslation(
-          "suggestion_ai_loading",
+          aiConciergeState.loadingPhase === "thinking"
+            ? "suggestion_ai_loading"
+            : "suggestion_ai_checking",
           currentLanguageForAiConcierge
         );
 
@@ -6463,10 +6650,29 @@ function renderAiConciergeSuggestionContent(
     return false;
   }
 
+  // AIコンシェルジュ Phase2｜「また開いて」の実装方式(採用案C)。
+  // AIには文言そのものを毎回自由生成させず、AIが返す構造化値
+  // shouldReopenLater(boolean)だけを見て、実際の文言はUI側の固定翻訳
+  // (suggestion_reopen_later_note)で出し分ける。AI応答にこの値が
+  // 無い/不正な場合はfalse相当として扱われる(サーバー側で安全に
+  // デフォルト化済み)ため、既存のfallback経路が壊れることはない。
+  const reopenNoteText =
+    aiSuggestion.shouldReopenLater === true
+      ? getMachinauTranslation(
+          "suggestion_reopen_later_note",
+          getCurrentMachinauLanguage()
+        )
+      : "";
+
   suggestionMessage.textContent =
     resolvedCandidate.title +
     "\n" +
-    reasonText;
+    reasonText +
+    (
+      reopenNoteText !== ""
+        ? "\n\n" + reopenNoteText
+        : ""
+    );
 
   if (
     typeof resolvedCandidate.openDetail === "function"
@@ -6751,6 +6957,7 @@ async function attemptAiConciergeSuggestion(
     {
       gpsSessionId: gpsSessionId,
       status: "loading",
+      loadingPhase: "checking",
       suggestionsByLanguage: {}
     };
 
@@ -6779,6 +6986,30 @@ async function attemptAiConciergeSuggestion(
     updateTravelerSuggestionCard();
     return;
   }
+
+  // AIコンシェルジュ Phase2｜キャッシュに無かった場合(=実際にAIを呼ぶ場合)
+  // だけ、本島北中南の地域天気を取得する。キャッシュ命中時はこの取得
+  // 自体を行わないため、無駄なAPIコールは発生しない。1地点でも失敗して
+  // 良い(fetchRegionalWeatherForAiConcierge()自身が段階的に劣化する)。
+  const regionalWeather =
+    await fetchRegionalWeatherForAiConcierge();
+
+  if (
+    gpsSessionId !==
+    machinauSuggestionGpsSessionId
+  ) {
+    return;
+  }
+
+  aiConciergeState =
+    {
+      gpsSessionId: gpsSessionId,
+      status: "loading",
+      loadingPhase: "thinking",
+      suggestionsByLanguage: {}
+    };
+
+  updateTravelerSuggestionCard();
 
   let responseSuggestion =
     null;
@@ -6838,7 +7069,20 @@ async function attemptAiConciergeSuggestion(
                   latestWeatherForMachinauSuggestion.uvIndex,
                 conditionText:
                   latestWeatherForMachinauSuggestion.conditionText
-              }
+              },
+              // AIコンシェルジュ Phase2｜api/weather.jsが既存の1回の
+              // forecast.json呼び出しから抽出済みの当日時間別予報を
+              // そのまま中継する(追加のAPIコールはしていない)。
+              nextHours:
+                Array.isArray(
+                  latestWeatherForMachinauSuggestion.nextHours
+                )
+                  ? latestWeatherForMachinauSuggestion.nextHours
+                  : [],
+              // AIコンシェルジュ Phase2｜本島北中南の代表地点(固定座標、
+              // 全利用者で/api/weather.jsの共有キャッシュを再利用)。
+              regionalWeather:
+                regionalWeather
             },
             // Ver1.8 Phase1(設計修正)｜buildAiConciergeCandidatePool()の
             // 各要素は既にAIへ送る最終形(id/sourceType/title/category/

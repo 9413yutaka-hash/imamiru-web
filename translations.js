@@ -109,9 +109,11 @@ const MACHINAU_TRANSLATIONS = {
     en: "Notice"
   },
 
+  // AIコンシェルジュ Phase2｜「店からの提案か、マチナウからの提案か
+  // 分かりにくい」問題への対応。本部第一候補をそのまま採用。
   suggestion_heading: {
-    ja: "✨ あなたへの提案",
-    en: "✨ Suggested for You"
+    ja: "✨ マチナウAI「今どうする？」",
+    en: "✨ Machinau AI: What now?"
   },
 
   suggestion_placeholder_main: {
@@ -129,9 +131,24 @@ const MACHINAU_TRANSLATIONS = {
     en: "Get a suggestion near me"
   },
 
+  // AIコンシェルジュ Phase2｜GPS→天気確認→AI判断という流れが伝わるよう、
+  // 2段階の待機文言にする(suggestion_ai_checkingが1段階目)。
+  suggestion_ai_checking: {
+    ja: "街の「今」を確認中…",
+    en: "Checking what's happening around you…"
+  },
+
   suggestion_ai_loading: {
-    ja: "AIが今のあなたに合う提案を考えています…",
-    en: "Machinau AI is finding a suggestion for you…"
+    ja: "天気や周辺情報から考えています…",
+    en: "Thinking it over based on the weather and what's nearby…"
+  },
+
+  // AIコンシェルジュ Phase2｜「また開いて」の実装方式(採用案C)。AIには
+  // この文言自体を生成させず、AIが返すshouldReopenLater(構造化値)が
+  // trueのときだけ、この固定文をUI側で末尾に付け足す。
+  suggestion_reopen_later_note: {
+    ja: "天気や場所が変わったら、またマチナウを開いてください。その時の「今」から次を提案します。",
+    en: "If the weather or your location changes, open Machinau again — we'll suggest what's next based on that new \"now\"."
   },
 
   suggestion_no_candidates_message: {

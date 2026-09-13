@@ -34,6 +34,17 @@ const WEATHER_SHARED_CACHE_MAX_AGE_SECONDS = 900;
 // (thundering herd)事態を緩和する。s-maxageの1/3程度を目安にする。
 const WEATHER_SHARED_CACHE_STALE_WHILE_REVALIDATE_SECONDS = 300;
 
+// AIコンシェルジュ Phase2｜forecast.json?days=1で既に取得済みの当日分
+// forecastday[0].hour[](24時間分)のうち、現在時刻以降の分だけを
+// 必要最小限の項目に絞って返す。追加APIコールは発生しない(既存の
+// 1回の呼び出しレスポンスに元々含まれていたが、今まで読み捨てていた
+// データを使うだけ)。24時間全部をAIへ渡すとトークンを浪費するため、
+// 直近WEATHER_NEXT_HOURS_MAX_COUNT件までに絞る。深夜など当日分の残り
+// 時間がほとんど無い場合はそのまま少ない件数(0件もありうる)を返す
+// (翌日分の取得(days=2)は、WeatherAPIの契約・料金体系がコードからは
+// 確認できないため今回は採用しない、既知の制限として残す)。
+const WEATHER_NEXT_HOURS_MAX_COUNT = 6;
+
 
 function parseCoordinateQueryParam(
   rawValue,
@@ -167,6 +178,12 @@ function normalizeWeatherApiResponse(
         )
       : null;
 
+  const nextHours =
+    extractNextHoursFromForecastDay(
+      forecastDay,
+      weatherApiData.location
+    );
+
   return {
     locationName:
       typeof location.name === "string"
@@ -221,9 +238,103 @@ function normalizeWeatherApiResponse(
         current.uv
       ),
 
+    // AIコンシェルジュ Phase2｜「このあとどうなるか」の判断材料。
+    // 現在時刻より前の時間帯は含めない(過去の予報を渡しても無意味なため)。
+    nextHours:
+      nextHours,
+
     updatedAt:
       new Date().toISOString()
   };
+}
+
+
+// forecastDay.hour[](24時間分、WeatherAPIの既存レスポンスに元々含まれる)
+// から、現在時刻(そのロケーションのローカル時刻epoch)以降の時間帯だけを
+// 抜き出し、AIが行動判断に使う最小限の項目だけに絞って返す。
+// location.localtime_epochを基準にする(Vercel実行環境のサーバー時計では
+// なく、その座標のローカル時刻を使うことで、日付境界のズレを防ぐ)。
+function extractNextHoursFromForecastDay(
+  forecastDay,
+  location
+) {
+  if (
+    !forecastDay ||
+    !Array.isArray(
+      forecastDay.hour
+    )
+  ) {
+    return [];
+  }
+
+  const localTimeEpoch =
+    location &&
+    typeof location === "object" &&
+    typeof location.localtime_epoch === "number"
+      ? location.localtime_epoch
+      : Math.floor(
+          Date.now() / 1000
+        );
+
+  const upcomingHours =
+    forecastDay.hour.filter(
+      function(hourEntry) {
+        return (
+          hourEntry &&
+          typeof hourEntry.time_epoch === "number" &&
+          hourEntry.time_epoch >=
+            localTimeEpoch
+        );
+      }
+    );
+
+  return upcomingHours
+    .slice(
+      0,
+      WEATHER_NEXT_HOURS_MAX_COUNT
+    )
+    .map(
+      function(hourEntry) {
+        // hour[].timeは"2026-09-13 15:00"形式のローカル時刻文字列。
+        // 時刻部分(HH:MM)だけを取り出す(日付は現在時刻からの近さで
+        // 自明なため渡さない、トークン節約)。
+        const timeLabel =
+          typeof hourEntry.time === "string" &&
+          hourEntry.time.includes(" ")
+            ? hourEntry.time.split(" ")[1]
+            : "";
+
+        const hourCondition =
+          hourEntry.condition &&
+          typeof hourEntry.condition === "object"
+            ? hourEntry.condition
+            : {};
+
+        return {
+          time: timeLabel,
+
+          chanceOfRain:
+            toFiniteNumberOrNull(
+              hourEntry.chance_of_rain
+            ),
+
+          condition:
+            typeof hourCondition.text === "string"
+              ? hourCondition.text
+              : "",
+
+          temperatureC:
+            toFiniteNumberOrNull(
+              hourEntry.temp_c
+            ),
+
+          windKph:
+            toFiniteNumberOrNull(
+              hourEntry.wind_kph
+            )
+        };
+      }
+    );
 }
 
 

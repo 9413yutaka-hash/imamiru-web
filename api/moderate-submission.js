@@ -277,14 +277,36 @@ const AI_CONCIERGE_FIELD_MAX_LENGTHS =
     availabilityHint: 60,
     conditionText: 40,
     sourceType: 30,
-    factSummary: 80
+    factSummary: 80,
+
+    // AIコンシェルジュ Phase2｜候補の「事実落ち」対策で追加する項目。
+    // Firestoreドキュメントを丸ごと渡すのではなく、実在するフィールドの
+    // 中から明示的にallowlistした項目だけを、それぞれ短く切り詰めて渡す。
+    shopName: 60,
+    contentExcerpt: 180,
+    locationLabel: 60,
+    validUntilHint: 40,
+    sourceUrl: 300
   };
 
 const AI_CONCIERGE_CURRENT_TIME_MAX_LENGTH =
   16;
 
+// AIコンシェルジュ Phase2｜「一文だけ」をやめ2〜4文程度を許容するため、
+// 安全上限を200→480文字へ引き上げる(4文×日本語1文あたり最大120文字
+// 程度を目安にした余裕を持たせた上限。プロンプト側の指示自体は文字数
+// ではなく文数(2〜4文)で行い、これはあくまで暴走防止の安全網)。
 const AI_CONCIERGE_REASON_MAX_LENGTH =
-  200;
+  480;
+
+const AI_CONCIERGE_NEXT_HOURS_MAX_COUNT =
+  6;
+
+const AI_CONCIERGE_REGIONAL_WEATHER_MAX_COUNT =
+  3;
+
+const AI_CONCIERGE_REGION_LABEL_MAX_LENGTH =
+  20;
 
 
 // Ver1.8 Phase2(マチナウ読み物コメント機能MVP)｜新しいVercel Functionは
@@ -874,7 +896,45 @@ function sanitizeAiConciergeCandidate(
       AI_CONCIERGE_FIELD_MAX_LENGTHS.factSummary
     ),
 
-    distanceKm: distanceKm
+    distanceKm: distanceKm,
+
+    // AIコンシェルジュ Phase2｜候補の「事実落ち」対策。実際にFirestoreへ
+    // 保存されている既存フィールド(shopName/content/address/websiteUrl/
+    // expiresAt由来)だけをclippedTextで短く切り詰めて渡す。存在しない
+    // フィールドを新設してはいない。空文字の場合はプロンプト側で
+    // 「情報なし」として自然に扱われる(AIへ「無いものは無い」と正直に
+    // 伝わる設計、埋め合わせの創作をさせない)。
+    shopName: clippedText(
+      rawCandidate.shopName,
+      AI_CONCIERGE_FIELD_MAX_LENGTHS.shopName
+    ),
+
+    contentExcerpt: clippedText(
+      rawCandidate.contentExcerpt,
+      AI_CONCIERGE_FIELD_MAX_LENGTHS.contentExcerpt
+    ),
+
+    locationLabel: clippedText(
+      rawCandidate.locationLabel,
+      AI_CONCIERGE_FIELD_MAX_LENGTHS.locationLabel
+    ),
+
+    // 期限切れ除外は既存の候補選定ロジック(getVisibleShops()等)で
+    // この候補プールへ入る前に完了済み。ここで渡すのは「あとどれくらい
+    // 有効か」という付随情報のみで、AI自身に期限切れ判定をさせるための
+    // ものではない(プロンプト側にも明記する)。
+    validUntilHint: clippedText(
+      rawCandidate.validUntilHint,
+      AI_CONCIERGE_FIELD_MAX_LENGTHS.validUntilHint
+    ),
+
+    // AIが「URLを確認した」等の未確認表現を生成しないよう、プロンプト側で
+    // 「出典表示用の情報であり、AIはこのURLへアクセスしていない」と
+    // 明記した上で渡す。
+    sourceUrl: clippedText(
+      rawCandidate.sourceUrl,
+      AI_CONCIERGE_FIELD_MAX_LENGTHS.sourceUrl
+    )
   };
 }
 
@@ -945,8 +1005,128 @@ function sanitizeAiConciergeWeather(
 }
 
 
+// AIコンシェルジュ Phase2｜api/weather.jsが既存の1回のforecast.json
+// 呼び出し(days=1)から抽出した「現在時刻以降の時間別予報」をそのまま
+// 中継する。ここでは新たな取得は行わず、件数・各項目の長さだけを
+// 安全側に検証・切り詰める。
+function sanitizeAiConciergeNextHours(
+  rawNextHours
+) {
+  if (!Array.isArray(rawNextHours)) {
+    return [];
+  }
+
+  function numberOrNull(value) {
+    return typeof value === "number" &&
+      Number.isFinite(value)
+      ? value
+      : null;
+  }
+
+  return rawNextHours
+    .slice(
+      0,
+      AI_CONCIERGE_NEXT_HOURS_MAX_COUNT
+    )
+    .map(
+      function(hourEntry) {
+        return {
+          time:
+            typeof hourEntry.time === "string"
+              ? hourEntry.time.trim().slice(0, 5)
+              : "",
+
+          chanceOfRain: numberOrNull(hourEntry.chanceOfRain),
+
+          condition:
+            typeof hourEntry.condition === "string"
+              ? hourEntry.condition
+                  .trim()
+                  .slice(0, AI_CONCIERGE_FIELD_MAX_LENGTHS.conditionText)
+              : "",
+
+          temperatureC: numberOrNull(hourEntry.temperatureC),
+          windKph: numberOrNull(hourEntry.windKph)
+        };
+      }
+    );
+}
+
+
+// AIコンシェルジュ Phase2｜沖縄本島 北部/中部/南部の代表地点3つの現在天候を
+// 比較材料として渡す。地点自体はクライアント側(app.js)の固定座標×既存
+// /api/weather.jsの共有キャッシュ(15分)経由で取得済みのものを中継する
+// だけで、このFunction自体が追加でWeatherAPIを呼ぶことはない。
+function sanitizeAiConciergeRegionalWeather(
+  rawRegionalWeather
+) {
+  if (!Array.isArray(rawRegionalWeather)) {
+    return [];
+  }
+
+  function numberOrNull(value) {
+    return typeof value === "number" &&
+      Number.isFinite(value)
+      ? value
+      : null;
+  }
+
+  return rawRegionalWeather
+    .slice(
+      0,
+      AI_CONCIERGE_REGIONAL_WEATHER_MAX_COUNT
+    )
+    .map(
+      function(regionEntry) {
+        return {
+          region:
+            regionEntry &&
+            typeof regionEntry.region === "string"
+              ? regionEntry.region
+                  .trim()
+                  .slice(0, AI_CONCIERGE_REGION_LABEL_MAX_LENGTH)
+              : "",
+
+          conditionText:
+            regionEntry &&
+            typeof regionEntry.conditionText === "string"
+              ? regionEntry.conditionText
+                  .trim()
+                  .slice(0, AI_CONCIERGE_FIELD_MAX_LENGTHS.conditionText)
+              : "",
+
+          chanceOfRain:
+            regionEntry
+              ? numberOrNull(regionEntry.chanceOfRain)
+              : null,
+
+          temperatureC:
+            regionEntry
+              ? numberOrNull(regionEntry.temperatureC)
+              : null
+        };
+      }
+    )
+    .filter(
+      function(regionEntry) {
+        return regionEntry.region !== "";
+      }
+    );
+}
+
+
 // Ver1.8 Phase1｜候補外の場所を生成させないための指示を明記する。
 // 「候補リストの中からIDで1件選ぶ」以外の振る舞いを許可しない。
+// AIコンシェルジュ Phase2｜「お天気アプリ」に見える問題への対応。
+// 変更点：(1)候補データにshopName/contentExcerpt/locationLabel/
+// validUntilHint/sourceUrlを追加(事実落ち対策、既存フィールドの
+// allowlistのみ、新規データは作らない)、(2)nextHours(当日の直近数時間の
+// 予報)・regionalWeather(本島北中南の代表地点)を判断材料として追加、
+// (3)reasonShortを「一文」から「状況→提案→(必要なら)代替案」の2〜4文へ、
+// (4)shouldReopenLater/reopenReasonTypeという小さな構造化値を追加し、
+// 「また開いて」の文言自体はUI側の固定文で出す設計にする(AIに毎回
+// 決まり文句を自由生成させない)。優先順位(factual_info最優先・捏造禁止・
+// 候補外を作らない)という既存の安全思想は一切変更しない。
 function buildAiConciergePrompt(
   payload
 ) {
@@ -954,16 +1134,18 @@ function buildAiConciergePrompt(
     payload.language === "en" ? "English" : "Japanese";
 
   const systemInstruction =
-    "You are Machinau's travel concierge. Each candidate in the JSON " +
-    "\"candidates\" array has a \"sourceType\" describing what kind of " +
-    "information it is: \"factual_info\" (safety/important real-time info, " +
-    "such as typhoons, warnings, evacuation notices, transport suspensions, " +
-    "facility closures, or last-minute schedule changes; it may include a " +
-    "short \"factSummary\" field with a brief factual excerpt), " +
-    "\"official_today\" (official Machinau operator post), " +
-    "\"traveler_suggestion\" (curated event/sightseeing pick), " +
-    "\"region_recommendation\" (editorial regional recommendation), or " +
-    "\"shop\" (a regular shop/venue listing). " +
+    "You are Machinau's travel concierge. Machinau is not a weather app — " +
+    "your job is to read the traveler's current situation (location, time, " +
+    "weather, and what's actually happening in the area right now) and help " +
+    "them decide what to do next, the way a knowledgeable local friend would. " +
+    "Each candidate in the JSON \"candidates\" array has a \"sourceType\" " +
+    "describing what kind of information it is: \"factual_info\" " +
+    "(safety/important real-time info, such as typhoons, warnings, " +
+    "evacuation notices, transport suspensions, facility closures, or " +
+    "last-minute schedule changes), \"official_today\" (official Machinau " +
+    "operator post), \"traveler_suggestion\" (curated event/sightseeing " +
+    "pick), \"region_recommendation\" (editorial regional recommendation), " +
+    "or \"shop\" (a regular shop/venue listing). " +
     "PRIORITY RULE: if any \"factual_info\" candidate is relevant to the " +
     "traveler's area or plans right now, you MUST treat it as higher " +
     "priority than any regular shop, sightseeing, or event candidate, even " +
@@ -972,26 +1154,83 @@ function buildAiConciergePrompt(
     "recommend something more appealing. Stay calm and factual — do not " +
     "exaggerate risk or cause unnecessary alarm. " +
     "You must choose exactly ONE candidate from the array that is most " +
-    "meaningful for this traveler right now, considering the provided area, " +
-    "current time, weather, distance, category, and availability hint. " +
-    "You must NEVER invent, rename, or describe a place, shop, or event that is " +
-    "not in the candidates list. The value of \"suggestedCandidateId\" in your " +
-    "response MUST be exactly one of the \"id\" values in the candidates array, " +
-    "copied verbatim (do not strip or alter its prefix). Do not state specific " +
-    "facts (hours, prices, distance) that are not present in the matching " +
-    "candidate's data (for \"factual_info\", you may restate its own " +
-    "\"factSummary\" in your own words, but do not add facts beyond it). " +
-    "ANSWER SHAPE when you choose a \"factual_info\" candidate: \"reasonShort\" " +
-    "should state the key fact plainly and what it means for the traveler's " +
-    "plans right now (fact -> what to do). If, and only if, another candidate " +
-    "in the array is a reasonable nearby alternative, you may name it in " +
-    "\"cautionNote\" by copying its exact \"title\" text from the candidates " +
-    "array — never invent an alternative name that is not one of the " +
-    "provided candidates' titles. Otherwise set \"cautionNote\" to null. " +
+    "meaningful for this traveler right now. " +
+    "\n\nDATA YOU MAY USE PER CANDIDATE: beyond title/category/area/" +
+    "distanceKm/availabilityHint/factSummary, some candidates also include " +
+    "\"shopName\" (the actual place name), \"contentExcerpt\" (a short " +
+    "excerpt of the original post text — may already mention a specific " +
+    "time, place, or detail; you may restate what it says but never expand " +
+    "beyond it), \"locationLabel\" (a short address/place description), " +
+    "\"validUntilHint\" (how much longer this specific candidate stays " +
+    "valid — this is informational only; every candidate in this list has " +
+    "ALREADY been confirmed to be currently valid by Machinau's own systems " +
+    "before reaching you, so never question or reason about whether a " +
+    "candidate might be expired), and \"sourceUrl\" (a source link shown to " +
+    "the traveler for attribution only — you have NOT visited this URL and " +
+    "must never say things like \"according to the official site\" or \"I " +
+    "checked the website\"; you may only say a source link is available). " +
+    "Any of these fields may be empty — if a fact is not given, treat it as " +
+    "unknown and do not guess or invent it. " +
+    "\n\nWEATHER DATA: \"weather\" is the current condition at the " +
+    "traveler's own location. \"nextHours\" (if present) is an ordered list " +
+    "of upcoming hourly forecasts for today only, starting from the current " +
+    "hour — you may describe how the weather is expected to change (e.g., " +
+    "rain easing, wind picking up) using ONLY the hours actually provided; " +
+    "never state a specific future time or condition that is not one of the " +
+    "given entries, and never assume what happens after the last entry " +
+    "provided. \"regionalWeather\" (if present) compares the current " +
+    "condition in up to three broad areas of Okinawa's main island (north/" +
+    "central/south) — you may use this to note that another part of the " +
+    "island has notably different weather, but only suggest moving there if " +
+    "a candidate in the list is actually relevant to that area; never " +
+    "suggest moving somewhere just because the weather sounds nicer if " +
+    "there is no relevant candidate there. " +
+    "\n\nABSOLUTELY FORBIDDEN: inventing a shop, place, or event not in the " +
+    "candidates list; inventing business hours, prices, dates, or other " +
+    "facts not present in the given data; inferring whether a place is open " +
+    "or closed purely from the weather; recommending a candidate with no " +
+    "stated reason beyond \"the weather is bad/good\" (a shop-ad-like " +
+    "recommendation); claiming to have visited a sourceUrl; restating a " +
+    "candidate's own facts beyond what its fields actually say. " +
+    "\n\nANSWER SHAPE for \"reasonShort\": write 2 to 4 short, natural " +
+    "sentences (not one, and not a long article) in " + languageLabel + " " +
+    "that a person can read at a glance on a phone screen. Structure: " +
+    "(1) briefly describe the relevant part of the current situation " +
+    "(weather/time/area/an active factual_info notice, whichever is most " +
+    "relevant), (2) say what that means to do right now, referencing the " +
+    "chosen candidate using only its given facts, (3) if genuinely useful, " +
+    "add one short alternative or caveat. Do not pad with filler sentences " +
+    "just to reach the sentence count — if the situation is simple, 2 " +
+    "sentences is fine. When you choose a \"factual_info\" candidate, state " +
+    "the key fact plainly and what it means for the traveler's plans right " +
+    "now (fact -> what to do), using its \"factSummary\"/\"contentExcerpt\" " +
+    "in your own words without adding facts beyond them. " +
+    "If, and only if, another candidate in the array is a reasonable nearby " +
+    "alternative, you may name it in \"cautionNote\" by copying its exact " +
+    "\"title\" text from the candidates array — never invent an alternative " +
+    "name that is not one of the provided candidates' titles. Otherwise set " +
+    "\"cautionNote\" to null. " +
+    "\n\nRE-OPEN SIGNAL: set \"shouldReopenLater\" to true only if this " +
+    "specific suggestion's relevance would meaningfully change if the " +
+    "traveler's weather, time, or location changes later (this will be " +
+    "common), and false if it is a one-time fact that will not change by " +
+    "being re-checked (e.g., a fixed factual notice). If true, set " +
+    "\"reopenReasonType\" to exactly one of \"weather\", \"time\", " +
+    "\"location\", or \"availability\" — whichever is the main reason this " +
+    "suggestion could change. If false, set \"reopenReasonType\" to null. " +
+    "Do not write any re-open/come-back phrasing inside \"reasonShort\" or " +
+    "\"cautionNote\" yourself — that message is handled separately by the " +
+    "app's own interface. " +
+    "\n\nThe value of \"suggestedCandidateId\" in your response MUST be " +
+    "exactly one of the \"id\" values in the candidates array, copied " +
+    "verbatim (do not strip or alter its prefix). " +
     "Reply with a single JSON object only, with exactly these keys: " +
     "\"suggestedCandidateId\" (string, one of the candidate ids), " +
-    "\"reasonShort\" (string, one short sentence written in " + languageLabel + "), " +
-    "\"cautionNote\" (string in " + languageLabel + ", or null). " +
+    "\"reasonShort\" (string, 2-4 short sentences written in " + languageLabel + "), " +
+    "\"cautionNote\" (string in " + languageLabel + ", or null), " +
+    "\"shouldReopenLater\" (boolean), " +
+    "\"reopenReasonType\" (one of \"weather\", \"time\", \"location\", " +
+    "\"availability\", or null). " +
     "No extra text before or after the JSON object.";
 
   const userContent =
@@ -999,6 +1238,8 @@ function buildAiConciergePrompt(
       area: payload.area,
       currentTime: payload.currentTime,
       weather: payload.weather,
+      nextHours: payload.nextHours,
+      regionalWeather: payload.regionalWeather,
       candidates: payload.candidates
     });
 
@@ -1280,6 +1521,16 @@ async function handleAiConciergeRequest(
         contextInput.weather
       );
 
+    const nextHours =
+      sanitizeAiConciergeNextHours(
+        contextInput.nextHours
+      );
+
+    const regionalWeather =
+      sanitizeAiConciergeRegionalWeather(
+        contextInput.regionalWeather
+      );
+
     const candidates =
       sanitizeAiConciergeCandidateList(
         requestBody.candidates
@@ -1318,6 +1569,8 @@ async function handleAiConciergeRequest(
             currentTime: currentTime,
             area: area,
             weather: weather,
+            nextHours: nextHours,
+            regionalWeather: regionalWeather,
             candidates: candidates
           }
         );
@@ -1367,6 +1620,25 @@ async function handleAiConciergeRequest(
             .slice(0, AI_CONCIERGE_REASON_MAX_LENGTH)
         : null;
 
+    // AIコンシェルジュ Phase2｜「また開いて」用の構造化シグナル。
+    // AIの出力形式が万一崩れていても(booleanでない等)、この2項目だけを
+    // 理由に提案全体を破棄しない(shouldReopenLater=falseへ安全側に
+    // フォールバックするだけにとどめ、既存fallback経路を壊さない)。
+    const shouldReopenLater =
+      aiSuggestion.shouldReopenLater === true;
+
+    const allowedReopenReasonTypes =
+      ["weather", "time", "location", "availability"];
+
+    const reopenReasonType =
+      shouldReopenLater &&
+      typeof aiSuggestion.reopenReasonType === "string" &&
+      allowedReopenReasonTypes.includes(
+        aiSuggestion.reopenReasonType
+      )
+        ? aiSuggestion.reopenReasonType
+        : null;
+
     return response.status(200).json({
       success: true,
       suggestion: {
@@ -1378,7 +1650,11 @@ async function handleAiConciergeRequest(
             .trim()
             .slice(0, AI_CONCIERGE_REASON_MAX_LENGTH),
 
-        cautionNote: cautionNote
+        cautionNote: cautionNote,
+
+        shouldReopenLater: shouldReopenLater,
+
+        reopenReasonType: reopenReasonType
       }
     });
   } catch (error) {
