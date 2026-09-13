@@ -251,13 +251,14 @@ export function matchesSafetyCriticalKeywords(
 }
 
 
-// 店舗投稿の安全化｜post.html側のcurrentPostMode("street"/"shop")を
-// Firestoreドキュメントの submissionType として保存したものを、
-// サーバー側(このモデレーション処理)でも安全に読み取るための許容値と
-// 解決関数。post.htmlはFirestoreへ直接書き込むクライアントのため、
-// この値が改ざん・欠落していても自動承認判定を誤らせないよう、
-// street/shop以外の値・未設定は必ず"shop"(=自動承認しない側)へ
-// フォールバックする(allowlist方式、クライアント値をそのまま信用しない)。
+// 店舗投稿の安全化＋撤回｜post.html側のcurrentPostMode("street"/"shop")を
+// Firestoreドキュメントの submissionType として保存したものを、安全に
+// 読み取るための許容値と解決関数。当初はここでshop投稿の自動承認可否を
+// 判定していたが、その条件は本部判断により撤回済み(このファイル内では
+// 現在未使用)。submissionType自体とこのallowlistは、Admin一覧の
+// 🏪店舗投稿識別表示のために引き続き保持する(本部指示により削除禁止)。
+// 値が改ざん・欠落していても呼び出し側を誤動作させないよう、street/shop
+// 以外の値・未設定は"shop"へフォールバックする(allowlist方式)。
 export const ALLOWED_SUBMISSION_TYPES =
   [
     "street",
@@ -6256,21 +6257,18 @@ export default async function handler(
         currentData
       );
 
-    // 店舗投稿の安全化｜店舗・施設(shop)を名乗る投稿は、現状「投稿者が
-    // 本当にその店の関係者か」を確認する仕組みが無いため、Moderationが
-    // SAFEであっても自動承認の対象から外し、必ず運営確認を経由させる
-    // (街の声/streetは従来どおり自動承認の対象のまま)。
-    const isShopSubmission =
-      resolveSubmissionType(
-        currentData
-      ) ===
-      "shop";
-
+    // 店舗投稿の安全化＋撤回｜「店舗(shop)投稿はSAFEでも自動承認しない」
+    // という条件は本部判断により撤回された(代表が個別に電話・DM等で
+    // 店舗の実在・セール内容を確認する運用は現実的に不可能なため)。
+    // street/shopの区別なく、Moderation SAFE＋durationHours正常＋
+    // 安全/災害/交通キーワード無しであれば自動承認する、撤回前の判定へ
+    // 戻す。submissionType自体・そのallowlist(resolveSubmissionType()、
+    // ALLOWED_SUBMISSION_TYPES)はAdmin一覧の🏪店舗投稿識別表示のために
+    // 引き続き保存・利用するが、このモデレーション判定では参照しない。
     if (
       allSafe &&
       durationHoursValue !== null &&
-      !isSafetyCriticalContent &&
-      !isShopSubmission
+      !isSafetyCriticalContent
     ) {
       await database.runTransaction(
         async function(transaction) {
@@ -6336,32 +6334,14 @@ export default async function handler(
       });
     }
 
-    // 店舗投稿の安全化｜「危険/不明瞭だからpending」(REVIEW)と、
-    // 「安全だが店舗投稿のため運営確認を待つ」(SAFE)は意味が異なるため、
-    // aiReviewStatusを分けて記録する。旧来の「allSafeならduration不正」
-    // という消去法の判定に、新たな不承認理由(isShopSubmission)が
-    // 加わったため、各理由を明示的に判定し直す。
-    const isPendingSolelyForShopVerification =
-      allSafe &&
-      durationHoursValue !== null &&
-      !isSafetyCriticalContent &&
-      isShopSubmission;
-
     const reasonText =
       allSafe && isSafetyCriticalContent
         ? "安全・災害・交通に関する情報の可能性があるため、内容を人間が確認します。"
-        : allSafe && durationHoursValue === null
+        : allSafe
           ? "掲載時間の情報が正しく設定されていないため、自動承認できません。"
-          : isPendingSolelyForShopVerification
-            ? "店舗・施設からの投稿のため、内容の安全確認とは別に運営確認を経てから公開します。"
-            : buildReviewReason(
-                moderationResults
-              );
-
-    const aiReviewStatusToRecord =
-      isPendingSolelyForShopVerification
-        ? "SAFE"
-        : "REVIEW";
+          : buildReviewReason(
+              moderationResults
+            );
 
     await database.runTransaction(
       async function(transaction) {
@@ -6389,7 +6369,7 @@ export default async function handler(
           matchingDocument.ref,
           {
             aiReviewStatus:
-              aiReviewStatusToRecord,
+              "REVIEW",
 
             aiReviewReason:
               reasonText,
@@ -6407,11 +6387,9 @@ export default async function handler(
     return response.status(200).json({
       success: true,
       message:
-        isPendingSolelyForShopVerification
-          ? "店舗投稿のため、運営確認後に公開されます。"
-          : "人間による確認が必要と判定されました。",
+        "人間による確認が必要と判定されました。",
       aiReviewStatus:
-        aiReviewStatusToRecord
+        "REVIEW"
     });
   } catch (error) {
     console.error(
