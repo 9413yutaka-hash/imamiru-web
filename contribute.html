@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <meta
+    name="theme-color"
+    content="#0788c9"
+  >
+
+  <meta
+    name="description"
+    content="マチナウへ、街の「今」を投稿する入口です。街で見つけたことも、お店・施設からのお知らせも、ここから届けられます。"
+  >
+
+  <title>
+    街の「今」を教えてください｜マチナウ
+  </title>
+
+  <link
+    rel="canonical"
+    href="https://machinau.jp/contribute.html"
+  >
+
+  <link
+    rel="icon"
+    type="image/svg+xml"
+    href="favicon.svg"
+  >
+
+  <style>
+    :root {
+      --navy: #071a33;
+      --blue: #0788c9;
+      --cyan: #04b7d7;
+      --sky: #dff7ff;
+      --white: #ffffff;
+      --text: #15233a;
+      --subtext: #697386;
+      --border: #e2eaf1;
+      --background: #f4f8fb;
+      --shadow: 0 18px 50px rgba(20, 52, 82, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0 0 60px;
+      font-family:
+        "Yu Gothic",
+        "Hiragino Kaku Gothic ProN",
+        "Meiryo",
+        sans-serif;
+      background: var(--background);
+      color: var(--text);
+    }
+
+    /* 投稿玄関Phase1｜ヘッダー/ヒーロー部分は既存post.htmlと同じ
+       クラス構成・見た目を採用し、TOP→contribute.html→post.htmlの
+       導線で世界観が途切れないようにする(意図的な複製、共通化のための
+       新規CSS読み込みは今回の範囲では見送り)。 */
+    .top-bar {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(12, 54, 87, 0.08);
+    }
+
+    .top-bar-inner {
+      width: min(100%, 760px);
+      margin: 0 auto;
+      padding: 13px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .brand-area {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-icon {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      color: var(--white);
+      font-size: 21px;
+      box-shadow: 0 8px 20px rgba(4, 158, 199, 0.25);
+    }
+
+    .brand-name {
+      margin: 0;
+      color: var(--navy);
+      font-size: 21px;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+    }
+
+    .brand-caption {
+      margin: 2px 0 0;
+      color: var(--subtext);
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .home-link {
+      padding: 9px 13px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--white);
+      color: var(--navy);
+      font-size: 12px;
+      font-weight: 900;
+      white-space: nowrap;
+      text-decoration: none;
+    }
+
+    .page-hero {
+      padding: 42px 18px 70px;
+      background: linear-gradient(135deg, #0687c5, #13c3ce);
+      color: var(--white);
+    }
+
+    .page-hero-inner {
+      width: min(100%, 720px);
+      margin: 0 auto;
+    }
+
+    .hero-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 8px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .page-hero h1 {
+      margin: 20px 0 0;
+      font-size: clamp(24px, 6vw, 34px);
+      line-height: 1.4;
+      letter-spacing: 0.02em;
+    }
+
+    .page-hero p {
+      margin: 14px 0 0;
+      max-width: 600px;
+      color: rgba(255, 255, 255, 0.92);
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.8;
+    }
+
+    main {
+      width: min(100%, 640px);
+      margin: -38px auto 0;
+      padding: 0 18px;
+    }
+
+    .entry-card {
+      display: block;
+      margin-bottom: 16px;
+      padding: 22px 20px;
+      border: 1px solid rgba(12, 54, 87, 0.08);
+      border-radius: 22px;
+      background: var(--white);
+      box-shadow: var(--shadow);
+      text-decoration: none;
+      color: inherit;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .entry-card:active {
+      transform: scale(0.98);
+    }
+
+    .entry-card-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 46px;
+      height: 46px;
+      border-radius: 14px;
+      background: var(--sky);
+      font-size: 24px;
+      margin-bottom: 12px;
+    }
+
+    .entry-card h2 {
+      margin: 0 0 8px;
+      color: var(--navy);
+      font-size: 18px;
+    }
+
+    .entry-card-examples {
+      margin: 0 0 16px;
+      color: var(--subtext);
+      font-size: 12.5px;
+      line-height: 1.9;
+    }
+
+    .entry-card-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 46px;
+      padding: 0 20px;
+      border-radius: 13px;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      color: var(--white);
+      font-size: 14px;
+      font-weight: 900;
+      box-shadow: 0 8px 20px rgba(5, 144, 194, 0.22);
+    }
+
+    .notice-box {
+      margin: 22px 0 30px;
+      padding: 18px 18px;
+      border: 1px solid #cfeefa;
+      border-radius: 16px;
+      background: #effbff;
+      color: #24627e;
+    }
+
+    .notice-box h2 {
+      margin: 0 0 10px;
+      font-size: 13px;
+      color: var(--navy);
+    }
+
+    .notice-box ul {
+      margin: 0;
+      padding-left: 18px;
+      font-size: 12.5px;
+      line-height: 1.9;
+    }
+
+    .notice-box a {
+      color: #0788c9;
+      font-weight: 700;
+    }
+
+    .back-link {
+      display: inline-block;
+      margin-top: 4px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--blue);
+      text-decoration: none;
+    }
+
+    @media (max-width: 480px) {
+      .page-hero {
+        padding: 34px 15px 60px;
+      }
+
+      main {
+        padding-right: 14px;
+        padding-left: 14px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <header class="top-bar">
+    <div class="top-bar-inner">
+
+      <div class="brand-area">
+
+        <div class="brand-icon">
+          🌺
+        </div>
+
+        <div>
+          <p class="brand-name">
+            マチナウ
+          </p>
+
+          <p class="brand-caption">
+            リアルタイム観光コンシェルジュ
+          </p>
+        </div>
+
+      </div>
+
+      <a
+        class="home-link"
+        href="index.html"
+      >
+        ← トップへ戻る
+      </a>
+
+    </div>
+  </header>
+
+  <section class="page-hero">
+    <div class="page-hero-inner">
+
+      <div class="hero-label">
+        📣 街のみんなで届ける
+      </div>
+
+      <h1>
+        街の「今」を教えてください
+      </h1>
+
+      <p>
+        マチナウは、みんなで街の今をつないでいく場所です。
+        あなたが見つけたことも、お店・施設からのお知らせも、
+        ここから届けられます。
+      </p>
+
+    </div>
+  </section>
+
+  <main>
+
+    <a
+      class="entry-card"
+      href="post.html?mode=street"
+    >
+      <span class="entry-card-icon">📍</span>
+
+      <h2>
+        街で見つけた！
+      </h2>
+
+      <p class="entry-card-examples">
+        夕日がきれい・ここが混んでいる・イベントをやっている・
+        ちょっとした街の発見など
+      </p>
+
+      <span class="entry-card-cta">
+        街の声を投稿する →
+      </span>
+    </a>
+
+    <a
+      class="entry-card"
+      href="post.html?mode=shop"
+    >
+      <span class="entry-card-icon">🏪</span>
+
+      <h2>
+        お店・施設の方はこちら
+      </h2>
+
+      <p class="entry-card-examples">
+        今日のお知らせ・イベント・営業時間変更・期間限定情報・
+        タイムセールなど、お店の今を知らせる投稿です
+      </p>
+
+      <span class="entry-card-cta">
+        お店の情報を投稿する →
+      </span>
+    </a>
+
+    <div class="notice-box">
+      <h2>
+        投稿する前に
+      </h2>
+
+      <ul>
+        <li>
+          写真は自分で撮影したもの、または投稿権限があるものをお使いください
+        </li>
+        <li>
+          個人が特定できる写真や、プライバシーへの配慮をお願いします
+        </li>
+        <li>
+          投稿内容は確認のうえ公開される場合があります
+        </li>
+        <li>
+          危険情報・緊急を要する情報は、まず消防・警察等の公的機関へご連絡ください
+        </li>
+        <li>
+          虚偽の情報や、他者の権利を侵害する投稿はご遠慮ください
+        </li>
+      </ul>
+
+      <p style="margin: 12px 0 0; font-size: 12px;">
+        詳しくは<a href="terms.html">利用規約</a>・<a href="privacy.html">プライバシーポリシー</a>をご覧ください。
+      </p>
+    </div>
+
+    <a class="back-link" href="index.html">← マチナウTOPへ戻る</a>
+
+  </main>
+
+</body>
+</html>

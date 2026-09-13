@@ -49,9 +49,24 @@ const MACHINAU_TRANSLATIONS = {
     en: "Choose a category to explore."
   },
 
-  shops_general_post_entry_link: {
-    ja: "👀 今ここで見つけた？ みんなに知らせる →",
-    en: "👀 Seen something here? Let others know →"
+  // 投稿玄関Phase1｜旧shops_general_post_entry_link(👀今ここで見つけた？
+  // みんなに知らせる→)を廃止し、投稿できることが一瞬で分かる参加CTAへ
+  // 置換。contribute.html自体は既存post.html同様に日本語のみ(post.html側に
+  // 多言語対応が無く、遷移先が日本語のみのため、玄関ページだけ英語化しても
+  // 一貫した体験にならないという確認済みの理由による)。
+  contribute_cta_heading: {
+    ja: "📣 君も、街の「今」を教えて！",
+    en: "📣 You can share what's happening now!"
+  },
+
+  contribute_cta_message: {
+    ja: "あなたが見つけた街の今が、今そこにいる誰かの役に立ちます。",
+    en: "What you notice right now could help someone nearby today."
+  },
+
+  contribute_cta_button: {
+    ja: "街の情報を投稿する →",
+    en: "Share what's happening →"
   },
 
   category_all: {
@@ -596,14 +611,11 @@ const MACHINAU_TRANSLATIONS = {
     en: "Contact Us"
   },
 
-  footer_shop_entry_link: {
-    ja: "お店・施設の方へ｜今の情報を掲載する",
-    en: "For shops & venues: Post your latest info"
-  },
-
-  footer_general_post_entry_link: {
-    ja: "👀 今ここで何か見つけた？｜地元の人も旅行中の人も情報を届ける",
-    en: "👀 Seen something here? Locals & travelers welcome to share"
+  // 投稿玄関Phase1｜旧footer_shop_entry_link/footer_general_post_entry_link
+  // (post.htmlへの別々の2導線)を、contribute.htmlへの1つの導線へ統一。
+  footer_contribute_link: {
+    ja: "街の「今」を投稿する",
+    en: "Share what's happening"
   },
 
   location_geolocation_unsupported: {

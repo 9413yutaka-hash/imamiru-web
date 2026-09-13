@@ -2334,6 +2334,29 @@
       }
     );
 
+    // 投稿玄関Phase1｜contribute.htmlの「街で見つけた！」「お店・施設の方は
+    // こちら」から遷移した場合、post.html側でもう一度同じ質問(どんな「今」を
+    // 届けますか？)を表示すると二度手間になるため、URLの?mode=street/shopを
+    // 検知した時だけ選択画面を省略してそのままapplyPostMode()する。
+    // パラメータが無い/不正な値の場合は、直接post.htmlを開いた既存の
+    // 全ての導線(ブックマーク等)向けに、これまで通り選択画面から始める
+    // (挙動を変えない)。「選び直す」ボタンでいつでも選択画面へ戻れる。
+    const requestedPostModeFromUrl =
+      new URLSearchParams(
+        window.location.search
+      ).get(
+        "mode"
+      );
+
+    if (
+      requestedPostModeFromUrl === "street" ||
+      requestedPostModeFromUrl === "shop"
+    ) {
+      applyPostMode(
+        requestedPostModeFromUrl
+      );
+    }
+
     const newPostButton =
       document.getElementById(
         "newPostButton"
