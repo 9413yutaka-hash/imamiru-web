@@ -953,6 +953,78 @@
 
         </div>
 
+        <!-- 店舗投稿の安全化＋運営店舗属性 共通化｜既存の一般店舗投稿
+             (post.html)にあるtakeout/paymentMethodsと同じ保存形式・
+             許容値をそのまま再利用する。表示は「お知らせ」カテゴリーの
+             ときだけ隠す(admin-post.jsのALLOWED_CATEGORIES 9種類のうち、
+             「お知らせ」以外の8種類はpost.html側の店舗カテゴリーと
+             完全に一致することを確認済みのため、この1カテゴリーだけを
+             除外する判定は推測ではなく実コード上の対応関係に基づく)。
+             updateShopAttributesVisibility()で表示切替。 -->
+        <div class="form-group" id="shopAttributesFormGroup">
+
+          <label
+            class="form-label"
+            for="takeout"
+          >
+            <input
+              id="takeout"
+              name="takeout"
+              type="checkbox"
+            >
+            🥡 テイクアウトができます
+          </label>
+
+          <div
+            class="form-label"
+            style="margin-top: 16px;"
+          >
+            支払い方法
+            <span class="optional">任意</span>
+          </div>
+
+          <label
+            class="form-label"
+            for="paymentCash"
+          >
+            <input
+              id="paymentCash"
+              name="paymentCash"
+              type="checkbox"
+            >
+            現金
+          </label>
+
+          <label
+            class="form-label"
+            for="paymentCard"
+          >
+            <input
+              id="paymentCard"
+              name="paymentCard"
+              type="checkbox"
+            >
+            クレジットカード
+          </label>
+
+          <label
+            class="form-label"
+            for="paymentQr"
+          >
+            <input
+              id="paymentQr"
+              name="paymentQr"
+              type="checkbox"
+            >
+            QR・電子マネー
+          </label>
+
+          <p class="form-help">
+            店舗・施設のお知らせにのみ表示される項目です。空欄でも投稿できます。
+          </p>
+
+        </div>
+
         <div class="form-group">
 
           <label
@@ -1170,6 +1242,14 @@
     const addressInput = document.getElementById("address");
     const websiteUrlInput = document.getElementById("websiteUrl");
     const areaInput = document.getElementById("area");
+
+    // 店舗投稿の安全化＋運営店舗属性 共通化｜post.htmlのtakeout/paymentMethods
+    // と同じ入力要素構成。
+    const shopAttributesFormGroup = document.getElementById("shopAttributesFormGroup");
+    const takeoutInput = document.getElementById("takeout");
+    const paymentCashInput = document.getElementById("paymentCash");
+    const paymentCardInput = document.getElementById("paymentCard");
+    const paymentQrInput = document.getElementById("paymentQr");
     const areaRequirementLabel = document.getElementById("areaRequirementLabel");
 
     const locationButton = document.getElementById("locationButton");
@@ -1700,6 +1780,29 @@
       }
     }
 
+    // 店舗投稿の安全化＋運営店舗属性 共通化｜admin-post.htmlはお知らせ/
+    // イベント/観光/店舗など幅広いカテゴリーに使われるため、テイクアウト・
+    // 支払い方法は「お知らせ」カテゴリーのときだけ隠す(それ以外の8種類は
+    // post.html側の店舗カテゴリーと一致するため、店舗・施設向けの情報と
+    // 判断できる)。非表示時にチェック状態を保存してしまわないよう、
+    // 送信直前ではなくここでチェックを外す(submitAdminPost側は
+    // チェック状態をそのまま読むだけで良いようにする)。
+    function updateShopAttributesVisibility() {
+      const isAnnouncementCategory =
+        categoryInput.value === "お知らせ" ||
+        categoryInput.value === "";
+
+      shopAttributesFormGroup.style.display =
+        isAnnouncementCategory ? "none" : "";
+
+      if (isAnnouncementCategory) {
+        takeoutInput.checked = false;
+        paymentCashInput.checked = false;
+        paymentCardInput.checked = false;
+        paymentQrInput.checked = false;
+      }
+    }
+
     function validateForm() {
       const validationErrors = [];
 
@@ -1848,6 +1951,20 @@
 
         const idToken = await currentUser.getIdToken();
 
+        const paymentMethods = [];
+
+        if (paymentCashInput.checked) {
+          paymentMethods.push("cash");
+        }
+
+        if (paymentCardInput.checked) {
+          paymentMethods.push("card");
+        }
+
+        if (paymentQrInput.checked) {
+          paymentMethods.push("qr");
+        }
+
         const payload = {
           title: titleInput.value.trim(),
           category: categoryInput.value,
@@ -1857,7 +1974,14 @@
           longitude: capturedLongitude,
           imageUrls: imageUrls,
           websiteUrl: websiteUrlInput.value.trim(),
-          area: areaInput.value.trim()
+          area: areaInput.value.trim(),
+
+          // 店舗投稿の安全化＋運営店舗属性 共通化｜「お知らせ」カテゴリー等、
+          // 属性欄が非表示の間はupdateShopAttributesVisibility()が
+          // チェックを外しているため、常にチェック状態をそのまま送って良い
+          // (店舗系カテゴリー以外では自然にfalse/空配列になる)。
+          takeout: takeoutInput.checked,
+          paymentMethods: paymentMethods
         };
 
         // 常設店舗広告(isPermanentAdチェックON)はexpiresAtを送らない
@@ -1962,6 +2086,7 @@
 
       refreshExpiresAtBounds();
       updateExpiresAtVisibility();
+      updateShopAttributesVisibility();
       renderImagePreviews();
       updateCharacterCounts();
       clearMessage();
@@ -2014,6 +2139,20 @@
       addressInput.value = submission.address || "";
       websiteUrlInput.value = submission.websiteUrl || "";
 
+      // 店舗投稿の安全化＋運営店舗属性 共通化｜既存投稿にフィールドが
+      // 無い場合(この機能追加より前の投稿)でも壊れないよう、真偽値/配列
+      // チェックのうえ安全にfalse/未チェックへフォールバックする。
+      takeoutInput.checked = submission.takeout === true;
+
+      const existingPaymentMethods =
+        Array.isArray(submission.paymentMethods)
+          ? submission.paymentMethods
+          : [];
+
+      paymentCashInput.checked = existingPaymentMethods.includes("cash");
+      paymentCardInput.checked = existingPaymentMethods.includes("card");
+      paymentQrInput.checked = existingPaymentMethods.includes("qr");
+
       // Ver1.8 Phase2 STEP7-G2A｜このAPI追加より前に作成された投稿(area
       // フィールド自体が存在しない)でも編集画面が壊れないよう、文字列以外は
       // 空欄にする。新規投稿時のsourceAreaInput相当のロジックには触れない。
@@ -2041,6 +2180,7 @@
       isPermanentAdCheckbox.checked = submission.isPermanentAd === true;
       isPermanentAdCheckbox.disabled = true;
       updateExpiresAtVisibility();
+      updateShopAttributesVisibility();
 
       existingImageUrls = Array.isArray(submission.imageUrls)
         ? submission.imageUrls
@@ -2195,6 +2335,7 @@
     });
 
     isPermanentAdCheckbox.addEventListener("change", updateExpiresAtVisibility);
+    categoryInput.addEventListener("change", updateShopAttributesVisibility);
 
     adminPostForm.addEventListener("submit", submitAdminPost);
 
@@ -2204,6 +2345,7 @@
 
     refreshExpiresAtBounds();
     updateExpiresAtVisibility();
+    updateShopAttributesVisibility();
     updateCharacterCounts();
 
     // 運営投稿担当(Editor)権限 Phase1｜このページはADMIN_EMAIL固定判定を

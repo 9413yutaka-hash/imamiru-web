@@ -538,6 +538,19 @@
       font-weight: 900;
     }
 
+    /* 店舗投稿の安全化＋運営店舗属性 共通化｜submissionType==="shop"の
+       投稿だけに付ける最小限の識別バッジ。大規模なadmin再設計はせず、
+       既存の.pending-badgeと同じ並び(.submission-top)へ1つ追加するのみ。 */
+    .shop-submission-badge {
+      flex-shrink: 0;
+      padding: 6px 9px;
+      border-radius: 999px;
+      color: var(--blue);
+      background: rgba(7, 136, 201, 0.1);
+      font-size: 10px;
+      font-weight: 900;
+    }
+
     .ai-review-note {
       display: flex;
       flex-wrap: wrap;
@@ -567,6 +580,14 @@
     .ai-review-badge.waiting {
       color: var(--subtext);
       background: #eef2f5;
+    }
+
+    /* 店舗投稿の安全化｜AIの安全性判定自体はSAFEだが、店舗投稿のため
+       運営確認待ちで止まっているケース専用(要確認=review とは意味が
+       異なるため、危機感を煽らない色にする)。 */
+    .ai-review-badge.safe-pending {
+      color: var(--green);
+      background: var(--green-light);
     }
 
     .ai-review-reason {
@@ -1592,6 +1613,16 @@
                       審査待ち
                     </span>
 
+                    ${
+                      submission.submissionType === "shop"
+                        ? `
+                          <span class="shop-submission-badge">
+                            🏪 店舗投稿
+                          </span>
+                        `
+                        : ""
+                    }
+
                   </div>
 
                   <div class="submission-body">
@@ -1645,6 +1676,20 @@
                             }
                           </div>
                         `
+                        : submission.aiReviewStatus === "SAFE" &&
+                          submission.submissionType === "shop"
+                          ? `
+                            <div class="ai-review-note">
+                              <span class="ai-review-badge safe-pending">AI判定：安全（店舗確認待ち）</span>
+                              ${
+                                submission.aiReviewReason
+                                  ? `<span class="ai-review-reason">${escapeHtml(
+                                      submission.aiReviewReason
+                                    )}</span>`
+                                  : ""
+                              }
+                            </div>
+                          `
                         : submission.aiReviewStatus === "ERROR"
                           ? `
                             <div class="ai-review-note">

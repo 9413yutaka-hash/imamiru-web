@@ -59,6 +59,14 @@ const ALLOWED_AUTHOR_TYPES = [
   "ai"
 ];
 
+// 店舗投稿の安全化＋運営店舗属性 共通化｜api/edit-ad.js・app.js(shop側)と
+// 同じ許容値。この3種類以外の値はvalidatePostFields()で除外する。
+const ALLOWED_PAYMENT_METHOD_VALUES = [
+  "cash",
+  "card",
+  "qr"
+];
+
 // 運営管理型・常設店舗広告(isPermanentAd:true)専用のauthorType識別値。
 // 既存の"admin"/"ai"とは異なる値にすることで、🔥(admin+admin)・
 // ⚡(admin+ai)のいずれの選定条件にも一致させない(postTypeを未設定のまま
@@ -657,6 +665,27 @@ function validatePostFields(
     );
   }
 
+  // 店舗投稿の安全化＋運営店舗属性 共通化｜post.html(一般の店舗投稿)の
+  // takeout/paymentMethodsと完全に同じ保存形式にする。値はoptionalで、
+  // 未指定/不正値でも例外にせず安全側(false/空配列)へフォールドする
+  // (既存のadmin投稿・isPermanentAd投稿にこれらのフィールドが無くても
+  // 壊れないようにするため)。
+  const takeout =
+    requestBody.takeout === true;
+
+  const paymentMethods =
+    Array.isArray(
+      requestBody.paymentMethods
+    )
+      ? requestBody.paymentMethods.filter(
+          function(value) {
+            return ALLOWED_PAYMENT_METHOD_VALUES.includes(
+              value
+            );
+          }
+        )
+      : [];
+
   return {
     title: title,
     category: category,
@@ -671,6 +700,8 @@ function validatePostFields(
     isPermanentAd: isPermanentAd,
     authorType: authorType,
     sourceType: sourceType,
+    takeout: takeout,
+    paymentMethods: paymentMethods,
     sourceId:
       sanitizeOptionalSourceId(
         requestBody.sourceId
@@ -801,6 +832,14 @@ export default async function handler(
 
       authorType:
         postFields.authorType,
+
+      // 店舗投稿の安全化＋運営店舗属性 共通化｜一般の店舗投稿(post.html)と
+      // 完全に同じフィールド名・保存形式。
+      takeout:
+        postFields.takeout,
+
+      paymentMethods:
+        postFields.paymentMethods,
 
       sourceLabel:
         "マチナウ運営より",

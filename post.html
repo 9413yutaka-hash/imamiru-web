@@ -2489,6 +2489,14 @@
       messageBox.className =
         "message-box visible success";
 
+      // 店舗投稿の安全化｜street modeの表示文言は既存のまま一切変更しない。
+      // shop modeのみ、内容確認を経てから公開される旨をより明確にする
+      // (「代表が確認します」等、運営体制の呼び方には触れない)。
+      const publicationNoticeText =
+        currentPostMode === "street"
+          ? "運営による確認後、承認された情報がトップページに掲載されます。"
+          : "店舗・施設からの投稿は、内容を確認後に公開されます。今しばらくお待ちください。";
+
       messageBox.innerHTML = `
         掲載のお申し込みを受け付けました。
         <br><br>
@@ -2539,7 +2547,7 @@
         この画面をスクリーンショットするか、必ずメモしてください。
         <br><br>
 
-        運営による確認後、承認された情報がトップページに掲載されます。
+        ${escapeHtml(publicationNoticeText)}
       `;
     }
 
@@ -4140,6 +4148,19 @@ longitude:
 
           images:
             uploadedImages,
+
+          // 店舗投稿の安全化｜街の声(street)/店舗・施設(shop)をサーバー側
+          // (api/moderate-submission.js)でも判別できるようにする識別値。
+          // currentPostModeは"street"かこれ以外(shopモード)しか取り得ないため、
+          // ここでは必ずどちらか一方になる。ただし直接Firestoreへ書き込む
+          // クライアント値であり、改ざん(shopなのにstreetと詐称)される
+          // 可能性は残るため、この値を信用した自動承認判定は行わず、
+          // サーバー側では許容値チェック＋不正/未設定時は安全側(shop扱い)
+          // にフォールバックする(api/moderate-submission.js側で対応)。
+          submissionType:
+            currentPostMode === "street"
+              ? "street"
+              : "shop",
 
           status: "pending",
           publicationNumber:

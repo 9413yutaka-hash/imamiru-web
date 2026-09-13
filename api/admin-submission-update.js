@@ -56,6 +56,15 @@ const FIELD_MAX_LENGTHS = {
 };
 
 
+// 店舗投稿の安全化＋運営店舗属性 共通化｜api/admin-post.js・api/edit-ad.js・
+// app.js(shop側)と同じ許容値。この3種類以外の値は除外する。
+const ALLOWED_PAYMENT_METHOD_VALUES = [
+  "cash",
+  "card",
+  "qr"
+];
+
+
 const MAX_IMAGE_COUNT = 5;
 
 const MAX_EXPIRES_AT_DAYS = 90;
@@ -333,6 +342,25 @@ function validatePostFields(
     }
   }
 
+  // 店舗投稿の安全化＋運営店舗属性 共通化｜api/admin-post.jsのvalidatePostFields()
+  // と同じ解析ロジック(このファイルはvalidatePostFields()を共有せず独自に
+  // 持っているため、両方に同じ処理を追加する)。
+  const takeout =
+    requestBody.takeout === true;
+
+  const paymentMethods =
+    Array.isArray(
+      requestBody.paymentMethods
+    )
+      ? requestBody.paymentMethods.filter(
+          function(value) {
+            return ALLOWED_PAYMENT_METHOD_VALUES.includes(
+              value
+            );
+          }
+        )
+      : [];
+
   return {
     title: title,
     category: category,
@@ -343,7 +371,9 @@ function validatePostFields(
     latitude: latitude,
     longitude: longitude,
     imageUrls: imageUrls,
-    expiresAtDate: expiresAtDate
+    expiresAtDate: expiresAtDate,
+    takeout: takeout,
+    paymentMethods: paymentMethods
   };
 }
 
@@ -525,6 +555,12 @@ export default async function handler(
 
       area:
         postFields.area,
+
+      takeout:
+        postFields.takeout,
+
+      paymentMethods:
+        postFields.paymentMethods,
 
       updatedAt:
         FieldValue.serverTimestamp()
