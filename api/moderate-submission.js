@@ -355,6 +355,131 @@ const COLUMN_CUSTOM_SLUG_MAX_LENGTH =
 const COLUMN_LIST_MAX_COUNT =
   200;
 
+// ==========================================================================
+// マチナウ読み物投稿機能(Phase2)｜地域連動基盤
+// columnArticlesは「沖縄専用」データ構造を新たに固定しない。国(country)・
+// 都道府県/州等(prefecture)・市区町村(city)・任意の細粒度エリア(area)の
+// 4階層をすべて任意項目として持たせ、記事ごとに粒度を選べるようにする
+// (例：「沖縄の雨」はcountry+prefectureのみ、「国際通りは…」はcity+area
+// まで指定、「日本のお正月」はcountryのみ)。既存のOKINAWA_MUNICIPALITY_TO_
+// REGION_NAME(app.js、沖縄8広域グループ)・submissions.area・
+// regionRecommendations.targetAreasはいずれも変更しない、完全に独立した
+// 新設計。
+// ==========================================================================
+
+const COLUMN_REGION_FIELD_MAX_LENGTHS =
+  {
+    prefecture: 40,
+    city: 40,
+    area: 40
+  };
+
+// countryは表示名の揺れ(「日本」「Japan」等、閲覧者のGoogle Geocoder
+// ロケールにより変わりうる)に依存させず、ISO 3166-1 alpha-2の国コードを
+// 正本として保存・照合する。管理画面では代表が普段どおり国名を日本語で
+// 入力できるようにし、保存時にこの対応表でコードへ正規化する
+// (代表にコードを覚えさせない)。閲覧者側の現在地判定
+// (resolveLocationHierarchyFromCoordinates()、app.js)は、Google
+// Geocoderのcountryコンポーネントのshort_name(常にコードで返る、
+// ロケール非依存)をそのまま使うため、双方が同じコードで一致判定できる。
+// 対応表に無い国名を入力した場合は、正規化を諦めて入力値をそのまま
+// 保存する(保存自体は失敗させない。ただしその場合、閲覧者側のコードとは
+// 一致しづらくなる=country単位のマッチングだけ効かなくなる、という
+// 既知の制限として残す。将来この対応表を増やすだけで拡張できる)。
+const COUNTRY_NAME_TO_ISO_CODE =
+  {
+    "日本": "JP",
+    "japan": "JP",
+    "フランス": "FR",
+    "france": "FR",
+    "台湾": "TW",
+    "taiwan": "TW",
+    "タイ": "TH",
+    "thailand": "TH",
+    "アメリカ": "US",
+    "アメリカ合衆国": "US",
+    "america": "US",
+    "usa": "US",
+    "united states": "US"
+  };
+
+const ISO_CODE_TO_COUNTRY_LABEL =
+  {
+    JP: "日本",
+    FR: "フランス",
+    TW: "台湾",
+    TH: "タイ",
+    US: "アメリカ"
+  };
+
+function normalizeCountryInputToCode(
+  rawValue
+) {
+  const trimmedValue =
+    String(
+      rawValue || ""
+    )
+      .trim();
+
+  if (trimmedValue === "") {
+    return "";
+  }
+
+  const lookupKey =
+    trimmedValue.toLowerCase();
+
+  if (
+    COUNTRY_NAME_TO_ISO_CODE[
+      trimmedValue
+    ]
+  ) {
+    return COUNTRY_NAME_TO_ISO_CODE[
+      trimmedValue
+    ];
+  }
+
+  if (
+    COUNTRY_NAME_TO_ISO_CODE[
+      lookupKey
+    ]
+  ) {
+    return COUNTRY_NAME_TO_ISO_CODE[
+      lookupKey
+    ];
+  }
+
+  // 対応表に無い場合、既にISOコード(例:"FR")っぽい2文字英字ならそのまま
+  // 大文字化して使う(閲覧者側のshort_nameと一致しうる)。それ以外は
+  // 入力値をそのまま保存する(保存は失敗させない、既知の制限として残す)。
+  if (
+    /^[A-Za-z]{2}$/.test(
+      trimmedValue
+    )
+  ) {
+    return trimmedValue.toUpperCase();
+  }
+
+  return trimmedValue;
+}
+
+function getCountryDisplayLabel(
+  countryCode
+) {
+  if (
+    typeof countryCode !== "string" ||
+    countryCode === ""
+  ) {
+    return "";
+  }
+
+  return (
+    ISO_CODE_TO_COUNTRY_LABEL[
+      countryCode.toUpperCase()
+    ] ||
+    countryCode
+  );
+}
+
 const COLUMN_ARTICLE_PAGE_SHARED_CACHE_MAX_AGE_SECONDS =
   300;
 
@@ -2719,6 +2844,58 @@ function buildColumnArticleHtml(
       article.slug
     );
 
+  // Ver1.8 Phase2(地域連動基盤)｜地域名は表示のためだけに使い、タイトル・
+  // descriptionへは詰め込まない(不自然なSEO詰め込みを避ける指示のため)。
+  // 空の階層は単に表示しない(市区町村未設定の記事は「日本 / 沖縄県」まで、
+  // というように自然に短くなる)。
+  const regionBreadcrumbParts =
+    [
+      article.regionCountryLabel,
+      article.regionPrefecture,
+      article.regionCity,
+      article.regionArea
+    ].filter(
+      function(part) {
+        return (
+          typeof part === "string" &&
+          part.trim() !== ""
+        );
+      }
+    );
+
+  const regionBreadcrumbHtml =
+    regionBreadcrumbParts.length > 0
+      ? '<p class="article-region">' +
+        regionBreadcrumbParts
+          .map(
+            escapeHtmlForRender
+          )
+          .join(
+            " / "
+          ) +
+        "</p>"
+      : "";
+
+  const hasMainImage =
+    typeof article.imageUrl === "string" &&
+    article.imageUrl !== "";
+
+  const ogImageUrl =
+    hasMainImage
+      ? article.imageUrl
+      : "https://machinau.jp/icon-512.png";
+
+  const mainImageHtml =
+    hasMainImage
+      ? '<img class="article-main-image" src="' +
+        escapeHtmlForRender(
+          article.imageUrl
+        ) +
+        '" alt="' +
+        escapedTitle +
+        '" loading="lazy">'
+      : "";
+
   return `<!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -2758,8 +2935,8 @@ function buildColumnArticleHtml(
   <meta property="og:title" content="${escapedTitle}｜マチナウ">
   <meta property="og:description" content="${escapedDescription}">
   <meta property="og:url" content="${canonicalUrl}">
-  <meta property="og:image" content="https://machinau.jp/icon-512.png">
-  <meta name="twitter:card" content="summary">
+  <meta property="og:image" content="${ogImageUrl}">
+  <meta name="twitter:card" content="summary${hasMainImage ? "_large_image" : ""}">
 
   <script type="application/ld+json">
   {
@@ -2767,7 +2944,7 @@ function buildColumnArticleHtml(
     "@type": "Article",
     "headline": ${JSON.stringify(article.title)},
     "description": ${JSON.stringify(article.description)},
-    "image": "https://machinau.jp/icon-512.png",
+    "image": ${JSON.stringify(ogImageUrl)},
     "author": { "@type": "Organization", "name": "マチナウ運営" },
     "publisher": {
       "@type": "Organization",
@@ -2820,10 +2997,15 @@ function buildColumnArticleHtml(
       box-shadow: 0 16px 45px rgba(20, 52, 82, 0.12); padding: 30px 22px;
     }
     .article-meta { margin: 0 0 12px; color: var(--subtext); font-size: 12px; }
+    .article-region { margin: 0 0 8px; color: var(--subtext); font-size: 12px; }
     .article-category {
       display: inline-block; margin: 0 0 14px; padding: 5px 12px;
       border-radius: 999px; background: #eef7fb; color: var(--blue);
       font-size: 11px; font-weight: 900;
+    }
+    .article-main-image {
+      display: block; width: 100%; max-height: 320px; object-fit: cover;
+      border-radius: 16px; margin: 0 0 20px;
     }
     .lede { margin: 0 0 28px; font-size: 15px; line-height: 2; color: var(--text); }
     p { font-size: 14px; line-height: 2; color: var(--text); }
@@ -2887,11 +3069,15 @@ function buildColumnArticleHtml(
   <main>
     <div class="card">
 
+      ${regionBreadcrumbHtml}
+
       <span class="article-category">${escapedCategory}</span>
 
       <p class="article-meta">
         公開日：<time datetime="${publishedAttribute}">${publishedDisplay}</time>／更新日：<time datetime="${updatedAttribute}">${updatedDisplay}</time>
       </p>
+
+      ${mainImageHtml}
 
       <p class="lede">${escapedDescription}</p>
 
@@ -3142,6 +3328,34 @@ async function handleRenderColumnArticleRequest(
           category: data.category,
           description: data.description,
           content: data.content,
+
+          regionCountryLabel:
+            getCountryDisplayLabel(
+              typeof data.regionCountry === "string"
+                ? data.regionCountry
+                : ""
+            ),
+
+          regionPrefecture:
+            typeof data.regionPrefecture === "string"
+              ? data.regionPrefecture
+              : "",
+
+          regionCity:
+            typeof data.regionCity === "string"
+              ? data.regionCity
+              : "",
+
+          regionArea:
+            typeof data.regionArea === "string"
+              ? data.regionArea
+              : "",
+
+          imageUrl:
+            typeof data.imageUrl === "string"
+              ? data.imageUrl
+              : "",
+
           publishedAtDate:
             toDateFromFirestoreValue(
               data.publishedAt
@@ -3191,6 +3405,51 @@ async function handleRenderColumnArticleRequest(
 // (index.html内のtyphoon-okinawa-travel専用マークアップ)はそのまま残し、
 // このAPIはそれに追加するFirestore由来の記事だけを返す(既存カードとの
 // 重複は発生しない設計)。
+// Ver1.8 Phase2(地域連動基盤)｜記事の地域タグと閲覧者の現在地(country/
+// prefecture/city、いずれも空文字なら未取得)を突き合わせ、地域の関連度を
+// 4段階(3=市区町村完全一致、2=同一都道府県・州等でその記事にcityの指定が
+// 無い、1=同一国でその記事にprefecture/cityの指定が無い、0=関連度なし)で
+// 返す。記事側のより下位階層(city等)が指定されている場合は、その階層での
+// 完全一致だけを見る(上位階層への取りこぼしフォールバックはしない。
+// 「那覇市限定」記事を沖縄県内の別市町村の閲覧者にも関連ありと広げすぎない
+// ため)。matchLevel 0の記事も除外はしない(現在地以外の記事を読めなくしては
+// いけないという指示のため、並び順を後ろにするだけ)。
+function computeColumnArticleMatchLevel(
+  article,
+  viewer
+) {
+  if (
+    article.regionCity !== "" &&
+    viewer.city !== "" &&
+    article.regionCity === viewer.city
+  ) {
+    return 3;
+  }
+
+  if (
+    article.regionCity === "" &&
+    article.regionPrefecture !== "" &&
+    viewer.prefecture !== "" &&
+    article.regionPrefecture === viewer.prefecture
+  ) {
+    return 2;
+  }
+
+  if (
+    article.regionCity === "" &&
+    article.regionPrefecture === "" &&
+    article.regionCountry !== "" &&
+    viewer.country !== "" &&
+    article.regionCountry.toUpperCase() ===
+      viewer.country.toUpperCase()
+  ) {
+    return 1;
+  }
+
+  return 0;
+}
+
+
 async function handlePublicListPublishedColumnArticlesRequest(
   request,
   response
@@ -3204,8 +3463,51 @@ async function handlePublicListPublishedColumnArticlesRequest(
         app
       );
 
-    const articlesSnapshot =
-      await database
+    const query =
+      request.query ||
+      {};
+
+    // 閲覧者の現在地(app.jsのresolveLocationHierarchyFromCoordinates()から
+    // 渡される、既存のuserAreaName/getSuggestionAreaPriorityRank()とは
+    // 完全に独立した値)。任意パラメータのため、無指定なら全記事が
+    // matchLevel 0(公開日時順のみ)として扱われ、既存のPhase1と同じ
+        // 「単純な新着順」に自然に縮退する。
+    const viewer =
+      {
+        country:
+          typeof query.viewerCountry === "string"
+            ? query.viewerCountry.trim().toUpperCase()
+            : "",
+
+        prefecture:
+          typeof query.viewerPrefecture === "string"
+            ? query.viewerPrefecture.trim()
+            : "",
+
+        city:
+          typeof query.viewerCity === "string"
+            ? query.viewerCity.trim()
+            : ""
+      };
+
+    // カテゴリーでの絞り込み(読み物一覧ページの「地域＋カテゴリーから探す」
+    // 用、任意)。無指定なら絞り込まない。
+    const categoryFilter =
+      typeof query.category === "string"
+        ? query.category.trim()
+        : "";
+
+    // column-list.html(専用一覧ページ)が地域欄へ明示的に入力して検索した
+    // 場合だけtrueにするフラグ。TOP(loadDynamicColumnEntries())は現在地を
+    // 「優先表示のヒント」として渡すだけで、これを付けない＝matchLevel0の
+    // 記事も引き続き返す(現在地以外の記事を読めなくしてはいけないという
+    // 指示のため)。一覧ページの明示検索だけは、実際に絞り込まれた手応えを
+    // 返すため、matchLevel0を除外する。
+    const strictRegionFilter =
+      query.strictRegion === "1";
+
+    let firestoreQuery =
+      database
         .collection(
           COLUMN_ARTICLES_COLLECTION
         )
@@ -3213,7 +3515,24 @@ async function handlePublicListPublishedColumnArticlesRequest(
           "status",
           "==",
           COLUMN_STATUS_PUBLISHED
-        )
+        );
+
+    if (
+      categoryFilter !== "" &&
+      ALLOWED_COLUMN_CATEGORIES.includes(
+        categoryFilter
+      )
+    ) {
+      firestoreQuery =
+        firestoreQuery.where(
+          "category",
+          "==",
+          categoryFilter
+        );
+    }
+
+    const articlesSnapshot =
+      await firestoreQuery
         .limit(
           COLUMN_LIST_MAX_COUNT
         )
@@ -3232,6 +3551,29 @@ async function handlePublicListPublishedColumnArticlesRequest(
                 data.publishedAt
               );
 
+            const articleRegion =
+              {
+                regionCountry:
+                  typeof data.regionCountry === "string"
+                    ? data.regionCountry
+                    : "",
+
+                regionPrefecture:
+                  typeof data.regionPrefecture === "string"
+                    ? data.regionPrefecture
+                    : "",
+
+                regionCity:
+                  typeof data.regionCity === "string"
+                    ? data.regionCity
+                    : "",
+
+                regionArea:
+                  typeof data.regionArea === "string"
+                    ? data.regionArea
+                    : ""
+              };
+
             return {
               slug:
                 documentSnapshot.id,
@@ -3246,6 +3588,36 @@ async function handlePublicListPublishedColumnArticlesRequest(
                   ? data.description
                   : "",
 
+              category:
+                typeof data.category === "string"
+                  ? data.category
+                  : "",
+
+              imageUrl:
+                typeof data.imageUrl === "string"
+                  ? data.imageUrl
+                  : "",
+
+              regionCountryLabel:
+                getCountryDisplayLabel(
+                  articleRegion.regionCountry
+                ),
+
+              regionPrefecture:
+                articleRegion.regionPrefecture,
+
+              regionCity:
+                articleRegion.regionCity,
+
+              regionArea:
+                articleRegion.regionArea,
+
+              matchLevel:
+                computeColumnArticleMatchLevel(
+                  articleRegion,
+                  viewer
+                ),
+
               publishedAtMillis:
                 publishedAtDate
                   ? publishedAtDate.getTime()
@@ -3255,9 +3627,25 @@ async function handlePublicListPublishedColumnArticlesRequest(
         )
         .sort(
           function(firstArticle, secondArticle) {
+            const matchLevelDifference =
+              secondArticle.matchLevel -
+              firstArticle.matchLevel;
+
+            if (matchLevelDifference !== 0) {
+              return matchLevelDifference;
+            }
+
             return (
               secondArticle.publishedAtMillis -
               firstArticle.publishedAtMillis
+            );
+          }
+        )
+        .filter(
+          function(article) {
+            return (
+              !strictRegionFilter ||
+              article.matchLevel > 0
             );
           }
         )
@@ -3266,7 +3654,14 @@ async function handlePublicListPublishedColumnArticlesRequest(
             return {
               slug: article.slug,
               title: article.title,
-              description: article.description
+              description: article.description,
+              category: article.category,
+              imageUrl: article.imageUrl,
+              regionCountry: article.regionCountryLabel,
+              regionPrefecture: article.regionPrefecture,
+              regionCity: article.regionCity,
+              regionArea: article.regionArea,
+              matchLevel: article.matchLevel
             };
           }
         );
@@ -3324,6 +3719,10 @@ async function handleRenderSitemapRequest(
         {
           loc: "https://machinau.jp/column/typhoon-okinawa-travel.html",
           lastmod: "2026-08-27"
+        },
+        {
+          loc: "https://machinau.jp/column-list.html",
+          lastmod: null
         }
       ];
 
@@ -3533,6 +3932,122 @@ function validateColumnArticleFields(
     );
   }
 
+  // Ver1.8 Phase2(地域連動基盤)｜country/prefecture/city/areaはすべて任意。
+  // 市区町村だけを必須単位にせず、記事ごとに粒度を選べるようにする
+  // (「沖縄の雨」はcountry+prefectureのみ、「日本のお正月」はcountryのみ、
+  // 等)。countryはnormalizeCountryInputToCode()でISOコードへ正規化する。
+  const regionCountry =
+    normalizeCountryInputToCode(
+      requestBody.regionCountry
+    );
+
+  const regionPrefecture =
+    String(
+      requestBody.regionPrefecture || ""
+    )
+      .trim();
+
+  if (
+    regionPrefecture.length >
+    COLUMN_REGION_FIELD_MAX_LENGTHS.prefecture
+  ) {
+    throw new Error(
+      "都道府県・州等が長すぎます（" +
+      COLUMN_REGION_FIELD_MAX_LENGTHS.prefecture +
+      "文字以内）。"
+    );
+  }
+
+  const regionCity =
+    String(
+      requestBody.regionCity || ""
+    )
+      .trim();
+
+  if (
+    regionCity.length >
+    COLUMN_REGION_FIELD_MAX_LENGTHS.city
+  ) {
+    throw new Error(
+      "市区町村が長すぎます（" +
+      COLUMN_REGION_FIELD_MAX_LENGTHS.city +
+      "文字以内）。"
+    );
+  }
+
+  const regionArea =
+    String(
+      requestBody.regionArea || ""
+    )
+      .trim();
+
+  if (
+    regionArea.length >
+    COLUMN_REGION_FIELD_MAX_LENGTHS.area
+  ) {
+    throw new Error(
+      "エリア名が長すぎます（" +
+      COLUMN_REGION_FIELD_MAX_LENGTHS.area +
+      "文字以内）。"
+    );
+  }
+
+  // city/areaを指定するなら、その上位階層(prefecture/city)も指定させる
+  // (階層の飛び級を防ぎ、マッチング条件を単純に保つ)。country自体は
+  // 必須にしない(将来country未設定の汎用記事もありうるため)。
+  if (
+    regionArea !== "" &&
+    regionCity === ""
+  ) {
+    throw new Error(
+      "エリアを指定する場合は市区町村も入力してください。"
+    );
+  }
+
+  if (
+    regionCity !== "" &&
+    regionPrefecture === ""
+  ) {
+    throw new Error(
+      "市区町村を指定する場合は都道府県・州等も入力してください。"
+    );
+  }
+
+  if (
+    regionPrefecture !== "" &&
+    regionCountry === ""
+  ) {
+    throw new Error(
+      "都道府県・州等を指定する場合は国も入力してください。"
+    );
+  }
+
+  // メイン画像は既存Cloudinary(mode:"cloudinarySignature"、post.html・
+  // admin-region-picks.htmlと共用)経由でアップロードされたURLのみを許可
+  // する(新しい画像サービスは追加しない)。1枚のみ、任意。
+  const imageUrl =
+    String(
+      requestBody.imageUrl || ""
+    )
+      .trim();
+
+  if (
+    imageUrl !== "" &&
+    !/^https:\/\//.test(
+      imageUrl
+    )
+  ) {
+    throw new Error(
+      "メイン画像のアドレスが正しくありません。"
+    );
+  }
+
+  const imagePublicId =
+    String(
+      requestBody.imagePublicId || ""
+    )
+      .trim();
+
   const isPublished =
     requestBody.isPublished === true;
 
@@ -3541,6 +4056,12 @@ function validateColumnArticleFields(
     category: category,
     description: description,
     content: content,
+    regionCountry: regionCountry,
+    regionPrefecture: regionPrefecture,
+    regionCity: regionCity,
+    regionArea: regionArea,
+    imageUrl: imageUrl,
+    imagePublicId: imagePublicId,
     isPublished: isPublished
   };
 }
@@ -3703,6 +4224,12 @@ async function handleAdminSaveColumnArticleRequest(
         category: fields.category,
         description: fields.description,
         content: fields.content,
+        regionCountry: fields.regionCountry,
+        regionPrefecture: fields.regionPrefecture,
+        regionCity: fields.regionCity,
+        regionArea: fields.regionArea,
+        imageUrl: fields.imageUrl,
+        imagePublicId: fields.imagePublicId,
 
         status:
           fields.isPublished
@@ -3756,6 +4283,12 @@ async function handleAdminSaveColumnArticleRequest(
       category: fields.category,
       description: fields.description,
       content: fields.content,
+      regionCountry: fields.regionCountry,
+      regionPrefecture: fields.regionPrefecture,
+      regionCity: fields.regionCity,
+      regionArea: fields.regionArea,
+      imageUrl: fields.imageUrl,
+      imagePublicId: fields.imagePublicId,
 
       status:
         fields.isPublished
@@ -3871,6 +4404,23 @@ async function handleAdminListColumnArticlesRequest(
                   ? data.category
                   : "",
 
+              regionCountry:
+                getCountryDisplayLabel(
+                  typeof data.regionCountry === "string"
+                    ? data.regionCountry
+                    : ""
+                ),
+
+              regionPrefecture:
+                typeof data.regionPrefecture === "string"
+                  ? data.regionPrefecture
+                  : "",
+
+              regionCity:
+                typeof data.regionCity === "string"
+                  ? data.regionCity
+                  : "",
+
               status:
                 typeof data.status === "string"
                   ? data.status
@@ -3902,6 +4452,9 @@ async function handleAdminListColumnArticlesRequest(
               id: article.id,
               title: article.title,
               category: article.category,
+              regionCountry: article.regionCountry,
+              regionPrefecture: article.regionPrefecture,
+              regionCity: article.regionCity,
               status: article.status,
               updatedAt: article.updatedAt
             };
@@ -4019,6 +4572,38 @@ async function handleAdminGetColumnArticleRequest(
         content:
           typeof data.content === "string"
             ? data.content
+            : "",
+
+        regionCountry:
+          getCountryDisplayLabel(
+            typeof data.regionCountry === "string"
+              ? data.regionCountry
+              : ""
+          ),
+
+        regionPrefecture:
+          typeof data.regionPrefecture === "string"
+            ? data.regionPrefecture
+            : "",
+
+        regionCity:
+          typeof data.regionCity === "string"
+            ? data.regionCity
+            : "",
+
+        regionArea:
+          typeof data.regionArea === "string"
+            ? data.regionArea
+            : "",
+
+        imageUrl:
+          typeof data.imageUrl === "string"
+            ? data.imageUrl
+            : "",
+
+        imagePublicId:
+          typeof data.imagePublicId === "string"
+            ? data.imagePublicId
             : "",
 
         status:

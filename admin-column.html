@@ -100,6 +100,25 @@
       color: var(--subtext);
     }
 
+    .region-field-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .region-field-grid label {
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    @media (max-width: 480px) {
+      .region-field-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
     .field input[type="text"],
     .field select,
     .field textarea {
@@ -335,6 +354,48 @@
           </div>
 
           <div class="field">
+            <label>
+              地域（どこの街の記憶か。すべて任意、空欄で問題ありません）
+            </label>
+            <p class="field-hint">
+              市区町村を入力する場合は都道府県・州等も、都道府県・州等を入力する場合は国も入力してください（階層の飛び級はできません）。「沖縄の雨」のように県全体の話なら市区町村は空欄のままにしてください。
+            </p>
+
+            <div class="region-field-grid">
+              <div>
+                <label for="regionCountryInput">国</label>
+                <input id="regionCountryInput" type="text" maxlength="40" placeholder="例：日本" value="日本">
+              </div>
+              <div>
+                <label for="regionPrefectureInput">都道府県・州等</label>
+                <input id="regionPrefectureInput" type="text" maxlength="40" placeholder="例：沖縄県">
+              </div>
+              <div>
+                <label for="regionCityInput">市区町村</label>
+                <input id="regionCityInput" type="text" maxlength="40" placeholder="例：那覇市">
+              </div>
+              <div>
+                <label for="regionAreaInput">エリア（任意）</label>
+                <input id="regionAreaInput" type="text" maxlength="40" placeholder="例：国際通り周辺">
+              </div>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>
+              メイン画像（任意・1枚・jpeg/png/webp、10MBまで）
+            </label>
+            <input id="imageInput" type="file" accept="image/jpeg,image/png,image/webp">
+            <div id="imagePreviewWrapper" style="display:none; margin-top: 10px;">
+              <img id="imagePreview" style="width:100%; max-height:200px; object-fit:cover; border-radius:12px;">
+              <button type="button" id="removeImageButton" class="secondary-button" style="margin-top:8px;">画像を削除</button>
+            </div>
+            <p class="field-hint">
+              ご自身で撮影・作成した画像、または利用許諾のある画像のみアップロードしてください（Web上の画像を無断で転載しない）。
+            </p>
+          </div>
+
+          <div class="field">
             <label for="descriptionInput">
               概要・説明文（記事一覧やSNSシェア時に表示されます）
             </label>
@@ -416,6 +477,14 @@
     const articleForm = document.getElementById("articleForm");
     const titleInput = document.getElementById("titleInput");
     const categoryInput = document.getElementById("categoryInput");
+    const regionCountryInput = document.getElementById("regionCountryInput");
+    const regionPrefectureInput = document.getElementById("regionPrefectureInput");
+    const regionCityInput = document.getElementById("regionCityInput");
+    const regionAreaInput = document.getElementById("regionAreaInput");
+    const imageInput = document.getElementById("imageInput");
+    const imagePreviewWrapper = document.getElementById("imagePreviewWrapper");
+    const imagePreview = document.getElementById("imagePreview");
+    const removeImageButton = document.getElementById("removeImageButton");
     const descriptionInput = document.getElementById("descriptionInput");
     const contentInput = document.getElementById("contentInput");
     const customSlugInput = document.getElementById("customSlugInput");
@@ -425,8 +494,19 @@
     const cancelEditButton = document.getElementById("cancelEditButton");
     const articleList = document.getElementById("articleList");
 
+    // post.html・admin-region-picks.htmlと同じCloudinary設定(signed upload)。
+    // 新しい画像サービスは追加せず、既存のmode:"cloudinarySignature"を
+    // そのまま再利用する。
+    const CLOUDINARY_CLOUD_NAME = "cdhyctnp";
+    const CLOUDINARY_UPLOAD_PRESET = "machinau_signed_upload";
+    const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
+    const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+
     let editingDocumentId = null;
     let allArticles = [];
+
+    // { url, publicId, isPendingUpload, file } | null
+    let currentImage = null;
 
     function showLoginMessage(text, type) {
       loginMessage.textContent = text;
@@ -493,6 +573,131 @@
       return responseData;
     }
 
+    // admin-region-picks.htmlのuploadImageToCloudinary()と全く同じ手順
+    // (署名取得→Cloudinaryへ直接POST)。既存のmode:"cloudinarySignature"は
+    // 管理者専用ではなく有効なFirebase認証済みユーザーなら誰でも呼べる
+    // 設計(post.htmlの匿名認証ユーザーも利用)のため、管理者のIDトークンでも
+    // 問題なく利用できる。
+    async function getCloudinaryUploadSignature() {
+      const idToken = await getAdminIdToken();
+
+      const response = await fetch("/api/moderate-submission", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + idToken
+        },
+        body: JSON.stringify({ mode: "cloudinarySignature" })
+      });
+
+      let responseData = null;
+
+      try {
+        responseData = await response.json();
+      } catch (jsonError) {
+        throw new Error("画像アップロードの準備に失敗しました。");
+      }
+
+      if (!response.ok || !responseData || responseData.success !== true) {
+        throw new Error(
+          (responseData && responseData.message) || "画像アップロードの準備に失敗しました。"
+        );
+      }
+
+      return responseData;
+    }
+
+    async function uploadImageToCloudinary(file) {
+      const uploadUrl =
+        "https://api.cloudinary.com/v1_1/" + CLOUDINARY_CLOUD_NAME + "/image/upload";
+
+      const uploadSignature = await getCloudinaryUploadSignature();
+
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("api_key", uploadSignature.apiKey);
+      formData.append("timestamp", uploadSignature.timestamp);
+      formData.append("signature", uploadSignature.signature);
+      formData.append("upload_preset", uploadSignature.uploadPreset || CLOUDINARY_UPLOAD_PRESET);
+      formData.append("folder", uploadSignature.folder);
+
+      const response = await fetch(uploadUrl, { method: "POST", body: formData });
+
+      let responseData = null;
+
+      try {
+        responseData = await response.json();
+      } catch (jsonError) {
+        throw new Error("画像アップロードの応答を読み取れませんでした。");
+      }
+
+      if (!response.ok) {
+        const cloudinaryMessage =
+          responseData && responseData.error && responseData.error.message
+            ? responseData.error.message
+            : "画像をアップロードできませんでした。";
+        throw new Error(cloudinaryMessage);
+      }
+
+      if (!responseData.secure_url) {
+        throw new Error("画像URLを取得できませんでした。");
+      }
+
+      return { url: responseData.secure_url, publicId: responseData.public_id || "" };
+    }
+
+    function renderImagePreview() {
+      if (!currentImage) {
+        imagePreviewWrapper.style.display = "none";
+        imagePreview.src = "";
+        return;
+      }
+
+      imagePreviewWrapper.style.display = "block";
+      imagePreview.src = currentImage.url;
+    }
+
+    imageInput.addEventListener("change", function() {
+      const file = imageInput.files && imageInput.files[0];
+
+      if (!file) {
+        return;
+      }
+
+      if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+        showFormMessage("対応していない画像形式です（jpeg/png/webpのみ）。", "error");
+        imageInput.value = "";
+        return;
+      }
+
+      if (file.size > MAX_IMAGE_SIZE_BYTES) {
+        showFormMessage("画像は10MBまでにしてください。", "error");
+        imageInput.value = "";
+        return;
+      }
+
+      const reader = new FileReader();
+
+      reader.onload = function() {
+        currentImage = {
+          url: reader.result,
+          publicId: "",
+          isPendingUpload: true,
+          file: file
+        };
+
+        renderImagePreview();
+      };
+
+      reader.readAsDataURL(file);
+      imageInput.value = "";
+    });
+
+    removeImageButton.addEventListener("click", function() {
+      currentImage = null;
+      renderImagePreview();
+    });
+
     function resetForm() {
       editingDocumentId = null;
       formTitle.textContent = "新規作成";
@@ -501,6 +706,12 @@
 
       titleInput.value = "";
       categoryInput.value = "";
+      regionCountryInput.value = "日本";
+      regionPrefectureInput.value = "";
+      regionCityInput.value = "";
+      regionAreaInput.value = "";
+      currentImage = null;
+      renderImagePreview();
       descriptionInput.value = "";
       contentInput.value = "";
       customSlugInput.value = "";
@@ -527,6 +738,16 @@
 
         titleInput.value = article.title || "";
         categoryInput.value = article.category || "";
+        regionCountryInput.value = article.regionCountry || "";
+        regionPrefectureInput.value = article.regionPrefecture || "";
+        regionCityInput.value = article.regionCity || "";
+        regionAreaInput.value = article.regionArea || "";
+
+        currentImage = article.imageUrl
+          ? { url: article.imageUrl, publicId: article.imagePublicId || "", isPendingUpload: false, file: null }
+          : null;
+        renderImagePreview();
+
         descriptionInput.value = article.description || "";
         contentInput.value = article.content || "";
         customSlugInput.value = documentId;
@@ -564,12 +785,18 @@
             ? new Date(article.updatedAt).toLocaleString("ja-JP")
             : "-";
 
+        const regionText =
+          [article.regionCountry, article.regionPrefecture, article.regionCity]
+            .filter(function(part) { return typeof part === "string" && part.trim() !== ""; })
+            .join(" / ") || "(未設定)";
+
         card.innerHTML =
           '<div class="article-card-top">' +
             '<div>' +
               '<div class="article-title"></div>' +
               '<div class="article-meta">' +
-                'カテゴリー: ' + escapeHtmlText(article.category || "(未設定)") +
+                '地域: ' + escapeHtmlText(regionText) +
+                '<br>カテゴリー: ' + escapeHtmlText(article.category || "(未設定)") +
                 '<br>URL: /column/' + escapeHtmlText(article.id) + '.html' +
                 '<br>更新日時: ' + escapeHtmlText(updatedAtText) +
               '</div>' +
@@ -642,6 +869,10 @@
 
       const title = titleInput.value.trim();
       const category = categoryInput.value;
+      const regionCountry = regionCountryInput.value.trim();
+      const regionPrefecture = regionPrefectureInput.value.trim();
+      const regionCity = regionCityInput.value.trim();
+      const regionArea = regionAreaInput.value.trim();
       const description = descriptionInput.value.trim();
       const content = contentInput.value.trim();
       const customSlug = customSlugInput.value.trim();
@@ -654,6 +885,21 @@
 
       if (category === "") {
         showFormMessage("カテゴリーを選択してください。", "error");
+        return;
+      }
+
+      if (regionArea !== "" && regionCity === "") {
+        showFormMessage("エリアを指定する場合は市区町村も入力してください。", "error");
+        return;
+      }
+
+      if (regionCity !== "" && regionPrefecture === "") {
+        showFormMessage("市区町村を指定する場合は都道府県・州等も入力してください。", "error");
+        return;
+      }
+
+      if (regionPrefecture !== "" && regionCountry === "") {
+        showFormMessage("都道府県・州等を指定する場合は国も入力してください。", "error");
         return;
       }
 
@@ -671,9 +917,32 @@
       saveButton.textContent = "保存しています…";
 
       try {
+        if (currentImage && currentImage.isPendingUpload) {
+          saveButton.textContent = "画像をアップロードしています…";
+
+          const uploaded = await uploadImageToCloudinary(currentImage.file);
+
+          currentImage = {
+            url: uploaded.url,
+            publicId: uploaded.publicId,
+            isPendingUpload: false,
+            file: null
+          };
+
+          renderImagePreview();
+
+          saveButton.textContent = "保存しています…";
+        }
+
         const payload = {
           title: title,
           category: category,
+          regionCountry: regionCountry,
+          regionPrefecture: regionPrefecture,
+          regionCity: regionCity,
+          regionArea: regionArea,
+          imageUrl: currentImage ? currentImage.url : "",
+          imagePublicId: currentImage ? currentImage.publicId : "",
           description: description,
           content: content,
           isPublished: isPublished

@@ -162,6 +162,16 @@
       text-decoration: none;
     }
 
+    .column-entry-more-link {
+      display: block;
+      margin-top: 14px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--blue);
+      text-decoration: none;
+      text-align: right;
+    }
+
     .region-recommendation-read-more-button {
       display: inline-block;
       background: none;
@@ -1196,6 +1206,12 @@
         </div>
 
       </div>
+
+      <a
+        class="column-entry-more-link"
+        href="column-list.html"
+        onclick="if (typeof gtag === 'function' && (location.hostname === 'machinau.jp' || location.hostname === 'imamiru-web.vercel.app')) { gtag('event', 'column_list_entry_click'); }"
+      >マチナウ読み物をもっと見る →</a>
 
     </section>
 

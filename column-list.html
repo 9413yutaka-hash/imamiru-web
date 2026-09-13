@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <meta
+    name="theme-color"
+    content="#0788c9"
+  >
+
+  <meta
+    name="description"
+    content="マチナウ読み物の一覧です。地域とカテゴリーから、街の記憶にまつわる読み物を探せます。"
+  >
+
+  <title>
+    マチナウ読み物 一覧｜マチナウ
+  </title>
+
+  <link
+    rel="canonical"
+    href="https://machinau.jp/column-list.html"
+  >
+
+  <link
+    rel="icon"
+    type="image/svg+xml"
+    href="favicon.svg"
+  >
+
+  <style>
+    :root {
+      --navy: #071a33;
+      --blue: #0788c9;
+      --cyan: #04b7d7;
+      --white: #ffffff;
+      --text: #15233a;
+      --subtext: #697386;
+      --border: #e7edf3;
+      --background: #f4f8fb;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0 0 60px;
+      font-family:
+        "Yu Gothic",
+        "Hiragino Kaku Gothic ProN",
+        "Meiryo",
+        sans-serif;
+      background: var(--background);
+      color: var(--text);
+    }
+
+    .page-header {
+      padding: 28px 18px;
+      background: linear-gradient(135deg, #0788c9, #04b7d7);
+      color: var(--white);
+      text-align: center;
+    }
+
+    .brand-mini {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 900;
+      font-size: 15px;
+      margin-bottom: 10px;
+    }
+
+    .brand-mini-icon {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border-radius: 9px;
+      background: rgba(255, 255, 255, 0.2);
+      font-size: 15px;
+    }
+
+    .page-header h1 {
+      margin: 0;
+      font-size: 20px;
+    }
+
+    main {
+      width: min(100%, 720px);
+      margin: -20px auto 0;
+      padding: 0 18px;
+    }
+
+    .card {
+      background: var(--white);
+      border-radius: 22px;
+      box-shadow: 0 16px 45px rgba(20, 52, 82, 0.12);
+      padding: 22px;
+      margin-bottom: 18px;
+    }
+
+    .filter-form {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .filter-form .field-full {
+      grid-column: 1 / -1;
+    }
+
+    .filter-form label {
+      display: block;
+      margin: 0 0 5px;
+      color: var(--navy);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .filter-form input,
+    .filter-form select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    .filter-actions {
+      grid-column: 1 / -1;
+      display: flex;
+      gap: 10px;
+      margin-top: 4px;
+    }
+
+    .search-button {
+      flex: 1;
+      min-height: 44px;
+      border: none;
+      border-radius: 999px;
+      color: var(--white);
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      font-size: 13px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .reset-button {
+      min-height: 44px;
+      padding: 0 16px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--white);
+      color: var(--text);
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .article-card {
+      display: block;
+      text-decoration: none;
+      color: inherit;
+    }
+
+    .article-card-image {
+      display: block;
+      width: 100%;
+      height: 140px;
+      object-fit: cover;
+      border-radius: 16px 16px 0 0;
+    }
+
+    .article-card-body {
+      padding: 16px 4px 4px;
+    }
+
+    .article-card-region {
+      margin: 0 0 4px;
+      font-size: 11px;
+      color: var(--subtext);
+    }
+
+    .article-card-category {
+      display: inline-block;
+      margin: 0 0 8px;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: #eef7fb;
+      color: var(--blue);
+      font-size: 10px;
+      font-weight: 900;
+    }
+
+    .article-card-title {
+      margin: 0 0 6px;
+      font-size: 15px;
+      font-weight: 900;
+      color: var(--navy);
+    }
+
+    .article-card-description {
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.7;
+      color: var(--subtext);
+    }
+
+    .empty-state {
+      padding: 30px 18px;
+      border: 1px dashed var(--border);
+      border-radius: 17px;
+      color: var(--subtext);
+      background: #f9fbfc;
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .back-link {
+      display: inline-block;
+      margin-top: 20px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--blue);
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="page-header">
+    <div class="brand-mini">
+      <span class="brand-mini-icon">📖</span>
+      マチナウ読み物
+    </div>
+    <h1>街の記憶を探す</h1>
+  </div>
+
+  <main>
+
+    <div class="card">
+      <form id="filterForm" class="filter-form">
+
+        <div>
+          <label for="filterCountryInput">国</label>
+          <input id="filterCountryInput" type="text" placeholder="例：日本">
+        </div>
+
+        <div>
+          <label for="filterPrefectureInput">都道府県・州等</label>
+          <input id="filterPrefectureInput" type="text" placeholder="例：沖縄県">
+        </div>
+
+        <div>
+          <label for="filterCityInput">市区町村</label>
+          <input id="filterCityInput" type="text" placeholder="例：那覇市">
+        </div>
+
+        <div>
+          <label for="filterCategoryInput">カテゴリー</label>
+          <select id="filterCategoryInput">
+            <option value="">すべて</option>
+            <option value="文化・背景">文化・背景</option>
+            <option value="楽しみ方">楽しみ方</option>
+            <option value="安全・備え">安全・備え</option>
+            <option value="マチナウの想い">マチナウの想い</option>
+          </select>
+        </div>
+
+        <div class="filter-actions">
+          <button type="submit" class="search-button">この条件で探す</button>
+          <button type="button" id="resetButton" class="reset-button">リセット</button>
+        </div>
+
+      </form>
+    </div>
+
+    <div id="articleList">
+      <div class="empty-state">読み込んでいます…</div>
+    </div>
+
+    <a class="back-link" href="/">← マチナウTOPへ戻る</a>
+
+  </main>
+
+  <script>
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    const filterForm = document.getElementById("filterForm");
+    const filterCountryInput = document.getElementById("filterCountryInput");
+    const filterPrefectureInput = document.getElementById("filterPrefectureInput");
+    const filterCityInput = document.getElementById("filterCityInput");
+    const filterCategoryInput = document.getElementById("filterCategoryInput");
+    const resetButton = document.getElementById("resetButton");
+    const articleList = document.getElementById("articleList");
+
+    function buildRegionText(article) {
+      return [article.regionCountry, article.regionPrefecture, article.regionCity, article.regionArea]
+        .filter(function(part) { return typeof part === "string" && part.trim() !== ""; })
+        .join(" / ");
+    }
+
+    function renderArticleCard(article) {
+      const regionText = buildRegionText(article);
+      const slug = typeof article.slug === "string" ? article.slug : "";
+
+      if (slug === "") {
+        return "";
+      }
+
+      return (
+        '<a class="card article-card" href="column/' + encodeURIComponent(slug) + '.html">' +
+          (article.imageUrl ? '<img class="article-card-image" src="' + escapeHtml(article.imageUrl) + '" alt="" loading="lazy">' : "") +
+          '<div class="article-card-body">' +
+            (regionText !== "" ? '<p class="article-card-region">' + escapeHtml(regionText) + '</p>' : "") +
+            (article.category ? '<span class="article-card-category">' + escapeHtml(article.category) + '</span>' : "") +
+            '<p class="article-card-title">' + escapeHtml(article.title) + '</p>' +
+            '<p class="article-card-description">' + escapeHtml(article.description) + '</p>' +
+          '</div>' +
+        '</a>'
+      );
+    }
+
+    async function loadArticles() {
+      articleList.innerHTML = '<div class="empty-state">読み込んでいます…</div>';
+
+      const searchParams = new URLSearchParams({ mode: "publicListPublishedColumns" });
+
+      const country = filterCountryInput.value.trim();
+      const prefecture = filterPrefectureInput.value.trim();
+      const city = filterCityInput.value.trim();
+      const category = filterCategoryInput.value;
+
+      if (country !== "") searchParams.set("viewerCountry", country);
+      if (prefecture !== "") searchParams.set("viewerPrefecture", prefecture);
+      if (city !== "") searchParams.set("viewerCity", city);
+      if (category !== "") searchParams.set("category", category);
+
+      // 地域欄のいずれかに入力がある場合だけ、実際に絞り込まれた結果を返す
+      // よう明示的に依頼する(TOPの現在地優先表示とは異なり、この一覧ページの
+      // 検索は「探した手応え」が必要なため)。
+      if (country !== "" || prefecture !== "" || city !== "") {
+        searchParams.set("strictRegion", "1");
+      }
+
+      try {
+        const response = await fetch("/api/moderate-submission?" + searchParams.toString());
+        const responseData = await response.json();
+
+        if (!response.ok || !responseData || responseData.success !== true || !Array.isArray(responseData.articles)) {
+          throw new Error("読み物一覧を取得できませんでした。");
+        }
+
+        if (responseData.articles.length === 0) {
+          articleList.innerHTML = '<div class="empty-state">この条件に一致する読み物はまだありません。</div>';
+          return;
+        }
+
+        articleList.innerHTML = responseData.articles.map(renderArticleCard).join("");
+      } catch (error) {
+        console.error("読み物一覧の取得に失敗しました：", error);
+        articleList.innerHTML = '<div class="empty-state">読み物を読み込めませんでした。時間をおいて再度お試しください。</div>';
+      }
+    }
+
+    filterForm.addEventListener("submit", function(event) {
+      event.preventDefault();
+      loadArticles();
+    });
+
+    resetButton.addEventListener("click", function() {
+      filterCountryInput.value = "";
+      filterPrefectureInput.value = "";
+      filterCityInput.value = "";
+      filterCategoryInput.value = "";
+      loadArticles();
+    });
+
+    loadArticles();
+  </script>
+
+</body>
+</html>

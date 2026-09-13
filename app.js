@@ -4942,6 +4942,206 @@ function resolveAreaNameFromCoordinates(latitude, longitude) {
 }
 
 
+// Ver1.8 Phase2(マチナウ読み物・地域連動基盤)｜resolveAreaNameFromCoordinates()
+// (既存、localityのみ取得、userAreaName/getSuggestionAreaPriorityRank()等
+// 沖縄専用の既存ロジックが広く依存しているため一切変更しない)とは完全に
+// 独立した、読み物の地域マッチング専用の新しい関数。同じGeocoder結果から
+// country(shortName、ロケール非依存のISOコード)・prefecture
+// (administrative_area_level_1のlongName)・city(localityのlongName)の
+// 3階層を取り出す。既存のuserAreaName・地域優先度判定・AIコンシェルジュ・
+// 常設広告判定等、他のどの機能にも一切使わない(読み物一覧の取得だけに使う)。
+function resolveLocationHierarchyFromCoordinates(
+  latitude,
+  longitude
+) {
+  return new Promise(
+    function(resolve) {
+      if (
+        typeof google === "undefined" ||
+        !google.maps ||
+        !google.maps.Geocoder
+      ) {
+        resolve(
+          {
+            country: "",
+            prefecture: "",
+            city: ""
+          }
+        );
+        return;
+      }
+
+      const timeoutId =
+        setTimeout(
+          function() {
+            resolve(
+              {
+                country: "",
+                prefecture: "",
+                city: ""
+              }
+            );
+          },
+          AREA_NAME_RESOLUTION_TIMEOUT_MS
+        );
+
+      function findComponent(
+        addressComponents,
+        typeName
+      ) {
+        if (
+          !Array.isArray(
+            addressComponents
+          )
+        ) {
+          return null;
+        }
+
+        return (
+          addressComponents.find(
+            function(component) {
+              return (
+                Array.isArray(
+                  component.types
+                ) &&
+                component.types.includes(
+                  typeName
+                )
+              );
+            }
+          ) ||
+          null
+        );
+      }
+
+      try {
+        const geocoder =
+          new google.maps.Geocoder();
+
+        geocoder.geocode(
+          {
+            location: {
+              lat: latitude,
+              lng: longitude
+            }
+          },
+          function(results, status) {
+            clearTimeout(
+              timeoutId
+            );
+
+            if (
+              status !== "OK" ||
+              !Array.isArray(results) ||
+              results.length === 0
+            ) {
+              resolve(
+                {
+                  country: "",
+                  prefecture: "",
+                  city: ""
+                }
+              );
+              return;
+            }
+
+            let countryValue =
+              "";
+
+            let prefectureValue =
+              "";
+
+            let cityValue =
+              "";
+
+            results.forEach(
+              function(result) {
+                const components =
+                  result.address_components;
+
+                if (
+                  countryValue === ""
+                ) {
+                  const countryComponent =
+                    findComponent(
+                      components,
+                      "country"
+                    );
+
+                  if (
+                    countryComponent &&
+                    typeof countryComponent.short_name === "string"
+                  ) {
+                    countryValue =
+                      countryComponent.short_name;
+                  }
+                }
+
+                if (
+                  prefectureValue === ""
+                ) {
+                  const prefectureComponent =
+                    findComponent(
+                      components,
+                      "administrative_area_level_1"
+                    );
+
+                  if (
+                    prefectureComponent &&
+                    typeof prefectureComponent.long_name === "string"
+                  ) {
+                    prefectureValue =
+                      prefectureComponent.long_name;
+                  }
+                }
+
+                if (
+                  cityValue === ""
+                ) {
+                  const cityComponent =
+                    findComponent(
+                      components,
+                      "locality"
+                    );
+
+                  if (
+                    cityComponent &&
+                    typeof cityComponent.long_name === "string"
+                  ) {
+                    cityValue =
+                      cityComponent.long_name;
+                  }
+                }
+              }
+            );
+
+            resolve(
+              {
+                country: countryValue,
+                prefecture: prefectureValue,
+                city: cityValue
+              }
+            );
+          }
+        );
+      } catch (error) {
+        clearTimeout(
+          timeoutId
+        );
+
+        resolve(
+          {
+            country: "",
+            prefecture: "",
+            city: ""
+          }
+        );
+      }
+    }
+  );
+}
+
+
 // GPS取得1回ごとに増分するセッションID。古いGPS取得の非同期結果が
 // 後から届いても、今のGPS取得と無関係な提案生成を行わないためのガード。
 let machinauSuggestionGpsSessionId =
@@ -6997,6 +7197,28 @@ function getLocation() {
             // 天候取得の失敗はrenderShops()等の既存フローに影響させない
           });
 
+        // Ver1.8 Phase2(地域連動基盤)｜resolveAreaNameFromCoordinates()
+        // (直下)とは別の独立したGeocoder呼び出し。マチナウ読み物の
+        // 地域マッチングだけに使い、userAreaName等の既存状態には一切書き込まない。
+        // 失敗してもTOPの他機能に影響しない(loadDynamicColumnEntries()自身が
+        // 例外を握りつぶす設計のため、ここでもcatchのみ)。
+        resolveLocationHierarchyFromCoordinates(
+          userLatitude,
+          userLongitude
+        )
+          .then(
+            function(locationHierarchy) {
+              loadDynamicColumnEntries(
+                locationHierarchy
+              );
+            }
+          )
+          .catch(
+            function(error) {
+              // 読み物の地域連動表示に失敗しても、TOPの他機能には影響させない
+            }
+          );
+
         resolveAreaNameFromCoordinates(
           userLatitude,
           userLongitude
@@ -7937,7 +8159,19 @@ document.addEventListener(
 // Firestoreへ公開されたマチナウ読み物のカードを動的に追加する。取得に
 // 失敗しても既存の静的カードの表示には一切影響させない(catchのみ)。
 // 新しい読み物を追加するたびにindex.htmlを編集する必要をなくすための対応。
-async function loadDynamicColumnEntries() {
+// Ver1.8 Phase2(地域連動基盤)｜TOPの表示総数(既存の静的カード1件＋動的
+// カード)を3件程度に抑える指示のため、動的カードはこの件数までに切り詰める。
+const TOP_DYNAMIC_COLUMN_ENTRY_MAX_COUNT =
+  2;
+
+// viewerLocation(country/prefecture/city、いずれも省略可)を渡すと、
+// resolveLocationHierarchyFromCoordinates()(このファイル内、既存の
+// userAreaName等とは独立)で取得した現在地に関連する読み物を優先表示する。
+// 省略時(GPS未取得時等)は単純な新着順にフォールバックする
+// (現在地が取得できない場合でも壊れないように)。
+async function loadDynamicColumnEntries(
+  viewerLocation
+) {
   const columnEntryCardList =
     document.getElementById(
       "columnEntryCardList"
@@ -7948,9 +8182,47 @@ async function loadDynamicColumnEntries() {
   }
 
   try {
+    const searchParams =
+      new URLSearchParams(
+        {
+          mode: "publicListPublishedColumns"
+        }
+      );
+
+    if (
+      viewerLocation &&
+      viewerLocation.country
+    ) {
+      searchParams.set(
+        "viewerCountry",
+        viewerLocation.country
+      );
+    }
+
+    if (
+      viewerLocation &&
+      viewerLocation.prefecture
+    ) {
+      searchParams.set(
+        "viewerPrefecture",
+        viewerLocation.prefecture
+      );
+    }
+
+    if (
+      viewerLocation &&
+      viewerLocation.city
+    ) {
+      searchParams.set(
+        "viewerCity",
+        viewerLocation.city
+      );
+    }
+
     const response =
       await fetch(
-        "/api/moderate-submission?mode=publicListPublishedColumns"
+        "/api/moderate-submission?" +
+          searchParams.toString()
       );
 
     const responseData =
@@ -7967,8 +8239,27 @@ async function loadDynamicColumnEntries() {
       return;
     }
 
-    responseData.articles.forEach(
-      function(article) {
+    // 呼び出しのたびに動的カードだけを作り直す(GPS取得前のfallback表示を
+    // GPS成功後の現在地優先表示へ置き換えるため)。既存の静的カード
+    // (typhoon-okinawa-travel、data-column-entry-dynamic属性を持たない)は
+        // 一切削除しない。
+    columnEntryCardList
+      .querySelectorAll(
+        "[data-column-entry-dynamic]"
+      )
+      .forEach(
+        function(existingCard) {
+          existingCard.remove();
+        }
+      );
+
+    responseData.articles
+      .slice(
+        0,
+        TOP_DYNAMIC_COLUMN_ENTRY_MAX_COUNT
+      )
+      .forEach(
+        function(article) {
         const slug =
           typeof article.slug === "string"
             ? article.slug
@@ -7985,6 +8276,11 @@ async function loadDynamicColumnEntries() {
 
         cardElement.className =
           "region-recommendation-card";
+
+        cardElement.setAttribute(
+          "data-column-entry-dynamic",
+          "true"
+        );
 
         cardElement.innerHTML = `
           <div class="region-recommendation-card-body">
