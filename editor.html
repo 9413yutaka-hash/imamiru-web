@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <meta name="robots" content="noindex, nofollow">
+
+  <title>
+    マチナウ運営｜投稿担当
+  </title>
+
+  <style>
+    :root {
+      --navy: #071a33;
+      --blue: #0788c9;
+      --cyan: #04b7d7;
+      --white: #ffffff;
+      --text: #15233a;
+      --subtext: #697386;
+      --border: #e2eaf1;
+      --background: #f4f8fb;
+      --red: #ef5a67;
+      --red-light: #fff0f0;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Yu Gothic", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+      background: var(--background);
+      color: var(--text);
+    }
+
+    .page-header {
+      padding: 28px 18px;
+      background: linear-gradient(135deg, #0788c9, #04b7d7);
+      color: var(--white);
+      text-align: center;
+    }
+
+    .brand-mini {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 900;
+      font-size: 15px;
+      margin-bottom: 8px;
+    }
+
+    .brand-mini-icon {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border-radius: 9px;
+      background: rgba(255, 255, 255, 0.2);
+      font-size: 15px;
+    }
+
+    .page-header h1 {
+      margin: 0;
+      font-size: 18px;
+    }
+
+    main {
+      width: min(100%, 480px);
+      margin: -20px auto 0;
+      padding: 0 18px 40px;
+    }
+
+    .card {
+      background: var(--white);
+      border-radius: 22px;
+      box-shadow: 0 16px 45px rgba(20, 52, 82, 0.12);
+      padding: 24px 20px;
+      margin-bottom: 18px;
+    }
+
+    .field {
+      margin-bottom: 16px;
+    }
+
+    .field label {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .field input {
+      width: 100%;
+      min-height: 48px;
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: 15px;
+      font-family: inherit;
+    }
+
+    .primary-button {
+      width: 100%;
+      min-height: 50px;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      color: var(--white);
+      border: none;
+      border-radius: 14px;
+      font-size: 15px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .primary-button:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+    .menu-link {
+      display: flex;
+      align-items: center;
+      min-height: 60px;
+      padding: 16px 18px;
+      margin-bottom: 12px;
+      border-radius: 16px;
+      background: #f4f8fb;
+      border: 1px solid var(--border);
+      color: var(--navy);
+      font-size: 15px;
+      font-weight: 900;
+      text-decoration: none;
+    }
+
+    .logout-button {
+      width: 100%;
+      min-height: 48px;
+      margin-top: 8px;
+      border: none;
+      border-radius: 14px;
+      background: var(--red-light);
+      color: #a43b3b;
+      font-size: 14px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .message-box {
+      font-size: 13px;
+      margin-top: 10px;
+      min-height: 1em;
+    }
+
+    .message-box.error {
+      color: var(--red);
+    }
+
+    #loginPanel, #menuPanel, #noAccessPanel, #checkingPanel {
+      display: none;
+    }
+
+    #loginPanel.visible, #menuPanel.visible, #noAccessPanel.visible, #checkingPanel.visible {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="page-header">
+    <div class="brand-mini">
+      <span class="brand-mini-icon">🌺</span>
+      マチナウ
+    </div>
+    <h1>投稿担当専用ページ</h1>
+  </div>
+
+  <main>
+
+    <section id="checkingPanel" class="card visible">
+      <p style="margin:0; font-size:13px; color:var(--subtext);">確認しています…</p>
+    </section>
+
+    <section id="loginPanel" class="card">
+      <div class="field">
+        <label for="emailInput">メールアドレス</label>
+        <input id="emailInput" type="email" autocomplete="email">
+      </div>
+
+      <div class="field">
+        <label for="passwordInput">パスワード</label>
+        <input id="passwordInput" type="password" autocomplete="current-password">
+      </div>
+
+      <button id="loginButton" class="primary-button" type="button">
+        ログイン
+      </button>
+
+      <div id="loginMessage" class="message-box" role="status" aria-live="polite"></div>
+    </section>
+
+    <section id="menuPanel" class="card">
+      <a class="menu-link" href="admin-post.html">🏙️ 地域情報を書く</a>
+      <a class="menu-link" href="admin-column.html">📖 マチナウ読み物を書く</a>
+
+      <button id="logoutButton" class="logout-button" type="button">
+        ログアウト
+      </button>
+    </section>
+
+    <section id="noAccessPanel" class="card">
+      <p style="margin:0 0 14px; font-size:13px;">
+        このアカウントには投稿担当としての権限がありません。マチナウ運営（代表）へご連絡ください。
+      </p>
+
+      <button id="noAccessLogoutButton" class="logout-button" type="button">
+        ログアウト
+      </button>
+    </section>
+
+  </main>
+
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore-compat.js"></script>
+  <script src="firebase.js"></script>
+
+  <script>
+    // 運営投稿担当(Editor)権限 Phase1｜このページはEditor専用の入口。
+    // admin.html・admin-region-picks.html・ai-editor.html・ai-sources.html
+    // への導線は一切出さない。権限の最終判定はmode:"getMyOperatorInfo"
+    // 経由でサーバー側に必ず確認する(このページのJSはUI表示の出し分けに
+    // しか使わない)。
+
+    const checkingPanel = document.getElementById("checkingPanel");
+    const loginPanel = document.getElementById("loginPanel");
+    const menuPanel = document.getElementById("menuPanel");
+    const noAccessPanel = document.getElementById("noAccessPanel");
+
+    const emailInput = document.getElementById("emailInput");
+    const passwordInput = document.getElementById("passwordInput");
+    const loginButton = document.getElementById("loginButton");
+    const loginMessage = document.getElementById("loginMessage");
+    const logoutButton = document.getElementById("logoutButton");
+    const noAccessLogoutButton = document.getElementById("noAccessLogoutButton");
+
+    function showPanel(panel) {
+      [checkingPanel, loginPanel, menuPanel, noAccessPanel].forEach(function(section) {
+        section.classList.remove("visible");
+      });
+
+      panel.classList.add("visible");
+    }
+
+    function showLoginMessage(text) {
+      loginMessage.textContent = text;
+      loginMessage.className = "message-box error";
+    }
+
+    async function getCurrentOperatorRole(user) {
+      try {
+        const idToken = await user.getIdToken();
+
+        const response = await fetch("/api/moderate-submission", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + idToken
+          },
+          body: JSON.stringify({ mode: "getMyOperatorInfo" })
+        });
+
+        const responseData = await response.json();
+
+        if (response.ok && responseData && responseData.success === true) {
+          return responseData.role;
+        }
+      } catch (error) {
+        console.error("権限の確認に失敗しました", error);
+      }
+
+      return null;
+    }
+
+    loginButton.addEventListener("click", async function() {
+      const email = emailInput.value.trim();
+      const password = passwordInput.value;
+
+      if (email === "" || password === "") {
+        showLoginMessage("メールアドレスとパスワードを入力してください。");
+        return;
+      }
+
+      loginButton.disabled = true;
+      loginButton.textContent = "ログインしています…";
+      loginMessage.textContent = "";
+      loginMessage.className = "message-box";
+
+      try {
+        await firebase.auth().signInWithEmailAndPassword(email, password);
+      } catch (error) {
+        console.error("❌ ログインに失敗しました", error);
+        showLoginMessage("ログインできませんでした。メールアドレスとパスワードを確認してください。");
+      } finally {
+        loginButton.disabled = false;
+        loginButton.textContent = "ログイン";
+      }
+    });
+
+    async function handleLogout() {
+      try {
+        await firebase.auth().signOut();
+      } catch (error) {
+        console.error("ログアウトに失敗しました", error);
+      }
+    }
+
+    logoutButton.addEventListener("click", handleLogout);
+    noAccessLogoutButton.addEventListener("click", handleLogout);
+
+    firebase.auth().onAuthStateChanged(async function(user) {
+      if (!user) {
+        showPanel(loginPanel);
+        return;
+      }
+
+      showPanel(checkingPanel);
+
+      const role = await getCurrentOperatorRole(user);
+
+      if (role === "admin" || role === "editor") {
+        showPanel(menuPanel);
+        return;
+      }
+
+      showPanel(noAccessPanel);
+    });
+  </script>
+
+</body>
+</html>

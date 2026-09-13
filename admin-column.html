@@ -464,9 +464,6 @@
   <script src="firebase.js"></script>
 
   <script>
-    const ADMIN_EMAIL =
-      "9413yutaka@gmail.com";
-
     const loginPanel = document.getElementById("loginPanel");
     const adminArea = document.getElementById("adminArea");
     const loginForm = document.getElementById("loginForm");
@@ -560,8 +557,8 @@
     populateRegionCountrySelect();
 
     // post.html・admin-region-picks.htmlと同じCloudinary設定(signed upload)。
-    // 新しい画像サービスは追加せず、既存のmode:"cloudinarySignature"を
-    // そのまま再利用する。
+    // 新しい画像サービスは追加せず、既存のCloudinary(署名発行先は
+    // mode:"operatorCloudinarySignature")をそのまま再利用する。
     const CLOUDINARY_CLOUD_NAME = "cdhyctnp";
     const CLOUDINARY_UPLOAD_PRESET = "machinau_signed_upload";
     const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
@@ -638,11 +635,12 @@
       return responseData;
     }
 
-    // admin-region-picks.htmlのuploadImageToCloudinary()と全く同じ手順
-    // (署名取得→Cloudinaryへ直接POST)。既存のmode:"cloudinarySignature"は
-    // 管理者専用ではなく有効なFirebase認証済みユーザーなら誰でも呼べる
-    // 設計(post.htmlの匿名認証ユーザーも利用)のため、管理者のIDトークンでも
-    // 問題なく利用できる。
+    // admin-region-picks.htmlのuploadImageToCloudinary()と同じ手順
+    // (署名取得→Cloudinaryへ直接POST)。運営投稿担当(Editor)権限Phase1で、
+    // このページの署名発行先はmode:"operatorCloudinarySignature"
+    // (Admin/Editor専用、requireAdminOrEditor()でサーバー側も検証)へ
+    // 切り替える。post.htmlの一般投稿・匿名認証ユーザーが使う既存の
+    // mode:"cloudinarySignature"は無変更のまま維持する。
     async function getCloudinaryUploadSignature() {
       const idToken = await getAdminIdToken();
 
@@ -652,7 +650,7 @@
           "Content-Type": "application/json",
           "Authorization": "Bearer " + idToken
         },
-        body: JSON.stringify({ mode: "cloudinarySignature" })
+        body: JSON.stringify({ mode: "operatorCloudinarySignature" })
       });
 
       let responseData = null;
@@ -1037,6 +1035,11 @@
       }
     });
 
+    // 運営投稿担当(Editor)権限 Phase1｜メールアドレスの事前チェック
+    // (旧ADMIN_EMAIL固定判定)は行わず、Firebase Authenticationの認証
+    // 結果そのものに判断を委ねる。実際にAdmin/Editorかどうかは、
+    // ログイン成功後にmode:"getMyOperatorInfo"でサーバーへ確認する
+    // (クライアント側だけでroleを信用しない)。
     loginForm.addEventListener("submit", async function(event) {
       event.preventDefault();
 
@@ -1045,18 +1048,13 @@
       const email = document.getElementById("adminEmail").value.trim().toLowerCase();
       const password = document.getElementById("adminPassword").value;
 
-      if (email !== ADMIN_EMAIL.toLowerCase()) {
-        showLoginMessage("このメールアドレスには管理者権限がありません。", "error");
-        return;
-      }
-
       loginButton.disabled = true;
       loginButton.textContent = "ログインしています…";
 
       try {
         await firebase.auth().signInWithEmailAndPassword(email, password);
       } catch (error) {
-        console.error("❌ 管理者ログインに失敗しました", error);
+        console.error("❌ ログインに失敗しました", error);
         showLoginMessage("ログインできませんでした。メールアドレスとパスワードを確認してください。", "error");
       } finally {
         loginButton.disabled = false;
@@ -1064,29 +1062,53 @@
       }
     });
 
-    // admin.html・admin-region-picks.htmlの管理者判定と同一パターン。
-    // Firebase Anonymous Authのユーザーはemailを持たないため、この判定で
-    // 自動的に非管理者として扱われる(request.auth != null だけでは判定しない)。
+    async function getCurrentOperatorRole(user) {
+      try {
+        const idToken = await user.getIdToken();
+
+        const response = await fetch("/api/moderate-submission", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + idToken
+          },
+          body: JSON.stringify({ mode: "getMyOperatorInfo" })
+        });
+
+        const responseData = await response.json();
+
+        if (response.ok && responseData && responseData.success === true) {
+          return responseData.role;
+        }
+      } catch (error) {
+        console.error("権限の確認に失敗しました", error);
+      }
+
+      return null;
+    }
+
     firebase.auth().onAuthStateChanged(async function(user) {
       clearLoginMessage();
 
-      if (user && user.email && user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
-        loginPanel.style.display = "none";
-        adminArea.classList.add("visible");
-
-        resetForm();
-        await loadArticles();
-        return;
-      }
-
       if (user) {
+        const role = await getCurrentOperatorRole(user);
+
+        if (role === "admin" || role === "editor") {
+          loginPanel.style.display = "none";
+          adminArea.classList.add("visible");
+
+          resetForm();
+          await loadArticles();
+          return;
+        }
+
         try {
           await firebase.auth().signOut();
         } catch (error) {
-          console.error("管理者以外のユーザーをログアウトできませんでした", error);
+          console.error("権限の無いユーザーをログアウトできませんでした", error);
         }
 
-        showLoginMessage("このアカウントには管理者権限がありません。", "error");
+        showLoginMessage("このアカウントには権限がありません。", "error");
       }
 
       loginPanel.style.display = "block";

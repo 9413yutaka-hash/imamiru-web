@@ -1152,6 +1152,64 @@
         </div>
       </div>
 
+      <div class="panel-header" style="margin-top: 30px;">
+        <div class="panel-title">
+          <h2>
+            運営投稿担当（Editor）の管理
+          </h2>
+
+          <p>
+            地域情報・マチナウ読み物の投稿だけができる専用アカウントです。承認/却下・コメント非表示・地域おすすめ等は使えません。
+          </p>
+        </div>
+      </div>
+
+      <div class="form-field search-field">
+        <label for="editorEmailInput">新しいEditorのメールアドレス</label>
+        <input
+          id="editorEmailInput"
+          type="email"
+          autocomplete="off"
+          placeholder="例：staff@example.com"
+        >
+      </div>
+
+      <div class="form-field search-field">
+        <label for="editorPasswordInput">初期パスワード（6文字以上・本人へ安全な方法で伝えてください）</label>
+        <input
+          id="editorPasswordInput"
+          type="text"
+          autocomplete="off"
+          placeholder="例：一時的なパスワード"
+        >
+      </div>
+
+      <div class="toolbar">
+        <button
+          id="createEditorButton"
+          class="refresh-button"
+          type="button"
+        >
+          ➕ Editorを作成する
+        </button>
+
+        <div
+          id="editorAdminMessage"
+          class="message-box"
+          role="status"
+          aria-live="polite"
+        ></div>
+      </div>
+
+      <div
+        id="editorAdminList"
+        class="submission-list"
+      >
+        <div class="empty-state">
+          読み込んでいます…
+        </div>
+      </div>
+
     </section>
 
   </main>
@@ -2988,6 +3046,350 @@
       }
     );
 
+    // 運営投稿担当(Editor)権限 Phase1｜代表(Admin)専用の運営者管理。
+    // このパネル自体、admin.html(既存のADMIN_EMAIL判定でゲート済み)の
+    // 内側にあるため、追加の権限確認UIは不要。ただし呼び出す各APIも
+    // 独立してrequireAdmin()で検証しているため、画面を隠すだけの
+    // 権限管理にはなっていない。
+    const editorEmailInput =
+      document.getElementById(
+        "editorEmailInput"
+      );
+
+    const editorPasswordInput =
+      document.getElementById(
+        "editorPasswordInput"
+      );
+
+    const createEditorButton =
+      document.getElementById(
+        "createEditorButton"
+      );
+
+    const editorAdminMessage =
+      document.getElementById(
+        "editorAdminMessage"
+      );
+
+    const editorAdminList =
+      document.getElementById(
+        "editorAdminList"
+      );
+
+    function showEditorAdminMessage(
+      message,
+      type
+    ) {
+      editorAdminMessage.textContent =
+        message;
+
+      editorAdminMessage.className =
+        "message-box " + type;
+    }
+
+    function formatEditorCreatedAt(
+      isoString
+    ) {
+      if (
+        typeof isoString !== "string" ||
+        isoString === ""
+      ) {
+        return "作成日時不明";
+      }
+
+      const parsedDate =
+        new Date(
+          isoString
+        );
+
+      if (
+        Number.isNaN(
+          parsedDate.getTime()
+        )
+      ) {
+        return "作成日時不明";
+      }
+
+      return parsedDate.toLocaleString(
+        "ja-JP"
+      );
+    }
+
+    function renderEditorAdminList(
+      operators
+    ) {
+      if (
+        !Array.isArray(operators) ||
+        operators.length === 0
+      ) {
+        editorAdminList.innerHTML = `
+          <div class="empty-state">
+            まだEditorは登録されていません。
+          </div>
+        `;
+
+        return;
+      }
+
+      editorAdminList.innerHTML =
+        operators
+          .map(
+            function(operator) {
+              return `
+                <article class="submission-card">
+                  <div class="submission-top">
+                    <span class="submission-category">
+                      ${escapeHtml(
+                        operator.email
+                      )}
+                    </span>
+
+                    <span class="${
+                      operator.active
+                        ? "approved-badge"
+                        : "expired-badge"
+                    }">
+                      ${
+                        operator.active
+                          ? "有効"
+                          : "停止中"
+                      }
+                    </span>
+                  </div>
+
+                  <div class="submission-body">
+                    <div class="submission-meta">
+                      <span>
+                        役割：Editor
+                      </span>
+                      <span>
+                        作成日時：${escapeHtml(
+                          formatEditorCreatedAt(
+                            operator.createdAt
+                          )
+                        )}
+                      </span>
+                    </div>
+
+                    <button
+                      class="end-button"
+                      type="button"
+                      data-operator-uid="${escapeHtml(
+                        operator.uid
+                      )}"
+                      data-next-active="${
+                        operator.active
+                          ? "false"
+                          : "true"
+                      }"
+                    >
+                      ${
+                        operator.active
+                          ? "🛑 このEditorを停止する"
+                          : "▶️ このEditorを有効にする"
+                      }
+                    </button>
+                  </div>
+                </article>
+              `;
+            }
+          )
+          .join("");
+    }
+
+    async function callOperatorApi(
+      mode,
+      payload
+    ) {
+      const currentUser =
+        firebase.auth().currentUser;
+
+      if (!currentUser) {
+        throw new Error(
+          "ログイン状態を確認できませんでした。再度ログインしてください。"
+        );
+      }
+
+      const idToken =
+        await currentUser.getIdToken();
+
+      const response =
+        await fetch(
+          "/api/moderate-submission",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer " + idToken
+            },
+            body: JSON.stringify(
+              Object.assign(
+                { mode: mode },
+                payload || {}
+              )
+            )
+          }
+        );
+
+      const responseData =
+        await response.json();
+
+      if (
+        !response.ok ||
+        !responseData ||
+        responseData.success !== true
+      ) {
+        throw new Error(
+          (responseData && responseData.message) ||
+            "処理に失敗しました。"
+        );
+      }
+
+      return responseData;
+    }
+
+    async function loadEditorAdminList() {
+      try {
+        const responseData =
+          await callOperatorApi(
+            "adminListEditors",
+            {}
+          );
+
+        renderEditorAdminList(
+          responseData.operators
+        );
+      } catch (error) {
+        console.error(
+          "❌ Editor一覧を取得できませんでした",
+          error
+        );
+
+        editorAdminList.innerHTML = `
+          <div class="empty-state">
+            Editor一覧を読み込めませんでした。
+          </div>
+        `;
+      }
+    }
+
+    createEditorButton.addEventListener(
+      "click",
+      async function() {
+        const email =
+          editorEmailInput.value.trim();
+
+        const password =
+          editorPasswordInput.value;
+
+        if (email === "" || password === "") {
+          showEditorAdminMessage(
+            "メールアドレスとパスワードを入力してください。",
+            "error"
+          );
+
+          return;
+        }
+
+        createEditorButton.disabled =
+          true;
+
+        createEditorButton.textContent =
+          "作成しています…";
+
+        try {
+          await callOperatorApi(
+            "adminCreateEditor",
+            {
+              email: email,
+              password: password
+            }
+          );
+
+          editorEmailInput.value = "";
+          editorPasswordInput.value = "";
+
+          showEditorAdminMessage(
+            "✅ Editorアカウントを作成しました。メールアドレスとパスワードを、安全な方法でご本人へお伝えください。",
+            "success"
+          );
+
+          await loadEditorAdminList();
+        } catch (error) {
+          console.error(
+            "❌ Editorを作成できませんでした",
+            error
+          );
+
+          showEditorAdminMessage(
+            error.message ||
+              "Editorを作成できませんでした。",
+            "error"
+          );
+        } finally {
+          createEditorButton.disabled =
+            false;
+
+          createEditorButton.textContent =
+            "➕ Editorを作成する";
+        }
+      }
+    );
+
+    editorAdminList.addEventListener(
+      "click",
+      async function(event) {
+        const button =
+          event.target.closest(
+            "button[data-operator-uid]"
+          );
+
+        if (!button) {
+          return;
+        }
+
+        const uid =
+          button.dataset.operatorUid;
+
+        const nextActive =
+          button.dataset.nextActive === "true";
+
+        const confirmed =
+          window.confirm(
+            nextActive
+              ? "このEditorを有効にしますか？"
+              : "このEditorを停止しますか？（次回のAPI呼び出しから即座に操作できなくなります）"
+          );
+
+        if (!confirmed) {
+          return;
+        }
+
+        try {
+          await callOperatorApi(
+            "adminSetEditorActive",
+            {
+              uid: uid,
+              active: nextActive
+            }
+          );
+
+          await loadEditorAdminList();
+        } catch (error) {
+          console.error(
+            "❌ Editorの状態を変更できませんでした",
+            error
+          );
+
+          showEditorAdminMessage(
+            error.message ||
+              "状態を変更できませんでした。",
+            "error"
+          );
+        }
+      }
+    );
+
     firebase
       .auth()
       .onAuthStateChanged(
@@ -3019,6 +3421,8 @@
             await loadSubmissions();
 
             populateCommentArticleOptions();
+
+            loadEditorAdminList();
 
             return;
           }

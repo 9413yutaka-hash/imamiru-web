@@ -705,18 +705,18 @@
     >
 
       <div class="form-heading">
-        <h2>ログインが必要です</h2>
-        <p>
-          この機能は管理者専用です。管理画面からログインしてください。
+        <h2 id="loginRequiredHeading">ログインが必要です</h2>
+        <p id="loginRequiredMessage">
+          この機能は運営専用です。ログインしてください。
         </p>
       </div>
 
       <a
         class="submit-button"
         style="display: flex; align-items: center; justify-content: center;"
-        href="admin.html"
+        href="editor.html"
       >
-        管理画面へ戻る
+        ログインへ戻る
       </a>
 
     </section>
@@ -1120,8 +1120,6 @@
   <script src="firebase.js"></script>
 
   <script>
-    const ADMIN_EMAIL = "9413yutaka@gmail.com";
-
     const CLOUDINARY_CLOUD_NAME = "cdhyctnp";
     const CLOUDINARY_UPLOAD_PRESET = "machinau_signed_upload";
 
@@ -1439,9 +1437,10 @@
     }
 
     // post.htmlに実装済みの署名取得方式と同じ考え方。ただしこの画面は
-    // 既にfirebase.auth().onAuthStateChangedでADMIN_EMAILのみ操作可能に
-    // ゲートされているため、匿名認証は使わず既存のログイン済みユーザーの
-    // IDトークンをそのまま使う(新しい認証方式は作らない)。
+    // 既にgetMyOperatorInfoでAdmin/Editorのみ操作可能にゲートされて
+    // いるため、匿名認証は使わず既存のログイン済みユーザーのIDトークンを
+    // そのまま使う。署名の発行先はmode:"operatorCloudinarySignature"
+    // (Admin/Editor専用、requireAdminOrEditor()でサーバー側も検証)。
     async function getCloudinaryUploadSignature() {
       const currentUser = firebase.auth().currentUser;
 
@@ -1459,7 +1458,7 @@
           "Content-Type": "application/json",
           "Authorization": "Bearer " + idToken
         },
-        body: JSON.stringify({ mode: "cloudinarySignature" })
+        body: JSON.stringify({ mode: "operatorCloudinarySignature" })
       });
 
       let responseData = null;
@@ -2207,15 +2206,36 @@
     updateExpiresAtVisibility();
     updateCharacterCounts();
 
-    firebase.auth().onAuthStateChanged(function(user) {
-      authCheckingPanel.style.display = "none";
+    // 運営投稿担当(Editor)権限 Phase1｜このページはADMIN_EMAIL固定判定を
+    // やめ、api/moderate-submission.jsのmode:"getMyOperatorInfo"で
+    // 「代表(Admin)かEditorか、権限が無いか」を毎回サーバーへ確認する。
+    // ここでのUI表示切り替えはあくまで見た目の案内であり、実際の投稿・
+    // 編集の可否は各APIが最終判断する(クライアント側だけでroleを信用しない)。
+    async function checkOperatorRoleAndInitialize(user) {
+      let role = null;
 
-      const isAdminUser =
-        user &&
-        user.email &&
-        user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+      try {
+        const idToken = await user.getIdToken();
 
-      if (!isAdminUser) {
+        const response = await fetch("/api/moderate-submission", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + idToken
+          },
+          body: JSON.stringify({ mode: "getMyOperatorInfo" })
+        });
+
+        const responseData = await response.json();
+
+        if (response.ok && responseData && responseData.success === true) {
+          role = responseData.role;
+        }
+      } catch (error) {
+        console.error("権限の確認に失敗しました", error);
+      }
+
+      if (role !== "admin" && role !== "editor") {
         postFormSection.style.display = "none";
         loginRequiredPanel.style.display = "block";
         return;
@@ -2224,11 +2244,37 @@
       loginRequiredPanel.style.display = "none";
       postFormSection.style.display = "block";
 
+      // Editorは常設店舗広告(isPermanentAd)を作成・編集できない
+      // (api/admin-post.js・api/admin-submission-update.jsが最終的に
+      // 拒否するが、混乱を避けるためチェックボックス自体を隠す)。
+      if (role === "editor") {
+        const permanentAdField = isPermanentAdCheckbox.closest(".form-group");
+
+        if (permanentAdField) {
+          permanentAdField.style.display = "none";
+        }
+
+        isPermanentAdCheckbox.checked = false;
+        updateExpiresAtVisibility();
+      }
+
       if (isEditMode) {
         initializeEditMode(user);
       } else {
         applyAiDraftIfPresent();
       }
+    }
+
+    firebase.auth().onAuthStateChanged(function(user) {
+      authCheckingPanel.style.display = "none";
+
+      if (!user) {
+        postFormSection.style.display = "none";
+        loginRequiredPanel.style.display = "block";
+        return;
+      }
+
+      checkOperatorRoleAndInitialize(user);
     });
   </script>
 

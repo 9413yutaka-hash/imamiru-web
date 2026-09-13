@@ -1,54 +1,15 @@
 import {
-  cert,
-  getApps,
-  initializeApp
-} from "firebase-admin/app";
-
-import {
   FieldValue,
-  Timestamp,
-  getFirestore
+  Timestamp
 } from "firebase-admin/firestore";
-
-import {
-  getAuth
-} from "firebase-admin/auth";
 
 import {
   createHash
 } from "node:crypto";
 
-
-function getFirebaseAdminApp() {
-  if (getApps().length > 0) {
-    return getApps()[0];
-  }
-
-  const serviceAccountText =
-    process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-
-  if (!serviceAccountText) {
-    throw new Error(
-      "FIREBASE_SERVICE_ACCOUNT_KEY が設定されていません。"
-    );
-  }
-
-  let serviceAccount;
-
-  try {
-    serviceAccount = JSON.parse(
-      serviceAccountText
-    );
-  } catch (error) {
-    throw new Error(
-      "FIREBASE_SERVICE_ACCOUNT_KEY のJSON形式が正しくありません。"
-    );
-  }
-
-  return initializeApp({
-    credential: cert(serviceAccount)
-  });
-}
+import {
+  requireAdminOrEditor
+} from "./moderate-submission.js";
 
 
 function readRequestBody(
@@ -74,32 +35,6 @@ function readRequestBody(
   }
 
   return {};
-}
-
-
-function readBearerToken(
-  request
-) {
-  const authorizationHeader =
-    request.headers &&
-    request.headers.authorization;
-
-  if (
-    typeof authorizationHeader !== "string"
-  ) {
-    return "";
-  }
-
-  const match =
-    authorizationHeader.match(
-      /^Bearer\s+(.+)$/
-    );
-
-  if (!match) {
-    return "";
-  }
-
-  return match[1].trim();
 }
 
 
@@ -772,68 +707,25 @@ export default async function handler(
     });
   }
 
-  const adminEmail =
-    process.env.ADMIN_EMAIL;
-
-  if (!adminEmail) {
-    return response.status(500).json({
-      success: false,
-      message:
-        "管理者メールアドレスが設定されていません。"
-    });
-  }
-
-  const idToken =
-    readBearerToken(
+  // 運営投稿担当(Editor)権限 Phase1｜このFunction内で認可ロジックを複製
+  // せず、api/moderate-submission.jsのrequireAdminOrEditor()をそのまま
+  // 再利用する(edit-ad.jsが既に同ファイルから関数をimportしている
+  // 既存の実例と同じ方法。新しいVercel Functionは追加していない)。
+  // 代表(Admin)・Editorのどちらも地域情報の新規投稿が可能。
+  const authResult =
+    await requireAdminOrEditor(
       request
     );
 
-  if (idToken === "") {
-    return response.status(401).json({
+  if (!authResult.ok) {
+    return response.status(authResult.status).json({
       success: false,
       message:
-        "認証情報がありません。"
+        authResult.message
     });
   }
 
   try {
-    const app =
-      getFirebaseAdminApp();
-
-    let decodedToken;
-
-    try {
-      decodedToken =
-        await getAuth(app)
-          .verifyIdToken(
-            idToken
-          );
-    } catch (verifyError) {
-      return response.status(401).json({
-        success: false,
-        message:
-          "認証情報が正しくありません。"
-      });
-    }
-
-    const decodedEmail =
-      String(
-        decodedToken.email || ""
-      )
-        .toLowerCase();
-
-    if (
-      decodedEmail === "" ||
-      decodedEmail !==
-        adminEmail.toLowerCase()
-    ) {
-      return response.status(403).json({
-        success: false,
-        message:
-          "管理者権限がありません。"
-      });
-    }
-
     const requestBody =
       readRequestBody(
         request
@@ -854,8 +746,24 @@ export default async function handler(
       });
     }
 
+    // 運営投稿担当(Editor)権限 Phase1｜常設店舗広告(isPermanentAd:true)は
+    // 自動終了日時を持たず、店舗と結んだ特別な広告契約に関わる性質のため、
+    // Editorには許可せず代表(Admin)専用のまま維持する(仕様書に明示は
+    // 無いが、最小権限の原則を優先した判断)。通常の地域情報(期限あり)は
+    // 従来通りEditorも投稿可能。
+    if (
+      postFields.isPermanentAd &&
+      authResult.actor.type !== "admin"
+    ) {
+      return response.status(403).json({
+        success: false,
+        message:
+          "常設店舗広告の投稿は管理者のみ利用できます。"
+      });
+    }
+
     const database =
-      getFirestore(app);
+      authResult.database;
 
     const submissionData = {
       shopName:
@@ -896,6 +804,18 @@ export default async function handler(
 
       sourceLabel:
         "マチナウ運営より",
+
+      // 運営投稿担当(Editor)権限 Phase1｜内部用の作成者記録(公開画面には
+      // 一切表示しない)。api/admin-submission-update.jsが、Editorは
+      // 自分が作成した投稿だけ編集できる、という判定にこの値を使う。
+      operatorUid:
+        authResult.actor.uid,
+
+      operatorEmail:
+        authResult.actor.email,
+
+      operatorRole:
+        authResult.actor.type,
 
       createdAt:
         FieldValue.serverTimestamp(),

@@ -2324,21 +2324,93 @@ async function handleArticleCommentsListRequest(
 // 認証方式をそのまま再利用する。新しい認証方式(APIキー・別の秘密鍵等)は
 // 一切作らない。一般ユーザーがこの経路でコメントを非表示にすることは
 // できない(有効なFirebase管理者アカウントのIDトークンが必須のため)。
-async function verifyAdminBearerToken(
-  app,
-  request
-) {
-  const adminEmail =
-    process.env.ADMIN_EMAIL;
+// ==========================================================================
+// 運営投稿担当(Editor)権限 Phase1｜代表(Admin)判定は既存の
+// process.env.ADMIN_EMAILを維持したまま無変更で残す。そのうえで、
+// Firestore operators/{uid}(ドキュメントID=Firebase Authのuidそのまま＝
+// 正本、メールアドレスだけを正本キーにしない)を追加し、role:"editor"かつ
+// active:trueの場合だけEditorとして扱う。operatorsコレクションは
+// クライアントから直接読み書きさせず、常にこのFunction(Admin SDK経由)の
+// みでアクセスするため、Firestore Security Rulesの変更は不要。
+// active判定は呼び出しのたびにFirestoreを直接読みに行く(トークンへ
+// 埋め込まない)ため、代表がactive:falseへ変更した瞬間から、そのEditorが
+// 既に持っている有効なIDトークンでも次の呼び出しで即座に拒否される
+// (Firebase Authのカスタムクレーム方式より確実に即時反映される)。
+// api/admin-post.js・api/admin-submission-get.js・api/admin-submission-
+// update.jsは、edit-ad.jsが既にこのファイルから関数をimportしている
+// 既存の実例と同じ方法で、ここからrequireAdmin()/requireAdminOrEditor()
+// をimportして再利用する(認可ロジックを複数ファイルへ複製しない)。
+const OPERATORS_COLLECTION =
+  "operators";
 
-  if (!adminEmail) {
+const OPERATOR_ROLE_EDITOR =
+  "editor";
+
+async function findOperatorActorByUid(
+  database,
+  uid
+) {
+  if (
+    typeof uid !== "string" ||
+    uid === ""
+  ) {
+    return null;
+  }
+
+  const operatorSnapshot =
+    await database
+      .collection(
+        OPERATORS_COLLECTION
+      )
+      .doc(
+        uid
+      )
+      .get();
+
+  if (
+    !operatorSnapshot.exists
+  ) {
+    return null;
+  }
+
+  const operatorData =
+    operatorSnapshot.data() ||
+    {};
+
+  if (
+    operatorData.role === OPERATOR_ROLE_EDITOR &&
+    operatorData.active === true
+  ) {
     return {
-      ok: false,
-      status: 500,
-      message:
-        "管理者メールアドレスが設定されていません。"
+      type: "editor",
+      role: OPERATOR_ROLE_EDITOR,
+      uid: uid,
+      email:
+        typeof operatorData.email === "string"
+          ? operatorData.email
+          : ""
     };
   }
+
+  return null;
+}
+
+
+// Bearer IDトークンを検証し、代表(ADMIN_EMAIL一致)かEditor(operators/{uid}
+// がrole:"editor"かつactive:true)かを判定する。どちらでもない場合は
+// actor:nullを返す(呼び出し元がrejectするかどうかを決める、この関数自体は
+// rejectしない＝getMyOperatorInfo等の「どちらでもないことを知りたいだけ」の
+// 用途にも使えるようにするため)。
+async function resolveRequestActor(
+  request
+) {
+  const app =
+    getFirebaseAdminApp();
+
+  const database =
+    getFirestore(
+      app
+    );
 
   const idToken =
     readBearerToken(
@@ -2371,6 +2443,9 @@ async function verifyAdminBearerToken(
     };
   }
 
+  const adminEmail =
+    process.env.ADMIN_EMAIL;
+
   const decodedEmail =
     String(
       decodedToken.email || ""
@@ -2378,40 +2453,256 @@ async function verifyAdminBearerToken(
       .toLowerCase();
 
   if (
-    decodedEmail === "" ||
-    decodedEmail !==
+    adminEmail &&
+    decodedEmail !== "" &&
+    decodedEmail ===
       adminEmail.toLowerCase()
+  ) {
+    return {
+      ok: true,
+      app: app,
+      database: database,
+      actor: {
+        type: "admin",
+        uid: decodedToken.uid,
+        email: decodedEmail
+      }
+    };
+  }
+
+  const editorActor =
+    await findOperatorActorByUid(
+      database,
+      decodedToken.uid
+    );
+
+  return {
+    ok: true,
+    app: app,
+    database: database,
+    actor: editorActor
+  };
+}
+
+
+// 代表(Admin)のみを許可する。一般投稿の承認/却下/コメント非表示等、
+// Editorには絶対に渡してはいけない操作で使う。
+export async function requireAdmin(
+  request
+) {
+  const result =
+    await resolveRequestActor(
+      request
+    );
+
+  if (!result.ok) {
+    return result;
+  }
+
+  if (
+    !result.actor ||
+    result.actor.type !== "admin"
   ) {
     return {
       ok: false,
       status: 403,
       message:
-        "管理者権限がありません。"
+        "管理者権限が必要です。"
     };
   }
 
-  return {
-    ok: true,
-    adminEmail: decodedEmail
-  };
+  return result;
 }
 
 
-// マチナウ読み物コメント管理(最小機能)｜指定articleSlugの全コメントを、
-// status(approved/hidden)を問わず一覧取得する。公開用のGET(status==="approved"
-// のみ)とは完全に別の関数・別のmodeであり、この関数自体が管理者認証必須
-// のため一般ユーザーは呼び出せない。
-async function handleAdminListArticleCommentsRequest(
+// 代表(Admin)またはEditorを許可する。地域情報・マチナウ読み物の投稿/編集、
+// 画像アップロード署名等、Editorへも許可する操作で使う。
+export async function requireAdminOrEditor(
+  request
+) {
+  const result =
+    await resolveRequestActor(
+      request
+    );
+
+  if (!result.ok) {
+    return result;
+  }
+
+  if (
+    !result.actor ||
+    (
+      result.actor.type !== "admin" &&
+      result.actor.type !== "editor"
+    )
+  ) {
+    return {
+      ok: false,
+      status: 403,
+      message:
+        "権限がありません。"
+    };
+  }
+
+  return result;
+}
+
+
+// admin-post.html・admin-column.html・editor.htmlが、ログイン直後に
+// 「この人はAdminかEditorか、それとも権限が無いか」を知るためだけに呼ぶ。
+// requireAdmin()/requireAdminOrEditor()と異なり、権限が無くても403にせず
+// role:nullを返す(呼び出し元が「権限がありません」の案内を出し分けるため)。
+async function handleGetMyOperatorInfoRequest(
   request,
   response
 ) {
   try {
-    const app =
-      getFirebaseAdminApp();
+    const result =
+      await resolveRequestActor(
+        request
+      );
 
+    if (!result.ok) {
+      return response.status(result.status).json({
+        success: false,
+        message:
+          result.message
+      });
+    }
+
+    return response.status(200).json({
+      success: true,
+      role:
+        result.actor
+          ? result.actor.type
+          : null
+    });
+  } catch (error) {
+    console.error(
+      "運営者情報の確認エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message:
+        "確認できませんでした。"
+    });
+  }
+}
+
+
+// admin-column.html・admin-post.html・editor.html専用のCloudinary署名発行。
+// 既存のmode:"cloudinarySignature"(post.htmlの一般投稿・匿名認証ユーザーが
+// 現在も利用しており、変更すると一般投稿の画像アップロードが壊れるため
+// 無変更のまま維持する)とは別のmodeとして新設し、Admin/Editor専用ツール
+// 側の呼び出し先だけをこちらへ切り替える。実質の署名発行ロジック
+// (buildCloudinaryUploadSignature()等)は完全に共通のまま、認可条件だけが
+// requireAdminOrEditor()により厳格になる。
+async function handleOperatorCloudinarySignatureRequest(
+  request,
+  response
+) {
+  try {
     const authResult =
-      await verifyAdminBearerToken(
-        app,
+      await requireAdminOrEditor(
+        request
+      );
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({
+        success: false,
+        message:
+          authResult.message
+      });
+    }
+
+    const cloudinaryApiKey =
+      process.env.CLOUDINARY_API_KEY;
+
+    const cloudinaryApiSecret =
+      process.env.CLOUDINARY_API_SECRET;
+
+    if (
+      !cloudinaryApiKey ||
+      !cloudinaryApiSecret
+    ) {
+      console.error(
+        "CLOUDINARY_API_KEY または CLOUDINARY_API_SECRET が設定されていません。"
+      );
+
+      return response.status(500).json({
+        success: false,
+        message:
+          "画像アップロードの準備ができませんでした。時間をおいて、もう一度お試しください。"
+      });
+    }
+
+    const timestampSeconds =
+      Math.floor(
+        Date.now() / 1000
+      );
+
+    const paramsToSign =
+      {
+        folder:
+          CLOUDINARY_UPLOAD_FOLDER,
+
+        timestamp:
+          timestampSeconds,
+
+        upload_preset:
+          CLOUDINARY_UPLOAD_PRESET
+      };
+
+    const signature =
+      buildCloudinaryUploadSignature(
+        paramsToSign,
+        cloudinaryApiSecret
+      );
+
+    return response.status(200).json({
+      success: true,
+      signature: signature,
+      timestamp: timestampSeconds,
+      apiKey: cloudinaryApiKey,
+      uploadPreset: CLOUDINARY_UPLOAD_PRESET,
+      folder: CLOUDINARY_UPLOAD_FOLDER
+    });
+  } catch (error) {
+    console.error(
+      "Cloudinary署名発行エラー(運営ツール向け)：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message:
+        "画像アップロードの準備ができませんでした。時間をおいて、もう一度お試しください。"
+    });
+  }
+}
+
+
+const EDITOR_PASSWORD_MIN_LENGTH =
+  6;
+
+const EMAIL_FORMAT_PATTERN =
+  /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+
+// 代表(Admin)専用。Firebase Authenticationへ新しいEditorアカウントを作成し、
+// 続けてoperators/{uid}へrole:"editor", active:trueで登録する。
+// 平文パスワードはFirestoreへ一切保存せず、ログにも残さず、応答にも
+// 含めない(uid/emailのみ返す)。新しいVercel Functionは追加せず、
+// 既存のFirebase Admin SDK(このFunctionが既に読み込み済み)をそのまま使う。
+async function handleAdminCreateEditorRequest(
+  request,
+  response
+) {
+  try {
+    const authResult =
+      await requireAdmin(
         request
       );
 
@@ -2428,15 +2719,390 @@ async function handleAdminListArticleCommentsRequest(
         request
       );
 
+    const email =
+      String(
+        requestBody.email || ""
+      )
+        .trim()
+        .toLowerCase();
+
+    if (
+      !EMAIL_FORMAT_PATTERN.test(
+        email
+      )
+    ) {
+      return response.status(400).json({
+        success: false,
+        message:
+          "メールアドレスの形式が正しくありません。"
+      });
+    }
+
+    const password =
+      typeof requestBody.password === "string"
+        ? requestBody.password
+        : "";
+
+    if (
+      password.length <
+      EDITOR_PASSWORD_MIN_LENGTH
+    ) {
+      return response.status(400).json({
+        success: false,
+        message:
+          "パスワードは" +
+          EDITOR_PASSWORD_MIN_LENGTH +
+          "文字以上にしてください。"
+      });
+    }
+
+    const database =
+      authResult.database;
+
+    let newUserRecord;
+
+    try {
+      newUserRecord =
+        await getAuth(
+          authResult.app
+        )
+          .createUser(
+            {
+              email: email,
+              password: password
+            }
+          );
+    } catch (createUserError) {
+      const errorCode =
+        createUserError &&
+        createUserError.code;
+
+      if (
+        errorCode === "auth/email-already-exists"
+      ) {
+        return response.status(400).json({
+          success: false,
+          message:
+            "このメールアドレスは既に使用されています。"
+        });
+      }
+
+      if (
+        errorCode === "auth/invalid-password"
+      ) {
+        return response.status(400).json({
+          success: false,
+          message:
+            "パスワードの形式が正しくありません。"
+        });
+      }
+
+      console.error(
+        "Editorアカウント作成エラー：",
+        createUserError
+      );
+
+      return response.status(500).json({
+        success: false,
+        message:
+          "アカウントを作成できませんでした。時間をおいて、もう一度お試しください。"
+      });
+    }
+
+    await database
+      .collection(
+        OPERATORS_COLLECTION
+      )
+      .doc(
+        newUserRecord.uid
+      )
+      .set(
+        {
+          email: email,
+          role: OPERATOR_ROLE_EDITOR,
+          active: true,
+
+          createdAt:
+            FieldValue.serverTimestamp(),
+
+          updatedAt:
+            FieldValue.serverTimestamp()
+        }
+      );
+
+    return response.status(200).json({
+      success: true,
+      message:
+        "Editorアカウントを作成しました。",
+      uid:
+        newUserRecord.uid,
+      email:
+        email
+    });
+  } catch (error) {
+    console.error(
+      "Editorアカウント作成エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message:
+        "アカウントを作成できませんでした。時間をおいて、もう一度お試しください。"
+    });
+  }
+}
+
+
+// 代表(Admin)専用。operators/{uid}.activeの切り替えのみ行う(物理削除・
+// Firebase Authアカウント自体の無効化は行わない)。resolveRequestActor()が
+// 呼び出しのたびにこのFirestore値を直接読みに行く設計のため、ここで
+// active:falseへ変更した瞬間から、そのEditorの以後のAPI呼び出しは
+// (既に有効なIDトークンを持っていても)次の呼び出しで即座に拒否される。
+async function handleAdminSetEditorActiveRequest(
+  request,
+  response
+) {
+  try {
+    const authResult =
+      await requireAdmin(
+        request
+      );
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({
+        success: false,
+        message:
+          authResult.message
+      });
+    }
+
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    const uid =
+      typeof requestBody.uid === "string"
+        ? requestBody.uid.trim()
+        : "";
+
+    const active =
+      requestBody.active === true;
+
+    if (uid === "") {
+      return response.status(400).json({
+        success: false,
+        message:
+          "uidを指定してください。"
+      });
+    }
+
+    const database =
+      authResult.database;
+
+    const operatorReference =
+      database
+        .collection(
+          OPERATORS_COLLECTION
+        )
+        .doc(
+          uid
+        );
+
+    const operatorSnapshot =
+      await operatorReference.get();
+
+    if (
+      !operatorSnapshot.exists
+    ) {
+      return response.status(404).json({
+        success: false,
+        message:
+          "対象の運営者が見つかりませんでした。"
+      });
+    }
+
+    await operatorReference.update(
+      {
+        active: active,
+
+        updatedAt:
+          FieldValue.serverTimestamp()
+      }
+    );
+
+    return response.status(200).json({
+      success: true,
+      message:
+        active
+          ? "有効にしました。"
+          : "停止しました。"
+    });
+  } catch (error) {
+    console.error(
+      "運営者の状態変更エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message:
+        "状態を変更できませんでした。"
+    });
+  }
+}
+
+
+// 代表(Admin)専用。運営者一覧(email/role/active/作成日時のみ、パスワードは
+// 元々どこにも保存していないため含まれ得ない)を返す。大規模なユーザー
+// 管理画面ではなく、admin.html内の小さな一覧表示用の最小限のデータ。
+async function handleAdminListEditorsRequest(
+  request,
+  response
+) {
+  try {
+    const authResult =
+      await requireAdmin(
+        request
+      );
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({
+        success: false,
+        message:
+          authResult.message
+      });
+    }
+
+    const database =
+      authResult.database;
+
+    const operatorsSnapshot =
+      await database
+        .collection(
+          OPERATORS_COLLECTION
+        )
+        .limit(
+          COLUMN_LIST_MAX_COUNT
+        )
+        .get();
+
+    const operators =
+      operatorsSnapshot.docs
+        .map(
+          function(documentSnapshot) {
+            const data =
+              documentSnapshot.data() ||
+              {};
+
+            const createdAtDate =
+              toDateFromFirestoreValue(
+                data.createdAt
+              );
+
+            return {
+              uid:
+                documentSnapshot.id,
+
+              email:
+                typeof data.email === "string"
+                  ? data.email
+                  : "",
+
+              role:
+                typeof data.role === "string"
+                  ? data.role
+                  : "",
+
+              active:
+                data.active === true,
+
+              createdAtMillis:
+                createdAtDate
+                  ? createdAtDate.getTime()
+                  : 0,
+
+              createdAt:
+                createdAtDate
+                  ? createdAtDate.toISOString()
+                  : null
+            };
+          }
+        )
+        .sort(
+          function(firstOperator, secondOperator) {
+            return (
+              secondOperator.createdAtMillis -
+              firstOperator.createdAtMillis
+            );
+          }
+        )
+        .map(
+          function(operator) {
+            return {
+              uid: operator.uid,
+              email: operator.email,
+              role: operator.role,
+              active: operator.active,
+              createdAt: operator.createdAt
+            };
+          }
+        );
+
+    return response.status(200).json({
+      success: true,
+      operators: operators
+    });
+  } catch (error) {
+    console.error(
+      "運営者一覧取得エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message:
+        "運営者一覧を取得できませんでした。"
+    });
+  }
+}
+
+
+// マチナウ読み物コメント管理(最小機能)｜指定articleSlugの全コメントを、
+// status(approved/hidden)を問わず一覧取得する。公開用のGET(status==="approved"
+// のみ)とは完全に別の関数・別のmodeであり、この関数自体が管理者認証必須
+// のため一般ユーザーは呼び出せない。
+async function handleAdminListArticleCommentsRequest(
+  request,
+  response
+) {
+  try {
+    const authResult =
+      await requireAdmin(
+        request
+      );
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({
+        success: false,
+        message:
+          authResult.message
+      });
+    }
+
+    const database =
+      authResult.database;
+
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
     const articleSlug =
       typeof requestBody.articleSlug === "string"
         ? requestBody.articleSlug.trim()
         : "";
-
-    const database =
-      getFirestore(
-        app
-      );
 
     if (
       !(await isColumnSlugEligibleForComments(
@@ -2558,12 +3224,8 @@ async function handleAdminHideArticleCommentRequest(
   response
 ) {
   try {
-    const app =
-      getFirebaseAdminApp();
-
     const authResult =
-      await verifyAdminBearerToken(
-        app,
+      await requireAdmin(
         request
       );
 
@@ -2574,6 +3236,9 @@ async function handleAdminHideArticleCommentRequest(
           authResult.message
       });
     }
+
+    const database =
+      authResult.database;
 
     const requestBody =
       readRequestBody(
@@ -2592,11 +3257,6 @@ async function handleAdminHideArticleCommentRequest(
           "documentIdを指定してください。"
       });
     }
-
-    const database =
-      getFirestore(
-        app
-      );
 
     const documentReference =
       database
@@ -2643,7 +3303,7 @@ async function handleAdminHideArticleCommentRequest(
           FieldValue.serverTimestamp(),
 
         hiddenBy:
-          authResult.adminEmail
+          authResult.actor.email
       }
     );
 
@@ -4166,12 +4826,8 @@ async function handleAdminSaveColumnArticleRequest(
   response
 ) {
   try {
-    const app =
-      getFirebaseAdminApp();
-
     const authResult =
-      await verifyAdminBearerToken(
-        app,
+      await requireAdminOrEditor(
         request
       );
 
@@ -4182,6 +4838,9 @@ async function handleAdminSaveColumnArticleRequest(
           authResult.message
       });
     }
+
+    const database =
+      authResult.database;
 
     const requestBody =
       readRequestBody(
@@ -4202,11 +4861,6 @@ async function handleAdminSaveColumnArticleRequest(
           validationError.message
       });
     }
-
-    const database =
-      getFirestore(
-        app
-      );
 
     const documentId =
       typeof requestBody.documentId === "string"
@@ -4311,6 +4965,14 @@ async function handleAdminSaveColumnArticleRequest(
       imageUrl: fields.imageUrl,
       imagePublicId: fields.imagePublicId,
 
+      // 運営投稿担当(Editor)権限 Phase1｜誰が作成したかを内部用として
+      // 記録する(公開画面には一切表示しない、admin-column.htmlの管理
+      // 一覧にも今回は表示しない)。作成時のみ設定し、以後の編集では
+      // 上書きしない(最終編集者ではなく作成者を残す)。
+      operatorUid: authResult.actor.uid,
+      operatorEmail: authResult.actor.email,
+      operatorRole: authResult.actor.type,
+
       status:
         fields.isPublished
           ? COLUMN_STATUS_PUBLISHED
@@ -4366,12 +5028,8 @@ async function handleAdminListColumnArticlesRequest(
   response
 ) {
   try {
-    const app =
-      getFirebaseAdminApp();
-
     const authResult =
-      await verifyAdminBearerToken(
-        app,
+      await requireAdminOrEditor(
         request
       );
 
@@ -4384,9 +5042,7 @@ async function handleAdminListColumnArticlesRequest(
     }
 
     const database =
-      getFirestore(
-        app
-      );
+      authResult.database;
 
     const articlesSnapshot =
       await database
@@ -4506,12 +5162,8 @@ async function handleAdminGetColumnArticleRequest(
   response
 ) {
   try {
-    const app =
-      getFirebaseAdminApp();
-
     const authResult =
-      await verifyAdminBearerToken(
-        app,
+      await requireAdminOrEditor(
         request
       );
 
@@ -4522,6 +5174,9 @@ async function handleAdminGetColumnArticleRequest(
           authResult.message
       });
     }
+
+    const database =
+      authResult.database;
 
     const requestBody =
       readRequestBody(
@@ -4540,11 +5195,6 @@ async function handleAdminGetColumnArticleRequest(
           "documentIdを指定してください。"
       });
     }
-
-    const database =
-      getFirestore(
-        app
-      );
 
     const documentSnapshot =
       await database
@@ -4656,12 +5306,8 @@ async function handleAdminSetColumnArticleStatusRequest(
   response
 ) {
   try {
-    const app =
-      getFirebaseAdminApp();
-
     const authResult =
-      await verifyAdminBearerToken(
-        app,
+      await requireAdminOrEditor(
         request
       );
 
@@ -4672,6 +5318,9 @@ async function handleAdminSetColumnArticleStatusRequest(
           authResult.message
       });
     }
+
+    const database =
+      authResult.database;
 
     const requestBody =
       readRequestBody(
@@ -4693,11 +5342,6 @@ async function handleAdminSetColumnArticleStatusRequest(
           "documentIdを指定してください。"
       });
     }
-
-    const database =
-      getFirestore(
-        app
-      );
 
     const documentReference =
       database
@@ -4933,6 +5577,53 @@ export default async function handler(
     requestBody.mode === "adminSetColumnArticleStatus"
   ) {
     return handleAdminSetColumnArticleStatusRequest(
+      request,
+      response
+    );
+  }
+
+  // 運営投稿担当(Editor)権限 Phase1｜Admin/Editor共用モード。
+  if (
+    requestBody.mode === "getMyOperatorInfo"
+  ) {
+    return handleGetMyOperatorInfoRequest(
+      request,
+      response
+    );
+  }
+
+  if (
+    requestBody.mode === "operatorCloudinarySignature"
+  ) {
+    return handleOperatorCloudinarySignatureRequest(
+      request,
+      response
+    );
+  }
+
+  // 運営投稿担当(Editor)権限 Phase1｜Admin専用の運営者管理モード。
+  if (
+    requestBody.mode === "adminCreateEditor"
+  ) {
+    return handleAdminCreateEditorRequest(
+      request,
+      response
+    );
+  }
+
+  if (
+    requestBody.mode === "adminSetEditorActive"
+  ) {
+    return handleAdminSetEditorActiveRequest(
+      request,
+      response
+    );
+  }
+
+  if (
+    requestBody.mode === "adminListEditors"
+  ) {
+    return handleAdminListEditorsRequest(
       request,
       response
     );

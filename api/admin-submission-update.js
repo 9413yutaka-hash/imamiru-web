@@ -1,50 +1,11 @@
 import {
-  cert,
-  getApps,
-  initializeApp
-} from "firebase-admin/app";
-
-import {
   FieldValue,
-  Timestamp,
-  getFirestore
+  Timestamp
 } from "firebase-admin/firestore";
 
 import {
-  getAuth
-} from "firebase-admin/auth";
-
-
-function getFirebaseAdminApp() {
-  if (getApps().length > 0) {
-    return getApps()[0];
-  }
-
-  const serviceAccountText =
-    process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-
-  if (!serviceAccountText) {
-    throw new Error(
-      "FIREBASE_SERVICE_ACCOUNT_KEY が設定されていません。"
-    );
-  }
-
-  let serviceAccount;
-
-  try {
-    serviceAccount = JSON.parse(
-      serviceAccountText
-    );
-  } catch (error) {
-    throw new Error(
-      "FIREBASE_SERVICE_ACCOUNT_KEY のJSON形式が正しくありません。"
-    );
-  }
-
-  return initializeApp({
-    credential: cert(serviceAccount)
-  });
-}
+  requireAdminOrEditor
+} from "./moderate-submission.js";
 
 
 function readRequestBody(
@@ -70,32 +31,6 @@ function readRequestBody(
   }
 
   return {};
-}
-
-
-function readBearerToken(
-  request
-) {
-  const authorizationHeader =
-    request.headers &&
-    request.headers.authorization;
-
-  if (
-    typeof authorizationHeader !== "string"
-  ) {
-    return "";
-  }
-
-  const match =
-    authorizationHeader.match(
-      /^Bearer\s+(.+)$/
-    );
-
-  if (!match) {
-    return "";
-  }
-
-  return match[1].trim();
 }
 
 
@@ -437,68 +372,24 @@ export default async function handler(
     });
   }
 
-  const adminEmail =
-    process.env.ADMIN_EMAIL;
-
-  if (!adminEmail) {
-    return response.status(500).json({
-      success: false,
-      message:
-        "管理者メールアドレスが設定されていません。"
-    });
-  }
-
-  const idToken =
-    readBearerToken(
+  // 運営投稿担当(Editor)権限 Phase1｜api/moderate-submission.jsの
+  // requireAdminOrEditor()を再利用する(edit-ad.jsの既存実例と同じ方法)。
+  // 誰が編集できるか(Editorは自分が作成した投稿だけ)は、この先で
+  // currentData.operatorUidと突き合わせて別途判定する。
+  const authResult =
+    await requireAdminOrEditor(
       request
     );
 
-  if (idToken === "") {
-    return response.status(401).json({
+  if (!authResult.ok) {
+    return response.status(authResult.status).json({
       success: false,
       message:
-        "認証情報がありません。"
+        authResult.message
     });
   }
 
   try {
-    const app =
-      getFirebaseAdminApp();
-
-    let decodedToken;
-
-    try {
-      decodedToken =
-        await getAuth(app)
-          .verifyIdToken(
-            idToken
-          );
-    } catch (verifyError) {
-      return response.status(401).json({
-        success: false,
-        message:
-          "認証情報が正しくありません。"
-      });
-    }
-
-    const decodedEmail =
-      String(
-        decodedToken.email || ""
-      )
-        .toLowerCase();
-
-    if (
-      decodedEmail === "" ||
-      decodedEmail !==
-        adminEmail.toLowerCase()
-    ) {
-      return response.status(403).json({
-        success: false,
-        message:
-          "管理者権限がありません。"
-      });
-    }
-
     const requestBody =
       readRequestBody(
         request
@@ -518,7 +409,7 @@ export default async function handler(
     }
 
     const database =
-      getFirestore(app);
+      authResult.database;
 
     const documentReference =
       database
@@ -560,6 +451,35 @@ export default async function handler(
         message:
           "この投稿は編集できません。"
       });
+    }
+
+    // 運営投稿担当(Editor)権限 Phase1｜常設店舗広告は代表(Admin)専用の
+    // まま(api/admin-post.jsの作成時制限と揃える)。通常の地域情報は、
+    // Editorであれば「自分が作成したものだけ」編集を許可する
+    // (currentData.operatorUidは作成時にapi/admin-post.jsが記録する
+    // 内部用フィールド。これより前に作成された既存投稿にはこの値が
+    // 無いため、Editorはそれらを編集できない=安全側のデフォルト拒否)。
+    if (
+      authResult.actor.type !== "admin"
+    ) {
+      if (isExistingPermanentAd) {
+        return response.status(403).json({
+          success: false,
+          message:
+            "常設店舗広告の編集は管理者のみ利用できます。"
+        });
+      }
+
+      if (
+        currentData.operatorUid !==
+        authResult.actor.uid
+      ) {
+        return response.status(403).json({
+          success: false,
+          message:
+            "この投稿はご自身が作成したものではないため編集できません。"
+        });
+      }
     }
 
     let postFields;

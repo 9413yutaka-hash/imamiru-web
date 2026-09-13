@@ -1,74 +1,6 @@
 import {
-  cert,
-  getApps,
-  initializeApp
-} from "firebase-admin/app";
-
-import {
-  getFirestore
-} from "firebase-admin/firestore";
-
-import {
-  getAuth
-} from "firebase-admin/auth";
-
-
-function getFirebaseAdminApp() {
-  if (getApps().length > 0) {
-    return getApps()[0];
-  }
-
-  const serviceAccountText =
-    process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-
-  if (!serviceAccountText) {
-    throw new Error(
-      "FIREBASE_SERVICE_ACCOUNT_KEY が設定されていません。"
-    );
-  }
-
-  let serviceAccount;
-
-  try {
-    serviceAccount = JSON.parse(
-      serviceAccountText
-    );
-  } catch (error) {
-    throw new Error(
-      "FIREBASE_SERVICE_ACCOUNT_KEY のJSON形式が正しくありません。"
-    );
-  }
-
-  return initializeApp({
-    credential: cert(serviceAccount)
-  });
-}
-
-
-function readBearerToken(
-  request
-) {
-  const authorizationHeader =
-    request.headers &&
-    request.headers.authorization;
-
-  if (
-    typeof authorizationHeader !== "string"
-  ) {
-    return "";
-  }
-
-  const match =
-    authorizationHeader.match(
-      /^Bearer\s+(.+)$/
-    );
-
-  if (!match) {
-    return "";
-  }
-
-  return match[1].trim();
-}
+  requireAdminOrEditor
+} from "./moderate-submission.js";
 
 
 export default async function handler(
@@ -95,68 +27,22 @@ export default async function handler(
     });
   }
 
-  const adminEmail =
-    process.env.ADMIN_EMAIL;
-
-  if (!adminEmail) {
-    return response.status(500).json({
-      success: false,
-      message:
-        "管理者メールアドレスが設定されていません。"
-    });
-  }
-
-  const idToken =
-    readBearerToken(
+  // 運営投稿担当(Editor)権限 Phase1｜api/moderate-submission.jsの
+  // requireAdminOrEditor()を再利用する(edit-ad.jsの既存実例と同じ方法)。
+  const authResult =
+    await requireAdminOrEditor(
       request
     );
 
-  if (idToken === "") {
-    return response.status(401).json({
+  if (!authResult.ok) {
+    return response.status(authResult.status).json({
       success: false,
       message:
-        "認証情報がありません。"
+        authResult.message
     });
   }
 
   try {
-    const app =
-      getFirebaseAdminApp();
-
-    let decodedToken;
-
-    try {
-      decodedToken =
-        await getAuth(app)
-          .verifyIdToken(
-            idToken
-          );
-    } catch (verifyError) {
-      return response.status(401).json({
-        success: false,
-        message:
-          "認証情報が正しくありません。"
-      });
-    }
-
-    const decodedEmail =
-      String(
-        decodedToken.email || ""
-      )
-        .toLowerCase();
-
-    if (
-      decodedEmail === "" ||
-      decodedEmail !==
-        adminEmail.toLowerCase()
-    ) {
-      return response.status(403).json({
-        success: false,
-        message:
-          "管理者権限がありません。"
-      });
-    }
-
     const documentId =
       request.query &&
       typeof request.query.id === "string"
@@ -172,7 +58,7 @@ export default async function handler(
     }
 
     const database =
-      getFirestore(app);
+      authResult.database;
 
     const documentSnapshot =
       await database
@@ -210,6 +96,35 @@ export default async function handler(
         message:
           "この投稿は編集できません。"
       });
+    }
+
+    // 運営投稿担当(Editor)権限 Phase1｜api/admin-submission-update.jsと
+    // 同じ制限(常設広告は代表専用、通常投稿は自分が作成したものだけ)を
+    // 編集画面の読み込み時点でも適用する(保存時だけ拒否すると、Editorが
+    // 他人の下書き内容を一度画面に読み込めてしまうため)。
+    if (
+      authResult.actor.type !== "admin"
+    ) {
+      if (
+        data.isPermanentAd === true
+      ) {
+        return response.status(403).json({
+          success: false,
+          message:
+            "常設店舗広告の編集は管理者のみ利用できます。"
+        });
+      }
+
+      if (
+        data.operatorUid !==
+        authResult.actor.uid
+      ) {
+        return response.status(403).json({
+          success: false,
+          message:
+            "この投稿はご自身が作成したものではないため編集できません。"
+        });
+      }
     }
 
     const expiresAtValue =
