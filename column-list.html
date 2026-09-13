@@ -171,11 +171,14 @@
     }
 
     .article-card-image {
+      /* 画像UX改善Phase2｜140pxはリストサムネイルとして低すぎたため
+         引き上げ(一覧性を保つためcoverは維持)。 */
       display: block;
       width: 100%;
-      height: 140px;
+      height: 170px;
       object-fit: cover;
       border-radius: 16px 16px 0 0;
+      background: #e9f1f5;
     }
 
     .article-card-body {
@@ -300,6 +303,29 @@
         .replaceAll("'", "&#039;");
     }
 
+    // 画像UX改善Phase2｜app.js/api/moderate-submission.jsと同じロジック。
+    // このページはapp.jsを読み込まない単独ページのため、同じ小さな
+    // 純関数をそのまま複製している(共通化のための新規スクリプト読み込みは
+    // 今回の範囲では見送り、既存の構成を変えない)。
+    function buildOptimizedImageUrl(url, options) {
+      if (typeof url !== "string" || url === "") {
+        return url;
+      }
+      const uploadMarker = "/image/upload/";
+      const uploadIndex = url.indexOf(uploadMarker);
+      if (!url.includes("res.cloudinary.com") || uploadIndex === -1) {
+        return url;
+      }
+      const width = options && Number.isFinite(options.width) && options.width > 0
+        ? Math.round(options.width) : null;
+      const transformationParts = ["f_auto", "q_auto", "c_limit"];
+      if (width) {
+        transformationParts.push("w_" + width);
+      }
+      const insertPosition = uploadIndex + uploadMarker.length;
+      return url.slice(0, insertPosition) + transformationParts.join(",") + "/" + url.slice(insertPosition);
+    }
+
     // Ver1.8 Phase2(国識別の世界対応・仕上げ)｜api/moderate-submission.jsの
     // ISO_3166_1_ALPHA_2_COUNTRY_CODESと同じ一覧。国の絞り込みも自由記述を
     // やめ、コードで検索する(country単位の一致判定はコード同士でしか
@@ -385,7 +411,7 @@
 
       return (
         '<a class="card article-card" href="column/' + encodeURIComponent(slug) + '.html">' +
-          (article.imageUrl ? '<img class="article-card-image" src="' + escapeHtml(article.imageUrl) + '" alt="" loading="lazy">' : "") +
+          (article.imageUrl ? '<img class="article-card-image" src="' + escapeHtml(buildOptimizedImageUrl(article.imageUrl, { width: 600 })) + '" alt="" loading="lazy" onerror="this.remove()">' : "") +
           '<div class="article-card-body">' +
             (regionText !== "" ? '<p class="article-card-region">' + escapeHtml(regionText) + '</p>' : "") +
             (article.category ? '<span class="article-card-category">' + escapeHtml(article.category) + '</span>' : "") +

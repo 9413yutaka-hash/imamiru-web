@@ -631,6 +631,14 @@ const MACHINAU_TRANSLATIONS = {
     en: "Getting your location via GPS…"
   },
 
+  // 画像UX改善Phase2｜GPS確定直後、店舗一覧を距離順へ並び替える一瞬だけ
+  // 表示する遷移メッセージ。「原因不明で写真が変わった」という体験を
+  // 避けるための表示で、location_message_success(直後に続けて表示)とは別。
+  location_message_sorting: {
+    ja: "現在地を取得しました。近い順に並び替えています…",
+    en: "Location found. Sorting by distance…"
+  },
+
   location_message_success: {
     ja: "現在地を取得しました。近い順に表示しています。",
     en: "Location found. Showing nearby spots first."

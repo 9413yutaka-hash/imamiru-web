@@ -3613,6 +3613,85 @@ async function handleAdminHideArticleCommentRequest(
 // URL・本文・コメント・GA4いずれも無変更のまま独立して残す。
 // ==========================================================================
 
+// 画像UX改善Phase2｜app.js側のbuildOptimizedImageUrl()と同じロジックの
+// サーバー側(Node.js)版。読み物ページ(buildColumnArticleHtml、このAPI内で
+// HTML文字列として生成)の本文中<img src>にだけ適用し、OG画像/JSON-LDの
+// imageは既存のsecure_urlのまま変更しない(SEO/OG処理を壊さないため)。
+// Firestoreへ保存済みのimageUrl自体は一切書き換えない。
+function buildOptimizedImageUrl(
+  url,
+  options
+) {
+  if (
+    typeof url !== "string" ||
+    url === ""
+  ) {
+    return url;
+  }
+
+  const uploadMarker =
+    "/image/upload/";
+
+  const uploadIndex =
+    url.indexOf(
+      uploadMarker
+    );
+
+  const isCloudinaryDeliveryUrl =
+    url.includes(
+      "res.cloudinary.com"
+    ) &&
+    uploadIndex !== -1;
+
+  if (!isCloudinaryDeliveryUrl) {
+    return url;
+  }
+
+  const width =
+    options &&
+    Number.isFinite(
+      options.width
+    ) &&
+    options.width > 0
+      ? Math.round(
+          options.width
+        )
+      : null;
+
+  const transformationParts =
+    [
+      "f_auto",
+      "q_auto",
+      "c_limit"
+    ];
+
+  if (width) {
+    transformationParts.push(
+      "w_" + width
+    );
+  }
+
+  const insertPosition =
+    uploadIndex +
+    uploadMarker.length;
+
+  return (
+    url.slice(
+      0,
+      insertPosition
+    ) +
+    transformationParts.join(
+      ","
+    ) +
+    "/" +
+    url.slice(
+      insertPosition
+    )
+  );
+}
+
+const OPTIMIZED_IMAGE_WIDTH_COLUMN_ARTICLE = 900;
+
 function escapeHtmlForRender(
   value
 ) {
@@ -3845,11 +3924,14 @@ function buildColumnArticleHtml(
     hasMainImage
       ? '<img class="article-main-image" src="' +
         escapeHtmlForRender(
-          article.imageUrl
+          buildOptimizedImageUrl(
+            article.imageUrl,
+            { width: OPTIMIZED_IMAGE_WIDTH_COLUMN_ARTICLE }
+          )
         ) +
         '" alt="' +
         escapedTitle +
-        '" loading="lazy">'
+        '" loading="lazy" onerror="this.remove()">'
       : "";
 
   return `<!DOCTYPE html>
@@ -3959,9 +4041,13 @@ function buildColumnArticleHtml(
       border-radius: 999px; background: #eef7fb; color: var(--blue);
       font-size: 11px; font-weight: 900;
     }
+    /* 画像UX改善Phase2｜読み物のメイン画像は実利用で上下/左右が
+       切れることが問題になっていたため、coverでの機械的な切り取りをやめ、
+       画像本来の比率を保ったまま全体を表示する(contain+ 背景色で
+       余白を自然に見せる)。 */
     .article-main-image {
-      display: block; width: 100%; max-height: 320px; object-fit: cover;
-      border-radius: 16px; margin: 0 0 20px;
+      display: block; width: 100%; max-height: 420px; object-fit: contain;
+      background: #e9f1f5; border-radius: 16px; margin: 0 0 20px;
     }
     .lede { margin: 0 0 28px; font-size: 15px; line-height: 2; color: var(--text); }
     p { font-size: 14px; line-height: 2; color: var(--text); }

@@ -119,10 +119,13 @@
     }
 
     .region-recommendation-card img {
+      /* 画像UX改善Phase2｜180pxは縦写真で意味が失われやすいため引き上げ。
+         一覧カードのためcoverは維持しつつ、切り過ぎを抑える。 */
       width: 100%;
-      max-height: 180px;
+      max-height: 220px;
       object-fit: cover;
       display: block;
+      background: #e9f1f5;
     }
 
     .region-recommendation-card-body {

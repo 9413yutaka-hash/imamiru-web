@@ -1290,6 +1290,121 @@ function getNumberValue(
   return null;
 }
 
+// 画像UX改善Phase2｜Firestoreに保存済みのsecure_urlそのものは書き換えず、
+// 表示のたびにCloudinaryの配信用変換(f_auto/q_auto/w_.../c_limit)を
+// 差し込んだURLを生成するだけの共通ヘルパー。Cloudinary以外の画像URL
+// (将来別サービス・外部URLの可能性)はres.cloudinary.com上の
+// "/image/upload/"を含むURLかどうかで判定し、該当しなければ元のURLの
+// まま返す(壊さない)。c_limitは元画像より大きくアップスケールしない
+// ためのCloudinary標準の指定で、追加の契約・有料機能は不要。
+function buildOptimizedImageUrl(
+  url,
+  options
+) {
+  if (
+    typeof url !== "string" ||
+    url === ""
+  ) {
+    return url;
+  }
+
+  const uploadMarker =
+    "/image/upload/";
+
+  const uploadIndex =
+    url.indexOf(
+      uploadMarker
+    );
+
+  const isCloudinaryDeliveryUrl =
+    url.includes(
+      "res.cloudinary.com"
+    ) &&
+    uploadIndex !== -1;
+
+  if (!isCloudinaryDeliveryUrl) {
+    return url;
+  }
+
+  const width =
+    options &&
+    Number.isFinite(
+      options.width
+    ) &&
+    options.width > 0
+      ? Math.round(
+          options.width
+        )
+      : null;
+
+  const transformationParts =
+    [
+      "f_auto",
+      "q_auto",
+      "c_limit"
+    ];
+
+  if (width) {
+    transformationParts.push(
+      "w_" + width
+    );
+  }
+
+  const insertPosition =
+    uploadIndex +
+    uploadMarker.length;
+
+  return (
+    url.slice(
+      0,
+      insertPosition
+    ) +
+    transformationParts.join(
+      ","
+    ) +
+    "/" +
+    url.slice(
+      insertPosition
+    )
+  );
+}
+
+// 画像UX改善Phase2｜表示場所ごとに必要十分な配信幅(px、Retina考慮済みの
+// 実配信px数)。値を大きくし過ぎると転送量が増え、小さ過ぎると
+// 高解像度端末でぼやけるため、実際の表示サイズを基準に選定。
+const OPTIMIZED_IMAGE_WIDTH_CARD = 360;
+const OPTIMIZED_IMAGE_WIDTH_HERO = 520;
+const OPTIMIZED_IMAGE_WIDTH_MODAL = 1000;
+const OPTIMIZED_IMAGE_WIDTH_REGION_RECOMMENDATION = 700;
+const OPTIMIZED_IMAGE_WIDTH_FAVORITE_LIST = 400;
+
+// 画像UX改善Phase2｜画像URLが壊れている場合に、壊れた画像アイコンを
+// そのまま見せないための共通フォールバック。既存の壊れ方に応じた
+// 個別fallbackが無かったため、ニュートラルなプレースホルダー画像
+// (外部通信を伴わないdata URI)へ差し替えるだけの安全な処理にする。
+const BROKEN_IMAGE_PLACEHOLDER_DATA_URL =
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240">' +
+      '<rect width="240" height="240" fill="#e9f1f5"/>' +
+      '<text x="120" y="136" font-size="64" text-anchor="middle" fill="#0788c9" font-family="sans-serif">🌺</text>' +
+    "</svg>"
+  );
+
+function handleBrokenImage(
+  imageElement
+) {
+  if (!imageElement) {
+    return;
+  }
+
+  imageElement.onerror =
+    null;
+
+  imageElement.src =
+    BROKEN_IMAGE_PLACEHOLDER_DATA_URL;
+}
+
 function getSafeImageUrl(
   value
 ) {
@@ -1399,7 +1514,8 @@ function getSubmissionImageUrls(
 }
 
 function getCardVisualHtml(
-  shop
+  shop,
+  isAboveFold
 ) {
   const firstImageUrl =
     shop.imageUrls &&
@@ -1417,10 +1533,21 @@ function getCardVisualHtml(
     `;
   }
 
+  // 画像UX改善Phase2｜above-the-fold(初期表示で見える先頭カード)だけ
+  // eager+fetchpriority=highにし、残りは既存通りlazyのまま
+  // (全カードをeagerにすると逆に初期表示が遅くなるため使い過ぎない)。
+  const loadingAttributeHtml =
+    isAboveFold
+      ? 'loading="eager" fetchpriority="high"'
+      : 'loading="lazy"';
+
   return `
     <img
       src="${escapeHtml(
-        firstImageUrl
+        buildOptimizedImageUrl(
+          firstImageUrl,
+          { width: OPTIMIZED_IMAGE_WIDTH_CARD }
+        )
       )}"
       alt="${getMachinauTranslation(
         "shop_image_alt",
@@ -1429,7 +1556,8 @@ function getCardVisualHtml(
         "{SHOP_NAME}",
         escapeHtml(shop.name)
       )}"
-      loading="lazy"
+      ${loadingAttributeHtml}
+      onerror="handleBrokenImage(this)"
       style="
         position: absolute;
         inset: 0;
@@ -2070,11 +2198,21 @@ function updateHeroPhoto() {
   }
 
   const photoUrl =
-    candidate.imageUrls[0];
+    buildOptimizedImageUrl(
+      candidate.imageUrls[0],
+      { width: OPTIMIZED_IMAGE_WIDTH_HERO }
+    );
 
   if (heroPhotoImage.src !== photoUrl) {
     heroPhotoImage.src = photoUrl;
   }
+
+  heroPhotoImage.onerror =
+    function() {
+      handleBrokenImage(
+        heroPhotoImage
+      );
+    };
 
   heroPhotoImage.alt =
     getMachinauTranslation(
@@ -2468,10 +2606,10 @@ function renderShops() {
     return;
   }
 
-  shopsList.innerHTML =
+  const shopCardsHtml =
     topShopCardCandidates
       .map(
-        function(shop) {
+        function(shop, shopCardIndex) {
           const isFavorite =
             favoriteShopIds.has(
               shop.firestoreId
@@ -2552,6 +2690,9 @@ function renderShops() {
                   ? "admin-post-card"
                   : ""
               }"
+              data-shop-id="${escapeHtml(
+                shop.firestoreId
+              )}"
               onclick="
                 if (
                   event.target.closest(
@@ -2619,7 +2760,8 @@ function renderShops() {
                 </div>
 
                 ${getCardVisualHtml(
-                  shop
+                  shop,
+                  shopCardIndex < 2
                 )}
 
               </div>
@@ -2850,7 +2992,123 @@ function renderShops() {
         }
       )
       .join("");
+
+  // 画像UX改善Phase2｜カテゴリー切替・お気に入り切替・60秒ごとの
+  // 期限表示更新タイマー(startExpiryDisplayRefreshTimer)等、renderShops()は
+  // 高頻度に呼ばれるが、その都度shopsList.innerHTMLを丸ごと作り直すと、
+  // 内容が変わっていない店舗カードの<img>まで毎回作り直され、
+  // 同じ写真が一瞬ちらつく原因になる。内容(HTML)が前回と一致する
+  // カードはDOMノードをそのまま使い回すことで、無駄な再描画を減らす
+  // (GPS取得直後の距離順並び替えは、GPS成功時のコールバック側で
+  // 別途「並び替え中」の遷移を挟んでおり、そちらで対応済み)。
+  renderShopCardsHtmlIntoList(
+    shopsList,
+    shopCardsHtml
+  );
 }
+
+// renderShops()専用。data-shop-id属性を持つ新しいHTML文字列を、
+// 前回描画時と内容が一致するカードは既存DOMノードを再利用しながら
+// 反映する。data-shop-id属性が無いノードは常に新規ノードを使う
+// (フォールバック、既存の描画結果を壊さない)。
+let lastRenderedShopCardHtmlById =
+  new Map();
+
+function renderShopCardsHtmlIntoList(
+  container,
+  cardsHtml
+) {
+  const temporaryContainer =
+    document.createElement(
+      "div"
+    );
+
+  temporaryContainer.innerHTML =
+    cardsHtml;
+
+  const existingNodesByShopId =
+    new Map();
+
+  Array.prototype.forEach.call(
+    container.children,
+    function(existingNode) {
+      const shopId =
+        existingNode.getAttribute &&
+        existingNode.getAttribute(
+          "data-shop-id"
+        );
+
+      if (shopId) {
+        existingNodesByShopId.set(
+          shopId,
+          existingNode
+        );
+      }
+    }
+  );
+
+  const fragment =
+    document.createDocumentFragment();
+
+  const nextRenderedHtmlById =
+    new Map();
+
+  Array.prototype.forEach.call(
+    temporaryContainer.children,
+    function(newNode) {
+      const shopId =
+        newNode.getAttribute(
+          "data-shop-id"
+        );
+
+      const newNodeHtml =
+        newNode.outerHTML;
+
+      if (shopId) {
+        nextRenderedHtmlById.set(
+          shopId,
+          newNodeHtml
+        );
+      }
+
+      const existingNode =
+        shopId
+          ? existingNodesByShopId.get(
+              shopId
+            )
+          : null;
+
+      const previousNodeHtml =
+        shopId
+          ? lastRenderedShopCardHtmlById.get(
+              shopId
+            )
+          : null;
+
+      if (
+        existingNode &&
+        previousNodeHtml ===
+          newNodeHtml
+      ) {
+        fragment.appendChild(
+          existingNode
+        );
+      } else {
+        fragment.appendChild(
+          newNode
+        );
+      }
+    }
+  );
+
+  container.replaceChildren(
+    fragment
+  );
+
+  lastRenderedShopCardHtmlById =
+    nextRenderedHtmlById;
+}
+
 function renderFavoriteList() {
   const favoriteList =
     document.getElementById("favoriteList");
@@ -2890,7 +3148,12 @@ function renderFavoriteList() {
         const visualHtml = firstImageUrl
           ? `
             <img
-              src="${escapeHtml(firstImageUrl)}"
+              src="${escapeHtml(
+                buildOptimizedImageUrl(
+                  firstImageUrl,
+                  { width: OPTIMIZED_IMAGE_WIDTH_FAVORITE_LIST }
+                )
+              )}"
               alt="${getMachinauTranslation(
                 "shop_image_alt",
                 getCurrentMachinauLanguage()
@@ -2899,6 +3162,7 @@ function renderFavoriteList() {
                 escapeHtml(shop.name)
               )}"
               loading="lazy"
+              onerror="handleBrokenImage(this)"
               style="
                 width: 100%;
                 height: 100%;
@@ -3237,8 +3501,18 @@ function createModalSlider() {
   image.style.display =
     "block";
 
+  // 画像UX改善Phase2｜詳細モーダルは「写真全体を見る」ことを優先するため
+  // coverからcontainへ変更(.modal-visualの背景色#e9f1f5が余白として
+  // 自然に見える。CSS側の高さもmin(58vh,440px)へ拡張済み)。
   image.style.objectFit =
-    "cover";
+    "contain";
+
+  image.onerror =
+    function() {
+      handleBrokenImage(
+        image
+      );
+    };
 
   image.style.userSelect =
     "none";
@@ -3531,6 +3805,51 @@ function createModalSlider() {
   updateModalSliderDisplay();
 }
 
+// 画像UX改善Phase2｜次画像/前画像への切替を速くするため、現在表示中の
+// 1枚に加えて隣接する最大2枚(次・前)だけをブラウザキャッシュへ
+// 先読みする。全件一括プリロードは通信量を無駄に増やすため行わない。
+// buildOptimizedImageUrl()で生成するURLは実際に<img>へ設定するURLと
+// 完全に一致させ、キャッシュヒットするようにする。
+function preloadAdjacentModalImages(
+  centerIndex
+) {
+  const imageCount =
+    currentModalImages.length;
+
+  if (imageCount <= 1) {
+    return;
+  }
+
+  const relativeOffsetsToPreload =
+    [1, -1];
+
+  relativeOffsetsToPreload.forEach(
+    function(offset) {
+      const preloadIndex =
+        (
+          centerIndex +
+          offset +
+          imageCount
+        ) %
+        imageCount;
+
+      const preloadUrl =
+        buildOptimizedImageUrl(
+          currentModalImages[
+            preloadIndex
+          ],
+          { width: OPTIMIZED_IMAGE_WIDTH_MODAL }
+        );
+
+      const preloadImage =
+        new Image();
+
+      preloadImage.src =
+        preloadUrl;
+    }
+  );
+}
+
 function updateModalSliderDisplay() {
   const image =
     document.getElementById(
@@ -3556,9 +3875,16 @@ function updateModalSliderDisplay() {
   }
 
   image.src =
-    currentModalImages[
-      currentModalImageIndex
-    ];
+    buildOptimizedImageUrl(
+      currentModalImages[
+        currentModalImageIndex
+      ],
+      { width: OPTIMIZED_IMAGE_WIDTH_MODAL }
+    );
+
+  preloadAdjacentModalImages(
+    currentModalImageIndex
+  );
 
   if (counter) {
     counter.textContent =
@@ -3665,11 +3991,9 @@ function showModalSlide(
           -35 +
         "px)";
 
-      image.src =
-        currentModalImages[
-          currentModalImageIndex
-        ];
-
+      // 画像UX改善Phase2｜image.srcの設定はupdateModalSliderDisplay()側
+      // (最適化URL生成・プリロードと同じ場所)に一本化し、ここでの
+      // 未最適化URLへの二重代入(無駄な読み込み)をなくす。
       updateModalSliderDisplay();
 
       window.requestAnimationFrame(
@@ -7368,12 +7692,6 @@ function getLocation() {
 
         resetLocationPermissionGuide();
 
-        locationMessage.textContent =
-          getMachinauTranslation(
-            "location_message_success",
-            getCurrentMachinauLanguage()
-          );
-
         currentMapLink.href =
           createGoogleMapUrl(
             userLatitude,
@@ -7399,7 +7717,32 @@ function getLocation() {
           userLongitude
         );
 
-        renderShops();
+        // 画像UX改善Phase2｜GPS確定直後にshopsListを距離順で即時全面再描画
+        // すると、直前まで見えていた写真が別店舗の写真へ入れ替わったように
+        // 見える(距離未確定→確定で並びが変わること自体は正しい挙動)。
+        // 「並び替え中」であることを明示する短い遷移を挟むことで、
+        // 「原因不明で写真が変わった」という体験を「現在地に合わせて
+        // 更新された」という体験に変える。距離順ロジック・再描画方式
+        // 自体は変更しない(最も安全で小さい実装、という指示に基づく採用。
+        // 完了報告のOption A参照)。
+        locationMessage.textContent =
+          getMachinauTranslation(
+            "location_message_sorting",
+            getCurrentMachinauLanguage()
+          );
+
+        window.setTimeout(
+          function() {
+            renderShops();
+
+            locationMessage.textContent =
+              getMachinauTranslation(
+                "location_message_success",
+                getCurrentMachinauLanguage()
+              );
+          },
+          450
+        );
 
         machinauSuggestionGpsSessionId += 1;
 
@@ -9317,9 +9660,15 @@ function buildRegionRecommendationCardHtml(
     firstImageUrl !== ""
       ? `
         <img
-          src="${escapeHtml(firstImageUrl)}"
+          src="${escapeHtml(
+            buildOptimizedImageUrl(
+              firstImageUrl,
+              { width: OPTIMIZED_IMAGE_WIDTH_REGION_RECOMMENDATION }
+            )
+          )}"
           alt="${escapeHtml(article.title || "")}"
           loading="lazy"
+          onerror="handleBrokenImage(this)"
         >
       `
       : "";

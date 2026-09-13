@@ -1157,12 +1157,21 @@
       }
     }
 
+    /* 画像UX改善Phase2｜詳細モーダルは一覧性より「写真を見る」意思が
+       強い場所のため、固定175px+coverによる機械的な上下/左右カットをやめ、
+       高さの余裕を持たせたうえでobject-fit:contain(JS側、image.style.objectFit)
+       と組み合わせ、縦写真/横写真どちらも全体が見えるようにする。
+       背景色(#e9f1f5)は既存のcreateModalSlider()のslider背景と揃えた
+       ニュートラル色で、黒帯ではなく余白として自然に見えるようにする。 */
     .modal-visual {
-      height: 175px;
+      height: min(58vh, 440px);
+      min-height: 220px;
       display: grid;
       place-items: center;
       border-radius: 26px 26px 0 0;
       font-size: 78px;
+      background: #e9f1f5;
+      overflow: hidden;
     }
 
     .modal-content {
@@ -1305,7 +1314,9 @@
       }
 
       .hero-photo-button {
-        aspect-ratio: 16 / 6;
+        /* 画像UX改善Phase2｜16/6は横長すぎて縦写真の大部分が切れるため、
+           16/9へ緩和(スマホでのコンパクトさは維持しつつ切り過ぎを抑える)。 */
+        aspect-ratio: 16 / 9;
       }
 
       #shopsList {
@@ -1325,8 +1336,12 @@
         cursor: pointer;
       }
 
+      /* 画像UX改善Phase2｜390px時92pxは写真の意味が失われるほど低く、
+         実利用で「何の写真か分からない」問題の一因だったため引き上げる。
+         カード幅(.shop-card min-width:116px)に対して極端に巨大化せず、
+         一覧性(横スクロールでのサムネイル一覧)は維持する範囲の値。 */
       .shop-visual {
-        height: 92px;
+        height: 132px;
       }
 
       .shop-emoji {
