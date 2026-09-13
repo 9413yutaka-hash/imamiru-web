@@ -364,7 +364,7 @@
             <div class="region-field-grid">
               <div>
                 <label for="regionCountryInput">国</label>
-                <input id="regionCountryInput" type="text" maxlength="40" placeholder="例：日本" value="日本">
+                <select id="regionCountryInput"></select>
               </div>
               <div>
                 <label for="regionPrefectureInput">都道府県・州等</label>
@@ -493,6 +493,71 @@
     const saveButton = document.getElementById("saveButton");
     const cancelEditButton = document.getElementById("cancelEditButton");
     const articleList = document.getElementById("articleList");
+
+    // Ver1.8 Phase2(国識別の世界対応・仕上げ)｜api/moderate-submission.jsの
+    // ISO_3166_1_ALPHA_2_COUNTRY_CODESと同じ一覧(ISO 3166-1で現在割り当て
+    // られているコードのみ、めったに変わらない国際標準)。日本語ラベルは
+    // 手書きせず、ブラウザ標準搭載のIntl.DisplayNames(新しい依存ライブラリ
+    // 不要)で実行時に生成する。これにより<select>の値は常にコード
+    // (例:"JP")、代表が国コードを直接入力する必要はない。
+    const ISO_3166_1_ALPHA_2_COUNTRY_CODES =
+      (
+        "AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ " +
+        "BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ " +
+        "CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ " +
+        "DE DJ DK DM DO DZ " +
+        "EC EE EG EH ER ES ET " +
+        "FI FJ FK FM FO FR " +
+        "GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY " +
+        "HK HM HN HR HT HU " +
+        "ID IE IL IM IN IO IQ IR IS IT " +
+        "JE JM JO JP " +
+        "KE KG KH KI KM KN KP KR KW KY KZ " +
+        "LA LB LC LI LK LR LS LT LU LV LY " +
+        "MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ " +
+        "NA NC NE NF NG NI NL NO NP NR NU NZ " +
+        "OM " +
+        "PA PE PF PG PH PK PL PM PN PR PS PT PW PY " +
+        "QA " +
+        "RE RO RS RU RW " +
+        "SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ " +
+        "TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ " +
+        "UA UG UM US UY UZ " +
+        "VA VC VE VG VI VN VU " +
+        "WF WS " +
+        "YE YT " +
+        "ZA ZM ZW"
+      ).split(" ");
+
+    function getCountryDisplayLabel(code) {
+      try {
+        const displayNames = new Intl.DisplayNames(["ja"], { type: "region" });
+        const label = displayNames.of(code);
+        return typeof label === "string" && label !== "" ? label : code;
+      } catch (error) {
+        return code;
+      }
+    }
+
+    function populateRegionCountrySelect() {
+      const countryOptions = ISO_3166_1_ALPHA_2_COUNTRY_CODES
+        .map(function(code) {
+          return { code: code, label: getCountryDisplayLabel(code) };
+        })
+        .sort(function(a, b) {
+          return a.label.localeCompare(b.label, "ja");
+        });
+
+      regionCountryInput.innerHTML =
+        '<option value="">未設定</option>' +
+        countryOptions
+          .map(function(option) {
+            return '<option value="' + option.code + '">' + option.label + '</option>';
+          })
+          .join("");
+    }
+
+    populateRegionCountrySelect();
 
     // post.html・admin-region-picks.htmlと同じCloudinary設定(signed upload)。
     // 新しい画像サービスは追加せず、既存のmode:"cloudinarySignature"を
@@ -706,7 +771,7 @@
 
       titleInput.value = "";
       categoryInput.value = "";
-      regionCountryInput.value = "日本";
+      regionCountryInput.value = "JP";
       regionPrefectureInput.value = "";
       regionCityInput.value = "";
       regionAreaInput.value = "";

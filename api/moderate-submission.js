@@ -374,94 +374,61 @@ const COLUMN_REGION_FIELD_MAX_LENGTHS =
     area: 40
   };
 
-// countryは表示名の揺れ(「日本」「Japan」等、閲覧者のGoogle Geocoder
-// ロケールにより変わりうる)に依存させず、ISO 3166-1 alpha-2の国コードを
-// 正本として保存・照合する。管理画面では代表が普段どおり国名を日本語で
-// 入力できるようにし、保存時にこの対応表でコードへ正規化する
-// (代表にコードを覚えさせない)。閲覧者側の現在地判定
-// (resolveLocationHierarchyFromCoordinates()、app.js)は、Google
-// Geocoderのcountryコンポーネントのshort_name(常にコードで返る、
-// ロケール非依存)をそのまま使うため、双方が同じコードで一致判定できる。
-// 対応表に無い国名を入力した場合は、正規化を諦めて入力値をそのまま
-// 保存する(保存自体は失敗させない。ただしその場合、閲覧者側のコードとは
-// 一致しづらくなる=country単位のマッチングだけ効かなくなる、という
-// 既知の制限として残す。将来この対応表を増やすだけで拡張できる)。
-const COUNTRY_NAME_TO_ISO_CODE =
-  {
-    "日本": "JP",
-    "japan": "JP",
-    "フランス": "FR",
-    "france": "FR",
-    "台湾": "TW",
-    "taiwan": "TW",
-    "タイ": "TH",
-    "thailand": "TH",
-    "アメリカ": "US",
-    "アメリカ合衆国": "US",
-    "america": "US",
-    "usa": "US",
-    "united states": "US"
-  };
+// Ver1.8 Phase2(国識別の世界対応・仕上げ)｜countryは表示名の揺れ(「日本」
+// 「Japan」等、入力言語や閲覧者のGoogle Geocoderロケールにより変わりうる)
+// を一切許さず、ISO 3166-1 alpha-2の国コードのみを正本として保存する。
+// 「JP/France/日本/フランスが混在する」状態を防ぐため、コードを覚えて
+// もらう代わりに、admin-column.html・column-list.htmlの国欄を自由記述の
+// テキストから<select>(値=コード、表示=国名)へ変更し、代表・利用者とも
+// コードを直接入力する必要が無い設計にした(手書きの国名変換表を増やす
+// アプローチは採らない)。
+//
+// 保持するのは「ISO 3166-1で現在割り当てられているalpha-2コードの一覧」
+// という、めったに変わらない国際標準の一覧だけ(新規発行・廃止は極めて
+// まれ)。表示用の国名(日本語ラベル)は一切手書きせず、Node.js/ブラウザ
+// 標準搭載のIntl.DisplayNames(新しい外部API・依存ライブラリを追加せず、
+// ECMAScript国際化APIの標準機能)で実行時に生成する。これにより、
+// 世界中どの国コードを追加しても翻訳表のメンテナンスが発生しない。
+const ISO_3166_1_ALPHA_2_COUNTRY_CODES =
+  (
+    "AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ " +
+    "BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ " +
+    "CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ " +
+    "DE DJ DK DM DO DZ " +
+    "EC EE EG EH ER ES ET " +
+    "FI FJ FK FM FO FR " +
+    "GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY " +
+    "HK HM HN HR HT HU " +
+    "ID IE IL IM IN IO IQ IR IS IT " +
+    "JE JM JO JP " +
+    "KE KG KH KI KM KN KP KR KW KY KZ " +
+    "LA LB LC LI LK LR LS LT LU LV LY " +
+    "MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ " +
+    "NA NC NE NF NG NI NL NO NP NR NU NZ " +
+    "OM " +
+    "PA PE PF PG PH PK PL PM PN PR PS PT PW PY " +
+    "QA " +
+    "RE RO RS RU RW " +
+    "SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ " +
+    "TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ " +
+    "UA UG UM US UY UZ " +
+    "VA VC VE VG VI VN VU " +
+    "WF WS " +
+    "YE YT " +
+    "ZA ZM ZW"
+  ).split(" ");
 
-const ISO_CODE_TO_COUNTRY_LABEL =
-  {
-    JP: "日本",
-    FR: "フランス",
-    TW: "台湾",
-    TH: "タイ",
-    US: "アメリカ"
-  };
+const ISO_3166_1_ALPHA_2_COUNTRY_CODE_SET =
+  new Set(
+    ISO_3166_1_ALPHA_2_COUNTRY_CODES
+  );
 
-function normalizeCountryInputToCode(
-  rawValue
-) {
-  const trimmedValue =
-    String(
-      rawValue || ""
-    )
-      .trim();
+let cachedJapaneseCountryDisplayNames =
+  null;
 
-  if (trimmedValue === "") {
-    return "";
-  }
-
-  const lookupKey =
-    trimmedValue.toLowerCase();
-
-  if (
-    COUNTRY_NAME_TO_ISO_CODE[
-      trimmedValue
-    ]
-  ) {
-    return COUNTRY_NAME_TO_ISO_CODE[
-      trimmedValue
-    ];
-  }
-
-  if (
-    COUNTRY_NAME_TO_ISO_CODE[
-      lookupKey
-    ]
-  ) {
-    return COUNTRY_NAME_TO_ISO_CODE[
-      lookupKey
-    ];
-  }
-
-  // 対応表に無い場合、既にISOコード(例:"FR")っぽい2文字英字ならそのまま
-  // 大文字化して使う(閲覧者側のshort_nameと一致しうる)。それ以外は
-  // 入力値をそのまま保存する(保存は失敗させない、既知の制限として残す)。
-  if (
-    /^[A-Za-z]{2}$/.test(
-      trimmedValue
-    )
-  ) {
-    return trimmedValue.toUpperCase();
-  }
-
-  return trimmedValue;
-}
-
+// Intl.DisplayNamesは環境によって未実装の可能性がある(Vercelの
+// Node.jsランタイムでは通常利用可能)。使えない場合はコードをそのまま
+// 表示にフォールバックし、機能停止にはしない。
 function getCountryDisplayLabel(
   countryCode
 ) {
@@ -472,12 +439,65 @@ function getCountryDisplayLabel(
     return "";
   }
 
-  return (
-    ISO_CODE_TO_COUNTRY_LABEL[
-      countryCode.toUpperCase()
-    ] ||
-    countryCode
-  );
+  const normalizedCode =
+    countryCode.toUpperCase();
+
+  try {
+    if (!cachedJapaneseCountryDisplayNames) {
+      cachedJapaneseCountryDisplayNames =
+        new Intl.DisplayNames(
+          ["ja"],
+          {
+            type: "region"
+          }
+        );
+    }
+
+    const label =
+      cachedJapaneseCountryDisplayNames.of(
+        normalizedCode
+      );
+
+    return (
+      typeof label === "string" &&
+      label !== ""
+        ? label
+        : normalizedCode
+    );
+  } catch (error) {
+    return normalizedCode;
+  }
+}
+
+// 新規保存時はISO 3166-1 alpha-2コードのみを正本として受け付ける
+// (JP/France/日本/フランス等の混在を防ぐ)。admin-column.htmlが
+// <select>(値=コード)へ変更されたため、通常はここで弾かれることは
+// ないが、API直叩き等の想定外入力に備えて厳密に検証する。
+function validateColumnRegionCountryCode(
+  rawValue
+) {
+  const trimmedValue =
+    String(
+      rawValue || ""
+    )
+      .trim()
+      .toUpperCase();
+
+  if (trimmedValue === "") {
+    return "";
+  }
+
+  if (
+    !ISO_3166_1_ALPHA_2_COUNTRY_CODE_SET.has(
+      trimmedValue
+    )
+  ) {
+    throw new Error(
+      "国の指定が正しくありません。選択肢から選び直してください。"
+    );
+  }
+
+  return trimmedValue;
 }
 
 const COLUMN_ARTICLE_PAGE_SHARED_CACHE_MAX_AGE_SECONDS =
@@ -3935,9 +3955,10 @@ function validateColumnArticleFields(
   // Ver1.8 Phase2(地域連動基盤)｜country/prefecture/city/areaはすべて任意。
   // 市区町村だけを必須単位にせず、記事ごとに粒度を選べるようにする
   // (「沖縄の雨」はcountry+prefectureのみ、「日本のお正月」はcountryのみ、
-  // 等)。countryはnormalizeCountryInputToCode()でISOコードへ正規化する。
+  // 等)。countryはISO 3166-1 alpha-2コードのみを正本として受け付ける
+  // (validateColumnRegionCountryCode()、不正な値はエラーで弾く)。
   const regionCountry =
-    normalizeCountryInputToCode(
+    validateColumnRegionCountryCode(
       requestBody.regionCountry
     );
 
@@ -4574,12 +4595,13 @@ async function handleAdminGetColumnArticleRequest(
             ? data.content
             : "",
 
+        // 編集フォームの<select>へそのまま値をセットするため、表示用
+        // ラベルへ変換せずISOコードのまま返す(admin-column.html側で
+        // Intl.DisplayNamesを使い、コードから選択肢を組み立てる)。
         regionCountry:
-          getCountryDisplayLabel(
-            typeof data.regionCountry === "string"
-              ? data.regionCountry
-              : ""
-          ),
+          typeof data.regionCountry === "string"
+            ? data.regionCountry
+            : "",
 
         regionPrefecture:
           typeof data.regionPrefecture === "string"
