@@ -9958,6 +9958,16 @@ async function showRegionRecommendationsForArea(
       );
   }
 
+  // 街の情報基盤 Phase1｜街を見るAI由来の「今」は、既に読み込み済みの
+  // shops配列から同期的に取り出せるため、Firestore取得(下のtry節)の
+  // 成否とは independent に先に計算しておく。regionRecommendationsの
+  // 取得が失敗した場合でも、この「今」の情報だけは表示できるようにする
+  // (既存機能を壊さない・段階的縮退の原則)。
+  const aiAreaInformation =
+    selectActiveAiAreaInformation(
+      areaName
+    );
+
   try {
     const querySnapshot =
       await window.machinauDb
@@ -9975,7 +9985,7 @@ async function showRegionRecommendationsForArea(
         .orderBy("sortOrder")
         .get();
 
-    regionRecommendationArticles =
+    const legacyArticles =
       querySnapshot.docs.map(
         function(documentSnapshot) {
           // Ver1.8 Phase1｜AIコンシェルジュが実データへ戻れるよう、
@@ -9989,6 +9999,54 @@ async function showRegionRecommendationsForArea(
         }
       );
 
+    // 街の情報基盤 Phase1｜同じ情報がregionRecommendations(人間が書いた
+    // 中長期情報)とAI由来submissionsの両方にある場合の重複表示を避ける。
+    // 複雑な判定はせず、websiteUrl完全一致(既存のgetSafeWebsiteUrl()で
+    // 正規化済みの値同士の比較)のみで判定する。URLが無い記事同士は
+    // 重複判定の対象にしない(誤って別々の情報を同一視しないため)。
+    const legacyWebsiteUrls =
+      new Set(
+        legacyArticles
+          .map(
+            function(article) {
+              return getSafeWebsiteUrl(
+                article.websiteUrl
+              );
+            }
+          )
+          .filter(
+            function(safeUrl) {
+              return safeUrl !== "";
+            }
+          )
+      );
+
+    const dedupedAiAreaInformation =
+      aiAreaInformation.filter(
+        function(article) {
+          const safeUrl =
+            getSafeWebsiteUrl(
+              article.websiteUrl
+            );
+
+          return (
+            safeUrl === "" ||
+            !legacyWebsiteUrls.has(
+              safeUrl
+            )
+          );
+        }
+      );
+
+    // 「街の今」(AI由来、安全・交通等を優先した並び)を先に、
+    // 「中長期の地域情報」(regionRecommendations、既存のsortOrder順)を
+    // 後に並べる。ユーザーからはひとつの「今知っておくといいこと」の
+    // 一覧として見える(データ源の違いをUI上で分けない)。
+    regionRecommendationArticles =
+      dedupedAiAreaInformation.concat(
+        legacyArticles
+      );
+
     renderRegionRecommendationCards();
   } catch (error) {
     console.error(
@@ -9996,11 +10054,105 @@ async function showRegionRecommendationsForArea(
       error
     );
 
+    // regionRecommendationsの取得だけが失敗した場合でも、既に計算済みの
+    // AI由来の「今」があればそれだけは表示する(空配列に戻して消さない)。
     regionRecommendationArticles =
-      [];
+      aiAreaInformation;
 
     renderRegionRecommendationCards();
   }
+}
+
+
+// 街の情報基盤 Phase1｜街を見るAIが収集し、現在も有効(status:"approved"
+// かつexpiresAt>now、既存のloadApprovedSubmissions()が取得する時点で
+// この条件を満たすものしかshopsに入らない)と判定されているAI由来の
+// 地域情報を、指定エリアぶんだけ取り出す。新しいFirestoreクエリ・
+// 新しいFunctionは使わず、既に読み込み済みのshops配列をJavaScript側で
+// 絞り込むだけ。将来マチナウAI自身が「(area)の今を見て」という形で
+// 再利用できるよう、UI専用の使い捨て処理にせず独立した関数にする
+// (関数名・置き場所は既存のselect...ForAiConcierge()系の命名・構成に合わせた)。
+//
+// 対象は「街を見るAIが自動収集・自動投稿した情報」のみ(postType:"admin"
+// かつauthorType:"ai")。一般の店舗投稿・街の声はここには混ぜない
+// (本部指示により今回は対象外、将来別途統合)。
+//
+// 並び順は、⚡「今知っておきたいこと」で既に使われている
+// matchesAiConciergeImportantKeywords()(安全・ライフライン・交通・休業等の
+// キーワード判定)をそのまま再利用し、安全・交通等に関わる情報を先に、
+// それ以外は新しい順に並べる。同じキーワード判定ロジックを複製しない。
+function selectActiveAiAreaInformation(
+  areaName
+) {
+  if (
+    typeof areaName !== "string" ||
+    areaName === ""
+  ) {
+    return [];
+  }
+
+  return shops
+    .filter(
+      function(shop) {
+        return (
+          shop.postType === "admin" &&
+          shop.authorType === "ai" &&
+          shop.area === areaName
+        );
+      }
+    )
+    .sort(
+      function(firstShop, secondShop) {
+        const firstIsImportant =
+          matchesAiConciergeImportantKeywords(
+            firstShop
+          );
+
+        const secondIsImportant =
+          matchesAiConciergeImportantKeywords(
+            secondShop
+          );
+
+        if (
+          firstIsImportant !==
+          secondIsImportant
+        ) {
+          return firstIsImportant
+            ? -1
+            : 1;
+        }
+
+        return (
+          getDateValue(
+            secondShop.createdAt
+          ) -
+          getDateValue(
+            firstShop.createdAt
+          )
+        );
+      }
+    )
+    .map(
+      function(shop) {
+        // buildRegionRecommendationCardHtml()が読む項目(title/content/
+        // websiteUrl/imageUrls)だけを持つ、既存regionRecommendations記事と
+        // 同じ形のオブジェクトに変換する。regionNameは付けない(市町村名の
+        // ラベルは「他の地域を見る」の見出し自体に既に出ているため)。
+        return {
+          title:
+            shop.title,
+
+          content:
+            shop.message,
+
+          websiteUrl:
+            shop.websiteUrl,
+
+          imageUrls:
+            shop.imageUrls
+        };
+      }
+    );
 }
 
 
