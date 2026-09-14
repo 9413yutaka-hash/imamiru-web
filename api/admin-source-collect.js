@@ -5170,15 +5170,32 @@ export default async function handler(
     cronSecretHeaderValue !== "";
 
   if (isCronRequest) {
-    const expectedCronSecret =
-      process.env.AI_COLLECT_CRON_SECRET;
+    // 街を見るAI Phase1.6-C｜cron-job.org移行のため、既存のGitHub Actions用
+    // secret(AI_COLLECT_CRON_SECRET)に加えて、cron-job.org専用の
+    // AI_COLLECT_CRON_SECRET_ALTのどちらかに一致すれば認証成功とする。
+    // 比較ロジック自体(cronSecretsMatch()のtiming-safe比較)は複製せず、
+    // 候補を列挙して同じ関数へ渡すだけにする(ALT運用が不要になった際に
+    // 配列から1行削除するだけで元に戻せるようにするため)。ALT未設定
+    // (process.env.AI_COLLECT_CRON_SECRET_ALTがundefined)の場合、
+    // cronSecretsMatch()は型チェックで安全にfalseを返すため、既存の
+    // GitHub Actions(PRIMARYのみ)の動作は一切変わらない。
+    const authorizedCronSecrets =
+      [
+        process.env.AI_COLLECT_CRON_SECRET,
+        process.env.AI_COLLECT_CRON_SECRET_ALT
+      ];
 
-    if (
-      !cronSecretsMatch(
-        cronSecretHeaderValue,
-        expectedCronSecret
-      )
-    ) {
+    const isAuthorizedCronRequest =
+      authorizedCronSecrets.some(
+        function(candidateSecret) {
+          return cronSecretsMatch(
+            cronSecretHeaderValue,
+            candidateSecret
+          );
+        }
+      );
+
+    if (!isAuthorizedCronRequest) {
       return response.status(401).json({
         success: false,
         message:
