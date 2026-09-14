@@ -3433,6 +3433,32 @@ function hasInternalProcedureStrongSignal(
 }
 
 
+// 旅行者価値フィルターPhase1.5(続き)｜「臨時休園」「臨時休館」等は
+// 旅行者の行動に直接影響する施設状態情報だが、これまでどのキーワードにも
+// 一致せずrelevanceLabel=優先度低のままだった。TRAVELER_RELEVANCE_KEYWORDSと
+// 違い、同じ文章内で複数語(例:「休園」と「臨時休園」)に同時一致しても
+// 加点は1回のみ(bounded)にする。hasStrongSafetySignalには含めない
+// (「交通」と同じ理由で、行政内部除外を無効化する強シグナルにはしない)。
+// 「臨時休業」は既にTRAVELER_RELEVANCE_KEYWORDSにあるため重複させない。
+const FACILITY_STATUS_KEYWORDS = [
+  "臨時休園", "臨時休館", "休園", "休館", "施設閉鎖", "利用停止"
+];
+
+function hasFacilityStatusSignal(
+  combinedText
+) {
+  return FACILITY_STATUS_KEYWORDS.some(
+    function(keyword) {
+      return combinedText.includes(
+        keyword
+      );
+    }
+  );
+}
+
+const FACILITY_STATUS_RELEVANCE_BONUS = 1;
+
+
 const RELEVANCE_LABELS_BY_SCORE = {
   5: "最重要",
   4: "旅行者向け",
@@ -3495,10 +3521,18 @@ function computeRelevance(
       combinedText
     );
 
+  const hasFacilityStatusBoost =
+    hasFacilityStatusSignal(
+      combinedText
+    );
+
   const rawScore =
     hasInternalProcedureOverride
       ? 1
-      : 2 + boostKeywords.length - dropKeywords.length;
+      : 2 +
+        boostKeywords.length -
+        dropKeywords.length +
+        (hasFacilityStatusBoost ? FACILITY_STATUS_RELEVANCE_BONUS : 0);
 
   const relevanceScore =
     Math.min(5, Math.max(1, rawScore));
@@ -3521,6 +3555,15 @@ function computeRelevance(
     );
   }
 
+  if (
+    !hasInternalProcedureOverride &&
+    hasFacilityStatusBoost
+  ) {
+    reasonParts.push(
+      "施設状態の変化（休園・休館等）に該当するため優先度を上げました"
+    );
+  }
+
   if (dropKeywords.length > 0) {
     reasonParts.push(
       "優先度低下：" + dropKeywords.join("、")
@@ -3537,7 +3580,8 @@ function computeRelevance(
     relevanceLabel: relevanceLabel,
     relevanceReason: relevanceReason,
     relevanceBoostKeywords: boostKeywords,
-    relevanceDropKeywords: dropKeywords
+    relevanceDropKeywords: dropKeywords,
+    hasFacilityStatusSignal: hasFacilityStatusBoost
   };
 }
 
@@ -3771,6 +3815,48 @@ async function resolveEnabledSourceForAutoPost(
 }
 
 
+// articleData.publishedAtが有効な日付として解釈でき、かつ現在時刻との差が
+// maxAgeDays日を超えている場合だけtrueを返す。publishedAtが空・不正な場合は
+// 判定不能として安全側(false＝古いとはみなさない)にする。既存のEVENT以外の
+// カテゴリー鮮度判定と、Phase1.5で追加した中止・延期告知の鮮度判定
+// (本文から新しい開催日を確定できない場合)の両方から共有される。
+function isArticleTooOldByPublishedAt(
+  articleData,
+  maxAgeDays
+) {
+  const publishedAtText =
+    typeof articleData.publishedAt === "string"
+      ? articleData.publishedAt.trim()
+      : "";
+
+  if (publishedAtText === "") {
+    return false;
+  }
+
+  const publishedAtDate =
+    new Date(
+      publishedAtText
+    );
+
+  if (isNaN(publishedAtDate.getTime())) {
+    return false;
+  }
+
+  const articleAgeMilliseconds =
+    Date.now() -
+    publishedAtDate.getTime();
+
+  const freshnessMaxAgeMilliseconds =
+    maxAgeDays *
+    24 * 60 * 60 * 1000;
+
+  return (
+    articleAgeMilliseconds >
+    freshnessMaxAgeMilliseconds
+  );
+}
+
+
 async function judgeArticleForAutoPost(
   database,
   articleData
@@ -3912,6 +3998,42 @@ async function judgeArticleForAutoPost(
       }
 
       // 開催日が未来、または開催中(猶予1日以内)なので鮮度チェックを通過する。
+      // (中止・延期の告知に元の開催予定日が書かれているケースも含む。
+      // 本部指示により、この場合の未来日付は「開催の証拠」としてではなく
+      // 「その中止・延期情報が旅行者に必要な期限」として扱い、既存の
+      // 日付判定・猶予をそのまま流用する。延期後の新しい日程が本文に
+      // 書かれている場合はextractLatestExplicitDateFromTextが最新の日付
+      // (＝新日程)を拾うため、誤ってSKIPすることはない。)
+    } else if (
+      hasEventStatusChangeSignal(
+        combinedText
+      )
+    ) {
+      // 旅行者価値フィルターPhase1.5(続き)｜「中止」「延期」等の状態変化を
+      // 告知する記事で、本文から(新)開催日を確定できない場合。中止・延期の
+      // 告知そのものに旅行者価値があるため、開催日不明のEVENTのように
+      // 一律SKIPにはせず、他カテゴリーと同じ「記事公開日からの経過日数」で
+      // 鮮度を判定する(本部指示により、新しい独自の日数は設けず
+      // FRESHNESS_MAX_AGE_DAYS_BY_CATEGORY.OTHERを再利用する)。
+      const statusChangeFreshnessMaxAgeDays =
+        FRESHNESS_MAX_AGE_DAYS_BY_CATEGORY.OTHER;
+
+      if (
+        isArticleTooOldByPublishedAt(
+          articleData,
+          statusChangeFreshnessMaxAgeDays
+        )
+      ) {
+        return {
+          outcome: "SKIP",
+          reason:
+            "中止・延期等の告知から時間が経過しているため対象外です（" +
+            statusChangeFreshnessMaxAgeDays +
+            "日基準）。"
+        };
+      }
+
+      // 公開から間もない中止・延期の告知なので鮮度チェックを通過する。
     } else {
       // Ver1.8 Phase2 STEP5-A(鮮度監査③)｜開催日を本文から確定できない
       // EVENT記事を「公開から60日以内だから」という理由だけで自動公開する
@@ -3965,49 +4087,21 @@ async function judgeArticleForAutoPost(
       ];
 
     if (
-      typeof freshnessMaxAgeDays === "number"
+      typeof freshnessMaxAgeDays === "number" &&
+      isArticleTooOldByPublishedAt(
+        articleData,
+        freshnessMaxAgeDays
+      )
     ) {
-      const publishedAtText =
-        typeof articleData.publishedAt === "string"
-          ? articleData.publishedAt.trim()
-          : "";
-
-      if (publishedAtText !== "") {
-        const publishedAtDate =
-          new Date(
-            publishedAtText
-          );
-
-        const isPublishedAtValid =
-          !isNaN(
-            publishedAtDate.getTime()
-          );
-
-        if (isPublishedAtValid) {
-          const articleAgeMilliseconds =
-            Date.now() -
-            publishedAtDate.getTime();
-
-          const freshnessMaxAgeMilliseconds =
-            freshnessMaxAgeDays *
-            24 * 60 * 60 * 1000;
-
-          if (
-            articleAgeMilliseconds >
-            freshnessMaxAgeMilliseconds
-          ) {
-            return {
-              outcome: "SKIP",
-              reason:
-                "公開から時間が経過しているため対象外です（" +
-                freshnessCategory +
-                "、" +
-                freshnessMaxAgeDays +
-                "日基準）。"
-            };
-          }
-        }
-      }
+      return {
+        outcome: "SKIP",
+        reason:
+          "公開から時間が経過しているため対象外です（" +
+          freshnessCategory +
+          "、" +
+          freshnessMaxAgeDays +
+          "日基準）。"
+      };
     }
   }
 
@@ -4045,8 +4139,14 @@ const DRAFT_TITLE_SUFFIX_TEXT = "｜滞在中・渡航予定の方も確認を";
 
 const DRAFT_LIFELINE_KEYWORDS = ["節水", "断水", "停電"];
 
+// 旅行者価値フィルターPhase1.5(続き)｜裸の「交通」は「交通安全対策会議」
+// 「全国交通安全運動」「交通安全功労者表彰」等の行政内部・広報記事にも
+// 一致してしまい、hasStrongSafetySignalを誤ってtrueにしていた
+// (本部指示により削除)。実際に旅行者の移動へ影響する具体語だけを残し、
+// 「道路封鎖」「迂回」「通行規制」を安全側カバレッジとして追加する。
 const DRAFT_TRANSPORT_KEYWORDS = [
-  "交通", "通行止め", "交通規制", "欠航", "運休"
+  "通行止め", "交通規制", "欠航", "運休",
+  "道路封鎖", "迂回", "通行規制"
 ];
 
 const DRAFT_EMERGENCY_KEYWORDS = [
@@ -4054,6 +4154,28 @@ const DRAFT_EMERGENCY_KEYWORDS = [
 ];
 
 const DRAFT_EVENT_KEYWORDS = ["イベント", "祭り", "花火"];
+
+// 旅行者価値フィルターPhase1.5(続き)｜EVENT分類済みの記事の中でだけ参照する
+// 補助シグナル。「中止」等の単語単体をサイト全体の強シグナルにはせず、
+// あくまでDRAFT_EVENT_KEYWORDSに一致した文脈内でのみjudgeArticleForAutoPost()
+// から参照する(hasEventStatusChangeSignalはcomputeRelevance()やhasStrongSafetySignal
+// には一切関与しない)。
+const EVENT_STATUS_CHANGE_KEYWORDS = [
+  "開催中止", "イベント中止", "中止いたします", "中止します",
+  "延期します", "延期いたします", "順延", "荒天中止"
+];
+
+function hasEventStatusChangeSignal(
+  combinedText
+) {
+  return EVENT_STATUS_CHANGE_KEYWORDS.some(
+    function(keyword) {
+      return combinedText.includes(
+        keyword
+      );
+    }
+  );
+}
 
 const DRAFT_SIGHTSEEING_KEYWORDS = [
   "ビーチ", "海", "観光施設", "首里城", "美ら海水族館"
