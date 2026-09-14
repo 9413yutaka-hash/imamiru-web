@@ -18,6 +18,7 @@ jobs:
   collect-sources:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    if: false # cron-job.orgへ移行済みのため停止(2026-09-14)。再開する場合はこの行を削除。
 
     steps:
       - name: Collect IMPORTANT sources
