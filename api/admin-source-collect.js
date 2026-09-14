@@ -3392,6 +3392,47 @@ const INTERNAL_RELEVANCE_KEYWORDS = [
   "教育委員会", "選挙"
 ];
 
+// 旅行者価値フィルターPhase1.5｜「南城市志喜屋海浜施設指定管理者を公募します」が
+// 自動投稿を通過した実例を調査した結果、原因はTRAVELER_RELEVANCE_KEYWORDSの
+// 「海」が「海浜施設」という施設名の一部に一致し、INTERNAL_RELEVANCE_KEYWORDSの
+// 「公募」による減点をちょうど相殺していたことだった(2+1-1=2、
+// AUTO_POST_MINIMUM_RELEVANCE_SCOREの2ちょうどで自動投稿対象になっていた)。
+//
+// 単語1つの増減では「工事」「施設」等を含む安全・交通情報まで誤って
+// 落としかねないため(本部指示により単一キーワードでの記事全体除外は禁止)、
+// ここでは行政の内部手続き・事業者向け公募であることが極めて明確な
+// 複合語(単独では travelers 向け文脈にまず出てこない語)だけを対象にし、
+// 一致した場合は既存のboost/dropキーワードの点数計算を上書きして
+// 強制的に自動投稿対象外にする。安全・交通の強いシグナル
+// (hasStrongSafetySignal)がある場合は、この上書きより安全側を必ず優先する
+// (「臨時休館」等の安全情報を巻き込んで落とさないため)。
+const INTERNAL_PROCEDURE_STRONG_PHRASES = [
+  "指定管理者",
+  "公募型プロポーザル",
+  "一般競争入札",
+  "指名競争入札",
+  "入札公告",
+  "入札公示",
+  "職員採用試験",
+  "会計年度任用職員",
+  "審議会委員",
+  "委員を公募",
+  "パブリックコメント"
+];
+
+function hasInternalProcedureStrongSignal(
+  combinedText
+) {
+  return INTERNAL_PROCEDURE_STRONG_PHRASES.some(
+    function(phrase) {
+      return combinedText.includes(
+        phrase
+      );
+    }
+  );
+}
+
+
 const RELEVANCE_LABELS_BY_SCORE = {
   5: "最重要",
   4: "旅行者向け",
@@ -3443,8 +3484,21 @@ function computeRelevance(
           }
         );
 
+  // 旅行者価値フィルターPhase1.5｜行政の内部手続き・事業者向け公募が
+  // 明確な複合語に一致した場合は、boost/dropキーワードの点数計算を
+  // 無視して強制的に最低点にする(「海」等の単語一致がたまたま
+  // 減点分を相殺してしまう問題を防ぐ)。安全・交通の強いシグナルが
+  // ある場合はこの上書きを行わない(安全情報を優先するため)。
+  const hasInternalProcedureOverride =
+    !hasStrongSafetySignal &&
+    hasInternalProcedureStrongSignal(
+      combinedText
+    );
+
   const rawScore =
-    2 + boostKeywords.length - dropKeywords.length;
+    hasInternalProcedureOverride
+      ? 1
+      : 2 + boostKeywords.length - dropKeywords.length;
 
   const relevanceScore =
     Math.min(5, Math.max(1, rawScore));
@@ -3454,6 +3508,12 @@ function computeRelevance(
 
   const reasonParts =
     [];
+
+  if (hasInternalProcedureOverride) {
+    reasonParts.push(
+      "行政内部手続き・事業者向け公募に該当するため優先度を下げました"
+    );
+  }
 
   if (boostKeywords.length > 0) {
     reasonParts.push(
