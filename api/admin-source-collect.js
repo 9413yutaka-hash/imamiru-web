@@ -3459,6 +3459,107 @@ function hasFacilityStatusSignal(
 const FACILITY_STATUS_RELEVANCE_BONUS = 1;
 
 
+// 旅行者価値フィルターPhase1.6｜「台風対策会議を開催しました」のように、
+// hasStrongSafetySignal(DRAFT_EMERGENCY_KEYWORDS/DRAFT_TRANSPORT_KEYWORDS)が
+// 単なる現象名(「台風」等)だけでtrueになり、行政活動の減点を無効化してしまう
+// 問題に対応するため、「旅行者の具体的な行動変更につながる事実」だけを表す
+// hasConcreteTravelImpactSignalを新設する。既存のDRAFT_TRANSPORT_KEYWORDS
+// (交通規制・通行止め・運休・欠航・道路封鎖・迂回・通行規制)、
+// hasFacilityStatusSignal(休園・休館等)、hasEventStatusChangeSignal
+// (開催中止・延期等)をそのまま再利用し、新しい巨大なキーワード一覧は作らない。
+// hasStrongSafetySignal自体の定義・既存の用途(鮮度判定等)は一切変更しない。
+function hasConcreteTravelImpactSignal(
+  combinedText
+) {
+  return (
+    DRAFT_TRANSPORT_KEYWORDS.some(
+      function(keyword) {
+        return combinedText.includes(
+          keyword
+        );
+      }
+    ) ||
+    hasFacilityStatusSignal(
+      combinedText
+    ) ||
+    hasEventStatusChangeSignal(
+      combinedText
+    )
+  );
+}
+
+// 旅行者価値フィルターPhase1.6(続き)｜DRAFT_EMERGENCY_KEYWORDSのうち「台風」は
+// 「台風対策会議」のように現象名だけの言及でも一致してしまう。「避難」「警報」
+// 「津波」「大雨」「熱中症」は直接の警戒情報・行動指示に使われる語であるため、
+// 「台風」だけを除いた既存配列のサブセットとして、行政活動保護の可否判定に
+// 限定して使う(hasStrongSafetySignal自体は変更しない。既存の鮮度判定等は
+// 引き続きDRAFT_EMERGENCY_KEYWORDS全体＝「台風」を含む定義を使う)。
+const ACTIONABLE_SAFETY_KEYWORDS =
+  DRAFT_EMERGENCY_KEYWORDS.filter(
+    function(keyword) {
+      return keyword !== "台風";
+    }
+  );
+
+function hasActionableSafetySignal(
+  combinedText
+) {
+  return ACTIONABLE_SAFETY_KEYWORDS.some(
+    function(keyword) {
+      return combinedText.includes(
+        keyword
+      );
+    }
+  );
+}
+
+// 旅行者価値フィルターPhase1.6(続き)｜「避難指示発令」のように、避難・警報等の
+// 直接的な安全指示語がTRAVELER_RELEVANCE_KEYWORDSのboost対象に入っていない
+// ためscore2(優先度低)に留まってしまう問題に対応する。hasActionableSafetySignal
+// 自体を最低スコアの保証(floor)として使い、boostKeywordsへの新規追加は行わない。
+// Math.maxによるfloorであり加算ではないため、津波警報・大雨警報・熱中症警戒
+// アラート等(TRAVELER_RELEVANCE_KEYWORDSの既存boostで既にこの値を超えている)
+// が二重に加点されることはない。
+const ACTIONABLE_SAFETY_MINIMUM_SCORE = 3;
+
+// 旅行者価値フィルターPhase1.6(続き)｜「表彰」「功労者」「表敬訪問」
+// 「計画策定」「受賞者発表」「啓発」は、正しい公式情報だが旅行者の今の行動には
+// ほぼ影響しない行政活動を示す狭い複合語。「委員会」「協議会」「審議会」
+// 「会議」等は既存のINTERNAL_RELEVANCE_KEYWORDS／INTERNAL_PROCEDURE_STRONG_PHRASES
+// で既に検出できるため重複させない(hasAdministrativeActivitySignal内で
+// 両方を合成する)。「実施します」「開催します」「報告」のような広すぎる語は、
+// 本物のイベント・告知まで巻き込むため意図的に含めない。
+const ADMINISTRATIVE_ACTIVITY_STRONG_PHRASES = [
+  "表彰", "功労者", "表敬訪問", "計画策定", "受賞者発表", "啓発"
+];
+
+function hasAdministrativeActivitySignal(
+  combinedText
+) {
+  return (
+    INTERNAL_RELEVANCE_KEYWORDS.some(
+      function(keyword) {
+        return combinedText.includes(
+          keyword
+        );
+      }
+    ) ||
+    hasInternalProcedureStrongSignal(
+      combinedText
+    ) ||
+    ADMINISTRATIVE_ACTIVITY_STRONG_PHRASES.some(
+      function(phrase) {
+        return combinedText.includes(
+          phrase
+        );
+      }
+    )
+  );
+}
+
+const ADMINISTRATIVE_ACTIVITY_RELEVANCE_PENALTY = 1;
+
+
 const RELEVANCE_LABELS_BY_SCORE = {
   5: "最重要",
   4: "旅行者向け",
@@ -3501,8 +3602,20 @@ function computeRelevance(
       }
     );
 
+  // 旅行者価値フィルターPhase1.6｜「審議会＋委員会＋臨時休館」のように、
+  // 具体的な施設状態の事実(hasConcreteTravelImpactSignal)があるにも関わらず、
+  // 行政内部キーワードが複数一致してFACILITY_STATUS_RELEVANCE_BONUS(+1)を
+  // 上回り、重要事実ごとSKIPされてしまう問題に対応するため、既存の
+  // hasStrongSafetySignalによる無効化に加えてhasConcreteTravelImpactSignalでも
+  // 無効化する(既存の無効化条件を弱める変更ではなく、条件をOR追加して
+  // 保護範囲を広げるだけなので、既存の安全記事の保護は失われない)。
+  const hasConcreteImpact =
+    hasConcreteTravelImpactSignal(
+      combinedText
+    );
+
   const dropKeywords =
-    hasStrongSafetySignal
+    (hasStrongSafetySignal || hasConcreteImpact)
       ? []
       : INTERNAL_RELEVANCE_KEYWORDS.filter(
           function(keyword) {
@@ -3515,8 +3628,9 @@ function computeRelevance(
   // 無視して強制的に最低点にする(「海」等の単語一致がたまたま
   // 減点分を相殺してしまう問題を防ぐ)。安全・交通の強いシグナルが
   // ある場合はこの上書きを行わない(安全情報を優先するため)。
+  // Phase1.6｜dropKeywordsと同じ理由でhasConcreteImpactもORで追加する。
   const hasInternalProcedureOverride =
-    !hasStrongSafetySignal &&
+    !(hasStrongSafetySignal || hasConcreteImpact) &&
     hasInternalProcedureStrongSignal(
       combinedText
     );
@@ -3526,16 +3640,46 @@ function computeRelevance(
       combinedText
     );
 
+  // 旅行者価値フィルターPhase1.6｜「台風対策会議を開催しました」のように、
+  // hasStrongSafetySignalが現象名(台風)だけでtrueになるケースを
+  // 行政活動の保護理由にしない。hasConcreteImpact(具体的旅行影響)または
+  // hasActionableSafety(避難・警報等の直接的な安全指示)のどちらかがあれば
+  // 保護し、どちらも無ければ行政活動シグナルにより減点する。
+  const hasActionableSafety =
+    hasActionableSafetySignal(
+      combinedText
+    );
+
+  const hasAdminActivity =
+    hasAdministrativeActivitySignal(
+      combinedText
+    );
+
+  const isAdministrativeActivityWithoutImpact =
+    hasAdminActivity &&
+    !hasConcreteImpact &&
+    !hasActionableSafety;
+
   const rawScore =
     hasInternalProcedureOverride
       ? 1
       : 2 +
         boostKeywords.length -
         dropKeywords.length +
-        (hasFacilityStatusBoost ? FACILITY_STATUS_RELEVANCE_BONUS : 0);
+        (hasFacilityStatusBoost ? FACILITY_STATUS_RELEVANCE_BONUS : 0) -
+        (isAdministrativeActivityWithoutImpact ? ADMINISTRATIVE_ACTIVITY_RELEVANCE_PENALTY : 0);
 
-  const relevanceScore =
+  const clampedScore =
     Math.min(5, Math.max(1, rawScore));
+
+  // 旅行者価値フィルターPhase1.6(続き)｜「避難指示」等の直接的な安全指示は、
+  // boostKeywordsの一致数に関わらず、少なくともACTIONABLE_SAFETY_MINIMUM_SCORE
+  // (要確認)以上を保証する。既にそれ以上のスコアを持つ記事(津波警報等)には
+  // 影響しない(Math.maxのため)。
+  const relevanceScore =
+    hasActionableSafety
+      ? Math.max(clampedScore, ACTIONABLE_SAFETY_MINIMUM_SCORE)
+      : clampedScore;
 
   const relevanceLabel =
     RELEVANCE_LABELS_BY_SCORE[relevanceScore];
@@ -3570,6 +3714,15 @@ function computeRelevance(
     );
   }
 
+  if (
+    !hasInternalProcedureOverride &&
+    isAdministrativeActivityWithoutImpact
+  ) {
+    reasonParts.push(
+      "具体的な旅行影響のない行政活動のため優先度を下げました"
+    );
+  }
+
   const relevanceReason =
     reasonParts.length > 0
       ? reasonParts.join(" / ")
@@ -3581,7 +3734,11 @@ function computeRelevance(
     relevanceReason: relevanceReason,
     relevanceBoostKeywords: boostKeywords,
     relevanceDropKeywords: dropKeywords,
-    hasFacilityStatusSignal: hasFacilityStatusBoost
+    hasFacilityStatusSignal: hasFacilityStatusBoost,
+    hasConcreteTravelImpactSignal: hasConcreteImpact,
+    hasActionableSafetySignal: hasActionableSafety,
+    hasAdministrativeActivitySignal: hasAdminActivity,
+    isAdministrativeActivityWithoutImpact: isAdministrativeActivityWithoutImpact
   };
 }
 
