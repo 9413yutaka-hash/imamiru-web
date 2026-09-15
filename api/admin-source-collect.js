@@ -1615,6 +1615,453 @@ async function callOpenAiFactExtraction(pageText) {
 }
 
 
+// ============================================================
+// 街を見るAI Phase1.7｜ルールベース＋限定的なOpenAI意味判定(第二審)
+// ============================================================
+// 第一審(computeRelevance/judgeArticleForAutoPost、既存ルール)が既に
+// 確定させた判定のうち、実戦テスト(48件)で誤判定が多かった「曖昧な記事」
+// だけをOpenAIへ送り、意味分類の結果を保存・限定的に最終判断へ反映する。
+// hasActionableSafetySignal(避難・警報・津波・大雨・熱中症)がある記事や、
+// 既存ルールが既に安全側で判定できている記事は、この第二審の対象にしない
+// (安全情報がOpenAIの成否に依存しないようにするため)。
+
+const AI_SECOND_OPINION_MODEL =
+  process.env.AI_SECOND_OPINION_MODEL ||
+  "gpt-4o-mini";
+
+// 街を見るAI Phase1.7｜30秒timeoutリスクの調査結果を踏まえ、5フィールドの
+// 短いJSON分類だけという用途の軽さに対して4000msは余裕を持たせすぎと判断し、
+// 3000msへ短縮する。shadow mode(下記)の間はこの呼び出しがAUTO_POST/SKIPに
+// 一切影響しないため、タイムアウトによるfallback発生率が多少上がっても
+// 安全性には影響しない。
+const AI_SECOND_OPINION_TIMEOUT_MS =
+  3000;
+
+// 街を見るAI Phase1.7｜Production投入初回は観測モード(shadow mode)とする。
+// true の間は、OpenAI第二審を実行し結果をFirestoreへ保存・ログ確認できる
+// ようにするが、AUTO_POST/SKIPの最終判定には一切反映しない
+// (finalOutcomeは常にjudgment.outcomeのまま、usedForFinalDecisionは常にfalse)。
+// 実際のAI応答精度をProductionの実記事で安全に観測した後、本部判断で
+// falseへ切り替えると、既に実装済みのevaluateSecondOpinionOverride()による
+// 最終判定反映が有効になる(このロジック自体は変更しない)。
+const AI_SECOND_OPINION_SHADOW_MODE =
+  true;
+
+// 街を見るAI Phase1.7｜「解除」「再開」等は、relevanceのスコアリングには
+// 一切使わず、この記事をOpenAIへ送るべきか(ルーティング)の判定にのみ使う
+// 狭い語彙。単語のモグラ叩き(スコア調整のためのキーワード追加)とは
+// 性質が異なる。巨大化させない。
+const AMBIGUOUS_STATUS_ROUTING_WORDS = [
+  "解除", "再開", "御礼", "終了しました", "延期決定"
+];
+
+function hasAmbiguousStatusRoutingSignal(
+  combinedText
+) {
+  return AMBIGUOUS_STATUS_ROUTING_WORDS.some(
+    function(word) {
+      return combinedText.includes(
+        word
+      );
+    }
+  );
+}
+
+
+// judgeArticleForAutoPost()が返したjudgment(SKIP・PROCEEDいずれの場合も
+// relevanceResult/freshnessCategoryを持つよう既に拡張済み)を見て、
+// この記事をOpenAI第二審へ送るべきかを判定する。判定材料が無い記事
+// (タイトル・summary・URL欠落、情報源無効化等、relevanceResult自体が
+// 存在しない早期SKIP)は対象外(=falseを安全側デフォルトにする)。
+function needsAiSecondOpinion(
+  judgment,
+  combinedText
+) {
+  const relevanceResult =
+    judgment.relevanceResult;
+
+  if (!relevanceResult) {
+    return false;
+  }
+
+  const isUnknownDateEventSkip =
+    judgment.outcome === "SKIP" &&
+    judgment.skipReasonCode === "EVENT_DATE_UNKNOWN";
+
+  const isScoreTwoUnclassified =
+    relevanceResult.relevanceScore === 2 &&
+    (
+      judgment.freshnessCategory === "OTHER" ||
+      judgment.freshnessCategory === undefined
+    );
+
+  const isAdminAndConcreteConflict =
+    relevanceResult.hasAdministrativeActivitySignal === true &&
+    relevanceResult.hasConcreteTravelImpactSignal === true;
+
+  const isAmbiguousStatusChange =
+    hasAmbiguousStatusRoutingSignal(
+      combinedText
+    ) &&
+    (
+      relevanceResult.hasConcreteTravelImpactSignal === true ||
+      relevanceResult.hasStrongSafetySignal === true
+    );
+
+  return (
+    isScoreTwoUnclassified ||
+    isAdminAndConcreteConflict ||
+    isUnknownDateEventSkip ||
+    isAmbiguousStatusChange
+  );
+}
+
+
+function buildAiSecondOpinionPrompt(
+  articleContext
+) {
+  const systemInstruction =
+    "You are a strict content classifier for a travel-information " +
+    "service covering Okinawa, Japan. You will be given metadata and a " +
+    "short summary of a news article that an automated rule-based filter " +
+    "found ambiguous. Your ONLY job is to classify it — do NOT write, " +
+    "rewrite, translate, or summarize the article. Carefully distinguish " +
+    "between: (1) a problem, restriction, or closure that is CURRENTLY " +
+    "active or in effect right now, (2) a restriction/closure/suspension " +
+    "that has already been LIFTED or RESUMED (status should be " +
+    "'resolved'), (3) a report about an event or activity that has " +
+    "ALREADY ENDED, such as a thank-you/wrap-up notice (also status " +
+    "'resolved'), (4) a purely administrative/internal government " +
+    "activity or ceremony with no concrete effect on a traveler's plans " +
+    "(isAdministrativeOnly should be true), (5) a commercial promotion " +
+    "or advertisement from a private business such as a hotel or shop " +
+    "(isCommercialPromotion should be true), and (6) genuinely useful, " +
+    "timely information that could change what a traveler visiting " +
+    "Okinawa does right now (travelerValue should be 'high'). " +
+    "IMPORTANT: the mere fact that this article was published on an " +
+    "official government or tourism-association website does NOT by " +
+    "itself make travelerValue 'high' — judge the CONTENT, not the " +
+    "source's official status. Reply with a single JSON object only, " +
+    "with exactly these keys: \"travelerValue\" (\"high\", \"medium\", " +
+    "or \"low\"), \"status\" (\"active\", \"resolved\", or \"unknown\"), " +
+    "\"isCommercialPromotion\" (boolean), \"isAdministrativeOnly\" " +
+    "(boolean), \"confidence\" (\"high\", \"medium\", or \"low\": your " +
+    "own confidence in this classification). No extra text before or " +
+    "after the JSON object.";
+
+  const userContent =
+    [
+      "title: " + articleContext.title,
+      "summary: " + articleContext.summary,
+      "sourceName: " + articleContext.sourceName,
+      "sourceType: " + articleContext.sourceType,
+      "area: " + articleContext.area,
+      "publishedAt: " + articleContext.publishedAt,
+      "freshnessCategory: " + articleContext.freshnessCategory,
+      "existingRelevanceScore: " + articleContext.relevanceScore,
+      "existingRelevanceLabel: " + articleContext.relevanceLabel
+    ].join("\n");
+
+  return {
+    systemInstruction: systemInstruction,
+    userContent: userContent
+  };
+}
+
+
+// callOpenAiFactExtraction()と同じfetchベースの呼び出し方式・エラー
+// フラグ規約(isTransient/isTimeout/isNetworkError/isHttpError/isJsonError/
+// isMissingApiKey)をそのまま踏襲する。既存関数自体には一切手を入れない。
+async function callOpenAiSecondOpinion(
+  articleContext
+) {
+  const apiKey =
+    process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    const configError =
+      new Error("OPENAI_API_KEY が設定されていません。");
+
+    configError.isMissingApiKey =
+      true;
+
+    throw configError;
+  }
+
+  const prompt =
+    buildAiSecondOpinionPrompt(
+      articleContext
+    );
+
+  const controller =
+    new AbortController();
+
+  const timeoutId =
+    setTimeout(
+      function() {
+        controller.abort();
+      },
+      AI_SECOND_OPINION_TIMEOUT_MS
+    );
+
+  let response;
+
+  try {
+    try {
+      response =
+        await fetch(
+          AI_FACT_EXTRACTION_ENDPOINT,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer " + apiKey
+            },
+
+            body: JSON.stringify({
+              model: AI_SECOND_OPINION_MODEL,
+              response_format: { type: "json_object" },
+              messages: [
+                { role: "system", content: prompt.systemInstruction },
+                { role: "user", content: prompt.userContent }
+              ]
+            }),
+
+            signal: controller.signal
+          }
+        );
+    } catch (fetchError) {
+      if (fetchError.name === "AbortError") {
+        const timeoutError =
+          new Error("AI第二審がタイムアウトしました。");
+
+        timeoutError.isTransient =
+          true;
+
+        timeoutError.isTimeout =
+          true;
+
+        throw timeoutError;
+      }
+
+      const networkError =
+        new Error("AI第二審の呼び出しに失敗しました。");
+
+      networkError.isTransient =
+        true;
+
+      networkError.isNetworkError =
+        true;
+
+      throw networkError;
+    }
+  } finally {
+    clearTimeout(
+      timeoutId
+    );
+  }
+
+  if (!response.ok) {
+    const httpError =
+      new Error(
+        "OpenAI APIがエラーを返しました。status=" + response.status
+      );
+
+    httpError.isHttpError =
+      true;
+
+    httpError.httpStatus =
+      response.status;
+
+    httpError.isTransient =
+      true;
+
+    throw httpError;
+  }
+
+  let responseData;
+
+  try {
+    responseData =
+      await response.json();
+  } catch (jsonError) {
+    const parseError =
+      new Error("OpenAI APIの応答を解析できませんでした。");
+
+    parseError.isJsonError =
+      true;
+
+    parseError.isTransient =
+      true;
+
+    throw parseError;
+  }
+
+  const messageContent =
+    responseData &&
+    Array.isArray(responseData.choices) &&
+    responseData.choices[0] &&
+    responseData.choices[0].message &&
+    typeof responseData.choices[0].message.content === "string"
+      ? responseData.choices[0].message.content
+      : "";
+
+  if (messageContent === "") {
+    const shapeError =
+      new Error("OpenAI APIの応答形式が不正です。");
+
+    shapeError.isJsonError =
+      true;
+
+    shapeError.isTransient =
+      true;
+
+    throw shapeError;
+  }
+
+  try {
+    return JSON.parse(
+      messageContent
+    );
+  } catch (contentParseError) {
+    const invalidJsonError =
+      new Error("AI第二審応答のJSON解析に失敗しました。");
+
+    invalidJsonError.isJsonError =
+      true;
+
+    invalidJsonError.isTransient =
+      true;
+
+    throw invalidJsonError;
+  }
+}
+
+
+const SECOND_OPINION_ALLOWED_TRAVELER_VALUES = ["high", "medium", "low"];
+const SECOND_OPINION_ALLOWED_STATUS_VALUES = ["active", "resolved", "unknown"];
+const SECOND_OPINION_ALLOWED_CONFIDENCE_VALUES = ["high", "medium", "low"];
+
+// AI出力をそのまま信用しない。callOpenAiFactExtraction系と同じ思想で、
+// 期待するenum値・型に厳密に一致しない場合は黙ってnullへ落とす
+// (呼び出し元はnullをAI失敗と同じ扱い＝案Aのフォールバックにする)。
+function validateSecondOpinionResult(
+  rawResult
+) {
+  if (
+    !rawResult ||
+    typeof rawResult !== "object"
+  ) {
+    return null;
+  }
+
+  const travelerValue =
+    rawResult.travelerValue;
+
+  const status =
+    rawResult.status;
+
+  const isCommercialPromotion =
+    rawResult.isCommercialPromotion;
+
+  const isAdministrativeOnly =
+    rawResult.isAdministrativeOnly;
+
+  const confidence =
+    rawResult.confidence;
+
+  if (
+    !SECOND_OPINION_ALLOWED_TRAVELER_VALUES.includes(travelerValue) ||
+    !SECOND_OPINION_ALLOWED_STATUS_VALUES.includes(status) ||
+    typeof isCommercialPromotion !== "boolean" ||
+    typeof isAdministrativeOnly !== "boolean" ||
+    !SECOND_OPINION_ALLOWED_CONFIDENCE_VALUES.includes(confidence)
+  ) {
+    return null;
+  }
+
+  return {
+    travelerValue: travelerValue,
+    status: status,
+    isCommercialPromotion: isCommercialPromotion,
+    isAdministrativeOnly: isAdministrativeOnly,
+    confidence: confidence
+  };
+}
+
+
+// 本部方針(Phase1.7)：
+// 【原則1】既存ルールで明確な重要情報(hasActionableSafetySignal＝避難・
+// 警報・津波・大雨・熱中症、およびhasConcreteTravelImpactSignal＝
+// 通行止め・交通規制・欠航・運休・道路封鎖・迂回・施設休園/休館・
+// イベント中止/延期)がある記事は、AI単独でSKIPさせない。実測(48件)で、
+// このガードをhasActionableSafetySignalだけにすると「台風対策会議の結果、
+// ○○公園を臨時休園します」のような具体的施設影響のある記事まで、AIが
+// 誤って低評価を返した場合にSKIPされてしまうことを確認したため、
+// hasConcreteTravelImpactSignalも同じ強さで保護する(このガードは
+// 呼び出し元でも二重に確認するが、この関数自体にも入れて安全側を徹底する)。
+// 【原則2】AI第二審をSKIP方向へ使えるのは、元の判定がPROCEEDで、
+// confidence==="high"の場合に限る。SKIP→PROCEEDの救済はPhase1.7では
+// 行わない(結果の保存のみ)。
+function evaluateSecondOpinionOverride(
+  judgment,
+  secondOpinionResult
+) {
+  const relevanceResult =
+    judgment.relevanceResult;
+
+  if (
+    !relevanceResult ||
+    relevanceResult.hasActionableSafetySignal === true ||
+    relevanceResult.hasConcreteTravelImpactSignal === true
+  ) {
+    return {
+      finalOutcome: judgment.outcome,
+      usedForFinalDecision: false
+    };
+  }
+
+  if (
+    judgment.outcome !== "PROCEED" ||
+    secondOpinionResult.confidence !== "high"
+  ) {
+    return {
+      finalOutcome: judgment.outcome,
+      usedForFinalDecision: false
+    };
+  }
+
+  const matchesAdministrativeOnlySkip =
+    secondOpinionResult.travelerValue === "low" &&
+    secondOpinionResult.isAdministrativeOnly === true;
+
+  const matchesCommercialPromotionSkip =
+    secondOpinionResult.travelerValue === "low" &&
+    secondOpinionResult.isCommercialPromotion === true;
+
+  const matchesResolvedLowValueSkip =
+    secondOpinionResult.travelerValue === "low" &&
+    secondOpinionResult.status === "resolved";
+
+  if (
+    matchesAdministrativeOnlySkip ||
+    matchesCommercialPromotionSkip ||
+    matchesResolvedLowValueSkip
+  ) {
+    return {
+      finalOutcome: "SKIP",
+      usedForFinalDecision: true
+    };
+  }
+
+  return {
+    finalOutcome: judgment.outcome,
+    usedForFinalDecision: false
+  };
+}
+
+
 // AI出力をそのまま信用しない。null以外の各値が、正規化済み本文中に
 // 部分文字列として実在するかを検証し、存在しない値は黙ってnullへ落とす。
 // area/source/URLはAIの出力対象に含めていないため、ここでの検証対象にもならない。
@@ -3967,6 +4414,14 @@ async function resolveEnabledSourceForAutoPost(
     sourceType:
       typeof sourceData.sourceType === "string"
         ? sourceData.sourceType.trim()
+        : "",
+
+    // 街を見るAI Phase1.7｜OpenAI第二審(callOpenAiSecondOpinion)へ実在する
+    // 情報源名を渡すために追加。sourceDataは既にこの関数内で取得済みのため、
+    // 新しいFirestore読み取りは発生しない。存在しない場合は推測せず空文字。
+    sourceName:
+      typeof sourceData.name === "string"
+        ? sourceData.name.trim()
         : ""
   };
 }
@@ -4083,6 +4538,9 @@ async function judgeArticleForAutoPost(
   const sourceType =
     sourceResolution.sourceType;
 
+  const sourceName =
+    sourceResolution.sourceName;
+
   const relevanceResult =
     computeRelevance(
       {
@@ -4100,7 +4558,11 @@ async function judgeArticleForAutoPost(
       reason:
         "旅行者関連度スコアが基準未満です（" +
         relevanceResult.relevanceScore +
-        "点）。"
+        "点）。",
+      // 街を見るAI Phase1.7｜AI第二審のルーティング判定
+      // (needsAiSecondOpinion)がscoreを参照できるようにするための追加。
+      // 既存の呼び出し元はoutcome/reasonしか読まないため無影響。
+      relevanceResult: relevanceResult
     };
   }
 
@@ -4149,6 +4611,7 @@ async function judgeArticleForAutoPost(
             explicitEventEndDate.toISOString().slice(0, 10) +
             ")が既に終了しているため対象外です。",
           skipReasonCode: "EVENT_DATE_PASSED",
+          relevanceResult: relevanceResult,
           freshnessCategory: freshnessCategory,
           explicitEventEndDate: explicitEventEndDate
         };
@@ -4186,7 +4649,9 @@ async function judgeArticleForAutoPost(
           reason:
             "中止・延期等の告知から時間が経過しているため対象外です（" +
             statusChangeFreshnessMaxAgeDays +
-            "日基準）。"
+            "日基準）。",
+          relevanceResult: relevanceResult,
+          freshnessCategory: freshnessCategory
         };
       }
 
@@ -4201,7 +4666,13 @@ async function judgeArticleForAutoPost(
       return {
         outcome: "SKIP",
         reason:
-          "開催日を本文から確定できないため、自動公開を見送りました。"
+          "開催日を本文から確定できないため、自動公開を見送りました。",
+        // 街を見るAI Phase1.7｜AI第二審ルーティング条件③
+        // (EVENT分類で開催日不明のためSKIP)が、reason文字列の部分一致に
+        // 頼らず安全に識別できるよう、EVENT_DATE_PASSEDと同じ構造化コードを付与する。
+        skipReasonCode: "EVENT_DATE_UNKNOWN",
+        relevanceResult: relevanceResult,
+        freshnessCategory: freshnessCategory
       };
     }
   } else if (
@@ -4231,6 +4702,7 @@ async function judgeArticleForAutoPost(
           explicitEventEndDate.toISOString().slice(0, 10) +
           ")が既に終了しているため対象外です。",
         skipReasonCode: "EVENT_DATE_PASSED",
+        relevanceResult: relevanceResult,
         freshnessCategory: freshnessCategory,
         explicitEventEndDate: explicitEventEndDate
       };
@@ -4257,7 +4729,9 @@ async function judgeArticleForAutoPost(
           freshnessCategory +
           "、" +
           freshnessMaxAgeDays +
-          "日基準）。"
+          "日基準）。",
+        relevanceResult: relevanceResult,
+        freshnessCategory: freshnessCategory
       };
     }
   }
@@ -4280,6 +4754,8 @@ async function judgeArticleForAutoPost(
     relevanceResult: relevanceResult,
     sourceArea: articleArea,
     sourceType: sourceType,
+    // 街を見るAI Phase1.7｜OpenAI第二審のプロンプトへ渡す実在情報として追加。
+    sourceName: sourceName,
     freshnessCategory: freshnessCategory,
     explicitEventEndDate: explicitEventEndDate
   };
@@ -5250,6 +5726,160 @@ async function attemptSummaryRescueForAutoPost(
 }
 
 
+// 街を見るAI Phase1.7｜judgeArticleForAutoPost()が確定させたjudgmentに対し、
+// 曖昧な記事だけをOpenAI第二審へ送り、最終的な採否(finalOutcome)を決める。
+// judgeArticleForAutoPost()自体は一切呼び出さない(rolling再確認等で
+// 同じ記事に何度もAIを呼ぶ構造を避けるため、この関数は
+// processDiscoveredArticleForAutoPost()から1記事につき1回だけ呼ばれる)。
+async function runAiSecondOpinionForJudgment(
+  judgment,
+  articleDataForJudgment
+) {
+  const title =
+    typeof articleDataForJudgment.title === "string"
+      ? articleDataForJudgment.title.trim()
+      : "";
+
+  const summary =
+    typeof articleDataForJudgment.summary === "string"
+      ? articleDataForJudgment.summary.trim()
+      : "";
+
+  const combinedText =
+    title + " " + summary;
+
+  if (
+    !needsAiSecondOpinion(
+      judgment,
+      combinedText
+    )
+  ) {
+    return {
+      finalOutcome: judgment.outcome,
+      secondOpinionRecord: { requested: false }
+    };
+  }
+
+  const articleContext =
+    {
+      title: title,
+      summary: summary,
+      sourceName: judgment.sourceName || "",
+      sourceType: judgment.sourceType || "",
+      area: judgment.sourceArea || "",
+
+      publishedAt:
+        typeof articleDataForJudgment.publishedAt === "string"
+          ? articleDataForJudgment.publishedAt
+          : "",
+
+      freshnessCategory: judgment.freshnessCategory || "",
+
+      relevanceScore:
+        judgment.relevanceResult
+          ? judgment.relevanceResult.relevanceScore
+          : null,
+
+      relevanceLabel:
+        judgment.relevanceResult
+          ? judgment.relevanceResult.relevanceLabel
+          : ""
+    };
+
+  let rawResult =
+    null;
+
+  let fallbackUsed =
+    false;
+
+  let errorReason =
+    "";
+
+  try {
+    rawResult =
+      await callOpenAiSecondOpinion(
+        articleContext
+      );
+  } catch (callError) {
+    // 本部方針「案A」｜OpenAI失敗(timeout/429/500/JSON不正/APIキーなし)は
+    // 既存judgmentをそのまま使用し、処理を継続する。街を見るAI全体を
+    // 止めない。エラーは既存のconsole.errorログ方式で追跡可能にする。
+    fallbackUsed =
+      true;
+
+    errorReason =
+      callError && callError.message
+        ? callError.message
+        : "AI第二審の呼び出しに失敗しました。";
+
+    console.error(
+      "AI第二審の呼び出しでエラーが発生しました：",
+      callError
+    );
+  }
+
+  let validatedResult =
+    null;
+
+  if (!fallbackUsed) {
+    validatedResult =
+      validateSecondOpinionResult(
+        rawResult
+      );
+
+    if (!validatedResult) {
+      fallbackUsed =
+        true;
+
+      errorReason =
+        "AI第二審の応答形式が不正です。";
+    }
+  }
+
+  let finalOutcome =
+    judgment.outcome;
+
+  let usedForFinalDecision =
+    false;
+
+  // 街を見るAI Phase1.7｜観測モード(shadow mode)。AI_SECOND_OPINION_SHADOW_MODEが
+  // trueの間はevaluateSecondOpinionOverride()自体を呼ばず、finalOutcomeは
+  // 常にjudgment.outcomeのまま、usedForFinalDecisionは常にfalseにする。
+  // 本部判断でfalseへ切り替えた時だけ、既存のoverrideロジック(変更なし)が
+  // 有効になる。
+  if (
+    !fallbackUsed &&
+    !AI_SECOND_OPINION_SHADOW_MODE
+  ) {
+    const overrideResult =
+      evaluateSecondOpinionOverride(
+        judgment,
+        validatedResult
+      );
+
+    finalOutcome =
+      overrideResult.finalOutcome;
+
+    usedForFinalDecision =
+      overrideResult.usedForFinalDecision;
+  }
+
+  return {
+    finalOutcome: finalOutcome,
+
+    secondOpinionRecord: {
+      requested: true,
+      result: validatedResult,
+      requestedAt: FieldValue.serverTimestamp(),
+      usedForFinalDecision: usedForFinalDecision,
+      fallbackUsed: fallbackUsed,
+      errorReason: errorReason,
+      shadowMode: AI_SECOND_OPINION_SHADOW_MODE
+    }
+  };
+}
+
+
 async function processDiscoveredArticleForAutoPost(
   database,
   articleRef,
@@ -5344,20 +5974,50 @@ async function processDiscoveredArticleForAutoPost(
     };
   }
 
-  if (judgment.outcome === "SKIP") {
+  // 街を見るAI Phase1.7｜第一審(judgment)確定後・SKIP/PROCEED分岐の前に
+  // 第二審を挟む。judgeArticleForAutoPost()自体は変更しない。
+  const secondOpinionOutcome =
+    await runAiSecondOpinionForJudgment(
+      judgment,
+      articleDataForJudgment
+    );
+
+  const finalOutcome =
+    secondOpinionOutcome.finalOutcome;
+
+  const aiSecondOpinionExtraField =
+    { aiSecondOpinion: secondOpinionOutcome.secondOpinionRecord };
+
+  if (finalOutcome === "SKIP") {
+    // 本部方針(Phase1.7)｜元がPROCEEDだった記事をAI第二審がSKIPへ
+    // 変更した場合は、その理由を明示する(judgment.reasonはPROCEED時には
+    // 存在しないため)。元から SKIP だった場合は既存のjudgment.reasonを
+    // そのまま使う(挙動不変)。
+    const skipReason =
+      judgment.outcome === "PROCEED"
+        ? "AI第二審によりSKIPと判断されました（travelerValue=" +
+          secondOpinionOutcome.secondOpinionRecord.result.travelerValue +
+          "、status=" +
+          secondOpinionOutcome.secondOpinionRecord.result.status +
+          "）。"
+        : judgment.reason;
+
     await finalizeArticleProcessing(
       database,
       articleRef,
       PROCESSING_STATUS_SKIPPED,
-      {
-        processingError:
-          judgment.reason
-      }
+      Object.assign(
+        {
+          processingError:
+            skipReason
+        },
+        aiSecondOpinionExtraField
+      )
     );
 
     return {
       outcome: "SKIPPED",
-      reason: judgment.reason
+      reason: skipReason
     };
   }
 
@@ -5384,13 +6044,16 @@ async function processDiscoveredArticleForAutoPost(
       database,
       articleRef,
       PROCESSING_STATUS_DONE,
-      {
-        processingError:
-          "",
+      Object.assign(
+        {
+          processingError:
+            "",
 
-        postedSubmissionId:
-          submissionId
-      }
+          postedSubmissionId:
+            submissionId
+        },
+        aiSecondOpinionExtraField
+      )
     );
 
     return {
