@@ -322,6 +322,52 @@ const AI_CONCIERGE_FIELD_MAX_LENGTHS =
 const AI_CONCIERGE_CURRENT_TIME_MAX_LENGTH =
   16;
 
+// 会話型マチナウAI Phase1(MVP)｜既存の単発提案(mode:"aiConcierge")とは
+// 別の会話モード(mode:"aiConciergeChat")専用の定数群。既存のAI_CONCIERGE_*
+// 定数・callOpenAiConcierge()・handleAiConciergeRequest()には一切手を
+// 入れず、既存の✨単発提案の挙動を変えない。
+//
+// 本部方針により、会話モードはChat Completions APIではなくOpenAI
+// Responses API(POST /v1/responses)を使う。モデル名は環境変数
+// AI_CONCIERGE_CHAT_MODELで切替可能にし、コードへ決め打ちしない。
+// 本部確認済みの公式仕様(2026年9月時点)に基づき、未設定時の既定値は
+// GPT-6 Astra(model ID: "gpt-6-astra"、Responses API・web_search対応)。
+// 「最高品質でMVP会話が成立するか」を最初に検証する方針のため、コスト
+// (Input $10/1M, Output $50/1M)より品質確認を優先する。将来GPT-5.6 Terra/
+// Lunaとの比較時もこの環境変数を変更するだけでよい。
+const AI_CONCIERGE_CHAT_MODEL =
+  process.env.AI_CONCIERGE_CHAT_MODEL ||
+  "gpt-6-astra";
+
+const AI_CONCIERGE_CHAT_ENDPOINT =
+  "https://api.openai.com/v1/responses";
+
+// 本部確認済みの公式仕様：GPT-6 Astraのreasoning.effortは
+// low/medium/high/xhigh/maxの5段階("none"は非対応)。旅行の雑談的な
+// 会話であり、MVP初回では過剰な推論コスト・レイテンシを避けるため
+// 最小のlowを使う(推測ではなく公式仕様の選択肢の中から選定)。
+const AI_CONCIERGE_CHAT_REASONING_EFFORT =
+  "low";
+
+// Web検索(tools:web_search)を伴うため、既存の単発提案(8000ms)より
+// 長めに確保する。ユーザーが画面で待つ経路のため、それでも上限は設ける。
+const AI_CONCIERGE_CHAT_TIMEOUT_MS =
+  20000;
+
+const AI_CONCIERGE_CHAT_MESSAGE_MAX_LENGTH =
+  300;
+
+// 「直近数ターン程度」の会話履歴に制限する(本部指示)。1往復＝ユーザー1件+
+// アシスタント1件のため、12件で直近6往復相当。無限にmessagesを増やさない。
+const AI_CONCIERGE_CHAT_MAX_HISTORY_ITEMS =
+  12;
+
+const AI_CONCIERGE_CHAT_HISTORY_TEXT_MAX_LENGTH =
+  400;
+
+const AI_CONCIERGE_CHAT_REPLY_MAX_LENGTH =
+  700;
+
 // AIコンシェルジュ Phase2｜「一文だけ」をやめ2〜4文程度を許容するため、
 // 安全上限を200→480文字へ引き上げる(4文×日本語1文あたり最大120文字
 // 程度を目安にした余裕を持たせた上限。プロンプト側の指示自体は文字数
@@ -1001,6 +1047,70 @@ function sanitizeAiConciergeCandidateList(
 }
 
 
+// 会話型マチナウAI Phase1(MVP)｜クライアントから送られてきた直近の会話
+// 履歴を検証する。role・textの型を厳密にチェックし、不正な要素は黙って
+// 除外する(既存のsanitizeAiConciergeCandidate系と同じ「信頼しない」方針)。
+// 末尾側(＝新しい方)からAI_CONCIERGE_CHAT_MAX_HISTORY_ITEMS件だけを残す
+// (クライアント側で既に制限している想定だが、サーバー側でも二重に守る)。
+function sanitizeAiConciergeChatHistory(
+  rawHistory
+) {
+  if (!Array.isArray(rawHistory)) {
+    return [];
+  }
+
+  const sanitizedHistory =
+    [];
+
+  rawHistory.forEach(
+    function(rawItem) {
+      if (
+        !rawItem ||
+        typeof rawItem !== "object"
+      ) {
+        return;
+      }
+
+      const role =
+        rawItem.role === "assistant" ||
+        rawItem.role === "user"
+          ? rawItem.role
+          : "";
+
+      const text =
+        typeof rawItem.text === "string"
+          ? rawItem.text
+              .trim()
+              .slice(0, AI_CONCIERGE_CHAT_HISTORY_TEXT_MAX_LENGTH)
+          : "";
+
+      if (
+        role === "" ||
+        text === ""
+      ) {
+        return;
+      }
+
+      sanitizedHistory.push(
+        { role: role, text: text }
+      );
+    }
+  );
+
+  if (
+    sanitizedHistory.length >
+    AI_CONCIERGE_CHAT_MAX_HISTORY_ITEMS
+  ) {
+    return sanitizedHistory.slice(
+      sanitizedHistory.length -
+        AI_CONCIERGE_CHAT_MAX_HISTORY_ITEMS
+    );
+  }
+
+  return sanitizedHistory;
+}
+
+
 function sanitizeAiConciergeWeather(
   rawWeather
 ) {
@@ -1476,6 +1586,507 @@ function isValidAiConciergeSuggestion(
   }
 
   return true;
+}
+
+
+// ============================================================
+// 会話型マチナウAI Phase1(MVP)
+// ============================================================
+// 既存の単発提案(buildAiConciergePrompt/callOpenAiConcierge/
+// handleAiConciergeRequest)には一切手を入れない。新しい会話モード専用の
+// プロンプト・呼び出し・ハンドラをここに追加するだけにとどめる。
+
+// 「街の今を見て、あなたの今を聞いて、一緒に次の行動を決めるAI」という
+// 本部方針の人格定義をそのまま指示にする。既存の単発提案プロンプトと
+// 同様、候補の事実以上を創作しないこと・factual_info(街を見るAIの
+// 確認済み一次情報)を最優先することを明記する。今回は「候補から必ず
+// 1つ選ぶ」制約を外し、候補はあくまで参考情報として扱わせる。
+function buildAiConciergeChatInstructions(
+  language
+) {
+  const languageLabel =
+    language === "en" ? "English" : "Japanese";
+
+  return (
+    "You are Machinau, a travel companion AI for people exploring Okinawa " +
+    "right now. Your role: \"see what's happening in the town right now, " +
+    "ask about the traveler's own situation, and decide the next move " +
+    "together.\" You are having an ongoing back-and-forth conversation, " +
+    "not writing a one-shot travel article. " +
+    "\n\nSTYLE: reply in " + languageLabel + ", in 2 to 5 short natural " +
+    "sentences a person can read at a glance on a phone screen. Do not " +
+    "decide everything in one turn — when genuinely useful, end with one " +
+    "short, natural question (e.g. what to eat, whether to stop somewhere, " +
+    "what time works) instead of a wall of suggestions. Be warm but " +
+    "efficient, like a knowledgeable local friend texting back, not a " +
+    "brochure. " +
+    "\n\nCONTEXT YOU RECEIVE: each user turn includes the traveler's " +
+    "message plus a JSON block of Machinau's own current data: area, " +
+    "currentTime, weather, nextHours (today's hourly forecast, in order, " +
+    "starting from now), regionalWeather (north/central/south Okinawa " +
+    "comparison), and candidates (places/posts Machinau's own systems " +
+    "already know about right now). Each candidate has a \"sourceType\": " +
+    "\"factual_info\" (safety/important real-time info such as typhoons, " +
+    "warnings, closures, transport suspensions, or schedule changes), " +
+    "\"official_today\" (official Machinau operator post), " +
+    "\"traveler_suggestion\" (curated event/sightseeing pick), " +
+    "\"region_recommendation\" (editorial regional pick), or \"shop\" (a " +
+    "regular shop/venue's own direct post). " +
+    "\n\nPRIORITY RULE: if a \"factual_info\" candidate is relevant to the " +
+    "traveler's area or plans, you MUST mention it and treat it as higher " +
+    "priority than any regular shop/sightseeing/event suggestion, even if " +
+    "another candidate seems more appealing. Never bury or skip a relevant " +
+    "closure, warning, suspension, or safety notice. Stay calm and " +
+    "factual — do not exaggerate risk. " +
+    "\n\nSHOP POSTS ARE A SEPARATE LANE: candidates with sourceType " +
+    "\"shop\" are direct posts from the shop/venue itself, not Machinau's " +
+    "own verified reporting. Whenever you mention one, make it clear to " +
+    "the traveler that it is a direct post from the shop itself (for " +
+    "example, phrase it as \"there's a post from [name] itself saying " +
+    "...\"), so the traveler understands the source. Only bring up a shop " +
+    "candidate when it is actually relevant to the conversation, " +
+    "destination, or timing — never distort your normal judgment just " +
+    "because a shop candidate exists, and never treat it as more " +
+    "authoritative than it is. " +
+    "\n\nWEB SEARCH: you have a web search tool available. Use it only " +
+    "when it would genuinely change your answer — for example confirming " +
+    "a specific shop/facility's current business hours, whether a named " +
+    "place is open today, or a detail about a specific destination the " +
+    "traveler asked about that Machinau's own data does not cover. Do NOT " +
+    "search reflexively on every turn, and never use web search to " +
+    "override or contradict Machinau's own weather or factual_info data " +
+    "given to you — those are Machinau's own authoritative, already-" +
+    "verified context and take priority over anything found via search. " +
+    "\n\nNEVER: invent a shop, place, price, business hour, or event not " +
+    "actually given to you by the candidates or by an actual web search " +
+    "result; claim to have visited a sourceUrl you were only given as a " +
+    "citation; pretend you checked something you did not actually check." +
+    "\n\nDo not output JSON or any formatting markup — reply with plain " +
+    "conversational text only."
+  );
+}
+
+
+// Responses API(POST /v1/responses)の"input"は、role付きの発話を並べた
+// 配列を受け付ける(user/assistant)。過去の発話はテキストのみ、最新の
+// ユーザー発話にだけ現在のマチナウ情報(area/weather/candidates等)を
+// JSONとして添えることで、履歴が古い天気情報等で膨らまないようにする。
+function buildAiConciergeChatInputItems(
+  payload
+) {
+  const inputItems =
+    payload.history.map(
+      function(historyItem) {
+        return {
+          role: historyItem.role,
+          content: [
+            {
+              type:
+                historyItem.role === "assistant"
+                  ? "output_text"
+                  : "input_text",
+              text: historyItem.text
+            }
+          ]
+        };
+      }
+    );
+
+  const currentContextJson =
+    JSON.stringify(
+      {
+        area: payload.area,
+        currentTime: payload.currentTime,
+        weather: payload.weather,
+        nextHours: payload.nextHours,
+        regionalWeather: payload.regionalWeather,
+        candidates: payload.candidates
+      }
+    );
+
+  inputItems.push(
+    {
+      role: "user",
+      content: [
+        {
+          type: "input_text",
+          text:
+            "【マチナウの現在情報(JSON)】\n" +
+            currentContextJson +
+            "\n\n【旅行者の発言】\n" +
+            payload.message
+        }
+      ]
+    }
+  );
+
+  return inputItems;
+}
+
+
+// callOpenAiConcierge()と同じfetchベースの呼び出し方式・エラーフラグ
+// 規約を踏襲するが、エンドポイント(Responses API)・リクエスト形状
+// (instructions/input/tools)・応答の取り出し方(output配列)が異なる。
+// Responses APIの応答は「web_search_call出力」と「message出力」等が
+// output配列に並ぶ形式のため、type:"message"の項目からoutput_textを
+// 探して取り出す(SDK専用の便宜プロパティoutput_textは生fetchでは
+// 保証されないため使わない)。
+async function callOpenAiConciergeChat(
+  payload
+) {
+  const apiKey =
+    process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    const configError =
+      new Error(
+        "OPENAI_API_KEY が設定されていません。"
+      );
+
+    configError.isMissingApiKey =
+      true;
+
+    throw configError;
+  }
+
+  const instructions =
+    buildAiConciergeChatInstructions(
+      payload.language
+    );
+
+  const inputItems =
+    buildAiConciergeChatInputItems(
+      payload
+    );
+
+  const controller =
+    new AbortController();
+
+  const timeoutId =
+    setTimeout(
+      function() {
+        controller.abort();
+      },
+      AI_CONCIERGE_CHAT_TIMEOUT_MS
+    );
+
+  let response;
+
+  try {
+    try {
+      response =
+        await fetch(
+          AI_CONCIERGE_CHAT_ENDPOINT,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer " + apiKey
+            },
+
+            body: JSON.stringify({
+              model: AI_CONCIERGE_CHAT_MODEL,
+              instructions: instructions,
+              input: inputItems,
+              tools: [{ type: "web_search" }],
+              tool_choice: "auto",
+
+              // 本部確認済みの公式仕様：GPT-6 Astra等のreasoningモデルは
+              // temperature/top_p/top_logprobsを非対応のため送らない
+              // (「APIが無視するだろう」に頼らず、そもそも含めない)。
+              reasoning: {
+                effort: AI_CONCIERGE_CHAT_REASONING_EFFORT
+              }
+            }),
+
+            signal: controller.signal
+          }
+        );
+    } catch (fetchError) {
+      if (fetchError.name === "AbortError") {
+        const timeoutError =
+          new Error("AIとの会話がタイムアウトしました。");
+
+        timeoutError.isTransient =
+          true;
+
+        timeoutError.isTimeout =
+          true;
+
+        throw timeoutError;
+      }
+
+      const networkError =
+        new Error("AIとの会話の呼び出しに失敗しました。");
+
+      networkError.isTransient =
+        true;
+
+      networkError.isNetworkError =
+        true;
+
+      throw networkError;
+    }
+  } finally {
+    clearTimeout(
+      timeoutId
+    );
+  }
+
+  if (!response.ok) {
+    const httpError =
+      new Error(
+        "OpenAI APIがエラーを返しました。status=" + response.status
+      );
+
+    httpError.isHttpError =
+      true;
+
+    httpError.httpStatus =
+      response.status;
+
+    httpError.isTransient =
+      true;
+
+    throw httpError;
+  }
+
+  let responseData;
+
+  try {
+    responseData =
+      await response.json();
+  } catch (jsonError) {
+    const parseError =
+      new Error("OpenAI APIの応答を解析できませんでした。");
+
+    parseError.isJsonError =
+      true;
+
+    parseError.isTransient =
+      true;
+
+    throw parseError;
+  }
+
+  // Responses APIのoutput配列から、type:"message"かつrole:"assistant"の
+  // 項目を探し、その中のtype:"output_text"のtextだけをつなげる。
+  // web_search_call等の他の出力項目は無視する(citations等は今回未使用)。
+  const outputItems =
+    Array.isArray(responseData.output)
+      ? responseData.output
+      : [];
+
+  const messageItem =
+    outputItems.find(
+      function(item) {
+        return (
+          item &&
+          item.type === "message" &&
+          item.role === "assistant" &&
+          Array.isArray(item.content)
+        );
+      }
+    );
+
+  const replyText =
+    messageItem
+      ? messageItem.content
+          .filter(
+            function(contentPart) {
+              return (
+                contentPart &&
+                contentPart.type === "output_text" &&
+                typeof contentPart.text === "string"
+              );
+            }
+          )
+          .map(
+            function(contentPart) {
+              return contentPart.text;
+            }
+          )
+          .join("")
+      : "";
+
+  if (replyText.trim() === "") {
+    const shapeError =
+      new Error("OpenAI APIの応答形式が不正です。");
+
+    shapeError.isJsonError =
+      true;
+
+    shapeError.isTransient =
+      true;
+
+    throw shapeError;
+  }
+
+  return replyText.trim();
+}
+
+
+// 会話型マチナウAI Phase1(MVP)｜認証はhandleAiConciergeRequest()と同じ
+// 匿名Firebase AuthenticationのBearer Token検証をそのまま再利用する。
+// 既存の✨単発提案(handleAiConciergeRequest/aiConciergeState)には一切
+// 触れない。AI呼び出し・応答検証のいずれかで失敗しても常にsuccess:false
+// のJSONを返すだけにとどめ、呼び出し元(app.js)がチャット欄だけに簡潔な
+// 再試行案内を出せるようにする(既存TOP・既存✨には影響させない)。
+async function handleAiConciergeChatRequest(
+  request,
+  response
+) {
+  try {
+    const idToken =
+      readBearerToken(
+        request
+      );
+
+    if (idToken === "") {
+      return response.status(401).json({
+        success: false,
+        message: "認証情報がありません。"
+      });
+    }
+
+    const app =
+      getFirebaseAdminApp();
+
+    try {
+      await getAuth(app)
+        .verifyIdToken(
+          idToken
+        );
+    } catch (verifyError) {
+      return response.status(401).json({
+        success: false,
+        message: "認証情報が正しくありません。"
+      });
+    }
+
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    const language =
+      requestBody.language === "en" ? "en" : "ja";
+
+    const currentTime =
+      typeof requestBody.currentTime === "string"
+        ? requestBody.currentTime
+            .trim()
+            .slice(0, AI_CONCIERGE_CURRENT_TIME_MAX_LENGTH)
+        : "";
+
+    const contextInput =
+      requestBody.context &&
+      typeof requestBody.context === "object"
+        ? requestBody.context
+        : {};
+
+    const area =
+      typeof contextInput.area === "string"
+        ? contextInput.area
+            .trim()
+            .slice(0, AI_CONCIERGE_FIELD_MAX_LENGTHS.area)
+        : "";
+
+    const weather =
+      sanitizeAiConciergeWeather(
+        contextInput.weather
+      );
+
+    const nextHours =
+      sanitizeAiConciergeNextHours(
+        contextInput.nextHours
+      );
+
+    const regionalWeather =
+      sanitizeAiConciergeRegionalWeather(
+        contextInput.regionalWeather
+      );
+
+    const candidates =
+      sanitizeAiConciergeCandidateList(
+        requestBody.candidates
+      );
+
+    const history =
+      sanitizeAiConciergeChatHistory(
+        requestBody.history
+      );
+
+    const message =
+      typeof requestBody.message === "string"
+        ? requestBody.message
+            .trim()
+            .slice(0, AI_CONCIERGE_CHAT_MESSAGE_MAX_LENGTH)
+        : "";
+
+    if (message === "") {
+      return response.status(400).json({
+        success: false,
+        message: "メッセージが指定されていません。"
+      });
+    }
+
+    console.log(
+      "[AIConciergeChat Debug] request received candidateCount=" +
+        candidates.length +
+        " historyCount=" +
+        history.length
+    );
+
+    let replyText;
+
+    try {
+      replyText =
+        await callOpenAiConciergeChat(
+          {
+            language: language,
+            currentTime: currentTime,
+            area: area,
+            weather: weather,
+            nextHours: nextHours,
+            regionalWeather: regionalWeather,
+            candidates: candidates,
+            history: history,
+            message: message
+          }
+        );
+    } catch (aiError) {
+      console.error(
+        "会話型マチナウAI呼び出しエラー：",
+        aiError
+      );
+
+      return response.status(200).json({
+        success: false,
+        message: "AIとの会話中にエラーが発生しました。"
+      });
+    }
+
+    return response.status(200).json({
+      success: true,
+      reply:
+        replyText.slice(
+          0,
+          AI_CONCIERGE_CHAT_REPLY_MAX_LENGTH
+        )
+    });
+  } catch (error) {
+    console.error(
+      "会話型マチナウAI処理エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message: "AIとの会話中にエラーが発生しました。"
+    });
+  }
 }
 
 
@@ -6028,6 +6639,17 @@ export default async function handler(
     requestBody.mode === "aiConcierge"
   ) {
     return handleAiConciergeRequest(
+      request,
+      response
+    );
+  }
+
+  // 会話型マチナウAI Phase1(MVP)｜既存のaiConciergeモードと同じ位置に
+  // 追加するだけで、既存モードのいずれにも一切触れない。
+  if (
+    requestBody.mode === "aiConciergeChat"
+  ) {
+    return handleAiConciergeChatRequest(
       request,
       response
     );

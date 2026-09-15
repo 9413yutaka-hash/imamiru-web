@@ -7093,6 +7093,443 @@ function renderAiConciergeFallbackContent(
 }
 
 
+// ============================================================
+// 会話型マチナウAI Phase1(MVP)
+// ============================================================
+// 既存の✨単発提案(aiConciergeState/updateTravelerSuggestionCard/
+// buildAiConciergeCandidatePool等)には一切手を入れない。候補プールの
+// 構築ロジックだけをそのまま再利用し、新しいチャットUI・会話状態を
+// 追加するだけにとどめる。
+
+// 最初のAIメッセージは固定UI文言(本部指示)。このためだけにAPIは呼ばない。
+const AI_CONCIERGE_CHAT_INITIAL_MESSAGE =
+  "今日はどんな予定？";
+
+// サーバー側のAI_CONCIERGE_CHAT_TIMEOUT_MS(20000ms)より長く確保する
+// (Web検索を伴うため既存の単発提案より時間がかかる想定)。
+const AI_CONCIERGE_CHAT_CLIENT_FETCH_TIMEOUT_MS =
+  25000;
+
+// 送信するhistoryの上限(サーバー側AI_CONCIERGE_CHAT_MAX_HISTORY_ITEMSと
+// 同じ考え方。直近6往復相当)。無限にmessagesを増やさない。
+const AI_CONCIERGE_CHAT_MAX_HISTORY_ITEMS_TO_SEND =
+  12;
+
+let aiConciergeChatHistory =
+  [
+    { role: "assistant", text: AI_CONCIERGE_CHAT_INITIAL_MESSAGE }
+  ];
+
+let aiConciergeChatInFlight =
+  false;
+
+function renderAiConciergeChatMessages() {
+  const messagesContainer =
+    document.getElementById(
+      "aiConciergeChatMessages"
+    );
+
+  if (!messagesContainer) {
+    return;
+  }
+
+  messagesContainer.innerHTML =
+    "";
+
+  aiConciergeChatHistory.forEach(
+    function(historyItem) {
+      const bubble =
+        document.createElement(
+          "div"
+        );
+
+      bubble.className =
+        "ai-concierge-chat-bubble " +
+        (
+          historyItem.role === "user"
+            ? "ai-concierge-chat-bubble-user"
+            : "ai-concierge-chat-bubble-assistant"
+        );
+
+      bubble.textContent =
+        historyItem.text;
+
+      if (
+        historyItem.role === "assistant" &&
+        typeof historyItem.imageUrl === "string" &&
+        historyItem.imageUrl !== ""
+      ) {
+        const image =
+          document.createElement(
+            "img"
+          );
+
+        image.className =
+          "ai-concierge-chat-bubble-image";
+
+        image.src =
+          historyItem.imageUrl;
+
+        image.alt =
+          "";
+
+        image.loading =
+          "lazy";
+
+        bubble.appendChild(
+          image
+        );
+      }
+
+      messagesContainer.appendChild(
+        bubble
+      );
+    }
+  );
+
+  messagesContainer.scrollTop =
+    messagesContainer.scrollHeight;
+}
+
+// AIの返答テキストに、候補プール中の店舗・施設名(shopName優先、無ければ
+// title)が実際に含まれているかを調べ、含まれていれば既存のshops配列
+// (resolveAiConciergeCandidateRealData()と同じ考え方)から画像を取得する。
+// AI自身には画像URLを一切渡さない(トークン節約・存在しないものを
+// AIに判断させないため)。一致が無い、または画像が無い場合はnullを返し、
+// その場合はテキストだけで正常動作する(本部指示)。
+function findAiConciergeChatReferencedImageUrl(
+  replyText,
+  candidatePool
+) {
+  if (
+    typeof replyText !== "string" ||
+    replyText === ""
+  ) {
+    return null;
+  }
+
+  for (
+    let candidateIndex = 0;
+    candidateIndex < candidatePool.length;
+    candidateIndex += 1
+  ) {
+    const candidate =
+      candidatePool[candidateIndex];
+
+    const nameToMatch =
+      (
+        candidate.shopName ||
+        candidate.title ||
+        ""
+      ).trim();
+
+    if (
+      nameToMatch === "" ||
+      candidate.id.indexOf("shop:") !== 0
+    ) {
+      continue;
+    }
+
+    if (replyText.indexOf(nameToMatch) === -1) {
+      continue;
+    }
+
+    const firestoreId =
+      candidate.id.slice(
+        "shop:".length
+      );
+
+    const matchedShop =
+      shops.find(
+        function(shop) {
+          return (
+            shop.firestoreId ===
+            firestoreId
+          );
+        }
+      );
+
+    if (
+      matchedShop &&
+      Array.isArray(matchedShop.imageUrls) &&
+      matchedShop.imageUrls.length > 0
+    ) {
+      return matchedShop.imageUrls[0];
+    }
+  }
+
+  return null;
+}
+
+function setAiConciergeChatStatus(
+  statusText
+) {
+  const statusElement =
+    document.getElementById(
+      "aiConciergeChatStatus"
+    );
+
+  if (!statusElement) {
+    return;
+  }
+
+  if (
+    typeof statusText === "string" &&
+    statusText !== ""
+  ) {
+    statusElement.textContent =
+      statusText;
+
+    statusElement.style.display =
+      "";
+  } else {
+    statusElement.textContent =
+      "";
+
+    statusElement.style.display =
+      "none";
+  }
+}
+
+// 本部方針「1ユーザーメッセージ＝原則1 Responses API call、ページ表示
+// だけでは呼ばない」を満たすため、この関数はチャット送信ボタン/フォーム
+// 送信からしか呼ばれない(DOMContentLoaded等の自動初期化からは呼ばない)。
+async function sendAiConciergeChatMessage(
+  userText
+) {
+  const trimmedUserText =
+    typeof userText === "string"
+      ? userText.trim()
+      : "";
+
+  if (
+    trimmedUserText === "" ||
+    aiConciergeChatInFlight
+  ) {
+    return;
+  }
+
+  aiConciergeChatInFlight =
+    true;
+
+  const sendButton =
+    document.getElementById(
+      "aiConciergeChatSendButton"
+    );
+
+  if (sendButton) {
+    sendButton.disabled =
+      true;
+  }
+
+  aiConciergeChatHistory.push(
+    { role: "user", text: trimmedUserText }
+  );
+
+  renderAiConciergeChatMessages();
+
+  setAiConciergeChatStatus(
+    "マチナウAIが考えています…"
+  );
+
+  // 既存の候補プール構築(buildAiConciergeCandidatePool())をそのまま
+  // 再利用する。街を見るAIの重要情報・今日のマチナウ・イベント/観光・
+  // 地域おすすめ・一般店舗投稿が既に同じ枠組みで揃っている。
+  const candidatePool =
+    buildAiConciergeCandidatePool();
+
+  const historyToSend =
+    aiConciergeChatHistory
+      .slice(0, aiConciergeChatHistory.length - 1)
+      .slice(-AI_CONCIERGE_CHAT_MAX_HISTORY_ITEMS_TO_SEND)
+      .map(
+        function(historyItem) {
+          return {
+            role: historyItem.role,
+            text: historyItem.text
+          };
+        }
+      );
+
+  const language =
+    (
+      typeof getCurrentMachinauLanguage === "function" &&
+      getCurrentMachinauLanguage() === "en"
+    )
+      ? "en"
+      : "ja";
+
+  const fetchAbortController =
+    new AbortController();
+
+  const fetchTimeoutId =
+    setTimeout(
+      function() {
+        fetchAbortController.abort();
+      },
+      AI_CONCIERGE_CHAT_CLIENT_FETCH_TIMEOUT_MS
+    );
+
+  let replyText =
+    null;
+
+  try {
+    const regionalWeather =
+      await fetchRegionalWeatherForAiConcierge();
+
+    const idToken =
+      await getAnonymousIdTokenForLocationCollection();
+
+    const response =
+      await fetch(
+        "/api/moderate-submission",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + idToken
+          },
+          signal:
+            fetchAbortController.signal,
+          body: JSON.stringify({
+            mode: "aiConciergeChat",
+            language: language,
+            currentTime: formatCurrentTimeForAiConcierge(),
+            context: {
+              area:
+                typeof userAreaName === "string"
+                  ? userAreaName
+                  : "",
+              weather: {
+                temperatureC:
+                  latestWeatherForMachinauSuggestion.temperatureC,
+                feelsLikeC:
+                  latestWeatherForMachinauSuggestion.feelsLikeC,
+                chanceOfRain:
+                  latestWeatherForMachinauSuggestion.chanceOfRain,
+                windKph:
+                  latestWeatherForMachinauSuggestion.windKph,
+                uvIndex:
+                  latestWeatherForMachinauSuggestion.uvIndex,
+                conditionText:
+                  latestWeatherForMachinauSuggestion.conditionText
+              },
+              nextHours:
+                Array.isArray(
+                  latestWeatherForMachinauSuggestion.nextHours
+                )
+                  ? latestWeatherForMachinauSuggestion.nextHours
+                  : [],
+              regionalWeather:
+                regionalWeather
+            },
+            candidates: candidatePool,
+            history: historyToSend,
+            message: trimmedUserText
+          })
+        }
+      );
+
+    const responseData =
+      await response.json();
+
+    if (
+      response.ok &&
+      responseData &&
+      responseData.success === true &&
+      typeof responseData.reply === "string" &&
+      responseData.reply.trim() !== ""
+    ) {
+      replyText =
+        responseData.reply.trim();
+    }
+  } catch (error) {
+    replyText =
+      null;
+  } finally {
+    clearTimeout(
+      fetchTimeoutId
+    );
+  }
+
+  setAiConciergeChatStatus(
+    ""
+  );
+
+  if (replyText) {
+    aiConciergeChatHistory.push(
+      {
+        role: "assistant",
+        text: replyText,
+        imageUrl:
+          findAiConciergeChatReferencedImageUrl(
+            replyText,
+            candidatePool
+          )
+      }
+    );
+  } else {
+    // 本部方針｜OpenAI失敗・Web検索失敗・レスポンス異常等でも、既存TOP・
+    // 既存✨(aiConciergeState)には一切触れない。チャット欄だけに簡潔な
+    // 再試行案内を表示する。
+    aiConciergeChatHistory.push(
+      {
+        role: "assistant",
+        text: "ごめんね、うまく答えられなかったみたい。もう一度送ってみて。"
+      }
+    );
+  }
+
+  renderAiConciergeChatMessages();
+
+  aiConciergeChatInFlight =
+    false;
+
+  if (sendButton) {
+    sendButton.disabled =
+      false;
+  }
+}
+
+function initializeAiConciergeChat() {
+  const chatForm =
+    document.getElementById(
+      "aiConciergeChatForm"
+    );
+
+  const chatInput =
+    document.getElementById(
+      "aiConciergeChatInput"
+    );
+
+  if (
+    !chatForm ||
+    !chatInput
+  ) {
+    return;
+  }
+
+  renderAiConciergeChatMessages();
+
+  chatForm.addEventListener(
+    "submit",
+    function(submitEvent) {
+      submitEvent.preventDefault();
+
+      const messageToSend =
+        chatInput.value;
+
+      chatInput.value =
+        "";
+
+      sendAiConciergeChatMessage(
+        messageToSend
+      );
+    }
+  );
+}
+
+
 // Ver1.8 Phase1｜AIコンシェルジュの1GPSセッション1回のsessionStorageキャッシュ。
 // 既存WEATHER_CACHE_*と同じTTL・座標近似判定パターンを踏襲する
 // (WEATHER_CACHE_MAX_COORDINATE_DELTAをそのまま再利用)。言語ごとに結果を
@@ -8737,6 +9174,8 @@ document.addEventListener(
     initializeMapLazyLoadObserver();
 
     loadDynamicColumnEntries();
+
+    initializeAiConciergeChat();
   }
 );
 

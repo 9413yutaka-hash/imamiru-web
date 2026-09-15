@@ -508,6 +508,84 @@
       text-decoration: none;
       box-shadow: 0 8px 20px rgba(5, 144, 194, 0.22);
     }
+
+    /* 会話型マチナウAI Phase1(MVP)専用の最小CSS。style.cssは変更しない。 */
+    .ai-concierge-chat-messages {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 320px;
+      overflow-y: auto;
+      margin: 10px 0;
+      padding-right: 2px;
+    }
+
+    .ai-concierge-chat-bubble {
+      max-width: 88%;
+      padding: 10px 13px;
+      border-radius: 14px;
+      font-size: 13.5px;
+      line-height: 1.5;
+      white-space: pre-line;
+    }
+
+    .ai-concierge-chat-bubble-assistant {
+      align-self: flex-start;
+      background: var(--sky);
+      color: var(--navy);
+      border-bottom-left-radius: 4px;
+    }
+
+    .ai-concierge-chat-bubble-user {
+      align-self: flex-end;
+      background: var(--blue);
+      color: var(--white);
+      border-bottom-right-radius: 4px;
+    }
+
+    .ai-concierge-chat-bubble-image {
+      display: block;
+      width: 100%;
+      max-height: 160px;
+      object-fit: cover;
+      border-radius: 10px;
+      margin-top: 8px;
+    }
+
+    .ai-concierge-chat-status {
+      font-size: 12px;
+      color: var(--text);
+      margin: 0 0 8px;
+    }
+
+    .ai-concierge-chat-form {
+      display: flex;
+      gap: 8px;
+    }
+
+    .ai-concierge-chat-input {
+      flex: 1;
+      min-height: 42px;
+      padding: 0 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      font-size: 14px;
+    }
+
+    .ai-concierge-chat-send-button {
+      min-height: 42px;
+      padding: 0 18px;
+      border-radius: 12px;
+      border: none;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      color: var(--white);
+      font-weight: 900;
+      font-size: 13.5px;
+    }
+
+    .ai-concierge-chat-send-button:disabled {
+      opacity: 0.5;
+    }
   </style>
 </head>
 
@@ -923,6 +1001,49 @@
       >
         この情報を見る
       </button>
+
+    </section>
+
+    <section
+      id="aiConciergeChatSection"
+      class="suggestion-highlight-section"
+    >
+
+      <span class="suggestion-highlight-heading">
+        💬 マチナウAIと話す
+      </span>
+
+      <div
+        id="aiConciergeChatMessages"
+        class="ai-concierge-chat-messages"
+      ></div>
+
+      <p
+        id="aiConciergeChatStatus"
+        class="ai-concierge-chat-status"
+        style="display:none;"
+      ></p>
+
+      <form
+        id="aiConciergeChatForm"
+        class="ai-concierge-chat-form"
+      >
+        <input
+          id="aiConciergeChatInput"
+          class="ai-concierge-chat-input"
+          type="text"
+          autocomplete="off"
+          maxlength="200"
+          placeholder="例：南部を目指す"
+        >
+        <button
+          id="aiConciergeChatSendButton"
+          class="ai-concierge-chat-send-button"
+          type="submit"
+        >
+          送信
+        </button>
+      </form>
 
     </section>
 
