@@ -343,12 +343,12 @@ const AI_CONCIERGE_CHAT_MODEL =
 const AI_CONCIERGE_CHAT_ENDPOINT =
   "https://api.openai.com/v1/responses";
 
-// 本部確認済みの公式仕様：GPT-6 Astraのreasoning.effortは
-// low/medium/high/xhigh/maxの5段階("none"は非対応)。旅行の雑談的な
-// 会話であり、MVP初回では過剰な推論コスト・レイテンシを避けるため
-// 最小のlowを使う(推測ではなく公式仕様の選択肢の中から選定)。
+// 本部確認済みの公式仕様：gpt-5.6-lunaのreasoning.effortは
+// none/low/medium(既定)/high/xhigh/maxの6段階。Luna reasoning比較実証の
+// ため、lowの1段階上であるmediumへ変更する(推測ではなく公式仕様の
+// 選択肢の中から選定)。
 const AI_CONCIERGE_CHAT_REASONING_EFFORT =
-  "low";
+  "medium";
 
 // Web検索(tools:web_search)を伴うため、既存の単発提案(8000ms)より
 // 長めに確保する。ユーザーが画面で待つ経路のため、それでも上限は設ける。
