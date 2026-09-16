@@ -1237,6 +1237,82 @@ function sanitizeAiConciergeNextHours(
 }
 
 
+// マチナウAI旅行相棒化 Phase1.1｜会話モード専用。既存のsanitizeAiConcierge
+// NextHours()(単発提案✨用)は一切変更せず、この新関数をhandleAiConcierge
+// ChatRequest()からだけ使う。今回の誤答(今日21時/22時のデータを明日の
+// 判断に使った)の根本原因が「時刻だけで日付が無い」ことだったため、
+// 各時間帯にdate(YYYY-MM-DD)を必ず含める。
+const AI_CONCIERGE_CHAT_TOMORROW_HOURS_MAX_COUNT =
+  6;
+
+function sanitizeAiConciergeChatHourEntry(
+  hourEntry
+) {
+  function numberOrNull(value) {
+    return typeof value === "number" &&
+      Number.isFinite(value)
+      ? value
+      : null;
+  }
+
+  return {
+    date:
+      typeof hourEntry.date === "string"
+        ? hourEntry.date.trim().slice(0, 10)
+        : "",
+
+    time:
+      typeof hourEntry.time === "string"
+        ? hourEntry.time.trim().slice(0, 5)
+        : "",
+
+    chanceOfRain: numberOrNull(hourEntry.chanceOfRain),
+
+    condition:
+      typeof hourEntry.condition === "string"
+        ? hourEntry.condition
+            .trim()
+            .slice(0, AI_CONCIERGE_FIELD_MAX_LENGTHS.conditionText)
+        : "",
+
+    temperatureC: numberOrNull(hourEntry.temperatureC),
+    windKph: numberOrNull(hourEntry.windKph)
+  };
+}
+
+function sanitizeAiConciergeChatNextHours(
+  rawNextHours
+) {
+  if (!Array.isArray(rawNextHours)) {
+    return [];
+  }
+
+  return rawNextHours
+    .slice(0, AI_CONCIERGE_NEXT_HOURS_MAX_COUNT)
+    .map(sanitizeAiConciergeChatHourEntry);
+}
+
+function sanitizeAiConciergeTomorrowHours(
+  rawTomorrowHours
+) {
+  if (!Array.isArray(rawTomorrowHours)) {
+    return [];
+  }
+
+  return rawTomorrowHours
+    .slice(0, AI_CONCIERGE_CHAT_TOMORROW_HOURS_MAX_COUNT)
+    .map(sanitizeAiConciergeChatHourEntry);
+}
+
+function sanitizeAiConciergeTimeString(
+  rawValue
+) {
+  return typeof rawValue === "string"
+    ? rawValue.trim().slice(0, 20)
+    : "";
+}
+
+
 // AIコンシェルジュ Phase2｜沖縄本島 北部/中部/南部の代表地点3つの現在天候を
 // 比較材料として渡す。地点自体はクライアント側(app.js)の固定座標×既存
 // /api/weather.jsの共有キャッシュ(15分)経由で取得済みのものを中継する
@@ -1667,10 +1743,16 @@ function buildAiConciergeChatInstructions(
     "attach the same tic (e.g. a laugh marker) to every message. " +
     "\n\nCONTEXT YOU RECEIVE: each user turn includes the traveler's " +
     "message plus a JSON block of Machinau's own current data: area, " +
-    "currentTime, weather, nextHours (today's hourly forecast, in order, " +
-    "starting from now), regionalWeather (north/central/south Okinawa " +
-    "comparison), and candidates (places/posts Machinau's own systems " +
-    "already know about right now). Each candidate has a \"sourceType\": " +
+    "currentTime, weather, nextHours (TODAY's remaining hourly forecast " +
+    "only, in order, starting from now), tomorrowHours (a handful of " +
+    "representative checkpoint hours for TOMORROW, present only when " +
+    "available), tomorrowSunset/tomorrowSunrise (tomorrow's own values, " +
+    "separate from weather.sunset/weather.sunrise which are today's), " +
+    "regionalWeather (north/central/south Okinawa comparison), and " +
+    "candidates (places/posts Machinau's own systems already know about " +
+    "right now). Every entry inside nextHours and tomorrowHours carries " +
+    "its own \"date\" (YYYY-MM-DD) field — always read it. Each candidate " +
+    "has a \"sourceType\": " +
     "\"factual_info\" (safety/important real-time info such as typhoons, " +
     "warnings, closures, transport suspensions, or schedule changes), " +
     "\"official_today\" (official Machinau operator post), " +
@@ -1687,25 +1769,25 @@ function buildAiConciergeChatInstructions(
     "\n\nA. WEATHER → HUMAN EXPERIENCE: never just read out numbers. " +
     "The weather block may include temperatureC, feelsLikeC, heatIndexC, " +
     "windKph, gustKph, uvIndex, chanceOfRain, and conditionText, plus " +
-    "nextHours (today's upcoming hours) and regionalWeather (north/" +
+    "nextHours, tomorrowHours (when present), and regionalWeather (north/" +
     "central/south comparison). Combine whichever of these are actually " +
-    "present into what it means for the traveler right now and what to do " +
-    "about it — for example, weigh feelsLikeC/heatIndexC and wind " +
-    "together rather than temperatureC alone; if it looks cloudy but " +
-    "uvIndex is high, mention sun protection anyway; if rain is only " +
-    "expected for a short window in nextHours, suggest reordering the day " +
-    "(e.g. do a meal or indoor stop during that window) rather than moving " +
-    "everything indoors; if regionalWeather shows the traveler's area " +
-    "differs from another region, do not describe Okinawa as if it has one " +
-    "single weather; treat strong wind/gusts as relevant to beach or " +
-    "outdoor plans. Never apply a fixed rule like \"Okinawa is always hot/" +
-    "cold at X°C\" — always reason from the actual numbers given " +
-    "this turn. If sunset (and sunrise, when given) is present in the " +
-    "weather data, you may use it together with currentTime to talk about " +
-    "how much daylight is left (e.g. \"there's still good daylight left, " +
-    "so X could wait until later\"), but never state a sunset/daylight " +
-    "claim if the field is empty, and never assume it becomes fully dark " +
-    "immediately at sunset. " +
+    "present — for the correct date, see rule D below — into what it " +
+    "means for the traveler and what to do about it. For example: weigh " +
+    "feelsLikeC/heatIndexC and wind together rather than temperatureC " +
+    "alone; if it looks cloudy but uvIndex is high, mention sun protection " +
+    "anyway; if rain is only expected for a short window, suggest " +
+    "reordering that part of the day (e.g. do a meal or indoor stop during " +
+    "that window) rather than moving everything indoors; if regionalWeather " +
+    "shows the traveler's area differs from another region, do not " +
+    "describe Okinawa as if it has one single weather; treat strong wind/" +
+    "gusts as relevant to beach or outdoor plans. Never apply a fixed rule " +
+    "like \"Okinawa is always hot/cold at X°C\" — always reason from the " +
+    "actual numbers given this turn. If a sunset/sunrise value for the " +
+    "relevant day is present, you may use it together with that day's " +
+    "timeline to talk about how much daylight is left (e.g. \"there's " +
+    "still good daylight left, so X could wait until later\"), but never " +
+    "state a sunset/daylight claim if the field is empty, and never assume " +
+    "it becomes fully dark immediately at sunset. " +
 
     "\n\nB. TRAVEL PACE: you are not optimizing for maximum efficiency. " +
     "Protect room for unhurried meals, moments to just look at the view, " +
@@ -1732,6 +1814,25 @@ function buildAiConciergeChatInstructions(
     "forward what was already decided earlier in this conversation " +
     "(accepted suggestions, declined suggestions, plan changes) rather " +
     "than re-deciding from scratch each turn. " +
+
+    "\n\nD2. NEVER MIX DATES (critical): before answering, silently fix " +
+    "which calendar date the traveler is actually asking about, using " +
+    "currentTime as \"today\". nextHours contains ONLY today's remaining " +
+    "hours — never use it to answer a question about tomorrow or any " +
+    "other future date, even if a nextHours entry's time (e.g. \"21:00\") " +
+    "looks like it could fit. tomorrowHours contains ONLY tomorrow's " +
+    "checkpoint hours — never use it for today. Always check each hour " +
+    "entry's own \"date\" field and only use entries whose date matches " +
+    "the day you are actually answering about; if the traveler asks about " +
+    "tomorrow, prefer tomorrowHours (and tomorrowSunset/tomorrowSunrise) " +
+    "over nextHours. If the day the traveler is asking about isn't covered " +
+    "by nextHours or tomorrowHours at all (e.g. two days from now), and " +
+    "the forecast would change your answer, use web search to check it " +
+    "for that specific date and location; if you still can't confirm it, " +
+    "say plainly that you don't have a confirmed forecast for that day " +
+    "yet instead of reusing a different day's numbers. Never present " +
+    "tonight's weather as if it were tomorrow's, and never blend two " +
+    "different dates' data into one piece of travel advice. " +
 
     "\n\nE. OPEN NOW / ACCURACY: when recommending a specific shop, " +
     "facility, or event as something to do right now or today, ground it " +
@@ -1762,6 +1863,21 @@ function buildAiConciergeChatInstructions(
     "(e.g. \"nothing special stands out for today\") rather than inventing " +
     "something. " +
 
+    "\n\nH. MISAKI BASELINE: Machinau's minimum quality bar for a good " +
+    "travel-companion experience is modeled on a representative traveler " +
+    "named \"Misaki\" — 28 years old, from Tokyo, visiting Okinawa for the " +
+    "first time, traveling alone, no car, a 2-night/3-day trip. This does " +
+    "NOT mean you should assume every traveler is like Misaki — never " +
+    "assume an attribute (age, being alone, no car, first visit, trip " +
+    "length, hometown) that the traveler hasn't actually stated. It means " +
+    "that when a traveler DOES indicate they are new to the area, " +
+    "traveling alone, and/or without a car, you should be especially " +
+    "mindful of: the real burden of relying on public transport, waiting " +
+    "and transfer time, the trip back, not overpacking the schedule, " +
+    "building in rest, and keeping the flow comfortable to do solo — the " +
+    "same care you'd want for someone finding their way around completely " +
+    "new territory by themselves. " +
+
     "\n\nWEB SEARCH: you have a web search tool available. Use it only " +
     "when it would genuinely change your answer — for example confirming " +
     "a specific shop/facility's current business hours, whether a named " +
@@ -1774,9 +1890,11 @@ function buildAiConciergeChatInstructions(
     "\n\nNEVER: invent a shop, place, price, business hour, event date, " +
     "closing day, sunset/daylight time, or fatigue/physical state not " +
     "actually given to you by the candidates, the weather data, the " +
-    "conversation, or an actual web search result; claim to have visited a " +
-    "sourceUrl you were only given as a citation; pretend you checked " +
-    "something you did not actually check." +
+    "conversation, or an actual web search result; use a weather entry " +
+    "whose \"date\" doesn't match the day you're actually answering about, " +
+    "or otherwise mix data from two different dates into one judgment; " +
+    "claim to have visited a sourceUrl you were only given as a citation; " +
+    "pretend you checked something you did not actually check." +
     "\n\nDo not output JSON or any formatting markup — reply with plain " +
     "conversational text only."
   );
@@ -1815,6 +1933,12 @@ function buildAiConciergeChatInputItems(
         currentTime: payload.currentTime,
         weather: payload.weather,
         nextHours: payload.nextHours,
+        // マチナウAI旅行相棒化 Phase1.1｜todayとは別のフィールドとして
+        // 明日分を渡す。各要素は必ずdate(YYYY-MM-DD)を持つため、
+        // currentTimeの日付と一致するかをAI自身が判定できる。
+        tomorrowHours: payload.tomorrowHours,
+        tomorrowSunset: payload.tomorrowSunset,
+        tomorrowSunrise: payload.tomorrowSunrise,
         regionalWeather: payload.regionalWeather,
         candidates: payload.candidates
       }
@@ -2115,8 +2239,27 @@ async function handleAiConciergeChatRequest(
       );
 
     const nextHours =
-      sanitizeAiConciergeNextHours(
+      sanitizeAiConciergeChatNextHours(
         contextInput.nextHours
+      );
+
+    // マチナウAI旅行相棒化 Phase1.1｜明日分。api/weather.jsが既に取得済み
+    // (追加fetchなし)のtomorrowHours/tomorrowSunset/tomorrowSunriseを
+    // そのまま中継する。todayのnextHoursとは別フィールドのまま渡し、
+    // 混同を防ぐ。
+    const tomorrowHours =
+      sanitizeAiConciergeTomorrowHours(
+        contextInput.tomorrowHours
+      );
+
+    const tomorrowSunset =
+      sanitizeAiConciergeTimeString(
+        contextInput.tomorrowSunset
+      );
+
+    const tomorrowSunrise =
+      sanitizeAiConciergeTimeString(
+        contextInput.tomorrowSunrise
       );
 
     const regionalWeather =
@@ -2166,6 +2309,9 @@ async function handleAiConciergeChatRequest(
             area: area,
             weather: weather,
             nextHours: nextHours,
+            tomorrowHours: tomorrowHours,
+            tomorrowSunset: tomorrowSunset,
+            tomorrowSunrise: tomorrowSunrise,
             regionalWeather: regionalWeather,
             candidates: candidates,
             history: history,

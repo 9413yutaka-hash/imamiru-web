@@ -7435,6 +7435,24 @@ async function sendAiConciergeChatMessage(
                 )
                   ? latestWeatherForMachinauSuggestion.nextHours
                   : [],
+              // マチナウAI旅行相棒化 Phase1.1｜「今日の夜のnextHoursを
+              // 明日の判断に誤用する」事故への根本対応。api/weather.jsが
+              // 既に取得済み(追加fetchなし)のforecastday[1]由来データを
+              // 日付付きのまま別フィールドとして渡す(nextHoursとは混ぜない)。
+              tomorrowHours:
+                Array.isArray(
+                  latestWeatherForMachinauSuggestion.tomorrowHours
+                )
+                  ? latestWeatherForMachinauSuggestion.tomorrowHours
+                  : [],
+              tomorrowSunset:
+                typeof latestWeatherForMachinauSuggestion.tomorrowSunset === "string"
+                  ? latestWeatherForMachinauSuggestion.tomorrowSunset
+                  : "",
+              tomorrowSunrise:
+                typeof latestWeatherForMachinauSuggestion.tomorrowSunrise === "string"
+                  ? latestWeatherForMachinauSuggestion.tomorrowSunrise
+                  : "",
               regionalWeather:
                 regionalWeather
             },

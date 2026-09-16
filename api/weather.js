@@ -34,16 +34,22 @@ const WEATHER_SHARED_CACHE_MAX_AGE_SECONDS = 900;
 // (thundering herd)事態を緩和する。s-maxageの1/3程度を目安にする。
 const WEATHER_SHARED_CACHE_STALE_WHILE_REVALIDATE_SECONDS = 300;
 
-// AIコンシェルジュ Phase2｜forecast.json?days=1で既に取得済みの当日分
+// AIコンシェルジュ Phase2｜forecast.json?days=2で取得済みの当日分
 // forecastday[0].hour[](24時間分)のうち、現在時刻以降の分だけを
 // 必要最小限の項目に絞って返す。追加APIコールは発生しない(既存の
 // 1回の呼び出しレスポンスに元々含まれていたが、今まで読み捨てていた
 // データを使うだけ)。24時間全部をAIへ渡すとトークンを浪費するため、
 // 直近WEATHER_NEXT_HOURS_MAX_COUNT件までに絞る。深夜など当日分の残り
-// 時間がほとんど無い場合はそのまま少ない件数(0件もありうる)を返す
-// (翌日分の取得(days=2)は、WeatherAPIの契約・料金体系がコードからは
-// 確認できないため今回は採用しない、既知の制限として残す)。
+// 時間がほとんど無い場合はそのまま少ない件数(0件もありうる)を返す。
 const WEATHER_NEXT_HOURS_MAX_COUNT = 6;
+
+// マチナウAI旅行相棒化 Phase1.1｜明日分(forecastday[1])は「現在時刻から
+// 何時間後」という基準が存在しない(まだ来ていない1日全体のため)。
+// ユーザー発言から対象時刻を解析する専用の仕組みは新設せず(本部指示)、
+// 旅行相談で意味を持つ代表的な時間帯だけを固定チェックポイントとして
+// 抽出する、最小かつ安全な方式にする。
+const TOMORROW_HOURS_CHECKPOINT_TIMES =
+  ["06:00", "09:00", "12:00", "15:00", "18:00", "21:00"];
 
 
 function parseCoordinateQueryParam(
@@ -160,13 +166,25 @@ function normalizeWeatherApiResponse(
       ? current.condition
       : {};
 
-  const forecastDay =
+  const forecastDayList =
     weatherApiData.forecast &&
     Array.isArray(
       weatherApiData.forecast.forecastday
-    ) &&
-    weatherApiData.forecast.forecastday.length > 0
-      ? weatherApiData.forecast.forecastday[0]
+    )
+      ? weatherApiData.forecast.forecastday
+      : [];
+
+  const forecastDay =
+    forecastDayList.length > 0
+      ? forecastDayList[0]
+      : null;
+
+  // マチナウAI旅行相棒化 Phase1.1｜forecastday[1]が明日分。days=2への
+  // 変更で取得できるようになったが、配列が短い(WeatherAPI側の一時的な
+  // 問題等)場合は安全にnullへフォールバックする(例外を投げない)。
+  const tomorrowForecastDay =
+    forecastDayList.length > 1
+      ? forecastDayList[1]
       : null;
 
   const chanceOfRain =
@@ -184,9 +202,18 @@ function normalizeWeatherApiResponse(
       weatherApiData.location
     );
 
+  // マチナウAI旅行相棒化 Phase1.1｜今回の誤答(今日21時/22時のデータを
+  // 明日の判断に使った)の根本原因が「時刻だけで日付が無い」ことだった
+  // ため、明日分は日付ラベル必須の固定チェックポイント抽出にする。
+  // ユーザー発言から対象時刻を解析する仕組みは新設しない(本部指示)。
+  const tomorrowHours =
+    extractTomorrowCheckpointHours(
+      tomorrowForecastDay
+    );
+
   // マチナウAI旅行相棒化 Phase1｜forecastday[0].astroは既存の1回の
-  // forecast.json呼び出し(days=1)に元々含まれているが、これまで抽出して
-  // いなかった。追加のAPI呼び出しは発生しない。sunset/sunriseが取得できない
+  // forecast.json呼び出しに元々含まれているが、これまで抽出していな
+  // かった。追加のAPI呼び出しは発生しない。sunset/sunriseが取得できない
   // 形式の場合は空文字にし、AI側で日没時刻を創作させない(存在しない値を
   // 断定材料にしない設計)。
   const astro =
@@ -204,6 +231,26 @@ function normalizeWeatherApiResponse(
   const sunrise =
     typeof astro.sunrise === "string"
       ? astro.sunrise
+      : "";
+
+  // マチナウAI旅行相棒化 Phase1.1｜明日分のastro(同じ1回のレスポンスに
+  // 元々含まれる)。tomorrowForecastDayが無い場合は空文字にし、today側と
+  // 混同されないよう別名のフィールドにする。
+  const tomorrowAstro =
+    tomorrowForecastDay &&
+    tomorrowForecastDay.astro &&
+    typeof tomorrowForecastDay.astro === "object"
+      ? tomorrowForecastDay.astro
+      : {};
+
+  const tomorrowSunset =
+    typeof tomorrowAstro.sunset === "string"
+      ? tomorrowAstro.sunset
+      : "";
+
+  const tomorrowSunrise =
+    typeof tomorrowAstro.sunrise === "string"
+      ? tomorrowAstro.sunrise
       : "";
 
   return {
@@ -274,6 +321,18 @@ function normalizeWeatherApiResponse(
     sunrise:
       sunrise,
 
+    // マチナウAI旅行相棒化 Phase1.1｜明日分。tomorrowForecastDayが
+    // 取得できない場合はtomorrowHours=[]・sunset/sunrise=""のまま
+    // (例外を投げず安全にフォールバックする)。
+    tomorrowHours:
+      tomorrowHours,
+
+    tomorrowSunset:
+      tomorrowSunset,
+
+    tomorrowSunrise:
+      tomorrowSunrise,
+
     updatedAt:
       new Date().toISOString()
   };
@@ -342,6 +401,15 @@ function extractNextHoursFromForecastDay(
             : {};
 
         return {
+          // マチナウAI旅行相棒化 Phase1.1｜「21時」「22時」等の時刻だけが
+          // 独立して見え、別の日の判断に誤用される事故を防ぐため、
+          // 既存のtime形式(HH:MM、後方互換のため変更しない)に加えて
+          // 必ずdate(YYYY-MM-DD)を付与する。
+          date:
+            typeof forecastDay.date === "string"
+              ? forecastDay.date
+              : "",
+
           time: timeLabel,
 
           chanceOfRain:
@@ -366,6 +434,89 @@ function extractNextHoursFromForecastDay(
         };
       }
     );
+}
+
+
+// マチナウAI旅行相棒化 Phase1.1｜明日分(forecastday[1])専用の抽出。
+// 「現在時刻から何時間後か」という基準は今日にしか存在しないため、
+// 旅行相談で意味を持つ代表的な時間帯(TOMORROW_HOURS_CHECKPOINT_TIMES)
+// だけを固定的に抜き出す、最小かつ安全な方式にする(ユーザー発言からの
+// 時刻解析システムは新設しない、本部指示)。tomorrowForecastDayが
+// 存在しない場合は例外を投げず空配列を返す。
+function extractTomorrowCheckpointHours(
+  tomorrowForecastDay
+) {
+  if (
+    !tomorrowForecastDay ||
+    !Array.isArray(
+      tomorrowForecastDay.hour
+    )
+  ) {
+    return [];
+  }
+
+  const tomorrowDate =
+    typeof tomorrowForecastDay.date === "string"
+      ? tomorrowForecastDay.date
+      : "";
+
+  const checkpointHours =
+    [];
+
+  TOMORROW_HOURS_CHECKPOINT_TIMES.forEach(
+    function(checkpointTime) {
+      const matchedHourEntry =
+        tomorrowForecastDay.hour.find(
+          function(hourEntry) {
+            return (
+              hourEntry &&
+              typeof hourEntry.time === "string" &&
+              hourEntry.time.includes(" ") &&
+              hourEntry.time.split(" ")[1] === checkpointTime
+            );
+          }
+        );
+
+      if (!matchedHourEntry) {
+        return;
+      }
+
+      const hourCondition =
+        matchedHourEntry.condition &&
+        typeof matchedHourEntry.condition === "object"
+          ? matchedHourEntry.condition
+          : {};
+
+      checkpointHours.push(
+        {
+          date: tomorrowDate,
+          time: checkpointTime,
+
+          chanceOfRain:
+            toFiniteNumberOrNull(
+              matchedHourEntry.chance_of_rain
+            ),
+
+          condition:
+            typeof hourCondition.text === "string"
+              ? hourCondition.text
+              : "",
+
+          temperatureC:
+            toFiniteNumberOrNull(
+              matchedHourEntry.temp_c
+            ),
+
+          windKph:
+            toFiniteNumberOrNull(
+              matchedHourEntry.wind_kph
+            )
+        }
+      );
+    }
+  );
+
+  return checkpointHours;
 }
 
 
@@ -483,9 +634,12 @@ export default async function handler(
     roundedLatitude + "," + roundedLongitude
   );
 
+  // マチナウAI旅行相棒化 Phase1.1｜本部確認済みの公式仕様により、
+  // days=2でも1リクエスト＝1コールのまま(呼び出し回数・料金は増えない)。
+  // forecastday[1](明日分)を取得するために2へ変更する。
   requestUrl.searchParams.set(
     "days",
-    "1"
+    "2"
   );
 
   requestUrl.searchParams.set(
