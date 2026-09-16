@@ -331,22 +331,21 @@ const AI_CONCIERGE_CURRENT_TIME_MAX_LENGTH =
 // Responses API(POST /v1/responses)を使う。モデル名は環境変数
 // AI_CONCIERGE_CHAT_MODELで切替可能にし、コードへ決め打ちしない。
 // GPT-6 Astra(gpt-6-astra)は品質基準として確定済みだが、商用運用モデル
-// ではない。Astra→Terraに続き、今回はモデル比較実証としてGPT-5.6の
-// 中で最も安価・低遅延なLuna(model ID: "gpt-5.6-luna")を既定値にする。
-// 本部確認済みの公式仕様(2026年9月時点)により、Responses API・
-// web_searchツール・reasoning.effort(low含む)いずれにも対応している
-// ことを確認済み。
+// ではない。Astra→Luna(low/medium)に続き、今回はモデル比較実証として
+// GPT-5.6 Terra(model ID: "gpt-5.6-terra")を既定値にする。本部確認済みの
+// 公式仕様(2026年9月時点)により、Responses API・web_searchツール・
+// reasoning.effortいずれにも対応していることを確認済み。
 const AI_CONCIERGE_CHAT_MODEL =
   process.env.AI_CONCIERGE_CHAT_MODEL ||
-  "gpt-5.6-luna";
+  "gpt-5.6-terra";
 
 const AI_CONCIERGE_CHAT_ENDPOINT =
   "https://api.openai.com/v1/responses";
 
-// 本部確認済みの公式仕様：gpt-5.6-lunaのreasoning.effortは
-// none/low/medium(既定)/high/xhigh/maxの6段階。Luna reasoning比較実証の
-// ため、lowの1段階上であるmediumへ変更する(推測ではなく公式仕様の
-// 選択肢の中から選定)。
+// 本部確認済みの公式仕様：gpt-5.6-terraのreasoning.effortは
+// none/low/medium(既定)/high/xhigh/maxの6段階。Luna比較との条件を揃える
+// ため、Lunaと同じmediumを使う(公式に対応していることを確認済み、
+// 推測での変更ではない)。
 const AI_CONCIERGE_CHAT_REASONING_EFFORT =
   "medium";
 
