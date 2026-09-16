@@ -331,13 +331,14 @@ const AI_CONCIERGE_CURRENT_TIME_MAX_LENGTH =
 // Responses API(POST /v1/responses)を使う。モデル名は環境変数
 // AI_CONCIERGE_CHAT_MODELで切替可能にし、コードへ決め打ちしない。
 // GPT-6 Astra(gpt-6-astra)は品質基準として確定済みだが、商用運用モデル
-// ではない。今回はモデル比較実証として、より安価なGPT-5.6 Terra
-// (model ID: "gpt-5.6-terra")を既定値にする。本部確認済みの公式仕様
-// (2026年9月時点)により、Responses API・web_searchツール・
-// reasoning.effort(low含む)いずれにも対応していることを確認済み。
+// ではない。Astra→Terraに続き、今回はモデル比較実証としてGPT-5.6の
+// 中で最も安価・低遅延なLuna(model ID: "gpt-5.6-luna")を既定値にする。
+// 本部確認済みの公式仕様(2026年9月時点)により、Responses API・
+// web_searchツール・reasoning.effort(low含む)いずれにも対応している
+// ことを確認済み。
 const AI_CONCIERGE_CHAT_MODEL =
   process.env.AI_CONCIERGE_CHAT_MODEL ||
-  "gpt-5.6-terra";
+  "gpt-5.6-luna";
 
 const AI_CONCIERGE_CHAT_ENDPOINT =
   "https://api.openai.com/v1/responses";
