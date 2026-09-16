@@ -385,6 +385,84 @@ const AI_CONCIERGE_REGION_LABEL_MAX_LENGTH =
   20;
 
 
+// AI地域編集部 Phase1(八重瀬町・最小縦断実証)専用の定数群。既存の
+// AI_CONCIERGE_*(単発提案✨)・AI_CONCIERGE_CHAT_*(会話型マチナウAI)の
+// どちらとも完全に独立させ、モデル・エンドポイント・定数のいずれも
+// 一切共有しない(本部指示：会話AIへ影響を与えず別modeとして呼べること)。
+// 新しいVercel Functionは追加せず、既存のこのFunctionへmode追加のみで
+// 実装する(Functions 12/12を維持)。
+//
+// 本部確認済みの公式仕様(2026年9月時点)により、gpt-5.6-terraはResponses
+// API・reasoning.effortに対応済み。地域編集は「低頻度で生成→保存→
+// 再利用」する用途のため、会話AIのような即時応答性は不要。web_searchは
+// 意図的に使わない(本部指示：確認済み事実のみを根拠にし、SNSを見たかの
+// ような記述を生まないため、Web検索結果を編集AIの入力に混ぜない)。
+const AI_REGION_EDITORIAL_MODEL =
+  process.env.AI_REGION_EDITORIAL_MODEL ||
+  "gpt-5.6-terra";
+
+const AI_REGION_EDITORIAL_ENDPOINT =
+  "https://api.openai.com/v1/responses";
+
+const AI_REGION_EDITORIAL_REASONING_EFFORT =
+  "medium";
+
+const AI_REGION_EDITORIAL_TIMEOUT_MS =
+  20000;
+
+// Phase1は八重瀬町のみが対象(本部指示：全国展開は行わない)。他市町村の
+// regionEditorial呼び出しはAPI側で明示的に拒否し、UIの実装ミスや将来の
+// 誤った拡張があっても、意図しない市町村でAI地域編集が動かないようにする。
+const AI_REGION_EDITORIAL_ALLOWED_AREAS =
+  [
+    "八重瀬町"
+  ];
+
+const AI_REGION_EDITORIAL_TARGET_AREA_MAX_LENGTH =
+  40;
+
+const AI_REGION_EDITORIAL_EXISTING_TEXT_MAX_LENGTHS =
+  {
+    title: 60,
+    content: 2000,
+    regionName: 20
+  };
+
+// 根拠として渡すsubmissions側の事実は、既存の公開一覧
+// (handlePublicSubmissionsListRequest)と全く同じ「status==approved」の
+// ドキュメントに限定する(未承認・却下済みの情報を編集AIへ渡さない)。
+// 1件あたりの文字数と件数に上限を設け、プロンプトの肥大化・コスト超過を
+// 防ぐ。
+const AI_REGION_EDITORIAL_SOURCE_FACT_MAX_COUNT =
+  20;
+
+const AI_REGION_EDITORIAL_SOURCE_FACT_TEXT_MAX_LENGTHS =
+  {
+    title: 60,
+    content: 400,
+    shopName: 60,
+    category: 30,
+    address: 120,
+    authorType: 30,
+    websiteUrl: 300
+  };
+
+// AIが返す下書き自体にも、他のAI機能と同じ考え方で安全上限を設ける
+// (json_schemaによる構造化出力を使うが、文字数上限はAPI応答の仕様では
+// 保証されないため、二重の安全網として保つ)。
+const AI_REGION_EDITORIAL_DRAFT_TEXT_MAX_LENGTHS =
+  {
+    title: 60,
+    content: 800,
+    regionName: 20,
+    citationLabel: 60,
+    citationUrl: 300
+  };
+
+const AI_REGION_EDITORIAL_DRAFT_CITATION_MAX_COUNT =
+  10;
+
+
 // Ver1.8 Phase2(マチナウ読み物コメント機能MVP)｜新しいVercel Functionは
 // 追加せず、既存のこのFunction(api/moderate-submission.js)へmode追加のみで
 // 実装する(Functions 12/12を維持)。新規Firestoreコレクションは
@@ -2410,6 +2488,696 @@ async function handleAiConciergeChatRequest(
     return response.status(500).json({
       success: false,
       message: "AIとの会話中にエラーが発生しました。"
+    });
+  }
+}
+
+
+// AI地域編集部 Phase1(八重瀬町・最小縦断実証)｜admin-region-picks.htmlの
+// 既存の「地域のおすすめ」作成・編集フォームから呼ばれる、AI下書き生成
+// 専用モード。この関数はFirestoreへ一切書き込まない(下書きを返すだけ)。
+// 実際のregionRecommendations保存は、既存のクライアント側
+// add()/update()呼び出し(admin-region-picks.html)が、人間が「保存する」
+// を押した時にだけ行う(AIがisPublishedはおろかFirestoreへの書き込み
+// 自体を一切行えない、という本部指示を構造的に満たす)。
+function sanitizeRegionEditorialText(
+  rawValue,
+  maxLength
+) {
+  if (typeof rawValue !== "string") {
+    return "";
+  }
+
+  return rawValue
+    .trim()
+    .slice(0, maxLength);
+}
+
+function sanitizeRegionEditorialExistingArticle(
+  rawExistingArticle
+) {
+  if (
+    !rawExistingArticle ||
+    typeof rawExistingArticle !== "object"
+  ) {
+    return null;
+  }
+
+  const title =
+    sanitizeRegionEditorialText(
+      rawExistingArticle.title,
+      AI_REGION_EDITORIAL_EXISTING_TEXT_MAX_LENGTHS.title
+    );
+
+  const content =
+    sanitizeRegionEditorialText(
+      rawExistingArticle.content,
+      AI_REGION_EDITORIAL_EXISTING_TEXT_MAX_LENGTHS.content
+    );
+
+  const regionName =
+    sanitizeRegionEditorialText(
+      rawExistingArticle.regionName,
+      AI_REGION_EDITORIAL_EXISTING_TEXT_MAX_LENGTHS.regionName
+    );
+
+  if (
+    title === "" &&
+    content === ""
+  ) {
+    return null;
+  }
+
+  return {
+    title: title,
+    content: content,
+    regionName: regionName
+  };
+}
+
+// 既存の公開一覧(handlePublicSubmissionsListRequest)と全く同じ2クエリ
+// (status==approved && expiresAt>now／status==approved &&
+// isPermanentAd==true)をそのまま再利用する。area条件はFirestore側の
+// whereへ足さず、取得後にコード側で絞り込む。理由：statusとexpiresAtの
+// 不等号条件は既存クエリで動作実績があるが、そこへarea(等価条件)を
+// 追加した組み合わせは新しいComposite Indexが必要になる可能性があり、
+// Phase1の最小変更方針(新しいFirestore Index作成をしない)に反するため。
+// 対象がsubmissions全体(確認時点で全国8件)である限り、この方式で性能上の
+// 問題は生じない。
+async function fetchApprovedSubmissionSourceFactsForArea(
+  database,
+  targetArea
+) {
+  const unexpiredQuerySnapshot =
+    await database
+      .collection("submissions")
+      .where("status", "==", "approved")
+      .where("expiresAt", ">", Timestamp.now())
+      .get();
+
+  let permanentAdQuerySnapshot =
+    null;
+
+  try {
+    permanentAdQuerySnapshot =
+      await database
+        .collection("submissions")
+        .where("status", "==", "approved")
+        .where("isPermanentAd", "==", true)
+        .get();
+  } catch (permanentAdQueryError) {
+    console.error(
+      "AI地域編集部：常設広告一覧の取得に失敗しました（期限内投稿の取得には影響しません）：",
+      permanentAdQueryError
+    );
+  }
+
+  const documentsById =
+    new Map();
+
+  unexpiredQuerySnapshot.docs.forEach(
+    function(documentSnapshot) {
+      documentsById.set(
+        documentSnapshot.id,
+        documentSnapshot
+      );
+    }
+  );
+
+  if (permanentAdQuerySnapshot) {
+    permanentAdQuerySnapshot.docs.forEach(
+      function(documentSnapshot) {
+        documentsById.set(
+          documentSnapshot.id,
+          documentSnapshot
+        );
+      }
+    );
+  }
+
+  const sourceFacts =
+    [];
+
+  documentsById.forEach(
+    function(documentSnapshot) {
+      if (sourceFacts.length >= AI_REGION_EDITORIAL_SOURCE_FACT_MAX_COUNT) {
+        return;
+      }
+
+      const data =
+        documentSnapshot.data() ||
+        {};
+
+      if (data.area !== targetArea) {
+        return;
+      }
+
+      sourceFacts.push(
+        {
+          title:
+            sanitizeRegionEditorialText(
+              data.title,
+              AI_REGION_EDITORIAL_SOURCE_FACT_TEXT_MAX_LENGTHS.title
+            ),
+
+          content:
+            sanitizeRegionEditorialText(
+              data.content,
+              AI_REGION_EDITORIAL_SOURCE_FACT_TEXT_MAX_LENGTHS.content
+            ),
+
+          shopName:
+            sanitizeRegionEditorialText(
+              data.shopName,
+              AI_REGION_EDITORIAL_SOURCE_FACT_TEXT_MAX_LENGTHS.shopName
+            ),
+
+          category:
+            sanitizeRegionEditorialText(
+              data.category,
+              AI_REGION_EDITORIAL_SOURCE_FACT_TEXT_MAX_LENGTHS.category
+            ),
+
+          address:
+            sanitizeRegionEditorialText(
+              data.address,
+              AI_REGION_EDITORIAL_SOURCE_FACT_TEXT_MAX_LENGTHS.address
+            ),
+
+          // authorType(admin/shopAd等)をそのまま渡すことで、AI側の
+          // instructionsで「shopAdは店舗の直接投稿であり、地域の公式情報
+          // ではない」と明確に区別させる(本部指示：店舗直接投稿と地域公式
+          // 情報を混同しない)。
+          authorType:
+            sanitizeRegionEditorialText(
+              data.authorType,
+              AI_REGION_EDITORIAL_SOURCE_FACT_TEXT_MAX_LENGTHS.authorType
+            ),
+
+          websiteUrl:
+            sanitizeRegionEditorialText(
+              data.websiteUrl,
+              AI_REGION_EDITORIAL_SOURCE_FACT_TEXT_MAX_LENGTHS.websiteUrl
+            )
+        }
+      );
+    }
+  );
+
+  return sourceFacts;
+}
+
+// 「Wikipedia的な事実列挙」を禁止し、旅行者が今の自分の行動へどう
+// 活かせるかを編集させる、地域編集AI版の憲法(本部指示に基づく)。
+// web_searchは使わない(sourceFacts以外の情報を根拠にしない)ため、
+// instructions内でも「与えられたsourceFacts以外の事実を書かない」ことを
+// 明示する。
+function buildRegionEditorialInstructions() {
+  return (
+    "あなたは沖縄の地域情報サイト『マチナウ』のAI地域編集者です。\n" +
+    "対象は沖縄県内の1つの市町村です。あなたの仕事は、与えられた" +
+    "sourceFacts(すでに承認済みで実在が確認されている情報)だけを根拠に、" +
+    "その市町村の『地域のおすすめ』記事の下書き(タイトル・本文)を書くことです。\n\n" +
+    "【絶対に守ること】\n" +
+    "1. sourceFactsに書かれていない事実・店名・営業時間・価格・数値を" +
+    "絶対に創作しない。sourceFactsが乏しい場合は、無理に埋めず、" +
+    "分かっている範囲だけで簡潔に書く。\n" +
+    "2. SNS(Twitter/Instagram等)を見たかのような書き方(「話題になっている」" +
+    "「口コミで人気」等)を絶対にしない。SNS情報は一切与えられていない。\n" +
+    "3. authorTypeが\"shopAd\"の項目は、店舗自身による直接投稿であり、" +
+    "地域の公式情報ではない。両者を混同して書かず、必要なら『地域で" +
+    "投稿されている店舗紹介として』のように情報の性質を区別できる書き方にする。\n" +
+    "4. 出力は指定されたJSON形式のみ。JSON以外の文字列（前置き・挨拶・" +
+    "コードブロック記法等）を一切含めない。\n\n" +
+    "【書き方の方針(Wikipedia的な事実列挙の禁止)】\n" +
+    "『◯◯町には△△があります。□□もあります。』のような単なる施設の" +
+    "羅列は禁止する。かわりに、旅行者が『いつ・誰と・どんな時に・どう" +
+    "使うと良いか』、そしてそれが旅行者の『今の行動』にどうつながるかを" +
+    "中心に書く。マチナウ全体の思想『街の今を見て、あなたの今を聞いて、" +
+    "一緒に次の行動を決める』の地域編集版として、事実(sourceFacts)→" +
+    "旅行者にとっての意味、の順で自然な日本語の文章にする。\n\n" +
+    "【出力形式】\n" +
+    "title: 記事のタイトル(短く、地名や特徴が伝わるもの)\n" +
+    "content: 本文(2〜5文程度。事実の言い換えではなく、旅行者がどう" +
+    "過ごすと良いかが伝わる文章)\n" +
+    "regionName: 運営整理用の短いラベル(例：南部)。既存のregionNameが" +
+    "与えられていれば、特に理由がない限りそのまま踏襲する。\n" +
+    "citations: 本文の根拠にした事実の出典一覧。sourceFactsのうち実際に" +
+    "使ったものだけを、{url, label}の配列で返す(labelはその情報が何かを" +
+    "示す短い日本語。例：『ゆかり食堂の投稿情報』)。websiteUrlが空の" +
+    "sourceFactは出典として使わないか、urlを空文字のまま返す。"
+  );
+}
+
+function buildRegionEditorialInputItems(
+  payload
+) {
+  const contextJson =
+    JSON.stringify(
+      {
+        targetArea: payload.targetArea,
+        existingArticle: payload.existingArticle,
+        sourceFacts: payload.sourceFacts
+      }
+    );
+
+  return [
+    {
+      role: "user",
+      content: [
+        {
+          type: "input_text",
+          text:
+            "【対象市町村・既存記事・確認済み事実(JSON)】\n" +
+            contextJson +
+            "\n\n" +
+            "上記のsourceFactsだけを根拠に、指定されたJSON形式で下書きを" +
+            "作成してください。既存記事(existingArticle)がある場合は、" +
+            "全面的な書き直しではなく、確認済み事実を反映した改善案として" +
+            "書いてください。"
+        }
+      ]
+    }
+  ];
+}
+
+function buildRegionEditorialJsonSchema() {
+  return {
+    type: "json_schema",
+    name: "region_editorial_draft",
+    strict: true,
+    schema: {
+      type: "object",
+      properties: {
+        title: {
+          type: "string"
+        },
+        content: {
+          type: "string"
+        },
+        regionName: {
+          type: "string"
+        },
+        citations: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              url: {
+                type: "string"
+              },
+              label: {
+                type: "string"
+              }
+            },
+            required: ["url", "label"],
+            additionalProperties: false
+          }
+        }
+      },
+      required: ["title", "content", "regionName", "citations"],
+      additionalProperties: false
+    }
+  };
+}
+
+async function callOpenAiRegionEditorial(
+  payload
+) {
+  const apiKey =
+    process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    const configError =
+      new Error(
+        "OPENAI_API_KEY が設定されていません。"
+      );
+
+    configError.isMissingApiKey =
+      true;
+
+    throw configError;
+  }
+
+  const instructions =
+    buildRegionEditorialInstructions();
+
+  const inputItems =
+    buildRegionEditorialInputItems(
+      payload
+    );
+
+  const controller =
+    new AbortController();
+
+  const timeoutId =
+    setTimeout(
+      function() {
+        controller.abort();
+      },
+      AI_REGION_EDITORIAL_TIMEOUT_MS
+    );
+
+  let response;
+
+  try {
+    try {
+      response =
+        await fetch(
+          AI_REGION_EDITORIAL_ENDPOINT,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer " + apiKey
+            },
+
+            body: JSON.stringify({
+              model: AI_REGION_EDITORIAL_MODEL,
+              instructions: instructions,
+              input: inputItems,
+
+              text: {
+                format:
+                  buildRegionEditorialJsonSchema()
+              },
+
+              // 会話AI(AI_CONCIERGE_CHAT_*)と同じ理由：reasoningモデルは
+              // temperature/top_pを非対応のため送らない。web_searchツール
+              // も意図的に付けない(sourceFacts以外を根拠にさせないため)。
+              reasoning: {
+                effort: AI_REGION_EDITORIAL_REASONING_EFFORT
+              }
+            }),
+
+            signal: controller.signal
+          }
+        );
+    } catch (fetchError) {
+      if (fetchError.name === "AbortError") {
+        const timeoutError =
+          new Error("AI地域編集の下書き生成がタイムアウトしました。");
+
+        timeoutError.isTransient =
+          true;
+
+        timeoutError.isTimeout =
+          true;
+
+        throw timeoutError;
+      }
+
+      const networkError =
+        new Error("AI地域編集の呼び出しに失敗しました。");
+
+      networkError.isTransient =
+        true;
+
+      networkError.isNetworkError =
+        true;
+
+      throw networkError;
+    }
+  } finally {
+    clearTimeout(
+      timeoutId
+    );
+  }
+
+  if (!response.ok) {
+    const httpError =
+      new Error(
+        "OpenAI APIがエラーを返しました。status=" + response.status
+      );
+
+    httpError.isHttpError =
+      true;
+
+    httpError.httpStatus =
+      response.status;
+
+    httpError.isTransient =
+      true;
+
+    throw httpError;
+  }
+
+  let responseData;
+
+  try {
+    responseData =
+      await response.json();
+  } catch (jsonError) {
+    const parseError =
+      new Error("OpenAI APIの応答を解析できませんでした。");
+
+    parseError.isJsonError =
+      true;
+
+    parseError.isTransient =
+      true;
+
+    throw parseError;
+  }
+
+  const outputItems =
+    Array.isArray(responseData.output)
+      ? responseData.output
+      : [];
+
+  const messageItem =
+    outputItems.find(
+      function(item) {
+        return (
+          item &&
+          item.type === "message" &&
+          item.role === "assistant" &&
+          Array.isArray(item.content)
+        );
+      }
+    );
+
+  const rawText =
+    messageItem
+      ? messageItem.content
+          .filter(
+            function(contentPart) {
+              return (
+                contentPart &&
+                contentPart.type === "output_text" &&
+                typeof contentPart.text === "string"
+              );
+            }
+          )
+          .map(
+            function(contentPart) {
+              return contentPart.text;
+            }
+          )
+          .join("")
+      : "";
+
+  if (rawText.trim() === "") {
+    const shapeError =
+      new Error("OpenAI APIの応答形式が不正です。");
+
+    shapeError.isJsonError =
+      true;
+
+    shapeError.isTransient =
+      true;
+
+    throw shapeError;
+  }
+
+  let parsedDraft;
+
+  try {
+    parsedDraft =
+      JSON.parse(rawText);
+  } catch (parseError) {
+    const shapeError =
+      new Error("AI地域編集の下書きがJSON形式ではありませんでした。");
+
+    shapeError.isJsonError =
+      true;
+
+    shapeError.isTransient =
+      true;
+
+    throw shapeError;
+  }
+
+  const citations =
+    Array.isArray(parsedDraft.citations)
+      ? parsedDraft.citations
+          .slice(0, AI_REGION_EDITORIAL_DRAFT_CITATION_MAX_COUNT)
+          .map(
+            function(citation) {
+              return {
+                url:
+                  sanitizeRegionEditorialText(
+                    citation && citation.url,
+                    AI_REGION_EDITORIAL_DRAFT_TEXT_MAX_LENGTHS.citationUrl
+                  ),
+
+                label:
+                  sanitizeRegionEditorialText(
+                    citation && citation.label,
+                    AI_REGION_EDITORIAL_DRAFT_TEXT_MAX_LENGTHS.citationLabel
+                  )
+              };
+            }
+          )
+          .filter(
+            function(citation) {
+              return citation.label !== "";
+            }
+          )
+      : [];
+
+  return {
+    title:
+      sanitizeRegionEditorialText(
+        parsedDraft.title,
+        AI_REGION_EDITORIAL_DRAFT_TEXT_MAX_LENGTHS.title
+      ),
+
+    content:
+      sanitizeRegionEditorialText(
+        parsedDraft.content,
+        AI_REGION_EDITORIAL_DRAFT_TEXT_MAX_LENGTHS.content
+      ),
+
+    regionName:
+      sanitizeRegionEditorialText(
+        parsedDraft.regionName,
+        AI_REGION_EDITORIAL_DRAFT_TEXT_MAX_LENGTHS.regionName
+      ),
+
+    citations:
+      citations
+  };
+}
+
+// AI地域編集部 Phase1(八重瀬町・最小縦断実証)｜admin-region-picks.htmlの
+// 管理者/Editorのみが呼び出せる(requireAdminOrEditor()、一般公開経路には
+// 存在しないmode)。この関数はFirestoreへ一切書き込まない。既存の
+// aiConcierge/aiConciergeChatのいずれにも一切触れない。
+async function handleRegionEditorialRequest(
+  request,
+  response
+) {
+  try {
+    const authResult =
+      await requireAdminOrEditor(
+        request
+      );
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({
+        success: false,
+        message:
+          authResult.message
+      });
+    }
+
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    const targetArea =
+      sanitizeRegionEditorialText(
+        requestBody.targetArea,
+        AI_REGION_EDITORIAL_TARGET_AREA_MAX_LENGTH
+      );
+
+    if (
+      !AI_REGION_EDITORIAL_ALLOWED_AREAS.includes(targetArea)
+    ) {
+      return response.status(400).json({
+        success: false,
+        message:
+          "AI地域編集は現在、八重瀬町のみ対応しています(Phase1実証中)。"
+      });
+    }
+
+    const existingArticle =
+      sanitizeRegionEditorialExistingArticle(
+        requestBody.existingArticle
+      );
+
+    const sourceFacts =
+      await fetchApprovedSubmissionSourceFactsForArea(
+        authResult.database,
+        targetArea
+      );
+
+    if (sourceFacts.length === 0) {
+      return response.status(200).json({
+        success: true,
+        hasSourceFacts: false,
+        message:
+          "現在、" + targetArea + "の確認済み情報(承認済みの投稿)が" +
+          "ありません。地域情報の投稿が承認された後に、あらためて生成して" +
+          "ください。",
+        draft: null,
+        sourceFactsUsed: []
+      });
+    }
+
+    let draft;
+
+    try {
+      draft =
+        await callOpenAiRegionEditorial(
+          {
+            targetArea: targetArea,
+            existingArticle: existingArticle,
+            sourceFacts: sourceFacts
+          }
+        );
+    } catch (aiError) {
+      console.error(
+        "AI地域編集部：下書き生成エラー：",
+        aiError
+      );
+
+      return response.status(200).json({
+        success: false,
+        message:
+          "AI下書きの生成中にエラーが発生しました。時間をおいて、もう一度お試しください。"
+      });
+    }
+
+    return response.status(200).json({
+      success: true,
+      hasSourceFacts: true,
+      draft: draft,
+
+      sourceFactsUsed:
+        sourceFacts.map(
+          function(sourceFact) {
+            return {
+              title: sourceFact.title,
+              shopName: sourceFact.shopName,
+              authorType: sourceFact.authorType,
+              websiteUrl: sourceFact.websiteUrl
+            };
+          }
+        )
+    });
+  } catch (error) {
+    console.error(
+      "AI地域編集部：処理エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message: "AI下書きの生成中にエラーが発生しました。"
     });
   }
 }
@@ -6975,6 +7743,18 @@ export default async function handler(
     requestBody.mode === "aiConciergeChat"
   ) {
     return handleAiConciergeChatRequest(
+      request,
+      response
+    );
+  }
+
+  // AI地域編集部 Phase1(八重瀬町・最小縦断実証)｜既存のaiConcierge/
+  // aiConciergeChatと同じ位置(モード判定)に追加するだけで、既存モードの
+  // いずれにも一切触れない。管理者/Editor専用(requireAdminOrEditor)。
+  if (
+    requestBody.mode === "regionEditorial"
+  ) {
+    return handleRegionEditorialRequest(
       request,
       response
     );

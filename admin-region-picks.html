@@ -385,6 +385,60 @@
             <div id="areaGroupContainer"></div>
           </div>
 
+          <!--
+            AI地域編集部 Phase1(八重瀬町・最小縦断実証)｜対象市町村を1つだけ
+            選択した状態でのみ利用できる、AI下書き生成パネル。ここで生成した
+            内容は「フォームに反映する」を押すまでタイトル・本文へは一切
+            書き込まれず、反映後もこのフォームの「保存する」ボタンを
+            人間が押すまでFirestoreへは一切保存されない(AIはisPublishedは
+            おろかFirestoreへの書き込み自体を行わない)。
+          -->
+          <div class="field" id="regionEditorialPanel">
+            <label>
+              AI地域編集アシスト(Phase1・八重瀬町のみ)
+            </label>
+
+            <button
+              id="regionEditorialGenerateButton"
+              class="secondary-button"
+              type="button"
+            >
+              AI下書きを生成する
+            </button>
+
+            <div
+              id="regionEditorialStatus"
+              class="message-box"
+              role="status"
+              aria-live="polite"
+            ></div>
+
+            <div id="regionEditorialPreview" style="display:none;">
+              <p><strong>AI提案タイトル：</strong><span id="regionEditorialPreviewTitle"></span></p>
+              <p><strong>AI提案本文：</strong></p>
+              <p id="regionEditorialPreviewContent" style="white-space: pre-wrap;"></p>
+              <p><strong>出典：</strong></p>
+              <ul id="regionEditorialPreviewCitations"></ul>
+              <p id="regionEditorialPreviewImageHint"></p>
+
+              <button
+                id="regionEditorialApplyButton"
+                class="primary-button"
+                type="button"
+              >
+                この内容をフォームに反映する
+              </button>
+
+              <button
+                id="regionEditorialDiscardButton"
+                class="secondary-button"
+                type="button"
+              >
+                破棄する
+              </button>
+            </div>
+          </div>
+
           <div class="field">
             <label for="websiteUrlInput">
               外部リンク(任意・http(s)://から入力)
@@ -570,9 +624,26 @@
     const cancelEditButton = document.getElementById("cancelEditButton");
     const articleList = document.getElementById("articleList");
 
+    const regionEditorialGenerateButton = document.getElementById("regionEditorialGenerateButton");
+    const regionEditorialStatus = document.getElementById("regionEditorialStatus");
+    const regionEditorialPreview = document.getElementById("regionEditorialPreview");
+    const regionEditorialPreviewTitle = document.getElementById("regionEditorialPreviewTitle");
+    const regionEditorialPreviewContent = document.getElementById("regionEditorialPreviewContent");
+    const regionEditorialPreviewCitations = document.getElementById("regionEditorialPreviewCitations");
+    const regionEditorialPreviewImageHint = document.getElementById("regionEditorialPreviewImageHint");
+    const regionEditorialApplyButton = document.getElementById("regionEditorialApplyButton");
+    const regionEditorialDiscardButton = document.getElementById("regionEditorialDiscardButton");
+
     let selectedNewImageFiles = [];
     let currentImages = [];
     let editingDocumentId = null;
+
+    // AI地域編集部 Phase1｜直近のAI生成結果(反映前のプレビュー)を保持する。
+    // 「反映する」を押した時にlastAppliedAiEditorialCitationsへ確定させ、
+    // それが値を持っている間だけ、保存時にlastCheckedAt等をdocumentDataへ
+    // 追加する(=このフォームでAI下書きが少なくとも一度反映されたことを示す)。
+    let pendingAiEditorialDraft = null;
+    let lastAppliedAiEditorialCitations = null;
     let allArticles = [];
 
     function showLoginMessage(text, type) {
@@ -834,6 +905,8 @@
       setSelectedTargetAreas([]);
 
       showFormMessage("", "");
+
+      resetRegionEditorialPanel();
     }
 
     function fillFormForEdit(article) {
@@ -870,10 +943,173 @@
 
       showFormMessage("", "");
 
+      resetRegionEditorialPanel();
+
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
 
     cancelEditButton.addEventListener("click", resetForm);
+
+    // AI地域編集部 Phase1(八重瀬町・最小縦断実証)｜生成→プレビュー→
+    // 「反映する」を押すまでは、titleInput/contentInput/regionNameInputへ
+    // 一切書き込まない。反映後も、最終的にFirestoreへ保存されるのは
+    // 既存のarticleForm submitハンドラ(=人間が「保存する」を押した時)のみ。
+    function resetRegionEditorialPanel() {
+      pendingAiEditorialDraft = null;
+      lastAppliedAiEditorialCitations = null;
+
+      regionEditorialPreview.style.display = "none";
+      regionEditorialPreviewTitle.textContent = "";
+      regionEditorialPreviewContent.textContent = "";
+      regionEditorialPreviewCitations.innerHTML = "";
+      regionEditorialPreviewImageHint.textContent = "";
+
+      regionEditorialStatus.textContent = "";
+      regionEditorialStatus.className = "message-box";
+    }
+
+    function showRegionEditorialStatus(text, type) {
+      regionEditorialStatus.textContent = text;
+      regionEditorialStatus.className = "message-box" + (type ? " " + type : "");
+    }
+
+    async function getRegionEditorialIdToken() {
+      const currentUser = firebase.auth().currentUser;
+
+      if (!currentUser) {
+        throw new Error(
+          "ログイン状態を確認できませんでした。管理画面から再度ログインしてください。"
+        );
+      }
+
+      return await currentUser.getIdToken();
+    }
+
+    regionEditorialGenerateButton.addEventListener("click", async function() {
+      const targetAreas = getSelectedTargetAreas();
+
+      if (targetAreas.length !== 1) {
+        showRegionEditorialStatus(
+          "AI下書き生成は、対象市町村を1つだけ選択した状態でご利用ください。",
+          "error"
+        );
+        return;
+      }
+
+      const targetArea = targetAreas[0];
+
+      resetRegionEditorialPanel();
+
+      regionEditorialGenerateButton.disabled = true;
+      showRegionEditorialStatus("AIが下書きを生成しています…", "");
+
+      try {
+        const idToken = await getRegionEditorialIdToken();
+
+        const existingArticle =
+          (titleInput.value.trim() !== "" || contentInput.value.trim() !== "")
+            ? {
+                title: titleInput.value,
+                content: contentInput.value,
+                regionName: regionNameInput.value
+              }
+            : null;
+
+        const response = await fetch("/api/moderate-submission", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + idToken
+          },
+          body: JSON.stringify({
+            mode: "regionEditorial",
+            targetArea: targetArea,
+            existingArticle: existingArticle
+          })
+        });
+
+        let responseData = null;
+
+        try {
+          responseData = await response.json();
+        } catch (jsonError) {
+          throw new Error("AI下書きの応答を読み取れませんでした。");
+        }
+
+        if (!response.ok || !responseData || responseData.success !== true) {
+          throw new Error(
+            (responseData && responseData.message) ||
+              "AI下書きの生成に失敗しました。"
+          );
+        }
+
+        if (responseData.hasSourceFacts === false) {
+          showRegionEditorialStatus(
+            responseData.message || "確認済み情報がありませんでした。",
+            "error"
+          );
+          return;
+        }
+
+        pendingAiEditorialDraft = responseData.draft;
+
+        regionEditorialPreviewTitle.textContent = pendingAiEditorialDraft.title;
+        regionEditorialPreviewContent.textContent = pendingAiEditorialDraft.content;
+
+        regionEditorialPreviewCitations.innerHTML = "";
+
+        if (pendingAiEditorialDraft.citations.length === 0) {
+          const emptyItem = document.createElement("li");
+          emptyItem.textContent = "(出典なし)";
+          regionEditorialPreviewCitations.appendChild(emptyItem);
+        } else {
+          pendingAiEditorialDraft.citations.forEach(function(citation) {
+            const item = document.createElement("li");
+            item.textContent =
+              citation.url ? citation.label + "：" + citation.url : citation.label;
+            regionEditorialPreviewCitations.appendChild(item);
+          });
+        }
+
+        regionEditorialPreviewImageHint.textContent =
+          currentImages.length > 0
+            ? "現在の画像：" + currentImages.length + "枚(AIは画像を変更しません)"
+            : "画像未設定(AIは画像を追加しません。必要であれば下の画像欄から追加してください)";
+
+        regionEditorialPreview.style.display = "block";
+
+        showRegionEditorialStatus("下書きを生成しました。内容を確認してください。", "success");
+      } catch (error) {
+        console.error("AI地域編集：下書き生成に失敗しました", error);
+        showRegionEditorialStatus(error.message || "AI下書きの生成に失敗しました。", "error");
+      } finally {
+        regionEditorialGenerateButton.disabled = false;
+      }
+    });
+
+    regionEditorialApplyButton.addEventListener("click", function() {
+      if (!pendingAiEditorialDraft) {
+        return;
+      }
+
+      titleInput.value = pendingAiEditorialDraft.title;
+      contentInput.value = pendingAiEditorialDraft.content;
+
+      if (pendingAiEditorialDraft.regionName) {
+        regionNameInput.value = pendingAiEditorialDraft.regionName;
+      }
+
+      lastAppliedAiEditorialCitations = pendingAiEditorialDraft.citations;
+
+      showRegionEditorialStatus(
+        "フォームへ反映しました。内容を確認のうえ「保存する」を押してください。",
+        "success"
+      );
+    });
+
+    regionEditorialDiscardButton.addEventListener("click", function() {
+      resetRegionEditorialPanel();
+    });
 
     function renderArticleList() {
       if (allArticles.length === 0) {
@@ -1069,6 +1305,17 @@
           isPublished: isPublished,
           updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
+
+        // AI地域編集部 Phase1｜このフォームでAI下書きが少なくとも一度
+        // 「反映する」されていた場合にだけ追加する、完全に任意の
+        // フィールド。既存ドキュメント・手動編集のみの保存には一切
+        // 追加しない(既存データへの一括マイグレーションは行わない)。
+        if (lastAppliedAiEditorialCitations) {
+          documentData.sourceCitations = lastAppliedAiEditorialCitations;
+          documentData.lastCheckedAt = firebase.firestore.FieldValue.serverTimestamp();
+          documentData.aiEditorialStatus = "reviewed";
+          documentData.aiEditorialUpdatedAt = firebase.firestore.FieldValue.serverTimestamp();
+        }
 
         if (editingDocumentId) {
           await window.machinauDb
