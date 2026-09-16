@@ -184,6 +184,28 @@ function normalizeWeatherApiResponse(
       weatherApiData.location
     );
 
+  // マチナウAI旅行相棒化 Phase1｜forecastday[0].astroは既存の1回の
+  // forecast.json呼び出し(days=1)に元々含まれているが、これまで抽出して
+  // いなかった。追加のAPI呼び出しは発生しない。sunset/sunriseが取得できない
+  // 形式の場合は空文字にし、AI側で日没時刻を創作させない(存在しない値を
+  // 断定材料にしない設計)。
+  const astro =
+    forecastDay &&
+    forecastDay.astro &&
+    typeof forecastDay.astro === "object"
+      ? forecastDay.astro
+      : {};
+
+  const sunset =
+    typeof astro.sunset === "string"
+      ? astro.sunset
+      : "";
+
+  const sunrise =
+    typeof astro.sunrise === "string"
+      ? astro.sunrise
+      : "";
+
   return {
     locationName:
       typeof location.name === "string"
@@ -242,6 +264,15 @@ function normalizeWeatherApiResponse(
     // 現在時刻より前の時間帯は含めない(過去の予報を渡しても無意味なため)。
     nextHours:
       nextHours,
+
+    // マチナウAI旅行相棒化 Phase1｜日没/日の出の判断材料(WeatherAPIの
+    // 既存レスポンスの文字列表記のままにする。時刻計算・タイムゾーン変換は
+    // 行わない。取得できない場合は空文字のままにし、AI側で創作させない)。
+    sunset:
+      sunset,
+
+    sunrise:
+      sunrise,
 
     updatedAt:
       new Date().toISOString()

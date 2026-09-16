@@ -7405,6 +7405,13 @@ async function sendAiConciergeChatMessage(
                   latestWeatherForMachinauSuggestion.temperatureC,
                 feelsLikeC:
                   latestWeatherForMachinauSuggestion.feelsLikeC,
+                // マチナウAI旅行相棒化 Phase1｜既存fetchWeather()が既に
+                // 取得済みだが今まで会話AIへ渡していなかった項目
+                // (追加のAPI呼び出しは発生しない)。
+                heatIndexC:
+                  latestWeatherForMachinauSuggestion.heatIndexC,
+                gustKph:
+                  latestWeatherForMachinauSuggestion.gustKph,
                 chanceOfRain:
                   latestWeatherForMachinauSuggestion.chanceOfRain,
                 windKph:
@@ -7412,7 +7419,15 @@ async function sendAiConciergeChatMessage(
                 uvIndex:
                   latestWeatherForMachinauSuggestion.uvIndex,
                 conditionText:
-                  latestWeatherForMachinauSuggestion.conditionText
+                  latestWeatherForMachinauSuggestion.conditionText,
+                sunset:
+                  typeof latestWeatherForMachinauSuggestion.sunset === "string"
+                    ? latestWeatherForMachinauSuggestion.sunset
+                    : "",
+                sunrise:
+                  typeof latestWeatherForMachinauSuggestion.sunrise === "string"
+                    ? latestWeatherForMachinauSuggestion.sunrise
+                    : ""
               },
               nextHours:
                 Array.isArray(
