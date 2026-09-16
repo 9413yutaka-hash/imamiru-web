@@ -330,14 +330,14 @@ const AI_CONCIERGE_CURRENT_TIME_MAX_LENGTH =
 // 本部方針により、会話モードはChat Completions APIではなくOpenAI
 // Responses API(POST /v1/responses)を使う。モデル名は環境変数
 // AI_CONCIERGE_CHAT_MODELで切替可能にし、コードへ決め打ちしない。
-// 本部確認済みの公式仕様(2026年9月時点)に基づき、未設定時の既定値は
-// GPT-6 Astra(model ID: "gpt-6-astra"、Responses API・web_search対応)。
-// 「最高品質でMVP会話が成立するか」を最初に検証する方針のため、コスト
-// (Input $10/1M, Output $50/1M)より品質確認を優先する。将来GPT-5.6 Terra/
-// Lunaとの比較時もこの環境変数を変更するだけでよい。
+// GPT-6 Astra(gpt-6-astra)は品質基準として確定済みだが、商用運用モデル
+// ではない。今回はモデル比較実証として、より安価なGPT-5.6 Terra
+// (model ID: "gpt-5.6-terra")を既定値にする。本部確認済みの公式仕様
+// (2026年9月時点)により、Responses API・web_searchツール・
+// reasoning.effort(low含む)いずれにも対応していることを確認済み。
 const AI_CONCIERGE_CHAT_MODEL =
   process.env.AI_CONCIERGE_CHAT_MODEL ||
-  "gpt-6-astra";
+  "gpt-5.6-terra";
 
 const AI_CONCIERGE_CHAT_ENDPOINT =
   "https://api.openai.com/v1/responses";
