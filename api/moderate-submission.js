@@ -758,6 +758,23 @@ const AI_REGION_PROFILE_RESEARCH_REPORT_TIMEOUT_MS =
 const AI_REGION_PROFILE_RESEARCH_CANDIDATES_TIMEOUT_MS =
   20000;
 
+// AI地域編集部 Phase3.2緊急検証｜「Web Search＋Structured Outputs＋
+// web_search_call.action.sourcesが同一Responses API requestで成立するか」
+// を確認するためだけの、一時的な能力検証(capability probe)専用の
+// タイムアウト。既存のAI_REGION_PROFILE_RESEARCH_REPORT_TIMEOUT_MS(45秒)・
+// AI_REGION_PROFILE_RESEARCH_CANDIDATES_TIMEOUT_MSは一切変更しない
+// (本部指示)。対象は1項目(identity.areaKm2)のみで、既存call1(最大10項目・
+// 45秒)より軽い負荷のはずだが、web_search＋json_schemaの組み合わせ自体が
+// 未検証のため、既存call1より少し余裕を持たせた値にする。
+const AI_REGION_PROFILE_RESEARCH_CAPABILITY_TEST_TIMEOUT_MS =
+  60000;
+
+const AI_REGION_PROFILE_RESEARCH_CAPABILITY_TEST_TARGET_AREA =
+  "八重瀬町";
+
+const AI_REGION_PROFILE_RESEARCH_CAPABILITY_TEST_FIELD_KEY =
+  "identity.areaKm2";
+
 // Phase3.2は八重瀬町のみが対象。regionEditorial/regionProfileGet・Saveの
 // 対象市町村ガードとは意図的に別の定数として管理する(それぞれのモードが
 // 将来別々に対象市町村を広げる可能性があり、片方の変更がもう片方へ
@@ -5867,6 +5884,440 @@ async function handleRegionProfileResearchRequest(
 }
 
 
+// AI地域編集部 Phase3.2緊急検証(能力検証専用・一時コード)｜
+// 「Web Search＋Structured Outputs＋web_search_call.action.sourcesが
+// 同一Responses API requestで成立するか」だけを、実際のOpenAI呼び出し
+// 1回で確認する診断専用モード。本番のregionProfiles/regionRecommendations
+// のいずれにも一切アクセスしない(この関数にFirestore読み書きの呼び出しは
+// 一切存在しない)。regionProfileGet/Save/fetchRegionEditorialMaterialsForArea
+// のいずれも呼ばない。
+//
+// 目的はPROFILE構築ではなく、あくまで技術的な実現可能性の検証。結果を
+// Firestoreへ保存することも想定していない(この関数はresponseを返すのみ)。
+function buildRegionProfileResearchCapabilityTestJsonSchema() {
+  return {
+    type: "json_schema",
+    name: "region_profile_capability_test",
+    strict: true,
+    schema: {
+      type: "object",
+      properties: {
+        candidates: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              fieldKey: { type: "string" },
+              suggestedValue: { type: "number" },
+              evidence: { type: "string" }
+            },
+            required: ["fieldKey", "suggestedValue", "evidence"],
+            additionalProperties: false
+          }
+        }
+      },
+      required: ["candidates"],
+      additionalProperties: false
+    }
+  };
+}
+
+// 本部指示の核心：JSON SchemaにsourceUrlフィールドを一切含めない
+// (上記schemaにurl/sourceに類するフィールドが存在しないことがそのまま
+// 保証になる)。AIは出典URLを一切生成できない。
+function buildRegionProfileResearchCapabilityTestInstructions() {
+  return (
+    "これはAPIの技術検証です。沖縄県" +
+    AI_REGION_PROFILE_RESEARCH_CAPABILITY_TEST_TARGET_AREA +
+    "の面積(km2)を、自治体公式または公的統計等の信頼できる情報源から" +
+    "確認してください。\n" +
+    "分かった場合は、指定されたJSON形式でfieldKey=\"" +
+    AI_REGION_PROFILE_RESEARCH_CAPABILITY_TEST_FIELD_KEY +
+    "\"の候補を1件返してください。分からない場合はcandidatesを空配列に" +
+    "してください。\n" +
+    "出力するJSON文字列の中にURLや出典名を書かないでください" +
+    "(evidenceには、確認できた事実の短い要約だけを書いてください)。"
+  );
+}
+
+// response.output配列から、web_search_call(複数あり得る)のaction.sourcesを
+// 集約する。公式ドキュメント(developers.openai.com/api/docs/guides/
+// tools-web-search)で確認済みの構造：
+// { type:"web_search_call", action: { sources: [...] } }。
+function collectWebSearchCallDiagnostics(
+  outputItems
+) {
+  const webSearchCallItems =
+    outputItems.filter(
+      function(item) {
+        return item && item.type === "web_search_call";
+      }
+    );
+
+  const sources =
+    [];
+
+  webSearchCallItems.forEach(
+    function(item) {
+      if (
+        item.action &&
+        Array.isArray(item.action.sources)
+      ) {
+        item.action.sources.forEach(
+          function(source) {
+            sources.push(source);
+          }
+        );
+      }
+    }
+  );
+
+  return {
+    webSearchCallCount: webSearchCallItems.length,
+    sources: sources
+  };
+}
+
+function collectAnnotationsPresent(
+  outputItems
+) {
+  return outputItems.some(
+    function(item) {
+      return (
+        item &&
+        item.type === "message" &&
+        Array.isArray(item.content) &&
+        item.content.some(
+          function(contentPart) {
+            return (
+              contentPart &&
+              Array.isArray(contentPart.annotations) &&
+              contentPart.annotations.length > 0
+            );
+          }
+        )
+      );
+    }
+  );
+}
+
+// candidateとsourceを、AI出力(sourceUrl等)を一切信用せずに機械的に対応
+// 付けられるかを判定する。本部指示：「sources配列があるだけではyesに
+// しない」。今回のschemaはfieldKeyへのsource参照を含まない最小構成
+// (=まず技術的な共存可否だけを見るための構成)であるため、レスポンス
+// 構造だけから安全に対応付けられるのは、実質的に「情報源が1件しかなく
+// 消去法で確定できる」場合に限られる。2件以上のsourcesがある場合、
+// どのsourceが根拠かを構造的に確定する手段が今回のschemaには無いため
+// "no"とする(将来sourceIndex等の参照フィールドを追加すれば"yes"にできる、
+// という設計判断を裏付けるための、意図的に厳しい判定)。
+function determineSourceMapping(
+  sourcesCount,
+  structuredOutputParsed
+) {
+  if (!structuredOutputParsed) {
+    return "unclear";
+  }
+
+  if (sourcesCount === 0) {
+    return "unclear";
+  }
+
+  if (sourcesCount === 1) {
+    return "yes";
+  }
+
+  return "no";
+}
+
+async function handleRegionProfileResearchCapabilityTestRequest(
+  request,
+  response
+) {
+ try {
+  const authResult =
+    await requireAdminOrEditor(
+      request
+    );
+
+  if (!authResult.ok) {
+    return response.status(authResult.status).json({
+      success: false,
+      message: authResult.message
+    });
+  }
+
+  const apiKey =
+    process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    return response.status(200).json({
+      success: false,
+      stage: "openai_request",
+      errorType: "missing_api_key",
+      message: "OPENAI_API_KEY が設定されていません。"
+    });
+  }
+
+  const instructions =
+    buildRegionProfileResearchCapabilityTestInstructions();
+
+  const inputItems =
+    [
+      {
+        role: "user",
+        content: [
+          {
+            type: "input_text",
+            text:
+              AI_REGION_PROFILE_RESEARCH_CAPABILITY_TEST_TARGET_AREA +
+              "の面積を確認してください。"
+          }
+        ]
+      }
+    ];
+
+  const controller =
+    new AbortController();
+
+  const timeoutId =
+    setTimeout(
+      function() {
+        controller.abort();
+      },
+      AI_REGION_PROFILE_RESEARCH_CAPABILITY_TEST_TIMEOUT_MS
+    );
+
+  const startedAtMs =
+    Date.now();
+
+  let httpResponse;
+
+  try {
+    try {
+      httpResponse =
+        await fetch(
+          AI_REGION_PROFILE_RESEARCH_ENDPOINT,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer " + apiKey
+            },
+
+            body: JSON.stringify({
+              model: AI_REGION_PROFILE_RESEARCH_MODEL,
+              instructions: instructions,
+              input: inputItems,
+              tools: [{ type: "web_search" }],
+              tool_choice: "auto",
+              include: ["web_search_call.action.sources"],
+
+              text: {
+                format:
+                  buildRegionProfileResearchCapabilityTestJsonSchema()
+              },
+
+              reasoning: {
+                effort: AI_REGION_PROFILE_RESEARCH_REASONING_EFFORT
+              }
+            }),
+
+            signal: controller.signal
+          }
+        );
+    } catch (fetchError) {
+      const elapsedMs =
+        Date.now() - startedAtMs;
+
+      if (fetchError.name === "AbortError") {
+        return response.status(200).json({
+          success: false,
+          stage: "openai_request",
+          errorType: "timeout",
+          elapsedMs: elapsedMs,
+          message: "能力検証がタイムアウトしました。"
+        });
+      }
+
+      return response.status(200).json({
+        success: false,
+        stage: "openai_request",
+        errorType: "network_error",
+        elapsedMs: elapsedMs,
+        message: "能力検証の呼び出しに失敗しました。"
+      });
+    }
+  } finally {
+    clearTimeout(
+      timeoutId
+    );
+  }
+
+  const elapsedMs =
+    Date.now() - startedAtMs;
+
+  const httpOk =
+    httpResponse.ok;
+
+  if (!httpOk) {
+    return response.status(200).json({
+      success: false,
+      stage: "openai_request",
+      errorType: "http_error",
+      httpStatus: httpResponse.status,
+      elapsedMs: elapsedMs,
+      message: "OpenAI APIがエラーを返しました。"
+    });
+  }
+
+  let responseData;
+
+  try {
+    responseData =
+      await httpResponse.json();
+  } catch (jsonError) {
+    return response.status(200).json({
+      success: false,
+      stage: "response_parse",
+      errorType: "invalid_response",
+      elapsedMs: elapsedMs,
+      message: "OpenAI APIの応答を解析できませんでした。"
+    });
+  }
+
+  const outputItems =
+    Array.isArray(responseData.output)
+      ? responseData.output
+      : [];
+
+  const webSearchDiagnostics =
+    collectWebSearchCallDiagnostics(
+      outputItems
+    );
+
+  const annotationsPresent =
+    collectAnnotationsPresent(
+      outputItems
+    );
+
+  const rawText =
+    extractOutputTextFromResponsesOutput(
+      outputItems
+    );
+
+  let structuredOutputParsed =
+    false;
+
+  let candidateCount =
+    0;
+
+  if (rawText.trim() !== "") {
+    try {
+      const parsed =
+        JSON.parse(rawText);
+
+      if (Array.isArray(parsed.candidates)) {
+        structuredOutputParsed =
+          true;
+
+        candidateCount =
+          parsed.candidates.length;
+      }
+    } catch (parseError) {
+      structuredOutputParsed =
+        false;
+    }
+  }
+
+  if (!structuredOutputParsed) {
+    return response.status(200).json({
+      success: false,
+      stage: "sources_parse",
+      errorType: "structured_output_missing",
+      elapsedMs: elapsedMs,
+
+      diagnostic: {
+        httpOk: httpOk,
+        structuredOutputParsed: false,
+        webSearchCallCount: webSearchDiagnostics.webSearchCallCount,
+        sourcesPresent: webSearchDiagnostics.sources.length > 0,
+        sourcesCount: webSearchDiagnostics.sources.length,
+        annotationsPresent: annotationsPresent
+      },
+
+      message: "Structured Outputの解析に失敗しました。"
+    });
+  }
+
+  const sourceUrlsPresent =
+    webSearchDiagnostics.sources.some(
+      function(source) {
+        return (
+          source &&
+          typeof source.url === "string" &&
+          source.url !== ""
+        );
+      }
+    );
+
+  return response.status(200).json({
+    success: true,
+
+    diagnostic: {
+      httpOk: httpOk,
+      structuredOutputParsed: structuredOutputParsed,
+      webSearchCallCount: webSearchDiagnostics.webSearchCallCount,
+      sourcesPresent: webSearchDiagnostics.sources.length > 0,
+      sourcesCount: webSearchDiagnostics.sources.length,
+      sourceUrlsPresent: sourceUrlsPresent,
+      annotationsPresent: annotationsPresent,
+      candidateCount: candidateCount,
+      elapsedMs: elapsedMs,
+
+      sourceMapping:
+        determineSourceMapping(
+          webSearchDiagnostics.sources.length,
+          structuredOutputParsed
+        ),
+
+      usage:
+        responseData.usage
+          ? {
+              inputTokens:
+                typeof responseData.usage.input_tokens === "number"
+                  ? responseData.usage.input_tokens
+                  : null,
+
+              outputTokens:
+                typeof responseData.usage.output_tokens === "number"
+                  ? responseData.usage.output_tokens
+                  : null,
+
+              totalTokens:
+                typeof responseData.usage.total_tokens === "number"
+                  ? responseData.usage.total_tokens
+                  : null
+            }
+          : null
+    }
+  });
+ } catch (error) {
+  console.error(
+    "能力検証：処理エラー：",
+    error
+  );
+
+  return response.status(500).json({
+    success: false,
+    stage: "unknown",
+    errorType: "unexpected_error",
+    message: "能力検証中に予期しないエラーが発生しました。"
+  });
+ }
+}
+
+
 // Ver1.8 Phase1｜AIコンシェルジュ本体。認証はhandleCloudinarySignatureRequest()
 // と同じ匿名Firebase AuthenticationのBearer Token検証をそのまま再利用する。
 // AI呼び出し・応答検証のいずれかで失敗しても、常にsuccess:falseのJSONを
@@ -10472,6 +10923,19 @@ export default async function handler(
     requestBody.mode === "regionProfileResearch"
   ) {
     return handleRegionProfileResearchRequest(
+      request,
+      response
+    );
+  }
+
+  // AI地域編集部 Phase3.2緊急検証(一時コード)｜Web Search＋Structured
+  // Outputs＋web_search_call.action.sourcesの共存可否だけを1回のOpenAI
+  // 呼び出しで確認する診断専用モード。Firestoreへは一切アクセスしない。
+  // 検証完了後、不要と判断されればこのmode・関数ごと削除する想定。
+  if (
+    requestBody.mode === "regionProfileResearchCapabilityTest"
+  ) {
+    return handleRegionProfileResearchCapabilityTestRequest(
       request,
       response
     );

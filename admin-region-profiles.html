@@ -257,6 +257,28 @@
 
     <div class="panel">
       <h2>
+        ⚠ API能力テスト（Phase3.2緊急検証・一時機能）
+      </h2>
+
+      <div class="warning-box">
+        これは「街の記憶」を作るテストではありません。OpenAI APIが
+        Web検索と構造化出力とsource情報を1回のリクエストで同時に扱えるかを
+        確認するためだけの、1回限りの技術検証です。押すと実際にOpenAI
+        APIが1回課金されます。<strong>必ず1回だけ</strong>押してください。
+        結果はこの画面にのみ表示され、Firestoreには一切保存されません。
+      </div>
+
+      <button id="capabilityTestButton" class="secondary-button" type="button">
+        API能力テスト（1回だけ）
+      </button>
+
+      <div id="capabilityTestStatus" class="message-box" role="status" aria-live="polite"></div>
+
+      <pre id="capabilityTestResult" style="white-space: pre-wrap; font-size: 12px; background: #f4f8fb; padding: 10px; border-radius: 6px; display: none;"></pre>
+    </div>
+
+    <div class="panel">
+      <h2>
         八重瀬町（Phase3.1実証中・対象はこの1件のみ）
       </h2>
 
@@ -349,6 +371,10 @@
   const researchButton = document.getElementById("researchButton");
   const researchStatus = document.getElementById("researchStatus");
   const candidateList = document.getElementById("candidateList");
+
+  const capabilityTestButton = document.getElementById("capabilityTestButton");
+  const capabilityTestStatus = document.getElementById("capabilityTestStatus");
+  const capabilityTestResult = document.getElementById("capabilityTestResult");
 
   // Phase3.2｜直近に読み込んだ/保存したPROFILEの実オブジェクト。
   // 「採用」を押した時に、この最新状態へ候補を1件だけ差し込んで
@@ -595,6 +621,67 @@
       showResearchStatus(error.message || "調査に失敗しました。", "error");
     } finally {
       researchButton.disabled = false;
+    }
+  });
+
+  function showCapabilityTestStatus(text, type) {
+    capabilityTestStatus.textContent = text;
+    capabilityTestStatus.className = "message-box" + (type ? " " + type : "");
+  }
+
+  // Phase3.2緊急検証(一時機能)｜本部指示により「誤って連打しにくい設計」
+  // とするため、押下後はこのページを再読み込みするまで再度押せないままにする
+  // (callRegionProfileApi()は既存の恒久機能と共有しているため使わず、
+  // この一時診断専用に直接fetchする。失敗時もdiagnostic部分観測情報を
+  // 画面へ出したいため、success:falseで例外を投げる共通ヘルパーは使わない)。
+  capabilityTestButton.addEventListener("click", async function() {
+    const confirmed = window.confirm(
+      "OpenAI APIを実際に1回呼び出します（課金が発生します）。よろしいですか？"
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    capabilityTestButton.disabled = true;
+    capabilityTestButton.textContent = "実行済み（再実行はページ再読み込みが必要です）";
+    capabilityTestResult.style.display = "none";
+    showCapabilityTestStatus("OpenAI APIを1回だけ呼び出しています…（Web検索を伴うため、時間がかかる場合があります）", "");
+
+    try {
+      const idToken = await getIdTokenOrThrow();
+
+      const response = await fetch("/api/moderate-submission", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + idToken
+        },
+        body: JSON.stringify({ mode: "regionProfileResearchCapabilityTest" })
+      });
+
+      let responseData = null;
+
+      try {
+        responseData = await response.json();
+      } catch (jsonError) {
+        throw new Error("応答を読み取れませんでした。");
+      }
+
+      capabilityTestResult.style.display = "block";
+      capabilityTestResult.textContent = JSON.stringify(responseData, null, 2);
+
+      if (responseData && responseData.success === true) {
+        showCapabilityTestStatus("検証が完了しました。結果をHQへ共有してください。", "success");
+      } else {
+        showCapabilityTestStatus(
+          "検証結果（エラーを含む）を取得しました。stage/errorTypeを含めて結果をHQへ共有してください。",
+          "error"
+        );
+      }
+    } catch (error) {
+      console.error("API能力テストに失敗しました", error);
+      showCapabilityTestStatus(error.message || "検証に失敗しました。", "error");
     }
   });
 
