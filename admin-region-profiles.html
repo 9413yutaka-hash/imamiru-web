@@ -156,6 +156,36 @@
     color: #7a5b00;
   }
 
+  .candidate-card {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 10px;
+  }
+
+  .candidate-card h3 {
+    margin: 0 0 6px;
+    font-size: 15px;
+  }
+
+  .candidate-card p {
+    margin: 4px 0;
+    font-size: 13px;
+  }
+
+  .candidate-card .tier-warning {
+    color: #a15c00;
+    font-weight: bold;
+  }
+
+  .candidate-card .candidate-actions {
+    margin-top: 8px;
+  }
+
+  .candidate-card .candidate-actions button {
+    margin-right: 8px;
+  }
+
   #adminArea {
     display: none;
   }
@@ -263,6 +293,27 @@
       <div id="saveStatus" class="message-box" role="status" aria-live="polite"></div>
     </div>
 
+    <div class="panel">
+      <h2>
+        不足している街の記憶をAIに調べてもらう（Phase3.2）
+      </h2>
+
+      <div class="warning-box">
+        対象は「人口」「面積」「成立史」「地形/位置」「特産/食」
+        「交通/車なし」の6グループのみです。AIはこの場でPROFILEへ
+        書き込みません。候補ごとに内容と出典を確認し、「採用」を押した
+        ものだけがPROFILEへ保存されます。
+      </div>
+
+      <button id="researchButton" class="secondary-button" type="button">
+        不足している街の記憶をAIに調べてもらう
+      </button>
+
+      <div id="researchStatus" class="message-box" role="status" aria-live="polite"></div>
+
+      <div id="candidateList"></div>
+    </div>
+
   </section>
 
 </main>
@@ -294,6 +345,16 @@
   const profileJsonTextarea = document.getElementById("profileJsonTextarea");
   const saveButton = document.getElementById("saveButton");
   const saveStatus = document.getElementById("saveStatus");
+
+  const researchButton = document.getElementById("researchButton");
+  const researchStatus = document.getElementById("researchStatus");
+  const candidateList = document.getElementById("candidateList");
+
+  // Phase3.2｜直近に読み込んだ/保存したPROFILEの実オブジェクト。
+  // 「採用」を押した時に、この最新状態へ候補を1件だけ差し込んで
+  // regionProfileSaveへ送る(profileJsonTextareaの文字列を都度JSON.parse
+  // するより、状態の食い違いを防ぎやすいため)。
+  let currentLoadedProfile = null;
 
   function showLoginMessage(text, type) {
     loginMessage.textContent = text;
@@ -373,6 +434,7 @@
     try {
       const result = await callRegionProfileApi("regionProfileGet");
 
+      currentLoadedProfile = result.profile;
       profileJsonTextarea.value = JSON.stringify(result.profile, null, 2);
       renderCompleteness(result.exists, result.completeness);
       showLoadStatus("読み込みました。", "success");
@@ -400,6 +462,7 @@
     try {
       const result = await callRegionProfileApi("regionProfileSave", { profile: parsedProfile });
 
+      currentLoadedProfile = result.profile;
       profileJsonTextarea.value = JSON.stringify(result.profile, null, 2);
       renderCompleteness(true, result.completeness);
       showSaveStatus("保存しました。", "success");
@@ -408,6 +471,130 @@
       showSaveStatus(error.message || "保存に失敗しました。", "error");
     } finally {
       saveButton.disabled = false;
+    }
+  });
+
+  function escapeHtmlText(text) {
+    return String(text == null ? "" : text)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  function showResearchStatus(text, type) {
+    researchStatus.textContent = text;
+    researchStatus.className = "message-box" + (type ? " " + type : "");
+  }
+
+  function renderCandidateCard(candidate) {
+    const card = document.createElement("div");
+    card.className = "candidate-card";
+
+    const valueLine =
+      candidate.asOf
+        ? escapeHtmlText(candidate.suggestedValueText) + "（基準日：" + escapeHtmlText(candidate.asOf) + "）"
+        : escapeHtmlText(candidate.suggestedValueText);
+
+    const safeUrl =
+      typeof candidate.source.url === "string" && /^https?:\/\//.test(candidate.source.url)
+        ? candidate.source.url
+        : "";
+
+    card.innerHTML =
+      "<h3>" + escapeHtmlText(candidate.label) + "（" + escapeHtmlText(candidate.fieldKey) + "）</h3>" +
+      "<p><strong>候補：</strong>" + valueLine + "</p>" +
+      "<p><strong>根拠：</strong>" + escapeHtmlText(candidate.evidenceQuote) + "</p>" +
+      "<p><strong>出典：</strong>" + escapeHtmlText(candidate.source.name) +
+        (safeUrl ? "（<a href=\"" + escapeHtmlText(safeUrl) + "\" target=\"_blank\" rel=\"noopener\">出典を確認</a>）" : "") + "</p>" +
+      "<p><strong>信頼度：</strong>" + escapeHtmlText(candidate.confidence) + "</p>" +
+      (candidate.sourceTierWarning
+        ? "<p class=\"tier-warning\">⚠ 公式一次情報源(.lg.jp/.go.jp等)と機械的には確認できませんでした。採用前に出典を直接ご確認ください。</p>"
+        : "") +
+      (candidate.isEditorialInterpretation
+        ? "<p><em>※この項目はAIの解釈を含みます(一次情報の直接引用ではありません)。</em></p>"
+        : "");
+
+    const actions = document.createElement("div");
+    actions.className = "candidate-actions";
+
+    const adoptButton = document.createElement("button");
+    adoptButton.className = "primary-button";
+    adoptButton.type = "button";
+    adoptButton.textContent = "採用";
+
+    const rejectButton = document.createElement("button");
+    rejectButton.className = "secondary-button";
+    rejectButton.type = "button";
+    rejectButton.textContent = "却下";
+
+    adoptButton.addEventListener("click", async function() {
+      if (!currentLoadedProfile) {
+        showResearchStatus("先にPROFILEを「読み込む」を押して読み込んでください。", "error");
+        return;
+      }
+
+      adoptButton.disabled = true;
+      rejectButton.disabled = true;
+      showResearchStatus("採用した候補をPROFILEへ保存しています…", "");
+
+      try {
+        const updatedProfile = JSON.parse(JSON.stringify(currentLoadedProfile));
+
+        updatedProfile[candidate.section][candidate.field] = {
+          value: candidate.suggestedValueText,
+          status: "confirmed",
+          validityType: candidate.validityType,
+          sources: [candidate.source],
+          updatedAt: null
+        };
+
+        const result = await callRegionProfileApi("regionProfileSave", { profile: updatedProfile });
+
+        currentLoadedProfile = result.profile;
+        profileJsonTextarea.value = JSON.stringify(result.profile, null, 2);
+        renderCompleteness(true, result.completeness);
+
+        card.remove();
+        showResearchStatus(candidate.label + "を採用し、PROFILEへ保存しました。", "success");
+      } catch (error) {
+        console.error("候補の採用に失敗しました", error);
+        showResearchStatus(error.message || "採用に失敗しました。", "error");
+        adoptButton.disabled = false;
+        rejectButton.disabled = false;
+      }
+    });
+
+    rejectButton.addEventListener("click", function() {
+      card.remove();
+    });
+
+    actions.appendChild(adoptButton);
+    actions.appendChild(rejectButton);
+    card.appendChild(actions);
+
+    return card;
+  }
+
+  researchButton.addEventListener("click", async function() {
+    researchButton.disabled = true;
+    candidateList.innerHTML = "";
+    showResearchStatus("AIが街の記憶を調査しています…（Web検索を伴うため、時間がかかる場合があります）", "");
+
+    try {
+      const result = await callRegionProfileApi("regionProfileResearch");
+
+      showResearchStatus(result.message || "", result.candidates.length > 0 ? "success" : "");
+
+      result.candidates.forEach(function(candidate) {
+        candidateList.appendChild(renderCandidateCard(candidate));
+      });
+    } catch (error) {
+      console.error("街の記憶調査に失敗しました", error);
+      showResearchStatus(error.message || "調査に失敗しました。", "error");
+    } finally {
+      researchButton.disabled = false;
     }
   });
 

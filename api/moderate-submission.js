@@ -726,6 +726,186 @@ const REGION_PROFILE_COUNT_WITH_ASOF_FIELDS =
   );
 
 
+// AI地域編集部 Phase3.2(街の記憶を調査するAI)｜既存のAI_REGION_EDITORIAL_*
+// (地域おすすめ下書き生成)・AI_CONCIERGE_CHAT_*(会話型マチナウAI)の
+// どちらとも完全に独立させる。新しいVercel Functionは追加せず、既存の
+// このFunctionへmode追加(regionProfileResearch)のみで実装する。
+//
+// 本部指示により、6項目を6回別々にAIへ投げず、1回の調査セッションに
+// まとめる。ただし品質を落としてまで1callに固定しないため、
+// 「Web調査してcitation付きの報告文を作る呼び出し」と
+// 「報告文を検証済み出典参照だけを使ってJSON候補へ構造化する呼び出し」の
+// 2段階(＝1セッションあたりOpenAI API 2回)にする。理由：Responses APIの
+// 構造化出力(json_schema)モードとweb_search引用(annotations)が同時に
+// 正しく機能するかを検証する手段がないため、安全側として実績のある
+// 「素のテキスト出力+citation」モードでの調査と、
+// 「citationなし構造化出力」でのJSON化を分離する。
+const AI_REGION_PROFILE_RESEARCH_MODEL =
+  process.env.AI_REGION_PROFILE_RESEARCH_MODEL ||
+  "gpt-5.6-terra";
+
+const AI_REGION_PROFILE_RESEARCH_ENDPOINT =
+  "https://api.openai.com/v1/responses";
+
+const AI_REGION_PROFILE_RESEARCH_REASONING_EFFORT =
+  "medium";
+
+// Web検索を伴う調査呼び出しは、既存のAI機能より長めのタイムアウトを
+// 確保する(体感速度より、公式情報を実際に探しに行く時間を優先する)。
+const AI_REGION_PROFILE_RESEARCH_REPORT_TIMEOUT_MS =
+  45000;
+
+const AI_REGION_PROFILE_RESEARCH_CANDIDATES_TIMEOUT_MS =
+  20000;
+
+// Phase3.2は八重瀬町のみが対象。regionEditorial/regionProfileGet・Saveの
+// 対象市町村ガードとは意図的に別の定数として管理する(それぞれのモードが
+// 将来別々に対象市町村を広げる可能性があり、片方の変更がもう片方へ
+// 意図せず波及しないようにするため)。
+const AI_REGION_PROFILE_RESEARCH_ALLOWED_AREAS =
+  [
+    "八重瀬町"
+  ];
+
+// Phase3.2で調査してよい10個のfieldKeyだけを明示的に許可する
+// (本部指示：6項目以外を調査しない)。isEditorialInterpretation:trueの
+// フィールド(carFreeTravelAdvice)は、一次情報の直接引用ではなくAIの
+// 解釈であることをsourceType上で明示する(スキーマ自体は変更しない、
+// 本部指示の「最小変更」)。
+const AI_REGION_PROFILE_RESEARCH_TARGET_FIELDS =
+  [
+    {
+      fieldKey: "identity.population",
+      section: "identity",
+      field: "population",
+      group: 1,
+      label: "人口",
+      isNumeric: true,
+      requiresAsOf: true,
+      isEditorialInterpretation: false
+    },
+    {
+      fieldKey: "identity.areaKm2",
+      section: "identity",
+      field: "areaKm2",
+      group: 2,
+      label: "面積",
+      isNumeric: true,
+      requiresAsOf: false,
+      isEditorialInterpretation: false
+    },
+    {
+      fieldKey: "identity.formationHistory",
+      section: "identity",
+      field: "formationHistory",
+      group: 3,
+      label: "成立史",
+      isNumeric: false,
+      requiresAsOf: false,
+      isEditorialInterpretation: false
+    },
+    {
+      fieldKey: "identity.establishedDate",
+      section: "identity",
+      field: "establishedDate",
+      group: 3,
+      label: "成立年月日",
+      isNumeric: false,
+      requiresAsOf: false,
+      isEditorialInterpretation: false
+    },
+    {
+      fieldKey: "identity.locationSummary",
+      section: "identity",
+      field: "locationSummary",
+      group: 4,
+      label: "位置",
+      isNumeric: false,
+      requiresAsOf: false,
+      isEditorialInterpretation: false
+    },
+    {
+      fieldKey: "character.geography",
+      section: "character",
+      field: "geography",
+      group: 4,
+      label: "地形",
+      isNumeric: false,
+      requiresAsOf: false,
+      isEditorialInterpretation: false
+    },
+    {
+      fieldKey: "character.specialties",
+      section: "character",
+      field: "specialties",
+      group: 5,
+      label: "特産",
+      isNumeric: false,
+      requiresAsOf: false,
+      isEditorialInterpretation: false
+    },
+    {
+      fieldKey: "character.localFoods",
+      section: "character",
+      field: "localFoods",
+      group: 5,
+      label: "食",
+      isNumeric: false,
+      requiresAsOf: false,
+      isEditorialInterpretation: false
+    },
+    {
+      fieldKey: "transport.publicTransportSummary",
+      section: "transport",
+      field: "publicTransportSummary",
+      group: 6,
+      label: "公共交通",
+      isNumeric: false,
+      requiresAsOf: false,
+      isEditorialInterpretation: false
+    },
+    {
+      fieldKey: "transport.carFreeTravelAdvice",
+      section: "transport",
+      field: "carFreeTravelAdvice",
+      group: 6,
+      label: "車なし旅行者へのアドバイス",
+      isNumeric: false,
+      requiresAsOf: false,
+      isEditorialInterpretation: true
+    }
+  ];
+
+const AI_REGION_PROFILE_RESEARCH_TEXT_MAX_LENGTHS =
+  {
+    suggestedValue: 300,
+    asOf: 20,
+    evidenceQuote: 220,
+    confidence: 20,
+    sourceRefId: 20,
+    sourceTypeGuess: 30,
+    sourceTitle: 120,
+    reportText: 6000
+  };
+
+const AI_REGION_PROFILE_RESEARCH_MAX_WEB_CITATIONS =
+  20;
+
+const AI_REGION_PROFILE_RESEARCH_MAX_CANDIDATES =
+  20;
+
+// 「公式情報を優先する」という本部方針を、完全な自動判定はできない前提で
+// 補助的にチェックするための簡易パターン(.lg.jp＝地方公共団体、
+// .go.jp＝国の機関)。一致しない場合でも候補自体は破棄せず、
+// sourceTierWarning:trueを付けて人間の目視判断に委ねる(Phase3.2では
+// 完璧な判定AIは不要、安全側は「隠さず警告表示する」ことで担保する)。
+const AI_REGION_PROFILE_RESEARCH_OFFICIAL_URL_PATTERNS =
+  [
+    /\.lg\.jp(\/|$)/i,
+    /\.go\.jp(\/|$)/i
+  ];
+
+
 // Ver1.8 Phase2(マチナウ読み物コメント機能MVP)｜新しいVercel Functionは
 // 追加せず、既存のこのFunction(api/moderate-submission.js)へmode追加のみで
 // 実装する(Functions 12/12を維持)。新規Firestoreコレクションは
@@ -4454,6 +4634,41 @@ function validateAndSanitizeRegionProfileInput(
 // 自動作成(write)は一切行わない(読むだけでwriteを発生させない、
 // というテストBの要件を構造的に満たす：この関数に.set()/.update()/
 // .add()の呼び出しは存在しない)。
+// AI地域編集部 Phase3.2｜handleRegionProfileGetRequest()と
+// handleRegionProfileResearchRequest()の両方から呼ばれる共通の
+// 取得処理。挙動はPhase3.1のhandleRegionProfileGetRequest()から
+// 1文字も変えていない(純粋な関数抽出のみ)。
+async function fetchRegionProfileOrEmpty(
+  database,
+  targetArea
+) {
+  const regionProfileId =
+    REGION_PROFILE_AREA_NAME_TO_ID[targetArea];
+
+  const documentSnapshot =
+    await database
+      .collection(REGION_PROFILES_COLLECTION)
+      .doc(regionProfileId)
+      .get();
+
+  if (!documentSnapshot.exists) {
+    const emptyProfile =
+      buildEmptyRegionProfile(targetArea);
+
+    return {
+      exists: false,
+      regionProfileId: regionProfileId,
+      profile: emptyProfile
+    };
+  }
+
+  return {
+    exists: true,
+    regionProfileId: regionProfileId,
+    profile: documentSnapshot.data() || {}
+  };
+}
+
 async function handleRegionProfileGetRequest(
   request,
   response
@@ -4489,37 +4704,18 @@ async function handleRegionProfileGetRequest(
       });
     }
 
-    const regionProfileId =
-      REGION_PROFILE_AREA_NAME_TO_ID[targetArea];
-
-    const documentSnapshot =
-      await authResult.database
-        .collection(REGION_PROFILES_COLLECTION)
-        .doc(regionProfileId)
-        .get();
-
-    if (!documentSnapshot.exists) {
-      const emptyProfile =
-        buildEmptyRegionProfile(targetArea);
-
-      return response.status(200).json({
-        success: true,
-        exists: false,
-        regionProfileId: regionProfileId,
-        profile: emptyProfile,
-        completeness: computeRegionProfileCompleteness(emptyProfile)
-      });
-    }
-
-    const storedProfile =
-      documentSnapshot.data() || {};
+    const fetchResult =
+      await fetchRegionProfileOrEmpty(
+        authResult.database,
+        targetArea
+      );
 
     return response.status(200).json({
       success: true,
-      exists: true,
-      regionProfileId: regionProfileId,
-      profile: storedProfile,
-      completeness: computeRegionProfileCompleteness(storedProfile)
+      exists: fetchResult.exists,
+      regionProfileId: fetchResult.regionProfileId,
+      profile: fetchResult.profile,
+      completeness: computeRegionProfileCompleteness(fetchResult.profile)
     });
   } catch (error) {
     console.error(
@@ -4647,6 +4843,1025 @@ async function handleRegionProfileSaveRequest(
     return response.status(500).json({
       success: false,
       message: "地域プロフィールの保存中にエラーが発生しました。"
+    });
+  }
+}
+
+
+function findRegionProfileResearchFieldDef(
+  fieldKey
+) {
+  return AI_REGION_PROFILE_RESEARCH_TARGET_FIELDS.find(
+    function(fieldDef) {
+      return fieldDef.fieldKey === fieldKey;
+    }
+  ) || null;
+}
+
+// Web調査(call1)専用のinstructions。json_schemaを使わず、素のテキスト＋
+// 実際のweb_search引用(annotations)を得るための呼び出し。ここでの
+// 出力そのものは人間には見せず、call2への中間素材としてのみ使う。
+function buildRegionProfileResearchReportInstructions(
+  targetArea,
+  unresearchedFieldDefs
+) {
+  const fieldListText =
+    unresearchedFieldDefs
+      .map(
+        function(fieldDef) {
+          return "- " + fieldDef.fieldKey + "（" + fieldDef.label + "）";
+        }
+      )
+      .join("\n");
+
+  return (
+    "あなたは沖縄県" + targetArea + "について、マチナウという地域情報サイトが" +
+    "長期的に保持する『街の記憶(地域プロフィール)』の不足項目を調査する" +
+    "リサーチャーです。記事は書きません。調べるのは以下の項目だけです。\n\n" +
+    fieldListText + "\n\n" +
+    "【情報源の優先順位(必ずこの順で優先する)】\n" +
+    "1. 自治体公式(市区町村の公式サイト、.lg.jpドメイン等)\n" +
+    "2. 国の公的統計・政府機関(.go.jpドメイン、e-stat.go.jp等)\n" +
+    "3. 都道府県公式\n" +
+    "4. 公式観光協会\n" +
+    "5. 公共交通事業者公式\n" +
+    "6. 施設公式\n" +
+    "上記以外(ブログ・SNS・まとめサイト・非公式な二次情報)を根拠にしない。\n\n" +
+    "【絶対に守ること】\n" +
+    "1. 分からないことを推測・創作で埋めない。信頼できる情報源が見つから" +
+    "なかった項目は、その旨を明記し、無理に埋めない。\n" +
+    "2. 既に与えられている『確認済みの地域ファクト』(street-watching AIが" +
+    "既に確認済みの情報)に該当項目の答えが既にあれば、新たに検索せず" +
+    "それを使う。\n" +
+    "3. 店舗の直接投稿(SHOP DIRECT POSTS)は今回一切与えられていない。" +
+    "特産(specialties/localFoods)を、たまたま知っている店舗の商品情報" +
+    "だけを根拠に断定しない。\n" +
+    "4. 人口(population)は、必ず値と基準日(何年何月何日時点か)をセットで" +
+    "確認する。基準日が分からない人口値は書かない。\n" +
+    "5. transport.carFreeTravelAdviceは、一次情報の丸写しではなく、" +
+    "publicTransportSummaryで確認した交通事実をもとに『車を持たない旅行者に" +
+    "とって何を意味するか』というあなた自身の解釈として書く(その旨が" +
+    "分かるように書く)。\n\n" +
+    "【出力】\n" +
+    "調査対象の項目ごとに見出しを立て、分かったことを日本語の文章で" +
+    "簡潔にまとめてください。実際に参照したページの内容だけを書き、" +
+    "出典は自然な形で言及してください(URLの文字列を自分で組み立てて" +
+    "書く必要はありません。実際に検索で確認したページを根拠にしてください)。"
+  );
+}
+
+function buildRegionProfileResearchReportInputItems(
+  payload
+) {
+  const contextJson =
+    JSON.stringify(
+      {
+        targetArea: payload.targetArea,
+        existingRegionFacts: payload.existingRegionFacts
+      }
+    );
+
+  return [
+    {
+      role: "user",
+      content: [
+        {
+          type: "input_text",
+          text:
+            "【対象市町村・既に確認済みの地域ファクト(JSON)】\n" +
+            contextJson +
+            "\n\n" +
+            "上記の確認済みファクトで既に答えが分かる項目は、新たに検索せず" +
+            "それを使ってください。分からない項目だけ、指示された優先順位の" +
+            "情報源をWeb検索で調べてください。"
+        }
+      ]
+    }
+  ];
+}
+
+// annotations(url_citation)から実URLを取り出す。OpenAI公式ドキュメント
+// (developers.openai.com/api/docs/guides/tools-web-search)で確認済みの
+// 仕様：web_searchツール使用時、message.content[].annotationsに
+// {type:"url_citation", url, title, start_index, end_index}が付与される。
+// AIがテキスト中に書いたURL文字列そのものは一切信用せず、この
+// annotationsだけを「実際にWeb検索で確認された出典」として扱う
+// (本部指示：sourceUrlをAIが創作してはいけない)。
+function extractUrlCitationsFromResponsesOutput(
+  outputItems
+) {
+  const citations =
+    [];
+
+  outputItems.forEach(
+    function(item) {
+      if (
+        !item ||
+        item.type !== "message" ||
+        item.role !== "assistant" ||
+        !Array.isArray(item.content)
+      ) {
+        return;
+      }
+
+      item.content.forEach(
+        function(contentPart) {
+          if (
+            !contentPart ||
+            contentPart.type !== "output_text" ||
+            !Array.isArray(contentPart.annotations)
+          ) {
+            return;
+          }
+
+          contentPart.annotations.forEach(
+            function(annotation) {
+              if (
+                !annotation ||
+                annotation.type !== "url_citation" ||
+                typeof annotation.url !== "string" ||
+                annotation.url === ""
+              ) {
+                return;
+              }
+
+              citations.push(
+                {
+                  url:
+                    sanitizeRegionEditorialText(
+                      annotation.url,
+                      AI_REGION_EDITORIAL_SOURCE_FACT_TEXT_MAX_LENGTHS.websiteUrl
+                    ),
+
+                  title:
+                    sanitizeRegionEditorialText(
+                      annotation.title,
+                      AI_REGION_PROFILE_RESEARCH_TEXT_MAX_LENGTHS.sourceTitle
+                    )
+                }
+              );
+            }
+          );
+        }
+      );
+    }
+  );
+
+  const seenUrls =
+    new Set();
+
+  const dedupedCitations =
+    [];
+
+  citations.forEach(
+    function(citation) {
+      if (seenUrls.has(citation.url)) {
+        return;
+      }
+
+      seenUrls.add(citation.url);
+
+      if (dedupedCitations.length < AI_REGION_PROFILE_RESEARCH_MAX_WEB_CITATIONS) {
+        dedupedCitations.push(citation);
+      }
+    }
+  );
+
+  return dedupedCitations;
+}
+
+function extractOutputTextFromResponsesOutput(
+  outputItems
+) {
+  const messageItem =
+    outputItems.find(
+      function(item) {
+        return (
+          item &&
+          item.type === "message" &&
+          item.role === "assistant" &&
+          Array.isArray(item.content)
+        );
+      }
+    );
+
+  if (!messageItem) {
+    return "";
+  }
+
+  return messageItem.content
+    .filter(
+      function(contentPart) {
+        return (
+          contentPart &&
+          contentPart.type === "output_text" &&
+          typeof contentPart.text === "string"
+        );
+      }
+    )
+    .map(
+      function(contentPart) {
+        return contentPart.text;
+      }
+    )
+    .join("");
+}
+
+// call1：Web調査＋citation取得。web_searchを使う(Phase3.2で初めて
+// 地域編集系のAIにweb_searchを許可する。理由：regionEditorial/
+// aiConciergeChatとは異なり、目的そのものが「未確認の一次情報を探す」
+// ことだからであり、既存のweb_searchを使わない設計方針とは矛盾しない)。
+async function callOpenAiRegionProfileResearchReport(
+  payload
+) {
+  const apiKey =
+    process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    const configError =
+      new Error("OPENAI_API_KEY が設定されていません。");
+
+    configError.isMissingApiKey =
+      true;
+
+    throw configError;
+  }
+
+  const instructions =
+    buildRegionProfileResearchReportInstructions(
+      payload.targetArea,
+      payload.unresearchedFieldDefs
+    );
+
+  const inputItems =
+    buildRegionProfileResearchReportInputItems(
+      payload
+    );
+
+  const controller =
+    new AbortController();
+
+  const timeoutId =
+    setTimeout(
+      function() {
+        controller.abort();
+      },
+      AI_REGION_PROFILE_RESEARCH_REPORT_TIMEOUT_MS
+    );
+
+  let response;
+
+  try {
+    try {
+      response =
+        await fetch(
+          AI_REGION_PROFILE_RESEARCH_ENDPOINT,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer " + apiKey
+            },
+
+            body: JSON.stringify({
+              model: AI_REGION_PROFILE_RESEARCH_MODEL,
+              instructions: instructions,
+              input: inputItems,
+              tools: [{ type: "web_search" }],
+              tool_choice: "auto",
+
+              reasoning: {
+                effort: AI_REGION_PROFILE_RESEARCH_REASONING_EFFORT
+              }
+            }),
+
+            signal: controller.signal
+          }
+        );
+    } catch (fetchError) {
+      if (fetchError.name === "AbortError") {
+        const timeoutError =
+          new Error("街の記憶調査(Web調査)がタイムアウトしました。");
+
+        timeoutError.isTransient =
+          true;
+
+        timeoutError.isTimeout =
+          true;
+
+        throw timeoutError;
+      }
+
+      const networkError =
+        new Error("街の記憶調査(Web調査)の呼び出しに失敗しました。");
+
+      networkError.isTransient =
+        true;
+
+      networkError.isNetworkError =
+        true;
+
+      throw networkError;
+    }
+  } finally {
+    clearTimeout(
+      timeoutId
+    );
+  }
+
+  if (!response.ok) {
+    const httpError =
+      new Error("OpenAI APIがエラーを返しました。status=" + response.status);
+
+    httpError.isHttpError =
+      true;
+
+    httpError.httpStatus =
+      response.status;
+
+    httpError.isTransient =
+      true;
+
+    throw httpError;
+  }
+
+  let responseData;
+
+  try {
+    responseData =
+      await response.json();
+  } catch (jsonError) {
+    const parseError =
+      new Error("OpenAI APIの応答を解析できませんでした。");
+
+    parseError.isJsonError =
+      true;
+
+    parseError.isTransient =
+      true;
+
+    throw parseError;
+  }
+
+  const outputItems =
+    Array.isArray(responseData.output)
+      ? responseData.output
+      : [];
+
+  return {
+    reportText:
+      extractOutputTextFromResponsesOutput(outputItems)
+        .slice(0, AI_REGION_PROFILE_RESEARCH_TEXT_MAX_LENGTHS.reportText),
+
+    verifiedWebCitations:
+      extractUrlCitationsFromResponsesOutput(outputItems)
+  };
+}
+
+function buildRegionProfileResearchCandidatesInstructions() {
+  return (
+    "あなたは、既に行われたWeb調査の報告文と、検証済みの出典参照一覧を、" +
+    "指定されたJSON形式へ構造化するアシスタントです。新たな調査は行わず、" +
+    "与えられた報告文の内容だけを使ってください。\n\n" +
+    "【絶対に守ること】\n" +
+    "1. sourceRefIdは、与えられたverifiedSources(ws1, ws2…)または" +
+    "existingRegionFacts(rf1, rf2…)のIDの中から、実際にその事実の根拠に" +
+    "なったものを1つだけ選んで返す。存在しないIDを作らない。URLや出典名" +
+    "そのものの文字列は絶対に出力しない(sourceRefIdだけで示す)。\n" +
+    "2. targetFieldKeysに含まれるfieldKey以外を候補にしない。\n" +
+    "3. 報告文に書かれていない事実を創作しない。報告文が『分からなかった』" +
+    "としている項目は候補を作らない。\n" +
+    "4. identity.populationは、報告文にasOf(基準日)が明記されている場合" +
+    "だけ候補にする。基準日が不明な場合は候補にしない。\n" +
+    "5. evidenceQuoteは、判断根拠が分かる最小限の要約または短い引用に" +
+    "とどめ、長文転載をしない(全角120文字程度まで)。\n" +
+    "6. confidenceは high/medium/low のいずれかで答える。\n" +
+    "7. sourceTypeGuessは、その出典の性質を表す短い日本語ラベル" +
+    "(例：自治体公式、公的統計、観光協会公式、交通事業者公式、施設公式)。"
+  );
+}
+
+function buildRegionProfileResearchCandidatesInputItems(
+  payload
+) {
+  const contextJson =
+    JSON.stringify(
+      {
+        reportText: payload.reportText,
+        verifiedSources: payload.verifiedSources,
+        existingRegionFacts: payload.existingRegionFacts,
+        targetFieldKeys:
+          payload.targetFieldDefs.map(
+            function(fieldDef) {
+              return fieldDef.fieldKey;
+            }
+          )
+      }
+    );
+
+  return [
+    {
+      role: "user",
+      content: [
+        {
+          type: "input_text",
+          text:
+            "【調査報告文・検証済み出典参照・対象fieldKey一覧(JSON)】\n" +
+            contextJson
+        }
+      ]
+    }
+  ];
+}
+
+function buildRegionProfileResearchCandidatesJsonSchema() {
+  return {
+    type: "json_schema",
+    name: "region_profile_research_candidates",
+    strict: true,
+    schema: {
+      type: "object",
+      properties: {
+        candidates: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              fieldKey: { type: "string" },
+              suggestedValue: { type: "string" },
+              asOf: { type: "string" },
+              evidenceQuote: { type: "string" },
+              sourceRefId: { type: "string" },
+              sourceTypeGuess: { type: "string" },
+              confidence: { type: "string" }
+            },
+            required: [
+              "fieldKey",
+              "suggestedValue",
+              "asOf",
+              "evidenceQuote",
+              "sourceRefId",
+              "sourceTypeGuess",
+              "confidence"
+            ],
+            additionalProperties: false
+          }
+        }
+      },
+      required: ["candidates"],
+      additionalProperties: false
+    }
+  };
+}
+
+async function callOpenAiRegionProfileResearchCandidates(
+  payload
+) {
+  const apiKey =
+    process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    const configError =
+      new Error("OPENAI_API_KEY が設定されていません。");
+
+    configError.isMissingApiKey =
+      true;
+
+    throw configError;
+  }
+
+  const instructions =
+    buildRegionProfileResearchCandidatesInstructions();
+
+  const inputItems =
+    buildRegionProfileResearchCandidatesInputItems(
+      payload
+    );
+
+  const controller =
+    new AbortController();
+
+  const timeoutId =
+    setTimeout(
+      function() {
+        controller.abort();
+      },
+      AI_REGION_PROFILE_RESEARCH_CANDIDATES_TIMEOUT_MS
+    );
+
+  let response;
+
+  try {
+    try {
+      response =
+        await fetch(
+          AI_REGION_PROFILE_RESEARCH_ENDPOINT,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer " + apiKey
+            },
+
+            body: JSON.stringify({
+              model: AI_REGION_PROFILE_RESEARCH_MODEL,
+              instructions: instructions,
+              input: inputItems,
+
+              text: {
+                format:
+                  buildRegionProfileResearchCandidatesJsonSchema()
+              },
+
+              // 構造化のみが目的のため、web_searchは付けない
+              // (call1で既にWeb調査は完了している)。
+              reasoning: {
+                effort: AI_REGION_PROFILE_RESEARCH_REASONING_EFFORT
+              }
+            }),
+
+            signal: controller.signal
+          }
+        );
+    } catch (fetchError) {
+      if (fetchError.name === "AbortError") {
+        const timeoutError =
+          new Error("街の記憶調査(構造化)がタイムアウトしました。");
+
+        timeoutError.isTransient =
+          true;
+
+        timeoutError.isTimeout =
+          true;
+
+        throw timeoutError;
+      }
+
+      const networkError =
+        new Error("街の記憶調査(構造化)の呼び出しに失敗しました。");
+
+      networkError.isTransient =
+        true;
+
+      networkError.isNetworkError =
+        true;
+
+      throw networkError;
+    }
+  } finally {
+    clearTimeout(
+      timeoutId
+    );
+  }
+
+  if (!response.ok) {
+    const httpError =
+      new Error("OpenAI APIがエラーを返しました。status=" + response.status);
+
+    httpError.isHttpError =
+      true;
+
+    httpError.httpStatus =
+      response.status;
+
+    httpError.isTransient =
+      true;
+
+    throw httpError;
+  }
+
+  let responseData;
+
+  try {
+    responseData =
+      await response.json();
+  } catch (jsonError) {
+    const parseError =
+      new Error("OpenAI APIの応答を解析できませんでした。");
+
+    parseError.isJsonError =
+      true;
+
+    parseError.isTransient =
+      true;
+
+    throw parseError;
+  }
+
+  const outputItems =
+    Array.isArray(responseData.output)
+      ? responseData.output
+      : [];
+
+  const rawText =
+    extractOutputTextFromResponsesOutput(outputItems);
+
+  if (rawText.trim() === "") {
+    const shapeError =
+      new Error("OpenAI APIの応答形式が不正です。");
+
+    shapeError.isJsonError =
+      true;
+
+    shapeError.isTransient =
+      true;
+
+    throw shapeError;
+  }
+
+  let parsedOutput;
+
+  try {
+    parsedOutput =
+      JSON.parse(rawText);
+  } catch (parseError) {
+    const shapeError =
+      new Error("街の記憶調査の候補がJSON形式ではありませんでした。");
+
+    shapeError.isJsonError =
+      true;
+
+    shapeError.isTransient =
+      true;
+
+    throw shapeError;
+  }
+
+  return Array.isArray(parsedOutput.candidates)
+    ? parsedOutput.candidates
+    : [];
+}
+
+// 1候補を検証する。ここが本部指示の核心の多重防御：
+// ・fieldKeyがPhase3.2許可リストに無ければ破棄(テストC)
+// ・sourceRefIdが実在するverifiedSources/existingRegionFactsを指して
+//   いなければ破棄(テストK：AI創作URLの排除)
+// ・populationでasOfが空なら破棄(テストF)
+// ・evidenceQuoteが空なら破棄(根拠不明な候補を出さない)
+function sanitizeRegionProfileResearchCandidate(
+  rawCandidate,
+  verifiedSourcesById,
+  existingRegionFactsById
+) {
+  if (!rawCandidate || typeof rawCandidate !== "object") {
+    return null;
+  }
+
+  const fieldKey =
+    typeof rawCandidate.fieldKey === "string" ? rawCandidate.fieldKey : "";
+
+  const fieldDef =
+    findRegionProfileResearchFieldDef(fieldKey);
+
+  if (!fieldDef) {
+    return null;
+  }
+
+  const sourceRefId =
+    sanitizeRegionEditorialText(
+      rawCandidate.sourceRefId,
+      AI_REGION_PROFILE_RESEARCH_TEXT_MAX_LENGTHS.sourceRefId
+    );
+
+  const resolvedWebSource =
+    verifiedSourcesById.get(sourceRefId);
+
+  const resolvedExistingFact =
+    existingRegionFactsById.get(sourceRefId);
+
+  if (!resolvedWebSource && !resolvedExistingFact) {
+    // 実在しないsourceRefId＝AIが創作した参照。候補ごと破棄する。
+    return null;
+  }
+
+  const evidenceQuote =
+    sanitizeRegionEditorialText(
+      rawCandidate.evidenceQuote,
+      AI_REGION_PROFILE_RESEARCH_TEXT_MAX_LENGTHS.evidenceQuote
+    );
+
+  if (evidenceQuote === "") {
+    return null;
+  }
+
+  const asOf =
+    sanitizeRegionEditorialText(
+      rawCandidate.asOf,
+      AI_REGION_PROFILE_RESEARCH_TEXT_MAX_LENGTHS.asOf
+    );
+
+  if (fieldDef.requiresAsOf && asOf === "") {
+    return null;
+  }
+
+  const suggestedValueText =
+    sanitizeRegionEditorialText(
+      rawCandidate.suggestedValue,
+      AI_REGION_PROFILE_RESEARCH_TEXT_MAX_LENGTHS.suggestedValue
+    );
+
+  if (suggestedValueText === "") {
+    return null;
+  }
+
+  if (fieldDef.isNumeric) {
+    const numericMatch =
+      suggestedValueText.match(/[0-9]+(\.[0-9]+)?/);
+
+    if (!numericMatch) {
+      // 数値が全く読み取れない候補(単位無しの曖昧な文章等)は破棄する。
+      return null;
+    }
+  }
+
+  const source =
+    resolvedExistingFact
+      ? {
+          name:
+            resolvedExistingFact.sourceName !== ""
+              ? resolvedExistingFact.sourceName
+              : (resolvedExistingFact.shopName || resolvedExistingFact.title),
+
+          url: resolvedExistingFact.websiteUrl,
+          sourceType: resolvedExistingFact.sourceType,
+          checkedAt: resolvedExistingFact.confirmedAt,
+          publishedAt: resolvedExistingFact.publishedAt
+        }
+      : {
+          name: resolvedWebSource.title,
+          url: resolvedWebSource.url,
+
+          sourceType:
+            sanitizeRegionEditorialText(
+              rawCandidate.sourceTypeGuess,
+              AI_REGION_PROFILE_RESEARCH_TEXT_MAX_LENGTHS.sourceTypeGuess
+            ),
+
+          checkedAt: new Date().toISOString().slice(0, 10),
+          publishedAt: ""
+        };
+
+  // 本部指示：carFreeTravelAdviceは一次情報の直接引用ではなくAIの解釈で
+  // あることをsourceType上で明示する(既存schemaは変更しない最小対応)。
+  if (fieldDef.isEditorialInterpretation) {
+    source.sourceType =
+      "AIによる解釈(根拠：" + (source.sourceType || source.name) + ")";
+  }
+
+  if (source.url === "") {
+    // 解決できたsourceRefIdにurlが無い(既存ファクト側にwebsiteUrlが
+    // 未設定だった等)場合は、出典なし候補として採用可能状態にしない
+    // (テストG)。
+    return null;
+  }
+
+  const isOfficialLikeUrl =
+    AI_REGION_PROFILE_RESEARCH_OFFICIAL_URL_PATTERNS.some(
+      function(pattern) {
+        return pattern.test(source.url);
+      }
+    );
+
+  return {
+    fieldKey: fieldDef.fieldKey,
+    section: fieldDef.section,
+    field: fieldDef.field,
+    label: fieldDef.label,
+    suggestedValueText: suggestedValueText,
+    asOf: asOf,
+    evidenceQuote: evidenceQuote,
+
+    confidence:
+      sanitizeRegionEditorialText(
+        rawCandidate.confidence,
+        AI_REGION_PROFILE_RESEARCH_TEXT_MAX_LENGTHS.confidence
+      ),
+
+    // 本部指示：temporaryはPROFILEへ保存しない。ここでAIに自由入力させず、
+    // 既存のREGION_PROFILE_SECTION_FIELD_DEFAULT_VALIDITY(Phase3.1で
+    // 定義済み、stable/periodicのみ)からサーバー側だけで決定する
+    // (テストL：temporaryが混入する経路自体を作らない)。
+    validityType:
+      REGION_PROFILE_SECTION_FIELD_DEFAULT_VALIDITY[fieldDef.section][fieldDef.field],
+
+    isEditorialInterpretation: fieldDef.isEditorialInterpretation,
+    sourceTierWarning: !isOfficialLikeUrl && !resolvedExistingFact,
+    source: source
+  };
+}
+
+// AI地域編集部 Phase3.2｜八重瀬町PROFILEの不足6項目グループをAIが調査し、
+// 出典付きの候補を返す。この関数はFirestoreへ一切書き込まない
+// (regionProfileGet/Saveと同じく、書き込みは既存regionProfileSaveへの
+// 別リクエストでのみ発生する。「採用」＝クライアントが候補をPROFILE
+// 形式へ変換してregionProfileSaveを呼ぶ、という既存経路の再利用)。
+async function handleRegionProfileResearchRequest(
+  request,
+  response
+) {
+  try {
+    const authResult =
+      await requireAdminOrEditor(
+        request
+      );
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({
+        success: false,
+        message: authResult.message
+      });
+    }
+
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    const targetArea =
+      sanitizeRegionProfileGenericText(
+        requestBody.targetArea,
+        AI_REGION_EDITORIAL_TARGET_AREA_MAX_LENGTH
+      );
+
+    if (!AI_REGION_PROFILE_RESEARCH_ALLOWED_AREAS.includes(targetArea)) {
+      return response.status(400).json({
+        success: false,
+        message: "街の記憶調査は現在、八重瀬町のみ対応しています(Phase3.2実証中)。"
+      });
+    }
+
+    const fetchResult =
+      await fetchRegionProfileOrEmpty(
+        authResult.database,
+        targetArea
+      );
+
+    const unresearchedFieldDefs =
+      AI_REGION_PROFILE_RESEARCH_TARGET_FIELDS.filter(
+        function(fieldDef) {
+          return !isRegionProfileFactConfirmed(
+            fetchResult.profile,
+            fieldDef.section,
+            fieldDef.field
+          );
+        }
+      );
+
+    if (unresearchedFieldDefs.length === 0) {
+      return response.status(200).json({
+        success: true,
+        candidates: [],
+        openAiCallCount: 0,
+        message:
+          "対象の6項目グループはすでにすべて確認済みです。再調査は行いません。"
+      });
+    }
+
+    const materials =
+      await fetchRegionEditorialMaterialsForArea(
+        authResult.database,
+        targetArea
+      );
+
+    // 本部指示：SHOP DIRECT POSTSは今回のAI入力へ一切含めない
+    // (特産等を店舗投稿だけから断定させないため、Phase2で分離済みの
+    // regionFactsだけを渡す)。
+    const existingRegionFactsWithId =
+      attachFactIds(
+        materials.regionFacts,
+        "rf",
+        "region_fact"
+      );
+
+    let reportResult;
+
+    try {
+      reportResult =
+        await callOpenAiRegionProfileResearchReport(
+          {
+            targetArea: targetArea,
+            unresearchedFieldDefs: unresearchedFieldDefs,
+            existingRegionFacts: existingRegionFactsWithId
+          }
+        );
+    } catch (reportError) {
+      console.error(
+        "街の記憶調査(Web調査)エラー：",
+        reportError
+      );
+
+      return response.status(200).json({
+        success: false,
+        message: "街の記憶調査中にエラーが発生しました。時間をおいて、もう一度お試しください。"
+      });
+    }
+
+    const verifiedSourcesWithId =
+      reportResult.verifiedWebCitations.map(
+        function(citation, index) {
+          return Object.assign(
+            { sourceRefId: "ws" + (index + 1) },
+            citation
+          );
+        }
+      );
+
+    let rawCandidates;
+
+    try {
+      rawCandidates =
+        await callOpenAiRegionProfileResearchCandidates(
+          {
+            reportText: reportResult.reportText,
+            verifiedSources: verifiedSourcesWithId,
+            existingRegionFacts: existingRegionFactsWithId,
+            targetFieldDefs: unresearchedFieldDefs
+          }
+        );
+    } catch (candidatesError) {
+      console.error(
+        "街の記憶調査(構造化)エラー：",
+        candidatesError
+      );
+
+      return response.status(200).json({
+        success: false,
+        message: "街の記憶調査中にエラーが発生しました。時間をおいて、もう一度お試しください。"
+      });
+    }
+
+    const verifiedSourcesById =
+      new Map(
+        verifiedSourcesWithId.map(
+          function(source) {
+            return [source.sourceRefId, source];
+          }
+        )
+      );
+
+    const existingRegionFactsById =
+      new Map(
+        existingRegionFactsWithId.map(
+          function(fact) {
+            return [fact.factId, fact];
+          }
+        )
+      );
+
+    const seenFieldKeys =
+      new Set();
+
+    const candidates =
+      [];
+
+    rawCandidates.forEach(
+      function(rawCandidate) {
+        if (candidates.length >= AI_REGION_PROFILE_RESEARCH_MAX_CANDIDATES) {
+          return;
+        }
+
+        const sanitized =
+          sanitizeRegionProfileResearchCandidate(
+            rawCandidate,
+            verifiedSourcesById,
+            existingRegionFactsById
+          );
+
+        if (!sanitized) {
+          return;
+        }
+
+        // 1フィールドにつき候補は1件まで(最初に出てきた有効な候補を採用)。
+        if (seenFieldKeys.has(sanitized.fieldKey)) {
+          return;
+        }
+
+        seenFieldKeys.add(sanitized.fieldKey);
+        candidates.push(sanitized);
+      }
+    );
+
+    return response.status(200).json({
+      success: true,
+      candidates: candidates,
+      openAiCallCount: 2,
+
+      message:
+        candidates.length === 0
+          ? "信頼できる情報源から確認できた新しい事実は見つかりませんでした。"
+          : candidates.length + "件の候補が見つかりました。内容と出典を確認のうえ、採用するものだけを選んでください。"
+    });
+  } catch (error) {
+    console.error(
+      "街の記憶調査：処理エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message: "街の記憶調査中にエラーが発生しました。"
     });
   }
 }
@@ -9245,6 +10460,18 @@ export default async function handler(
     requestBody.mode === "regionProfileSave"
   ) {
     return handleRegionProfileSaveRequest(
+      request,
+      response
+    );
+  }
+
+  // AI地域編集部 Phase3.2(街の記憶を調査するAI)｜既存のregionProfileGet/
+  // Saveと同じ位置(モード判定)に追加するだけで、既存モードのいずれにも
+  // 一切触れない。管理者/Editor専用(requireAdminOrEditor)。
+  if (
+    requestBody.mode === "regionProfileResearch"
+  ) {
+    return handleRegionProfileResearchRequest(
       request,
       response
     );
