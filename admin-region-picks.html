@@ -1043,38 +1043,58 @@
           );
         }
 
-        if (responseData.hasSourceFacts === false) {
+        const counts = responseData.counts || {};
+
+        const countsText =
+          "確認済み地域ファクト：" + (counts.regionFacts || 0) + "件／" +
+          "店舗直接投稿：" + (counts.shopDirectPosts || 0) + "件／" +
+          "確認待ち：" + (counts.pendingReview || 0) + "件";
+
+        if (responseData.sufficient === false) {
           showRegionEditorialStatus(
-            responseData.message || "確認済み情報がありませんでした。",
+            (responseData.message || "確認済み地域ファクトが不足しています。") +
+              "\n" + countsText,
             "error"
           );
           return;
         }
 
-        pendingAiEditorialDraft = responseData.draft;
+        // AI地域編集部 Phase2｜出典(sourceCitations)はAIが生成した文字列
+        // ではなく、サーバー側が実際のREGION FACTS/SHOP DIRECT POSTSから
+        // 組み立てたものだけを受け取る(citation.kindでどちらの種類の
+        // 事実かを区別して表示する)。
+        pendingAiEditorialDraft = {
+          title: responseData.draft.title,
+          content: responseData.draft.content,
+          regionName: responseData.draft.regionName,
+          sourceCitations: responseData.sourceCitations || []
+        };
 
         regionEditorialPreviewTitle.textContent = pendingAiEditorialDraft.title;
         regionEditorialPreviewContent.textContent = pendingAiEditorialDraft.content;
 
         regionEditorialPreviewCitations.innerHTML = "";
 
-        if (pendingAiEditorialDraft.citations.length === 0) {
+        if (pendingAiEditorialDraft.sourceCitations.length === 0) {
           const emptyItem = document.createElement("li");
           emptyItem.textContent = "(出典なし)";
           regionEditorialPreviewCitations.appendChild(emptyItem);
         } else {
-          pendingAiEditorialDraft.citations.forEach(function(citation) {
+          pendingAiEditorialDraft.sourceCitations.forEach(function(citation) {
             const item = document.createElement("li");
+            const kindLabel =
+              citation.kind === "shop_direct_post" ? "【店舗直接投稿】" : "【地域ファクト】";
             item.textContent =
-              citation.url ? citation.label + "：" + citation.url : citation.label;
+              kindLabel + citation.label + (citation.url ? "：" + citation.url : "");
             regionEditorialPreviewCitations.appendChild(item);
           });
         }
 
         regionEditorialPreviewImageHint.textContent =
-          currentImages.length > 0
+          countsText + "\n" +
+          (currentImages.length > 0
             ? "現在の画像：" + currentImages.length + "枚(AIは画像を変更しません)"
-            : "画像未設定(AIは画像を追加しません。必要であれば下の画像欄から追加してください)";
+            : "画像未設定(AIは画像を追加しません。必要であれば下の画像欄から追加してください)");
 
         regionEditorialPreview.style.display = "block";
 
@@ -1099,7 +1119,7 @@
         regionNameInput.value = pendingAiEditorialDraft.regionName;
       }
 
-      lastAppliedAiEditorialCitations = pendingAiEditorialDraft.citations;
+      lastAppliedAiEditorialCitations = pendingAiEditorialDraft.sourceCitations;
 
       showRegionEditorialStatus(
         "フォームへ反映しました。内容を確認のうえ「保存する」を押してください。",

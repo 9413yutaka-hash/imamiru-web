@@ -432,7 +432,8 @@ const AI_REGION_EDITORIAL_EXISTING_TEXT_MAX_LENGTHS =
 // (handlePublicSubmissionsListRequest)と全く同じ「status==approved」の
 // ドキュメントに限定する(未承認・却下済みの情報を編集AIへ渡さない)。
 // 1件あたりの文字数と件数に上限を設け、プロンプトの肥大化・コスト超過を
-// 防ぐ。
+// 防ぐ。REGION FACTS・SHOP DIRECT POSTSの両方でこの1つの上限セットを
+// 共有する(概念上は分離するが、安全上限の考え方まで分ける理由がないため)。
 const AI_REGION_EDITORIAL_SOURCE_FACT_MAX_COUNT =
   20;
 
@@ -444,8 +445,24 @@ const AI_REGION_EDITORIAL_SOURCE_FACT_TEXT_MAX_LENGTHS =
     category: 30,
     address: 120,
     authorType: 30,
-    websiteUrl: 300
+    websiteUrl: 300,
+    sourceName: 60,
+    sourceType: 30,
+    confirmedAt: 30,
+    publishedAt: 40
   };
+
+// AI地域編集部 Phase2(街を見るAI→地域ファクト接続)｜本部指示により、
+// 出典(sourceCitations)はAIに文字列(URL)を生成させず、必ずプログラム側で
+// 実データから組み立てる。AIには「入力に含めた事実のうち、実際に本文の
+// 根拠に使ったものはどれか」をfactId(こちらが採番した記号)の配列で
+// 答えさせるだけにとどめ、AIがURLやラベルの文字列を出力する経路自体を
+// 構造的になくす。
+const AI_REGION_EDITORIAL_CITED_FACT_ID_MAX_COUNT =
+  20;
+
+const AI_REGION_EDITORIAL_CITED_FACT_ID_MAX_LENGTH =
+  20;
 
 // AIが返す下書き自体にも、他のAI機能と同じ考え方で安全上限を設ける
 // (json_schemaによる構造化出力を使うが、文字数上限はAPI応答の仕様では
@@ -454,13 +471,77 @@ const AI_REGION_EDITORIAL_DRAFT_TEXT_MAX_LENGTHS =
   {
     title: 60,
     content: 800,
-    regionName: 20,
-    citationLabel: 60,
-    citationUrl: 300
+    regionName: 20
   };
 
-const AI_REGION_EDITORIAL_DRAFT_CITATION_MAX_COUNT =
-  10;
+// AI地域編集部 Phase2｜地域おすすめ記事を生成してよい最低限のREGION
+// FACTS件数。本部指示「材料が薄いなら生成しない方が正しい」の安全側の
+// 最小実装として、件数だけを見る単純な閾値にとどめる(情報の種類の偏り
+// までを判定する複雑なロジックはPhase2では作らない)。SHOP DIRECT POSTS
+// だけがどれだけあっても、この判定には一切カウントしない
+// (店舗投稿だけで地域全体の記事を生成させないため)。
+const AI_REGION_EDITORIAL_MIN_REGION_FACT_COUNT =
+  1;
+
+// 既存submissionsのauthorTypeのうち、「マチナウ運営・街を見るAIが
+// 確認した情報」を示す値だけをREGION FACTSとして扱う。それ以外
+// (shopAd・店舗自身の投稿・authorType未設定の一般投稿等)はすべて
+// SHOP DIRECT POSTS側へ回す。新しい分類値を作らず、既存のauthorTypeを
+// そのまま再利用する(api/admin-post.jsのALLOWED_AUTHOR_TYPES・
+// api/admin-source-collect.jsのcreateAutoPostSubmission()と一致)。
+const AI_REGION_EDITORIAL_REGION_FACT_AUTHOR_TYPES =
+  [
+    "ai",
+    "admin"
+  ];
+
+// aiCollectedArticles側から長期地域ファクト候補を拾う際、1つの情報源
+// あたりに読みに行く件数の上限(コスト・応答時間の安全網)。
+const AI_REGION_EDITORIAL_AI_COLLECTED_PER_SOURCE_MAX_COUNT =
+  30;
+
+// api/admin-source-collect.jsのAI_COLLECTED_ARTICLES_COLLECTIONと同じ
+// コレクション名の文字列("aiCollectedArticles")。2つの独立したVercel
+// Function間でconstをimportし合う結合を避けるため、既存の
+// OKINAWA_MUNICIPALITY_TO_REGION_NAME等と同じ考え方で、コレクション名
+// (単純な文字列定数1つ)だけをこちらにも複製する。
+const AI_COLLECTED_ARTICLES_COLLECTION_NAME =
+  "aiCollectedArticles";
+
+// 街を見るAIの内部で既に使われているEVENT/鮮度判定エンジン
+// (judgeArticleForAutoPost内のresolveFreshnessCategory等)は、
+// 他の判定(関連度スコア・第二審等)と密結合しており、Phase2の最小
+// スコープでそのまま再利用/import すると2つの独立したVercel Function
+// 間の結合が強まりすぎる(本部指示のスコープ外)。そのため、
+// aiCollectedArticles由来の長期ファクト候補(既にsubmissionsの掲示
+// 期限が切れているもの)だけに対象を絞った、意図的に単純な安全側の
+// キーワード検出を新設する。「完璧な判定AIは不要、安全側へ倒す」という
+// 本部方針に基づき、該当した場合は無条件でTier Bへ降格させる
+// (Terraへは渡さない)。
+const AI_REGION_EDITORIAL_TIME_BOUND_KEYWORDS =
+  [
+    "イベント",
+    "開催",
+    "祭り",
+    "花火",
+    "中止",
+    "延期",
+    "休業",
+    "運休",
+    "臨時",
+    "限定",
+    "募集",
+    "申込",
+    "締切",
+    "本日",
+    "今日",
+    "明日",
+    "今週",
+    "今月",
+    "変更になりました",
+    "終了しました",
+    "開始します"
+  ];
 
 
 // Ver1.8 Phase2(マチナウ読み物コメント機能MVP)｜新しいVercel Functionは
@@ -2564,7 +2645,7 @@ function sanitizeRegionEditorialExistingArticle(
 // Phase1の最小変更方針(新しいFirestore Index作成をしない)に反するため。
 // 対象がsubmissions全体(確認時点で全国8件)である限り、この方式で性能上の
 // 問題は生じない。
-async function fetchApprovedSubmissionSourceFactsForArea(
+async function fetchApprovedSubmissionDocsForArea(
   database,
   targetArea
 ) {
@@ -2615,15 +2696,11 @@ async function fetchApprovedSubmissionSourceFactsForArea(
     );
   }
 
-  const sourceFacts =
+  const matchingDocs =
     [];
 
   documentsById.forEach(
     function(documentSnapshot) {
-      if (sourceFacts.length >= AI_REGION_EDITORIAL_SOURCE_FACT_MAX_COUNT) {
-        return;
-      }
-
       const data =
         documentSnapshot.data() ||
         {};
@@ -2632,59 +2709,402 @@ async function fetchApprovedSubmissionSourceFactsForArea(
         return;
       }
 
-      sourceFacts.push(
-        {
-          title:
-            sanitizeRegionEditorialText(
-              data.title,
-              AI_REGION_EDITORIAL_SOURCE_FACT_TEXT_MAX_LENGTHS.title
-            ),
-
-          content:
-            sanitizeRegionEditorialText(
-              data.content,
-              AI_REGION_EDITORIAL_SOURCE_FACT_TEXT_MAX_LENGTHS.content
-            ),
-
-          shopName:
-            sanitizeRegionEditorialText(
-              data.shopName,
-              AI_REGION_EDITORIAL_SOURCE_FACT_TEXT_MAX_LENGTHS.shopName
-            ),
-
-          category:
-            sanitizeRegionEditorialText(
-              data.category,
-              AI_REGION_EDITORIAL_SOURCE_FACT_TEXT_MAX_LENGTHS.category
-            ),
-
-          address:
-            sanitizeRegionEditorialText(
-              data.address,
-              AI_REGION_EDITORIAL_SOURCE_FACT_TEXT_MAX_LENGTHS.address
-            ),
-
-          // authorType(admin/shopAd等)をそのまま渡すことで、AI側の
-          // instructionsで「shopAdは店舗の直接投稿であり、地域の公式情報
-          // ではない」と明確に区別させる(本部指示：店舗直接投稿と地域公式
-          // 情報を混同しない)。
-          authorType:
-            sanitizeRegionEditorialText(
-              data.authorType,
-              AI_REGION_EDITORIAL_SOURCE_FACT_TEXT_MAX_LENGTHS.authorType
-            ),
-
-          websiteUrl:
-            sanitizeRegionEditorialText(
-              data.websiteUrl,
-              AI_REGION_EDITORIAL_SOURCE_FACT_TEXT_MAX_LENGTHS.websiteUrl
-            )
-        }
-      );
+      matchingDocs.push(data);
     }
   );
 
-  return sourceFacts;
+  return matchingDocs;
+}
+
+// AI地域編集部 Phase2(街を見るAI→地域ファクト接続)｜承認済みsubmissionsの
+// うち、authorTypeが"ai"(街を見るAIのAUTO_POST)または"admin"
+// (ai-editor.html経由の運営編集)のものだけをREGION FACTSとして扱う。
+// それ以外(shopAd＝店舗の常設広告、authorType未設定の一般店舗投稿等)は
+// すべてSHOP DIRECT POSTSへ回す。新しい分類値は作らず、既存の
+// authorType(api/admin-post.jsのALLOWED_AUTHOR_TYPES・
+// api/admin-source-collect.jsのcreateAutoPostSubmission()が実際に書き込む
+// 値)をそのまま再利用する。
+function mapApprovedSubmissionToFactCandidate(
+  data
+) {
+  return {
+    title:
+      sanitizeRegionEditorialText(
+        data.title,
+        AI_REGION_EDITORIAL_SOURCE_FACT_TEXT_MAX_LENGTHS.title
+      ),
+
+    content:
+      sanitizeRegionEditorialText(
+        data.content,
+        AI_REGION_EDITORIAL_SOURCE_FACT_TEXT_MAX_LENGTHS.content
+      ),
+
+    shopName:
+      sanitizeRegionEditorialText(
+        data.shopName,
+        AI_REGION_EDITORIAL_SOURCE_FACT_TEXT_MAX_LENGTHS.shopName
+      ),
+
+    category:
+      sanitizeRegionEditorialText(
+        data.category,
+        AI_REGION_EDITORIAL_SOURCE_FACT_TEXT_MAX_LENGTHS.category
+      ),
+
+    address:
+      sanitizeRegionEditorialText(
+        data.address,
+        AI_REGION_EDITORIAL_SOURCE_FACT_TEXT_MAX_LENGTHS.address
+      ),
+
+    authorType:
+      sanitizeRegionEditorialText(
+        data.authorType,
+        AI_REGION_EDITORIAL_SOURCE_FACT_TEXT_MAX_LENGTHS.authorType
+      ),
+
+    websiteUrl:
+      sanitizeRegionEditorialText(
+        data.websiteUrl,
+        AI_REGION_EDITORIAL_SOURCE_FACT_TEXT_MAX_LENGTHS.websiteUrl
+      ),
+
+    sourceType:
+      sanitizeRegionEditorialText(
+        data.sourceType,
+        AI_REGION_EDITORIAL_SOURCE_FACT_TEXT_MAX_LENGTHS.sourceType
+      ),
+
+    sourceName:
+      AI_REGION_EDITORIAL_REGION_FACT_AUTHOR_TYPES.includes(
+        typeof data.authorType === "string" ? data.authorType : ""
+      )
+        ? (
+            data.authorType === "ai"
+              ? "街を見るAIが確認した地域情報"
+              : "マチナウ編集部"
+          )
+        : "",
+
+    confirmedAt:
+      data.updatedAt &&
+      typeof data.updatedAt.toDate === "function"
+        ? data.updatedAt.toDate().toISOString().slice(0, 10)
+        : "",
+
+    // submissionsは元記事の公開日時を保持していないため空文字のまま
+    // 返す(存在しないfieldを推測で埋めない)。
+    publishedAt:
+      "",
+
+    origin:
+      "submission"
+  };
+}
+
+async function fetchApprovedSubmissionFactsForArea(
+  database,
+  targetArea
+) {
+  const matchingDocs =
+    await fetchApprovedSubmissionDocsForArea(
+      database,
+      targetArea
+    );
+
+  const regionFacts =
+    [];
+
+  const shopDirectPosts =
+    [];
+
+  matchingDocs.forEach(
+    function(data) {
+      const authorType =
+        typeof data.authorType === "string"
+          ? data.authorType
+          : "";
+
+      const candidate =
+        mapApprovedSubmissionToFactCandidate(
+          data
+        );
+
+      if (
+        AI_REGION_EDITORIAL_REGION_FACT_AUTHOR_TYPES.includes(authorType)
+      ) {
+        if (regionFacts.length < AI_REGION_EDITORIAL_SOURCE_FACT_MAX_COUNT) {
+          regionFacts.push(candidate);
+        }
+      } else {
+        if (shopDirectPosts.length < AI_REGION_EDITORIAL_SOURCE_FACT_MAX_COUNT) {
+          shopDirectPosts.push(candidate);
+        }
+      }
+    }
+  );
+
+  return {
+    regionFacts: regionFacts,
+    shopDirectPosts: shopDirectPosts
+  };
+}
+
+// AI地域編集部 Phase2｜対象市町村に登録されているaiSources(街を見るAIの
+// 一次情報源)を取得する。本部指示により、記事のタイトル文字列から
+// 市町村を推測する方式は採用せず、必ずこの「情報源自体に登録された
+// area」から市町村を判定する(town.yaese.lg.jpのような情報源は登録時に
+// area:"八重瀬町"が設定されているため、記事1件ごとの市町村判定は
+// 構造的に確実)。
+async function fetchAiSourcesForArea(
+  database,
+  targetArea
+) {
+  const querySnapshot =
+    await database
+      .collection("aiSources")
+      .where("area", "==", targetArea)
+      .get();
+
+  return querySnapshot.docs.map(
+    function(documentSnapshot) {
+      const data =
+        documentSnapshot.data() ||
+        {};
+
+      return {
+        id: documentSnapshot.id,
+
+        name:
+          sanitizeRegionEditorialText(
+            data.name,
+            AI_REGION_EDITORIAL_SOURCE_FACT_TEXT_MAX_LENGTHS.sourceName
+          ),
+
+        sourceType:
+          sanitizeRegionEditorialText(
+            data.sourceType,
+            AI_REGION_EDITORIAL_SOURCE_FACT_TEXT_MAX_LENGTHS.sourceType
+          )
+      };
+    }
+  );
+}
+
+// AI地域編集部 Phase2｜街を見るAIの内部にある本格的なEVENT/鮮度判定
+// エンジン(judgeArticleForAutoPost内のresolveFreshnessCategory等)は、
+// 関連度スコアや第二審と密結合しており、Phase2の最小スコープでそのまま
+// 再利用・importすると2つの独立したVercel Function間の結合が過剰に
+// 強まる(本部指示のスコープ外)。そのため、aiCollectedArticles由来の
+// 長期ファクト候補(既にsubmissionsの掲示期限が切れているもの)だけに
+// 対象を絞った、意図的に単純な安全側のキーワード検出を行う。
+// 「完璧な判定AIは不要、安全側へ倒す」という本部方針に基づき、
+// 該当した場合は無条件でTier B(Terraへは渡さない)へ倒す。
+function looksTimeBoundForLongTermReuse(
+  text
+) {
+  if (typeof text !== "string" || text === "") {
+    return false;
+  }
+
+  return AI_REGION_EDITORIAL_TIME_BOUND_KEYWORDS.some(
+    function(keyword) {
+      return text.includes(keyword);
+    }
+  );
+}
+
+// AI地域編集部 Phase2｜対象市町村に登録されたaiSourcesのaiCollectedArticles
+// から、「街を見るAIの判定(judgeArticleForAutoPost)と第二審の両方を
+// 通過し、実際にsubmissionsへ投稿されたことがある(=postedSubmissionIdを
+// 持つ)」記事だけを長期地域ファクト候補として拾う。processingStatusが
+// DISCOVERED/PROCESSING/ERROR/SKIPPEDの記事(未判定・エラー・非採用)は
+// 一切対象にしない。
+//
+// 本部指示(Phase1.7はshadow modeであり、その結果だけを根拠に地域ファクト
+// へ昇格させない)を踏まえ、ここではaiCollectedArticles.aiSecondOpinion
+// フィールドを一切読み取らない。判定に使うのはprocessingStatus/
+// postedSubmissionIdという「既に本番のAUTO_POSTパイプライン全体
+// (第一審＋第二審＋実際の投稿)を経た最終結果」のみであり、第二審の結果を
+// 単独の根拠にすることはない。
+//
+// 対応する投稿がまだ承認済み一覧(submissions)に残っている記事は、
+// fetchApprovedSubmissionFactsForArea()側で既にREGION FACTSとして
+// 拾われているため、ここでは重複を避けるためpostedSubmissionIdの集合を
+// 除外リストとして受け取る。
+async function fetchLongTermRegionFactsFromAiCollectedArticles(
+  database,
+  aiSources,
+  excludedSubmissionIds
+) {
+  const tierAFacts =
+    [];
+
+  let tierBCount =
+    0;
+
+  for (const source of aiSources) {
+    if (typeof source.id !== "string" || source.id === "") {
+      continue;
+    }
+
+    let querySnapshot;
+
+    try {
+      querySnapshot =
+        await database
+          .collection(AI_COLLECTED_ARTICLES_COLLECTION_NAME)
+          .where("sourceId", "==", source.id)
+          .limit(AI_REGION_EDITORIAL_AI_COLLECTED_PER_SOURCE_MAX_COUNT)
+          .get();
+    } catch (queryError) {
+      console.error(
+        "AI地域編集部：aiCollectedArticlesの取得に失敗しました（他の情報源の取得には影響しません）：",
+        queryError
+      );
+      continue;
+    }
+
+    querySnapshot.docs.forEach(
+      function(documentSnapshot) {
+        const data =
+          documentSnapshot.data() ||
+          {};
+
+        if (data.processingStatus !== "DONE") {
+          return;
+        }
+
+        const postedSubmissionId =
+          typeof data.postedSubmissionId === "string"
+            ? data.postedSubmissionId
+            : "";
+
+        if (postedSubmissionId === "") {
+          return;
+        }
+
+        if (excludedSubmissionIds.has(postedSubmissionId)) {
+          // 既にREGION FACTSとして拾われている(=まだ掲示期限内)ため、
+          // 二重に渡さない。
+          return;
+        }
+
+        const title =
+          sanitizeRegionEditorialText(
+            data.title,
+            AI_REGION_EDITORIAL_SOURCE_FACT_TEXT_MAX_LENGTHS.title
+          );
+
+        const content =
+          sanitizeRegionEditorialText(
+            data.summary,
+            AI_REGION_EDITORIAL_SOURCE_FACT_TEXT_MAX_LENGTHS.content
+          );
+
+        if (
+          looksTimeBoundForLongTermReuse(
+            title + " " + content
+          )
+        ) {
+          tierBCount +=
+            1;
+          return;
+        }
+
+        if (tierAFacts.length >= AI_REGION_EDITORIAL_SOURCE_FACT_MAX_COUNT) {
+          return;
+        }
+
+        tierAFacts.push(
+          {
+            title: title,
+            content: content,
+            shopName: "",
+            category: "",
+            address: "",
+            authorType: "ai",
+            websiteUrl:
+              sanitizeRegionEditorialText(
+                data.articleUrl,
+                AI_REGION_EDITORIAL_SOURCE_FACT_TEXT_MAX_LENGTHS.websiteUrl
+              ),
+            sourceType: source.sourceType,
+            sourceName:
+              source.name !== ""
+                ? source.name
+                : "街を見るAIが確認した地域情報",
+            confirmedAt:
+              data.lastSeenAt &&
+              typeof data.lastSeenAt.toDate === "function"
+                ? data.lastSeenAt.toDate().toISOString().slice(0, 10)
+                : "",
+            publishedAt:
+              sanitizeRegionEditorialText(
+                data.publishedAt,
+                AI_REGION_EDITORIAL_SOURCE_FACT_TEXT_MAX_LENGTHS.publishedAt
+              ),
+            origin: "aiCollectedArticle"
+          }
+        );
+      }
+    );
+  }
+
+  return {
+    tierAFacts: tierAFacts,
+    tierBCount: tierBCount
+  };
+}
+
+// AI地域編集部 Phase2｜対象市町村のREGION FACTS・SHOP DIRECT POSTSを
+// まとめて取得する。新しいVercel Functionは作らず、既存の
+// /api/moderate-submissionのregionEditorial処理からのみ呼ばれる。
+async function fetchRegionEditorialMaterialsForArea(
+  database,
+  targetArea
+) {
+  const submissionFacts =
+    await fetchApprovedSubmissionFactsForArea(
+      database,
+      targetArea
+    );
+
+  const aiSources =
+    await fetchAiSourcesForArea(
+      database,
+      targetArea
+    );
+
+  // submissionFacts.regionFactsは既にsubmissions由来なので、その元
+  // documentのIDまでは持っていない(mapApprovedSubmissionToFactCandidate()
+  // が返す形にIDを含めていない)。重複除外は「まだ承認済み一覧に residing
+  // している」こと自体で十分に目的を達成できるため、ここでは
+  // postedSubmissionIdの実際の値までは追跡せず、空集合を渡す
+  // (=aiCollectedArticles側は常に「まだsubmissionsに無い」ものとして
+  // 扱われるが、その場合でも同一記事が2回渡る実害は「同じ事実が2回
+  // 言及される可能性がある」程度であり、事実の誤りには繋がらない。
+  // Phase2の最小スコープではこの程度の重複許容を安全側とみなす)。
+  const longTermFacts =
+    await fetchLongTermRegionFactsFromAiCollectedArticles(
+      database,
+      aiSources,
+      new Set()
+    );
+
+  return {
+    regionFacts:
+      submissionFacts.regionFacts.concat(
+        longTermFacts.tierAFacts
+      ),
+
+    shopDirectPosts:
+      submissionFacts.shopDirectPosts,
+
+    pendingReviewCount:
+      longTermFacts.tierBCount
+  };
 }
 
 // 「Wikipedia的な事実列挙」を禁止し、旅行者が今の自分の行動へどう
@@ -2692,40 +3112,57 @@ async function fetchApprovedSubmissionSourceFactsForArea(
 // web_searchは使わない(sourceFacts以外の情報を根拠にしない)ため、
 // instructions内でも「与えられたsourceFacts以外の事実を書かない」ことを
 // 明示する。
+// AI地域編集部 Phase2(街を見るAI→地域ファクト接続)｜本部指示により、
+// REGION FACTS(公式・確認済みの街の事実)とSHOP DIRECT POSTS(店舗からの
+// 直接投稿)を完全に分離して渡し、店舗投稿だけを根拠に地域全体の特徴を
+// 断定させない。出典(URL)はAIに一切生成させず、factIdの参照だけを
+// 答えさせる(sourceCitationsは呼び出し元がfactIdから実データを引いて
+// 組み立てる)。
 function buildRegionEditorialInstructions() {
   return (
     "あなたは沖縄の地域情報サイト『マチナウ』のAI地域編集者です。\n" +
-    "対象は沖縄県内の1つの市町村です。あなたの仕事は、与えられた" +
-    "sourceFacts(すでに承認済みで実在が確認されている情報)だけを根拠に、" +
-    "その市町村の『地域のおすすめ』記事の下書き(タイトル・本文)を書くことです。\n\n" +
+    "対象は沖縄県内の1つの市町村です。入力には2種類の事実配列が" +
+    "与えられます。\n\n" +
+    "・regionFacts：公式一次情報・自治体・街を見るAIが確認した、地域の" +
+    "公式的な事実。\n" +
+    "・shopDirectPosts：店舗自身が直接投稿した情報(店舗の主張であり、" +
+    "地域を代表する事実ではない)。\n\n" +
+    "あなたの仕事は、この2つだけを根拠に、その市町村の『地域のおすすめ』" +
+    "記事の下書き(タイトル・本文)を書くことです。\n\n" +
     "【絶対に守ること】\n" +
-    "1. sourceFactsに書かれていない事実・店名・営業時間・価格・数値を" +
-    "絶対に創作しない。sourceFactsが乏しい場合は、無理に埋めず、" +
+    "1. regionFacts・shopDirectPostsに書かれていない事実・店名・営業時間・" +
+    "価格・数値・日付を絶対に創作しない。情報が乏しい場合は、無理に埋めず、" +
     "分かっている範囲だけで簡潔に書く。\n" +
     "2. SNS(Twitter/Instagram等)を見たかのような書き方(「話題になっている」" +
     "「口コミで人気」等)を絶対にしない。SNS情報は一切与えられていない。\n" +
-    "3. authorTypeが\"shopAd\"の項目は、店舗自身による直接投稿であり、" +
-    "地域の公式情報ではない。両者を混同して書かず、必要なら『地域で" +
-    "投稿されている店舗紹介として』のように情報の性質を区別できる書き方にする。\n" +
-    "4. 出力は指定されたJSON形式のみ。JSON以外の文字列（前置き・挨拶・" +
+    "3. shopDirectPostsだけを根拠に、地域全体の特徴・代表性・文化・人気を" +
+    "断定してはいけない。\n" +
+    "   NG例：「八重瀬町は個性派バーガーの街です。」\n" +
+    "   OK例：「八重瀬町では現在、店舗から直接投稿されている飲食情報として" +
+    "○○があります。」\n" +
+    "   ただし本文でこの区別を毎回長々と説明する必要はない。regionFactsが" +
+    "十分にある場合は地域の事実を中心に書き、shopDirectPostsは補足として" +
+    "軽く触れる程度でよい。\n" +
+    "4. urlやlabelなどの出典文字列を自分で生成しない。本文の根拠に実際に" +
+    "使った事実は、citedFactIds配列にfactId(入力データに含まれる記号、" +
+    "例：\"rf1\"、\"sp1\")をそのまま返すことでのみ示す。\n" +
+    "5. 出力は指定されたJSON形式のみ。JSON以外の文字列（前置き・挨拶・" +
     "コードブロック記法等）を一切含めない。\n\n" +
     "【書き方の方針(Wikipedia的な事実列挙の禁止)】\n" +
     "『◯◯町には△△があります。□□もあります。』のような単なる施設の" +
     "羅列は禁止する。かわりに、旅行者が『いつ・誰と・どんな時に・どう" +
     "使うと良いか』、そしてそれが旅行者の『今の行動』にどうつながるかを" +
     "中心に書く。マチナウ全体の思想『街の今を見て、あなたの今を聞いて、" +
-    "一緒に次の行動を決める』の地域編集版として、事実(sourceFacts)→" +
-    "旅行者にとっての意味、の順で自然な日本語の文章にする。\n\n" +
+    "一緒に次の行動を決める』の地域編集版として、事実(regionFacts/" +
+    "shopDirectPosts)→旅行者にとっての意味、の順で自然な日本語の文章にする。\n\n" +
     "【出力形式】\n" +
     "title: 記事のタイトル(短く、地名や特徴が伝わるもの)\n" +
     "content: 本文(2〜5文程度。事実の言い換えではなく、旅行者がどう" +
     "過ごすと良いかが伝わる文章)\n" +
     "regionName: 運営整理用の短いラベル(例：南部)。既存のregionNameが" +
     "与えられていれば、特に理由がない限りそのまま踏襲する。\n" +
-    "citations: 本文の根拠にした事実の出典一覧。sourceFactsのうち実際に" +
-    "使ったものだけを、{url, label}の配列で返す(labelはその情報が何かを" +
-    "示す短い日本語。例：『ゆかり食堂の投稿情報』)。websiteUrlが空の" +
-    "sourceFactは出典として使わないか、urlを空文字のまま返す。"
+    "citedFactIds: 本文の根拠に実際に使ったregionFacts/shopDirectPostsの" +
+    "factIdだけを配列で返す。使っていない事実のfactIdを含めない。"
   );
 }
 
@@ -2737,7 +3174,8 @@ function buildRegionEditorialInputItems(
       {
         targetArea: payload.targetArea,
         existingArticle: payload.existingArticle,
-        sourceFacts: payload.sourceFacts
+        regionFacts: payload.regionFacts,
+        shopDirectPosts: payload.shopDirectPosts
       }
     );
 
@@ -2748,13 +3186,14 @@ function buildRegionEditorialInputItems(
         {
           type: "input_text",
           text:
-            "【対象市町村・既存記事・確認済み事実(JSON)】\n" +
+            "【対象市町村・既存記事・REGION FACTS・SHOP DIRECT POSTS(JSON)】\n" +
             contextJson +
             "\n\n" +
-            "上記のsourceFactsだけを根拠に、指定されたJSON形式で下書きを" +
-            "作成してください。既存記事(existingArticle)がある場合は、" +
-            "全面的な書き直しではなく、確認済み事実を反映した改善案として" +
-            "書いてください。"
+            "regionFactsとshopDirectPostsだけを根拠に、指定されたJSON形式で" +
+            "下書きを作成してください。regionFactsが少ない場合は、無理に" +
+            "地域全体を語らず、分かっている範囲だけで簡潔に書いてください。" +
+            "既存記事(existingArticle)がある場合は、全面的な書き直しでは" +
+            "なく、確認済み事実を反映した改善案として書いてください。"
         }
       ]
     }
@@ -2778,24 +3217,14 @@ function buildRegionEditorialJsonSchema() {
         regionName: {
           type: "string"
         },
-        citations: {
+        citedFactIds: {
           type: "array",
           items: {
-            type: "object",
-            properties: {
-              url: {
-                type: "string"
-              },
-              label: {
-                type: "string"
-              }
-            },
-            required: ["url", "label"],
-            additionalProperties: false
+            type: "string"
           }
         }
       },
-      required: ["title", "content", "regionName", "citations"],
+      required: ["title", "content", "regionName", "citedFactIds"],
       additionalProperties: false
     }
   };
@@ -3009,30 +3438,26 @@ async function callOpenAiRegionEditorial(
     throw shapeError;
   }
 
-  const citations =
-    Array.isArray(parsedDraft.citations)
-      ? parsedDraft.citations
-          .slice(0, AI_REGION_EDITORIAL_DRAFT_CITATION_MAX_COUNT)
-          .map(
-            function(citation) {
-              return {
-                url:
-                  sanitizeRegionEditorialText(
-                    citation && citation.url,
-                    AI_REGION_EDITORIAL_DRAFT_TEXT_MAX_LENGTHS.citationUrl
-                  ),
-
-                label:
-                  sanitizeRegionEditorialText(
-                    citation && citation.label,
-                    AI_REGION_EDITORIAL_DRAFT_TEXT_MAX_LENGTHS.citationLabel
-                  )
-              };
+  // 本部指示：出典(URL/label)はAIに生成させない。AIから受け取るのは
+  // factId(こちらが採番した記号)の配列だけであり、実データへの変換
+  // (sourceCitations構築)は呼び出し元(handleRegionEditorialRequest)が
+  // 実際のregionFacts/shopDirectPosts配列と突き合わせて行う。ここでは
+  // 文字列としての型・長さ・件数だけを安全側に制限する。
+  const citedFactIds =
+    Array.isArray(parsedDraft.citedFactIds)
+      ? parsedDraft.citedFactIds
+          .filter(
+            function(factId) {
+              return typeof factId === "string" && factId !== "";
             }
           )
-          .filter(
-            function(citation) {
-              return citation.label !== "";
+          .slice(0, AI_REGION_EDITORIAL_CITED_FACT_ID_MAX_COUNT)
+          .map(
+            function(factId) {
+              return sanitizeRegionEditorialText(
+                factId,
+                AI_REGION_EDITORIAL_CITED_FACT_ID_MAX_LENGTH
+              );
             }
           )
       : [];
@@ -3056,15 +3481,93 @@ async function callOpenAiRegionEditorial(
         AI_REGION_EDITORIAL_DRAFT_TEXT_MAX_LENGTHS.regionName
       ),
 
-    citations:
-      citations
+    citedFactIds:
+      citedFactIds
   };
 }
 
-// AI地域編集部 Phase1(八重瀬町・最小縦断実証)｜admin-region-picks.htmlの
-// 管理者/Editorのみが呼び出せる(requireAdminOrEditor()、一般公開経路には
+// AIが本文の根拠として引用したfactIdの配列を、実際のregionFacts/
+// shopDirectPosts配列(factId付き)と突き合わせ、実データからだけ
+// sourceCitationsを組み立てる。AIが存在しないfactIdを返した場合は
+// 無視する(ハルシネーション対策の多重防御)。
+function buildSourceCitationsFromFactIds(
+  citedFactIds,
+  factsWithId
+) {
+  const factsById =
+    new Map();
+
+  factsWithId.forEach(
+    function(fact) {
+      factsById.set(
+        fact.factId,
+        fact
+      );
+    }
+  );
+
+  const citations =
+    [];
+
+  citedFactIds.forEach(
+    function(factId) {
+      const fact =
+        factsById.get(factId);
+
+      if (!fact) {
+        return;
+      }
+
+      citations.push(
+        {
+          factId: fact.factId,
+          kind: fact.factKind,
+          url: fact.websiteUrl,
+
+          label:
+            fact.sourceName !== ""
+              ? fact.sourceName
+              : (fact.shopName || fact.title),
+
+          sourceType: fact.sourceType,
+          confirmedAt: fact.confirmedAt,
+          publishedAt: fact.publishedAt
+        }
+      );
+    }
+  );
+
+  return citations;
+}
+
+function attachFactIds(
+  facts,
+  prefix,
+  factKind
+) {
+  return facts.map(
+    function(fact, index) {
+      return Object.assign(
+        {},
+        fact,
+        {
+          factId: prefix + (index + 1),
+          factKind: factKind
+        }
+      );
+    }
+  );
+}
+
+// AI地域編集部 Phase2(街を見るAI→地域ファクト接続)｜admin-region-picks.html
+// の管理者/Editorのみが呼び出せる(requireAdminOrEditor()、一般公開経路には
 // 存在しないmode)。この関数はFirestoreへ一切書き込まない。既存の
 // aiConcierge/aiConciergeChatのいずれにも一切触れない。
+//
+// Phase1との最大の違い：REGION FACTSが本部指定の最低件数
+// (AI_REGION_EDITORIAL_MIN_REGION_FACT_COUNT)未満の場合、
+// SHOP DIRECT POSTSがいくつあってもOpenAI APIを一切呼ばずに終了する
+// (本部指示「薄い記事を生成するより、生成しない方が正しい」)。
 async function handleRegionEditorialRequest(
   request,
   response
@@ -3109,24 +3612,50 @@ async function handleRegionEditorialRequest(
         requestBody.existingArticle
       );
 
-    const sourceFacts =
-      await fetchApprovedSubmissionSourceFactsForArea(
+    const materials =
+      await fetchRegionEditorialMaterialsForArea(
         authResult.database,
         targetArea
       );
 
-    if (sourceFacts.length === 0) {
+    const counts =
+      {
+        regionFacts: materials.regionFacts.length,
+        shopDirectPosts: materials.shopDirectPosts.length,
+        pendingReview: materials.pendingReviewCount
+      };
+
+    if (
+      materials.regionFacts.length <
+      AI_REGION_EDITORIAL_MIN_REGION_FACT_COUNT
+    ) {
       return response.status(200).json({
         success: true,
-        hasSourceFacts: false,
+        sufficient: false,
         message:
-          "現在、" + targetArea + "の確認済み情報(承認済みの投稿)が" +
-          "ありません。地域情報の投稿が承認された後に、あらためて生成して" +
-          "ください。",
+          "現在、" + targetArea + "について確認済みの地域ファクト" +
+          "(公式情報・街を見るAIが確認した情報)が不足しているため、" +
+          "地域紹介記事を生成しません。店舗の直接投稿だけでは地域全体を" +
+          "紹介する記事を作成しない設計です。",
+        counts: counts,
         draft: null,
-        sourceFactsUsed: []
+        sourceCitations: []
       });
     }
+
+    const regionFactsWithId =
+      attachFactIds(
+        materials.regionFacts,
+        "rf",
+        "region_fact"
+      );
+
+    const shopDirectPostsWithId =
+      attachFactIds(
+        materials.shopDirectPosts,
+        "sp",
+        "shop_direct_post"
+      );
 
     let draft;
 
@@ -3136,7 +3665,8 @@ async function handleRegionEditorialRequest(
           {
             targetArea: targetArea,
             existingArticle: existingArticle,
-            sourceFacts: sourceFacts
+            regionFacts: regionFactsWithId,
+            shopDirectPosts: shopDirectPostsWithId
           }
         );
     } catch (aiError) {
@@ -3152,22 +3682,24 @@ async function handleRegionEditorialRequest(
       });
     }
 
+    const sourceCitations =
+      buildSourceCitationsFromFactIds(
+        draft.citedFactIds,
+        regionFactsWithId.concat(shopDirectPostsWithId)
+      );
+
     return response.status(200).json({
       success: true,
-      hasSourceFacts: true,
-      draft: draft,
+      sufficient: true,
 
-      sourceFactsUsed:
-        sourceFacts.map(
-          function(sourceFact) {
-            return {
-              title: sourceFact.title,
-              shopName: sourceFact.shopName,
-              authorType: sourceFact.authorType,
-              websiteUrl: sourceFact.websiteUrl
-            };
-          }
-        )
+      draft: {
+        title: draft.title,
+        content: draft.content,
+        regionName: draft.regionName
+      },
+
+      sourceCitations: sourceCitations,
+      counts: counts
     });
   } catch (error) {
     console.error(
