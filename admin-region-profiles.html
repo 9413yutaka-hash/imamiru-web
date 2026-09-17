@@ -321,8 +321,9 @@
       </h2>
 
       <div class="warning-box">
-        対象は「人口」「面積」「成立史」「地形/位置」「特産/食」
-        「交通/車なし」の6グループのみです。AIはこの場でPROFILEへ
+        対象は「基本統計(人口・面積)」「成立・地理」「食・特産」「移動」の
+        4グループのみです。1グループ＝OpenAI呼び出し1回(最大4回、確認済み
+        グループは呼び出しません)。AIはこの場でPROFILEへ
         書き込みません。候補ごとに内容と出典を確認し、「採用」を押した
         ものだけがPROFILEへ保存されます。
       </div>
@@ -523,21 +524,36 @@
         ? escapeHtmlText(candidate.suggestedValueText) + "（基準日：" + escapeHtmlText(candidate.asOf) + "）"
         : escapeHtmlText(candidate.suggestedValueText);
 
-    const safeUrl =
-      typeof candidate.source.url === "string" && /^https?:\/\//.test(candidate.source.url)
-        ? candidate.source.url
-        : "";
+    // Phase3.2改修(1call方式)｜「このcandidateはこの1URLだけが根拠」という
+    // 偽の精度は主張せず、そのグループの調査で実際に参照したsources全部を
+    // 「この調査で参照した情報源」として表示する(本部指示)。
+    const sourcesListHtml =
+      (candidate.candidateSources || [])
+        .map(function(source) {
+          const safeUrl =
+            typeof source.url === "string" && /^https?:\/\//.test(source.url)
+              ? source.url
+              : "";
+
+          if (!safeUrl) {
+            return "";
+          }
+
+          return (
+            "<li><a href=\"" + escapeHtmlText(safeUrl) + "\" target=\"_blank\" rel=\"noopener\">" +
+            escapeHtmlText(source.title || safeUrl) + "</a></li>"
+          );
+        })
+        .join("");
 
     card.innerHTML =
       "<h3>" + escapeHtmlText(candidate.label) + "（" + escapeHtmlText(candidate.fieldKey) + "）</h3>" +
       "<p><strong>候補：</strong>" + valueLine + "</p>" +
       "<p><strong>根拠：</strong>" + escapeHtmlText(candidate.evidenceQuote) + "</p>" +
-      "<p><strong>出典：</strong>" + escapeHtmlText(candidate.source.name) +
-        (safeUrl ? "（<a href=\"" + escapeHtmlText(safeUrl) + "\" target=\"_blank\" rel=\"noopener\">出典を確認</a>）" : "") + "</p>" +
+      "<p><strong>この調査で参照した情報源：</strong></p>" +
+      "<ul>" + sourcesListHtml + "</ul>" +
+      "<p><strong>出典の種類（AI推定）：</strong>" + escapeHtmlText(candidate.sourceTypeGuess) + "</p>" +
       "<p><strong>信頼度：</strong>" + escapeHtmlText(candidate.confidence) + "</p>" +
-      (candidate.sourceTierWarning
-        ? "<p class=\"tier-warning\">⚠ 公式一次情報源(.lg.jp/.go.jp等)と機械的には確認できませんでした。採用前に出典を直接ご確認ください。</p>"
-        : "") +
       (candidate.isEditorialInterpretation
         ? "<p><em>※この項目はAIの解釈を含みます(一次情報の直接引用ではありません)。</em></p>"
         : "");
@@ -568,11 +584,27 @@
       try {
         const updatedProfile = JSON.parse(JSON.stringify(currentLoadedProfile));
 
+        // Phase3.2改修(1call方式)｜candidateSources(そのグループの調査で
+        // 実際に参照した情報源全部)を、既存のfact wrapperのsources配列へ
+        // そのまま保存する(1URLだけを根拠と偽らない)。confirmedにするには
+        // 最低1件の出典が必要というPhase3.1ルールは維持される
+        // (candidateSourcesが0件のcandidateはそもそもサーバー側で
+        // 返されない)。
         updatedProfile[candidate.section][candidate.field] = {
           value: candidate.suggestedValueText,
           status: "confirmed",
           validityType: candidate.validityType,
-          sources: [candidate.source],
+
+          sources: (candidate.candidateSources || []).map(function(source) {
+            return {
+              name: source.title || "",
+              url: source.url || "",
+              sourceType: candidate.sourceTypeGuess || "",
+              checkedAt: "",
+              publishedAt: ""
+            };
+          }),
+
           updatedAt: null
         };
 
@@ -611,7 +643,34 @@
     try {
       const result = await callRegionProfileApi("regionProfileResearch");
 
-      showResearchStatus(result.message || "", result.candidates.length > 0 ? "success" : "");
+      // Phase3.2改修(1call方式)｜グループ別elapsedMs・全体totalElapsedMs・
+      // usageを、代表がどのグループが重いか把握できるよう表示する
+      // (秘密情報・OpenAI raw responseは含めない)。
+      const groupSummaryText =
+        (result.groupResults || [])
+          .map(function(g) {
+            if (g.skipped) {
+              return g.label + "：確認済みのためスキップ";
+            }
+            if (!g.success) {
+              return g.label + "：失敗(" + g.errorType + ")";
+            }
+            return g.label + "：" + g.elapsedMs + "ms／候補" + g.candidateCount + "件／出典" + g.sourcesCount + "件";
+          })
+          .join(" ／ ");
+
+      const usageText =
+        result.usage
+          ? "合計トークン：入力" + result.usage.inputTokens + "／出力" + result.usage.outputTokens + "／計" + result.usage.totalTokens
+          : "";
+
+      showResearchStatus(
+        (result.message || "") +
+          "\n" + groupSummaryText +
+          (typeof result.totalElapsedMs === "number" ? "\n合計所要時間：" + result.totalElapsedMs + "ms" : "") +
+          (usageText ? "\n" + usageText : ""),
+        result.candidates.length > 0 ? "success" : ""
+      );
 
       result.candidates.forEach(function(candidate) {
         candidateList.appendChild(renderCandidateCard(candidate));
