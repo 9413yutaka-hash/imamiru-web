@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+
+<meta
+  name="viewport"
+  content="width=device-width, initial-scale=1.0"
+>
+
+<meta name="robots" content="noindex, nofollow">
+
+<title>
+  地域プロフィール(街の記憶)管理｜マチナウ運営
+</title>
+
+<style>
+  :root {
+    --navy: #071a33;
+    --blue: #0788c9;
+    --green: #19a96b;
+    --red: #ef5a67;
+    --text: #15233a;
+    --subtext: #697386;
+    --border: #e2eaf1;
+    --background: #f4f8fb;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: "Yu Gothic", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+    background: var(--background);
+    color: var(--text);
+  }
+
+  header {
+    background: var(--navy);
+    color: #fff;
+    padding: 18px 20px;
+  }
+
+  header .page-label {
+    font-size: 12px;
+    opacity: 0.8;
+  }
+
+  header h1 {
+    margin: 4px 0 0;
+    font-size: 20px;
+  }
+
+  header a {
+    display: inline-block;
+    margin-top: 10px;
+    color: #dff7ff;
+    font-size: 13px;
+    text-decoration: none;
+  }
+
+  main {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 20px 16px 60px;
+  }
+
+  .panel {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px;
+    margin-bottom: 18px;
+  }
+
+  .field {
+    margin-bottom: 14px;
+  }
+
+  .field label {
+    display: block;
+    font-size: 13px;
+    font-weight: bold;
+    margin-bottom: 4px;
+  }
+
+  input[type="text"],
+  input[type="password"] {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 14px;
+  }
+
+  textarea#profileJsonTextarea {
+    width: 100%;
+    min-height: 360px;
+    font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+    font-size: 12px;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    white-space: pre;
+  }
+
+  .primary-button,
+  .secondary-button {
+    display: inline-block;
+    padding: 10px 16px;
+    border-radius: 6px;
+    border: none;
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  .primary-button {
+    background: var(--blue);
+    color: #fff;
+  }
+
+  .secondary-button {
+    background: #eef3f7;
+    color: var(--text);
+  }
+
+  .message-box {
+    margin-top: 10px;
+    font-size: 13px;
+    white-space: pre-wrap;
+  }
+
+  .message-box.error {
+    color: var(--red);
+  }
+
+  .message-box.success {
+    color: var(--green);
+  }
+
+  .completeness-line {
+    font-size: 14px;
+    margin: 4px 0;
+  }
+
+  .warning-box {
+    background: #fff6e5;
+    border: 1px solid #f0c869;
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 13px;
+    margin-bottom: 14px;
+    color: #7a5b00;
+  }
+
+  #adminArea {
+    display: none;
+  }
+
+  #adminArea.visible {
+    display: block;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="page-label">
+    🔐 運営者専用
+  </div>
+
+  <h1>
+    地域プロフィール(街の記憶)管理
+  </h1>
+
+  <a href="admin.html">
+    ← 管理トップへ戻る
+  </a>
+</header>
+
+<main>
+
+  <section id="loginPanel" class="panel">
+    <h2>
+      管理者ログイン
+    </h2>
+
+    <form id="loginForm" novalidate>
+      <div class="field">
+        <label for="adminEmail">
+          メールアドレス
+        </label>
+
+        <input
+          id="adminEmail"
+          type="text"
+          autocomplete="email"
+          required
+        >
+      </div>
+
+      <div class="field">
+        <label for="adminPassword">
+          パスワード
+        </label>
+
+        <input
+          id="adminPassword"
+          type="password"
+          autocomplete="current-password"
+          required
+        >
+      </div>
+
+      <button id="loginButton" class="primary-button" type="submit">
+        管理画面へログイン
+      </button>
+    </form>
+
+    <div id="loginMessage" class="message-box" role="status" aria-live="polite"></div>
+  </section>
+
+  <section id="adminArea">
+
+    <div class="panel">
+      <h2>
+        八重瀬町（Phase3.1実証中・対象はこの1件のみ）
+      </h2>
+
+      <div class="warning-box">
+        Phase3.1はregionProfilesの保存・読出し経路が正しく動くかだけを
+        確認するテストです。実際の人口・歴史等の地域データをここへ
+        入力しないでください。保存はテスト用の値、または全項目
+        unknownの状態のみで行ってください。
+      </div>
+
+      <button id="loadButton" class="secondary-button" type="button">
+        読み込む
+      </button>
+
+      <div id="loadStatus" class="message-box" role="status" aria-live="polite"></div>
+
+      <div id="existsLine" class="completeness-line"></div>
+      <div id="completenessLine" class="completeness-line"></div>
+    </div>
+
+    <div class="panel">
+      <h2>
+        PROFILE JSON（読込内容の確認・テスト保存用の編集）
+      </h2>
+
+      <div class="field">
+        <textarea id="profileJsonTextarea" spellcheck="false"></textarea>
+      </div>
+
+      <button id="saveButton" class="primary-button" type="button">
+        このJSONを保存する（テスト）
+      </button>
+
+      <div id="saveStatus" class="message-box" role="status" aria-live="polite"></div>
+    </div>
+
+  </section>
+
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"></script>
+<script src="firebase.js"></script>
+
+<script>
+  const ADMIN_EMAIL =
+    "9413yutaka@gmail.com";
+
+  // Phase3.1は八重瀬町のみが対象(api/moderate-submission.jsの
+  // REGION_PROFILE_ALLOWED_AREASと一致させる)。
+  const TARGET_AREA =
+    "八重瀬町";
+
+  const loginPanel = document.getElementById("loginPanel");
+  const adminArea = document.getElementById("adminArea");
+  const loginForm = document.getElementById("loginForm");
+  const loginButton = document.getElementById("loginButton");
+  const loginMessage = document.getElementById("loginMessage");
+
+  const loadButton = document.getElementById("loadButton");
+  const loadStatus = document.getElementById("loadStatus");
+  const existsLine = document.getElementById("existsLine");
+  const completenessLine = document.getElementById("completenessLine");
+
+  const profileJsonTextarea = document.getElementById("profileJsonTextarea");
+  const saveButton = document.getElementById("saveButton");
+  const saveStatus = document.getElementById("saveStatus");
+
+  function showLoginMessage(text, type) {
+    loginMessage.textContent = text;
+    loginMessage.className = "message-box" + (type ? " " + type : "");
+  }
+
+  function clearLoginMessage() {
+    loginMessage.textContent = "";
+    loginMessage.className = "message-box";
+  }
+
+  function showLoadStatus(text, type) {
+    loadStatus.textContent = text;
+    loadStatus.className = "message-box" + (type ? " " + type : "");
+  }
+
+  function showSaveStatus(text, type) {
+    saveStatus.textContent = text;
+    saveStatus.className = "message-box" + (type ? " " + type : "");
+  }
+
+  function renderCompleteness(exists, completeness) {
+    existsLine.textContent =
+      exists ? "Firestoreに保存済みのPROFILEです。" : "まだFirestoreに保存されていません(初期unknown構造を表示しています)。";
+
+    if (completeness) {
+      completenessLine.textContent =
+        "確認済み：" + completeness.confirmedCount + "／" +
+        "未確認：" + completeness.unknownCount + "／" +
+        "必須項目数：" + completeness.totalRequired;
+    } else {
+      completenessLine.textContent = "";
+    }
+  }
+
+  async function getIdTokenOrThrow() {
+    const currentUser = firebase.auth().currentUser;
+
+    if (!currentUser) {
+      throw new Error("ログイン状態を確認できませんでした。管理画面から再度ログインしてください。");
+    }
+
+    return await currentUser.getIdToken();
+  }
+
+  async function callRegionProfileApi(mode, extraBody) {
+    const idToken = await getIdTokenOrThrow();
+
+    const response = await fetch("/api/moderate-submission", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + idToken
+      },
+      body: JSON.stringify(Object.assign({ mode: mode, targetArea: TARGET_AREA }, extraBody || {}))
+    });
+
+    let responseData = null;
+
+    try {
+      responseData = await response.json();
+    } catch (jsonError) {
+      throw new Error("応答を読み取れませんでした。");
+    }
+
+    if (!response.ok || !responseData || responseData.success !== true) {
+      throw new Error((responseData && responseData.message) || "処理に失敗しました。");
+    }
+
+    return responseData;
+  }
+
+  loadButton.addEventListener("click", async function() {
+    loadButton.disabled = true;
+    showLoadStatus("読み込んでいます…", "");
+
+    try {
+      const result = await callRegionProfileApi("regionProfileGet");
+
+      profileJsonTextarea.value = JSON.stringify(result.profile, null, 2);
+      renderCompleteness(result.exists, result.completeness);
+      showLoadStatus("読み込みました。", "success");
+    } catch (error) {
+      console.error("地域プロフィールの読み込みに失敗しました", error);
+      showLoadStatus(error.message || "読み込みに失敗しました。", "error");
+    } finally {
+      loadButton.disabled = false;
+    }
+  });
+
+  saveButton.addEventListener("click", async function() {
+    let parsedProfile;
+
+    try {
+      parsedProfile = JSON.parse(profileJsonTextarea.value);
+    } catch (parseError) {
+      showSaveStatus("JSONの形式が正しくありません。", "error");
+      return;
+    }
+
+    saveButton.disabled = true;
+    showSaveStatus("保存しています…", "");
+
+    try {
+      const result = await callRegionProfileApi("regionProfileSave", { profile: parsedProfile });
+
+      profileJsonTextarea.value = JSON.stringify(result.profile, null, 2);
+      renderCompleteness(true, result.completeness);
+      showSaveStatus("保存しました。", "success");
+    } catch (error) {
+      console.error("地域プロフィールの保存に失敗しました", error);
+      showSaveStatus(error.message || "保存に失敗しました。", "error");
+    } finally {
+      saveButton.disabled = false;
+    }
+  });
+
+  loginForm.addEventListener("submit", async function(event) {
+    event.preventDefault();
+
+    clearLoginMessage();
+
+    const email = document.getElementById("adminEmail").value.trim().toLowerCase();
+    const password = document.getElementById("adminPassword").value;
+
+    if (email !== ADMIN_EMAIL.toLowerCase()) {
+      showLoginMessage("このメールアドレスには管理者権限がありません。", "error");
+      return;
+    }
+
+    loginButton.disabled = true;
+    loginButton.textContent = "ログインしています…";
+
+    try {
+      await firebase.auth().signInWithEmailAndPassword(email, password);
+    } catch (error) {
+      console.error("❌ 管理者ログインに失敗しました", error);
+      showLoginMessage("ログインできませんでした。メールアドレスとパスワードを確認してください。", "error");
+    } finally {
+      loginButton.disabled = false;
+      loginButton.textContent = "管理画面へログイン";
+    }
+  });
+
+  firebase.auth().onAuthStateChanged(async function(user) {
+    clearLoginMessage();
+
+    if (user && user.email && user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+      loginPanel.style.display = "none";
+      adminArea.classList.add("visible");
+      return;
+    }
+
+    if (user) {
+      try {
+        await firebase.auth().signOut();
+      } catch (error) {
+        console.error("管理者以外のユーザーをログアウトできませんでした", error);
+      }
+
+      showLoginMessage("このアカウントには管理者権限がありません。", "error");
+    }
+
+    loginPanel.style.display = "block";
+    adminArea.classList.remove("visible");
+  });
+</script>
+
+</body>
+</html>

@@ -544,6 +544,188 @@ const AI_REGION_EDITORIAL_TIME_BOUND_KEYWORDS =
   ];
 
 
+// AI地域編集部 Phase3.1(街の長期記憶DB)｜regionRecommendations(旅行者へ
+// 見せる編集済み記事)とは完全に別のcollection。新しいVercel Functionは
+// 追加せず、既存のこのFunctionへmode追加(regionProfileGet/
+// regionProfileSave)のみで実装する。クライアントから直接読み書きさせず、
+// 常にAdmin SDK経由(このFunction経由)のみでアクセスする設計とし、
+// Firestore Security Rulesの変更を一切不要にする
+// (既存のaiSources/aiCollectedArticles等と同じ設計方針)。
+const REGION_PROFILES_COLLECTION =
+  "regionProfiles";
+
+// document ID方式｜本部指示により、表示名(identity.regionName)とは別の
+// 安定IDを採用する。全国・海外展開時の地名衝突(例：「府中市」は東京都・
+// 広島県の両方に実在する)を避けるため、
+// 「jp-<JIS X 0401:1973都道府県コード(2桁)>-<市町村の公式ローマ字表記>」
+// という形式にする。都道府県コードはISO 3166-2:JPにも採用されている
+// 確立した公的規格であり、沖縄県=47はWebSearchで確認済み(出典：
+// https://www.asahi-net.or.jp/~ax2s-kmtn/ref/jisx0401.html 等)。
+// 市町村側のローマ字表記は、その市町村自身の公式サイトドメイン
+// (八重瀬町の場合、既存のaiSourcesに登録済みのtown.yaese.lg.jp)から
+// 確認できたものだけを採用する。41市町村分を一括で推測生成すること はせず
+// (本部指示：独自ID体系を推測で作らない)、実際にPhase3.1〜3.2で対象と
+// する市町村を1つずつ、この方法で個別に確認しながら追加していく。
+// 既存の全システム(submissions.area／aiSources.area／
+// regionRecommendations.targetAreas等)は、今後も従来通り生の市町村名
+// 文字列("八重瀬町")を使い続ける(変更しない)。このmapは、その生の
+// 市町村名文字列からregionProfilesのdocument IDへ変換するためだけの、
+// 意図的に小さい対応表である。
+const REGION_PROFILE_AREA_NAME_TO_ID =
+  {
+    "八重瀬町": "jp-47-yaese"
+  };
+
+const REGION_PROFILE_AREA_NAME_TO_PREFECTURE =
+  {
+    "八重瀬町": "沖縄県"
+  };
+
+// Phase3.1は八重瀬町のみが対象(本部指示：全国展開は行わない)。
+// regionEditorialのAI_REGION_EDITORIAL_ALLOWED_AREASとは値は同じだが、
+// 意図的に別の定数として管理する(地域プロフィール機能と地域編集AI機能は
+// 将来別々に対象市町村を広げる可能性があり、片方の変更がもう片方へ
+// 意図せず波及しないようにするため)。
+const REGION_PROFILE_ALLOWED_AREAS =
+  [
+    "八重瀬町"
+  ];
+
+const REGION_PROFILE_SCHEMA_VERSION =
+  1;
+
+const REGION_PROFILE_VALID_STATUS_VALUES =
+  [
+    "confirmed",
+    "unknown"
+  ];
+
+// temporary(今日のイベント等)はPROFILEへ保存しない(本部指示)。
+// この配列に"temporary"を含めないこと自体が、テストGの安全網になる。
+const REGION_PROFILE_VALID_VALIDITY_TYPES =
+  [
+    "stable",
+    "periodic"
+  ];
+
+const REGION_PROFILE_TEXT_MAX_LENGTHS =
+  {
+    sourceName: 80,
+    sourceUrl: 300,
+    sourceType: 30,
+    checkedAt: 20,
+    publishedAt: 40,
+    shortText: 200,
+    longText: 800,
+    listItem: 100
+  };
+
+const REGION_PROFILE_SOURCES_MAX_COUNT =
+  5;
+
+const REGION_PROFILE_LIST_VALUE_MAX_COUNT =
+  20;
+
+// 主要事実(fact)のvalidityType初期値。本部が挙げた例
+// (成立史→stable、人口→periodic、交通路線→periodic)に沿った、
+// このコード内だけのデフォルト分類。保存時にadmin/editorが異なる
+// validityTypeを指定することも許可する(このデフォルトは「未確認状態を
+// 初期化する時の初期値」としてのみ使う)。
+const REGION_PROFILE_SECTION_FIELD_DEFAULT_VALIDITY =
+  {
+    identity: {
+      regionType: "stable",
+      population: "periodic",
+      households: "periodic",
+      areaKm2: "stable",
+      establishedDate: "stable",
+      formationHistory: "stable",
+      formerMunicipalities: "stable",
+      locationSummary: "stable",
+      neighboringAreas: "stable",
+      oneLineIdentity: "stable"
+    },
+    character: {
+      historySummary: "stable",
+      geography: "stable",
+      landscape: "stable",
+      mainIndustries: "stable",
+      specialties: "stable",
+      localFoods: "stable",
+      agriculture: "stable",
+      fisheries: "stable",
+      culture: "stable",
+      traditionalEvents: "stable",
+      localLifestyle: "stable",
+      localCharacter: "stable"
+    },
+    travel: {
+      representativePlaces: "stable",
+      localFavoritePlaces: "stable",
+      scenery: "stable",
+      foodExperiences: "stable",
+      activities: "stable",
+      soloTravelFit: "stable",
+      familyTravelFit: "stable",
+      rainyDayOptions: "stable",
+      morningCharacter: "stable",
+      daytimeCharacter: "stable",
+      eveningCharacter: "stable",
+      nightCharacter: "stable",
+      typicalStayIdeas: "stable"
+    },
+    climate: {
+      climateSummary: "stable",
+      temperatureCharacteristics: "stable",
+      rainCharacteristics: "stable",
+      windCharacteristics: "stable",
+      seasonalCharacteristics: "stable",
+      typhoonCharacteristics: "stable",
+      heatRiskCharacteristics: "stable",
+      spring: "stable",
+      summer: "stable",
+      autumn: "stable",
+      winter: "stable",
+      seasonalHighlights: "stable"
+    },
+    transport: {
+      carDependency: "stable",
+      publicTransportSummary: "periodic",
+      airportAccess: "periodic",
+      stationAccess: "periodic",
+      portAccess: "periodic",
+      walkingTravelFit: "stable",
+      carFreeTravelAdvice: "stable",
+      connectionsToNearbyAreas: "periodic"
+    },
+    safety: {
+      longTermSafetyNotes: "stable"
+    }
+  };
+
+// 値がリスト(配列)になる項目。それ以外は文字列/オブジェクトの単一値として
+// 扱う(sanitizeRegionProfileFactValue()がこの一覧を見て検証方法を分ける)。
+const REGION_PROFILE_LIST_VALUE_FIELDS =
+  new Set(
+    [
+      "formerMunicipalities",
+      "neighboringAreas",
+      "representativePlaces",
+      "localFavoritePlaces"
+    ]
+  );
+
+// population/householdsだけは{count, asOf}という特別な形を持つ
+// (本部指示：人口値と基準日を文章1本へ潰さない)。
+const REGION_PROFILE_COUNT_WITH_ASOF_FIELDS =
+  new Set(
+    [
+      "population",
+      "households"
+    ]
+  );
+
+
 // Ver1.8 Phase2(マチナウ読み物コメント機能MVP)｜新しいVercel Functionは
 // 追加せず、既存のこのFunction(api/moderate-submission.js)へmode追加のみで
 // 実装する(Functions 12/12を維持)。新規Firestoreコレクションは
@@ -3710,6 +3892,761 @@ async function handleRegionEditorialRequest(
     return response.status(500).json({
       success: false,
       message: "AI下書きの生成中にエラーが発生しました。"
+    });
+  }
+}
+
+
+// AI地域編集部 Phase3.1(街の長期記憶DB)｜1つの主要事実の「未確認」初期値を
+// 作る。value:nullかつstatus:"unknown"かつsources:[]という、
+// 「まだ何も分かっていない」ことを構造的に表現する形。AIが穴埋め創作する
+// ことを防ぐため、valueが空でも自然に扱える設計にする。
+function buildUnknownRegionProfileFact(
+  validityType,
+  isListValue
+) {
+  return {
+    value:
+      isListValue === true
+        ? []
+        : null,
+
+    status: "unknown",
+    validityType: validityType,
+    sources: [],
+    updatedAt: null
+  };
+}
+
+// 対象市町村の「全項目unknown」の初期PROFILE構造を作る。Firestoreへは
+// 一切書き込まない(呼び出し元がGETの「存在しない場合の初期構造」、または
+// SAVE時の「既存が無い場合の土台」として使う)。
+function buildEmptyRegionProfile(
+  targetArea
+) {
+  const sections =
+    {};
+
+  Object.keys(REGION_PROFILE_SECTION_FIELD_DEFAULT_VALIDITY).forEach(
+    function(sectionKey) {
+      const fieldDefaults =
+        REGION_PROFILE_SECTION_FIELD_DEFAULT_VALIDITY[sectionKey];
+
+      const sectionValue =
+        {};
+
+      Object.keys(fieldDefaults).forEach(
+        function(fieldKey) {
+          sectionValue[fieldKey] =
+            buildUnknownRegionProfileFact(
+              fieldDefaults[fieldKey],
+              REGION_PROFILE_LIST_VALUE_FIELDS.has(fieldKey)
+            );
+        }
+      );
+
+      sections[sectionKey] =
+        sectionValue;
+    }
+  );
+
+  sections.identity.regionName =
+    targetArea;
+
+  sections.identity.prefecture =
+    REGION_PROFILE_AREA_NAME_TO_PREFECTURE[targetArea] || "";
+
+  sections.identity.country =
+    "日本";
+
+  return Object.assign(
+    {},
+    sections,
+    {
+      photos: {
+        heroImage: null,
+        landscapeImages: [],
+        foodImages: [],
+        cultureImages: [],
+        otherImages: []
+      },
+
+      meta: {
+        createdAt: null,
+        updatedAt: null,
+        lastReviewedAt: null,
+        schemaVersion: REGION_PROFILE_SCHEMA_VERSION
+      }
+    }
+  );
+}
+
+// 15項目の固定チェックリスト(本部指示のVer.1必須項目)。複雑なスコアは
+// 作らず、confirmedCount/unknownCount/totalRequiredの3値だけを返す。
+function isRegionProfileFactConfirmed(
+  profile,
+  sectionKey,
+  fieldKey
+) {
+  return (
+    !!profile &&
+    !!profile[sectionKey] &&
+    !!profile[sectionKey][fieldKey] &&
+    profile[sectionKey][fieldKey].status === "confirmed"
+  );
+}
+
+function computeRegionProfileCompleteness(
+  profile
+) {
+  const checklist =
+    [
+      isRegionProfileFactConfirmed(profile, "identity", "population"),
+      isRegionProfileFactConfirmed(profile, "identity", "areaKm2"),
+      isRegionProfileFactConfirmed(profile, "identity", "formationHistory"),
+      isRegionProfileFactConfirmed(profile, "identity", "locationSummary"),
+      isRegionProfileFactConfirmed(profile, "travel", "localCharacter") ||
+        isRegionProfileFactConfirmed(profile, "character", "localCharacter"),
+
+      isRegionProfileFactConfirmed(profile, "character", "specialties") ||
+        isRegionProfileFactConfirmed(profile, "character", "localFoods"),
+
+      isRegionProfileFactConfirmed(profile, "character", "geography") ||
+        isRegionProfileFactConfirmed(profile, "character", "landscape"),
+
+      isRegionProfileFactConfirmed(profile, "character", "culture"),
+      isRegionProfileFactConfirmed(profile, "climate", "climateSummary"),
+      isRegionProfileFactConfirmed(profile, "transport", "publicTransportSummary"),
+      isRegionProfileFactConfirmed(profile, "transport", "carFreeTravelAdvice"),
+      isRegionProfileFactConfirmed(profile, "travel", "representativePlaces"),
+      isRegionProfileFactConfirmed(profile, "safety", "longTermSafetyNotes"),
+
+      // source coverage｜confirmed(=既に最低1件のsourcesを要求済み)の
+      // 事実が1件でもあれば「出典に基づく確認が始まっている」とみなす。
+      Object.keys(REGION_PROFILE_SECTION_FIELD_DEFAULT_VALIDITY).some(
+        function(sectionKey) {
+          return Object.keys(
+            REGION_PROFILE_SECTION_FIELD_DEFAULT_VALIDITY[sectionKey]
+          ).some(
+            function(fieldKey) {
+              return isRegionProfileFactConfirmed(profile, sectionKey, fieldKey);
+            }
+          );
+        }
+      ),
+
+      // photo state｜1枚でも画像が登録されていればtrue。
+      !!profile &&
+        !!profile.photos &&
+        (
+          !!profile.photos.heroImage ||
+          (Array.isArray(profile.photos.landscapeImages) && profile.photos.landscapeImages.length > 0) ||
+          (Array.isArray(profile.photos.foodImages) && profile.photos.foodImages.length > 0) ||
+          (Array.isArray(profile.photos.cultureImages) && profile.photos.cultureImages.length > 0) ||
+          (Array.isArray(profile.photos.otherImages) && profile.photos.otherImages.length > 0)
+        )
+    ];
+
+  const confirmedCount =
+    checklist.filter(
+      function(isConfirmed) {
+        return isConfirmed === true;
+      }
+    ).length;
+
+  return {
+    confirmedCount: confirmedCount,
+    unknownCount: checklist.length - confirmedCount,
+    totalRequired: checklist.length
+  };
+}
+
+function sanitizeRegionProfileGenericText(
+  rawValue,
+  maxLength
+) {
+  if (typeof rawValue !== "string") {
+    return "";
+  }
+
+  return rawValue
+    .trim()
+    .slice(0, maxLength);
+}
+
+// 出典1件を検証する。urlが指定されている場合はhttp(s)://形式のみ許可する
+// (テストF：不正URL拒否)。
+function sanitizeRegionProfileSource(
+  rawSource
+) {
+  if (!rawSource || typeof rawSource !== "object") {
+    return { ok: false, message: "出典の形式が正しくありません。" };
+  }
+
+  const url =
+    sanitizeRegionProfileGenericText(
+      rawSource.url,
+      REGION_PROFILE_TEXT_MAX_LENGTHS.sourceUrl
+    );
+
+  if (url !== "" && !/^https?:\/\//.test(url)) {
+    return {
+      ok: false,
+      message: "出典URLはhttp://またはhttps://から入力してください。"
+    };
+  }
+
+  return {
+    ok: true,
+    source: {
+      name:
+        sanitizeRegionProfileGenericText(
+          rawSource.name,
+          REGION_PROFILE_TEXT_MAX_LENGTHS.sourceName
+        ),
+
+      url: url,
+
+      sourceType:
+        sanitizeRegionProfileGenericText(
+          rawSource.sourceType,
+          REGION_PROFILE_TEXT_MAX_LENGTHS.sourceType
+        ),
+
+      checkedAt:
+        sanitizeRegionProfileGenericText(
+          rawSource.checkedAt,
+          REGION_PROFILE_TEXT_MAX_LENGTHS.checkedAt
+        ),
+
+      publishedAt:
+        sanitizeRegionProfileGenericText(
+          rawSource.publishedAt,
+          REGION_PROFILE_TEXT_MAX_LENGTHS.publishedAt
+        )
+    }
+  };
+}
+
+function sanitizeRegionProfileFactValue(
+  rawValue,
+  fieldKey
+) {
+  if (REGION_PROFILE_COUNT_WITH_ASOF_FIELDS.has(fieldKey)) {
+    if (!rawValue || typeof rawValue !== "object") {
+      return null;
+    }
+
+    const count =
+      typeof rawValue.count === "number" && Number.isFinite(rawValue.count)
+        ? rawValue.count
+        : null;
+
+    const asOf =
+      sanitizeRegionProfileGenericText(
+        rawValue.asOf,
+        REGION_PROFILE_TEXT_MAX_LENGTHS.checkedAt
+      );
+
+    if (count === null) {
+      return null;
+    }
+
+    return { count: count, asOf: asOf };
+  }
+
+  if (REGION_PROFILE_LIST_VALUE_FIELDS.has(fieldKey)) {
+    if (!Array.isArray(rawValue)) {
+      return [];
+    }
+
+    return rawValue
+      .slice(0, REGION_PROFILE_LIST_VALUE_MAX_COUNT)
+      .filter(
+        function(item) {
+          return typeof item === "string" && item.trim() !== "";
+        }
+      )
+      .map(
+        function(item) {
+          return sanitizeRegionProfileGenericText(
+            item,
+            REGION_PROFILE_TEXT_MAX_LENGTHS.listItem
+          );
+        }
+      );
+  }
+
+  return sanitizeRegionProfileGenericText(
+    rawValue,
+    REGION_PROFILE_TEXT_MAX_LENGTHS.longText
+  );
+}
+
+// 1つの主要事実(fact)を検証する。本部指示の核心：
+// status:"confirmed"なのにsourcesが0件、という状態を拒否する(テストE)。
+// validityTypeに"temporary"が来たら拒否する(テストG)。
+function sanitizeRegionProfileFact(
+  rawFact,
+  fieldKey,
+  defaultValidityType
+) {
+  if (!rawFact || typeof rawFact !== "object") {
+    return {
+      ok: false,
+      message: fieldKey + "の形式が正しくありません。"
+    };
+  }
+
+  const status =
+    typeof rawFact.status === "string" ? rawFact.status : "";
+
+  if (!REGION_PROFILE_VALID_STATUS_VALUES.includes(status)) {
+    return {
+      ok: false,
+      message: fieldKey + "のstatusが不正です。"
+    };
+  }
+
+  const validityType =
+    typeof rawFact.validityType === "string"
+      ? rawFact.validityType
+      : defaultValidityType;
+
+  if (!REGION_PROFILE_VALID_VALIDITY_TYPES.includes(validityType)) {
+    return {
+      ok: false,
+      message:
+        fieldKey + "のvalidityTypeが不正です" +
+        "(temporaryはPROFILEへ保存できません)。"
+    };
+  }
+
+  const rawSources =
+    Array.isArray(rawFact.sources) ? rawFact.sources : [];
+
+  const sanitizedSources =
+    [];
+
+  for (const rawSource of rawSources.slice(0, REGION_PROFILE_SOURCES_MAX_COUNT)) {
+    const sourceResult =
+      sanitizeRegionProfileSource(rawSource);
+
+    if (!sourceResult.ok) {
+      return {
+        ok: false,
+        message: fieldKey + "の出典：" + sourceResult.message
+      };
+    }
+
+    sanitizedSources.push(sourceResult.source);
+  }
+
+  if (status === "confirmed" && sanitizedSources.length === 0) {
+    return {
+      ok: false,
+      message:
+        fieldKey + "をconfirmedにするには、最低1件の出典が必要です。"
+    };
+  }
+
+  return {
+    ok: true,
+    fact: {
+      value:
+        status === "unknown"
+          ? (REGION_PROFILE_LIST_VALUE_FIELDS.has(fieldKey) ? [] : null)
+          : sanitizeRegionProfileFactValue(rawFact.value, fieldKey),
+
+      status: status,
+      validityType: validityType,
+      sources: sanitizedSources,
+
+      // unknownのまま(＝未確認)の項目はupdatedAtも null のままにする
+      // (「この保存操作が触れた時刻」ではなく「この事実が最後に確認された
+      // 時刻」を表すため)。全項目unknownのPROFILEを保存→再取得しても
+      // 構造が完全一致する(テストJ)。
+      updatedAt:
+        status === "confirmed"
+          ? new Date().toISOString()
+          : null
+    }
+  };
+}
+
+function sanitizeRegionProfilePhotoEntry(
+  rawPhoto
+) {
+  if (!rawPhoto || typeof rawPhoto !== "object") {
+    return null;
+  }
+
+  const imageUrl =
+    sanitizeRegionProfileGenericText(
+      rawPhoto.imageUrl,
+      REGION_PROFILE_TEXT_MAX_LENGTHS.sourceUrl
+    );
+
+  if (imageUrl === "") {
+    return null;
+  }
+
+  return {
+    imageUrl: imageUrl,
+
+    imagePublicId:
+      sanitizeRegionProfileGenericText(
+        rawPhoto.imagePublicId,
+        REGION_PROFILE_TEXT_MAX_LENGTHS.sourceName
+      ),
+
+    caption:
+      sanitizeRegionProfileGenericText(
+        rawPhoto.caption,
+        REGION_PROFILE_TEXT_MAX_LENGTHS.shortText
+      ),
+
+    source:
+      sanitizeRegionProfileGenericText(
+        rawPhoto.source,
+        REGION_PROFILE_TEXT_MAX_LENGTHS.sourceName
+      ),
+
+    rightsStatus:
+      sanitizeRegionProfileGenericText(
+        rawPhoto.rightsStatus,
+        REGION_PROFILE_TEXT_MAX_LENGTHS.sourceType
+      ),
+
+    regionRelevance:
+      sanitizeRegionProfileGenericText(
+        rawPhoto.regionRelevance,
+        REGION_PROFILE_TEXT_MAX_LENGTHS.shortText
+      )
+  };
+}
+
+function sanitizeRegionProfilePhotos(
+  rawPhotos
+) {
+  const source =
+    rawPhotos && typeof rawPhotos === "object" ? rawPhotos : {};
+
+  return {
+    heroImage:
+      sanitizeRegionProfilePhotoEntry(source.heroImage),
+
+    landscapeImages:
+      Array.isArray(source.landscapeImages)
+        ? source.landscapeImages
+            .map(sanitizeRegionProfilePhotoEntry)
+            .filter(function(entry) { return entry !== null; })
+        : [],
+
+    foodImages:
+      Array.isArray(source.foodImages)
+        ? source.foodImages
+            .map(sanitizeRegionProfilePhotoEntry)
+            .filter(function(entry) { return entry !== null; })
+        : [],
+
+    cultureImages:
+      Array.isArray(source.cultureImages)
+        ? source.cultureImages
+            .map(sanitizeRegionProfilePhotoEntry)
+            .filter(function(entry) { return entry !== null; })
+        : [],
+
+    otherImages:
+      Array.isArray(source.otherImages)
+        ? source.otherImages
+            .map(sanitizeRegionProfilePhotoEntry)
+            .filter(function(entry) { return entry !== null; })
+        : []
+  };
+}
+
+// 入力全体(クライアントがGETで取得→編集→SAVEへ送り返す想定の完全な
+// PROFILEオブジェクト)を検証し、安全なPROFILEオブジェクトを組み立てる。
+// 未知のキーは全て無視する(許可リスト方式。ハルシネーションや想定外の
+// フィールド混入をここで構造的に遮断する)。
+function validateAndSanitizeRegionProfileInput(
+  rawProfile,
+  targetArea
+) {
+  if (!rawProfile || typeof rawProfile !== "object") {
+    return { ok: false, message: "PROFILEの形式が正しくありません。" };
+  }
+
+  const sections =
+    {};
+
+  for (const sectionKey of Object.keys(REGION_PROFILE_SECTION_FIELD_DEFAULT_VALIDITY)) {
+    const fieldDefaults =
+      REGION_PROFILE_SECTION_FIELD_DEFAULT_VALIDITY[sectionKey];
+
+    const rawSection =
+      rawProfile[sectionKey] &&
+      typeof rawProfile[sectionKey] === "object"
+        ? rawProfile[sectionKey]
+        : {};
+
+    const sanitizedSection =
+      {};
+
+    for (const fieldKey of Object.keys(fieldDefaults)) {
+      const factResult =
+        sanitizeRegionProfileFact(
+          rawSection[fieldKey],
+          sectionKey + "." + fieldKey,
+          fieldDefaults[fieldKey]
+        );
+
+      if (!factResult.ok) {
+        return { ok: false, message: factResult.message };
+      }
+
+      sanitizedSection[fieldKey] =
+        factResult.fact;
+    }
+
+    sections[sectionKey] =
+      sanitizedSection;
+  }
+
+  sections.identity.regionName =
+    targetArea;
+
+  sections.identity.prefecture =
+    REGION_PROFILE_AREA_NAME_TO_PREFECTURE[targetArea] || "";
+
+  sections.identity.country =
+    sanitizeRegionProfileGenericText(
+      (rawProfile.identity && rawProfile.identity.country) || "日本",
+      REGION_PROFILE_TEXT_MAX_LENGTHS.sourceName
+    ) || "日本";
+
+  return {
+    ok: true,
+    profile: Object.assign(
+      {},
+      sections,
+      {
+        photos:
+          sanitizeRegionProfilePhotos(rawProfile.photos),
+
+        // meta.schemaVersion/createdAt/updatedAtはサーバー側だけが
+        // 決定する(クライアントからの値は一切信用しない)。
+        meta: {
+          lastReviewedAt:
+            sanitizeRegionProfileGenericText(
+              rawProfile.meta && rawProfile.meta.lastReviewedAt,
+              REGION_PROFILE_TEXT_MAX_LENGTHS.checkedAt
+            )
+        }
+      }
+    )
+  };
+}
+
+// AI地域編集部 Phase3.1｜八重瀬町PROFILEを取得する。存在しない場合でも
+// 500にせず、exists:false＋初期unknown構造を返す。Firestoreへの
+// 自動作成(write)は一切行わない(読むだけでwriteを発生させない、
+// というテストBの要件を構造的に満たす：この関数に.set()/.update()/
+// .add()の呼び出しは存在しない)。
+async function handleRegionProfileGetRequest(
+  request,
+  response
+) {
+  try {
+    const authResult =
+      await requireAdminOrEditor(
+        request
+      );
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({
+        success: false,
+        message: authResult.message
+      });
+    }
+
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    const targetArea =
+      sanitizeRegionProfileGenericText(
+        requestBody.targetArea,
+        AI_REGION_EDITORIAL_TARGET_AREA_MAX_LENGTH
+      );
+
+    if (!REGION_PROFILE_ALLOWED_AREAS.includes(targetArea)) {
+      return response.status(400).json({
+        success: false,
+        message: "地域プロフィールは現在、八重瀬町のみ対応しています(Phase3.1実証中)。"
+      });
+    }
+
+    const regionProfileId =
+      REGION_PROFILE_AREA_NAME_TO_ID[targetArea];
+
+    const documentSnapshot =
+      await authResult.database
+        .collection(REGION_PROFILES_COLLECTION)
+        .doc(regionProfileId)
+        .get();
+
+    if (!documentSnapshot.exists) {
+      const emptyProfile =
+        buildEmptyRegionProfile(targetArea);
+
+      return response.status(200).json({
+        success: true,
+        exists: false,
+        regionProfileId: regionProfileId,
+        profile: emptyProfile,
+        completeness: computeRegionProfileCompleteness(emptyProfile)
+      });
+    }
+
+    const storedProfile =
+      documentSnapshot.data() || {};
+
+    return response.status(200).json({
+      success: true,
+      exists: true,
+      regionProfileId: regionProfileId,
+      profile: storedProfile,
+      completeness: computeRegionProfileCompleteness(storedProfile)
+    });
+  } catch (error) {
+    console.error(
+      "地域プロフィール取得エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message: "地域プロフィールの取得中にエラーが発生しました。"
+    });
+  }
+}
+
+// AI地域編集部 Phase3.1｜八重瀬町PROFILEを保存する。管理者/Editorが
+// 明示的にこのmodeを呼んだ時だけwriteが発生する(ページ表示・GETでは
+// 一切writeしない)。既存のregionRecommendationsコレクションには
+// 一切アクセスしない。
+async function handleRegionProfileSaveRequest(
+  request,
+  response
+) {
+  try {
+    const authResult =
+      await requireAdminOrEditor(
+        request
+      );
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({
+        success: false,
+        message: authResult.message
+      });
+    }
+
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    const targetArea =
+      sanitizeRegionProfileGenericText(
+        requestBody.targetArea,
+        AI_REGION_EDITORIAL_TARGET_AREA_MAX_LENGTH
+      );
+
+    if (!REGION_PROFILE_ALLOWED_AREAS.includes(targetArea)) {
+      return response.status(400).json({
+        success: false,
+        message: "地域プロフィールは現在、八重瀬町のみ対応しています(Phase3.1実証中)。"
+      });
+    }
+
+    const validationResult =
+      validateAndSanitizeRegionProfileInput(
+        requestBody.profile,
+        targetArea
+      );
+
+    if (!validationResult.ok) {
+      return response.status(400).json({
+        success: false,
+        message: validationResult.message
+      });
+    }
+
+    const regionProfileId =
+      REGION_PROFILE_AREA_NAME_TO_ID[targetArea];
+
+    const documentRef =
+      authResult.database
+        .collection(REGION_PROFILES_COLLECTION)
+        .doc(regionProfileId);
+
+    const existingSnapshot =
+      await documentRef.get();
+
+    const createdAt =
+      existingSnapshot.exists &&
+      existingSnapshot.data() &&
+      existingSnapshot.data().meta &&
+      existingSnapshot.data().meta.createdAt
+        ? existingSnapshot.data().meta.createdAt
+        : FieldValue.serverTimestamp();
+
+    const profileToStore =
+      Object.assign(
+        {},
+        validationResult.profile,
+        {
+          meta: Object.assign(
+            {},
+            validationResult.profile.meta,
+            {
+              createdAt: createdAt,
+              updatedAt: FieldValue.serverTimestamp(),
+              schemaVersion: REGION_PROFILE_SCHEMA_VERSION
+            }
+          )
+        }
+      );
+
+    await documentRef.set(
+      profileToStore
+    );
+
+    const storedSnapshot =
+      await documentRef.get();
+
+    const storedProfile =
+      storedSnapshot.data() || {};
+
+    return response.status(200).json({
+      success: true,
+      regionProfileId: regionProfileId,
+      profile: storedProfile,
+      completeness: computeRegionProfileCompleteness(storedProfile)
+    });
+  } catch (error) {
+    console.error(
+      "地域プロフィール保存エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message: "地域プロフィールの保存中にエラーが発生しました。"
     });
   }
 }
@@ -8287,6 +9224,27 @@ export default async function handler(
     requestBody.mode === "regionEditorial"
   ) {
     return handleRegionEditorialRequest(
+      request,
+      response
+    );
+  }
+
+  // AI地域編集部 Phase3.1(街の長期記憶DB)｜既存のregionEditorialと同じ
+  // 位置(モード判定)に追加するだけで、既存モードのいずれにも一切触れない。
+  // 管理者/Editor専用(requireAdminOrEditor)。
+  if (
+    requestBody.mode === "regionProfileGet"
+  ) {
+    return handleRegionProfileGetRequest(
+      request,
+      response
+    );
+  }
+
+  if (
+    requestBody.mode === "regionProfileSave"
+  ) {
+    return handleRegionProfileSaveRequest(
       request,
       response
     );
