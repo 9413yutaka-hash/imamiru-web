@@ -5231,6 +5231,19 @@ async function callOpenAiRegionProfileResearchGroup(
                 {
                   type: "web_search",
 
+                  // 本部指示｜Production実測(80,408 input tokens／
+                  // sources最大20件)を踏まえた最小最適化。公式ドキュメント
+                  // (developers.openai.com/api/docs/guides/tools-web-search)
+                  // で確認済みの配置(web_searchツールオブジェクトの
+                  // 直下、filtersと同階層)にsearch_context_size:"low"を
+                  // 追加する。「low＝簡易な照会向け」という公式説明どおり、
+                  // 検索結果から取り込むコンテキスト量そのものを絞る狙い。
+                  // allowed_domains/prompt/4グループ定義/candidateSources
+                  // 生成方式等、他の設計は一切変更しない
+                  // (search_context_size単独の効果をProductionで比較する
+                  // ため)。
+                  search_context_size: "low",
+
                   filters: {
                     allowed_domains: payload.group.allowedDomains
                   }

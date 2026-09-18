@@ -655,7 +655,17 @@
             if (!g.success) {
               return g.label + "：失敗(" + g.errorType + ")";
             }
-            return g.label + "：" + g.elapsedMs + "ms／候補" + g.candidateCount + "件／出典" + g.sourcesCount + "件";
+
+            // 本部指示｜Production比較用に、グループ別のinputTokens/
+            // outputTokensも表示する(APIレスポンスには既に含まれている
+            // groupResult.usageを画面に出すだけで、AI処理ロジックには
+            // 触れない)。
+            const groupUsageText =
+              g.usage
+                ? "／入力" + g.usage.inputTokens + "・出力" + g.usage.outputTokens + "トークン"
+                : "";
+
+            return g.label + "：" + g.elapsedMs + "ms／候補" + g.candidateCount + "件／出典" + g.sourcesCount + "件" + groupUsageText;
           })
           .join(" ／ ");
 
