@@ -764,8 +764,28 @@ const AI_REGION_PROFILE_RESEARCH_CAPABILITY_TEST_TIMEOUT_MS =
 const AI_REGION_PROFILE_RESEARCH_CAPABILITY_TEST_TARGET_AREA =
   "八重瀬町";
 
-const AI_REGION_PROFILE_RESEARCH_CAPABILITY_TEST_FIELD_KEY =
-  "identity.areaKm2";
+// 本部指示(searchCallIndex方式 実装前検証)｜今回だけ一時的に、面積1項目
+// から「成立・地理」相当の4項目へ検証対象を差し替える。理由：複数テーマを
+// 含むグループの方が、1 response内に複数web_search_callが発生するかを
+// 確認しやすいため。通常のAI_REGION_PROFILE_RESEARCH_GROUPS(4グループ
+// 本実装)には一切触れていない。
+const AI_REGION_PROFILE_RESEARCH_CAPABILITY_TEST_FIELD_KEYS =
+  [
+    "identity.formationHistory",
+    "identity.establishedDate",
+    "identity.locationSummary",
+    "character.geography"
+  ];
+
+// 通常のformationGeographyグループと同じallowed_domains(本セッションで
+// 実在確認済み)を使い、Production通常researchとできる限り同じ条件で
+// 検証する。ただしsearch_context_size等、本部指示の変更禁止対象は
+// 一切追加しない。
+const AI_REGION_PROFILE_RESEARCH_CAPABILITY_TEST_ALLOWED_DOMAINS =
+  [
+    "town.yaese.lg.jp",
+    "pref.okinawa.lg.jp"
+  ];
 
 // Phase3.2は八重瀬町のみが対象。regionEditorial/regionProfileGet・Saveの
 // 対象市町村ガードとは意図的に別の定数として管理する(それぞれのモードが
@@ -5820,7 +5840,7 @@ function buildRegionProfileResearchCapabilityTestJsonSchema() {
             type: "object",
             properties: {
               fieldKey: { type: "string" },
-              suggestedValue: { type: "number" },
+              suggestedValue: { type: "string" },
               evidence: { type: "string" }
             },
             required: ["fieldKey", "suggestedValue", "evidence"],
@@ -5837,57 +5857,109 @@ function buildRegionProfileResearchCapabilityTestJsonSchema() {
 // 本部指示の核心：JSON SchemaにsourceUrlフィールドを一切含めない
 // (上記schemaにurl/sourceに類するフィールドが存在しないことがそのまま
 // 保証になる)。AIは出典URLを一切生成できない。
+// 本部指示(searchCallIndex方式 実装前検証)｜今回だけ、面積1項目ではなく
+// 成立・地理相当の4項目を対象にする(複数テーマの方が複数web_search_call
+// の発生を確認しやすいため)。
 function buildRegionProfileResearchCapabilityTestInstructions() {
+  const fieldListText =
+    AI_REGION_PROFILE_RESEARCH_CAPABILITY_TEST_FIELD_KEYS
+      .map(
+        function(fieldKey) {
+          return "- " + fieldKey;
+        }
+      )
+      .join("\n");
+
   return (
     "これはAPIの技術検証です。沖縄県" +
     AI_REGION_PROFILE_RESEARCH_CAPABILITY_TEST_TARGET_AREA +
-    "の面積(km2)を、自治体公式または公的統計等の信頼できる情報源から" +
-    "確認してください。\n" +
-    "分かった場合は、指定されたJSON形式でfieldKey=\"" +
-    AI_REGION_PROFILE_RESEARCH_CAPABILITY_TEST_FIELD_KEY +
-    "\"の候補を1件返してください。分からない場合はcandidatesを空配列に" +
-    "してください。\n" +
+    "について、以下の項目を自治体公式または都道府県公式等の信頼できる" +
+    "情報源から確認してください。\n\n" +
+    fieldListText + "\n\n" +
+    "分かった項目だけ、指定されたJSON形式のcandidatesへ含めてください。" +
+    "分からない項目は含めないでください。\n" +
     "出力するJSON文字列の中にURLや出典名を書かないでください" +
     "(evidenceには、確認できた事実の短い要約だけを書いてください)。"
   );
 }
 
-// response.output配列から、web_search_call(複数あり得る)のaction.sourcesを
-// 集約する。公式ドキュメント(developers.openai.com/api/docs/guides/
-// tools-web-search)で確認済みの構造：
-// { type:"web_search_call", action: { sources: [...] } }。
-function collectWebSearchCallDiagnostics(
+// searchCallIndex方式(本実装前)の実現可能性を検証するため、
+// web_search_callアイテムのsourcesを集約せず、検索操作ごとに分離して
+// 報告する。集約(旧collectWebSearchCallDiagnostics相当)は通常の
+// regionProfileResearch(extractActualSourcesFromResponsesOutput)側では
+// 引き続き使われており、そちらには一切手を加えていない。
+function collectPerSearchCallDiagnostics(
   outputItems
 ) {
-  const webSearchCallItems =
-    outputItems.filter(
-      function(item) {
-        return item && item.type === "web_search_call";
-      }
-    );
-
-  const sources =
+  const searchCalls =
     [];
 
-  webSearchCallItems.forEach(
-    function(item) {
-      if (
-        item.action &&
-        Array.isArray(item.action.sources)
-      ) {
-        item.action.sources.forEach(
-          function(source) {
-            sources.push(source);
-          }
-        );
+  outputItems.forEach(
+    function(item, outputIndex) {
+      if (!item || item.type !== "web_search_call") {
+        return;
       }
+
+      const sources =
+        (item.action && Array.isArray(item.action.sources))
+          ? item.action.sources
+          : [];
+
+      searchCalls.push(
+        {
+          searchCallIndex: searchCalls.length,
+          outputIndex: outputIndex,
+
+          actionType:
+            (item.action && typeof item.action.type === "string")
+              ? item.action.type
+              : null,
+
+          // 公式ドキュメント上、単数形query/複数形queriesのどちらの
+          // 表記も見られたため、両方存在すればそのまま報告する
+          // (推測で片方だけに決め打ちしない)。
+          query:
+            (item.action && typeof item.action.query === "string")
+              ? item.action.query
+              : null,
+
+          queries:
+            (item.action && Array.isArray(item.action.queries))
+              ? item.action.queries
+              : null,
+
+          sourcesCount: sources.length,
+
+          sampleSources:
+            sources
+              .slice(0, 3)
+              .map(
+                function(source) {
+                  return {
+                    url:
+                      typeof source.url === "string" ? source.url : "",
+
+                    title:
+                      typeof source.title === "string" ? source.title : ""
+                  };
+                }
+              )
+        }
+      );
     }
   );
 
-  return {
-    webSearchCallCount: webSearchCallItems.length,
-    sources: sources
-  };
+  return searchCalls;
+}
+
+function collectOutputItemTypes(
+  outputItems
+) {
+  return outputItems.map(
+    function(item) {
+      return (item && typeof item.type === "string") ? item.type : "unknown";
+    }
+  );
 }
 
 function collectAnnotationsPresent(
@@ -5913,32 +5985,81 @@ function collectAnnotationsPresent(
   );
 }
 
-// candidateとsourceを、AI出力(sourceUrl等)を一切信用せずに機械的に対応
-// 付けられるかを判定する。本部指示：「sources配列があるだけではyesに
-// しない」。今回のschemaはfieldKeyへのsource参照を含まない最小構成
-// (=まず技術的な共存可否だけを見るための構成)であるため、レスポンス
-// 構造だけから安全に対応付けられるのは、実質的に「情報源が1件しかなく
-// 消去法で確定できる」場合に限られる。2件以上のsourcesがある場合、
-// どのsourceが根拠かを構造的に確定する手段が今回のschemaには無いため
-// "no"とする(将来sourceIndex等の参照フィールドを追加すれば"yes"にできる、
-// という設計判断を裏付けるための、意図的に厳しい判定)。
-function determineSourceMapping(
-  sourcesCount,
-  structuredOutputParsed
+// searchCallごとのsources集合を比較し、機械的に判定できる範囲で
+// 重複状況を分類する。URLは正規化(末尾スラッシュ除去)してから比較する。
+function classifySourcesOverlap(
+  searchCalls
 ) {
-  if (!structuredOutputParsed) {
-    return "unclear";
+  if (searchCalls.length < 2) {
+    return "single_call_only";
   }
 
-  if (sourcesCount === 0) {
-    return "unclear";
+  const urlSets =
+    searchCalls.map(
+      function(searchCall) {
+        return new Set(
+          searchCall.sampleSources.map(
+            function(source) {
+              return source.url.replace(/\/$/, "");
+            }
+          )
+        );
+      }
+    );
+
+  // sampleSourcesは先頭3件までに切り詰めているため、この判定は
+  // 「確認用サンプルの範囲内での重複傾向」であり、sourcesCount全体の
+  // 厳密な集合演算ではないことに注意(本部指示：確認用でよい)。
+  let allIdentical =
+    true;
+
+  let allDistinct =
+    true;
+
+  for (let i = 0; i < urlSets.length; i += 1) {
+    for (let j = i + 1; j < urlSets.length; j += 1) {
+      const setA =
+        urlSets[i];
+
+      const setB =
+        urlSets[j];
+
+      const intersectionExists =
+        [...setA].some(
+          function(url) {
+            return setB.has(url);
+          }
+        );
+
+      const isEqual =
+        setA.size === setB.size &&
+        [...setA].every(
+          function(url) {
+            return setB.has(url);
+          }
+        );
+
+      if (!isEqual) {
+        allIdentical =
+          false;
+      }
+
+      if (intersectionExists) {
+        allDistinct =
+          false;
+      }
+    }
   }
 
-  if (sourcesCount === 1) {
-    return "yes";
+  if (allIdentical) {
+    return "identical";
   }
 
-  return "no";
+  if (allDistinct) {
+    return "distinct";
+  }
+
+  return "partial_overlap";
 }
 
 async function handleRegionProfileResearchCapabilityTestRequest(
@@ -5982,7 +6103,7 @@ async function handleRegionProfileResearchCapabilityTestRequest(
             type: "input_text",
             text:
               AI_REGION_PROFILE_RESEARCH_CAPABILITY_TEST_TARGET_AREA +
-              "の面積を確認してください。"
+              "について、指示された項目を確認してください。"
           }
         ]
       }
@@ -6021,7 +6142,21 @@ async function handleRegionProfileResearchCapabilityTestRequest(
               model: AI_REGION_PROFILE_RESEARCH_MODEL,
               instructions: instructions,
               input: inputItems,
-              tools: [{ type: "web_search" }],
+
+              // 本部指示｜通常のformationGeographyグループと同じ
+              // allowed_domainsを使い、Production通常researchへできる
+              // 限り近づける。search_context_size等、変更禁止対象は
+              // 一切追加しない。
+              tools: [
+                {
+                  type: "web_search",
+
+                  filters: {
+                    allowed_domains: AI_REGION_PROFILE_RESEARCH_CAPABILITY_TEST_ALLOWED_DOMAINS
+                  }
+                }
+              ],
+
               tool_choice: "auto",
               include: ["web_search_call.action.sources"],
 
@@ -6103,9 +6238,19 @@ async function handleRegionProfileResearchCapabilityTestRequest(
       ? responseData.output
       : [];
 
-  const webSearchDiagnostics =
-    collectWebSearchCallDiagnostics(
+  const outputItemTypes =
+    collectOutputItemTypes(
       outputItems
+    );
+
+  const searchCalls =
+    collectPerSearchCallDiagnostics(
+      outputItems
+    );
+
+  const sourcesOverlap =
+    classifySourcesOverlap(
+      searchCalls
     );
 
   const annotationsPresent =
@@ -6142,76 +6287,47 @@ async function handleRegionProfileResearchCapabilityTestRequest(
     }
   }
 
-  if (!structuredOutputParsed) {
-    return response.status(200).json({
-      success: false,
-      stage: "sources_parse",
-      errorType: "structured_output_missing",
-      elapsedMs: elapsedMs,
+  const usage =
+    responseData.usage
+      ? {
+          inputTokens:
+            typeof responseData.usage.input_tokens === "number"
+              ? responseData.usage.input_tokens
+              : null,
 
-      diagnostic: {
-        httpOk: httpOk,
-        structuredOutputParsed: false,
-        webSearchCallCount: webSearchDiagnostics.webSearchCallCount,
-        sourcesPresent: webSearchDiagnostics.sources.length > 0,
-        sourcesCount: webSearchDiagnostics.sources.length,
-        annotationsPresent: annotationsPresent
-      },
+          outputTokens:
+            typeof responseData.usage.output_tokens === "number"
+              ? responseData.usage.output_tokens
+              : null,
 
-      message: "Structured Outputの解析に失敗しました。"
-    });
-  }
+          totalTokens:
+            typeof responseData.usage.total_tokens === "number"
+              ? responseData.usage.total_tokens
+              : null
+        }
+      : null;
 
-  const sourceUrlsPresent =
-    webSearchDiagnostics.sources.some(
-      function(source) {
-        return (
-          source &&
-          typeof source.url === "string" &&
-          source.url !== ""
-        );
-      }
-    );
-
+  // 本部指示：今回はcandidateへsearchCallIndexを出力させる実装は
+  // しない。structured outputの解析に失敗しても、その事実自体が
+  // 診断結果として重要なため、他の診断情報と併せてそのまま返す
+  // (500にせず、常にsuccess:trueで診断内容を返す)。
   return response.status(200).json({
     success: true,
 
     diagnostic: {
       httpOk: httpOk,
       structuredOutputParsed: structuredOutputParsed,
-      webSearchCallCount: webSearchDiagnostics.webSearchCallCount,
-      sourcesPresent: webSearchDiagnostics.sources.length > 0,
-      sourcesCount: webSearchDiagnostics.sources.length,
-      sourceUrlsPresent: sourceUrlsPresent,
-      annotationsPresent: annotationsPresent,
       candidateCount: candidateCount,
       elapsedMs: elapsedMs,
 
-      sourceMapping:
-        determineSourceMapping(
-          webSearchDiagnostics.sources.length,
-          structuredOutputParsed
-        ),
+      outputItemCount: outputItems.length,
+      outputItemTypes: outputItemTypes,
+      webSearchCallCount: searchCalls.length,
+      searchCalls: searchCalls,
+      sourcesOverlap: sourcesOverlap,
 
-      usage:
-        responseData.usage
-          ? {
-              inputTokens:
-                typeof responseData.usage.input_tokens === "number"
-                  ? responseData.usage.input_tokens
-                  : null,
-
-              outputTokens:
-                typeof responseData.usage.output_tokens === "number"
-                  ? responseData.usage.output_tokens
-                  : null,
-
-              totalTokens:
-                typeof responseData.usage.total_tokens === "number"
-                  ? responseData.usage.total_tokens
-                  : null
-            }
-          : null
+      annotationsPresent: annotationsPresent,
+      usage: usage
     }
   });
  } catch (error) {
