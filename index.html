@@ -574,6 +574,28 @@
       margin: 0 0 8px;
     }
 
+    /* マチナウAI一本化 Phase1専用の最小CSS。 */
+    .ai-concierge-chat-quick-replies {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 0 0 10px;
+    }
+
+    .ai-concierge-chat-quick-reply-button {
+      padding: 8px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--white);
+      color: var(--navy);
+      font-size: 12.5px;
+      font-weight: 700;
+    }
+
+    .ai-concierge-chat-quick-reply-button:disabled {
+      opacity: 0.5;
+    }
+
     .ai-concierge-chat-form {
       display: flex;
       gap: 8px;
@@ -983,9 +1005,15 @@
 
     </section>
 
+    <!-- マチナウAI一本化 Phase1｜旧「✨マチナウAI『今どうする？』」は
+         「💬マチナウAIと話す」(#aiConciergeChatSection)へ一本化したため
+         非表示にする。本部指示により大規模な削除・整理は行わず、DOM・
+         関連関数(updateTravelerSuggestionCard()等)はそのまま残し、
+         display:noneで停止するだけにとどめる。 -->
     <section
       id="suggestionCard"
       class="suggestion-highlight-section"
+      style="display:none;"
     >
 
       <span class="suggestion-highlight-heading" data-i18n="suggestion_heading">
@@ -1025,14 +1053,45 @@
       class="suggestion-highlight-section"
     >
 
-      <span class="suggestion-highlight-heading">
-        💬 マチナウAIと話す
+      <span class="suggestion-highlight-heading" data-i18n="ai_concierge_chat_heading">
+        🤖 マチナウAI
       </span>
 
       <div
         id="aiConciergeChatMessages"
         class="ai-concierge-chat-messages"
       ></div>
+
+      <!-- マチナウAI一本化 Phase1｜第一声の下に表示するクイック返信。
+           押されたら文字列をそのまま既存sendAiConciergeChatMessage()へ渡す
+           だけで、専用のAI処理・専用APIは作らない。最初のユーザー発言後は
+           sendAiConciergeChatMessage()内で非表示にする。 -->
+      <div
+        id="aiConciergeChatQuickReplies"
+        class="ai-concierge-chat-quick-replies"
+      >
+        <button
+          type="button"
+          class="ai-concierge-chat-quick-reply-button"
+          data-i18n="ai_concierge_quick_reply_no_plan"
+        >
+          ノープラン
+        </button>
+        <button
+          type="button"
+          class="ai-concierge-chat-quick-reply-button"
+          data-i18n="ai_concierge_quick_reply_nearby"
+        >
+          近場で楽しみたい
+        </button>
+        <button
+          type="button"
+          class="ai-concierge-chat-quick-reply-button"
+          data-i18n="ai_concierge_quick_reply_rainy_ok"
+        >
+          雨でも楽しみたい
+        </button>
+      </div>
 
       <p
         id="aiConciergeChatStatus"

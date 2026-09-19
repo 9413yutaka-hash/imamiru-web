@@ -7328,6 +7328,18 @@ async function sendAiConciergeChatMessage(
 
   renderAiConciergeChatMessages();
 
+  // マチナウAI一本化 Phase1｜クイック返信は最初の発言までの導線のため、
+  // 一度でも発言したら以後は非表示にする(会話中の視覚的な邪魔を避ける)。
+  const quickRepliesContainer =
+    document.getElementById(
+      "aiConciergeChatQuickReplies"
+    );
+
+  if (quickRepliesContainer) {
+    quickRepliesContainer.style.display =
+      "none";
+  }
+
   setAiConciergeChatStatus(
     "マチナウAIが考えています…"
   );
@@ -7524,6 +7536,69 @@ async function sendAiConciergeChatMessage(
   }
 }
 
+// マチナウAI一本化 Phase1｜第一声はOpenAI/Terraを一切呼ばず、既に取得済みの
+// userAreaName・latestWeatherForMachinauSuggestion(いずれも既存のGPS/天気
+// 取得処理がそのまま持っている値、追加のAPI呼び出しは発生しない)だけを
+// 使ってテンプレートから組み立てる。天気の晴雨判定は既存の
+// resolveSuggestionWeatherCategory()をそのまま再利用し、新しい判定ロジック
+// は作らない。ユーザーが既に1件でも発言している場合(aiConciergeChatHistory
+// の先頭がassistant・件数1件、という初期状態でなくなっている場合)は、
+// 進行中の会話を壊さないよう上書きしない。
+function updateAiConciergeChatInitialMessage() {
+  if (
+    !Array.isArray(aiConciergeChatHistory) ||
+    aiConciergeChatHistory.length !== 1 ||
+    aiConciergeChatHistory[0].role !== "assistant"
+  ) {
+    return;
+  }
+
+  const language =
+    getCurrentMachinauLanguage();
+
+  const areaName =
+    typeof userAreaName === "string" && userAreaName !== ""
+      ? userAreaName
+      : "";
+
+  let translationKey;
+
+  if (
+    areaName !== "" &&
+    latestWeatherForMachinauSuggestion !== null
+  ) {
+    const weatherCategory =
+      resolveSuggestionWeatherCategory(
+        latestWeatherForMachinauSuggestion
+      );
+
+    translationKey =
+      weatherCategory === "RAIN"
+        ? "ai_concierge_initial_rain"
+        : "ai_concierge_initial_clear";
+  } else if (areaName !== "") {
+    translationKey =
+      "ai_concierge_initial_area_only";
+  } else {
+    translationKey =
+      "ai_concierge_initial_fallback";
+  }
+
+  const messageText =
+    getMachinauTranslation(
+      translationKey,
+      language
+    ).replace(
+      "{AREA}",
+      areaName
+    );
+
+  aiConciergeChatHistory[0] =
+    { role: "assistant", text: messageText };
+
+  renderAiConciergeChatMessages();
+}
+
 function initializeAiConciergeChat() {
   const chatForm =
     document.getElementById(
@@ -7544,6 +7619,12 @@ function initializeAiConciergeChat() {
 
   renderAiConciergeChatMessages();
 
+  // マチナウAI一本化 Phase1｜第一声をOpenAIなしでできる範囲まで具体化する。
+  // この時点でuserAreaName/latestWeatherForMachinauSuggestionが未確定
+  // (GPS前)でも、updateAiConciergeChatInitialMessage()自身が
+  // ai_concierge_initial_fallbackへ安全にフォールバックする。
+  updateAiConciergeChatInitialMessage();
+
   chatForm.addEventListener(
     "submit",
     function(submitEvent) {
@@ -7557,6 +7638,28 @@ function initializeAiConciergeChat() {
 
       sendAiConciergeChatMessage(
         messageToSend
+      );
+    }
+  );
+
+  // マチナウAI一本化 Phase1｜クイック返信。押されたボタンの表示文字列
+  // (data-i18nで既に選択言語へ置換済み)を、既存sendAiConciergeChatMessage()
+  // へ通常のユーザーメッセージとしてそのまま渡すだけで、専用のAI処理・
+  // 専用APIは作らない。
+  const quickReplyButtons =
+    document.querySelectorAll(
+      "#aiConciergeChatQuickReplies .ai-concierge-chat-quick-reply-button"
+    );
+
+  quickReplyButtons.forEach(
+    function(quickReplyButton) {
+      quickReplyButton.addEventListener(
+        "click",
+        function() {
+          sendAiConciergeChatMessage(
+            quickReplyButton.textContent.trim()
+          );
+        }
       );
     }
   );
@@ -7981,15 +8084,13 @@ function tryGenerateMachinauSuggestion(gpsSessionId) {
   generatedMachinauSuggestionGpsSessionId =
     gpsSessionId;
 
-  // Ver1.8 Phase1｜✨あなたへの提案は、まずAIコンシェルジュ
-  // (attemptAiConciergeSuggestion())を試み、候補が無い/AI応答が使えない
-  // 場合はupdateTravelerSuggestionCard()内のルールベース処理へ必ず
-  // フォールバックする。updateSuggestionCard()本体は無変更のまま保持する
-  // (未使用)。selectTravelerSuggestionCandidate()・✨⚡🔥3枠分離ロジックは
-  // 一切変更しない。
-  attemptAiConciergeSuggestion(
-    gpsSessionId
-  );
+  // マチナウAI一本化 Phase1｜✨「今どうする？」(旧attemptAiConciergeSuggestion()
+  // 経由のgpt-4o-mini自動呼び出し)は「🤖マチナウAI」(aiConciergeChat)へ
+  // 一本化したため停止する。#suggestionCard自体もdisplay:noneのため
+  // この呼び出し結果を表示する場所が無い。attemptAiConciergeSuggestion()・
+  // buildAiConciergeCandidatePool()等の関数本体は削除しない(本部指示：
+  // 安全優先、大規模削除・整理はしない)。
+  // attemptAiConciergeSuggestion(gpsSessionId);
 
   updateUnifiedImportantInfo();
 }
@@ -8422,6 +8523,11 @@ function getLocation() {
               tryGenerateMachinauSuggestion(
                 suggestionGpsSessionId
               );
+
+              // マチナウAI一本化 Phase1｜天気が確定した時点でも、
+              // OpenAIを呼ばずに第一声を更新する(area未確定ならarea無しの
+              // 文言のまま、area確定済みなら天気を反映した文言へ)。
+              updateAiConciergeChatInitialMessage();
             }
           })
           .catch(function(error) {
@@ -8475,6 +8581,11 @@ function getLocation() {
               showCityInfoSection(
                 areaName
               );
+
+              // マチナウAI一本化 Phase1｜地域名が確定した時点でも、
+              // OpenAIを呼ばずに第一声を更新する(天気未確定なら
+              // 「地域名だけ」の文言、天気確定済みなら天気を反映した文言)。
+              updateAiConciergeChatInitialMessage();
             }
 
             if (

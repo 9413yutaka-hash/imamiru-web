@@ -131,6 +131,51 @@ const MACHINAU_TRANSLATIONS = {
     en: "✨ Machinau AI: What now?"
   },
 
+  // マチナウAI一本化 Phase1｜「💬マチナウAIと話す」を唯一の「マチナウAI」
+  // として表示するための見出し。
+  ai_concierge_chat_heading: {
+    ja: "🤖 マチナウAI",
+    en: "🤖 Machinau AI"
+  },
+
+  // マチナウAI一本化 Phase1｜第一声はOpenAIを呼ばず、既に取得済みの
+  // userAreaName/latestWeatherForMachinauSuggestionだけでクライアント側
+  // テンプレートから組み立てる({AREA}を地域名で置換)。
+  ai_concierge_initial_rain: {
+    ja: "{AREA}は今、雨が降るところもありそう。今日はどんな予定？\nまだ決めてなければ、一緒に考えるよ。",
+    en: "It looks like it might rain in {AREA} right now. What's the plan for today?\nIf you haven't decided yet, let's figure it out together."
+  },
+
+  ai_concierge_initial_clear: {
+    ja: "{AREA}は今、外も楽しめそう。今日はどんな予定？\nまだ決めてなければ、一緒に考えるよ。",
+    en: "The weather looks good for being outside in {AREA} right now. What's the plan for today?\nIf you haven't decided yet, let's figure it out together."
+  },
+
+  ai_concierge_initial_area_only: {
+    ja: "{AREA}にいるんだね。今日はどんな予定？\nまだ決めてなければ、一緒に考えるよ。",
+    en: "So you're in {AREA}. What's the plan for today?\nIf you haven't decided yet, let's figure it out together."
+  },
+
+  ai_concierge_initial_fallback: {
+    ja: "今日はどんな予定？\nまだ決めてなければ、一緒に考えるよ。",
+    en: "What's the plan for today?\nIf you haven't decided yet, let's figure it out together."
+  },
+
+  ai_concierge_quick_reply_no_plan: {
+    ja: "ノープラン",
+    en: "No plans yet"
+  },
+
+  ai_concierge_quick_reply_nearby: {
+    ja: "近場で楽しみたい",
+    en: "Something nearby"
+  },
+
+  ai_concierge_quick_reply_rainy_ok: {
+    ja: "雨でも楽しみたい",
+    en: "Fun even in the rain"
+  },
+
   suggestion_placeholder_main: {
     ja: "このあと、どうする？",
     en: "What should you do next?"
