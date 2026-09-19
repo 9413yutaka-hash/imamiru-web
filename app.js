@@ -8041,6 +8041,180 @@ function getAnonymousIdTokenForLocationCollection() {
     );
 }
 
+// 「この街の情報」Phase1｜regionProfiles/regionRecommendations/
+// regionEditorialのいずれにも依存しない独立機能。GPSでuserAreaNameが
+// 確定した時点ではボタンを表示するだけ(showCityInfoSection())で、AIは
+// 一切呼ばない(本部指示)。実際に/api/moderate-submission
+// (mode:"cityInfoGet")を呼ぶのはボタン押下時(handleCityInfoButtonClick())
+// のみ。認証はaiConciergeChatと同じgetAnonymousIdTokenForLocationCollection()
+// をそのまま再利用する(新しい認証方式を作らない)。
+let cityInfoCurrentAreaName =
+  null;
+
+function showCityInfoSection(
+  areaName
+) {
+  const cityInfoSection =
+    document.getElementById("cityInfoSection");
+
+  if (!cityInfoSection) {
+    return;
+  }
+
+  cityInfoCurrentAreaName =
+    areaName;
+
+  cityInfoSection.style.display =
+    "";
+
+  const cityInfoStatus =
+    document.getElementById("cityInfoStatus");
+
+  const cityInfoResult =
+    document.getElementById("cityInfoResult");
+
+  const cityInfoButton =
+    document.getElementById("cityInfoButton");
+
+  if (cityInfoStatus) {
+    cityInfoStatus.textContent =
+      "";
+  }
+
+  if (cityInfoResult) {
+    cityInfoResult.style.display =
+      "none";
+  }
+
+  if (cityInfoButton) {
+    cityInfoButton.disabled =
+      false;
+  }
+}
+
+async function handleCityInfoButtonClick() {
+  if (!cityInfoCurrentAreaName) {
+    return;
+  }
+
+  const cityInfoButton =
+    document.getElementById("cityInfoButton");
+
+  const cityInfoStatus =
+    document.getElementById("cityInfoStatus");
+
+  const cityInfoResult =
+    document.getElementById("cityInfoResult");
+
+  const cityInfoTitle =
+    document.getElementById("cityInfoTitle");
+
+  const cityInfoContent =
+    document.getElementById("cityInfoContent");
+
+  if (
+    !cityInfoButton ||
+    !cityInfoStatus ||
+    !cityInfoResult ||
+    !cityInfoTitle ||
+    !cityInfoContent
+  ) {
+    return;
+  }
+
+  cityInfoButton.disabled =
+    true;
+
+  cityInfoResult.style.display =
+    "none";
+
+  cityInfoStatus.textContent =
+    getMachinauTranslation(
+      "city_info_status_loading",
+      getCurrentMachinauLanguage()
+    );
+
+  try {
+    const idToken =
+      await getAnonymousIdTokenForLocationCollection();
+
+    const response =
+      await fetch(
+        "/api/moderate-submission",
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + idToken
+          },
+
+          body: JSON.stringify({
+            mode: "cityInfoGet",
+            targetArea: cityInfoCurrentAreaName
+          })
+        }
+      );
+
+    let responseData =
+      null;
+
+    try {
+      responseData =
+        await response.json();
+    } catch (jsonError) {
+      throw new Error("応答を読み取れませんでした。");
+    }
+
+    if (
+      !response.ok ||
+      !responseData ||
+      responseData.success !== true
+    ) {
+      throw new Error(
+        (responseData && responseData.message) ||
+          "この街の情報を取得できませんでした。"
+      );
+    }
+
+    cityInfoStatus.textContent =
+      "";
+
+    cityInfoTitle.textContent =
+      responseData.title || "";
+
+    cityInfoContent.textContent =
+      responseData.content || "";
+
+    cityInfoResult.style.display =
+      "";
+  } catch (error) {
+    console.error(
+      "この街の情報の取得に失敗しました",
+      error
+    );
+
+    cityInfoStatus.textContent =
+      getMachinauTranslation(
+        "city_info_status_error",
+        getCurrentMachinauLanguage()
+      );
+  } finally {
+    cityInfoButton.disabled =
+      false;
+  }
+}
+
+const cityInfoButtonElement =
+  document.getElementById("cityInfoButton");
+
+if (cityInfoButtonElement) {
+  cityInfoButtonElement.addEventListener(
+    "click",
+    handleCityInfoButtonClick
+  );
+}
+
 // GPSで地域(areaName)が確定した直後に、その地域のaiSourcesだけを対象に
 // 既存の自動AI記者フロー(/api/admin-source-collect)を起動するための
 // 補助的なトリガー。位置情報起点収集はあくまで補助処理であり、
@@ -8291,6 +8465,14 @@ function getLocation() {
               );
 
               loadRegionRecommendations(
+                areaName
+              );
+
+              // 「この街の情報」Phase1｜ここではボタンを表示するだけで、
+              // AIは一切呼ばない(本部指示：GPS取得時にはAIを呼ばない)。
+              // 実際の生成・取得はshowCityInfoSection()内ではなく、
+              // ボタン押下時のhandleCityInfoButtonClick()でのみ行う。
+              showCityInfoSection(
                 areaName
               );
             }

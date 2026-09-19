@@ -6155,6 +6155,680 @@ async function handleRegionProfileResearchRequest(
 }
 
 
+// 「この街の情報」Phase1｜regionProfiles/regionRecommendations/
+// regionEditorialのいずれにも依存しない、完全に独立した新機能。GPSで
+// 市区町村が確定した旅行者が「この街の情報」ボタンを押した時だけ、
+// Terra(web_search付き)がその場でその市区町村を調べて600〜800字の
+// 紹介記事を生成し、Firestoreへ90日間キャッシュする。GPS取得時点では
+// このFunctionを一切呼ばない(呼び出しはボタン押下時のみ、app.js側で
+// 制御する)。既存のregionProfiles(街の記憶・人間確認済み長期記憶)・
+// regionRecommendations/regionEditorial(運営が採用ボタンを押して確定する
+// 記事)とは保存先・生成方式・レビュー方式が全く異なるため、意図的に
+// 独立したcollection・独立した定数群として実装する。
+const CITY_INFO_ARTICLES_COLLECTION =
+  "cityInfoArticles";
+
+// Phase1時点でマチナウが対象とする地域は沖縄県内のみ(既存の
+// OKINAWA_MUNICIPALITY_TO_REGION_NAME等、他の既存前提と同じ)。本部指示
+// 「41市町村・全国自治体を手登録する構造にしない」に従い、市区町村ごとの
+// 個別登録は行わず、この1つの定数だけで全ての沖縄県内市町村に対応する。
+const CITY_INFO_PREFECTURE =
+  "沖縄県";
+
+const CITY_INFO_COUNTRY =
+  "日本";
+
+const CITY_INFO_MODEL =
+  process.env.AI_CITY_INFO_MODEL ||
+  "gpt-5.6-terra";
+
+const CITY_INFO_ENDPOINT =
+  "https://api.openai.com/v1/responses";
+
+const CITY_INFO_REASONING_EFFORT =
+  "medium";
+
+// Terra＋web_searchを1 requestで使う既存実績(regionProfileResearchの
+// AI_REGION_PROFILE_RESEARCH_GROUP_TIMEOUT_MS)と同じ60秒に合わせる。
+const CITY_INFO_TIMEOUT_MS =
+  60000;
+
+const CITY_INFO_TARGET_AREA_MAX_LENGTH =
+  40;
+
+const CITY_INFO_TITLE_MAX_LENGTH =
+  60;
+
+// 目標は600〜800字(本部指示)。Terraの出力が多少前後しても本文が途中で
+// 切れないよう、目標分量の約2倍を安全上限として持たせる(regionEditorial
+// のcontent上限設計と同じ考え方)。
+const CITY_INFO_CONTENT_MAX_LENGTH =
+  1600;
+
+const CITY_INFO_SCHEMA_VERSION =
+  1;
+
+const CITY_INFO_EXPIRES_AFTER_MILLISECONDS =
+  90 * 24 * 60 * 60 * 1000;
+
+// Firestore document IDとして安全な文字列を、都道府県＋市区町村から
+// 事前登録なしで生成する。本部指示により、既存の手動登録型
+// REGION_PROFILE_AREA_NAME_TO_ID(現状八重瀬町のみ)には依存させない。
+// Firestore document IDの制約("/"を含められない、"."単体・".."は不可、
+// "__"で始まり"__"で終わる名前は予約済み、UTF-8で1500byte以内)を踏まえ、
+// 安全側に短絡させる。
+function sanitizeCityInfoRegionKeyPart(
+  rawText
+) {
+  if (typeof rawText !== "string") {
+    return "";
+  }
+
+  return rawText
+    .trim()
+    .replace(/\//g, "");
+}
+
+function buildCityInfoRegionKey(
+  prefecture,
+  municipality
+) {
+  const safePrefecture =
+    sanitizeCityInfoRegionKeyPart(prefecture);
+
+  const safeMunicipality =
+    sanitizeCityInfoRegionKeyPart(municipality);
+
+  if (safePrefecture === "" || safeMunicipality === "") {
+    return null;
+  }
+
+  const regionKey =
+    safePrefecture + "-" + safeMunicipality;
+
+  if (regionKey === "." || regionKey === "..") {
+    return null;
+  }
+
+  if (/^__.*__$/.test(regionKey)) {
+    return null;
+  }
+
+  if (Buffer.byteLength(regionKey, "utf8") > 1500) {
+    return null;
+  }
+
+  return regionKey;
+}
+
+// 本部指定のプロンプトをそのまま反映する(長大な新システムプロンプトを
+// 作らない、という本部方針に沿い、独自の追加要件は最小限にとどめる)。
+// web_searchを使うため、regionEditorial(web_search不使用)には無い
+// 「情報源の信頼性」に関する注意だけを本部指示どおり追加する。
+function buildCityInfoInstructions() {
+  return (
+    "あなたは、旅行者に街の魅力を短く伝えるプロの旅行ライター兼" +
+    "コピーライターです。\n\n" +
+    "対象の市区町村について、旅行中にスマートフォンで読む" +
+    "『この街の情報』を作成してください。\n\n" +
+    "旅行者は移動中や屋外で読むことを想定しています。長い観光記事" +
+    "ではなく、『ここはどんな街？』『何がある？』が1分程度で分かり、" +
+    "その街を少し歩いてみたくなる文章にしてください。\n\n" +
+    "【入れてほしい内容】\n" +
+    "・市区町村名\n" +
+    "・人口と面積\n" +
+    "・名前の由来\n" +
+    "・街ができた経緯や歴史\n" +
+    "・この街らしい風景、文化、産業、食\n" +
+    "・おすすめスポットが確認できる場合は具体名で2〜4か所\n" +
+    "・今後のまちづくりや新しい取り組みなど、確かな情報があれば簡潔に" +
+    "紹介\n\n" +
+    "600〜800字程度。\n\n" +
+    "百科事典のような羅列ではなく、一つの短い旅の読み物として自然に" +
+    "つなぐ。最初の数行でその街らしさを伝える。\n\n" +
+    "行政資料のような文章にしない。過剰な観光コピーにしない。\n\n" +
+    "おすすめスポットは確認できる場合、具体的な名称を使用し、そこで" +
+    "何を感じたり楽しめるかを短く伝える。\n\n" +
+    "人口や面積は文章へ自然に入れる。\n\n" +
+    "現在の営業時間、料金、イベント開催状況、交通運行など変化しやすい" +
+    "情報は、最新確認できない限り断定しない。\n\n" +
+    "確認できない事実を推測・創作しない。\n\n" +
+    "最後は、『今ここにいるなら、ちょっと行ってみようかな』と思える" +
+    "自然な言葉で締める。\n\n" +
+    "【情報源についての注意】\n" +
+    "Web検索では、自治体公式サイト・国や都道府県等の公的機関・公式" +
+    "観光協会・施設公式サイトなど、信頼できる一次情報を優先してくだ" +
+    "さい。Wikipedia、まとめサイト、個人ブログ等の情報だけを根拠に、" +
+    "人口・面積・歴史・名前の由来などの事実を断定しないでください。" +
+    "信頼できる情報源で確認できない場合は、無理に埋めず、確認できた" +
+    "範囲だけで書いてください。\n\n" +
+    "【出力】\n" +
+    "本文中にURLを一切書かないでください。指定されたJSON形式" +
+    "(title/content)以外の文字列(前置き・挨拶・コードブロック記法等)を" +
+    "一切含めないでください。本文はMarkdown記法(##見出し、**太字**等)を" +
+    "使わないでください。"
+  );
+}
+
+function buildCityInfoInputItems(
+  targetArea,
+  prefecture
+) {
+  const contextJson =
+    JSON.stringify(
+      {
+        targetArea: targetArea,
+        prefecture: prefecture,
+        country: CITY_INFO_COUNTRY
+      }
+    );
+
+  return [
+    {
+      role: "user",
+      content: [
+        {
+          type: "input_text",
+          text:
+            "【対象市区町村(JSON)】\n" +
+            contextJson +
+            "\n\n" +
+            "この市区町村について、指定されたJSON形式で" +
+            "『この街の情報』を作成してください。"
+        }
+      ]
+    }
+  ];
+}
+
+function buildCityInfoJsonSchema() {
+  return {
+    type: "json_schema",
+    name: "city_info_article",
+    strict: true,
+    schema: {
+      type: "object",
+      properties: {
+        title: { type: "string" },
+        content: { type: "string" }
+      },
+      required: ["title", "content"],
+      additionalProperties: false
+    }
+  };
+}
+
+// Terra＋web_search＋Structured Outputsを1 requestで使う既存実績
+// (callOpenAiRegionProfileResearchGroup)と同じ技術構成。本部指示により、
+// allowed_domainsによる市町村ごとの事前登録は行わない(全国展開時に
+// 手登録が発生する構造を避けるため)。
+async function callOpenAiCityInfo(
+  payload
+) {
+  const apiKey =
+    process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    const configError =
+      new Error("OPENAI_API_KEY が設定されていません。");
+
+    configError.isMissingApiKey =
+      true;
+
+    throw configError;
+  }
+
+  const instructions =
+    buildCityInfoInstructions();
+
+  const inputItems =
+    buildCityInfoInputItems(
+      payload.targetArea,
+      payload.prefecture
+    );
+
+  const controller =
+    new AbortController();
+
+  const timeoutId =
+    setTimeout(
+      function() {
+        controller.abort();
+      },
+      CITY_INFO_TIMEOUT_MS
+    );
+
+  let response;
+
+  try {
+    try {
+      response =
+        await fetch(
+          CITY_INFO_ENDPOINT,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer " + apiKey
+            },
+
+            body: JSON.stringify({
+              model: CITY_INFO_MODEL,
+              instructions: instructions,
+              input: inputItems,
+
+              tools: [
+                {
+                  type: "web_search",
+                  search_context_size: "low"
+                }
+              ],
+
+              tool_choice: "auto",
+
+              text: {
+                format:
+                  buildCityInfoJsonSchema()
+              },
+
+              reasoning: {
+                effort: CITY_INFO_REASONING_EFFORT
+              }
+            }),
+
+            signal: controller.signal
+          }
+        );
+    } catch (fetchError) {
+      if (fetchError.name === "AbortError") {
+        const timeoutError =
+          new Error("この街の情報の生成がタイムアウトしました。");
+
+        timeoutError.isTransient =
+          true;
+
+        timeoutError.isTimeout =
+          true;
+
+        throw timeoutError;
+      }
+
+      const networkError =
+        new Error("この街の情報の生成呼び出しに失敗しました。");
+
+      networkError.isTransient =
+        true;
+
+      networkError.isNetworkError =
+        true;
+
+      throw networkError;
+    }
+  } finally {
+    clearTimeout(
+      timeoutId
+    );
+  }
+
+  if (!response.ok) {
+    const httpError =
+      new Error(
+        "OpenAI APIがエラーを返しました。status=" + response.status
+      );
+
+    httpError.isHttpError =
+      true;
+
+    httpError.httpStatus =
+      response.status;
+
+    httpError.isTransient =
+      true;
+
+    throw httpError;
+  }
+
+  let responseData;
+
+  try {
+    responseData =
+      await response.json();
+  } catch (jsonError) {
+    const parseError =
+      new Error("OpenAI APIの応答を解析できませんでした。");
+
+    parseError.isJsonError =
+      true;
+
+    parseError.isTransient =
+      true;
+
+    throw parseError;
+  }
+
+  const outputItems =
+    Array.isArray(responseData.output)
+      ? responseData.output
+      : [];
+
+  const messageItem =
+    outputItems.find(
+      function(item) {
+        return (
+          item &&
+          item.type === "message" &&
+          item.role === "assistant" &&
+          Array.isArray(item.content)
+        );
+      }
+    );
+
+  const rawText =
+    messageItem
+      ? messageItem.content
+          .filter(
+            function(contentPart) {
+              return (
+                contentPart &&
+                contentPart.type === "output_text" &&
+                typeof contentPart.text === "string"
+              );
+            }
+          )
+          .map(
+            function(contentPart) {
+              return contentPart.text;
+            }
+          )
+          .join("")
+      : "";
+
+  if (rawText.trim() === "") {
+    const shapeError =
+      new Error("OpenAI APIの応答形式が不正です。");
+
+    shapeError.isJsonError =
+      true;
+
+    shapeError.isTransient =
+      true;
+
+    throw shapeError;
+  }
+
+  let parsedArticle;
+
+  try {
+    parsedArticle =
+      JSON.parse(rawText);
+  } catch (parseError) {
+    const shapeError =
+      new Error("この街の情報がJSON形式ではありませんでした。");
+
+    shapeError.isJsonError =
+      true;
+
+    shapeError.isTransient =
+      true;
+
+    throw shapeError;
+  }
+
+  return {
+    title:
+      sanitizeRegionEditorialText(
+        parsedArticle.title,
+        CITY_INFO_TITLE_MAX_LENGTH
+      ),
+
+    content:
+      sanitizeRegionEditorialText(
+        parsedArticle.content,
+        CITY_INFO_CONTENT_MAX_LENGTH
+      )
+  };
+}
+
+// 90日キャッシュの読み取り。単一document読み取りのみ(collectionクエリ
+// 不要)。期限切れ・未生成・データ形式不正のいずれもnullとして扱い、
+// 呼び出し元が一律「無ければ生成する」で処理できるようにする。
+async function fetchCityInfoArticleOrNull(
+  database,
+  regionKey
+) {
+  const documentSnapshot =
+    await database
+      .collection(CITY_INFO_ARTICLES_COLLECTION)
+      .doc(regionKey)
+      .get();
+
+  if (!documentSnapshot.exists) {
+    return null;
+  }
+
+  const data =
+    documentSnapshot.data() || {};
+
+  const expiresAtMilliseconds =
+    data.expiresAt &&
+    typeof data.expiresAt.toMillis === "function"
+      ? data.expiresAt.toMillis()
+      : null;
+
+  if (
+    expiresAtMilliseconds === null ||
+    expiresAtMilliseconds <= Date.now()
+  ) {
+    return null;
+  }
+
+  if (
+    typeof data.title !== "string" ||
+    typeof data.content !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    title: data.title,
+    content: data.content
+  };
+}
+
+async function saveCityInfoArticle(
+  database,
+  regionKey,
+  payload
+) {
+  const expiresAtDate =
+    new Date(
+      Date.now() +
+      CITY_INFO_EXPIRES_AFTER_MILLISECONDS
+    );
+
+  await database
+    .collection(CITY_INFO_ARTICLES_COLLECTION)
+    .doc(regionKey)
+    .set({
+      regionKey: regionKey,
+      regionName: payload.regionName,
+      prefecture: payload.prefecture,
+      country: CITY_INFO_COUNTRY,
+      title: payload.title,
+      content: payload.content,
+
+      generatedAt:
+        FieldValue.serverTimestamp(),
+
+      expiresAt:
+        Timestamp.fromDate(expiresAtDate),
+
+      model: CITY_INFO_MODEL,
+      schemaVersion: CITY_INFO_SCHEMA_VERSION
+    });
+}
+
+// 「この街の情報」Phase1｜公開機能(旅行者向け)のため、AIコンシェルジュ
+// (handleAiConciergeChatRequest)と同じ認証方式(有効なFirebase IDトークン
+// を持つユーザーなら誰でも可、匿名認証も許可、管理者/Editor限定にしない)
+// を採用する。regionEditorial/regionProfile系のrequireAdminOrEditor()は
+// ここでは使わない(旅行者本人がボタンを押す機能のため)。
+async function handleCityInfoGetRequest(
+  request,
+  response
+) {
+  try {
+    const idToken =
+      readBearerToken(
+        request
+      );
+
+    if (idToken === "") {
+      return response.status(401).json({
+        success: false,
+        message: "認証情報がありません。"
+      });
+    }
+
+    const app =
+      getFirebaseAdminApp();
+
+    try {
+      await getAuth(app)
+        .verifyIdToken(
+          idToken
+        );
+    } catch (verifyError) {
+      return response.status(401).json({
+        success: false,
+        message: "認証情報が正しくありません。"
+      });
+    }
+
+    const database =
+      getFirestore(app);
+
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    const targetArea =
+      sanitizeRegionEditorialText(
+        requestBody.targetArea,
+        CITY_INFO_TARGET_AREA_MAX_LENGTH
+      );
+
+    if (targetArea === "") {
+      return response.status(400).json({
+        success: false,
+        message: "対象市区町村を指定してください。"
+      });
+    }
+
+    const regionKey =
+      buildCityInfoRegionKey(
+        CITY_INFO_PREFECTURE,
+        targetArea
+      );
+
+    if (!regionKey) {
+      return response.status(400).json({
+        success: false,
+        message: "対象市区町村を正しく処理できませんでした。"
+      });
+    }
+
+    const cachedArticle =
+      await fetchCityInfoArticleOrNull(
+        database,
+        regionKey
+      );
+
+    if (cachedArticle) {
+      return response.status(200).json({
+        success: true,
+        cached: true,
+        title: cachedArticle.title,
+        content: cachedArticle.content
+      });
+    }
+
+    let generatedArticle;
+
+    try {
+      generatedArticle =
+        await callOpenAiCityInfo(
+          {
+            targetArea: targetArea,
+            prefecture: CITY_INFO_PREFECTURE
+          }
+        );
+    } catch (aiError) {
+      console.error(
+        "この街の情報：生成エラー：",
+        aiError
+      );
+
+      return response.status(200).json({
+        success: false,
+        message:
+          "この街の情報の生成中にエラーが発生しました。時間をおいて、もう一度お試しください。"
+      });
+    }
+
+    if (
+      generatedArticle.title === "" ||
+      generatedArticle.content === ""
+    ) {
+      return response.status(200).json({
+        success: false,
+        message: "この街の情報を生成できませんでした。"
+      });
+    }
+
+    try {
+      await saveCityInfoArticle(
+        database,
+        regionKey,
+        {
+          regionName: targetArea,
+          prefecture: CITY_INFO_PREFECTURE,
+          title: generatedArticle.title,
+          content: generatedArticle.content
+        }
+      );
+    } catch (saveError) {
+      // 保存に失敗しても、今回生成できた記事はそのままこの旅行者へ
+      // 返す(体験を優先する)。次回アクセス時は未保存のため再生成される
+      // だけで、データ不整合等の実害は無い。
+      console.error(
+        "この街の情報：保存エラー：",
+        saveError
+      );
+    }
+
+    return response.status(200).json({
+      success: true,
+      cached: false,
+      title: generatedArticle.title,
+      content: generatedArticle.content
+    });
+  } catch (error) {
+    console.error(
+      "この街の情報：処理エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message: "この街の情報の取得中にエラーが発生しました。"
+    });
+  }
+}
+
+
 // Ver1.8 Phase1｜AIコンシェルジュ本体。認証はhandleCloudinarySignatureRequest()
 // と同じ匿名Firebase AuthenticationのBearer Token検証をそのまま再利用する。
 // AI呼び出し・応答検証のいずれかで失敗しても、常にsuccess:falseのJSONを
@@ -10760,6 +11434,19 @@ export default async function handler(
     requestBody.mode === "regionProfileResearch"
   ) {
     return handleRegionProfileResearchRequest(
+      request,
+      response
+    );
+  }
+
+  // 「この街の情報」Phase1｜既存モードのいずれにも一切触れない。
+  // regionEditorial/regionProfile系とは異なり、公開機能(旅行者向け)の
+  // ため管理者/Editor限定にしない(handleCityInfoGetRequest内部で
+  // aiConciergeChatと同じ認証方式を使う)。
+  if (
+    requestBody.mode === "cityInfoGet"
+  ) {
+    return handleCityInfoGetRequest(
       request,
       response
     );

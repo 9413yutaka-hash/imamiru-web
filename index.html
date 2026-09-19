@@ -152,6 +152,22 @@
       margin-bottom: 6px;
     }
 
+    /* 「この街の情報」Phase1専用の最小CSS。外枠は既存
+       .region-recommendation-sectionをそのまま再利用する。 */
+    #cityInfoContent {
+      font-size: 13px;
+      color: var(--text);
+      white-space: pre-line;
+      margin: 8px 0 0;
+    }
+
+    #cityInfoTitle {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 900;
+      color: var(--navy);
+    }
+
     .region-recommendation-card-title {
       font-size: 15px;
       font-weight: 900;
@@ -1356,6 +1372,37 @@
         class="region-recommendation-area-picker"
         style="display:none;"
       ></div>
+
+    </section>
+
+    <!-- 「この街の情報」Phase1｜GPSでuserAreaNameが確定した時点ではボタンを
+         表示するだけで、AIは一切呼ばない(本部指示)。ボタン押下時に初めて
+         /api/moderate-submissionへ問い合わせる。既存の
+         regionRecommendationSectionとは独立したセクションとし、その内部
+         構造・表示条件には一切触れない。外枠は既存
+         .region-recommendation-sectionクラスをそのまま再利用する
+         (新しいデザイン体系を作らない)。 -->
+    <section
+      id="cityInfoSection"
+      class="region-recommendation-section"
+      style="display:none;"
+    >
+
+      <button
+        id="cityInfoButton"
+        class="location-button"
+        type="button"
+        data-i18n="city_info_button"
+      >
+        この街の情報
+      </button>
+
+      <p id="cityInfoStatus"></p>
+
+      <div id="cityInfoResult" style="display:none;">
+        <p id="cityInfoTitle"></p>
+        <p id="cityInfoContent"></p>
+      </div>
 
     </section>
 

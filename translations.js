@@ -536,6 +536,21 @@ const MACHINAU_TRANSLATIONS = {
     en: "📍 Recommended in This Area"
   },
 
+  city_info_button: {
+    ja: "この街の情報",
+    en: "About This City"
+  },
+
+  city_info_status_loading: {
+    ja: "この街について調べています…",
+    en: "Looking up this city…"
+  },
+
+  city_info_status_error: {
+    ja: "この街の情報を取得できませんでした。時間をおいて、もう一度お試しください。",
+    en: "Couldn't load city info. Please try again later."
+  },
+
   column_entry_heading: {
     ja: "📖 マチナウ読みもの",
     en: "📖 Machinau Reads"
