@@ -322,8 +322,24 @@ const AI_CONCIERGE_FIELD_MAX_LENGTHS =
     // shop.authorType(値は"admin"/"ai"/"shopAd"等、いずれも既存の短い
     // 固定文字列)をcandidateへ通すための長さ制限。新しいFirestore
     // フィールドではなく、既存フィールドの安全な受け渡し用の制限値。
-    authorType: 20
+    authorType: 20,
+
+    // 情報源の信用区分 Phase1｜aiSources.sourceTrust("official"/
+    // "self_reported"/"third_party"のいずれか、または未設定を表す空文字)
+    // をcandidateへ通すための長さ制限。authorType(誰がマチナウ上で投稿を
+    // 作成したか)とは別軸の値であり、意味を混同しない。
+    sourceTrust: 20
   };
+
+// 情報源の信用区分 Phase1｜aiSources.sourceTrustとして許可する値。
+// この3値以外(未知の値・改変された値)はsanitizeAiConciergeCandidate()で
+// すべて空文字へ落とし、Terraへは絶対に渡さない。
+const AI_CONCIERGE_ALLOWED_SOURCE_TRUST_VALUES =
+  [
+    "official",
+    "self_reported",
+    "third_party"
+  ];
 
 const AI_CONCIERGE_CURRENT_TIME_MAX_LENGTH =
   16;
@@ -1688,7 +1704,19 @@ function sanitizeAiConciergeCandidate(
     authorType: clippedText(
       rawCandidate.authorType,
       AI_CONCIERGE_FIELD_MAX_LENGTHS.authorType
-    )
+    ),
+
+    // 情報源の信用区分 Phase1｜aiSources.sourceTrustをshop→candidateまで
+    // 通してきた値を、Terraへ渡す直前で厳格に検証する。未知の値・改変された
+    // 値を信用しないよう、"official"/"self_reported"/"third_party"の3つ
+    // 以外はすべて空文字(＝未設定/legacy扱い)へ落とす。空文字を"official"
+    // のように安全側でない値へは絶対に補完しない。
+    sourceTrust:
+      AI_CONCIERGE_ALLOWED_SOURCE_TRUST_VALUES.includes(
+        rawCandidate.sourceTrust
+      )
+        ? rawCandidate.sourceTrust
+        : ""
   };
 }
 
@@ -2478,6 +2506,45 @@ function buildAiConciergeChatInstructions(
     "presence of a sourceUrl does not tell you what kind of organization " +
     "published it — never infer the publisher's identity or category from " +
     "sourceUrl alone. " +
+
+    "\n\nORIGINAL SOURCE TRUST: a candidate may separately include a " +
+    "\"sourceTrust\" field. This is a DIFFERENT axis from \"authorType\" " +
+    "above — " +
+    "authorType is about who created the post ON Machinau, while " +
+    "sourceTrust is about who the ORIGINAL information came from, and the " +
+    "two do not always line up (e.g. Machinau's town-watching AI can " +
+    "auto-post something that originally came from a shop's own social " +
+    "media account). \"sourceTrust\":\"official\" means the original " +
+    "information itself came from an official primary source (a " +
+    "government office, transport operator, tourism board, official " +
+    "facility, etc.) — you don't need to keep pointing this out every " +
+    "time, just treat it as reliable as usual. \"sourceTrust\":" +
+    "\"self_reported\" means the original information came from the shop/" +
+    "facility/operator itself (e.g. its own social media account) — this " +
+    "is a legitimate first-party source, but it is the business talking " +
+    "about itself, not something a third party has verified; when it's " +
+    "actually useful to be clear about that, say so naturally (e.g. " +
+    "\"店舗の発信では\"/\"according to the shop's own post\") instead of " +
+    "presenting it as independently confirmed. \"sourceTrust\":" +
+    "\"third_party\" means the original information came from an " +
+    "unverified third party (a general user, word-of-mouth, a social " +
+    "media post not from the business/organization itself, etc.) — never " +
+    "state it as a confirmed fact; when it's relevant, say so briefly and " +
+    "plainly (e.g. \"SNS上では〜という情報がありますが、未確認です\") rather " +
+    "than a long disclaimer, and don't repeat the caveat more than once " +
+    "in the same reply. A MISSING or empty \"sourceTrust\" (it may not be " +
+    "present on every candidate) means this is simply unclassified/legacy " +
+    "data — it does NOT mean \"official\", and you must not assume or " +
+    "state that it's official. In particular, never use " +
+    "\"authorType\":\"ai\" by itself as proof that a candidate is from a " +
+    "registered official source — that is what OFFICIAL_TODAY AUTHORTYPE " +
+    "above already covers separately; only an actual \"sourceTrust\":" +
+    "\"official\" (or the candidate's own title/content genuinely saying " +
+    "so) lets you call it official. Do not invent a disclaimer when " +
+    "sourceTrust is simply absent — treat it the same as any other " +
+    "candidate whose provenance you were not told, and rely on the " +
+    "existing rules (e.g. rule F below, OFFICIAL_TODAY AUTHORTYPE above) " +
+    "for how to talk about it. " +
 
     "\n\nPRIORITY RULE: if a \"factual_info\" candidate is relevant to the " +
     "traveler's area or plans, you MUST mention it and treat it as higher " +

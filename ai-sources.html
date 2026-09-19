@@ -482,6 +482,36 @@
       background: #eaf4fb;
     }
 
+    .source-trust-badge {
+      margin-top: 6px;
+      margin-left: 6px;
+      display: inline-block;
+      padding: 4px 9px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 800;
+    }
+
+    .source-trust-official {
+      color: #1f6f43;
+      background: #e6f6ec;
+    }
+
+    .source-trust-self_reported {
+      color: #7a5b00;
+      background: #fff6df;
+    }
+
+    .source-trust-third_party {
+      color: #9a3b12;
+      background: #fdece3;
+    }
+
+    .source-trust-legacy {
+      color: var(--subtext);
+      background: #eef2f5;
+    }
+
     .source-item-meta {
       margin-top: 6px;
       color: var(--subtext);
@@ -964,6 +994,29 @@
 
         <label
           class="form-label"
+          for="sourceTrustInput"
+        >
+          情報源の信用区分
+          <span class="required">必須</span>
+        </label>
+
+        <select id="sourceTrustInput">
+          <option value="">未設定（レガシー・既存挙動を維持）</option>
+          <option value="official">公式一次情報（行政・交通機関・観光施設等の公式発信）</option>
+          <option value="self_reported">本人・事業者発信（店舗・施設公式SNS等）</option>
+          <option value="third_party">第三者・未確認（一般ユーザー・口コミ・第三者SNS等）</option>
+        </select>
+
+        <p class="form-help">
+          元情報を誰の発信として扱うかの区分です。新規登録時は必ず選択してください。既存の情報源を編集するだけの場合、この項目が「未設定」のままでも保存できます（自動的に「公式一次情報」として扱われることはありません）。「第三者・未確認」は、自動公開が許可されていても人間の確認なしには掲載されません。
+        </p>
+
+      </div>
+
+      <div class="form-group">
+
+        <label
+          class="form-label"
           for="sourcePriorityInput"
         >
           情報源ランク
@@ -1330,6 +1383,21 @@
       "その他"
     ];
 
+    // 情報源の信用区分 Phase1｜空文字は「未設定（レガシー）」を表す正当な値
+    // として扱う(officialへは絶対に補完しない)。
+    const ALLOWED_SOURCE_TRUST_VALUES = [
+      "official",
+      "self_reported",
+      "third_party"
+    ];
+
+    const SOURCE_TRUST_LABELS_BY_VALUE = {
+      "": "未設定（レガシー）",
+      official: "公式一次情報",
+      self_reported: "本人・事業者発信",
+      third_party: "第三者・未確認"
+    };
+
     const ALLOWED_SOURCE_PRIORITY_VALUES = [1, 2, 3, 4, 5];
 
     const DEFAULT_SOURCE_PRIORITY = 3;
@@ -1477,6 +1545,7 @@
     const sourceNameInput = document.getElementById("sourceNameInput");
     const sourceUrlInput = document.getElementById("sourceUrlInput");
     const sourceTypeInput = document.getElementById("sourceTypeInput");
+    const sourceTrustInput = document.getElementById("sourceTrustInput");
     const sourcePriorityInput = document.getElementById("sourcePriorityInput");
     const sourceAreaInput = document.getElementById("sourceAreaInput");
     const sourceFeedUrlInput = document.getElementById("sourceFeedUrlInput");
@@ -1630,6 +1699,30 @@
         });
       }
 
+      // 情報源の信用区分 Phase1｜空文字(未設定/レガシー)は既存sourceの
+      // 編集時には常に許可する。新規登録時(editingSourceIdがnull)だけは
+      // 3値のいずれかを明示的に選ばせる(将来SNS等を登録する際に、信用区分の
+      // 選択を確実に行わせるため)。
+      const sourceTrustValue = sourceTrustInput.value;
+
+      if (
+        sourceTrustValue !== "" &&
+        !ALLOWED_SOURCE_TRUST_VALUES.includes(sourceTrustValue)
+      ) {
+        validationErrors.push({
+          message: "情報源の信用区分の値が正しくありません。",
+          element: sourceTrustInput
+        });
+      } else if (
+        editingSourceId === null &&
+        sourceTrustValue === ""
+      ) {
+        validationErrors.push({
+          message: "情報源の信用区分を選択してください。",
+          element: sourceTrustInput
+        });
+      }
+
       const priorityValue = Number(sourcePriorityInput.value);
 
       if (!ALLOWED_SOURCE_PRIORITY_VALUES.includes(priorityValue)) {
@@ -1684,6 +1777,7 @@
         name: nameValue,
         url: urlValue,
         sourceType: sourceTypeInput.value,
+        sourceTrust: sourceTrustValue,
         priority: priorityValue,
         area: areaValue,
         isEnabled: sourceIsEnabledInput.checked,
@@ -1696,6 +1790,7 @@
       sourceNameInput.disabled = submitting;
       sourceUrlInput.disabled = submitting;
       sourceTypeInput.disabled = submitting;
+      sourceTrustInput.disabled = submitting;
       sourcePriorityInput.disabled = submitting;
       sourceAreaInput.disabled = submitting;
       sourceFeedUrlInput.disabled = submitting;
@@ -1720,6 +1815,7 @@
       sourceNameInput.value = "";
       sourceUrlInput.value = "";
       sourceTypeInput.value = "";
+      sourceTrustInput.value = "";
       sourcePriorityInput.value = String(DEFAULT_SOURCE_PRIORITY);
       sourceAreaInput.value = "";
       sourceFeedUrlInput.value = "";
@@ -1866,6 +1962,23 @@
                 SOURCE_PRIORITY_LABELS_BY_VALUE[priorityValue]
               );
 
+            // 情報源の信用区分 Phase1｜未設定(空文字)も「未設定（レガシー）」
+            // として明示的に表示し、officialであるかのように見せない。
+            const sourceTrustValue =
+              ALLOWED_SOURCE_TRUST_VALUES.includes(source.sourceTrust)
+                ? source.sourceTrust
+                : "";
+
+            const safeSourceTrustLabel =
+              escapeHtml(
+                SOURCE_TRUST_LABELS_BY_VALUE[sourceTrustValue]
+              );
+
+            const sourceTrustBadgeClass =
+              sourceTrustValue === ""
+                ? "source-trust-legacy"
+                : "source-trust-" + sourceTrustValue;
+
             return (
               '<div class="source-item">' +
               '<div class="source-item-top">' +
@@ -1893,6 +2006,11 @@
               autoPostBadgeClass +
               '">' +
               autoPostBadgeText +
+              "</span>" +
+              '<span class="source-trust-badge ' +
+              sourceTrustBadgeClass +
+              '">🪪 ' +
+              safeSourceTrustLabel +
               "</span>" +
               '<div class="source-item-url">' +
               safeUrl +
@@ -1963,6 +2081,10 @@
       sourceUrlInput.value = targetSource.url || "";
       sourceTypeInput.value = targetSource.sourceType || "";
 
+      // 情報源の信用区分 Phase1｜既存sourceに値が無い(未設定/レガシー)場合、
+      // 勝手に"official"等を選択済みにはせず、「未設定」のまま表示する。
+      sourceTrustInput.value = targetSource.sourceTrust || "";
+
       sourcePriorityInput.value =
         ALLOWED_SOURCE_PRIORITY_VALUES.includes(targetSource.priority)
           ? String(targetSource.priority)
@@ -2011,6 +2133,11 @@
             name: targetSource.name,
             url: targetSource.url,
             sourceType: targetSource.sourceType,
+            // 情報源の信用区分 Phase1｜有効/停止トグル時にsourceTrustを
+            // 送り忘れると、admin-source-save.js側で空文字(未設定)として
+            // 上書き保存されてしまう。既存値をそのまま維持するために送る
+            // (この呼び出し自体でsourceTrustを変更することはしない)。
+            sourceTrust: targetSource.sourceTrust || "",
             area: targetSource.area,
             feedUrl: targetSource.feedUrl,
             isEnabled: !targetSource.isEnabled,
@@ -3377,6 +3504,7 @@
           name: sourceFields.name,
           url: sourceFields.url,
           sourceType: sourceFields.sourceType,
+          sourceTrust: sourceFields.sourceTrust,
           priority: sourceFields.priority,
           area: sourceFields.area,
           isEnabled: sourceFields.isEnabled,

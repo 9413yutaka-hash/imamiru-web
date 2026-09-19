@@ -119,11 +119,21 @@ const FIELD_MAX_LENGTHS = {
 const ALLOWED_PRIORITY_VALUES = [1, 2, 3, 4, 5];
 
 
+// 情報源の信用区分 Phase1｜未設定(空文字)はlegacy/unknown扱いとして
+// 許可し、officialへは絶対に補完しない。この3値以外はすべて無効値。
+const ALLOWED_SOURCE_TRUST_VALUES = [
+  "official",
+  "self_reported",
+  "third_party"
+];
+
+
 const MAX_SOURCE_COUNT = 100;
 
 
 function validateSourceFields(
-  requestBody
+  requestBody,
+  isCreating
 ) {
   const name =
     String(
@@ -268,6 +278,37 @@ function validateSourceFields(
     );
   }
 
+  // 情報源の信用区分 Phase1｜空文字(未設定/legacy)は既存sourceの後方互換
+  // のため常に許可する。ただし新規登録(isCreating)だけは、将来SNS等を
+  // 登録する際に信用区分を確実に明示させるため、3値のいずれかを必須とする。
+  // 既存source編集時に値が無くても、勝手にofficialとして保存しない
+  // (空文字のまま保存を許可する)。
+  const sourceTrustRaw =
+    String(
+      requestBody.sourceTrust || ""
+    )
+      .trim();
+
+  if (
+    sourceTrustRaw !== "" &&
+    !ALLOWED_SOURCE_TRUST_VALUES.includes(
+      sourceTrustRaw
+    )
+  ) {
+    throw new Error(
+      "情報源の信用区分の値が正しくありません。"
+    );
+  }
+
+  if (
+    isCreating === true &&
+    sourceTrustRaw === ""
+  ) {
+    throw new Error(
+      "情報源の信用区分を選択してください。"
+    );
+  }
+
   return {
     name: name,
     url: url,
@@ -276,7 +317,8 @@ function validateSourceFields(
     isEnabled: requestBody.isEnabled,
     autoPostEnabled: requestBody.autoPostEnabled,
     feedUrl: feedUrl,
-    priority: priority
+    priority: priority,
+    sourceTrust: sourceTrustRaw
   };
 }
 
@@ -291,7 +333,8 @@ async function createSource(
   try {
     sourceFields =
       validateSourceFields(
-        requestBody
+        requestBody,
+        true
       );
   } catch (validationError) {
     return response.status(400).json({
@@ -374,6 +417,9 @@ async function createSource(
       priority:
         sourceFields.priority,
 
+      sourceTrust:
+        sourceFields.sourceTrust,
+
       createdAt:
         FieldValue.serverTimestamp(),
 
@@ -422,7 +468,8 @@ async function updateSource(
   try {
     sourceFields =
       validateSourceFields(
-        requestBody
+        requestBody,
+        false
       );
   } catch (validationError) {
     return response.status(400).json({
@@ -487,6 +534,9 @@ async function updateSource(
 
     priority:
       sourceFields.priority,
+
+    sourceTrust:
+      sourceFields.sourceTrust,
 
     updatedAt:
       FieldValue.serverTimestamp()

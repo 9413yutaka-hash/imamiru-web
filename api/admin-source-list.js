@@ -75,6 +75,15 @@ const ALLOWED_PRIORITY_VALUES = [1, 2, 3, 4, 5];
 
 const DEFAULT_SOURCE_PRIORITY = 3;
 
+// 情報源の信用区分 Phase1｜未設定/不正値はofficialへ補完せず、常に空文字
+// (legacy/unknown、UI側で「未設定」として明示的に識別・表示する)として
+// 返す。priorityのような既定値補完はしない。
+const ALLOWED_SOURCE_TRUST_VALUES = [
+  "official",
+  "self_reported",
+  "third_party"
+];
+
 
 function toIsoStringOrNull(
   timestampValue
@@ -232,6 +241,14 @@ export default async function handler(
               ALLOWED_PRIORITY_VALUES.includes(data.priority)
                 ? data.priority
                 : DEFAULT_SOURCE_PRIORITY,
+
+            sourceTrust:
+              typeof data.sourceTrust === "string" &&
+              ALLOWED_SOURCE_TRUST_VALUES.includes(
+                data.sourceTrust
+              )
+                ? data.sourceTrust
+                : "",
 
             createdAt:
               toIsoStringOrNull(

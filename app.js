@@ -1806,6 +1806,16 @@ function convertSubmissionToShop(
         ? data.sourceType.trim()
         : "",
 
+    // 情報源の信用区分 Phase1｜submissions.sourceTrust("official"/
+    // "self_reported"/"third_party"、または未設定を表す空文字)をそのまま
+    // 通す。authorType(誰がマチナウ上で投稿を作成したか)とは別軸のため、
+    // 意味を混同しない。値の厳格な検証はapi/moderate-submission.jsの
+    // sanitizeAiConciergeCandidate()側で行う。
+    sourceTrust:
+      typeof data.sourceTrust === "string"
+        ? data.sourceTrust.trim()
+        : "",
+
     isPermanentAd:
       data.isPermanentAd === true
   };
@@ -6319,6 +6329,16 @@ function buildAiConciergeCandidateFromShop(
     authorType:
       typeof shop.authorType === "string"
         ? shop.authorType
+        : "",
+
+    // 情報源の信用区分 Phase1｜新しいFirestoreフィールドは作らず、既存の
+    // shop.sourceTrust(convertSubmissionToShop()が既にsubmissions.
+    // sourceTrustから通してきた値)をそのままcandidateへ渡す。authorTypeとは
+    // 別軸。値の厳格な検証はapi/moderate-submission.jsのsanitizeAiConcierge
+    // Candidate()側で行う(未知の値はそこで空文字に落ちる)。
+    sourceTrust:
+      typeof shop.sourceTrust === "string"
+        ? shop.sourceTrust
         : ""
   };
 }

@@ -285,6 +285,16 @@ const PRIORITY_TIER_IMPORTANT =
 const PRIORITY_TIER_NORMAL =
   "NORMAL";
 
+// 情報源の信用区分 Phase1｜aiSources.sourceTrustとして許可する値。
+// 未設定(undefined/null/空文字)はlegacy/unknown扱いとし、officialへは
+// 変換しない。この3値以外はすべて無効値として扱う。
+const ALLOWED_SOURCE_TRUST_VALUES =
+  [
+    "official",
+    "self_reported",
+    "third_party"
+  ];
+
 const CRON_COLLECTION_CONCURRENCY =
   2;
 
@@ -4403,6 +4413,27 @@ async function resolveEnabledSourceForAutoPost(
     };
   }
 
+  const sourceTrust =
+    typeof sourceData.sourceTrust === "string" &&
+    ALLOWED_SOURCE_TRUST_VALUES.includes(
+      sourceData.sourceTrust.trim()
+    )
+      ? sourceData.sourceTrust.trim()
+      : "";
+
+  // 情報源の信用区分 Phase1｜第三者・未確認情報(third_party)は、
+  // autoPostEnabled:trueが設定されていても人間確認なしでは自動掲載しない。
+  // 設定ミス(third_partyの情報源にうっかりautoPostEnabled:trueを付けて
+  // しまう等)よりコード側の安全網を優先する、という本部方針をそのまま
+  // 反映する。official/self_reportedおよび未設定(legacy)はこの対象外
+  // (従来通りautoPostEnabledのみで判定する)。
+  if (sourceTrust === "third_party") {
+    return {
+      eligible: false,
+      reason: "第三者・未確認情報の情報源のため、自動公開の対象外です。"
+    };
+  }
+
   return {
     eligible: true,
 
@@ -4415,6 +4446,9 @@ async function resolveEnabledSourceForAutoPost(
       typeof sourceData.sourceType === "string"
         ? sourceData.sourceType.trim()
         : "",
+
+    sourceTrust:
+      sourceTrust,
 
     // 街を見るAI Phase1.7｜OpenAI第二審(callOpenAiSecondOpinion)へ実在する
     // 情報源名を渡すために追加。sourceDataは既にこの関数内で取得済みのため、
@@ -4540,6 +4574,9 @@ async function judgeArticleForAutoPost(
 
   const sourceName =
     sourceResolution.sourceName;
+
+  const sourceTrust =
+    sourceResolution.sourceTrust;
 
   const relevanceResult =
     computeRelevance(
@@ -4756,6 +4793,11 @@ async function judgeArticleForAutoPost(
     sourceType: sourceType,
     // 街を見るAI Phase1.7｜OpenAI第二審のプロンプトへ渡す実在情報として追加。
     sourceName: sourceName,
+    // 情報源の信用区分 Phase1｜submissionsまで伝播させるための値。
+    // third_partyは既にresolveEnabledSourceForAutoPost()内でSKIP済みの
+    // ため、ここに到達するのは"official"/"self_reported"/未設定(空文字)
+    // のいずれか。
+    sourceTrust: sourceTrust,
     freshnessCategory: freshnessCategory,
     explicitEventEndDate: explicitEventEndDate
   };
@@ -5111,7 +5153,8 @@ function buildDraftContentText(article, trimmedSourceUrlValue, combinedText) {
 function buildAutoDraftFromArticle(
   articleData,
   sourceArea,
-  sourceType
+  sourceType,
+  sourceTrust
 ) {
   const title =
     articleData.title.trim();
@@ -5157,6 +5200,14 @@ function buildAutoDraftFromArticle(
     sourceType:
       typeof sourceType === "string"
         ? sourceType
+        : "",
+
+    // 情報源の信用区分 Phase1｜judgeArticleForAutoPost()が
+    // resolveEnabledSourceForAutoPost()経由で確定させた値をそのまま通す。
+    // third_partyはこの関数へ到達する前にSKIP済み。
+    sourceTrust:
+      typeof sourceTrust === "string"
+        ? sourceTrust
         : ""
   };
 }
@@ -5232,6 +5283,12 @@ async function createAutoPostSubmission(
 
           sourceType:
             draft.sourceType,
+
+          // 情報源の信用区分 Phase1｜未設定(空文字)のまま保存する。
+          // "official"へ勝手に補完しない(既存source・third_party除外済み
+          // のself_reported/officialのいずれかも、そのまま忠実に反映する)。
+          sourceTrust:
+            draft.sourceTrust,
 
           createdAt:
             FieldValue.serverTimestamp(),
@@ -6031,7 +6088,8 @@ async function processDiscoveredArticleForAutoPost(
       buildAutoDraftFromArticle(
         articleDataForJudgment,
         judgment.sourceArea,
-        judgment.sourceType
+        judgment.sourceType,
+        judgment.sourceTrust
       );
 
     const submissionId =
