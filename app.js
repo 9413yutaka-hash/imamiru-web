@@ -6122,12 +6122,25 @@ function selectFactualImportantInfoCandidatesForAiConcierge() {
 }
 
 
+// マチナウAI一本化「お知らせ」接続｜街を見るAIが収集・投稿まで成功させた
+// authorType:"ai"かつcategory:"お知らせ"(resolveDraftCategory()の既定/
+// 安全キーワード一致カテゴリー、api/admin-source-collect.js参照)は、
+// 従来この関数の対象外だったため、重要安全情報(factual_info)以外は
+// buildAiConciergeCandidatePool()のどのsourceTypeにも該当せず、マチナウAI
+// へ一切届いていなかった。既存のadmin投稿(shop.authorType==="admin")の
+// 条件は変更せず、この1条件だけを additional で許可する(既存経路は無変更)。
 function selectTodayMachinauCandidatesForAiConcierge() {
   return shops
     .filter(function(shop) {
       return (
         shop.postType === "admin" &&
-        shop.authorType === "admin" &&
+        (
+          shop.authorType === "admin" ||
+          (
+            shop.authorType === "ai" &&
+            shop.category === "お知らせ"
+          )
+        ) &&
         getSuggestionAreaPriorityRank(shop) <= 2
       );
     })
@@ -6296,7 +6309,17 @@ function buildAiConciergeCandidateFromShop(
       buildAiConciergeValidUntilHint(
         shop.expiresAt
       ),
-    sourceUrl: sourceUrl
+    sourceUrl: sourceUrl,
+
+    // マチナウAI一本化「お知らせ」接続｜新しいFirestoreフィールドは作らず、
+    // 既存のshop.authorType(submissionsに既に保存済み)をそのまま
+    // candidateへ通す。Terra側でadmin(運営が直接投稿)とai(街を見るAIが
+    // 自動収集)を区別できるようにするためだけの追加(buildAiConcierge
+    // ChatInstructions()参照)。
+    authorType:
+      typeof shop.authorType === "string"
+        ? shop.authorType
+        : ""
   };
 }
 

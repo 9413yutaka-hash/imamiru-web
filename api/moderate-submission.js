@@ -316,7 +316,13 @@ const AI_CONCIERGE_FIELD_MAX_LENGTHS =
     contentExcerpt: 180,
     locationLabel: 60,
     validUntilHint: 40,
-    sourceUrl: 300
+    sourceUrl: 300,
+
+    // マチナウAI一本化「お知らせ」接続｜既存Firestoreフィールド
+    // shop.authorType(値は"admin"/"ai"/"shopAd"等、いずれも既存の短い
+    // 固定文字列)をcandidateへ通すための長さ制限。新しいFirestore
+    // フィールドではなく、既存フィールドの安全な受け渡し用の制限値。
+    authorType: 20
   };
 
 const AI_CONCIERGE_CURRENT_TIME_MAX_LENGTH =
@@ -1671,6 +1677,17 @@ function sanitizeAiConciergeCandidate(
     sourceUrl: clippedText(
       rawCandidate.sourceUrl,
       AI_CONCIERGE_FIELD_MAX_LENGTHS.sourceUrl
+    ),
+
+    // マチナウAI一本化「お知らせ」接続｜新しいFirestoreフィールドではなく、
+    // 既存のsubmissions.authorType(値は"admin"/"ai"等の短い固定文字列)を
+    // そのまま通す。official_todayが運営投稿(admin)か街を見るAIの自動収集
+    // (ai)かをTerraが区別するためだけに使う(buildAiConciergeChat
+    // Instructions()参照)。値の妥当性はクライアント側の候補選定条件で
+    // 既に確定済みのため、ここでは文字列としての最大長切り詰めのみ行う。
+    authorType: clippedText(
+      rawCandidate.authorType,
+      AI_CONCIERGE_FIELD_MAX_LENGTHS.authorType
     )
   };
 }
@@ -2423,10 +2440,33 @@ function buildAiConciergeChatInstructions(
     "has a \"sourceType\": " +
     "\"factual_info\" (safety/important real-time info such as typhoons, " +
     "warnings, closures, transport suspensions, or schedule changes), " +
-    "\"official_today\" (official Machinau operator post), " +
+    "\"official_today\" (Machinau's own confirmed today-relevant post — " +
+    "see OFFICIAL_TODAY AUTHORTYPE below for who actually created it), " +
     "\"traveler_suggestion\" (curated event/sightseeing pick), " +
     "\"region_recommendation\" (editorial regional pick), or \"shop\" (a " +
     "regular shop/venue's own direct post). " +
+
+    "\n\nOFFICIAL_TODAY AUTHORTYPE: an \"official_today\" candidate may " +
+    "include an \"authorType\" field. \"authorType\":\"admin\" means a " +
+    "Machinau operator personally confirmed and posted this. " +
+    "\"authorType\":\"ai\" means Machinau's town-watching AI automatically " +
+    "collected this from a registered official source (town hall, tourism " +
+    "board, transport, weather, etc.) and posted it without a human " +
+    "individually re-confirming it. Both are Machinau's own information " +
+    "and you may treat both as reliable, but for \"authorType\":\"ai\" you " +
+    "must NEVER say or imply that a human operator personally confirmed it " +
+    "(e.g. never say things like \"マチナウ運営が確認したところ\"/\"運営が確認" +
+    "済み\"/\"Machinau confirmed this\") — describe it neutrally instead " +
+    "(e.g. \"街の情報として\"/\"as information Machinau is tracking\"). Also, " +
+    "the candidate data alone often does NOT tell you exactly which kind " +
+    "of official source (town hall vs. tourism board vs. transport agency, " +
+    "etc.) produced it — never guess or assert a specific source (e.g. " +
+    "\"○○市役所が発表\"/\"the tourism board announced\") unless the " +
+    "candidate's own title/content/category actually says so. The mere " +
+    "presence of a sourceUrl does not tell you what kind of organization " +
+    "published it — never infer the publisher's identity or category from " +
+    "sourceUrl alone. " +
+
     "\n\nPRIORITY RULE: if a \"factual_info\" candidate is relevant to the " +
     "traveler's area or plans, you MUST mention it and treat it as higher " +
     "priority than any regular shop/sightseeing/event suggestion, even if " +
