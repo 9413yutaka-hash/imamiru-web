@@ -6302,11 +6302,20 @@ function buildCityInfoInstructions() {
     "人口・面積・歴史・名前の由来などの事実を断定しないでください。" +
     "信頼できる情報源で確認できない場合は、無理に埋めず、確認できた" +
     "範囲だけで書いてください。\n\n" +
+    "Web検索で使用した出典・URL・Markdownリンク・ドメイン名・引用表記を、" +
+    "titleおよびcontentへ出力しないでください。Web検索は事実確認のために" +
+    "使用し、完成記事は通常の旅行読み物として出力してください。\n\n" +
+    "【タイトル】\n" +
+    "titleは『市区町村名｜〜』の形を基本にする(例：『八重瀬町｜〜』)。" +
+    "都道府県名をタイトルの先頭に含めない(『沖縄県八重瀬町｜〜』のような" +
+    "形にしない)。都道府県名は必要であれば本文(content)の中で使ってよい。" +
+    "\n\n" +
     "【出力】\n" +
-    "本文中にURLを一切書かないでください。指定されたJSON形式" +
-    "(title/content)以外の文字列(前置き・挨拶・コードブロック記法等)を" +
-    "一切含めないでください。本文はMarkdown記法(##見出し、**太字**等)を" +
-    "使わないでください。"
+    "本文中にURL・Markdownリンク(例：[文字列](URL))・出典を示す丸括弧" +
+    "書き(例：(ドメイン名)、(URL))を一切書かないでください。指定された" +
+    "JSON形式(title/content)以外の文字列(前置き・挨拶・コードブロック" +
+    "記法等)を一切含めないでください。本文はMarkdown記法(##見出し、" +
+    "**太字**等)を使わないでください。"
   );
 }
 
@@ -6356,6 +6365,43 @@ function buildCityInfoJsonSchema() {
       additionalProperties: false
     }
   };
+}
+
+// Production実証(八重瀬町初回生成)で、Terraがweb_search由来の出典を
+// 「(ドメイン名)(URL)」やMarkdownリンク「[文字列](URL)」の形でtitle/
+// content本文へそのまま書き込んでしまうことを確認した。原因調査：
+// callOpenAiCityInfoはresponse.output内のtype:"output_text"パートから
+// text文字列だけを取り出しており(下記参照)、annotations等の構造化された
+// 出典情報を本文へ変換するコードは存在しない。つまりURLはこのFunctionの
+// 抽出処理が混入させたものではなく、Terra自身がJSON文字列(title/content)
+// の中に直接書き込んだものである。json_schemaによるStructured Outputsは
+// 「JSON形式であること」だけを強制し、文字列の中身(URLを書くかどうか)
+// までは制約できないため、instructions側の指示(buildCityInfoInstructions
+// 参照)だけに依存せず、実際に観測されたこのパターンに限定した最小の
+// サーバー側除去処理を安全網として追加する(本部指示：推測で正規表現を
+// 大量追加しない)。
+function stripCitationArtifactsFromCityInfoText(
+  rawText
+) {
+  if (typeof rawText !== "string") {
+    return "";
+  }
+
+  return rawText
+    // Markdownリンク「[文字列](URL)」をまるごと除去する。
+    .replace(/\[[^\[\]]*\]\(https?:\/\/[^\s)]+\)/g, "")
+    // 「(ドメイン名)(URL)」のように、URLを含む丸括弧の直前に隣接する
+    // 別の丸括弧(ドメイン名だけのラベル等)がある場合は、それも含めて
+    // まるごと除去する。単独の「(URL)」にもそのまま一致する
+    // (先頭の丸括弧グループは任意)。
+    .replace(/(\([^()]*\))?\([^()]*https?:\/\/[^()]*\)/g, "")
+    // 上記2パターンに当てはまらない裸のURLを除去する。
+    .replace(/https?:\/\/\S+/g, "")
+    // 除去によって生じた余分な空白・改行の連続だけを整える
+    // (文章の言い換え等は一切行わない)。
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 // Terra＋web_search＋Structured Outputsを1 requestで使う既存実績
@@ -6578,13 +6624,17 @@ async function callOpenAiCityInfo(
   return {
     title:
       sanitizeRegionEditorialText(
-        parsedArticle.title,
+        stripCitationArtifactsFromCityInfoText(
+          parsedArticle.title
+        ),
         CITY_INFO_TITLE_MAX_LENGTH
       ),
 
     content:
       sanitizeRegionEditorialText(
-        parsedArticle.content,
+        stripCitationArtifactsFromCityInfoText(
+          parsedArticle.content
+        ),
         CITY_INFO_CONTENT_MAX_LENGTH
       )
   };
