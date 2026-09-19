@@ -421,10 +421,15 @@ const AI_REGION_EDITORIAL_ALLOWED_AREAS =
 const AI_REGION_EDITORIAL_TARGET_AREA_MAX_LENGTH =
   40;
 
+// Phase3.4.1｜下書きのcontent上限(後述のAI_REGION_EDITORIAL_DRAFT_TEXT_
+// MAX_LENGTHS.content)を3000へ引き上げたことに合わせ、既存記事
+// (existingArticle、改善案生成時に読み込む前回保存済み記事)側の上限も
+// 同じ3000へ揃える。ここが2000のままだと、3000字弱で生成・保存された
+// 記事を改善案生成時に読み込む際に途中で切り詰められてしまうため。
 const AI_REGION_EDITORIAL_EXISTING_TEXT_MAX_LENGTHS =
   {
     title: 60,
-    content: 2000,
+    content: 3000,
     regionName: 20
   };
 
@@ -468,13 +473,16 @@ const AI_REGION_EDITORIAL_CITED_FACT_ID_MAX_LENGTH =
 // (json_schemaによる構造化出力を使うが、文字数上限はAPI応答の仕様では
 // 保証されないため、二重の安全網として保つ)。
 // Phase3.4｜「タイトル＋数行の行政案内」ではなく、街の魅力を理解できる
-// 読み物量を許可するため、contentの上限を既存の
-// AI_REGION_EDITORIAL_EXISTING_TEXT_MAX_LENGTHS.content(既存記事の上限、
-// 2000)と同じ値へ引き上げる(新しい上限値を独自に発明しない)。
+// 読み物量を許可するため上限を引き上げる。
+// Phase3.4.1(本部指示)｜「約2000字の記事」をこの値で強制切断する設計に
+// しない。instructions側でAIへ求める分量はあくまで「約2000字」のまま
+// とし、この安全上限は実際の出力が多少前後しても本文が途中で切れない
+// よう3000文字に余裕を持たせる(二重の安全網としての上限であり、目標
+// 分量そのものではない)。
 const AI_REGION_EDITORIAL_DRAFT_TEXT_MAX_LENGTHS =
   {
     title: 60,
-    content: 2000,
+    content: 3000,
     regionName: 20
   };
 
@@ -3615,10 +3623,16 @@ async function fetchRegionEditorialMaterialsForArea(
 function buildRegionEditorialInstructions() {
   return (
     "あなたは沖縄の地域情報サイト『マチナウ』の地域編集長です。\n" +
-    "『地域のおすすめ』は『今日の速報』ではありません。今日・今の行動" +
-    "判断は、街を見るAIや会話型マチナウAI側が別途担当します。あなたの" +
-    "仕事は、その市町村が『どんな街で、なぜ行ってみたいと思えるのか』を、" +
-    "街の記憶(PROFILE)を土台にして旅行者へ伝える読み物を書くことです。\n\n" +
+    "あなたはプロの地域コピーライターでもあります。『地域のおすすめ』は" +
+    "『今日の速報』ではありません。今日・今の行動判断は、街を見るAIや" +
+    "会話型マチナウAI側が別途担当します。あなたの仕事は、その市町村を" +
+    "初めて知る旅行者へ向けて、その街の記憶(PROFILE)を土台にした約2000字" +
+    "の魅力的なPR記事を書くことです。PROFILEに確認済みの人口・面積・" +
+    "成立の歴史がある場合は、記事の中に自然な形で必ず含めてください。" +
+    "代表的な場所がPROFILEにある場合は、具体的なスポット名を使って" +
+    "紹介してください。旅行者に語りかける文章にし、事実を羅列するの" +
+    "ではなく『この街へ行ってみたい』『この場所を歩いてみたい』と感じ" +
+    "られる一つの読み物として構成してください。\n\n" +
     "入力には3種類の情報配列が与えられます。それぞれ時間軸と役割が" +
     "異なるため、絶対に混同しないでください。\n\n" +
     "・profileFacts(PROFILE＝街そのものの長期記憶)：マチナウ運営が事前に" +
@@ -3695,22 +3709,37 @@ function buildRegionEditorialInstructions() {
     "想像できるように)\n" +
     "  6. 最後に、行ってみたいと自然に思える締めくくり\n" +
     "記事全体を貫く一本のテーマを最初に決め、事実の言い換えではなく、" +
-    "旅行者が実際にその場所を歩いているかのように読める文章にする。" +
-    "population/areaKm2等の数値は、街を理解するための補足が必要な場面" +
-    "だけで使い、記事の主役にしない。profileFactsの14項目全部を無理に" +
-    "詰め込まず、記事のテーマに合う項目だけを選んで使う。\n" +
-    "   NG例：「八重瀬町は人口○人、面積○km²で、2006年に誕生しました。」\n" +
-    "   OK例：「南部らしい落ち着いた住宅地と農地が広がる八重瀬町では、" +
-    "車なしだと移動の選択肢が限られるため…」\n\n" +
+    "旅行者が実際にその場所を歩いているかのように読める文章にする。\n\n" +
+    "【必ず含めること(確認済みデータがある場合)】\n" +
+    "・identity.population(人口、asOf付き)とidentity.areaKm2(面積)が" +
+    "confirmedの場合、記事の中に自然な形で必ず含める(数値を並べるだけで" +
+    "終わらせず、旅行者にとっての意味を添えてよい)。\n" +
+    "・identity.formationHistory/establishedDate/formerMunicipalities" +
+    "(成立史・成立年月日・合併前の旧市町村名)やcharacter.historySummary" +
+    "(歴史の概要)がconfirmedの場合、街の成り立ちとして記事に含める。\n" +
+    "・名前の由来を直接説明する専用データが無い場合がある。上記の確認済み" +
+    "テキストの中に名前の由来にあたる記述が実際に含まれている場合はそれを" +
+    "活かし、含まれていない場合は名前の由来を推測・創作しない(書かなくて" +
+    "よい)。\n" +
+    "・travel.representativePlacesがconfirmedの場合、『丘陵』『海岸』" +
+    "『畑』のような抽象的な地形描写だけで終わらせず、そこに含まれる" +
+    "具体的な場所名を使って旅行者へ紹介する。場所名の創作は禁止。\n" +
+    "・character.specialties/localFoods(特産・食)がconfirmedの場合、" +
+    "具体的に紹介する。\n" +
+    "・地域の今後の展開・将来計画は、既存PROFILEには保存する項目が無い。" +
+    "現在も有効なregionFacts(NOW)の中に将来計画の一次情報が実際にある" +
+    "場合だけ紹介し、無ければ今後の展開について書かない(創作しない)。\n" +
+    "profileFactsの項目全部を無理に詰め込む必要はないが、上記の確認済み" +
+    "データは省略せずに使う。\n\n" +
     "【分量】\n" +
-    "タイトル＋数行だけの短い行政案内ではなく、街の魅力が伝わる十分な" +
-    "読み物量で書く。ただし内容が薄いのに文字数だけを無意味に水増しする" +
+    "本文は日本語で約2000字を目安にする。タイトル＋数行だけの短い行政" +
+    "案内では不合格。ただし内容が薄いのに文字数だけを無意味に水増しする" +
     "ことはしない。見出しの箇条書きではなく、複数の段落からなる自然な" +
     "文章にする。\n\n" +
     "【出力形式】\n" +
     "title: 記事のタイトル(短く、地名や街らしさが伝わるもの)\n" +
-    "content: 本文(上記の編集思考に沿った、複数段落の自然な読み物。" +
-    "Markdown記法は使わない)\n" +
+    "content: 本文(上記の編集思考・必須要件に沿った、約2000字・複数段落の" +
+    "自然な読み物。Markdown記法は使わない)\n" +
     "regionName: 運営整理用の短いラベル(例：南部)。既存のregionNameが" +
     "与えられていれば、特に理由がない限りそのまま踏襲する。\n" +
     "citedFactIds: 本文の根拠に実際に使ったregionFacts/shopDirectPostsの" +
@@ -4125,15 +4154,29 @@ function attachFactIds(
 // 項目だけに絞る)。isEditorialInterpretationはAI_REGION_PROFILE_RESEARCH_
 // GROUPSのcarFreeTravelAdviceと同じ意味(一次事実そのものではなくAIの
 // 解釈である旨)。
+// Phase3.4.1｜代表の元の記事要件(人口・面積・名前の由来・成立の歴史・
+// おすすめスポット・今後の展開・約2000字のPRコピー)を満たすため4項目
+// 追加。いずれも既存のREGION_PROFILE_SECTION_FIELD_DEFAULT_VALIDITYに
+// 実在するフィールドであり、新しいPROFILE schemaは作らない
+// (formerMunicipalities/oneLineIdentity/historySummary/localFoodsは
+// isRegionProfileFactConfirmed()がfalseを返す限りcontextへ含まれない
+// ため、未確認の八重瀬町以外の市町村へも安全に適用できる)。名前の由来を
+// 直接保存する専用フィールドはPROFILE schema上に存在しないため追加せず、
+// instructions側で「既存の確認済みテキストに含まれていれば使い、無ければ
+// 創作しない」という扱いにする。
 const AI_REGION_EDITORIAL_PROFILE_FACT_DEFS =
   [
     { section: "identity", field: "population", label: "人口" },
     { section: "identity", field: "areaKm2", label: "面積" },
     { section: "identity", field: "formationHistory", label: "成立史" },
     { section: "identity", field: "establishedDate", label: "成立年月日" },
+    { section: "identity", field: "formerMunicipalities", label: "合併前の旧市町村名" },
+    { section: "identity", field: "oneLineIdentity", label: "街を一言で表す説明" },
     { section: "identity", field: "locationSummary", label: "位置" },
+    { section: "character", field: "historySummary", label: "歴史の概要" },
     { section: "character", field: "geography", label: "地形" },
     { section: "character", field: "specialties", label: "特産" },
+    { section: "character", field: "localFoods", label: "食" },
     { section: "character", field: "localCharacter", label: "街らしさ・雰囲気" },
     { section: "character", field: "culture", label: "文化" },
     { section: "travel", field: "representativePlaces", label: "代表的なスポット" },
