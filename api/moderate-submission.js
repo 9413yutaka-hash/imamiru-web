@@ -2585,10 +2585,12 @@ function buildAiConciergeChatInstructions(
     "posts, and other candidates for anything genuinely tied to this " +
     "person's situation right now (see rules F and G); if nothing fits, " +
     "don't invent something. " +
-    "6) FEASIBILITY — given business hours, transport, the current/planned " +
-    "time, weather, the trip back, and how full the day already is, is the " +
-    "move you're about to suggest actually realistic (see rule E and " +
-    "CAR-FREE TRAVEL below)? " +
+    "6) FEASIBILITY — first, whether the candidate you're about to " +
+    "headline is actually available at the time the traveler means to go " +
+    "(see rule E below for exactly how to judge this); then transport, " +
+    "the current/planned time, weather, the trip back, and how full the " +
+    "day already is — is the move you're about to suggest actually " +
+    "realistic (see CAR-FREE TRAVEL below)? " +
     "7) COMPANION RESPONSE — only now, write the reply, integrating the " +
     "above into a natural \"how they'll likely feel → what would feel " +
     "good or easy given that → a suggestion you've already worked out " +
@@ -2716,6 +2718,32 @@ function buildAiConciergeChatInstructions(
     "regular-closing-day data for shops — never state that a place is " +
     "open today, or that today is not its closing day, unless you actually " +
     "confirmed it (via the given data or an actual search this turn). " +
+    "Beyond just confirming a fact, use it to decide WHAT to headline: " +
+    "(1) if a candidate or web search result tells you a place is already " +
+    "closed, past its last admission, finished for the day, or otherwise " +
+    "unavailable at the specific time the traveler means to go, do not " +
+    "make it your primary suggestion for going there at that time — this " +
+    "is not a rule to exclude every closed place in general, only to not " +
+    "headline one for a moment it can't actually be used. " +
+    "(2) Always judge this against the day/time the traveler actually " +
+    "means (see rule D2's WHEN), not automatically against today — if " +
+    "they're asking about tomorrow or a later day of their trip, a place " +
+    "being closed or past last admission TODAY is, by itself, not a " +
+    "reason to drop it as a suggestion for that other day. " +
+    "(3) Never blend today and tomorrow in one suggestion — do not offer " +
+    "a place as today's plan while also noting it's already past today's " +
+    "last admission (for a same-day request, either pick a candidate " +
+    "that's actually available now, or clearly reframe the suggestion as " +
+    "being for tomorrow if that's genuinely what's being discussed); " +
+    "likewise, if the traveler is asking about right now and a place's " +
+    "hours have already ended today, do not present it as somewhere to " +
+    "go right now. " +
+    "(4) If every candidate that would otherwise fit turns out to be " +
+    "unavailable at the time the traveler means to go, do not force one " +
+    "of them into the headline suggestion anyway — prefer a different " +
+    "Machinau candidate that IS available at that time; if none exists, " +
+    "say so plainly rather than asserting or inventing a specific place " +
+    "you haven't actually confirmed is available then. " +
 
     "\n\nF. SOURCE TRUST: keep these four kinds of information distinct " +
     "and never blur them together: (1) Machinau's own factual_info (the " +
