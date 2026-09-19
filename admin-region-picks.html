@@ -421,6 +421,20 @@
               <ul id="regionEditorialPreviewCitations"></ul>
               <p id="regionEditorialPreviewImageHint"></p>
 
+              <div id="regionEditorialProfileHeroSection" style="display:none; margin: 10px 0;">
+                <p><strong>街の記憶(PROFILE)のメイン写真：</strong></p>
+                <img id="regionEditorialProfileHeroImage" style="max-width:200px; display:block; margin-bottom:6px;">
+                <p id="regionEditorialProfileHeroCaption" style="font-size:13px; color:#666;"></p>
+
+                <button
+                  id="regionEditorialUseProfileHeroButton"
+                  class="secondary-button"
+                  type="button"
+                >
+                  PROFILEのメイン写真を使う
+                </button>
+              </div>
+
               <button
                 id="regionEditorialApplyButton"
                 class="primary-button"
@@ -633,6 +647,11 @@
     const regionEditorialPreviewImageHint = document.getElementById("regionEditorialPreviewImageHint");
     const regionEditorialApplyButton = document.getElementById("regionEditorialApplyButton");
     const regionEditorialDiscardButton = document.getElementById("regionEditorialDiscardButton");
+
+    const regionEditorialProfileHeroSection = document.getElementById("regionEditorialProfileHeroSection");
+    const regionEditorialProfileHeroImage = document.getElementById("regionEditorialProfileHeroImage");
+    const regionEditorialProfileHeroCaption = document.getElementById("regionEditorialProfileHeroCaption");
+    const regionEditorialUseProfileHeroButton = document.getElementById("regionEditorialUseProfileHeroButton");
 
     let selectedNewImageFiles = [];
     let currentImages = [];
@@ -964,6 +983,10 @@
       regionEditorialPreviewCitations.innerHTML = "";
       regionEditorialPreviewImageHint.textContent = "";
 
+      regionEditorialProfileHeroSection.style.display = "none";
+      regionEditorialProfileHeroImage.src = "";
+      regionEditorialProfileHeroCaption.textContent = "";
+
       regionEditorialStatus.textContent = "";
       regionEditorialStatus.className = "message-box";
     }
@@ -1067,7 +1090,8 @@
           title: responseData.draft.title,
           content: responseData.draft.content,
           regionName: responseData.draft.regionName,
-          sourceCitations: responseData.sourceCitations || []
+          sourceCitations: responseData.sourceCitations || [],
+          profileHeroImage: responseData.profileHeroImage || null
         };
 
         regionEditorialPreviewTitle.textContent = pendingAiEditorialDraft.title;
@@ -1095,6 +1119,19 @@
           (currentImages.length > 0
             ? "現在の画像：" + currentImages.length + "枚(AIは画像を変更しません)"
             : "画像未設定(AIは画像を追加しません。必要であれば下の画像欄から追加してください)");
+
+        // AI地域編集部 Phase3.3｜AIは画像を一切見ておらず、選択にも関与
+        // しない。profileHeroImageはPROFILEの実データ(Cloudinary保存済み
+        // URL)をそのまま表示するだけで、「使う」ボタンを押すまでは
+        // currentImagesへ一切追加しない(自動採用禁止)。
+        if (pendingAiEditorialDraft.profileHeroImage) {
+          regionEditorialProfileHeroImage.src = pendingAiEditorialDraft.profileHeroImage.imageUrl;
+          regionEditorialProfileHeroCaption.textContent =
+            pendingAiEditorialDraft.profileHeroImage.caption || "(キャプションなし)";
+          regionEditorialProfileHeroSection.style.display = "block";
+        } else {
+          regionEditorialProfileHeroSection.style.display = "none";
+        }
 
         regionEditorialPreview.style.display = "block";
 
@@ -1129,6 +1166,41 @@
 
     regionEditorialDiscardButton.addEventListener("click", function() {
       resetRegionEditorialPanel();
+    });
+
+    // AI地域編集部 Phase3.3｜PROFILEのheroImageは既にCloudinaryへ保存
+    // 済みのURL/publicIdをそのまま再利用する(再アップロードしない)。
+    // 明示的にこのボタンを押した場合だけcurrentImagesへ追加し、既存画像を
+    // 上書きせず、同一publicId/urlが既にあれば重複追加しない。
+    regionEditorialUseProfileHeroButton.addEventListener("click", function() {
+      const heroImage =
+        pendingAiEditorialDraft && pendingAiEditorialDraft.profileHeroImage;
+
+      if (!heroImage || !heroImage.imageUrl) {
+        return;
+      }
+
+      const alreadyExists = currentImages.some(function(image) {
+        return (
+          (heroImage.imagePublicId && image.publicId === heroImage.imagePublicId) ||
+          image.url === heroImage.imageUrl
+        );
+      });
+
+      if (alreadyExists) {
+        showRegionEditorialStatus("この画像は既に追加されています。", "");
+        return;
+      }
+
+      currentImages.push({
+        url: heroImage.imageUrl,
+        publicId: heroImage.imagePublicId || "",
+        isPendingUpload: false,
+        file: null
+      });
+
+      renderImagePreviewList();
+      showRegionEditorialStatus("PROFILEのメイン写真を画像欄へ追加しました。「保存する」を押すまでは確定しません。", "success");
     });
 
     function renderArticleList() {

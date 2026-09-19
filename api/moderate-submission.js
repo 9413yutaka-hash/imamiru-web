@@ -3598,22 +3598,35 @@ async function fetchRegionEditorialMaterialsForArea(
 function buildRegionEditorialInstructions() {
   return (
     "あなたは沖縄の地域情報サイト『マチナウ』のAI地域編集者です。\n" +
-    "対象は沖縄県内の1つの市町村です。入力には2種類の事実配列が" +
-    "与えられます。\n\n" +
-    "・regionFacts：公式一次情報・自治体・街を見るAIが確認した、地域の" +
-    "公式的な事実。\n" +
-    "・shopDirectPosts：店舗自身が直接投稿した情報(店舗の主張であり、" +
-    "地域を代表する事実ではない)。\n\n" +
-    "あなたの仕事は、この2つだけを根拠に、その市町村の『地域のおすすめ』" +
+    "対象は沖縄県内の1つの市町村です。入力には3種類の情報配列が" +
+    "与えられます。それぞれ時間軸と役割が異なるため、絶対に混同しない" +
+    "でください。\n\n" +
+    "・regionFacts(NOW＝現在有効な地域の一次情報)：公式一次情報・自治体・" +
+    "街を見るAIが確認した、現在有効な地域の事実。地域のおすすめ記事の" +
+    "主役。\n" +
+    "・shopDirectPosts(SHOP＝店舗からの直接投稿)：店舗自身が直接投稿した" +
+    "情報(店舗の主張であり、地域を代表する事実でも自治体確認情報でもない)。" +
+    "必要な場合のみ補助的に使う。\n" +
+    "・profileFacts(PROFILE＝街そのものの長期記憶)：マチナウ運営が事前に" +
+    "人間確認し、長期記憶として保存済みの街のプロフィール情報。今日" +
+    "発生した出来事ではなく、変化の遅い背景知識。NOWを理解するための" +
+    "文脈として使うものであり、記事の主役ではない。\n\n" +
+    "あなたの仕事は、この3つだけを根拠に、その市町村の『地域のおすすめ』" +
     "記事の下書き(タイトル・本文)を書くことです。\n\n" +
+    "【優先順位(信頼度ではなく、記事内での役割・主従関係)】\n" +
+    "1位 NOW(regionFacts)：今、旅行者の行動に影響する情報。記事の中心。\n" +
+    "2位 PROFILE(profileFacts)：NOWを理解し、その街らしい文脈を加える" +
+    "背景知識。全項目を列挙せず、必要な部分だけ短く触れる。\n" +
+    "3位 SHOP(shopDirectPosts)：必要な場合のみ補足として使う。\n\n" +
     "【絶対に守ること】\n" +
-    "1. regionFacts・shopDirectPostsに書かれていない事実・店名・営業時間・" +
-    "価格・数値・日付を絶対に創作しない。情報が乏しい場合は、無理に埋めず、" +
-    "分かっている範囲だけで簡潔に書く。\n" +
+    "1. regionFacts・shopDirectPosts・profileFactsに書かれていない事実・" +
+    "店名・営業時間・価格・数値・日付を絶対に創作しない。情報が乏しい場合は、" +
+    "無理に埋めず、分かっている範囲だけで簡潔に書く。\n" +
     "2. SNS(Twitter/Instagram等)を見たかのような書き方(「話題になっている」" +
     "「口コミで人気」等)を絶対にしない。SNS情報は一切与えられていない。\n" +
     "3. shopDirectPostsだけを根拠に、地域全体の特徴・代表性・文化・人気を" +
-    "断定してはいけない。\n" +
+    "断定してはいけない。SHOPを自治体確認情報や地域全体を代表する事実の" +
+    "ように書かない。\n" +
     "   NG例：「八重瀬町は個性派バーガーの街です。」\n" +
     "   OK例：「八重瀬町では現在、店舗から直接投稿されている飲食情報として" +
     "○○があります。」\n" +
@@ -3622,16 +3635,37 @@ function buildRegionEditorialInstructions() {
     "軽く触れる程度でよい。\n" +
     "4. urlやlabelなどの出典文字列を自分で生成しない。本文の根拠に実際に" +
     "使った事実は、citedFactIds配列にfactId(入力データに含まれる記号、" +
-    "例：\"rf1\"、\"sp1\")をそのまま返すことでのみ示す。\n" +
+    "例：\"rf1\"、\"sp1\")をそのまま返すことでのみ示す。profileFactsには" +
+    "factIdが付いていないため、citedFactIdsへ含めることはできない" +
+    "(profileFactsは既に保存時点で人間確認・出典確認済みの長期記憶であり、" +
+    "この記事単位での新しい引用ID方式は使わない)。\n" +
     "5. 出力は指定されたJSON形式のみ。JSON以外の文字列（前置き・挨拶・" +
-    "コードブロック記法等）を一切含めない。\n\n" +
+    "コードブロック記法等）を一切含めない。\n" +
+    "6. profileFactsの内容を『今日・現在』の出来事であるかのように書かない。\n" +
+    "   ・safety.longTermSafetyNotes(長期的な安全特性)を『本日警報が" +
+    "出ています』のような今日の警報・注意情報として書かない。\n" +
+    "   ・travel.representativePlaces(代表的なスポット)を『今日営業して" +
+    "います』のように今日の営業状況として推測しない。\n" +
+    "   ・transport.publicTransportSummary/carFreeTravelAdvice(交通の" +
+    "PROFILE情報)から、今日の運行状況・遅延・運休を推測しない。今日の" +
+    "交通状況が必要な場合はregionFacts側の情報だけを根拠にする。\n" +
+    "7. transport.carFreeTravelAdviceは、一次事実そのものではなく、" +
+    "確認済み交通情報を踏まえた旅行者向けの解釈・助言として扱う" +
+    "(一次事実と混同して断定的に書かない)。\n\n" +
     "【書き方の方針(Wikipedia的な事実列挙の禁止)】\n" +
     "『◯◯町には△△があります。□□もあります。』のような単なる施設の" +
     "羅列は禁止する。かわりに、旅行者が『いつ・誰と・どんな時に・どう" +
     "使うと良いか』、そしてそれが旅行者の『今の行動』にどうつながるかを" +
     "中心に書く。マチナウ全体の思想『街の今を見て、あなたの今を聞いて、" +
     "一緒に次の行動を決める』の地域編集版として、事実(regionFacts/" +
-    "shopDirectPosts)→旅行者にとっての意味、の順で自然な日本語の文章にする。\n\n" +
+    "shopDirectPosts/profileFacts)→旅行者にとっての意味、の順で自然な" +
+    "日本語の文章にする。profileFacts(人口・面積・成立年月日等を含む)は" +
+    "AIへの背景情報として渡されるが、旅行者の行動や理解に必要でなければ" +
+    "本文へ数値をそのまま列挙しない。\n" +
+    "   NG例：「八重瀬町は人口○人、面積○km²で、2006年に誕生しました。」\n" +
+    "   OK例(profileFactsを背景として使う場合)：「南部らしい落ち着いた" +
+    "住宅地と農地が広がる八重瀬町では、車なしだと移動の選択肢が限られる" +
+    "ため…」\n\n" +
     "【出力形式】\n" +
     "title: 記事のタイトル(短く、地名や特徴が伝わるもの)\n" +
     "content: 本文(2〜5文程度。事実の言い換えではなく、旅行者がどう" +
@@ -3639,7 +3673,8 @@ function buildRegionEditorialInstructions() {
     "regionName: 運営整理用の短いラベル(例：南部)。既存のregionNameが" +
     "与えられていれば、特に理由がない限りそのまま踏襲する。\n" +
     "citedFactIds: 本文の根拠に実際に使ったregionFacts/shopDirectPostsの" +
-    "factIdだけを配列で返す。使っていない事実のfactIdを含めない。"
+    "factIdだけを配列で返す(profileFactsのfactIdは存在しないため含めない)。" +
+    "使っていない事実のfactIdを含めない。"
   );
 }
 
@@ -3652,7 +3687,8 @@ function buildRegionEditorialInputItems(
         targetArea: payload.targetArea,
         existingArticle: payload.existingArticle,
         regionFacts: payload.regionFacts,
-        shopDirectPosts: payload.shopDirectPosts
+        shopDirectPosts: payload.shopDirectPosts,
+        profileFacts: payload.profileFacts
       }
     );
 
@@ -3663,14 +3699,18 @@ function buildRegionEditorialInputItems(
         {
           type: "input_text",
           text:
-            "【対象市町村・既存記事・REGION FACTS・SHOP DIRECT POSTS(JSON)】\n" +
+            "【対象市町村・既存記事・NOW(regionFacts)・SHOP(shopDirectPosts)" +
+            "・PROFILE(profileFacts)のJSON】\n" +
             contextJson +
             "\n\n" +
-            "regionFactsとshopDirectPostsだけを根拠に、指定されたJSON形式で" +
-            "下書きを作成してください。regionFactsが少ない場合は、無理に" +
-            "地域全体を語らず、分かっている範囲だけで簡潔に書いてください。" +
-            "既存記事(existingArticle)がある場合は、全面的な書き直しでは" +
-            "なく、確認済み事実を反映した改善案として書いてください。"
+            "regionFacts(NOW)・shopDirectPosts(SHOP)・profileFacts(PROFILE)" +
+            "だけを根拠に、指定されたJSON形式で下書きを作成してください。" +
+            "regionFactsを記事の中心にし、profileFactsは必要な部分だけ" +
+            "背景として短く使ってください。regionFactsが少ない場合は、" +
+            "無理に地域全体を語らず、分かっている範囲だけで簡潔に" +
+            "書いてください。既存記事(existingArticle)がある場合は、" +
+            "全面的な書き直しではなく、確認済み事実を反映した改善案として" +
+            "書いてください。"
         }
       ]
     }
@@ -4036,6 +4076,150 @@ function attachFactIds(
   );
 }
 
+// AI地域編集部 Phase3.3(街の記憶→地域編集AI接続)｜regionEditorialへ渡す
+// PROFILEフィールドをこの一覧だけに限定する(本部指示：56項目全部を渡すと
+// 「街の百科事典」になってしまうため、旅行者の行動・理解に本当に必要な
+// 項目だけに絞る)。isEditorialInterpretationはAI_REGION_PROFILE_RESEARCH_
+// GROUPSのcarFreeTravelAdviceと同じ意味(一次事実そのものではなくAIの
+// 解釈である旨)。
+const AI_REGION_EDITORIAL_PROFILE_FACT_DEFS =
+  [
+    { section: "identity", field: "population", label: "人口" },
+    { section: "identity", field: "areaKm2", label: "面積" },
+    { section: "identity", field: "formationHistory", label: "成立史" },
+    { section: "identity", field: "establishedDate", label: "成立年月日" },
+    { section: "identity", field: "locationSummary", label: "位置" },
+    { section: "character", field: "geography", label: "地形" },
+    { section: "character", field: "specialties", label: "特産" },
+    { section: "character", field: "localCharacter", label: "街らしさ・雰囲気" },
+    { section: "character", field: "culture", label: "文化" },
+    { section: "travel", field: "representativePlaces", label: "代表的なスポット" },
+    { section: "climate", field: "climateSummary", label: "気候の特徴" },
+    { section: "transport", field: "publicTransportSummary", label: "公共交通" },
+    {
+      section: "transport",
+      field: "carFreeTravelAdvice",
+      label: "車なし旅行者へのアドバイス",
+      isEditorialInterpretation: true
+    },
+    { section: "safety", field: "longTermSafetyNotes", label: "地域固有の安全特性（長期的）" }
+  ];
+
+// confirmedのPROFILE事実だけを、regionEditorial用に薄く抽出する。
+// sources[]の実URL・meta・photos全量はここで意図的に落とす(本部指示：
+// source URLを大量にpromptへ投入してトークンを浪費しない)。既存の
+// isRegionProfileFactConfirmed()をそのまま再利用し、confirmed判定ロジック
+// を重複させない。unknownのフィールドはprofileFactsへ一切含めない。
+function buildRegionEditorialProfileFacts(
+  profile
+) {
+  const profileFacts =
+    [];
+
+  AI_REGION_EDITORIAL_PROFILE_FACT_DEFS.forEach(
+    function(def) {
+      if (
+        !isRegionProfileFactConfirmed(profile, def.section, def.field)
+      ) {
+        return;
+      }
+
+      const fact =
+        profile[def.section][def.field];
+
+      const isCountWithAsOf =
+        REGION_PROFILE_COUNT_WITH_ASOF_FIELDS.has(def.field);
+
+      profileFacts.push(
+        {
+          section: def.section,
+          field: def.field,
+          label: def.label,
+
+          value:
+            isCountWithAsOf
+              ? (fact.value ? fact.value.count : null)
+              : fact.value,
+
+          asOf:
+            isCountWithAsOf && fact.value
+              ? fact.value.asOf
+              : "",
+
+          isEditorialInterpretation:
+            def.isEditorialInterpretation === true
+        }
+      );
+    }
+  );
+
+  return profileFacts;
+}
+
+// AI地域編集部 Phase3.3｜regionEditorialからPROFILE(regionProfiles)を
+// 読み込む。既存のfetchRegionProfileOrEmpty()・REGION_PROFILE_ALLOWED_AREAS
+// をそのまま再利用し、新しいsanitizer/normalizerは作らない。対象市町村が
+// PROFILE対象外、またはPROFILE取得中に何らかのエラーが起きた場合でも、
+// regionEditorial本体(NOW＋SHOP)を失敗させず、profileFacts=[]・
+// profileHeroImage=nullとして継続する(本部指示：PROFILEが無いことを理由に
+// regionEditorial全体を失敗させない)。
+async function fetchRegionEditorialProfileContext(
+  database,
+  targetArea
+) {
+  if (!REGION_PROFILE_ALLOWED_AREAS.includes(targetArea)) {
+    return {
+      profileFacts: [],
+      profileHeroImage: null
+    };
+  }
+
+  try {
+    const profileResult =
+      await fetchRegionProfileOrEmpty(
+        database,
+        targetArea
+      );
+
+    const profile =
+      profileResult.profile || {};
+
+    const profileFacts =
+      buildRegionEditorialProfileFacts(
+        profile
+      );
+
+    const heroImage =
+      profile.photos && profile.photos.heroImage
+        ? profile.photos.heroImage
+        : null;
+
+    return {
+      profileFacts: profileFacts,
+
+      profileHeroImage:
+        heroImage && heroImage.imageUrl
+          ? {
+              imageUrl: heroImage.imageUrl,
+              imagePublicId: heroImage.imagePublicId || "",
+              caption: heroImage.caption || ""
+            }
+          : null
+    };
+  } catch (profileError) {
+    console.error(
+      "AI地域編集部：PROFILE取得に失敗しました(regionEditorial自体は" +
+        "NOW・SHOPのみで継続します)：",
+      profileError
+    );
+
+    return {
+      profileFacts: [],
+      profileHeroImage: null
+    };
+  }
+}
+
 // AI地域編集部 Phase2(街を見るAI→地域ファクト接続)｜admin-region-picks.html
 // の管理者/Editorのみが呼び出せる(requireAdminOrEditor()、一般公開経路には
 // 存在しないmode)。この関数はFirestoreへ一切書き込まない。既存の
@@ -4134,6 +4318,19 @@ async function handleRegionEditorialRequest(
         "shop_direct_post"
       );
 
+    // AI地域編集部 Phase3.3(街の記憶→地域編集AI接続)｜PROFILEの取得失敗・
+    // 未登録は、fetchRegionEditorialProfileContext内部で吸収され
+    // {profileFacts:[], profileHeroImage:null}として返る(本部指示：
+    // PROFILEが無いことを理由にregionEditorial全体を失敗させない)。
+    const profileContext =
+      await fetchRegionEditorialProfileContext(
+        authResult.database,
+        targetArea
+      );
+
+    counts.profileFacts =
+      profileContext.profileFacts.length;
+
     let draft;
 
     try {
@@ -4143,7 +4340,8 @@ async function handleRegionEditorialRequest(
             targetArea: targetArea,
             existingArticle: existingArticle,
             regionFacts: regionFactsWithId,
-            shopDirectPosts: shopDirectPostsWithId
+            shopDirectPosts: shopDirectPostsWithId,
+            profileFacts: profileContext.profileFacts
           }
         );
     } catch (aiError) {
@@ -4176,7 +4374,13 @@ async function handleRegionEditorialRequest(
       },
 
       sourceCitations: sourceCitations,
-      counts: counts
+      counts: counts,
+
+      // AI地域編集部 Phase3.3｜AIには画像を一切渡していない(AIは画像の
+      // 存在・選択に関与しない)。PROFILEの実データからそのまま抽出した
+      // 候補を返すだけで、採用するかどうかは運営の明示的なボタン操作に
+      // 委ねる(自動採用しない)。
+      profileHeroImage: profileContext.profileHeroImage
     });
   } catch (error) {
     console.error(
