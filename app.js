@@ -6720,6 +6720,17 @@ function updateTravelerSuggestionCard() {
   const suggestionCard =
     document.getElementById("suggestionCard");
 
+  // マチナウAI一本化 Phase1修正｜本カードは廃止済みのため常に非表示にする。
+  // 呼び出し元(renderShops()等)がどの経路からこの関数を呼んでも再表示
+  // されないよう、関数の先頭でガードする。以下の既存ロジック(ルールベース
+  // フォールバック含む)は削除・変更せずそのまま残すが、この時点で
+  // returnするため到達しなくなるだけにする。
+  if (suggestionCard) {
+    suggestionCard.style.display = "none";
+  }
+
+  return;
+
   const suggestionMessage =
     document.getElementById("suggestionMessage");
 
