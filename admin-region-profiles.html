@@ -299,11 +299,12 @@
       </h2>
 
       <div class="warning-box">
-        対象は「基本統計(人口・面積)」「成立・地理」「食・特産」「移動」の
-        4グループのみです。1グループ＝OpenAI呼び出し1回(最大4回、確認済み
-        グループは呼び出しません)。AIはこの場でPROFILEへ
-        書き込みません。候補ごとに内容と出典を確認し、「採用」を押した
-        ものだけがPROFILEへ保存されます。
+        対象は「基本統計(人口・面積)」「成立・地理」「食・特産」「移動」
+        「性格・文化・安全」「気候・代表スポット」の6グループのみです。
+        1グループ＝OpenAI呼び出し1回(最大6回、確認済みグループは
+        呼び出しません)。AIはこの場でPROFILEへ書き込みません。候補ごとに
+        内容と出典を確認し、「採用」を押したものだけがPROFILEへ
+        保存されます。
       </div>
 
       <button id="researchButton" class="secondary-button" type="button">
@@ -313,6 +314,85 @@
       <div id="researchStatus" class="message-box" role="status" aria-live="polite"></div>
 
       <div id="candidateList"></div>
+    </div>
+
+    <div class="panel">
+      <h2>
+        写真の登録（Phase3完成）
+      </h2>
+
+      <div class="warning-box">
+        ここで運営者が実際にアップロードした画像だけがPROFILEへ保存されます。
+        Web上で見つけた画像やAIが生成した画像はここでは扱いません。
+        メイン写真を1枚保存するだけで「写真」のチェック項目が確認済みに
+        なります。
+      </div>
+
+      <div id="photoSummaryLine" class="completeness-line"></div>
+
+      <div class="field">
+        <label for="photoCategorySelect">
+          分類
+        </label>
+
+        <select id="photoCategorySelect">
+          <option value="heroImage">メイン写真（1枚のみ・上書き保存）</option>
+          <option value="landscapeImages">風景</option>
+          <option value="foodImages">食</option>
+          <option value="cultureImages">文化</option>
+          <option value="otherImages">その他</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="photoFileInput">
+          画像ファイル（jpeg/png/webp・10MBまで）
+        </label>
+
+        <input id="photoFileInput" type="file" accept="image/jpeg,image/png,image/webp">
+      </div>
+
+      <div id="photoPreviewWrapper" style="display:none; margin-bottom:14px;">
+        <img id="photoPreviewImage" alt="選択した画像のプレビュー" style="max-width:100%; border-radius:8px; border:1px solid var(--border);">
+      </div>
+
+      <div class="field">
+        <label for="photoCaptionInput">
+          キャプション
+        </label>
+
+        <input id="photoCaptionInput" type="text">
+      </div>
+
+      <div class="field">
+        <label for="photoSourceInput">
+          出典・撮影者
+        </label>
+
+        <input id="photoSourceInput" type="text">
+      </div>
+
+      <div class="field">
+        <label for="photoRightsStatusInput">
+          権利状態
+        </label>
+
+        <input id="photoRightsStatusInput" type="text" placeholder="例：運営撮影・掲載許諾済み">
+      </div>
+
+      <div class="field">
+        <label for="photoRegionRelevanceInput">
+          この街との関係
+        </label>
+
+        <input id="photoRegionRelevanceInput" type="text" placeholder="例：役場前の街並み">
+      </div>
+
+      <button id="photoUploadButton" class="primary-button" type="button">
+        アップロードしてPROFILEへ保存する
+      </button>
+
+      <div id="photoStatus" class="message-box" role="status" aria-live="polite"></div>
     </div>
 
   </section>
@@ -350,6 +430,27 @@
   const researchButton = document.getElementById("researchButton");
   const researchStatus = document.getElementById("researchStatus");
   const candidateList = document.getElementById("candidateList");
+
+  // 実装GO｜Phase3完成｜post.html/admin-post.html/admin-region-picks.htmlと
+  // 同一のCloudinary設定。新しいCloudinary設定は作らない。
+  const CLOUDINARY_CLOUD_NAME = "cdhyctnp";
+  const CLOUDINARY_UPLOAD_PRESET = "machinau_signed_upload";
+  const MAX_PHOTO_SIZE_BYTES = 10 * 1024 * 1024;
+  const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
+
+  const photoSummaryLine = document.getElementById("photoSummaryLine");
+  const photoCategorySelect = document.getElementById("photoCategorySelect");
+  const photoFileInput = document.getElementById("photoFileInput");
+  const photoPreviewWrapper = document.getElementById("photoPreviewWrapper");
+  const photoPreviewImage = document.getElementById("photoPreviewImage");
+  const photoCaptionInput = document.getElementById("photoCaptionInput");
+  const photoSourceInput = document.getElementById("photoSourceInput");
+  const photoRightsStatusInput = document.getElementById("photoRightsStatusInput");
+  const photoRegionRelevanceInput = document.getElementById("photoRegionRelevanceInput");
+  const photoUploadButton = document.getElementById("photoUploadButton");
+  const photoStatus = document.getElementById("photoStatus");
+
+  let selectedPhotoFile = null;
 
   // Phase3.2｜直近に読み込んだ/保存したPROFILEの実オブジェクト。
   // 「採用」を押した時に、この最新状態へ候補を1件だけ差し込んで
@@ -390,6 +491,209 @@
       completenessLine.textContent = "";
     }
   }
+
+  function renderPhotoSummary(profile) {
+    const photos = profile && profile.photos ? profile.photos : {};
+
+    const counts =
+      "メイン：" + (photos.heroImage ? "登録済み" : "未登録") +
+      "／風景：" + ((photos.landscapeImages || []).length) + "枚" +
+      "／食：" + ((photos.foodImages || []).length) + "枚" +
+      "／文化：" + ((photos.cultureImages || []).length) + "枚" +
+      "／その他：" + ((photos.otherImages || []).length) + "枚";
+
+    photoSummaryLine.textContent = counts;
+  }
+
+  function showPhotoStatus(text, type) {
+    photoStatus.textContent = text;
+    photoStatus.className = "message-box" + (type ? " " + type : "");
+  }
+
+  photoFileInput.addEventListener("change", function() {
+    const file = (photoFileInput.files || [])[0] || null;
+
+    if (!file) {
+      selectedPhotoFile = null;
+      photoPreviewWrapper.style.display = "none";
+      return;
+    }
+
+    if (!ALLOWED_PHOTO_TYPES.includes(file.type)) {
+      showPhotoStatus("対応していない画像形式です(jpeg/png/webpのみ)。", "error");
+      photoFileInput.value = "";
+      selectedPhotoFile = null;
+      photoPreviewWrapper.style.display = "none";
+      return;
+    }
+
+    if (file.size > MAX_PHOTO_SIZE_BYTES) {
+      showPhotoStatus("1枚あたり10MBまでの画像を選択してください。", "error");
+      photoFileInput.value = "";
+      selectedPhotoFile = null;
+      photoPreviewWrapper.style.display = "none";
+      return;
+    }
+
+    selectedPhotoFile = file;
+
+    const reader = new FileReader();
+
+    reader.onload = function() {
+      photoPreviewImage.src = reader.result;
+      photoPreviewWrapper.style.display = "block";
+    };
+
+    reader.readAsDataURL(file);
+  });
+
+  // post.html・admin-post.html・admin-region-picks.htmlに実装済みの署名
+  // 取得方式と同じ考え方(既存のcloudinarySignature modeをそのまま使う。
+  // 新しいCloudinary設定・新しいAPI modeは作らない)。
+  async function getCloudinaryUploadSignature() {
+    const idToken = await getIdTokenOrThrow();
+
+    const response = await fetch("/api/moderate-submission", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + idToken
+      },
+      body: JSON.stringify({ mode: "cloudinarySignature" })
+    });
+
+    let responseData = null;
+
+    try {
+      responseData = await response.json();
+    } catch (jsonError) {
+      throw new Error("画像アップロードの準備に失敗しました。");
+    }
+
+    if (!response.ok || !responseData || responseData.success !== true) {
+      throw new Error(
+        (responseData && responseData.message) || "画像アップロードの準備に失敗しました。"
+      );
+    }
+
+    return responseData;
+  }
+
+  async function uploadImageToCloudinary(file) {
+    const uploadUrl =
+      "https://api.cloudinary.com/v1_1/" + CLOUDINARY_CLOUD_NAME + "/image/upload";
+
+    const uploadSignature = await getCloudinaryUploadSignature();
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("api_key", uploadSignature.apiKey);
+    formData.append("timestamp", uploadSignature.timestamp);
+    formData.append("signature", uploadSignature.signature);
+    formData.append("upload_preset", uploadSignature.uploadPreset || CLOUDINARY_UPLOAD_PRESET);
+    formData.append("folder", uploadSignature.folder);
+
+    const response = await fetch(uploadUrl, {
+      method: "POST",
+      body: formData
+    });
+
+    let responseData = null;
+
+    try {
+      responseData = await response.json();
+    } catch (jsonError) {
+      throw new Error("画像アップロードの応答を読み取れませんでした。");
+    }
+
+    if (!response.ok) {
+      const cloudinaryMessage =
+        responseData && responseData.error && responseData.error.message
+          ? responseData.error.message
+          : "画像をアップロードできませんでした。";
+
+      throw new Error(cloudinaryMessage);
+    }
+
+    if (!responseData.secure_url) {
+      throw new Error("画像URLを取得できませんでした。");
+    }
+
+    return {
+      url: responseData.secure_url,
+      publicId: responseData.public_id || ""
+    };
+  }
+
+  photoUploadButton.addEventListener("click", async function() {
+    if (!currentLoadedProfile) {
+      showPhotoStatus("先にPROFILEを「読み込む」を押して読み込んでください。", "error");
+      return;
+    }
+
+    if (!selectedPhotoFile) {
+      showPhotoStatus("画像ファイルを選択してください。", "error");
+      return;
+    }
+
+    photoUploadButton.disabled = true;
+    showPhotoStatus("画像をアップロードしています…", "");
+
+    try {
+      const uploaded = await uploadImageToCloudinary(selectedPhotoFile);
+
+      const photoEntry = {
+        imageUrl: uploaded.url,
+        imagePublicId: uploaded.publicId,
+        caption: photoCaptionInput.value,
+        source: photoSourceInput.value,
+        rightsStatus: photoRightsStatusInput.value,
+        regionRelevance: photoRegionRelevanceInput.value
+      };
+
+      const updatedProfile = JSON.parse(JSON.stringify(currentLoadedProfile));
+
+      if (!updatedProfile.photos) {
+        updatedProfile.photos = {};
+      }
+
+      const category = photoCategorySelect.value;
+
+      if (category === "heroImage") {
+        updatedProfile.photos.heroImage = photoEntry;
+      } else {
+        if (!Array.isArray(updatedProfile.photos[category])) {
+          updatedProfile.photos[category] = [];
+        }
+
+        updatedProfile.photos[category].push(photoEntry);
+      }
+
+      showPhotoStatus("PROFILEへ保存しています…", "");
+
+      const result = await callRegionProfileApi("regionProfileSave", { profile: updatedProfile });
+
+      currentLoadedProfile = result.profile;
+      profileJsonTextarea.value = JSON.stringify(result.profile, null, 2);
+      renderCompleteness(true, result.completeness);
+      renderPhotoSummary(result.profile);
+
+      photoFileInput.value = "";
+      selectedPhotoFile = null;
+      photoPreviewWrapper.style.display = "none";
+      photoCaptionInput.value = "";
+      photoSourceInput.value = "";
+      photoRightsStatusInput.value = "";
+      photoRegionRelevanceInput.value = "";
+
+      showPhotoStatus("写真を保存しました。", "success");
+    } catch (error) {
+      console.error("写真の保存に失敗しました", error);
+      showPhotoStatus(error.message || "写真の保存に失敗しました。", "error");
+    } finally {
+      photoUploadButton.disabled = false;
+    }
+  });
 
   async function getIdTokenOrThrow() {
     const currentUser = firebase.auth().currentUser;
@@ -438,6 +742,7 @@
       currentLoadedProfile = result.profile;
       profileJsonTextarea.value = JSON.stringify(result.profile, null, 2);
       renderCompleteness(result.exists, result.completeness);
+      renderPhotoSummary(result.profile);
       showLoadStatus("読み込みました。", "success");
     } catch (error) {
       console.error("地域プロフィールの読み込みに失敗しました", error);
@@ -466,6 +771,7 @@
       currentLoadedProfile = result.profile;
       profileJsonTextarea.value = JSON.stringify(result.profile, null, 2);
       renderCompleteness(true, result.completeness);
+      renderPhotoSummary(result.profile);
       showSaveStatus("保存しました。", "success");
     } catch (error) {
       console.error("地域プロフィールの保存に失敗しました", error);
@@ -564,8 +870,20 @@
         // 最低1件の出典が必要というPhase3.1ルールは維持される
         // (candidateSourcesが0件のcandidateはそもそもサーバー側で
         // 返されない)。
+        // 実装GO｜Phase3完成｜travel.representativePlacesのようなリスト型
+        // 項目は、AIが返した1本の文字列(読点区切り)をここで配列へ分割する
+        // (サーバー側のREGION_PROFILE_LIST_VALUE_FIELDS検証は文字列を渡すと
+        // 空配列にしてしまうため、confirmedなのに値が空という状態を防ぐ)。
+        const adoptedValue =
+          candidate.isListValue
+            ? candidate.suggestedValueText
+                .split(/[、,，・\/]/)
+                .map(function(item) { return item.trim(); })
+                .filter(function(item) { return item !== ""; })
+            : candidate.suggestedValueText;
+
         updatedProfile[candidate.section][candidate.field] = {
-          value: candidate.suggestedValueText,
+          value: adoptedValue,
           status: "confirmed",
           validityType: candidate.validityType,
 
@@ -587,6 +905,7 @@
         currentLoadedProfile = result.profile;
         profileJsonTextarea.value = JSON.stringify(result.profile, null, 2);
         renderCompleteness(true, result.completeness);
+        renderPhotoSummary(result.profile);
 
         card.remove();
         showResearchStatus(candidate.label + "を採用し、PROFILEへ保存しました。", "success");

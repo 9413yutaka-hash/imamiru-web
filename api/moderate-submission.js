@@ -904,6 +904,85 @@ const AI_REGION_PROFILE_RESEARCH_GROUPS =
           isEditorialInterpretation: true
         }
       ]
+    },
+    // 実装GO｜Phase3 八重瀬町「街の記憶」完成(15/15)｜既存4グループと
+    // 完全に同じ技術(Terra・web_search・Structured Outputs・
+    // search_context_size:"low"・candidateSources方式)を再利用した
+    // 追加2グループ。allowed_domainsは新規推測せず、本セッションで既に
+    // 実在確認済みのドメインだけを使う(本部指示)。
+    {
+      groupKey: "characterCultureSafety",
+      label: "性格・文化・安全",
+      allowedDomains: [
+        "town.yaese.lg.jp",
+        "pref.okinawa.lg.jp",
+        "ocvb.or.jp"
+      ],
+      fields: [
+        {
+          fieldKey: "character.localCharacter",
+          section: "character",
+          field: "localCharacter",
+          label: "街らしさ・雰囲気",
+          isNumeric: false,
+          requiresAsOf: false,
+          isEditorialInterpretation: false
+        },
+        {
+          fieldKey: "character.culture",
+          section: "character",
+          field: "culture",
+          label: "文化",
+          isNumeric: false,
+          requiresAsOf: false,
+          isEditorialInterpretation: false
+        },
+        {
+          fieldKey: "safety.longTermSafetyNotes",
+          section: "safety",
+          field: "longTermSafetyNotes",
+          label: "地域固有の安全特性（長期的）",
+          isNumeric: false,
+          requiresAsOf: false,
+          isEditorialInterpretation: false
+        }
+      ]
+    },
+    {
+      groupKey: "climateHighlights",
+      label: "気候・代表スポット",
+      allowedDomains: [
+        "town.yaese.lg.jp",
+        "pref.okinawa.lg.jp",
+        "ocvb.or.jp"
+      ],
+      fields: [
+        {
+          fieldKey: "climate.climateSummary",
+          section: "climate",
+          field: "climateSummary",
+          label: "気候の特徴",
+          isNumeric: false,
+          requiresAsOf: false,
+          isEditorialInterpretation: false
+        },
+        {
+          // travel.representativePlacesはREGION_PROFILE_LIST_VALUE_FIELDSに
+          // 含まれるリスト型項目。suggestedValueのJSON schema自体は既存の
+          // 全グループ共通で文字列型のままにし(schema変更なし)、AIには
+          // 読点(、)区切りで複数地名を1つの文字列として書かせる。実際の
+          // 配列化はクライアント側(admin-region-profiles.html)がisListValue
+          // を見て行う(サーバー側のリスト検証ルールはPhase3.1のまま変更しない)。
+          fieldKey: "travel.representativePlaces",
+          section: "travel",
+          field: "representativePlaces",
+          label: "代表的なスポット",
+          isNumeric: false,
+          requiresAsOf: false,
+          isEditorialInterpretation: false,
+          isListValue: true
+        }
+      ]
     }
   ];
 
@@ -4941,7 +5020,13 @@ function buildRegionProfileResearchGroupInstructions(
     "分かるように書く)。\n" +
     "5. 出力するJSON文字列の中にURLやドメイン名を一切書かない" +
     "(evidenceには、確認できた事実の短い要約だけを書く)。出典の実際の" +
-    "URLは、あなたの出力とは別にシステム側が記録します。\n\n" +
+    "URLは、あなたの出力とは別にシステム側が記録します。\n" +
+    "6. safety.longTermSafetyNotesは、台風常襲地域である・高台と低地が" +
+    "混在する等の長期的・構造的な安全特性だけを対象にする。『本日の警報』" +
+    "『今週の注意情報』のような今日・今週限定のNOW情報は一切含めない。\n" +
+    "7. travel.representativePlacesのように複数の代表的な場所をまとめて" +
+    "答える項目は、suggestedValueの中で読点(、)を使って複数の地名を1つの" +
+    "文字列として区切って書く(例：「城跡公園、道の駅、海岸」)。\n\n" +
     "【出力】\n" +
     "指定されたJSON形式のcandidatesだけを返してください。確認できなかった" +
     "項目は配列に含めないでください。"
@@ -5478,7 +5563,12 @@ function sanitizeRegionProfileResearchCandidate(
     validityType:
       REGION_PROFILE_SECTION_FIELD_DEFAULT_VALIDITY[fieldDef.section][fieldDef.field],
 
-    isEditorialInterpretation: fieldDef.isEditorialInterpretation
+    isEditorialInterpretation: fieldDef.isEditorialInterpretation,
+
+    // 実装GO｜Phase3完成｜travel.representativePlaces等、値がリストになる
+    // 項目かどうかをクライアントへ伝える(採用時に配列化するかどうかの
+    // 判断に使う。fieldDefにisListValueが無ければfalse扱い)。
+    isListValue: fieldDef.isListValue === true
   };
 }
 
