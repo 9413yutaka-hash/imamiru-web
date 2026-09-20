@@ -718,50 +718,12 @@
     </div>
   </header>
 
-  <section class="hero">
-    <div class="hero-inner">
-
-      <div class="hero-copy">
-
-        <div class="hero-kicker">
-          <span class="hero-kicker-dot"></span>
-          <span data-i18n="hero_kicker">沖縄の「今」をリアルタイム配信</span>
-        </div>
-
-        <h1 data-i18n="hero_heading">
-          今、沖縄で<br>
-          何が起きているか。
-        </h1>
-
-        <p class="hero-description" data-i18n="hero_description">
-          近くのお店、今日だけのイベント、旅先の<span class="hero-description-emphasis">偶然の寄り道</span>。
-          今の沖縄が、ひと目でわかる。
-        </p>
-
-      </div>
-
-      <div id="heroPhotoWrapper" class="hero-photo-wrapper" style="display:none;">
-        <button
-          id="heroPhotoButton"
-          type="button"
-          class="hero-photo-button"
-        >
-          <img
-            id="heroPhotoImage"
-            class="hero-photo-image"
-            src=""
-            alt=""
-          >
-        </button>
-      </div>
-
-    </div>
-
-    <div class="hero-wave" aria-hidden="true"></div>
-  </section>
-
-  <main>
-
+  <!-- 代表指示｜現在地セクションを最上部(ヘッダー直下)へ移動。
+       文言・デザイン・GPSロジックは無変更、DOM位置のみ変更。
+       .location-card は元々 <main> の外側 padding に依存していたため、
+       この新しいラッパーで同じ幅制約(width:min(100%,920px); margin:0 auto)
+       を持たせる(style.cssの .top-location-wrapper 参照)。 -->
+  <div class="top-location-wrapper">
     <section class="location-card">
 
       <div class="location-card-top">
@@ -773,12 +735,12 @@
           </div>
 
           <div>
-            <h2 data-i18n="location_heading">
-              あなたの現在地
+            <h2 id="locationHeading" data-i18n="location_heading">
+              今いる街を見てみよう
             </h2>
 
             <p id="locationMessage" data-i18n="location_message_initial">
-              現在地を取得すると、近い順に表示します。
+              マチナウは、今いる街の「今」をお届けします。まずは現在地ボタンを押してね。
             </p>
           </div>
 
@@ -791,7 +753,7 @@
           onclick="ensureGoogleMapsLoaded(); getLocation()"
           data-i18n="location_button_get"
         >
-          現在地を取得
+          現在地からはじめる
         </button>
 
       </div>
@@ -1042,6 +1004,51 @@
       </div>
 
     </section>
+  </div>
+
+  <section class="hero">
+    <div class="hero-inner">
+
+      <div class="hero-copy">
+
+        <div class="hero-kicker">
+          <span class="hero-kicker-dot"></span>
+          <span data-i18n="hero_kicker">沖縄の「今」をリアルタイム配信</span>
+        </div>
+
+        <h1 data-i18n="hero_heading">
+          今、沖縄で<br>
+          何が起きているか。
+        </h1>
+
+        <p class="hero-description" data-i18n="hero_description">
+          近くのお店、今日だけのイベント、旅先の<span class="hero-description-emphasis">偶然の寄り道</span>。
+          今の沖縄が、ひと目でわかる。
+        </p>
+
+      </div>
+
+      <div id="heroPhotoWrapper" class="hero-photo-wrapper" style="display:none;">
+        <button
+          id="heroPhotoButton"
+          type="button"
+          class="hero-photo-button"
+        >
+          <img
+            id="heroPhotoImage"
+            class="hero-photo-image"
+            src=""
+            alt=""
+          >
+        </button>
+      </div>
+
+    </div>
+
+    <div class="hero-wave" aria-hidden="true"></div>
+  </section>
+
+  <main>
 
     <!-- マチナウAI一本化 Phase1｜旧「✨マチナウAI『今どうする？』」は
          「💬マチナウAIと話す」(#aiConciergeChatSection)へ一本化したため

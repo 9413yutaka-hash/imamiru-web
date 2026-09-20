@@ -24,14 +24,24 @@ const MACHINAU_TRANSLATIONS = {
     en: "Live updates on Okinawa, right now"
   },
 
+  // 現在地ファーストUX STEP2｜初めてマチナウを開いた人が「何をすればいいか」
+  // 一目で分かる取得前の見出し。取得後はlocation_heading_after(下記)へ
+  // JS側(updateLocationButtonLanguage())が切り替える(userLatitudeの有無で
+  // 判定、getLocation()本体・地域判定ロジックには一切触れない)。
   location_heading: {
-    ja: "あなたの現在地",
-    en: "Your Location"
+    ja: "今いる街を見てみよう",
+    en: "See what's near you"
+  },
+
+  // 現在地取得後の見出し。
+  location_heading_after: {
+    ja: "今いる街",
+    en: "Your area right now"
   },
 
   location_button_get: {
-    ja: "現在地を取得",
-    en: "Get Location"
+    ja: "現在地からはじめる",
+    en: "Start with my location"
   },
 
   location_button_update: {
@@ -335,9 +345,11 @@ const MACHINAU_TRANSLATIONS = {
     en: "Nearby shops, one-day-only events, and <span class=\"hero-description-emphasis\">happy detours</span> along the way — Okinawa's \"right now,\" at a glance."
   },
 
+  // 現在地ファーストUX STEP2｜取得前の説明文。取得後はlocation_message_success
+  // (既存、変更なし)へgetLocation()が切り替える。
   location_message_initial: {
-    ja: "現在地を取得すると、近い順に表示します。",
-    en: "Get your location to see what's nearby first."
+    ja: "マチナウは、今いる街の「今」をお届けします。まずは現在地ボタンを押してね。",
+    en: "Machinau shows you what's happening in your area right now. Tap the button below to get started."
   },
 
   location_permission_toggle_show: {

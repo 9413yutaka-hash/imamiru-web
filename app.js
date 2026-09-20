@@ -49,27 +49,46 @@ function saveMachinauLanguage(language) {
   }
 }
 
-// #locationButtonはgetLocation()(本体は変更しない)がGPS成功時に
-// 文言を直接書き換えるため、data-i18n属性の一括置換だけでは正しい状態を
-// 追従できない。userLatitudeの有無で現在の状態を判定し、ここでだけ
-// 個別に文言を決める(getLocation()本体には一切触れない)。
+// #locationButton・#locationHeadingはgetLocation()(本体は変更しない)が
+// GPS成功時に文言を直接書き換えるため、data-i18n属性の一括置換だけでは
+// 正しい状態を追従できない。userLatitudeの有無で現在の状態を判定し、
+// ここでだけ個別に文言を決める(getLocation()本体には一切触れない)。
+// 現在地ファーストUX STEP2｜取得後は見出しも切り替えるため、対象へ
+// #locationHeadingを追加した(#locationMessageはgetLocation()が
+// sorting→successの遷移メッセージを自分で管理しているため対象外のまま)。
 function updateLocationButtonLanguage(language) {
   const locationButton = document.getElementById("locationButton");
+  const locationHeading = document.getElementById("locationHeading");
 
-  if (!locationButton) {
-    return;
+  const isLocationAcquired =
+    userLatitude !== null;
+
+  if (locationButton) {
+    const buttonTranslationKey =
+      isLocationAcquired
+        ? "location_button_update"
+        : "location_button_get";
+
+    const translatedButtonText =
+      getMachinauTranslation(buttonTranslationKey, language);
+
+    if (translatedButtonText) {
+      locationButton.textContent = translatedButtonText;
+    }
   }
 
-  const translationKey =
-    userLatitude !== null
-      ? "location_button_update"
-      : "location_button_get";
+  if (locationHeading) {
+    const headingTranslationKey =
+      isLocationAcquired
+        ? "location_heading_after"
+        : "location_heading";
 
-  const translatedText =
-    getMachinauTranslation(translationKey, language);
+    const translatedHeadingText =
+      getMachinauTranslation(headingTranslationKey, language);
 
-  if (translatedText) {
-    locationButton.textContent = translatedText;
+    if (translatedHeadingText) {
+      locationHeading.textContent = translatedHeadingText;
+    }
   }
 }
 
@@ -8401,6 +8420,14 @@ function getLocation() {
       "currentMapLink"
     );
 
+  // 現在地ファーストUX STEP2｜取得前/取得後で見出しを切り替えるための
+  // 参照。既存の必須要素チェック(直後のif)には加えない(見出し要素が
+  // 万一無くても、既存のGPS取得処理自体は今まで通り動くようにするため)。
+  const locationHeading =
+    document.getElementById(
+      "locationHeading"
+    );
+
   if (
     !locationButton ||
     !locationMessage ||
@@ -8487,6 +8514,17 @@ function getLocation() {
             "location_button_update",
             getCurrentMachinauLanguage()
           );
+
+        // 現在地ファーストUX STEP2｜取得成功と同時に見出しも「取得後」
+        // 状態へ切り替える(location_message自体はこの後もsorting→success
+        // の遷移を続けるため、ここでは変更しない)。
+        if (locationHeading) {
+          locationHeading.textContent =
+            getMachinauTranslation(
+              "location_heading_after",
+              getCurrentMachinauLanguage()
+            );
+        }
 
         showCurrentLocationMarker(
           userLatitude,

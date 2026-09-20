@@ -375,6 +375,24 @@
       border: 1px solid rgba(23, 74, 110, 0.08);
     }
 
+    /* 代表指示｜現在地セクションをヘッダー直下へ移動。.location-cardは
+       元々<main>の外側padding(width:min(100%,920px); margin:0 auto)に
+       依存していたため、移動後も同じ幅制約をこのラッパーで持たせる。
+       既存の.location-card自体の宣言(上記)は変更しない。 */
+    .top-location-wrapper {
+      width: min(100%, 920px);
+      margin: 0 auto;
+      padding: 24px 18px 0;
+    }
+
+    /* 元のmargin-top:-22pxは、直前にあった.hero-waveへ重ねるための値
+       だったため、ヘッダー直下ではそのまま使うと固定ヘッダーの下に
+       隠れてしまう。.top-location-wrapper配下でだけ打ち消す
+       (既存の.location-card { margin-top: -22px; }宣言自体は無変更)。 */
+    .top-location-wrapper .location-card {
+      margin-top: 0;
+    }
+
     .location-card-top {
       display: flex;
       align-items: center;
@@ -1523,8 +1541,17 @@
         padding-right: 14px;
       }
 
+      .top-location-wrapper {
+        padding-left: 14px;
+        padding-right: 14px;
+      }
+
       .location-card {
         margin-top: -26px;
+      }
+
+      .top-location-wrapper .location-card {
+        margin-top: 0;
       }
 
       .location-card-top {
