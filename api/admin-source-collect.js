@@ -1076,6 +1076,93 @@ function createCollectionError(
 }
 
 
+// 初心回帰後の新トップ体験 Phase1｜SNS/公開Web発見アダプターの受け口。
+// 本部指示により「取得できているように見せる」実装は禁止のため、
+// 実際に取得を試みられるのはprovider:"rss"(既存のfeedUrl経由の収集)
+// だけであり、それ以外は必ずunsupported/unavailableを明示的に返す。
+// aiSources.providerは新しい任意フィールド(未設定は既存source互換のため
+// 常に"rss"扱い、sourceTrust導入時と同じ後方互換パターン)。ここで
+// 「取得できたことにする」偽のデータを一切生成しない。
+const KNOWN_COLLECT_PROVIDERS =
+  [
+    "rss",
+    "youtube",
+    "instagram",
+    "x",
+    "facebook",
+    "tiktok",
+    "web"
+  ];
+
+function resolveSourceProvider(
+  sourceData
+) {
+  const rawProvider =
+    typeof sourceData.provider === "string"
+      ? sourceData.provider.trim()
+      : "";
+
+  return rawProvider === ""
+    ? "rss"
+    : rawProvider;
+}
+
+// providerごとの取得可否だけを判定する。実際のfetchは一切行わない。
+// YouTubeのみ、環境変数の「存在有無」を実行時に確認する(値自体は
+// ログにも応答にも一切出さない。本部への報告は「有無」のみに限定する)。
+function checkProviderAvailability(
+  provider
+) {
+  if (provider === "rss") {
+    return {
+      available: true
+    };
+  }
+
+  if (provider === "youtube") {
+    const hasYoutubeApiKey =
+      typeof process.env.YOUTUBE_DATA_API_KEY === "string" &&
+      process.env.YOUTUBE_DATA_API_KEY.trim() !== "";
+
+    if (!hasYoutubeApiKey) {
+      return {
+        available: false,
+        reason:
+          "YouTube Data APIキー(環境変数YOUTUBE_DATA_API_KEY)が未設定のため取得できません。"
+      };
+    }
+
+    return {
+      available: false,
+      reason:
+          "YouTube Data APIキーは検出されましたが、取得処理自体はPhase1では未実装です。"
+    };
+  }
+
+  if (
+    KNOWN_COLLECT_PROVIDERS.includes(
+      provider
+    )
+  ) {
+    return {
+      available: false,
+      reason:
+        "provider=\"" +
+        provider +
+        "\"は現在未接続です(公式APIの認証・契約が必要なため、非公式スクレイピングは行いません)。"
+    };
+  }
+
+  return {
+    available: false,
+    reason:
+      "未知のprovider(\"" +
+      provider +
+      "\")が指定されています。"
+  };
+}
+
+
 // ============================================================
 // Ver1.8 Phase2 STEP6-W (Phase A)｜構造化ページからの事実自動取得
 // ============================================================
@@ -2611,6 +2698,27 @@ async function collectFromSource(
     throw createCollectionError(
       400,
       "この情報源は停止中のため情報を集められません。"
+    );
+  }
+
+  // 初心回帰後の新トップ体験 Phase1｜provider未設定(既存source)は常に
+  // "rss"扱いのため、既存の挙動は完全に無変更のまま(以下のfeedUrl以降の
+  // 処理へそのまま進む)。provider指定済みでrss以外の場合だけ、実際の
+  // 取得を試みず明示的なエラーで止める(偽の成功を返さない)。
+  const provider =
+    resolveSourceProvider(
+      sourceData
+    );
+
+  if (provider !== "rss") {
+    const providerAvailability =
+      checkProviderAvailability(
+        provider
+      );
+
+    throw createCollectionError(
+      400,
+      providerAvailability.reason
     );
   }
 

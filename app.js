@@ -181,6 +181,16 @@ function switchMachinauLanguage(language) {
   renderRegionRecommendationCards();
   refreshRegionRecommendationHeadingForCurrentLanguage();
 
+  // 初心回帰後の新トップ体験 Phase1｜「近くの『今』」パネル・街情報ボタンの
+  // 一覧内テキストは、data-i18n属性ではなくbuildAwarenessNoticeText()等が
+  // 都度組み立てる文字列のため、applyMachinauLanguage()のdata-i18n一括置換
+  // だけでは切り替わらない。地域おすすめと同じ理由・同じパターンで、
+  // Firestore再取得なしに既存shops配列から再描画するだけ(新しいAPI呼び出し
+  // は発生しない)。
+  renderAwarenessNotices();
+
+  renderAreaInfoButtons();
+
   // Hero写真のalt文言(shop_image_altキー)を現在言語へ即時反映する。
   // 候補選定・画像URL・Firestore再取得は発生しない(既存候補を再利用するだけ)。
   updateHeroPhoto();
@@ -7382,20 +7392,8 @@ async function sendAiConciergeChatMessage(
 
   renderAiConciergeChatMessages();
 
-  // マチナウAI一本化 Phase1｜クイック返信は最初の発言までの導線のため、
-  // 一度でも発言したら以後は非表示にする(会話中の視覚的な邪魔を避ける)。
-  const quickRepliesContainer =
-    document.getElementById(
-      "aiConciergeChatQuickReplies"
-    );
-
-  if (quickRepliesContainer) {
-    quickRepliesContainer.style.display =
-      "none";
-  }
-
   setAiConciergeChatStatus(
-    "マチナウAIが考えています…"
+    "調べています…"
   );
 
   // 既存の候補プール構築(buildAiConciergeCandidatePool())をそのまま
@@ -7696,27 +7694,6 @@ function initializeAiConciergeChat() {
     }
   );
 
-  // マチナウAI一本化 Phase1｜クイック返信。押されたボタンの表示文字列
-  // (data-i18nで既に選択言語へ置換済み)を、既存sendAiConciergeChatMessage()
-  // へ通常のユーザーメッセージとしてそのまま渡すだけで、専用のAI処理・
-  // 専用APIは作らない。
-  const quickReplyButtons =
-    document.querySelectorAll(
-      "#aiConciergeChatQuickReplies .ai-concierge-chat-quick-reply-button"
-    );
-
-  quickReplyButtons.forEach(
-    function(quickReplyButton) {
-      quickReplyButton.addEventListener(
-        "click",
-        function() {
-          sendAiConciergeChatMessage(
-            quickReplyButton.textContent.trim()
-          );
-        }
-      );
-    }
-  );
 }
 
 
@@ -8619,6 +8596,19 @@ function getLocation() {
               userAreaName = areaName;
 
               renderShops();
+
+              // 初心回帰後の新トップ体験 Phase1｜現在地取得・更新の
+              // タイミングでのみ「気づきの一言」を再判定する(移動だけでの
+              // 自動更新はしない、60秒タイマー等のrenderShops()呼び出しでは
+              // 再描画しない)。新しいFirestore読み取り・API呼び出しは
+              // 発生しない(既にロード済みのshops配列から組み立てるのみ)。
+              renderAwarenessNotices();
+
+              // 初心回帰後の新トップ体験 Phase1｜街情報ボタンも同じ
+              // タイミングでのみ再判定する(新しいFirestore読み取り・
+              // API呼び出しは発生しない、既にロード済みのshops配列から
+              // 組み立てるのみ)。
+              renderAreaInfoButtons();
 
               triggerLocationBasedCollection(
                 areaName
@@ -9556,6 +9546,10 @@ document.addEventListener(
     loadDynamicColumnEntries();
 
     initializeAiConciergeChat();
+
+    initializeAwarenessNoticesInteractions();
+
+    initializeAreaInfoInteractions();
   }
 );
 
@@ -10958,6 +10952,16 @@ function selectActiveAiAreaInformation(
         // 同じ形のオブジェクトに変換する。regionNameは付けない(市町村名の
         // ラベルは「他の地域を見る」の見出し自体に既に出ているため)。
         return {
+          // 初心回帰後の新トップ体験 Phase1｜以前の全配線調査で判明した
+          // 不具合修正：idが無いとbuildAiConciergeCandidateFromRegionArticle()
+          // のガード(article.idが無ければnullを返す)で弾かれ、街を見るAI
+          // 由来のこの情報がregion_recommendation候補としてTerraへ一切
+          // 届かなかった。新しいFirestoreフィールドは使わず、既存の
+          // shop.firestoreIdをそのままidとして使う(表示用オブジェクトの
+          // 他フィールドは無変更)。
+          id:
+            shop.firestoreId,
+
           title:
             shop.title,
 
@@ -10972,6 +10976,533 @@ function selectActiveAiAreaInformation(
         };
       }
     );
+}
+
+
+// 初心回帰後の新トップ体験 Phase1｜「聞かせる」のではなく「気づかせる」。
+// 会話を介さず、現在地×現在時刻×情報管理室から短い一言で直接届けるための
+// 候補集約。新しいFirestore読み取り・新しいOpenAI呼び出しは一切行わず、
+// 既にshops配列(getVisibleShops()が期限切れ・未承認を除外済み)から候補を
+// 取り出す既存4関数(factual_info/official_today/traveler_suggestion/
+// 一般店舗)をそのまま優先順に再利用するだけ。同じ店舗が複数の枠に重複
+// 該当する場合はfirestoreId単位で先勝ちにする。regionRecommendation
+// (地域のおすすめ)は既存の別セクションで既に表示されているため、今回の
+// 「気づきの一言」には二重表示しない。
+function selectAwarenessNoticesForCurrentArea() {
+  if (
+    typeof userAreaName !== "string" ||
+    userAreaName === ""
+  ) {
+    return {
+      headlineNotices: [],
+      hasGeneralShopInfo: false
+    };
+  }
+
+  const seenFirestoreIds =
+    {};
+
+  const headlineNotices =
+    [];
+
+  function addHeadlineNotices(
+    shopList,
+    kind
+  ) {
+    shopList.forEach(
+      function(shop) {
+        if (
+          !shop.firestoreId ||
+          seenFirestoreIds[shop.firestoreId]
+        ) {
+          return;
+        }
+
+        seenFirestoreIds[shop.firestoreId] =
+          true;
+
+        headlineNotices.push(
+          {
+            kind: kind,
+            shop: shop
+          }
+        );
+      }
+    );
+  }
+
+  // 優先順位：1.知らないと困る(安全) 2.今しかない(お知らせ・イベント)
+  // 3.知ってたら得する(街の発見)。一般店舗投稿は個別の一言にはせず、
+  // 後述のhasGeneralShopInfoによる要約1行にまとめる(羅列を避けるため)。
+  addHeadlineNotices(
+    selectFactualImportantInfoCandidatesForAiConcierge(),
+    "factual_info"
+  );
+
+  addHeadlineNotices(
+    selectTodayMachinauCandidatesForAiConcierge(),
+    "official_today"
+  );
+
+  addHeadlineNotices(
+    selectAiConciergeCandidates(),
+    "traveler_suggestion"
+  );
+
+  const generalShopCandidates =
+    selectGeneralShopCandidatesForAiConcierge();
+
+  const streetDiscoveryCandidates =
+    generalShopCandidates.filter(
+      function(shop) {
+        return shop.category === "街の発見";
+      }
+    );
+
+  addHeadlineNotices(
+    streetDiscoveryCandidates,
+    "street_discovery"
+  );
+
+  const hasGeneralShopInfo =
+    generalShopCandidates.some(
+      function(shop) {
+        return (
+          shop.category !== "街の発見" &&
+          !seenFirestoreIds[shop.firestoreId]
+        );
+      }
+    );
+
+  return {
+    headlineNotices: headlineNotices,
+    hasGeneralShopInfo: hasGeneralShopInfo
+  };
+}
+
+
+// 種類ごとの短い一言テンプレートへ、実際のタイトルを差し込むだけ
+// (OpenAI呼び出しなし、AIが文章を生成するわけではない)。
+function buildAwarenessNoticeText(
+  notice
+) {
+  const language =
+    getCurrentMachinauLanguage();
+
+  const title =
+    typeof notice.shop.title === "string" &&
+    notice.shop.title !== ""
+      ? notice.shop.title
+      : (
+          typeof notice.shop.name === "string"
+            ? notice.shop.name
+            : ""
+        );
+
+  const templateKeyByKind =
+    {
+      factual_info: "awareness_notice_factual_info",
+      official_today: "awareness_notice_official_today",
+      traveler_suggestion: "awareness_notice_traveler_suggestion",
+      street_discovery: "awareness_notice_street_discovery"
+    };
+
+  const templateKey =
+    templateKeyByKind[notice.kind] ||
+    "awareness_notice_official_today";
+
+  return getMachinauTranslation(
+    templateKey,
+    language
+  ).replace(
+    "{TITLE}",
+    title
+  );
+}
+
+
+// 「気づきの一言」パネルの描画。GPSで現在地取得・更新された時にだけ
+// getLocation()から呼ばれる(60秒タイマー等での自動再判定はしない)。
+// タップ先は既存openShopModal()/scrollToShops()のみで、AIチャットへは
+// 一切遷移させない。
+function renderAwarenessNotices() {
+  const section =
+    document.getElementById(
+      "awarenessNoticesSection"
+    );
+
+  const list =
+    document.getElementById(
+      "awarenessNoticesList"
+    );
+
+  const emptyMessage =
+    document.getElementById(
+      "awarenessNoticesEmptyMessage"
+    );
+
+  if (
+    !section ||
+    !list ||
+    !emptyMessage
+  ) {
+    return;
+  }
+
+  if (
+    typeof userAreaName !== "string" ||
+    userAreaName === ""
+  ) {
+    section.style.display =
+      "none";
+
+    return;
+  }
+
+  const language =
+    getCurrentMachinauLanguage();
+
+  const awarenessResult =
+    selectAwarenessNoticesForCurrentArea();
+
+  const itemsHtml =
+    [];
+
+  awarenessResult.headlineNotices.forEach(
+    function(notice) {
+      itemsHtml.push(
+        '<button type="button" class="awareness-notice-item" data-action="detail" data-firestore-id="' +
+        escapeHtml(notice.shop.firestoreId || "") +
+        '">' +
+        escapeHtml(
+          buildAwarenessNoticeText(
+            notice
+          )
+        ) +
+        "</button>"
+      );
+    }
+  );
+
+  if (awarenessResult.hasGeneralShopInfo) {
+    itemsHtml.push(
+      '<button type="button" class="awareness-notice-item awareness-notice-shop-summary" data-action="scroll-shops">' +
+      escapeHtml(
+        getMachinauTranslation(
+          "awareness_notice_shop_summary",
+          language
+        )
+      ) +
+      "</button>"
+    );
+  }
+
+  if (itemsHtml.length === 0) {
+    list.innerHTML =
+      "";
+
+    emptyMessage.textContent =
+      getMachinauTranslation(
+        "awareness_notices_empty",
+        language
+      );
+
+    emptyMessage.style.display =
+      "";
+
+    section.style.display =
+      "";
+
+    return;
+  }
+
+  emptyMessage.style.display =
+    "none";
+
+  list.innerHTML =
+    itemsHtml.join("");
+
+  section.style.display =
+    "";
+}
+
+
+// awarenessNoticesListへのクリックをイベント委譲で処理する。一覧を
+// renderAwarenessNotices()が再描画するたびにリスナーを付け直す必要が
+// ないよう、親要素固定のリスナーを1回だけ登録する。
+function initializeAwarenessNoticesInteractions() {
+  const list =
+    document.getElementById(
+      "awarenessNoticesList"
+    );
+
+  if (!list) {
+    return;
+  }
+
+  list.addEventListener(
+    "click",
+    function(clickEvent) {
+      const button =
+        clickEvent.target.closest(
+          ".awareness-notice-item"
+        );
+
+      if (!button) {
+        return;
+      }
+
+      const action =
+        button.getAttribute(
+          "data-action"
+        );
+
+      if (action === "scroll-shops") {
+        scrollToShops();
+
+        return;
+      }
+
+      if (action === "detail") {
+        const firestoreId =
+          button.getAttribute(
+            "data-firestore-id"
+          );
+
+        if (firestoreId) {
+          openShopModal(
+            firestoreId
+          );
+        }
+      }
+    }
+  );
+}
+
+
+// 初心回帰後の新トップ体験 Phase1｜街情報ボタン。マチナウが全情報を旅行者へ
+// 押し付けず、興味を持った人だけが自分で開く入口。既存データを無理に
+// 3分類(地域・役所/商業施設/観光施設)へ当てはめず、実際にaiSources.
+// sourceTypeで確実に区別できる2分類(行政/観光施設)だけを採用した
+// (商業施設に相当する既存フィールドは無いため今回は見送り)。対象は
+// 街を見るAIが自動収集した情報(authorType:"ai")のみで、既存の
+// getSuggestionAreaPriorityRank()による地域絞り込みも他の候補選定と統一する。
+function selectAreaInfoBySourceType(
+  targetSourceType
+) {
+  if (
+    typeof userAreaName !== "string" ||
+    userAreaName === ""
+  ) {
+    return [];
+  }
+
+  return shops
+    .filter(
+      function(shop) {
+        return (
+          shop.postType === "admin" &&
+          shop.authorType === "ai" &&
+          shop.sourceType === targetSourceType &&
+          getSuggestionAreaPriorityRank(shop) <= 2
+        );
+      }
+    )
+    .sort(
+      function(firstShop, secondShop) {
+        const areaPriorityDifference =
+          getSuggestionAreaPriorityRank(firstShop) -
+          getSuggestionAreaPriorityRank(secondShop);
+
+        if (areaPriorityDifference !== 0) {
+          return areaPriorityDifference;
+        }
+
+        return (
+          getDateValue(secondShop.createdAt) -
+          getDateValue(firstShop.createdAt)
+        );
+      }
+    );
+}
+
+
+// 1分類ぶんのボタン+一覧を描画する。0件の場合はボタンごと非表示にする
+// (情報が存在するように見せないため。既存regionRecommendationSection等の
+// 「空なら非表示」という既存の慣習に合わせた)。戻り値はこの分類に表示する
+//情報が1件以上あったかどうか。
+function renderAreaInfoCategoryButton(
+  buttonElementId,
+  listElementId,
+  targetSourceType
+) {
+  const button =
+    document.getElementById(
+      buttonElementId
+    );
+
+  const list =
+    document.getElementById(
+      listElementId
+    );
+
+  if (
+    !button ||
+    !list
+  ) {
+    return false;
+  }
+
+  const candidates =
+    selectAreaInfoBySourceType(
+      targetSourceType
+    );
+
+  if (candidates.length === 0) {
+    button.style.display =
+      "none";
+
+    list.style.display =
+      "none";
+
+    list.innerHTML =
+      "";
+
+    return false;
+  }
+
+  button.style.display =
+    "";
+
+  // 現在地取得のたびに再判定するため、開閉状態は毎回閉じた状態へ戻す。
+  list.style.display =
+    "none";
+
+  list.innerHTML =
+    candidates
+      .map(
+        function(shop) {
+          return (
+            '<button type="button" class="awareness-notice-item" data-action="detail" data-firestore-id="' +
+            escapeHtml(shop.firestoreId || "") +
+            '">' +
+            escapeHtml(shop.title || "") +
+            "</button>"
+          );
+        }
+      )
+      .join("");
+
+  return true;
+}
+
+
+// 街情報ボタン全体の描画。GPSで現在地取得・更新された時にだけ
+// getLocation()から呼ばれる(awarenessNoticesと同じタイミング)。
+function renderAreaInfoButtons() {
+  const section =
+    document.getElementById(
+      "areaInfoSection"
+    );
+
+  if (!section) {
+    return;
+  }
+
+  if (
+    typeof userAreaName !== "string" ||
+    userAreaName === ""
+  ) {
+    section.style.display =
+      "none";
+
+    return;
+  }
+
+  const hasRoleInfo =
+    renderAreaInfoCategoryButton(
+      "areaInfoRoleButton",
+      "areaInfoRoleList",
+      "行政"
+    );
+
+  const hasTourismInfo =
+    renderAreaInfoCategoryButton(
+      "areaInfoTourismButton",
+      "areaInfoTourismList",
+      "観光施設"
+    );
+
+  section.style.display =
+    (hasRoleInfo || hasTourismInfo)
+      ? ""
+      : "none";
+}
+
+
+// areaInfoButtonsContainerへのクリックをイベント委譲で処理する。
+// カテゴリーボタン押下は対応する一覧の開閉のみ(新しい取得は発生しない、
+// 既にrenderAreaInfoButtons()が組み立て済みのHTMLを表示/非表示にするだけ)。
+// 一覧内の項目タップは既存openShopModal()による詳細表示のみで、
+// AIチャットへは一切遷移させない。
+function initializeAreaInfoInteractions() {
+  const container =
+    document.getElementById(
+      "areaInfoButtonsContainer"
+    );
+
+  if (!container) {
+    return;
+  }
+
+  container.addEventListener(
+    "click",
+    function(clickEvent) {
+      const categoryButton =
+        clickEvent.target.closest(
+          ".area-info-category-button"
+        );
+
+      if (categoryButton) {
+        const listId =
+          categoryButton.getAttribute(
+            "data-list-id"
+          );
+
+        const list =
+          listId
+            ? document.getElementById(listId)
+            : null;
+
+        if (list) {
+          list.style.display =
+            list.style.display === "none"
+              ? ""
+              : "none";
+        }
+
+        return;
+      }
+
+      const detailButton =
+        clickEvent.target.closest(
+          ".area-info-category-list .awareness-notice-item"
+        );
+
+      if (detailButton) {
+        const firestoreId =
+          detailButton.getAttribute(
+            "data-firestore-id"
+          );
+
+        if (firestoreId) {
+          openShopModal(
+            firestoreId
+          );
+        }
+      }
+    }
+  );
 }
 
 

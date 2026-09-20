@@ -131,11 +131,12 @@ const MACHINAU_TRANSLATIONS = {
     en: "✨ Machinau AI: What now?"
   },
 
-  // マチナウAI一本化 Phase1｜「💬マチナウAIと話す」を唯一の「マチナウAI」
-  // として表示するための見出し。
+  // 初心回帰後の新トップ体験 Phase1｜旅行者向けUIから「AI」という言葉・
+  // 「マチナウAI」という名称を外すための見出し変更(AI処理自体は裏方として
+  // 無変更のまま残す)。
   ai_concierge_chat_heading: {
-    ja: "🤖 マチナウAI",
-    en: "🤖 Machinau AI"
+    ja: "気になることを聞く",
+    en: "Ask something"
   },
 
   // マチナウAI一本化 Phase1｜第一声はOpenAIを呼ばず、既に取得済みの
@@ -161,19 +162,60 @@ const MACHINAU_TRANSLATIONS = {
     en: "What's the plan for today?\nIf you haven't decided yet, let's figure it out together."
   },
 
-  ai_concierge_quick_reply_no_plan: {
-    ja: "ノープラン",
-    en: "No plans yet"
+  // 初心回帰後の新トップ体験 Phase1｜「近くの『今』」パネルの見出しと、
+  // 種類ごとの短い一言テンプレート({TITLE}を実際のタイトルで置換)。
+  // AIが自然文を生成するのではなく、既存データのタイトルを固定テンプレート
+  // へ差し込むだけ(OpenAI呼び出しなし)。
+  awareness_notices_heading: {
+    ja: "近くの「今」",
+    en: "What's happening nearby"
   },
 
-  ai_concierge_quick_reply_nearby: {
-    ja: "近場で楽しみたい",
-    en: "Something nearby"
+  awareness_notice_factual_info: {
+    ja: "⚠️ 近くで大事なお知らせが出てるよ：{TITLE}",
+    en: "⚠️ Important notice nearby: {TITLE}"
   },
 
-  ai_concierge_quick_reply_rainy_ok: {
-    ja: "雨でも楽しみたい",
-    en: "Fun even in the rain"
+  awareness_notice_official_today: {
+    ja: "📢 近くで今日のお知らせが出てるよ：{TITLE}",
+    en: "📢 Today's notice nearby: {TITLE}"
+  },
+
+  awareness_notice_traveler_suggestion: {
+    ja: "🎉 近くで今日、「{TITLE}」やってるみたい！",
+    en: "🎉 Looks like \"{TITLE}\" is happening nearby today!"
+  },
+
+  awareness_notice_street_discovery: {
+    ja: "📍 この辺に来た人からこんな発見が届いてるよ：{TITLE}",
+    en: "📍 Someone nearby shared this discovery: {TITLE}"
+  },
+
+  awareness_notice_shop_summary: {
+    ja: "🏪 近くのお店から今日の情報が出てるよ。チェックしてね！",
+    en: "🏪 Nearby shops have posted today's updates. Check them out!"
+  },
+
+  awareness_notices_empty: {
+    ja: "近くで気づいた情報はまだ見つかってないよ。",
+    en: "Nothing notable found nearby yet."
+  },
+
+  // 初心回帰後の新トップ体験 Phase1｜街情報ボタン。マチナウが全情報を
+  // 押し付けず、興味を持った人だけが自分で開く入口の見出し・ラベル。
+  area_info_heading: {
+    ja: "気になる情報を見る",
+    en: "Browse more info"
+  },
+
+  area_info_role_label: {
+    ja: "🏛️ 地域・行政",
+    en: "🏛️ Local & government"
+  },
+
+  area_info_tourism_label: {
+    ja: "🏝️ 観光施設",
+    en: "🏝️ Tourist facilities"
   },
 
   suggestion_placeholder_main: {

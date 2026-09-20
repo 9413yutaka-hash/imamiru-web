@@ -574,26 +574,58 @@
       margin: 0 0 8px;
     }
 
-    /* マチナウAI一本化 Phase1専用の最小CSS。 */
-    .ai-concierge-chat-quick-replies {
+    /* 初心回帰後の新トップ体験 Phase1｜「気づきの一言」一覧の最小CSS。 */
+    .awareness-notices-list {
       display: flex;
-      flex-wrap: wrap;
+      flex-direction: column;
       gap: 8px;
-      margin: 0 0 10px;
+      margin: 0 0 4px;
     }
 
-    .ai-concierge-chat-quick-reply-button {
+    .awareness-notice-item {
+      display: block;
+      width: 100%;
+      text-align: left;
+      padding: 10px 14px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--white);
+      color: var(--navy);
+      font-size: 13.5px;
+      font-weight: 700;
+      line-height: 1.5;
+    }
+
+    .awareness-notice-item.awareness-notice-shop-summary {
+      font-weight: 600;
+      color: var(--subtext);
+    }
+
+    .awareness-notices-empty-message {
+      font-size: 12.5px;
+      color: var(--subtext);
+      margin: 0;
+    }
+
+    /* 初心回帰後の新トップ体験 Phase1｜街情報ボタンの最小CSS。
+       一覧項目自体は既存の.awareness-notice-itemをそのまま再利用する。 */
+    .area-info-category-button {
+      display: inline-block;
       padding: 8px 14px;
+      margin: 0 8px 8px 0;
       border-radius: 999px;
       border: 1px solid var(--border);
       background: var(--white);
       color: var(--navy);
-      font-size: 12.5px;
+      font-size: 13px;
       font-weight: 700;
     }
 
-    .ai-concierge-chat-quick-reply-button:disabled {
-      opacity: 0.5;
+    .area-info-category-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin: 0 0 10px;
     }
 
     .ai-concierge-chat-form {
@@ -1048,50 +1080,102 @@
 
     </section>
 
+    <!-- 初心回帰後の新トップ体験 Phase1｜現在地×現在時刻×情報管理室から、
+         会話を介さず「気づきの一言」として直接届ける新しい情報枠。
+         AIチャットへの入口にはしない(タップ先は既存openShopModal()/
+         scrollToShops()のみ)。GPSで現在地取得・更新された時にだけ
+         renderAwarenessNotices()で再判定する(移動だけでの自動更新はしない)。 -->
+    <section
+      id="awarenessNoticesSection"
+      class="suggestion-highlight-section"
+      style="display:none;"
+    >
+
+      <span class="suggestion-highlight-heading" data-i18n="awareness_notices_heading">
+        近くの「今」
+      </span>
+
+      <div
+        id="awarenessNoticesList"
+        class="awareness-notices-list"
+      ></div>
+
+      <p
+        id="awarenessNoticesEmptyMessage"
+        class="awareness-notices-empty-message"
+        style="display:none;"
+      ></p>
+
+    </section>
+
+    <!-- 初心回帰後の新トップ体験 Phase1｜街情報ボタン。全情報を旅行者へ
+         押し付けず、興味を持った人だけが自分で開く入口。既存データを無理に
+         3分類へ当てはめず、実際にaiSources.sourceTypeで確実に区別できる
+         2分類(行政/観光施設)だけを採用している(商業施設に相当する既存
+         フィールドが無いため今回は見送り。詳細は完了報告を参照)。
+         0件の分類はボタンごと非表示にする(既存regionRecommendationSection
+         等と同じ「空なら非表示」の慣習に合わせた)。 -->
+    <section
+      id="areaInfoSection"
+      class="suggestion-highlight-section"
+      style="display:none;"
+    >
+
+      <span class="suggestion-highlight-heading" data-i18n="area_info_heading">
+        気になる情報を見る
+      </span>
+
+      <div id="areaInfoButtonsContainer">
+
+        <button
+          type="button"
+          id="areaInfoRoleButton"
+          class="area-info-category-button"
+          data-list-id="areaInfoRoleList"
+          style="display:none;"
+        >
+          <span data-i18n="area_info_role_label">🏛️ 地域・行政</span>
+        </button>
+
+        <div
+          id="areaInfoRoleList"
+          class="area-info-category-list"
+          style="display:none;"
+        ></div>
+
+        <button
+          type="button"
+          id="areaInfoTourismButton"
+          class="area-info-category-button"
+          data-list-id="areaInfoTourismList"
+          style="display:none;"
+        >
+          <span data-i18n="area_info_tourism_label">🏝️ 観光施設</span>
+        </button>
+
+        <div
+          id="areaInfoTourismList"
+          class="area-info-category-list"
+          style="display:none;"
+        ></div>
+
+      </div>
+
+    </section>
+
     <section
       id="aiConciergeChatSection"
       class="suggestion-highlight-section"
     >
 
       <span class="suggestion-highlight-heading" data-i18n="ai_concierge_chat_heading">
-        🤖 マチナウAI
+        気になることを聞く
       </span>
 
       <div
         id="aiConciergeChatMessages"
         class="ai-concierge-chat-messages"
       ></div>
-
-      <!-- マチナウAI一本化 Phase1｜第一声の下に表示するクイック返信。
-           押されたら文字列をそのまま既存sendAiConciergeChatMessage()へ渡す
-           だけで、専用のAI処理・専用APIは作らない。最初のユーザー発言後は
-           sendAiConciergeChatMessage()内で非表示にする。 -->
-      <div
-        id="aiConciergeChatQuickReplies"
-        class="ai-concierge-chat-quick-replies"
-      >
-        <button
-          type="button"
-          class="ai-concierge-chat-quick-reply-button"
-          data-i18n="ai_concierge_quick_reply_no_plan"
-        >
-          ノープラン
-        </button>
-        <button
-          type="button"
-          class="ai-concierge-chat-quick-reply-button"
-          data-i18n="ai_concierge_quick_reply_nearby"
-        >
-          近場で楽しみたい
-        </button>
-        <button
-          type="button"
-          class="ai-concierge-chat-quick-reply-button"
-          data-i18n="ai_concierge_quick_reply_rainy_ok"
-        >
-          雨でも楽しみたい
-        </button>
-      </div>
 
       <p
         id="aiConciergeChatStatus"
