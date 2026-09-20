@@ -8610,6 +8610,25 @@ function getLocation() {
               // 組み立てるのみ)。
               renderAreaInfoButtons();
 
+              // SNS街巡回(socialPatrol) Phase1｜新しい地域が確定した
+              // 時点で、前の地域のSNS巡回結果をいったんクリアしてから
+              // (古い地域の話題を新しい地域の下に出し続けない)、新しい
+              // 地域について非同期でSNS街巡回を開始する。結果は
+              // triggerSocialPatrolForArea()内でgpsSessionIdを確認した
+              // 上で反映される。
+              currentSocialPatrolFindings =
+                [];
+
+              currentSocialPatrolChecked =
+                false;
+
+              if (SOCIAL_PATROL_TRAVELER_DISPLAY_ENABLED) {
+                triggerSocialPatrolForArea(
+                  areaName,
+                  suggestionGpsSessionId
+                );
+              }
+
               triggerLocationBasedCollection(
                 areaName
               );
@@ -11138,6 +11157,25 @@ function buildAwarenessNoticeText(
 // getLocation()から呼ばれる(60秒タイマー等での自動再判定はしない)。
 // タップ先は既存openShopModal()/scrollToShops()のみで、AIチャットへは
 // 一切遷移させない。
+// SNS街巡回(socialPatrol) Phase1｜本部指示による最小feature flag。
+// 「実装できた」と「Productionで実際にSNSを巡回できた」は別物であり、
+// 実地試験で意味のある話題を発見できると確認できるまで、一般旅行者の
+// 画面には一切表示しない。falseの間はtriggerSocialPatrolForArea()自体を
+// 呼び出さない(サーバー側api/moderate-submission.jsのmode:"socialPatrol"
+// 自体は生きたまま、Claude Code側からの直接呼び出しによる実地試験は可能)。
+// trueへ切り替えるのは本部の判断のみ。
+const SOCIAL_PATROL_TRAVELER_DISPLAY_ENABLED =
+  false;
+
+// SNS街巡回(socialPatrol) Phase1｜GPS取得のたびに毎回このセッション内で
+// 結果を保持し直す(古いGPSセッションの応答が後から届いても上書きしない
+// よう、machinauSuggestionGpsSessionIdと同じ考え方でガードする)。
+let currentSocialPatrolFindings =
+  [];
+
+let currentSocialPatrolChecked =
+  false;
+
 function renderAwarenessNotices() {
   const section =
     document.getElementById(
@@ -11210,13 +11248,34 @@ function renderAwarenessNotices() {
     );
   }
 
+  // SNS街巡回(socialPatrol) Phase1｜見つかった話題は、SNS投稿本文の転載を
+  // しないため既存openShopModal()等のタップ詳細は持たせず、非対話の
+  // <p>としてそのまま追加する(タップ先が無いことをボタンにしない見た目で
+  // 明示する)。findingsは既にサーバー側sanitizeSocialPatrolFinding()で
+  // 検証済みの短文のみ。
+  currentSocialPatrolFindings.forEach(
+    function(finding) {
+      itemsHtml.push(
+        '<p class="awareness-notice-item awareness-notice-social">' +
+        escapeHtml(finding.summary) +
+        "</p>"
+      );
+    }
+  );
+
   if (itemsHtml.length === 0) {
     list.innerHTML =
       "";
 
+    // SNS巡回が実際に実行され(checked:true)、それでも何も見つからなかった
+    // 場合だけ、SNSに言及した空メッセージへ切り替える。巡回が未実行/失敗
+    // (checked:false)の場合は、取得していないものを「確認した」と
+    // 表現しないため、既存の中立な空メッセージを維持する(本部指示)。
     emptyMessage.textContent =
       getMachinauTranslation(
-        "awareness_notices_empty",
+        currentSocialPatrolChecked
+          ? "awareness_notices_empty_social_checked"
+          : "awareness_notices_empty",
         language
       );
 
@@ -11290,6 +11349,83 @@ function initializeAwarenessNoticesInteractions() {
       }
     }
   );
+}
+
+
+// SNS街巡回(socialPatrol) Phase1｜GPS取得/更新のたびに呼ぶ(移動だけでの
+// 自動再取得はしない、既存の「近くの今」パネルと同じトリガー方針)。
+// サーバー側(api/moderate-submission.js、mode:"socialPatrol")が地域単位の
+// Firestoreキャッシュ(3時間)を持つため、同じ地域への短時間の連続アクセス
+// でOpenAI呼び出しが重複することはない。応答が届いた時点でgpsSessionIdが
+// 既に古くなっていれば(別の場所へ移動済み)、結果は反映しない。
+async function triggerSocialPatrolForArea(
+  areaName,
+  gpsSessionId
+) {
+  try {
+    const idToken =
+      await getAnonymousIdTokenForLocationCollection();
+
+    const response =
+      await fetch(
+        "/api/moderate-submission",
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + idToken
+          },
+
+          body: JSON.stringify({
+            mode: "socialPatrol",
+            targetArea: areaName
+          })
+        }
+      );
+
+    let responseData =
+      null;
+
+    try {
+      responseData =
+        await response.json();
+    } catch (jsonError) {
+      return;
+    }
+
+    if (
+      gpsSessionId !==
+      machinauSuggestionGpsSessionId
+    ) {
+      // 応答が届く間に別の場所へ移動済み。古い地域の結果を今の画面へ
+      // 反映しない。
+      return;
+    }
+
+    if (
+      !response.ok ||
+      !responseData ||
+      responseData.success !== true
+    ) {
+      // 失敗時は「巡回していない」既存の中立表示のまま何もしない
+      // (取得できていないものを取得したように見せない)。
+      return;
+    }
+
+    currentSocialPatrolChecked =
+      responseData.checked === true;
+
+    currentSocialPatrolFindings =
+      Array.isArray(responseData.findings)
+        ? responseData.findings
+        : [];
+
+    renderAwarenessNotices();
+  } catch (error) {
+    // SNS街巡回は補助機能のため、失敗しても「近くの今」の既存表示
+    // (街を見るAI・店舗由来)には一切影響させない。
+  }
 }
 
 

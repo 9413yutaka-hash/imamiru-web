@@ -204,6 +204,15 @@ const MACHINAU_TRANSLATIONS = {
     en: "Nothing notable found nearby yet."
   },
 
+  // SNS街巡回(socialPatrol) Phase1｜巡回が実際に実行され(checked:true)、
+  // それでも何も見つからなかった場合だけ表示する。巡回が未実行/失敗の
+  // 場合はawareness_notices_emptyのまま(取得していないものを確認したと
+  // 表現しないため)。
+  awareness_notices_empty_social_checked: {
+    ja: "SNSでは今のところ、旅行者向けに特に気になる情報は見つからなかったよ。",
+    en: "Nothing especially traveler-relevant found on social media right now."
+  },
+
   // 初心回帰後の新トップ体験 Phase1｜街情報ボタン。マチナウが全情報を
   // 押し付けず、興味を持った人だけが自分で開く入口の見出し・ラベル。
   area_info_heading: {

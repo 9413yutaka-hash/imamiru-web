@@ -7161,6 +7161,839 @@ async function handleCityInfoGetRequest(
 }
 
 
+// ============================================================
+// SNS街巡回(socialPatrol) Phase1
+// ============================================================
+// 目的：SNS投稿を取得・保存・転載するのではなく、「街を見回して、旅行者が
+// 知らなそうな話題が出ていれば、その存在・傾向だけを短く伝える」機能。
+// 技術的には既存callOpenAiRegionProfileResearchGroup()(AI地域編集部)と
+// 全く同じ、Production実績のある構成(web_search＋Structured Outputs＋
+// include:["web_search_call.action.sources"])を再利用する。新しい
+// Vercel Functionは作らない(既存api/moderate-submission.jsへのmode追加)。
+const SOCIAL_PATROL_RESULTS_COLLECTION =
+  "socialPatrolResults";
+
+const SOCIAL_PATROL_MODEL =
+  process.env.AI_SOCIAL_PATROL_MODEL ||
+  "gpt-5.6-terra";
+
+const SOCIAL_PATROL_ENDPOINT =
+  "https://api.openai.com/v1/responses";
+
+const SOCIAL_PATROL_REASONING_EFFORT =
+  "medium";
+
+// web_searchを伴うためcityInfo/regionProfileResearchと同じ60秒に揃える。
+const SOCIAL_PATROL_TIMEOUT_MS =
+  60000;
+
+const SOCIAL_PATROL_TARGET_AREA_MAX_LENGTH =
+  40;
+
+const SOCIAL_PATROL_SUMMARY_MAX_LENGTH =
+  80;
+
+// 「近くの今」を情報の羅列にしないため、SNS巡回発見も少数に絞る。
+const SOCIAL_PATROL_MAX_FINDINGS =
+  3;
+
+// 「今日/今の話題」を扱うため、この街の情報(90日)のような長期キャッシュは
+// 適さない一方、GPS取得のたびに毎回web_searchを課金するのは本部指示
+// (「100人が開いたから100回検索する設計は禁止」)に反する。今日という
+// 時間粒度に対して安全側に短く、かつ同一地域への短時間の連続アクセスを
+// 吸収できる3時間を採用する(調整余地のある値として明示)。
+const SOCIAL_PATROL_CACHE_MILLISECONDS =
+  3 * 60 * 60 * 1000;
+
+const SOCIAL_PATROL_SCHEMA_VERSION =
+  1;
+
+// 話題の種類。安全・災害系のtopicは意図的に含めない(構造的に出力させない
+// ことで、本部指示「安全情報はSNSを最終根拠にしない」をschemaレベルで担保
+// する。instructions側の注意書きだけに頼らない)。
+const SOCIAL_PATROL_ALLOWED_TOPICS =
+  [
+    "event",
+    "festival",
+    "street_walk",
+    "seasonal",
+    "closure_or_change",
+    "other"
+  ];
+
+const SOCIAL_PATROL_ALLOWED_PLATFORMS =
+  [
+    "instagram",
+    "x",
+    "tiktok",
+    "facebook",
+    "web",
+    "unknown"
+  ];
+
+const SOCIAL_PATROL_ALLOWED_CONFIDENCE =
+  [
+    "low",
+    "medium",
+    "high"
+  ];
+
+const SOCIAL_PATROL_ALLOWED_TIME_RELEVANCE =
+  [
+    "today",
+    "this_week",
+    "ongoing",
+    "unknown"
+  ];
+
+// 「1件しか確認できていないのに『いくつか投稿がある』と言わない」を
+// 構造的に守るための識別子。Terra自身の自己申告に加え、後述の
+// sanitizeSocialPatrolFinding()がsummary文言との矛盾を検知する
+// 安全網(instructions文言だけに頼らない、二重防御)も持つ。
+const SOCIAL_PATROL_ALLOWED_EVIDENCE_LEVELS =
+  [
+    "single_mention",
+    "multiple_mentions"
+  ];
+
+// evidenceLevel:"single_mention"なのに、summary側で「複数」を示唆する
+// 表現が使われていた場合、そのfinding自体を安全側で除外する
+// (本部指示：1件しか確認できていないのに「いくつか」「話題」と言わない)。
+const SOCIAL_PATROL_MULTIPLE_SOURCE_KEYWORDS =
+  [
+    "いくつか",
+    "複数",
+    "多く",
+    "several",
+    "multiple",
+    "many posts",
+    "many people"
+  ];
+
+function buildSocialPatrolJsonSchema() {
+  return {
+    type: "json_schema",
+    name: "social_patrol_result",
+    strict: true,
+
+    schema: {
+      type: "object",
+
+      properties: {
+        checked: {
+          type: "boolean"
+        },
+
+        findings: {
+          type: "array",
+
+          items: {
+            type: "object",
+
+            properties: {
+              summary: {
+                type: "string"
+              },
+
+              topic: {
+                type: "string",
+                enum: SOCIAL_PATROL_ALLOWED_TOPICS
+              },
+
+              sourcePlatform: {
+                type: "string",
+                enum: SOCIAL_PATROL_ALLOWED_PLATFORMS
+              },
+
+              confidence: {
+                type: "string",
+                enum: SOCIAL_PATROL_ALLOWED_CONFIDENCE
+              },
+
+              timeRelevance: {
+                type: "string",
+                enum: SOCIAL_PATROL_ALLOWED_TIME_RELEVANCE
+              },
+
+              evidenceLevel: {
+                type: "string",
+                enum: SOCIAL_PATROL_ALLOWED_EVIDENCE_LEVELS
+              }
+            },
+
+            required: [
+              "summary",
+              "topic",
+              "sourcePlatform",
+              "confidence",
+              "timeRelevance",
+              "evidenceLevel"
+            ],
+
+            additionalProperties: false
+          }
+        }
+      },
+
+      required: ["checked", "findings"],
+      additionalProperties: false
+    }
+  };
+}
+
+function buildSocialPatrolInstructions() {
+  return (
+    "You are Machinau's town-watching lookout. Your ONLY job this turn: " +
+    "check whether there is anything on the public web/social media " +
+    "about the given Okinawan town right now that a traveler would " +
+    "genuinely find useful to know about — NOT things they would have " +
+    "searched for anyway, but things they wouldn't have known to look " +
+    "for. " +
+
+    "\n\nWHAT YOU ARE NOT DOING: you are not writing an article, not " +
+    "copying or quoting any post's text, not describing photos/videos in " +
+    "detail, not treating a social media post as Machinau's own verified " +
+    "first-hand information. \"summary\" must be YOUR OWN short " +
+    "description of WHAT KIND of thing is being talked about — never a " +
+    "copy-paste or close paraphrase of the original post's wording. " +
+
+    "\n\nWHAT TO LOOK FOR: today/this-week events, festivals, " +
+    "\"michi-junee\"-style town walks, seasonal happenings, sudden " +
+    "closures or schedule changes, or other genuinely time-relevant " +
+    "local topics. Do not limit yourself to a fixed keyword list — " +
+    "search the way a curious local would, varying your queries (the " +
+    "town name alone, the town name plus \"today\"/\"event\"/platform " +
+    "names/festival-related words, etc.) to find what's actually " +
+    "happening, not just what a generic tourist search would already " +
+    "surface. " +
+
+    "\n\nNEVER include disaster, safety, evacuation, typhoon, tsunami, " +
+    "or similar warnings/emergency information as a finding here — " +
+    "Machinau has a separate, official-source-based system for that, " +
+    "and mixing an unverified social media mention into that category " +
+    "would be dangerous. If you happen to see such a post, ignore it for " +
+    "this task entirely (do not create a finding for it). " +
+
+    "\n\nHONESTY ABOUT HOW MUCH YOU FOUND (critical): set " +
+    "\"evidenceLevel\" truthfully. Use \"single_mention\" when you found " +
+    "only one independent public post/page about this specific topic — " +
+    "in that case your summary must describe it as a single mention " +
+    "(e.g. \"○○について投稿が出てるみたい\"), and you must NEVER use " +
+    "words implying multiple sources (\"いくつか\"/\"複数\"/\"話題になって" +
+    "いる\"/\"several\"/\"multiple\") for it. Use \"multiple_mentions\" " +
+    "ONLY when you actually found more than one genuinely independent " +
+    "public result about the same topic — only then may your summary " +
+    "say something like \"いくつか見つかった\"/\"複数投稿されている\". " +
+    "When genuinely unsure, prefer \"single_mention\" and the more " +
+    "modest phrasing — never round up. " +
+
+    "\n\nOFFICIAL VS. SOCIAL (critical): never present a social-media-" +
+    "only finding as if it were confirmed official fact. If, in the same " +
+    "search, you also find what looks like an official/primary source " +
+    "(town hall, tourism board, the venue's own site) confirming the " +
+    "same thing, you may phrase it as something like \"SNSでも○○の情報が" +
+    "出てるよ。公式案内も確認できるよ。\" and use confidence:\"high\". " +
+    "Otherwise, keep the phrasing clearly social-media-sourced (e.g. " +
+    "\"SNSでは○○という投稿が出てるみたい。\") and never claim it as a " +
+    "confirmed fact. For anything that would actually change a " +
+    "traveler's plans (an event's date/time, whether something is " +
+    "closed, safety-relevant details), prefer official sources when " +
+    "available and lower your confidence when you only have a social " +
+    "media mention. " +
+
+    "\n\nOUTPUT: at most " + SOCIAL_PATROL_MAX_FINDINGS + " findings, " +
+    "each summary a short, natural, traveler-facing sentence in " +
+    "Japanese (not a bullet, not a headline, not a copied caption). Set " +
+    "\"checked\":true once you have actually performed a web search for " +
+    "this task (even if you found nothing worth reporting) — never set " +
+    "it to true without actually searching. If you found nothing " +
+    "genuinely worth telling a traveler, return an empty findings array " +
+    "rather than inventing something to fill it. Do not output anything " +
+    "other than the JSON object described by the schema."
+  );
+}
+
+function buildSocialPatrolInputItems(
+  targetArea,
+  prefecture
+) {
+  return [
+    {
+      role: "user",
+
+      content: [
+        {
+          type: "input_text",
+
+          text:
+            JSON.stringify(
+              {
+                targetArea: targetArea,
+                prefecture: prefecture,
+                country: "日本",
+                currentDateTimeJst:
+                  new Date().toLocaleString(
+                    "ja-JP",
+                    { timeZone: "Asia/Tokyo" }
+                  )
+              }
+            )
+        }
+      ]
+    }
+  ];
+}
+
+// summaryとevidenceLevelの矛盾を検知する安全網(instructions文言だけに
+// 頼らない、二重防御)。矛盾するfindingは安全側で丸ごと除外する
+// (無理に書き換えて別の誤りを生まないため)。
+function socialPatrolSummaryClaimsMultipleSources(
+  summaryText
+) {
+  const lowerCaseSummary =
+    summaryText.toLowerCase();
+
+  return SOCIAL_PATROL_MULTIPLE_SOURCE_KEYWORDS.some(
+    function(keyword) {
+      return lowerCaseSummary.includes(
+        keyword.toLowerCase()
+      );
+    }
+  );
+}
+
+function sanitizeSocialPatrolFinding(
+  rawFinding
+) {
+  if (
+    !rawFinding ||
+    typeof rawFinding !== "object"
+  ) {
+    return null;
+  }
+
+  const summary =
+    stripCitationArtifactsFromAiText(
+      sanitizeRegionEditorialText(
+        rawFinding.summary,
+        SOCIAL_PATROL_SUMMARY_MAX_LENGTH
+      )
+    );
+
+  if (summary === "") {
+    return null;
+  }
+
+  const topic =
+    SOCIAL_PATROL_ALLOWED_TOPICS.includes(rawFinding.topic)
+      ? rawFinding.topic
+      : "other";
+
+  const sourcePlatform =
+    SOCIAL_PATROL_ALLOWED_PLATFORMS.includes(rawFinding.sourcePlatform)
+      ? rawFinding.sourcePlatform
+      : "unknown";
+
+  const confidence =
+    SOCIAL_PATROL_ALLOWED_CONFIDENCE.includes(rawFinding.confidence)
+      ? rawFinding.confidence
+      : "low";
+
+  const timeRelevance =
+    SOCIAL_PATROL_ALLOWED_TIME_RELEVANCE.includes(rawFinding.timeRelevance)
+      ? rawFinding.timeRelevance
+      : "unknown";
+
+  const evidenceLevel =
+    SOCIAL_PATROL_ALLOWED_EVIDENCE_LEVELS.includes(rawFinding.evidenceLevel)
+      ? rawFinding.evidenceLevel
+      : "single_mention";
+
+  // 安全網：single_mentionなのに「いくつか」「複数」等を主張している
+  // findingは、無理に修正せず丸ごと除外する。
+  if (
+    evidenceLevel === "single_mention" &&
+    socialPatrolSummaryClaimsMultipleSources(summary)
+  ) {
+    return null;
+  }
+
+  return {
+    summary: summary,
+    topic: topic,
+    sourcePlatform: sourcePlatform,
+    confidence: confidence,
+    timeRelevance: timeRelevance,
+    evidenceLevel: evidenceLevel
+  };
+}
+
+async function callOpenAiSocialPatrol(
+  payload
+) {
+  const apiKey =
+    process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    const configError =
+      new Error("OPENAI_API_KEY が設定されていません。");
+
+    configError.isMissingApiKey =
+      true;
+
+    throw configError;
+  }
+
+  const instructions =
+    buildSocialPatrolInstructions();
+
+  const inputItems =
+    buildSocialPatrolInputItems(
+      payload.targetArea,
+      payload.prefecture
+    );
+
+  const controller =
+    new AbortController();
+
+  const timeoutId =
+    setTimeout(
+      function() {
+        controller.abort();
+      },
+      SOCIAL_PATROL_TIMEOUT_MS
+    );
+
+  let response;
+
+  try {
+    try {
+      response =
+        await fetch(
+          SOCIAL_PATROL_ENDPOINT,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer " + apiKey
+            },
+
+            body: JSON.stringify({
+              model: SOCIAL_PATROL_MODEL,
+              instructions: instructions,
+              input: inputItems,
+
+              tools: [
+                {
+                  type: "web_search",
+                  search_context_size: "low"
+                }
+              ],
+
+              tool_choice: "auto",
+              include: ["web_search_call.action.sources"],
+
+              text: {
+                format:
+                  buildSocialPatrolJsonSchema()
+              },
+
+              reasoning: {
+                effort: SOCIAL_PATROL_REASONING_EFFORT
+              }
+            }),
+
+            signal: controller.signal
+          }
+        );
+    } catch (fetchError) {
+      if (fetchError.name === "AbortError") {
+        const timeoutError =
+          new Error("SNS街巡回がタイムアウトしました。");
+
+        timeoutError.isTransient =
+          true;
+
+        timeoutError.isTimeout =
+          true;
+
+        throw timeoutError;
+      }
+
+      const networkError =
+        new Error("SNS街巡回の呼び出しに失敗しました。");
+
+      networkError.isTransient =
+        true;
+
+      networkError.isNetworkError =
+        true;
+
+      throw networkError;
+    }
+  } finally {
+    clearTimeout(
+      timeoutId
+    );
+  }
+
+  if (!response.ok) {
+    const httpError =
+      new Error(
+        "OpenAI APIがエラーを返しました。status=" + response.status
+      );
+
+    httpError.isHttpError =
+      true;
+
+    httpError.httpStatus =
+      response.status;
+
+    httpError.isTransient =
+      true;
+
+    throw httpError;
+  }
+
+  let responseData;
+
+  try {
+    responseData =
+      await response.json();
+  } catch (jsonError) {
+    const parseError =
+      new Error("OpenAI APIの応答を解析できませんでした。");
+
+    parseError.isJsonError =
+      true;
+
+    parseError.isTransient =
+      true;
+
+    throw parseError;
+  }
+
+  const outputItems =
+    Array.isArray(responseData.output)
+      ? responseData.output
+      : [];
+
+  // 内部検証用にのみ保持する(旅行者画面へURLを出す仕様にはしない)。
+  // 実際にweb_searchが参照した実URLのみで、Terra自身の出力(findings)には
+  // 一切URLを書かせない(本部指示：sourceUrlをAIに創作させない)。
+  const consultedSources =
+    extractActualSourcesFromResponsesOutput(
+      outputItems
+    );
+
+  const rawText =
+    extractOutputTextFromResponsesOutput(
+      outputItems
+    );
+
+  if (rawText.trim() === "") {
+    const shapeError =
+      new Error("OpenAI APIの応答形式が不正です。");
+
+    shapeError.isJsonError =
+      true;
+
+    shapeError.isTransient =
+      true;
+
+    throw shapeError;
+  }
+
+  let parsedResult;
+
+  try {
+    parsedResult =
+      JSON.parse(rawText);
+  } catch (parseError) {
+    const shapeError =
+      new Error("SNS街巡回の応答がJSON形式ではありませんでした。");
+
+    shapeError.isJsonError =
+      true;
+
+    shapeError.isTransient =
+      true;
+
+    throw shapeError;
+  }
+
+  const checked =
+    parsedResult.checked === true;
+
+  const rawFindings =
+    Array.isArray(parsedResult.findings)
+      ? parsedResult.findings
+      : [];
+
+  const findings =
+    rawFindings
+      .map(sanitizeSocialPatrolFinding)
+      .filter(
+        function(finding) {
+          return finding !== null;
+        }
+      )
+      .slice(0, SOCIAL_PATROL_MAX_FINDINGS);
+
+  return {
+    checked: checked,
+    findings: findings,
+    consultedSourceCount: consultedSources.length,
+
+    // Production実地試験(2026-09-20)専用の内部監査用データ。通常の
+    // レスポンス組み立て(handleSocialPatrolRequest)では
+    // requestBody.includeDebugSourcesがtrueの場合にのみこのまま
+    // 中継し、それ以外は破棄する(旅行者向けの通常応答には一切含めない、
+    // 本部指示「source URLを不用意に表示しない」への対応)。
+    consultedSources: consultedSources
+  };
+}
+
+async function fetchSocialPatrolResultOrNull(
+  database,
+  regionKey
+) {
+  const documentSnapshot =
+    await database
+      .collection(SOCIAL_PATROL_RESULTS_COLLECTION)
+      .doc(regionKey)
+      .get();
+
+  if (!documentSnapshot.exists) {
+    return null;
+  }
+
+  const data =
+    documentSnapshot.data() || {};
+
+  const expiresAtMilliseconds =
+    data.expiresAt &&
+    typeof data.expiresAt.toMillis === "function"
+      ? data.expiresAt.toMillis()
+      : null;
+
+  if (
+    expiresAtMilliseconds === null ||
+    expiresAtMilliseconds <= Date.now()
+  ) {
+    return null;
+  }
+
+  if (typeof data.checked !== "boolean") {
+    return null;
+  }
+
+  return {
+    checked: data.checked,
+    findings:
+      Array.isArray(data.findings)
+        ? data.findings
+        : []
+  };
+}
+
+async function saveSocialPatrolResult(
+  database,
+  regionKey,
+  payload
+) {
+  const expiresAtDate =
+    new Date(
+      Date.now() +
+      SOCIAL_PATROL_CACHE_MILLISECONDS
+    );
+
+  await database
+    .collection(SOCIAL_PATROL_RESULTS_COLLECTION)
+    .doc(regionKey)
+    .set({
+      regionKey: regionKey,
+      area: payload.area,
+      checked: payload.checked,
+      findings: payload.findings,
+
+      generatedAt:
+        FieldValue.serverTimestamp(),
+
+      expiresAt:
+        Timestamp.fromDate(expiresAtDate),
+
+      model: SOCIAL_PATROL_MODEL,
+      schemaVersion: SOCIAL_PATROL_SCHEMA_VERSION
+    });
+}
+
+// 旅行者本人のGPS取得/更新をトリガーに呼ばれる公開機能のため、
+// handleCityInfoGetRequest()と同じ認証方式(有効なFirebase IDトークンを
+// 持つユーザーなら誰でも可、匿名認証も許可)を採用する。
+async function handleSocialPatrolRequest(
+  request,
+  response
+) {
+  try {
+    const idToken =
+      readBearerToken(
+        request
+      );
+
+    if (idToken === "") {
+      return response.status(401).json({
+        success: false,
+        message: "認証情報がありません。"
+      });
+    }
+
+    const app =
+      getFirebaseAdminApp();
+
+    try {
+      await getAuth(app)
+        .verifyIdToken(
+          idToken
+        );
+    } catch (verifyError) {
+      return response.status(401).json({
+        success: false,
+        message: "認証情報が正しくありません。"
+      });
+    }
+
+    const database =
+      getFirestore(app);
+
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    const targetArea =
+      sanitizeRegionEditorialText(
+        requestBody.targetArea,
+        SOCIAL_PATROL_TARGET_AREA_MAX_LENGTH
+      );
+
+    if (targetArea === "") {
+      return response.status(400).json({
+        success: false,
+        message: "対象市区町村を指定してください。"
+      });
+    }
+
+    // Production実地試験(2026-09-20)専用。既存app.js側は絶対にこの
+    // フィールドを送らないため、通常の旅行者アクセスでは常にfalseになる。
+    // trueの場合のみ、実際にweb_searchが参照したsource URL一覧を応答へ
+    // 含める(本部指示による一時的な監査目的。恒常的な旅行者向け応答には
+    // 含めない)。
+    const includeDebugSources =
+      requestBody.includeDebugSources === true;
+
+    // 「この街の情報」と同じ既存の安全な鍵生成をそのまま再利用する
+    // (新しいFirestoreスキーマ設計を増やさない)。
+    const regionKey =
+      buildCityInfoRegionKey(
+        CITY_INFO_PREFECTURE,
+        targetArea
+      );
+
+    if (!regionKey) {
+      return response.status(400).json({
+        success: false,
+        message: "対象市区町村を正しく処理できませんでした。"
+      });
+    }
+
+    const cachedResult =
+      await fetchSocialPatrolResultOrNull(
+        database,
+        regionKey
+      );
+
+    if (cachedResult) {
+      return response.status(200).json({
+        success: true,
+        cached: true,
+        checked: cachedResult.checked,
+        findings: cachedResult.findings
+      });
+    }
+
+    let patrolResult;
+
+    try {
+      patrolResult =
+        await callOpenAiSocialPatrol(
+          {
+            targetArea: targetArea,
+            prefecture: CITY_INFO_PREFECTURE
+          }
+        );
+    } catch (aiError) {
+      console.error(
+        "SNS街巡回：生成エラー：",
+        aiError
+      );
+
+      return response.status(200).json({
+        success: false,
+        message: "SNS街巡回中にエラーが発生しました。"
+      });
+    }
+
+    try {
+      await saveSocialPatrolResult(
+        database,
+        regionKey,
+        {
+          area: targetArea,
+          checked: patrolResult.checked,
+          findings: patrolResult.findings
+        }
+      );
+    } catch (saveError) {
+      // 保存に失敗しても、今回の結果はそのまま返す(体験を優先する)。
+      // 次回アクセス時は未保存のため再実行されるだけで実害は無い。
+      console.error(
+        "SNS街巡回：保存エラー：",
+        saveError
+      );
+    }
+
+    return response.status(200).json(
+      Object.assign(
+        {
+          success: true,
+          cached: false,
+          checked: patrolResult.checked,
+          findings: patrolResult.findings
+        },
+
+        includeDebugSources
+          ? {
+              debugConsultedSources: patrolResult.consultedSources
+            }
+          : {}
+      )
+    );
+  } catch (error) {
+    console.error(
+      "SNS街巡回：処理エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message: "SNS街巡回中にエラーが発生しました。"
+    });
+  }
+}
+
+
 // Ver1.8 Phase1｜AIコンシェルジュ本体。認証はhandleCloudinarySignatureRequest()
 // と同じ匿名Firebase AuthenticationのBearer Token検証をそのまま再利用する。
 // AI呼び出し・応答検証のいずれかで失敗しても、常にsuccess:falseのJSONを
@@ -11779,6 +12612,17 @@ export default async function handler(
     requestBody.mode === "cityInfoGet"
   ) {
     return handleCityInfoGetRequest(
+      request,
+      response
+    );
+  }
+
+  // SNS街巡回(socialPatrol) Phase1｜既存モードのいずれにも一切触れない。
+  // cityInfoGetと同様、公開機能(旅行者向け)のため管理者/Editor限定にしない。
+  if (
+    requestBody.mode === "socialPatrol"
+  ) {
+    return handleSocialPatrolRequest(
       request,
       response
     );
