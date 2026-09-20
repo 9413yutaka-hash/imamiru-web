@@ -139,27 +139,30 @@ const MACHINAU_TRANSLATIONS = {
     en: "Ask something"
   },
 
-  // マチナウAI一本化 Phase1｜第一声はOpenAIを呼ばず、既に取得済みの
-  // userAreaName/latestWeatherForMachinauSuggestionだけでクライアント側
-  // テンプレートから組み立てる({AREA}を地域名で置換)。
+  // 初心回帰後の新トップ体験 Phase1修正｜第一声はOpenAIを呼ばず、既に
+  // 取得済みのuserAreaNameだけでクライアント側テンプレートから組み立てる
+  // ({AREA}を地域名で置換)。本部指示により、天気の話題・予定を聞く問いかけ・
+  // 回答を要求する言い回しは一切含めない、静かな案内文へ変更した
+  // (4キーとも天気による分岐を維持する必要が無くなったため、rain/clearは
+  // area_onlyと同じ文言にしている。JSの分岐ロジック自体は変更していない)。
   ai_concierge_initial_rain: {
-    ja: "{AREA}は今、雨が降るところもありそう。今日はどんな予定？\nまだ決めてなければ、一緒に考えるよ。",
-    en: "It looks like it might rain in {AREA} right now. What's the plan for today?\nIf you haven't decided yet, let's figure it out together."
+    ja: "{AREA}にいるんだね。気になることがあれば、ここで聞けるよ。",
+    en: "So you're in {AREA}. If anything comes to mind, you can ask here."
   },
 
   ai_concierge_initial_clear: {
-    ja: "{AREA}は今、外も楽しめそう。今日はどんな予定？\nまだ決めてなければ、一緒に考えるよ。",
-    en: "The weather looks good for being outside in {AREA} right now. What's the plan for today?\nIf you haven't decided yet, let's figure it out together."
+    ja: "{AREA}にいるんだね。気になることがあれば、ここで聞けるよ。",
+    en: "So you're in {AREA}. If anything comes to mind, you can ask here."
   },
 
   ai_concierge_initial_area_only: {
-    ja: "{AREA}にいるんだね。今日はどんな予定？\nまだ決めてなければ、一緒に考えるよ。",
-    en: "So you're in {AREA}. What's the plan for today?\nIf you haven't decided yet, let's figure it out together."
+    ja: "{AREA}にいるんだね。気になることがあれば、ここで聞けるよ。",
+    en: "So you're in {AREA}. If anything comes to mind, you can ask here."
   },
 
   ai_concierge_initial_fallback: {
-    ja: "今日はどんな予定？\nまだ決めてなければ、一緒に考えるよ。",
-    en: "What's the plan for today?\nIf you haven't decided yet, let's figure it out together."
+    ja: "気になることがあれば、ここで聞けるよ。",
+    en: "If anything comes to mind, you can ask here."
   },
 
   // 初心回帰後の新トップ体験 Phase1｜「近くの『今』」パネルの見出しと、

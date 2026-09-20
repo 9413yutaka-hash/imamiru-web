@@ -11044,8 +11044,21 @@ function selectAwarenessNoticesForCurrentArea() {
     "official_today"
   );
 
+  // 「近くの『今』」Phase1修正｜Production実データ確認により、
+  // selectAiConciergeCandidates()が返す候補には、本来のイベント/観光・体験
+  // (category==="イベント"|"観光・体験"、街を見るAI由来)に加えて、
+  // 「常設店舗広告」(shop.isPermanentAd===true、自動失効しない通常営業の
+  // 店舗広告枠、無条件に埋め合わせとして混ざる)も含まれることを確認した。
+  // 後者は「今日だけ」の情報ではないため、個別の「今日、○○やってるみたい」
+  // という一言にはしない(isPermanentAd===trueを除外する)。この店舗広告は
+  // 既にselectGeneralShopCandidatesForAiConcierge()経由でhasGeneralShopInfo
+  // (一般店舗の要約導線)側に自然に含まれるため、情報自体は失われない。
   addHeadlineNotices(
-    selectAiConciergeCandidates(),
+    selectAiConciergeCandidates().filter(
+      function(shop) {
+        return shop.isPermanentAd !== true;
+      }
+    ),
     "traveler_suggestion"
   );
 
