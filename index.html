@@ -718,6 +718,15 @@
     </div>
   </header>
 
+  <!-- トップ画面再設計 STEP3｜旧ヒーロー(「今、沖縄で何が起きているか。」)を
+       削除し、現在地セクションより前に小さなオープニングを配置する。
+       巨大な広告エリアにはせず、1行のみ。 -->
+  <section class="opening-intro">
+    <p class="opening-intro-heading" data-i18n="opening_heading">
+      マチナウ、現在の街を見てみよう！
+    </p>
+  </section>
+
   <!-- 代表指示｜現在地セクションを最上部(ヘッダー直下)へ移動。
        文言・デザイン・GPSロジックは無変更、DOM位置のみ変更。
        .location-card は元々 <main> の外側 padding に依存していたため、
@@ -1005,48 +1014,6 @@
 
     </section>
   </div>
-
-  <section class="hero">
-    <div class="hero-inner">
-
-      <div class="hero-copy">
-
-        <div class="hero-kicker">
-          <span class="hero-kicker-dot"></span>
-          <span data-i18n="hero_kicker">沖縄の「今」をリアルタイム配信</span>
-        </div>
-
-        <h1 data-i18n="hero_heading">
-          今、沖縄で<br>
-          何が起きているか。
-        </h1>
-
-        <p class="hero-description" data-i18n="hero_description">
-          近くのお店、今日だけのイベント、旅先の<span class="hero-description-emphasis">偶然の寄り道</span>。
-          今の沖縄が、ひと目でわかる。
-        </p>
-
-      </div>
-
-      <div id="heroPhotoWrapper" class="hero-photo-wrapper" style="display:none;">
-        <button
-          id="heroPhotoButton"
-          type="button"
-          class="hero-photo-button"
-        >
-          <img
-            id="heroPhotoImage"
-            class="hero-photo-image"
-            src=""
-            alt=""
-          >
-        </button>
-      </div>
-
-    </div>
-
-    <div class="hero-wave" aria-hidden="true"></div>
-  </section>
 
   <main>
 

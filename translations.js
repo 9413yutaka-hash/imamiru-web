@@ -14,6 +14,16 @@
 // (ロジック側の変更は不要です)。
 
 const MACHINAU_TRANSLATIONS = {
+  // トップ画面再設計 STEP3｜旧ヒーロー(hero_heading等、下記に残置)を
+  // 廃止し、現在地セクションより前に置く新しいオープニングの1行。
+  opening_heading: {
+    ja: "マチナウ、現在の街を見てみよう！",
+    en: "Machinau — let's see your city right now!"
+  },
+
+  // トップ画面再設計 STEP3で旧ヒーローのDOMは削除したが、キーは既存の
+  // 「削除せず残す」方針に合わせて残置する(参照箇所は無くなったが、
+  // データとして残しても実害が無いため)。
   hero_heading: {
     ja: "今、沖縄で<br>何が起きているか。",
     en: "What's happening<br>in Okinawa right now."
