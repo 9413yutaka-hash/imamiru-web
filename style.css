@@ -176,7 +176,9 @@
     }
 
     .opening-visual-photo-wrapper {
-      max-width: 260px;
+      max-width: 520px;
+      margin-left: auto;
+      margin-right: auto;
     }
 
     .opening-visual-photo-button {
