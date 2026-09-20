@@ -1004,7 +1004,7 @@
           id="weatherLocationLabel"
           class="weather-location-label"
         >
-          現在地の天気
+          今いる街の天気
         </span>
 
         <p
@@ -1087,31 +1087,25 @@
 
     </section>
 
-    <!-- 初心回帰後の新トップ体験 Phase1｜現在地×現在時刻×情報管理室から、
-         会話を介さず「気づきの一言」として直接届ける新しい情報枠。
-         AIチャットへの入口にはしない(タップ先は既存openShopModal()/
-         scrollToShops()のみ)。GPSで現在地取得・更新された時にだけ
-         renderAwarenessNotices()で再判定する(移動だけでの自動更新はしない)。 -->
+    <!-- トップ画面整理｜旧「近くの『今』」(#awarenessNoticesSection)と
+         旧「気になることを聞く」(#aiConciergeChatSection、この下の
+         areaInfoSectionの後にあったため削除)の2枠を統合し、下に続く
+         店舗情報・街の声等へ誘導する1つの案内枠にする。関連するJS
+         (renderAwarenessNotices()・selectAwarenessNoticesForCurrentArea()・
+         initializeAiConciergeChat()・sendAiConciergeChatMessage()・
+         socialPatrol関連等)は削除せず、対象DOMが無くなったことで
+         既存のnullガードにより安全に何もしなくなるだけにとどめる
+         (本部指示：関係するJS/APIを推測で大規模削除しない)。表示/非表示は
+         既存2枠と同じくGPS取得後にだけrenderCityNowGuidance()で切り替える。 -->
     <section
-      id="awarenessNoticesSection"
+      id="cityNowGuidanceSection"
       class="suggestion-highlight-section"
       style="display:none;"
     >
 
-      <span class="suggestion-highlight-heading" data-i18n="awareness_notices_heading">
-        近くの「今」
+      <span class="suggestion-highlight-heading" data-i18n="city_now_guidance_message">
+        この街の「今」が届いているよ！下をチェック！
       </span>
-
-      <div
-        id="awarenessNoticesList"
-        class="awareness-notices-list"
-      ></div>
-
-      <p
-        id="awarenessNoticesEmptyMessage"
-        class="awareness-notices-empty-message"
-        style="display:none;"
-      ></p>
 
     </section>
 
@@ -1167,49 +1161,6 @@
         ></div>
 
       </div>
-
-    </section>
-
-    <section
-      id="aiConciergeChatSection"
-      class="suggestion-highlight-section"
-    >
-
-      <span class="suggestion-highlight-heading" data-i18n="ai_concierge_chat_heading">
-        気になることを聞く
-      </span>
-
-      <div
-        id="aiConciergeChatMessages"
-        class="ai-concierge-chat-messages"
-      ></div>
-
-      <p
-        id="aiConciergeChatStatus"
-        class="ai-concierge-chat-status"
-        style="display:none;"
-      ></p>
-
-      <form
-        id="aiConciergeChatForm"
-        class="ai-concierge-chat-form"
-      >
-        <input
-          id="aiConciergeChatInput"
-          class="ai-concierge-chat-input"
-          type="text"
-          autocomplete="off"
-          maxlength="200"
-          placeholder="例：南部を目指す"
-        >
-        <button
-          id="aiConciergeChatSendButton"
-          class="ai-concierge-chat-send-button"
-          type="submit"
-        >
-          送信
-        </button>
-      </form>
 
     </section>
 

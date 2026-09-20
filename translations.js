@@ -197,10 +197,20 @@ const MACHINAU_TRANSLATIONS = {
     en: "If anything comes to mind, you can ask here."
   },
 
+  // トップ画面整理｜旧「近くの『今』」「気になることを聞く」の2枠を
+  // 統合した1つの案内枠の文言。下に続く店舗情報・街の声等へ誘導する。
+  city_now_guidance_message: {
+    ja: "この街の「今」が届いているよ！下をチェック！",
+    en: "This city's \"now\" has arrived! Check it out below."
+  },
+
   // 初心回帰後の新トップ体験 Phase1｜「近くの『今』」パネルの見出しと、
   // 種類ごとの短い一言テンプレート({TITLE}を実際のタイトルで置換)。
   // AIが自然文を生成するのではなく、既存データのタイトルを固定テンプレート
-  // へ差し込むだけ(OpenAI呼び出しなし)。
+  // へ差し込むだけ(OpenAI呼び出しなし)。STEP後のトップ画面整理で
+  // #awarenessNoticesSection自体はDOMから削除したが、キーは既存の
+  // 「削除せず残す」方針に合わせて残置する(参照箇所は無くなったが、
+  // データとして残しても実害が無いため)。
   awareness_notices_heading: {
     ja: "近くの「今」",
     en: "What's happening nearby"
@@ -777,8 +787,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   weather_location_current: {
-    ja: "現在地の天気",
-    en: "Current Location Weather"
+    ja: "今いる街の天気",
+    en: "Weather in your area"
   },
 
   location_button_checking: {

@@ -8662,6 +8662,11 @@ function getLocation() {
               // 組み立てるのみ)。
               renderAreaInfoButtons();
 
+              // トップ画面整理｜旧「近くの『今』」「気になることを聞く」の
+              // 統合案内枠も同じタイミングでのみ表示判定する(新しい
+              // Firestore読み取り・API呼び出しは発生しない)。
+              renderCityNowGuidance();
+
               // SNS街巡回(socialPatrol) Phase1｜新しい地域が確定した
               // 時点で、前の地域のSNS巡回結果をいったんクリアしてから
               // (古い地域の話題を新しい地域の下に出し続けない)、新しい
@@ -11636,6 +11641,31 @@ function renderAreaInfoButtons() {
 
   section.style.display =
     (hasRoleInfo || hasTourismInfo)
+      ? ""
+      : "none";
+}
+
+
+// トップ画面整理｜旧「近くの『今』」「気になることを聞く」の2枠を統合した
+// 案内枠の表示制御。文言自体はdata-i18nの一括置換で言語切替に追従する
+// (buildAwarenessNoticeText()のような動的組み立てが無いため、既存の
+// renderAwarenessNotices()と違いswitchMachinauLanguage()側の再描画呼び出し
+// は不要)。表示/非表示の判定だけ既存2枠と同じくuserAreaNameの有無で行う。
+function renderCityNowGuidance() {
+  const section =
+    document.getElementById(
+      "cityNowGuidanceSection"
+    );
+
+  if (!section) {
+    return;
+  }
+
+  section.style.display =
+    (
+      typeof userAreaName === "string" &&
+      userAreaName !== ""
+    )
       ? ""
       : "none";
 }
