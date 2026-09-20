@@ -718,13 +718,40 @@
     </div>
   </header>
 
-  <!-- トップ画面再設計 STEP3｜旧ヒーロー(「今、沖縄で何が起きているか。」)を
-       削除し、現在地セクションより前に小さなオープニングを配置する。
-       巨大な広告エリアにはせず、1行のみ。 -->
-  <section class="opening-intro">
-    <p class="opening-intro-heading" data-i18n="opening_heading">
-      マチナウ、現在の街を見てみよう！
-    </p>
+  <!-- トップ画面再設計 STEP4｜代表承認済みの実写バナー画像を新しいビジュアル
+       入口として採用。画像内に既に「マチナウ、今の街の声を聞こう！」の
+       文言が入っているため、STEP3のopening-intro(HTMLテキストのみの
+       見出し)は削除し、二重表示にしない(opening_headingキー自体は
+       translations.jsに残置し、将来言語ごとのメインコピーをHTML側で
+       出す余地は残す)。既存のheroPhoto実投稿写真枠(#heroPhotoWrapper等、
+       GPS/Firestoreの既存ロジックは無変更のまま)をこのビジュアル直下へ
+       再配置して活かす。 -->
+  <section class="opening-visual">
+
+    <img
+      class="opening-visual-banner"
+      src="opening-visual-banner.png"
+      data-i18n-alt="opening_visual_alt"
+      alt="マチナウ、今の街の声を聞こう！"
+    >
+
+    <div class="opening-visual-photo-area">
+      <div id="heroPhotoWrapper" class="opening-visual-photo-wrapper" style="display:none;">
+        <button
+          id="heroPhotoButton"
+          type="button"
+          class="opening-visual-photo-button"
+        >
+          <img
+            id="heroPhotoImage"
+            class="opening-visual-photo-image"
+            src=""
+            alt=""
+          >
+        </button>
+      </div>
+    </div>
+
   </section>
 
   <!-- 代表指示｜現在地セクションを最上部(ヘッダー直下)へ移動。

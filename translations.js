@@ -15,10 +15,22 @@
 
 const MACHINAU_TRANSLATIONS = {
   // トップ画面再設計 STEP3｜旧ヒーロー(hero_heading等、下記に残置)を
-  // 廃止し、現在地セクションより前に置く新しいオープニングの1行。
+  // 廃止し、現在地セクションより前に置いた新しいオープニングの1行。
+  // STEP4で実写バナー画像に置き換えたためHTML上の参照は無くなったが、
+  // 将来言語ごとのメインコピーをHTML側で表示する余地を残すため残置する。
   opening_heading: {
     ja: "マチナウ、現在の街を見てみよう！",
     en: "Machinau — let's see your city right now!"
+  },
+
+  // トップ画面再設計 STEP4｜代表承認済み実写バナー画像(opening-visual-banner.png)
+  // のalt文言。画像内には既に日本語で「マチナウ、今の街の声を聞こう！」が
+  // 描かれているが、alt自体は画像内日本語だけに意味を依存させないよう
+  // 多言語で用意する(スクリーンリーダー・画像読み込み失敗時にも意味が
+  // 伝わるようにするため)。
+  opening_visual_alt: {
+    ja: "マチナウ、今の街の声を聞こう！",
+    en: "Machinau — hear what's happening in your city right now"
   },
 
   // トップ画面再設計 STEP3で旧ヒーローのDOMは削除したが、キーは既存の

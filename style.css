@@ -148,24 +148,55 @@
       }
     }
 
-    /* トップ画面再設計 STEP3｜旧ヒーロー(.hero、.hero-inner、.hero-copy、
-       .hero-kicker、.hero-description、.hero-photo-wrapper等、.hero-wave)は、
-       index.htmlからDOMごと削除したためCSSも削除した。style.cssは
-       index.html専用(他ページはいずれも独自のstyleを持ち、style.cssを
-       読み込んでいないことを確認済み)のため、他ページへの影響は無い。
-       新しいオープニング用の最小CSSに置き換える。 */
-    .opening-intro {
-      width: min(100%, 920px);
-      margin: 0 auto;
-      padding: 20px 18px 0;
+    /* トップ画面再設計 STEP4｜代表承認済みの実写バナー画像を新しい
+       ビジュアル入口にする。STEP3の.opening-intro(テキストのみの見出し)は
+       画像に同文言が含まれるため廃止し、この最小CSSへ置き換える。
+       PCでは横幅を活かすため、他セクションと違いmax-width制約を付けず
+       画面幅いっぱいに表示する。画像はheight:autoで全体を常に表示し、
+       中央の文言が切れないようにする(トリミングしない)。 */
+    .opening-visual {
+      width: 100%;
+      overflow: hidden;
     }
 
-    .opening-intro-heading {
-      margin: 0;
-      font-size: 19px;
-      font-weight: 900;
-      color: var(--navy);
-      line-height: 1.5;
+    .opening-visual-banner {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    /* 既存のheroPhoto実投稿写真枠(#heroPhotoWrapper等)を、このビジュアル
+       直下へ再配置するための最小コンテナ。既存の.hero-photo-wrapper/
+       .hero-photo-button/.hero-photo-imageと同じ数値(260px・4:3・700pxで
+       16:9)をそのまま踏襲し、独自のデザインは加えない。 */
+    .opening-visual-photo-area {
+      width: min(100%, 920px);
+      margin: 0 auto;
+      padding: 14px 18px 0;
+    }
+
+    .opening-visual-photo-wrapper {
+      max-width: 260px;
+    }
+
+    .opening-visual-photo-button {
+      display: block;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      border: none;
+      padding: 0;
+      border-radius: 18px;
+      overflow: hidden;
+      cursor: pointer;
+      background: rgba(4, 64, 105, 0.08);
+      box-shadow: 0 12px 28px rgba(3, 77, 121, 0.18);
+    }
+
+    .opening-visual-photo-image {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
     }
 
     .hero-actions {
@@ -1198,6 +1229,18 @@
     }
 
     @media (max-width: 700px) {
+      /* トップ画面再設計 STEP4｜既存の.hero-photo-wrapper/.hero-photo-button
+         (STEP3で削除)が持っていたモバイル時の値(全幅・16:9)をそのまま
+         .opening-visual-photo-wrapper/.opening-visual-photo-buttonへ踏襲する。 */
+      .opening-visual-photo-wrapper {
+        max-width: none;
+        width: 100%;
+      }
+
+      .opening-visual-photo-button {
+        aspect-ratio: 16 / 9;
+      }
+
       #shopsList {
         display: flex;
         grid-template-columns: unset;
@@ -1394,7 +1437,7 @@
         padding-right: 14px;
       }
 
-      .opening-intro {
+      .opening-visual-photo-area {
         padding-left: 14px;
         padding-right: 14px;
       }

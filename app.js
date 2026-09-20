@@ -137,6 +137,20 @@ function applyMachinauLanguage(language) {
     }
   });
 
+  // トップ画面再設計 STEP4｜上記aria-label方式と全く同じ考え方をimgの
+  // alt属性にも適用する。対象はdata-i18n-alt属性を持つ要素のみで、
+  // 既存のdata-i18n(innerHTML)・data-i18n-aria-labelの挙動には一切
+  // 影響しない(オープニングのバナー画像alt文言を多言語化するために追加、
+  // 画像内日本語だけに意味を依存させない構造にする本部指示に対応)。
+  document.querySelectorAll("[data-i18n-alt]").forEach(function (element) {
+    const key = element.getAttribute("data-i18n-alt");
+    const translatedText = getMachinauTranslation(key, language);
+
+    if (translatedText) {
+      element.setAttribute("alt", translatedText);
+    }
+  });
+
   updateLocationButtonLanguage(language);
   updateLanguageSwitcherUi(language);
 }
