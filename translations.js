@@ -62,7 +62,7 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   location_button_get: {
-    ja: "現在地からはじめる",
+    ja: "現在値ボタン",
     en: "Start with my location"
   },
 
