@@ -2821,6 +2821,12 @@ function renderShops() {
 
               <div class="shop-body">
 
+                <h3 class="shop-name">
+                  ${escapeHtml(
+                    shop.name
+                  )}
+                </h3>
+
                 <div class="shop-category">
 
                   <span>
@@ -2881,12 +2887,6 @@ function renderShops() {
                       </div>
                     `
                 }
-
-                <h3 class="shop-name">
-                  ${escapeHtml(
-                    shop.name
-                  )}
-                </h3>
 
                 <p class="shop-description">
                   ${escapeHtml(

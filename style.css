@@ -913,9 +913,10 @@
     }
 
     .shop-name {
-      margin: 7px 0 0;
-      font-size: 20px;
-      line-height: 1.4;
+      margin: 0 0 6px;
+      font-size: 22px;
+      font-weight: 900;
+      line-height: 1.35;
       color: var(--navy);
     }
 
@@ -1298,9 +1299,10 @@
       }
 
       .shop-name {
-        margin: 5px 0 0;
-        font-size: 13px;
-        line-height: 1.35;
+        margin: 0 0 4px;
+        font-size: 14px;
+        font-weight: 900;
+        line-height: 1.3;
         display: -webkit-box;
         -webkit-line-clamp: 2;
         line-clamp: 2;
@@ -1385,9 +1387,10 @@
       }
 
       #shopsSection.shops-show-all .shop-name {
-        margin: 7px 0 0;
-        font-size: 20px;
-        line-height: 1.4;
+        margin: 0 0 6px;
+        font-size: 22px;
+        font-weight: 900;
+        line-height: 1.35;
         display: block;
         overflow: visible;
       }
