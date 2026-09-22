@@ -52,7 +52,11 @@ const FIELD_MAX_LENGTHS = {
   content: 300,
   address: 120,
   websiteUrl: 300,
-  area: 80
+  area: 80,
+
+  // 店舗投稿の安全化＋運営店舗属性 共通化｜api/admin-post.jsのshopName上限
+  // (post.html(一般の店舗投稿)のshopName入力maxlength="60"と同じ)と揃える。
+  shopName: 60
 };
 
 
@@ -342,6 +346,36 @@ function validatePostFields(
     }
   }
 
+  // 常設店舗広告(isExistingPermanentAd:true)の編集時だけ、店舗名の入力を
+  // 検証・保存対象にする。isExistingPermanentAdは呼び出し元がFirestoreの
+  // 既存ドキュメント自身の値から判定した結果であり、リクエストボディの
+  // 値では左右されない(このファイル冒頭のコメント参照)。通常のadmin投稿の
+  // 編集ではshopNameを検証せず、保存対象にも含めない(挙動は変更しない)。
+  let shopName = "";
+
+  if (isExistingPermanentAd) {
+    shopName =
+      String(
+        requestBody.shopName || ""
+      )
+        .trim();
+
+    if (shopName === "") {
+      throw new Error(
+        "常設店舗広告では店舗名を入力してください。"
+      );
+    }
+
+    if (
+      shopName.length >
+      FIELD_MAX_LENGTHS.shopName
+    ) {
+      throw new Error(
+        "店舗名が長すぎます。"
+      );
+    }
+  }
+
   // 店舗投稿の安全化＋運営店舗属性 共通化｜api/admin-post.jsのvalidatePostFields()
   // と同じ解析ロジック(このファイルはvalidatePostFields()を共有せず独自に
   // 持っているため、両方に同じ処理を追加する)。
@@ -372,6 +406,7 @@ function validatePostFields(
     longitude: longitude,
     imageUrls: imageUrls,
     expiresAtDate: expiresAtDate,
+    shopName: shopName,
     takeout: takeout,
     paymentMethods: paymentMethods
   };
@@ -571,6 +606,15 @@ export default async function handler(
         Timestamp.fromDate(
           postFields.expiresAtDate
         );
+    }
+
+    // shopNameは、Firestoreの既存ドキュメント自身がisPermanentAd:trueで
+    // あるとサーバー側で確認できた場合だけ更新対象にする(リクエストボディの
+    // 値では判断しない)。通常のadmin投稿の編集ではshopNameフィールド自体を
+    // updateDataに含めないため、従来どおり一切変更されない。
+    if (isExistingPermanentAd) {
+      updateData.shopName =
+        postFields.shopName;
     }
 
     await documentReference.update(

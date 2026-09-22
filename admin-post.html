@@ -1800,14 +1800,12 @@
       expiresAtFormGroup.style.display = isPermanentAd ? "none" : "";
       expiresAtInput.required = !isPermanentAd;
 
-      // 店舗名欄はisPermanentAdがONの新規投稿時だけ表示・必須にする。
-      // 編集時(isEditMode)はapi/admin-submission-update.js側がshopNameを
-      // 保存しない既存仕様のため、誤って入力・送信できないよう常に隠す。
-      const showShopNameField =
-        isPermanentAd && !isEditMode;
-
-      shopNameFormGroup.style.display = showShopNameField ? "" : "none";
-      shopNameInput.required = showShopNameField;
+      // 店舗名欄はisPermanentAdがONのときだけ表示・必須にする(新規投稿・
+      // 既存の常設広告の編集のどちらでも同じ条件)。isPermanentAd自体は
+      // 編集時に変更できない(チェックボックスがdisabled)ため、編集時の
+      // チェック状態は読み込んだ投稿の実データをそのまま反映している。
+      shopNameFormGroup.style.display = isPermanentAd ? "" : "none";
+      shopNameInput.required = isPermanentAd;
 
       if (isPermanentAd) {
         areaInput.placeholder = "那覇市、八重瀬町";
@@ -1883,10 +1881,7 @@
           });
         }
 
-        if (
-          !isEditMode &&
-          shopNameInput.value.trim() === ""
-        ) {
+        if (shopNameInput.value.trim() === "") {
           validationErrors.push({
             message: "常設店舗広告では店舗名の入力が必須です。",
             element: shopNameInput
@@ -2037,9 +2032,14 @@
         // 既存ドキュメントのisPermanentAdだけを見て判断するため送らない。
         // 通常投稿↔常設広告のトグルは編集時には提供しない)。
         if (isPermanentAdCheckbox.checked) {
+          // 店舗名は新規投稿・既存の常設広告の編集のどちらでも送る。
+          // isPermanentAd:trueは新規投稿時のみ送る(編集時はサーバー側が
+          // 既存ドキュメントのisPermanentAdだけを見て判断する、という
+          // 既存仕様を維持する)。
+          payload.shopName = shopNameInput.value.trim();
+
           if (!isEditMode) {
             payload.isPermanentAd = true;
-            payload.shopName = shopNameInput.value.trim();
           }
         } else {
           const expiresAtDate = new Date(expiresAtInput.value);
@@ -2183,6 +2183,7 @@
 
     function fillFormForEdit(submission) {
       titleInput.value = submission.title || "";
+      shopNameInput.value = submission.shopName || "";
       categoryInput.value = submission.category || "";
       contentInput.value = submission.content || "";
       addressInput.value = submission.address || "";

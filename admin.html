@@ -1773,6 +1773,15 @@
                 submission.postType ===
                 "admin";
 
+              // 常設店舗広告(isPermanentAd:true)はpostTypeを設定しない設計
+              // (api/admin-post.jsの仕様)のため、isAdminPostだけでは編集
+              // 導線が出ない。admin-post.html側は既に常設広告の編集に対応
+              // しているため、ここでも同じ導線を表示できるようにする。
+              const isEditableViaAdminPost =
+                isAdminPost ||
+                submission.isPermanentAd ===
+                  true;
+
               return `
                 <article class="submission-card">
 
@@ -1832,7 +1841,7 @@
                     )}
 
                     ${
-                      isAdminPost
+                      isEditableViaAdminPost
                         ? `
                           <div class="submission-actions">
 
