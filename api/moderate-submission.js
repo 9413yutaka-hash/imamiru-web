@@ -8810,6 +8810,497 @@ async function handleAdminTerraRegionalResearchProbeRequest(
 }
 
 
+// Luna沖縄県全域テストモード(本部指示)｜「現在地周辺を検索する方式」ではなく
+// 「沖縄県全域を1回で検索する方式」の情報収集力・実費を実測する、代表専用の
+// 別試験。既存のadminLunaRegionalResearchProbe/adminTerraRegionalResearchProbe
+// (八重瀬町起点・検索範囲限定)は一切書き換えず、検索範囲・instructions/input
+// だけをこの試験専用に新規分離する。スキーマ(項目構成)・sanitize・実費計算・
+// OpenAI呼び出しの土台(fetch/timeout/エラー処理/usage抽出/web_search_call
+// カウント)は安全に共通利用できる既存コードをそのまま再利用する
+// (buildLunaRegionalResearchProbeJsonSchema()・
+// sanitizeLunaRegionalResearchProbeFinding()・
+// calculateLunaProbeEstimatedCostUsd()は無変更のまま呼び出すだけ)。
+// モデルはLuna固定(LUNA_PROBE_MODELをそのまま再利用、既存Production
+// モデル設定には一切触れない)。
+
+// 前回(八重瀬町起点)の検索範囲より大幅に広いため、web_search呼び出しが
+// 増え60秒を超える可能性がある。安全のため既存のLUNA_PROBE_TIMEOUT_MSは
+// 変更せず、この試験専用の独立した値を用意する(既存試験のタイムアウト
+// 挙動には一切影響しない)。
+const LUNA_PREFECTURE_PROBE_TIMEOUT_MS =
+  90000;
+
+// 「41市町村それぞれ最低1件」を強制しない安全弁として、上限だけ緩めに
+// 設定する(本部指示：情報が無い地域は0件でよい・件数を埋めない)。
+const LUNA_PREFECTURE_PROBE_MAX_FINDINGS =
+  60;
+
+const LUNA_PREFECTURE_PROBE_REMOTE_ISLANDS =
+  [
+    "久米島",
+    "慶良間諸島",
+    "伊江島",
+    "伊平屋島",
+    "伊是名島",
+    "粟国島",
+    "渡名喜島",
+    "北大東島",
+    "南大東島",
+    "宮古島地域",
+    "石垣島",
+    "竹富町の島々",
+    "与那国島"
+  ];
+
+function buildLunaPrefectureResearchProbeInstructions() {
+  return (
+    "You are a regional \"what's happening today\" research assistant for " +
+    "a travel app. The target date for this research is explicitly " +
+    LUNA_PROBE_TARGET_DATE_ISO + " (" + LUNA_PROBE_TARGET_DATE_JAPANESE +
+    ") — do NOT use today's actual date, use exactly this specified date " +
+    "as \"today\" for every judgment you make. " +
+
+    "\n\nSCOPE (critical, read carefully): this is NOT a search centered " +
+    "on one starting location. Cover ALL 41 municipalities of Okinawa " +
+    "Prefecture (沖縄県) as a whole — mainland Okinawa's northern, " +
+    "central, and southern areas, AND the remote islands, with no " +
+    "distance-based cutoff from any single point. Make sure to actively " +
+    "consider these remote island areas specifically (do not skip them): " +
+    LUNA_PREFECTURE_PROBE_REMOTE_ISLANDS.join("、") + "。" +
+
+    "\n\nDO NOT force even coverage: it is fine and expected for many " +
+    "municipalities to have zero findings today. Never invent or " +
+    "stretch a weak/generic candidate just to have \"something\" for a " +
+    "given place. Quality and genuine time-relevance matter far more " +
+    "than covering every municipality. " +
+
+    "\n\nYOUR GOAL: find information that is genuinely meaningful " +
+    "BECAUSE of this specific date — the kind of thing that could " +
+    "change a traveler's plans or actions today if they knew about it " +
+    "(\"知らなくて損した\" / \"知っててよかった\"). Do NOT include " +
+    "generic sightseeing information, permanent/always-available " +
+    "attractions, ordinary shops just operating normally, experiences " +
+    "available year-round, generic travel-guide-style articles, " +
+    "rankings, or anything with no real connection to this specific " +
+    "date. " +
+
+    "\n\nSOURCES YOU MUST ACTIVELY SEARCH: municipal government sites " +
+    "(市町村役場), 沖縄県 (prefectural government), other national/" +
+    "public institutions, public facilities (公共施設), tourism " +
+    "associations (観光協会), official tourism sites (観光公式), event " +
+    "organizers, shop/facility official sites, local media (地域メディア), " +
+    "event information sites, and publicly searchable posts on " +
+    "Instagram, Facebook, X (Twitter), etc. — only content you can " +
+    "actually find via web search, never invent or assume a post " +
+    "exists. Also check other public web pages relevant to each area. " +
+
+    "\n\nWHAT TO LOOK FOR (non-exhaustive, use judgment for similar " +
+    "\"good to know\" items): events happening today, festivals, " +
+    "traditional/seasonal observances, eisa (エイサー), michi-junee " +
+    "(道ジュネー) processions, fireworks, marche/markets, live " +
+    "performances, local community events, experiences a traveler could " +
+    "join today, things on their first day today, things on their last " +
+    "day today, special one-day-only opening/closing or business hours, " +
+    "temporary changes from normal operations, sudden closures, changed " +
+    "business hours, a shop or facility's special plan just for today, " +
+    "traffic regulations, transit service suspensions, and any other " +
+    "high-value current local information for a traveler. " +
+
+    "\n\nEXCLUDE SAFETY INFORMATION: do NOT include typhoon, tsunami, " +
+    "earthquake, evacuation, warnings, or other disaster/safety-related " +
+    "or major traffic-disruption-as-emergency information as a finding " +
+    "here. This test intentionally excludes that category (it is " +
+    "planned as a separate, differently-updated system). If you " +
+    "encounter such information while searching, ignore it for this " +
+    "task entirely. " +
+
+    "\n\nDATE VERIFICATION (critical): for every candidate, actively " +
+    "check its date, time, and place before including it. Only set " +
+    "\"dateConfirmedValidForTargetDate\":true if you can confirm the " +
+    "event/change is actually valid and happening on " +
+    LUNA_PROBE_TARGET_DATE_ISO + " specifically (not the day before, not " +
+    "the day after, not \"this weekend\" in general, not an unclear/" +
+    "unstated date). If you cannot confirm the date is exactly this " +
+    "target date, set dateConfirmedValidForTargetDate:false rather than " +
+    "presenting stale or date-unclear information as if it were " +
+    "confirmed for today. " +
+
+    "\n\nOFFICIAL VS. SNS: set \"isOfficialSourceConfirmed\":true only " +
+    "when a municipal/prefectural/official tourism/venue's own official " +
+    "source confirms the information. Set \"isFromSns\":true when a " +
+    "public social media post is part of what you found for this " +
+    "finding (not mutually exclusive with isOfficialSourceConfirmed). " +
+    "Put the organization, site, or platform name in \"sourceName\" as " +
+    "plain text (e.g. \"那覇市公式サイト\", \"Instagram(公開投稿)\", " +
+    "\"沖縄タイムス\") — never put a raw URL in any field; this app " +
+    "tracks real reference URLs separately from your output. " +
+
+    "\n\nOUTPUT: each finding must have area (which municipality/region " +
+    "of Okinawa Prefecture this belongs to), name (short title), time, " +
+    "place, a short Japanese description (your own words, not copied " +
+    "from a post/page), sourceName, isOfficialSourceConfirmed, " +
+    "isFromSns, and dateConfirmedValidForTargetDate. Write area/name/" +
+    "time/place/description/sourceName in Japanese. Set \"checked\":" +
+    "true once you have actually performed web searches for this task " +
+    "(even if you found nothing) — never set it to true without " +
+    "actually searching. Do not output anything other than the JSON " +
+    "object described by the schema."
+  );
+}
+
+function buildLunaPrefectureResearchProbeInputItems() {
+  return [
+    {
+      role: "user",
+
+      content: [
+        {
+          type: "input_text",
+
+          text:
+            JSON.stringify(
+              {
+                prefecture: LUNA_PROBE_PREFECTURE,
+                country: "日本",
+                targetDateIso: LUNA_PROBE_TARGET_DATE_ISO,
+                targetDateJapanese: LUNA_PROBE_TARGET_DATE_JAPANESE,
+
+                scope:
+                  "沖縄県内41市町村全域(本島北部・中部・南部＋離島)。" +
+                  "特定の出発地点からの距離では絞り込まない。",
+
+                remoteIslandsToInclude:
+                  LUNA_PREFECTURE_PROBE_REMOTE_ISLANDS
+              }
+            )
+        }
+      ]
+    }
+  ];
+}
+
+async function callOpenAiLunaPrefectureResearchProbe() {
+  const apiKey =
+    process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    const configError =
+      new Error("OPENAI_API_KEY が設定されていません。");
+
+    configError.isMissingApiKey =
+      true;
+
+    throw configError;
+  }
+
+  const instructions =
+    buildLunaPrefectureResearchProbeInstructions();
+
+  const inputItems =
+    buildLunaPrefectureResearchProbeInputItems();
+
+  const controller =
+    new AbortController();
+
+  const timeoutId =
+    setTimeout(
+      function() {
+        controller.abort();
+      },
+      LUNA_PREFECTURE_PROBE_TIMEOUT_MS
+    );
+
+  let response;
+
+  try {
+    try {
+      response =
+        await fetch(
+          LUNA_PROBE_ENDPOINT,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer " + apiKey
+            },
+
+            body: JSON.stringify({
+              model: LUNA_PROBE_MODEL,
+              instructions: instructions,
+              input: inputItems,
+
+              tools: [
+                {
+                  type: "web_search"
+                }
+              ],
+
+              tool_choice: "auto",
+              include: ["web_search_call.action.sources"],
+
+              text: {
+                format:
+                  buildLunaRegionalResearchProbeJsonSchema()
+              },
+
+              reasoning: {
+                effort: LUNA_PROBE_REASONING_EFFORT
+              }
+            }),
+
+            signal: controller.signal
+          }
+        );
+    } catch (fetchError) {
+      if (fetchError.name === "AbortError") {
+        const timeoutError =
+          new Error("Luna沖縄県全域テストがタイムアウトしました。");
+
+        timeoutError.isTransient =
+          true;
+
+        timeoutError.isTimeout =
+          true;
+
+        throw timeoutError;
+      }
+
+      const networkError =
+        new Error("Luna沖縄県全域テストの呼び出しに失敗しました。");
+
+      networkError.isTransient =
+        true;
+
+      networkError.isNetworkError =
+        true;
+
+      throw networkError;
+    }
+  } finally {
+    clearTimeout(
+      timeoutId
+    );
+  }
+
+  if (!response.ok) {
+    const httpError =
+      new Error(
+        "OpenAI APIがエラーを返しました。status=" + response.status
+      );
+
+    httpError.isHttpError =
+      true;
+
+    httpError.httpStatus =
+      response.status;
+
+    httpError.isTransient =
+      true;
+
+    throw httpError;
+  }
+
+  let responseData;
+
+  try {
+    responseData =
+      await response.json();
+  } catch (jsonError) {
+    const parseError =
+      new Error("OpenAI APIの応答を解析できませんでした。");
+
+    parseError.isJsonError =
+      true;
+
+    parseError.isTransient =
+      true;
+
+    throw parseError;
+  }
+
+  const outputItems =
+    Array.isArray(responseData.output)
+      ? responseData.output
+      : [];
+
+  const consultedSources =
+    extractActualSourcesFromResponsesOutput(
+      outputItems
+    );
+
+  const webSearchCallCount =
+    outputItems.filter(
+      function(item) {
+        return (
+          item &&
+          item.type === "web_search_call"
+        );
+      }
+    ).length;
+
+  const rawText =
+    extractOutputTextFromResponsesOutput(
+      outputItems
+    );
+
+  if (rawText.trim() === "") {
+    const shapeError =
+      new Error("OpenAI APIの応答形式が不正です。");
+
+    shapeError.isJsonError =
+      true;
+
+    shapeError.isTransient =
+      true;
+
+    throw shapeError;
+  }
+
+  let parsedResult;
+
+  try {
+    parsedResult =
+      JSON.parse(rawText);
+  } catch (parseError) {
+    const shapeError =
+      new Error("Luna沖縄県全域テストの応答がJSON形式ではありませんでした。");
+
+    shapeError.isJsonError =
+      true;
+
+    shapeError.isTransient =
+      true;
+
+    throw shapeError;
+  }
+
+  const checked =
+    parsedResult.checked === true;
+
+  const rawFindings =
+    Array.isArray(parsedResult.findings)
+      ? parsedResult.findings
+      : [];
+
+  const findings =
+    rawFindings
+      .map(sanitizeLunaRegionalResearchProbeFinding)
+      .filter(
+        function(finding) {
+          return finding !== null;
+        }
+      )
+      .slice(0, LUNA_PREFECTURE_PROBE_MAX_FINDINGS);
+
+  const usage =
+    responseData.usage
+      ? {
+          inputTokens:
+            typeof responseData.usage.input_tokens === "number"
+              ? responseData.usage.input_tokens
+              : null,
+
+          outputTokens:
+            typeof responseData.usage.output_tokens === "number"
+              ? responseData.usage.output_tokens
+              : null,
+
+          totalTokens:
+            typeof responseData.usage.total_tokens === "number"
+              ? responseData.usage.total_tokens
+              : null
+        }
+      : null;
+
+  const estimatedCostUsd =
+    usage &&
+    typeof usage.inputTokens === "number" &&
+    typeof usage.outputTokens === "number"
+      ? calculateLunaProbeEstimatedCostUsd(
+          LUNA_PROBE_MODEL,
+          usage.inputTokens,
+          usage.outputTokens,
+          webSearchCallCount
+        )
+      : null;
+
+  return {
+    checked: checked,
+    findings: findings,
+    usage: usage,
+    webSearchCallCount: webSearchCallCount,
+    estimatedCostUsd: estimatedCostUsd,
+    consultedSources: consultedSources
+  };
+}
+
+// 代表(Admin)専用。一般旅行者・Editorからは実行できない(requireAdmin()を
+// そのまま踏襲)。Firestoreへの保存は行わない(本部指示：今回は県単位
+// キャッシュを実装しない、テスト結果の永続保存も不要)。現在値ボタン等の
+// 既存UIからは呼ばれない、完全に独立した試験専用エンドポイント。
+async function handleAdminLunaPrefectureResearchProbeRequest(
+  request,
+  response
+) {
+  try {
+    const authResult =
+      await requireAdmin(
+        request
+      );
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({
+        success: false,
+        message:
+          authResult.message
+      });
+    }
+
+    let probeResult;
+
+    try {
+      probeResult =
+        await callOpenAiLunaPrefectureResearchProbe();
+    } catch (aiError) {
+      console.error(
+        "Luna沖縄県全域テスト：生成エラー：",
+        aiError
+      );
+
+      return response.status(200).json({
+        success: false,
+        message: "Luna沖縄県全域テスト中にエラーが発生しました。"
+      });
+    }
+
+    return response.status(200).json({
+      success: true,
+      model: LUNA_PROBE_MODEL,
+      scope: "okinawa_prefecture_wide",
+      targetDate: LUNA_PROBE_TARGET_DATE_ISO,
+      checked: probeResult.checked,
+      findingCount: probeResult.findings.length,
+      findings: probeResult.findings,
+      usage: probeResult.usage,
+      webSearchCallCount: probeResult.webSearchCallCount,
+      estimatedCostUsd: probeResult.estimatedCostUsd,
+      consultedSources: probeResult.consultedSources
+    });
+  } catch (error) {
+    console.error(
+      "Luna沖縄県全域テスト：処理エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message: "Luna沖縄県全域テスト中にエラーが発生しました。"
+    });
+  }
+}
+
+
 // Ver1.8 Phase1｜AIコンシェルジュ本体。認証はhandleCloudinarySignatureRequest()
 // と同じ匿名Firebase AuthenticationのBearer Token検証をそのまま再利用する。
 // AI呼び出し・応答検証のいずれかで失敗しても、常にsuccess:falseのJSONを
@@ -13462,6 +13953,19 @@ export default async function handler(
     requestBody.mode === "adminTerraRegionalResearchProbe"
   ) {
     return handleAdminTerraRegionalResearchProbeRequest(
+      request,
+      response
+    );
+  }
+
+  // Luna沖縄県全域テストモード｜前述のadminLunaRegionalResearchProbe/
+  // adminTerraRegionalResearchProbeとは別の、代表(Admin)専用の独立した
+  // 試験。既存モードのいずれにも一切触れない。現在値ボタン等の既存UIからは
+  // 呼ばれない。
+  if (
+    requestBody.mode === "adminLunaPrefectureResearchProbe"
+  ) {
+    return handleAdminLunaPrefectureResearchProbeRequest(
       request,
       response
     );
