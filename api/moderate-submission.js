@@ -9301,6 +9301,532 @@ async function handleAdminLunaPrefectureResearchProbeRequest(
 }
 
 
+// Luna汎用地域調査テストモード(本部指示)｜「沖縄専用の検索設計」ではなく、
+// 地域名(country/region/municipality)と対象日だけを差し替えれば東京・
+// 北海道・将来海外でも同じ思想で使える、完全汎用の地域情報調査
+// instructions/inputを試験する、代表専用の別Probe。既存の
+// adminLunaRegionalResearchProbe(八重瀬町起点・検索範囲限定)・
+// adminLunaPrefectureResearchProbe(沖縄県全域・沖縄固有の離島名を明示)・
+// adminTerraRegionalResearchProbeはいずれも一切書き換えない。
+// instructions/inputだけをこの試験専用に新規作成し、地域名・県名・
+// 市町村名等の固有名詞をinstructions本文にハードコードしない
+// (regionName/localDate等の引数として渡すことで、将来別地域でもこの
+// 関数をそのまま再利用できる構造にする)。スキーマ(項目構成)・sanitize・
+// 実費計算・OpenAI呼び出しの土台(fetch/timeout/エラー処理/usage抽出/
+// web_search_call カウント)は安全に共通利用できる既存コードをそのまま
+// 再利用する(buildLunaRegionalResearchProbeJsonSchema()・
+// sanitizeLunaRegionalResearchProbeFinding()・
+// calculateLunaProbeEstimatedCostUsd()は無変更のまま呼び出すだけ)。
+// モデルはLuna固定(LUNA_PROBE_MODELをそのまま再利用)。比較可能性のため、
+// タイムアウト・最大件数上限は前回のLuna県全域Probeと同じ値
+// (LUNA_PREFECTURE_PROBE_TIMEOUT_MS/LUNA_PREFECTURE_PROBE_MAX_FINDINGS)を
+// そのまま再利用する。
+
+// 今回の比較試験の入力値(本部指示どおり前回と同一条件)。country/region/
+// municipalityを分離した汎用パラメータとして扱う(municipalityは現在地の
+// 参考情報にすぎず、検索範囲をmunicipality周辺へ限定する用途には使わない)。
+const GENERIC_REGION_PROBE_COUNTRY =
+  "日本";
+
+const GENERIC_REGION_PROBE_REGION =
+  "沖縄県";
+
+const GENERIC_REGION_PROBE_MUNICIPALITY =
+  "八重瀬町";
+
+// regionName/localDateを引数として受け取る汎用instructions。地域固有の
+// 地名・下位区分名(都道府県名・市町村名・「南部/中部/北部」「離島」等)を
+// 一切ハードコードしない。SNSを検索目標にする文言は含めない(本部指示：
+// 通常検索結果に偶然SNSが出ても排除は不要だが、SNS発見自体を目的にしない)。
+function buildLunaGenericRegionResearchProbeInstructions(
+  regionName,
+  localDateIso,
+  localDateJapanese
+) {
+  return (
+    "You are a regional \"what's happening today\" research assistant " +
+    "for a travel app, designed to work for any region in any country — " +
+    "do not assume any specific country, prefecture/state, or " +
+    "administrative structure beyond what is given to you below. A " +
+    "traveler's current location has been resolved to the broad region " +
+    "\"" + regionName + "\". The target date for this research is " +
+    "explicitly " + localDateIso + " (" + localDateJapanese + ") — do " +
+    "NOT use today's actual date, use exactly this specified date as " +
+    "\"today\" for every judgment you make. " +
+
+    "\n\nYOUR GOAL: research information that, if the traveler knew " +
+    "about it today, could change their plans, actions, or experience — " +
+    "genuinely valuable BECAUSE of this specific date, not generic " +
+    "sightseeing information. Prioritize \"something different from a " +
+    "normal day\" over simply listing events. Do NOT treat this as a " +
+    "task to maximize the number of events found — the goal is not " +
+    "\"today's event list\", it is \"what's different from usual today " +
+    "in this region\". " +
+
+    "\n\nWHAT TO LOOK FOR: things happening only today; events, " +
+    "festivals, local observances, performances, or experiences held " +
+    "today; things on their first or last day today; things currently " +
+    "running as a limited-time period that includes today; special " +
+    "one-day-only opening/closing or operating hours; sudden closures; " +
+    "changed business/operating hours; temporary changes affecting " +
+    "transportation, facility use, or travel logistics; a moment where " +
+    "a traveler could experience local culture or daily life specific " +
+    "to this day; and any other \"I wish I had known this\" / \"glad I " +
+    "knew this\" type of current regional information. " +
+
+    "\n\nSCOPE AND REGIONAL BIAS (critical): treat \"" + regionName + "\" " +
+    "as a whole broad region, not just the traveler's exact current " +
+    "point. Do not concentrate your search only on the most famous city " +
+    "or tourist destination within this region. If this region contains " +
+    "multiple major cities, tourist areas, rural areas, or " +
+    "geographically distant sub-areas, check whether your search has " +
+    "been skewed toward only one part of it, and if so, vary your " +
+    "search angles and query terms to also check other distinct areas " +
+    "within the region. You do NOT need to produce at least one finding " +
+    "per administrative subdivision — it is fine and expected for areas " +
+    "without strong findings to contribute zero. Never pad coverage " +
+    "with a weak or generic finding just to represent an area. " +
+
+    "\n\nSOURCES (priority order): national/state/prefectural government " +
+    "sites, municipal/local government sites, tourism associations, " +
+    "DMOs and official tourism sites, public facilities, transportation " +
+    "operators, event organizers, and official venue/shop sites. Where " +
+    "useful, also check local media and event-listing sites, and other " +
+    "public web pages. Use web search as you normally would — if a " +
+    "public social media post happens to come up in an ordinary search " +
+    "result, you don't need to discard it, but do not treat searching " +
+    "social media platforms as a goal in itself. " +
+
+    "\n\nEXCLUDE SAFETY INFORMATION: do NOT include typhoon, tsunami, " +
+    "earthquake, evacuation, warnings, or other disaster/safety-related " +
+    "or major emergency traffic-disruption information as a finding " +
+    "here. This test intentionally excludes that category (planned as a " +
+    "separate, differently-updated system). If you encounter such " +
+    "information while searching, ignore it for this task entirely. " +
+
+    "\n\nDATE VERIFICATION (critical): for every candidate, actively " +
+    "check its date, time, and place before including it. Only set " +
+    "\"dateConfirmedValidForTargetDate\":true if you can confirm it is " +
+    "actually valid and happening on " + localDateIso + " specifically " +
+    "(not the day before, not the day after, not \"this week\" in " +
+    "general, not an unclear/unstated date, not something already " +
+    "ended). If you cannot confirm the date is exactly this target " +
+    "date, set dateConfirmedValidForTargetDate:false rather than " +
+    "presenting stale or date-unclear information as if it were " +
+    "confirmed for today. " +
+
+    "\n\nEXCLUDE GENERIC/EVERGREEN INFORMATION: do not include " +
+    "always-available tourist attractions, ordinary shops just " +
+    "operating normally, experiences available year-round, articles " +
+    "with no real connection to this specific date, generic rankings, " +
+    "or standard travel-guide-style content — UNLESS something about " +
+    "it is genuinely different today (special hours, a temporary " +
+    "closure, a limited-time program, etc.). " +
+
+    "\n\nOFFICIAL VS. OTHER SOURCES: set \"isOfficialSourceConfirmed\":" +
+    "true only when a government/official tourism/venue's own official " +
+    "source confirms the information. Set \"isFromSns\":true only when " +
+    "a public social media post is part of what you found for this " +
+    "finding. Put the organization or site name in \"sourceName\" as " +
+    "plain text (e.g. the municipality's official site name, a " +
+    "newspaper name) — never put a raw URL in any field; this app " +
+    "tracks real reference URLs separately from your output. " +
+
+    "\n\nIF YOU FIND NOTHING GENUINELY WORTHWHILE, it is fine to report " +
+    "few or zero findings. Prioritize reliability and genuine " +
+    "today-specific value over quantity — never invent a candidate to " +
+    "fill space. " +
+
+    "\n\nOUTPUT: each finding must have area (which part of \"" +
+    regionName + "\" this belongs to, in your own words based on what " +
+    "you actually found — do not force a fixed subdivision scheme), " +
+    "name (short title), time, place, a short Japanese description " +
+    "(your own words, not copied from a post/page), sourceName, " +
+    "isOfficialSourceConfirmed, isFromSns, and " +
+    "dateConfirmedValidForTargetDate. Write area/name/time/place/" +
+    "description/sourceName in Japanese. Set \"checked\":true once you " +
+    "have actually performed web searches for this task (even if you " +
+    "found nothing) — never set it to true without actually searching. " +
+    "Do not output anything other than the JSON object described by " +
+    "the schema."
+  );
+}
+
+// country/region/municipality/localDateを分離した汎用input。municipalityは
+// 現在地の参考情報であり、検索範囲をその周辺へ限定する意図ではないことを
+// noteで明示する(本部指示：「八重瀬町」は現在地情報として渡すが検索範囲を
+// 八重瀬町周辺へ限定しない)。
+function buildLunaGenericRegionResearchProbeInputItems(
+  country,
+  region,
+  municipality,
+  localDateIso,
+  localDateJapanese
+) {
+  return [
+    {
+      role: "user",
+
+      content: [
+        {
+          type: "input_text",
+
+          text:
+            JSON.stringify(
+              {
+                country: country,
+                region: region,
+                municipality: municipality,
+                localDateIso: localDateIso,
+                localDateJapanese: localDateJapanese,
+
+                note:
+                  "municipality is only the traveler's current " +
+                  "reference point. The research scope is the entire " +
+                  "'region', not an area limited to the vicinity of " +
+                  "municipality."
+              }
+            )
+        }
+      ]
+    }
+  ];
+}
+
+async function callOpenAiLunaGenericRegionResearchProbe() {
+  const apiKey =
+    process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    const configError =
+      new Error("OPENAI_API_KEY が設定されていません。");
+
+    configError.isMissingApiKey =
+      true;
+
+    throw configError;
+  }
+
+  const instructions =
+    buildLunaGenericRegionResearchProbeInstructions(
+      GENERIC_REGION_PROBE_REGION,
+      LUNA_PROBE_TARGET_DATE_ISO,
+      LUNA_PROBE_TARGET_DATE_JAPANESE
+    );
+
+  const inputItems =
+    buildLunaGenericRegionResearchProbeInputItems(
+      GENERIC_REGION_PROBE_COUNTRY,
+      GENERIC_REGION_PROBE_REGION,
+      GENERIC_REGION_PROBE_MUNICIPALITY,
+      LUNA_PROBE_TARGET_DATE_ISO,
+      LUNA_PROBE_TARGET_DATE_JAPANESE
+    );
+
+  const controller =
+    new AbortController();
+
+  const timeoutId =
+    setTimeout(
+      function() {
+        controller.abort();
+      },
+      LUNA_PREFECTURE_PROBE_TIMEOUT_MS
+    );
+
+  let response;
+
+  try {
+    try {
+      response =
+        await fetch(
+          LUNA_PROBE_ENDPOINT,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer " + apiKey
+            },
+
+            body: JSON.stringify({
+              model: LUNA_PROBE_MODEL,
+              instructions: instructions,
+              input: inputItems,
+
+              tools: [
+                {
+                  type: "web_search"
+                }
+              ],
+
+              tool_choice: "auto",
+              include: ["web_search_call.action.sources"],
+
+              text: {
+                format:
+                  buildLunaRegionalResearchProbeJsonSchema()
+              },
+
+              reasoning: {
+                effort: LUNA_PROBE_REASONING_EFFORT
+              }
+            }),
+
+            signal: controller.signal
+          }
+        );
+    } catch (fetchError) {
+      if (fetchError.name === "AbortError") {
+        const timeoutError =
+          new Error("Luna汎用地域調査テストがタイムアウトしました。");
+
+        timeoutError.isTransient =
+          true;
+
+        timeoutError.isTimeout =
+          true;
+
+        throw timeoutError;
+      }
+
+      const networkError =
+        new Error("Luna汎用地域調査テストの呼び出しに失敗しました。");
+
+      networkError.isTransient =
+        true;
+
+      networkError.isNetworkError =
+        true;
+
+      throw networkError;
+    }
+  } finally {
+    clearTimeout(
+      timeoutId
+    );
+  }
+
+  if (!response.ok) {
+    const httpError =
+      new Error(
+        "OpenAI APIがエラーを返しました。status=" + response.status
+      );
+
+    httpError.isHttpError =
+      true;
+
+    httpError.httpStatus =
+      response.status;
+
+    httpError.isTransient =
+      true;
+
+    throw httpError;
+  }
+
+  let responseData;
+
+  try {
+    responseData =
+      await response.json();
+  } catch (jsonError) {
+    const parseError =
+      new Error("OpenAI APIの応答を解析できませんでした。");
+
+    parseError.isJsonError =
+      true;
+
+    parseError.isTransient =
+      true;
+
+    throw parseError;
+  }
+
+  const outputItems =
+    Array.isArray(responseData.output)
+      ? responseData.output
+      : [];
+
+  const consultedSources =
+    extractActualSourcesFromResponsesOutput(
+      outputItems
+    );
+
+  const webSearchCallCount =
+    outputItems.filter(
+      function(item) {
+        return (
+          item &&
+          item.type === "web_search_call"
+        );
+      }
+    ).length;
+
+  const rawText =
+    extractOutputTextFromResponsesOutput(
+      outputItems
+    );
+
+  if (rawText.trim() === "") {
+    const shapeError =
+      new Error("OpenAI APIの応答形式が不正です。");
+
+    shapeError.isJsonError =
+      true;
+
+    shapeError.isTransient =
+      true;
+
+    throw shapeError;
+  }
+
+  let parsedResult;
+
+  try {
+    parsedResult =
+      JSON.parse(rawText);
+  } catch (parseError) {
+    const shapeError =
+      new Error("Luna汎用地域調査テストの応答がJSON形式ではありませんでした。");
+
+    shapeError.isJsonError =
+      true;
+
+    shapeError.isTransient =
+      true;
+
+    throw shapeError;
+  }
+
+  const checked =
+    parsedResult.checked === true;
+
+  const rawFindings =
+    Array.isArray(parsedResult.findings)
+      ? parsedResult.findings
+      : [];
+
+  const findings =
+    rawFindings
+      .map(sanitizeLunaRegionalResearchProbeFinding)
+      .filter(
+        function(finding) {
+          return finding !== null;
+        }
+      )
+      .slice(0, LUNA_PREFECTURE_PROBE_MAX_FINDINGS);
+
+  const usage =
+    responseData.usage
+      ? {
+          inputTokens:
+            typeof responseData.usage.input_tokens === "number"
+              ? responseData.usage.input_tokens
+              : null,
+
+          outputTokens:
+            typeof responseData.usage.output_tokens === "number"
+              ? responseData.usage.output_tokens
+              : null,
+
+          totalTokens:
+            typeof responseData.usage.total_tokens === "number"
+              ? responseData.usage.total_tokens
+              : null
+        }
+      : null;
+
+  const estimatedCostUsd =
+    usage &&
+    typeof usage.inputTokens === "number" &&
+    typeof usage.outputTokens === "number"
+      ? calculateLunaProbeEstimatedCostUsd(
+          LUNA_PROBE_MODEL,
+          usage.inputTokens,
+          usage.outputTokens,
+          webSearchCallCount
+        )
+      : null;
+
+  return {
+    checked: checked,
+    findings: findings,
+    usage: usage,
+    webSearchCallCount: webSearchCallCount,
+    estimatedCostUsd: estimatedCostUsd,
+    consultedSources: consultedSources
+  };
+}
+
+// 代表(Admin)専用。一般旅行者・Editorからは実行できない(requireAdmin()を
+// そのまま踏襲)。Firestoreへの保存は行わない(本部指示：今回もキャッシュ・
+// 永続保存は実装しない)。現在値ボタン等の既存UIからは呼ばれない、完全に
+// 独立した試験専用エンドポイント。
+async function handleAdminLunaGenericRegionResearchProbeRequest(
+  request,
+  response
+) {
+  try {
+    const authResult =
+      await requireAdmin(
+        request
+      );
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({
+        success: false,
+        message:
+          authResult.message
+      });
+    }
+
+    let probeResult;
+
+    try {
+      probeResult =
+        await callOpenAiLunaGenericRegionResearchProbe();
+    } catch (aiError) {
+      console.error(
+        "Luna汎用地域調査テスト：生成エラー：",
+        aiError
+      );
+
+      return response.status(200).json({
+        success: false,
+        message: "Luna汎用地域調査テスト中にエラーが発生しました。"
+      });
+    }
+
+    return response.status(200).json({
+      success: true,
+      model: LUNA_PROBE_MODEL,
+      country: GENERIC_REGION_PROBE_COUNTRY,
+      region: GENERIC_REGION_PROBE_REGION,
+      municipality: GENERIC_REGION_PROBE_MUNICIPALITY,
+      localDate: LUNA_PROBE_TARGET_DATE_ISO,
+      checked: probeResult.checked,
+      findingCount: probeResult.findings.length,
+      findings: probeResult.findings,
+      usage: probeResult.usage,
+      webSearchCallCount: probeResult.webSearchCallCount,
+      estimatedCostUsd: probeResult.estimatedCostUsd,
+      consultedSources: probeResult.consultedSources
+    });
+  } catch (error) {
+    console.error(
+      "Luna汎用地域調査テスト：処理エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message: "Luna汎用地域調査テスト中にエラーが発生しました。"
+    });
+  }
+}
+
+
 // Ver1.8 Phase1｜AIコンシェルジュ本体。認証はhandleCloudinarySignatureRequest()
 // と同じ匿名Firebase AuthenticationのBearer Token検証をそのまま再利用する。
 // AI呼び出し・応答検証のいずれかで失敗しても、常にsuccess:falseのJSONを
@@ -13966,6 +14492,18 @@ export default async function handler(
     requestBody.mode === "adminLunaPrefectureResearchProbe"
   ) {
     return handleAdminLunaPrefectureResearchProbeRequest(
+      request,
+      response
+    );
+  }
+
+  // Luna汎用地域調査テストモード｜前述の各Probeとは別の、代表(Admin)専用の
+  // 独立した試験。既存モードのいずれにも一切触れない。現在値ボタン等の
+  // 既存UIからは呼ばれない。
+  if (
+    requestBody.mode === "adminLunaGenericRegionResearchProbe"
+  ) {
+    return handleAdminLunaGenericRegionResearchProbeRequest(
       request,
       response
     );
