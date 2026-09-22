@@ -9827,6 +9827,716 @@ async function handleAdminLunaGenericRegionResearchProbeRequest(
 }
 
 
+// Luna汎用地域調査(2観点)テストモード(本部指示)｜前回の
+// adminLunaGenericRegionResearchProbeの汎用instructions思想(地域名・日付を
+// 引数化し、都道府県・市町村等の固有名詞をinstructionsへハードコードしない)
+// をそのまま土台にしつつ、検索観点を「A：今日あるもの(today_happening)」
+// 「B：今日変わっているもの(today_changed)」の2つに明示的に分離して両方を
+// 必ず確認させる、代表専用の別Probe。既存の
+// adminLunaRegionalResearchProbe/adminLunaPrefectureResearchProbe/
+// adminTerraRegionalResearchProbe/adminLunaGenericRegionResearchProbeは
+// いずれも一切書き換えない。informationType項目を追加する必要があるため、
+// 既存の共通schema(buildLunaRegionalResearchProbeJsonSchema())・共通
+// sanitize(sanitizeLunaRegionalResearchProbeFinding())を変更せず、この
+// 試験専用の新しいschema/sanitize関数を用意する(本部指示：既存Probeの
+// 出力schemaを壊さないことを優先)。input構築(buildLunaGenericRegionResearchProbeInputItems())
+// は地域名・日付の受け渡しのみで観点とは無関係のため、無変更のまま
+// そのまま再利用する。モデル・エンドポイント・タイムアウト・reasoning・
+// 上限件数は前回のLuna汎用/県全域Probeと同じ値を再利用し、比較可能性を
+// 維持する。
+
+const TWO_LENS_PROBE_ALLOWED_INFORMATION_TYPES =
+  [
+    "today_happening",
+    "today_changed"
+  ];
+
+function buildLunaGenericRegionTwoLensProbeJsonSchema() {
+  return {
+    type: "json_schema",
+    name: "luna_generic_region_two_lens_probe_result",
+    strict: true,
+
+    schema: {
+      type: "object",
+
+      properties: {
+        checked: {
+          type: "boolean"
+        },
+
+        findings: {
+          type: "array",
+
+          items: {
+            type: "object",
+
+            properties: {
+              area: {
+                type: "string"
+              },
+
+              name: {
+                type: "string"
+              },
+
+              time: {
+                type: "string"
+              },
+
+              place: {
+                type: "string"
+              },
+
+              description: {
+                type: "string"
+              },
+
+              sourceName: {
+                type: "string"
+              },
+
+              isOfficialSourceConfirmed: {
+                type: "boolean"
+              },
+
+              isFromSns: {
+                type: "boolean"
+              },
+
+              dateConfirmedValidForTargetDate: {
+                type: "boolean"
+              },
+
+              // A(today_happening)/B(today_changed)のどちらの観点で
+              // 発見したかを明示させる、この試験専用の追加項目。
+              informationType: {
+                type: "string",
+                enum: TWO_LENS_PROBE_ALLOWED_INFORMATION_TYPES
+              }
+            },
+
+            required: [
+              "area",
+              "name",
+              "time",
+              "place",
+              "description",
+              "sourceName",
+              "isOfficialSourceConfirmed",
+              "isFromSns",
+              "dateConfirmedValidForTargetDate",
+              "informationType"
+            ],
+
+            additionalProperties: false
+          }
+        }
+      },
+
+      required: ["checked", "findings"],
+      additionalProperties: false
+    }
+  };
+}
+
+// regionName/localDateを引数として受け取る汎用instructions(前回と同じ
+// 引数化の思想)。検索観点をA/Bの2つに明示的に分離し、「Aが見つかった時点で
+// 検索を終了しない」ことを明示する。地域固有の地名・下位区分名は一切
+// ハードコードしない。SNSを検索目標にする文言は含めない。
+function buildLunaGenericRegionTwoLensProbeInstructions(
+  regionName,
+  localDateIso,
+  localDateJapanese
+) {
+  return (
+    "You are a regional \"what's happening today\" research assistant " +
+    "for a travel app, designed to work for any region in any country — " +
+    "do not assume any specific country, prefecture/state, or " +
+    "administrative structure beyond what is given to you below. A " +
+    "traveler's current location has been resolved to the broad region " +
+    "\"" + regionName + "\". The target date for this research is " +
+    "explicitly " + localDateIso + " (" + localDateJapanese + ") — do " +
+    "NOT use today's actual date, use exactly this specified date as " +
+    "\"today\" for every judgment you make. " +
+
+    "\n\nYOUR GOAL: research information that, if the traveler knew " +
+    "about it today, could change their plans, actions, or experience — " +
+    "genuinely valuable BECAUSE of this specific date, not generic " +
+    "sightseeing information. You must check TWO distinct lenses (both " +
+    "required, described below), not just list events. " +
+
+    "\n\nLENS A — \"things that exist today\" (informationType:" +
+    "\"today_happening\"): things a traveler could do, join, or witness " +
+    "today that they would want to know about — one-day/limited-time " +
+    "events, festivals, local observances, performances, or experiences " +
+    "held today; things on their first or last day today; things " +
+    "currently running as a limited-time period that includes today; " +
+    "special one-day-only opening/closing or operating hours; a moment " +
+    "where a traveler could experience local culture or daily life " +
+    "specific to this day. " +
+
+    "\n\nLENS B — \"things that are different today\" (informationType:" +
+    "\"today_changed\"): a deviation from the region's normal state " +
+    "today that could affect a traveler's schedule, movement, or " +
+    "actions if they don't know about it — unexpected/irregular " +
+    "closures (e.g. a holiday-caused closure that differs from the " +
+    "normal weekly closing day, or a makeup/substitute closure), " +
+    "special/extended opening on a day it would normally be closed, " +
+    "changed business or operating hours, changed admission/entry " +
+    "procedures, temporary usage restrictions on a facility, traffic " +
+    "regulations, road closures or detours, service suspensions or " +
+    "reduced services, temporary/special transit schedules, timetable " +
+    "changes, a changed event venue or time, a postponement, a " +
+    "cancellation, or any other temporary change to how a place can be " +
+    "used or reached today. " +
+
+    "\n\nCRITICAL — DO NOT STOP AFTER LENS A: even if you already found " +
+    "several good Lens A (today_happening) results, you must still " +
+    "actively check Lens B (\"is anything different from normal today?" +
+    "\") before finishing. Likewise, do not focus only on Lens B and " +
+    "skip Lens A. Check both. You do NOT need an equal number of each — " +
+    "it is completely normal and expected to have, for example, many " +
+    "Lens A findings and zero Lens B findings, or the reverse. Never " +
+    "invent a finding for either lens just to have \"something\" — " +
+    "report only what you can genuinely support. " +
+
+    "\n\nLENS B ACCURACY WARNING (critical): a facility simply being " +
+    "closed on its normal, regular weekly closing day is NOT a Lens B " +
+    "finding — that is ordinary, not a change. Only report it as Lens B " +
+    "when you can identify an actual deviation from the normal " +
+    "schedule/state (e.g. closed today specifically because of a " +
+    "holiday when it would normally be open, or open today specifically " +
+    "as a makeup day when it would normally be closed, or hours/" +
+    "procedures/service that are different from the norm today " +
+    "specifically). When in doubt whether something is actually a " +
+    "deviation from normal, do not report it as Lens B. " +
+
+    "\n\nSCOPE AND REGIONAL BIAS (critical): treat \"" + regionName + "\" " +
+    "as a whole broad region, not just the traveler's exact current " +
+    "point. Do not concentrate your search only on the most famous city " +
+    "or tourist destination within this region. If this region contains " +
+    "multiple major cities, tourist areas, rural areas, or " +
+    "geographically distant sub-areas, check whether your search has " +
+    "been skewed toward only one part of it, and if so, vary your " +
+    "search angles and query terms to also check other distinct areas " +
+    "within the region. You do NOT need to produce at least one finding " +
+    "per administrative subdivision — it is fine and expected for areas " +
+    "without strong findings to contribute zero. Never pad coverage " +
+    "with a weak or generic finding just to represent an area. " +
+
+    "\n\nSOURCES (priority order): national/state/prefectural government " +
+    "sites, municipal/local government sites, tourism associations, " +
+    "DMOs and official tourism sites, public facilities, transportation " +
+    "operators, event organizers, and official venue/shop sites. For " +
+    "Lens B specifically, prioritize primary sources such as the " +
+    "municipality, the public facility itself, the transportation " +
+    "operator, or the venue's own official site. Where useful, also " +
+    "check local media and event-listing sites, and other public web " +
+    "pages. Use web search as you normally would — if a public social " +
+    "media post happens to come up in an ordinary search result, you " +
+    "don't need to discard it, but do not treat searching social media " +
+    "platforms as a goal in itself. " +
+
+    "\n\nEXCLUDE SAFETY INFORMATION: do NOT include typhoon, tsunami, " +
+    "earthquake, evacuation, warnings, or other disaster/safety-related " +
+    "information as a finding here. This test intentionally excludes " +
+    "that category (planned as a separate, differently-updated system). " +
+    "However, ordinary traffic regulations or transit service " +
+    "suspensions that directly affect a traveler's movement today " +
+    "(found in the normal course of this research, not as a safety " +
+    "alert) may be reported as Lens B. If you encounter genuine " +
+    "disaster/safety warning information, ignore it for this task " +
+    "entirely. " +
+
+    "\n\nDATE VERIFICATION (critical, applies to both lenses): for " +
+    "every candidate, actively check its date, time, and place before " +
+    "including it. Only set \"dateConfirmedValidForTargetDate\":true if " +
+    "you can confirm it is actually valid on " + localDateIso + " " +
+    "specifically (not the day before, not the day after, not \"this " +
+    "week\" in general, not an unclear/unstated date, not something " +
+    "already ended). If you cannot confirm the date is exactly this " +
+    "target date, set dateConfirmedValidForTargetDate:false rather than " +
+    "presenting stale or date-unclear information as if it were " +
+    "confirmed for today. " +
+
+    "\n\nEXCLUDE GENERIC/EVERGREEN INFORMATION: do not include " +
+    "always-available tourist attractions, ordinary shops just " +
+    "operating normally, experiences available year-round, articles " +
+    "with no real connection to this specific date, generic rankings, " +
+    "or standard travel-guide-style content — UNLESS it qualifies for " +
+    "Lens A or Lens B as defined above. " +
+
+    "\n\nOFFICIAL VS. OTHER SOURCES: set \"isOfficialSourceConfirmed\":" +
+    "true only when a government/official tourism/venue's own official " +
+    "source confirms the information. Set \"isFromSns\":true only when " +
+    "a public social media post is part of what you found for this " +
+    "finding. Put the organization or site name in \"sourceName\" as " +
+    "plain text (e.g. the municipality's official site name, a " +
+    "newspaper name) — never put a raw URL in any field; this app " +
+    "tracks real reference URLs separately from your output. " +
+
+    "\n\nIF YOU FIND NOTHING GENUINELY WORTHWHILE for a given lens, it " +
+    "is fine to report zero findings for that lens. Prioritize " +
+    "reliability and genuine today-specific value over quantity — never " +
+    "invent a candidate to fill space for either lens. " +
+
+    "\n\nOUTPUT: each finding must have area (which part of \"" +
+    regionName + "\" this belongs to, in your own words based on what " +
+    "you actually found — do not force a fixed subdivision scheme), " +
+    "name (short title), time, place, a short Japanese description " +
+    "(your own words, not copied from a post/page), sourceName, " +
+    "isOfficialSourceConfirmed, isFromSns, " +
+    "dateConfirmedValidForTargetDate, and informationType (exactly " +
+    "\"today_happening\" for Lens A or \"today_changed\" for Lens B). " +
+    "Write area/name/time/place/description/sourceName in Japanese. Set " +
+    "\"checked\":true once you have actually performed web searches for " +
+    "both lenses (even if you found nothing) — never set it to true " +
+    "without actually searching. Do not output anything other than the " +
+    "JSON object described by the schema."
+  );
+}
+
+function sanitizeLunaGenericRegionTwoLensProbeFinding(
+  rawFinding
+) {
+  if (
+    !rawFinding ||
+    typeof rawFinding !== "object"
+  ) {
+    return null;
+  }
+
+  const informationType =
+    TWO_LENS_PROBE_ALLOWED_INFORMATION_TYPES.includes(
+      rawFinding.informationType
+    )
+      ? rawFinding.informationType
+      : null;
+
+  // Structured Outputs(strict)がenumを保証するはずだが、念のための
+  // 安全網として、不正/欠損なfindingは推測で補わず丸ごと除外する。
+  if (informationType === null) {
+    return null;
+  }
+
+  const description =
+    stripCitationArtifactsFromAiText(
+      sanitizeRegionEditorialText(
+        rawFinding.description,
+        LUNA_PROBE_FIELD_MAX_LENGTHS.description
+      )
+    );
+
+  if (description === "") {
+    return null;
+  }
+
+  return {
+    area:
+      sanitizeRegionEditorialText(
+        rawFinding.area,
+        LUNA_PROBE_FIELD_MAX_LENGTHS.area
+      ),
+
+    name:
+      sanitizeRegionEditorialText(
+        rawFinding.name,
+        LUNA_PROBE_FIELD_MAX_LENGTHS.name
+      ),
+
+    time:
+      sanitizeRegionEditorialText(
+        rawFinding.time,
+        LUNA_PROBE_FIELD_MAX_LENGTHS.time
+      ),
+
+    place:
+      sanitizeRegionEditorialText(
+        rawFinding.place,
+        LUNA_PROBE_FIELD_MAX_LENGTHS.place
+      ),
+
+    description: description,
+
+    sourceName:
+      sanitizeRegionEditorialText(
+        rawFinding.sourceName,
+        LUNA_PROBE_FIELD_MAX_LENGTHS.sourceName
+      ),
+
+    isOfficialSourceConfirmed:
+      rawFinding.isOfficialSourceConfirmed === true,
+
+    isFromSns:
+      rawFinding.isFromSns === true,
+
+    dateConfirmedValidForTargetDate:
+      rawFinding.dateConfirmedValidForTargetDate === true,
+
+    informationType: informationType
+  };
+}
+
+async function callOpenAiLunaGenericRegionTwoLensProbe() {
+  const apiKey =
+    process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    const configError =
+      new Error("OPENAI_API_KEY が設定されていません。");
+
+    configError.isMissingApiKey =
+      true;
+
+    throw configError;
+  }
+
+  const instructions =
+    buildLunaGenericRegionTwoLensProbeInstructions(
+      GENERIC_REGION_PROBE_REGION,
+      LUNA_PROBE_TARGET_DATE_ISO,
+      LUNA_PROBE_TARGET_DATE_JAPANESE
+    );
+
+  // input構築は観点(A/B)とは無関係(地域名・日付の受け渡しのみ)のため、
+  // 前回の汎用Probeのinput関数をそのまま再利用する(無変更)。
+  const inputItems =
+    buildLunaGenericRegionResearchProbeInputItems(
+      GENERIC_REGION_PROBE_COUNTRY,
+      GENERIC_REGION_PROBE_REGION,
+      GENERIC_REGION_PROBE_MUNICIPALITY,
+      LUNA_PROBE_TARGET_DATE_ISO,
+      LUNA_PROBE_TARGET_DATE_JAPANESE
+    );
+
+  const controller =
+    new AbortController();
+
+  const timeoutId =
+    setTimeout(
+      function() {
+        controller.abort();
+      },
+      LUNA_PREFECTURE_PROBE_TIMEOUT_MS
+    );
+
+  let response;
+
+  try {
+    try {
+      response =
+        await fetch(
+          LUNA_PROBE_ENDPOINT,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer " + apiKey
+            },
+
+            body: JSON.stringify({
+              model: LUNA_PROBE_MODEL,
+              instructions: instructions,
+              input: inputItems,
+
+              tools: [
+                {
+                  type: "web_search"
+                }
+              ],
+
+              tool_choice: "auto",
+              include: ["web_search_call.action.sources"],
+
+              text: {
+                format:
+                  buildLunaGenericRegionTwoLensProbeJsonSchema()
+              },
+
+              reasoning: {
+                effort: LUNA_PROBE_REASONING_EFFORT
+              }
+            }),
+
+            signal: controller.signal
+          }
+        );
+    } catch (fetchError) {
+      if (fetchError.name === "AbortError") {
+        const timeoutError =
+          new Error("Luna汎用地域調査(2観点)テストがタイムアウトしました。");
+
+        timeoutError.isTransient =
+          true;
+
+        timeoutError.isTimeout =
+          true;
+
+        throw timeoutError;
+      }
+
+      const networkError =
+        new Error("Luna汎用地域調査(2観点)テストの呼び出しに失敗しました。");
+
+      networkError.isTransient =
+        true;
+
+      networkError.isNetworkError =
+        true;
+
+      throw networkError;
+    }
+  } finally {
+    clearTimeout(
+      timeoutId
+    );
+  }
+
+  if (!response.ok) {
+    const httpError =
+      new Error(
+        "OpenAI APIがエラーを返しました。status=" + response.status
+      );
+
+    httpError.isHttpError =
+      true;
+
+    httpError.httpStatus =
+      response.status;
+
+    httpError.isTransient =
+      true;
+
+    throw httpError;
+  }
+
+  let responseData;
+
+  try {
+    responseData =
+      await response.json();
+  } catch (jsonError) {
+    const parseError =
+      new Error("OpenAI APIの応答を解析できませんでした。");
+
+    parseError.isJsonError =
+      true;
+
+    parseError.isTransient =
+      true;
+
+    throw parseError;
+  }
+
+  const outputItems =
+    Array.isArray(responseData.output)
+      ? responseData.output
+      : [];
+
+  const consultedSources =
+    extractActualSourcesFromResponsesOutput(
+      outputItems
+    );
+
+  const webSearchCallCount =
+    outputItems.filter(
+      function(item) {
+        return (
+          item &&
+          item.type === "web_search_call"
+        );
+      }
+    ).length;
+
+  const rawText =
+    extractOutputTextFromResponsesOutput(
+      outputItems
+    );
+
+  if (rawText.trim() === "") {
+    const shapeError =
+      new Error("OpenAI APIの応答形式が不正です。");
+
+    shapeError.isJsonError =
+      true;
+
+    shapeError.isTransient =
+      true;
+
+    throw shapeError;
+  }
+
+  let parsedResult;
+
+  try {
+    parsedResult =
+      JSON.parse(rawText);
+  } catch (parseError) {
+    const shapeError =
+      new Error(
+        "Luna汎用地域調査(2観点)テストの応答がJSON形式ではありませんでした。"
+      );
+
+    shapeError.isJsonError =
+      true;
+
+    shapeError.isTransient =
+      true;
+
+    throw shapeError;
+  }
+
+  const checked =
+    parsedResult.checked === true;
+
+  const rawFindings =
+    Array.isArray(parsedResult.findings)
+      ? parsedResult.findings
+      : [];
+
+  const findings =
+    rawFindings
+      .map(sanitizeLunaGenericRegionTwoLensProbeFinding)
+      .filter(
+        function(finding) {
+          return finding !== null;
+        }
+      )
+      .slice(0, LUNA_PREFECTURE_PROBE_MAX_FINDINGS);
+
+  const usage =
+    responseData.usage
+      ? {
+          inputTokens:
+            typeof responseData.usage.input_tokens === "number"
+              ? responseData.usage.input_tokens
+              : null,
+
+          outputTokens:
+            typeof responseData.usage.output_tokens === "number"
+              ? responseData.usage.output_tokens
+              : null,
+
+          totalTokens:
+            typeof responseData.usage.total_tokens === "number"
+              ? responseData.usage.total_tokens
+              : null
+        }
+      : null;
+
+  const estimatedCostUsd =
+    usage &&
+    typeof usage.inputTokens === "number" &&
+    typeof usage.outputTokens === "number"
+      ? calculateLunaProbeEstimatedCostUsd(
+          LUNA_PROBE_MODEL,
+          usage.inputTokens,
+          usage.outputTokens,
+          webSearchCallCount
+        )
+      : null;
+
+  return {
+    checked: checked,
+    findings: findings,
+    usage: usage,
+    webSearchCallCount: webSearchCallCount,
+    estimatedCostUsd: estimatedCostUsd,
+    consultedSources: consultedSources
+  };
+}
+
+// 代表(Admin)専用。一般旅行者・Editorからは実行できない(requireAdmin()を
+// そのまま踏襲)。Firestoreへの保存は行わない。現在値ボタン等の既存UIからは
+// 呼ばれない、完全に独立した試験専用エンドポイント。
+async function handleAdminLunaGenericRegionTwoLensProbeRequest(
+  request,
+  response
+) {
+  try {
+    const authResult =
+      await requireAdmin(
+        request
+      );
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({
+        success: false,
+        message:
+          authResult.message
+      });
+    }
+
+    let probeResult;
+
+    try {
+      probeResult =
+        await callOpenAiLunaGenericRegionTwoLensProbe();
+    } catch (aiError) {
+      console.error(
+        "Luna汎用地域調査(2観点)テスト：生成エラー：",
+        aiError
+      );
+
+      return response.status(200).json({
+        success: false,
+        message: "Luna汎用地域調査(2観点)テスト中にエラーが発生しました。"
+      });
+    }
+
+    const todayHappeningCount =
+      probeResult.findings.filter(
+        function(finding) {
+          return (
+            finding.informationType ===
+            "today_happening"
+          );
+        }
+      ).length;
+
+    const todayChangedCount =
+      probeResult.findings.filter(
+        function(finding) {
+          return (
+            finding.informationType ===
+            "today_changed"
+          );
+        }
+      ).length;
+
+    return response.status(200).json({
+      success: true,
+      model: LUNA_PROBE_MODEL,
+      country: GENERIC_REGION_PROBE_COUNTRY,
+      region: GENERIC_REGION_PROBE_REGION,
+      municipality: GENERIC_REGION_PROBE_MUNICIPALITY,
+      localDate: LUNA_PROBE_TARGET_DATE_ISO,
+      checked: probeResult.checked,
+      findingCount: probeResult.findings.length,
+      todayHappeningCount: todayHappeningCount,
+      todayChangedCount: todayChangedCount,
+      findings: probeResult.findings,
+      usage: probeResult.usage,
+      webSearchCallCount: probeResult.webSearchCallCount,
+      estimatedCostUsd: probeResult.estimatedCostUsd,
+      consultedSources: probeResult.consultedSources
+    });
+  } catch (error) {
+    console.error(
+      "Luna汎用地域調査(2観点)テスト：処理エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message: "Luna汎用地域調査(2観点)テスト中にエラーが発生しました。"
+    });
+  }
+}
+
+
 // Ver1.8 Phase1｜AIコンシェルジュ本体。認証はhandleCloudinarySignatureRequest()
 // と同じ匿名Firebase AuthenticationのBearer Token検証をそのまま再利用する。
 // AI呼び出し・応答検証のいずれかで失敗しても、常にsuccess:falseのJSONを
@@ -14504,6 +15214,18 @@ export default async function handler(
     requestBody.mode === "adminLunaGenericRegionResearchProbe"
   ) {
     return handleAdminLunaGenericRegionResearchProbeRequest(
+      request,
+      response
+    );
+  }
+
+  // Luna汎用地域調査(2観点)テストモード｜前述の各Probeとは別の、代表(Admin)
+  // 専用の独立した試験。既存モードのいずれにも一切触れない。現在値ボタン等の
+  // 既存UIからは呼ばれない。
+  if (
+    requestBody.mode === "adminLunaGenericRegionTwoLensProbe"
+  ) {
+    return handleAdminLunaGenericRegionTwoLensProbeRequest(
       request,
       response
     );
