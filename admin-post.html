@@ -853,6 +853,33 @@
 
         <div
           class="form-group"
+          id="shopNameFormGroup"
+        >
+
+          <label
+            class="form-label"
+            for="shopName"
+          >
+            店舗名
+            <span class="required">必須</span>
+          </label>
+
+          <input
+            id="shopName"
+            name="shopName"
+            type="text"
+            maxlength="60"
+            placeholder="例：キナリモダンバーガー"
+          >
+
+          <p class="form-help">
+            カード本文に大きく表示される、実際の店舗名を入力してください。「情報タイトル」欄は、写真上に表示される小さいラベルの文言になります。
+          </p>
+
+        </div>
+
+        <div
+          class="form-group"
           id="expiresAtFormGroup"
         >
 
@@ -1237,6 +1264,8 @@
     const categoryInput = document.getElementById("category");
     const contentInput = document.getElementById("content");
     const isPermanentAdCheckbox = document.getElementById("isPermanentAd");
+    const shopNameFormGroup = document.getElementById("shopNameFormGroup");
+    const shopNameInput = document.getElementById("shopName");
     const expiresAtFormGroup = document.getElementById("expiresAtFormGroup");
     const expiresAtInput = document.getElementById("expiresAt");
     const addressInput = document.getElementById("address");
@@ -1771,6 +1800,15 @@
       expiresAtFormGroup.style.display = isPermanentAd ? "none" : "";
       expiresAtInput.required = !isPermanentAd;
 
+      // 店舗名欄はisPermanentAdがONの新規投稿時だけ表示・必須にする。
+      // 編集時(isEditMode)はapi/admin-submission-update.js側がshopNameを
+      // 保存しない既存仕様のため、誤って入力・送信できないよう常に隠す。
+      const showShopNameField =
+        isPermanentAd && !isEditMode;
+
+      shopNameFormGroup.style.display = showShopNameField ? "" : "none";
+      shopNameInput.required = showShopNameField;
+
       if (isPermanentAd) {
         areaInput.placeholder = "那覇市、八重瀬町";
         areaRequirementLabel.textContent = "必須";
@@ -1842,6 +1880,16 @@
               PERMANENT_AD_DISALLOWED_AREA_VALUE +
               "」を対象地域にできません。具体的な市町村名を入力してください。",
             element: areaInput
+          });
+        }
+
+        if (
+          !isEditMode &&
+          shopNameInput.value.trim() === ""
+        ) {
+          validationErrors.push({
+            message: "常設店舗広告では店舗名の入力が必須です。",
+            element: shopNameInput
           });
         }
       }
@@ -1991,6 +2039,7 @@
         if (isPermanentAdCheckbox.checked) {
           if (!isEditMode) {
             payload.isPermanentAd = true;
+            payload.shopName = shopNameInput.value.trim();
           }
         } else {
           const expiresAtDate = new Date(expiresAtInput.value);

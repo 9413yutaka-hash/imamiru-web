@@ -93,7 +93,11 @@ const FIELD_MAX_LENGTHS = {
   websiteUrl: 300,
   area: 80,
   sourceId: 128,
-  sourceArticleUrl: 300
+  sourceArticleUrl: 300,
+
+  // 店舗投稿の安全化＋運営店舗属性 共通化｜post.html(一般の店舗投稿)の
+  // shopName入力(maxlength="60")と同じ上限に揃える。
+  shopName: 60
 };
 
 
@@ -621,6 +625,36 @@ function validatePostFields(
     }
   }
 
+  // 運営管理型・常設店舗広告(isPermanentAd:true)は、店舗カード本文の
+  // 見出しに実際の店舗名を表示する必要があるため、この場合だけshopNameを
+  // 必須にする。通常のお知らせ投稿(isPermanentAdがfalse/未指定)は、従来
+  // どおり発信元表示に固定の「マチナウ運営」を使うため、ここでは検証しない
+  // (isPermanentAdが指定されない既存の通常運営投稿の挙動は一切変更しない)。
+  let shopName = "";
+
+  if (isPermanentAd) {
+    shopName =
+      String(
+        requestBody.shopName || ""
+      )
+        .trim();
+
+    if (shopName === "") {
+      throw new Error(
+        "常設店舗広告では店舗名を入力してください。"
+      );
+    }
+
+    if (
+      shopName.length >
+      FIELD_MAX_LENGTHS.shopName
+    ) {
+      throw new Error(
+        "店舗名が長すぎます。"
+      );
+    }
+  }
+
   // 常設店舗広告のauthorTypeはクライアント入力に依存させず、サーバー側で
   // 固定値(PERMANENT_AD_AUTHOR_TYPE)にする(ALLOWED_AUTHOR_TYPESのチェックも
   // 経由しない、既存の"admin"/"ai"とは独立した専用の識別値のため)。
@@ -698,6 +732,7 @@ function validatePostFields(
     imageUrls: imageUrls,
     expiresAtDate: expiresAtDate,
     isPermanentAd: isPermanentAd,
+    shopName: shopName,
     authorType: authorType,
     sourceType: sourceType,
     takeout: takeout,
@@ -797,8 +832,12 @@ export default async function handler(
       authResult.database;
 
     const submissionData = {
+      // 運営管理型・常設店舗広告(isPermanentAd:true)は実際の店舗名を、
+      // それ以外の通常お知らせ投稿は従来どおり固定の発信元表示を保存する。
       shopName:
-        "マチナウ運営",
+        postFields.isPermanentAd
+          ? postFields.shopName
+          : "マチナウ運営",
 
       title:
         postFields.title,
