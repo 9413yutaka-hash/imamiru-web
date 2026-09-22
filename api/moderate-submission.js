@@ -8009,6 +8009,14 @@ async function handleSocialPatrolRequest(
 const LUNA_PROBE_MODEL =
   "gpt-5.6-luna";
 
+// Terra比較試験専用の独立定数(本部指示)。既存のAI_CITY_INFO_MODEL/
+// AI_SOCIAL_PATROL_MODEL等(既定値が偶然同じ"gpt-5.6-terra"の場合が
+// あっても、環境変数経由の別物)には一切触れない。LunaとTerraの比較を
+// 完全に公平にするため、OpenAI呼び出し部分(callOpenAiLunaRegionalResearchProbe())
+// はmodel引数で共通化し、instructions/schema/inputは一切変更しない。
+const TERRA_PROBE_MODEL =
+  "gpt-5.6-terra";
+
 const LUNA_PROBE_ENDPOINT =
   "https://api.openai.com/v1/responses";
 
@@ -8072,8 +8080,36 @@ const LUNA_PROBE_INPUT_COST_PER_MILLION_USD =
 const LUNA_PROBE_OUTPUT_COST_PER_MILLION_USD =
   1.2;
 
+// OpenAI公式ドキュメント(developers.openai.com/api/docs/models/gpt-5.6-terra、
+// 実装時点で確認済み)のgpt-5.6-terra標準単価。Lunaより高い(標準入力$2/1M、
+// 出力$12/1M)。
+const TERRA_PROBE_INPUT_COST_PER_MILLION_USD =
+  2;
+
+const TERRA_PROBE_OUTPUT_COST_PER_MILLION_USD =
+  12;
+
+// web_searchツールの呼び出し課金($10/1,000回=1回$0.01)はOpenAI公式
+// Pricingにおいてモデルに依存しない固定額のため、Luna/Terra共通で
+// この1つの定数を使う(モデルごとに重複定義しない)。
 const LUNA_PROBE_WEB_SEARCH_COST_PER_CALL_USD =
   0.01;
+
+// モデル文字列から円換算前のUSD単価を引くための対応表。未知のmodelが
+// 渡された場合はnullを返し、estimatedCostUsdの計算自体を安全側でnullに
+// する(誤った単価で計算しない)。
+const PROBE_MODEL_COST_RATES_USD =
+  {
+    "gpt-5.6-luna": {
+      inputPerMillion: LUNA_PROBE_INPUT_COST_PER_MILLION_USD,
+      outputPerMillion: LUNA_PROBE_OUTPUT_COST_PER_MILLION_USD
+    },
+
+    "gpt-5.6-terra": {
+      inputPerMillion: TERRA_PROBE_INPUT_COST_PER_MILLION_USD,
+      outputPerMillion: TERRA_PROBE_OUTPUT_COST_PER_MILLION_USD
+    }
+  };
 
 function buildLunaRegionalResearchProbeJsonSchema() {
   return {
@@ -8337,22 +8373,32 @@ function sanitizeLunaRegionalResearchProbeFinding(
   };
 }
 
+// modelを追加した以外は既存のLuna試験の計算式と完全に同じ(本部指示の
+// 「model以外は完全に共通化」に合わせる)。計算式(実請求額ではなく推定額):
+// (inputTokens / 1,000,000) × モデルの標準入力単価
+// + (outputTokens / 1,000,000) × モデルの標準出力単価
+// + webSearchCallCount × $0.01(web_searchツール呼び出し、モデル非依存)
 function calculateLunaProbeEstimatedCostUsd(
+  model,
   inputTokens,
   outputTokens,
   webSearchCallCount
 ) {
-  // 計算式(本部指示の公式料金を使用、実請求額ではなく推定額):
-  // (inputTokens / 1,000,000) × $0.20
-  // + (outputTokens / 1,000,000) × $1.20
-  // + webSearchCallCount × $0.01
+  const costRates =
+    PROBE_MODEL_COST_RATES_USD[model];
+
+  if (!costRates) {
+    // 未知のmodelでは誤った単価で計算しない(安全側でnull)。
+    return null;
+  }
+
   const inputCostUsd =
     (inputTokens / 1000000) *
-    LUNA_PROBE_INPUT_COST_PER_MILLION_USD;
+    costRates.inputPerMillion;
 
   const outputCostUsd =
     (outputTokens / 1000000) *
-    LUNA_PROBE_OUTPUT_COST_PER_MILLION_USD;
+    costRates.outputPerMillion;
 
   const webSearchCostUsd =
     webSearchCallCount *
@@ -8365,7 +8411,9 @@ function calculateLunaProbeEstimatedCostUsd(
   );
 }
 
-async function callOpenAiLunaRegionalResearchProbe() {
+async function callOpenAiLunaRegionalResearchProbe(
+  model
+) {
   const apiKey =
     process.env.OPENAI_API_KEY;
 
@@ -8412,7 +8460,7 @@ async function callOpenAiLunaRegionalResearchProbe() {
             },
 
             body: JSON.stringify({
-              model: LUNA_PROBE_MODEL,
+              model: model,
               instructions: instructions,
               input: inputItems,
 
@@ -8606,6 +8654,7 @@ async function callOpenAiLunaRegionalResearchProbe() {
     typeof usage.inputTokens === "number" &&
     typeof usage.outputTokens === "number"
       ? calculateLunaProbeEstimatedCostUsd(
+          model,
           usage.inputTokens,
           usage.outputTokens,
           webSearchCallCount
@@ -8649,7 +8698,9 @@ async function handleAdminLunaRegionalResearchProbeRequest(
 
     try {
       probeResult =
-        await callOpenAiLunaRegionalResearchProbe();
+        await callOpenAiLunaRegionalResearchProbe(
+          LUNA_PROBE_MODEL
+        );
     } catch (aiError) {
       console.error(
         "Luna地域情報テスト：生成エラー：",
@@ -8684,6 +8735,76 @@ async function handleAdminLunaRegionalResearchProbeRequest(
     return response.status(500).json({
       success: false,
       message: "Luna地域情報テスト中にエラーが発生しました。"
+    });
+  }
+}
+
+
+// Terra比較試験(本部指示)｜Lunaと完全に同一条件(instructions/schema/input/
+// tools/include/reasoning)で、modelだけをTERRA_PROBE_MODELにした比較用
+// エンドポイント。callOpenAiLunaRegionalResearchProbe()を関数名も含めて
+// 完全に共有し、渡すmodelだけが異なる(検索条件を一切変更しないことを
+// 構造的に担保する)。認証・エラーハンドリング・レスポンス形はLuna版と
+// 完全に同じパターン(handleAdminLunaRegionalResearchProbeRequest()参照)。
+async function handleAdminTerraRegionalResearchProbeRequest(
+  request,
+  response
+) {
+  try {
+    const authResult =
+      await requireAdmin(
+        request
+      );
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({
+        success: false,
+        message:
+          authResult.message
+      });
+    }
+
+    let probeResult;
+
+    try {
+      probeResult =
+        await callOpenAiLunaRegionalResearchProbe(
+          TERRA_PROBE_MODEL
+        );
+    } catch (aiError) {
+      console.error(
+        "Terra地域情報テスト：生成エラー：",
+        aiError
+      );
+
+      return response.status(200).json({
+        success: false,
+        message: "Terra地域情報テスト中にエラーが発生しました。"
+      });
+    }
+
+    return response.status(200).json({
+      success: true,
+      model: TERRA_PROBE_MODEL,
+      targetArea: LUNA_PROBE_TARGET_AREA,
+      targetDate: LUNA_PROBE_TARGET_DATE_ISO,
+      checked: probeResult.checked,
+      findingCount: probeResult.findings.length,
+      findings: probeResult.findings,
+      usage: probeResult.usage,
+      webSearchCallCount: probeResult.webSearchCallCount,
+      estimatedCostUsd: probeResult.estimatedCostUsd,
+      consultedSources: probeResult.consultedSources
+    });
+  } catch (error) {
+    console.error(
+      "Terra地域情報テスト：処理エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message: "Terra地域情報テスト中にエラーが発生しました。"
     });
   }
 }
@@ -13330,6 +13451,17 @@ export default async function handler(
     requestBody.mode === "adminLunaRegionalResearchProbe"
   ) {
     return handleAdminLunaRegionalResearchProbeRequest(
+      request,
+      response
+    );
+  }
+
+  // Terra比較試験モード｜Lunaと完全に同一条件・代表(Admin)専用。既存モード
+  // のいずれにも一切触れない。現在値ボタン等の既存UIからは呼ばれない。
+  if (
+    requestBody.mode === "adminTerraRegionalResearchProbe"
+  ) {
+    return handleAdminTerraRegionalResearchProbeRequest(
       request,
       response
     );
