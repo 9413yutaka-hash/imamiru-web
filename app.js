@@ -13803,6 +13803,87 @@ if (regionRecommendationBackToCurrentButtonElement) {
 // #heroActionArea/#heroActionReads)を、既存の各セクション・既存処理へ
 // 接続する。新しい機能・新しいGPS/地域選択ロジックは一切作らず、
 // 既存の該当要素をsmooth scrollまたはclick代理実行するだけの薄い配線。
+// TOPヒーロー緊急変更｜「今日の沖縄」無反応バグの修正。
+// #regionTodayInfoSectionは、GPS未取得・情報未取得・エラー時は
+// style.display="none"のまま(renderRegionTodayInfo()の既存挙動、無変更)。
+// そのため単純にscrollIntoView()するだけでは、非表示要素には何も
+// スクロールが起きず「無反応」に見えていた(調査で確認した実際の原因)。
+// 修正は「既にregionTodayInfoが表示可能ならそのままscroll、まだなら
+// 既存#locationButtonの処理(GPS取得→triggerRegionTodayInfo())をそのまま
+// 再利用して起動し、セクションが表示された時点で自動的にscrollする」の
+// 2分岐にする。GPS取得ロジック・regionTodayInfo生成ロジックは一切
+// 複製しない(既存要素のclick代理実行のみ)。
+let heroActionTodayPendingObserver =
+  null;
+
+// regionTodayInfoSectionのstyle.display変化(renderRegionTodayInfo()が
+// 既に行っている既存の表示切り替え)を監視するだけの薄いオブザーバー。
+// 表示された瞬間に1回だけscrollし、自分自身を切断する。GPS許可待ちが
+// 極端に長引く/情報が結局表示されない場合に備え、一定時間で監視を
+// 打ち切る(タイムアウト時も新しいエラー表示は出さない、既存の
+// 「エラーを大きく表示しない」方針に合わせる)。
+function waitForRegionTodayInfoSectionAndScrollIntoView() {
+  const targetSection =
+    document.getElementById(
+      "regionTodayInfoSection"
+    );
+
+  if (!targetSection) {
+    return;
+  }
+
+  if (heroActionTodayPendingObserver) {
+    heroActionTodayPendingObserver.disconnect();
+
+    heroActionTodayPendingObserver =
+      null;
+  }
+
+  const observer =
+    new MutationObserver(
+      function() {
+        if (targetSection.style.display !== "none") {
+          targetSection.scrollIntoView(
+            {
+              behavior: "smooth",
+              block: "start"
+            }
+          );
+
+          observer.disconnect();
+
+          if (heroActionTodayPendingObserver === observer) {
+            heroActionTodayPendingObserver =
+              null;
+          }
+        }
+      }
+    );
+
+  observer.observe(
+    targetSection,
+    {
+      attributes: true,
+      attributeFilter: ["style"]
+    }
+  );
+
+  heroActionTodayPendingObserver =
+    observer;
+
+  window.setTimeout(
+    function() {
+      if (heroActionTodayPendingObserver === observer) {
+        observer.disconnect();
+
+        heroActionTodayPendingObserver =
+          null;
+      }
+    },
+    45000
+  );
+}
+
 const heroActionTodayElement =
   document.getElementById(
     "heroActionToday"
@@ -13817,14 +13898,49 @@ if (heroActionTodayElement) {
           "regionTodayInfoSection"
         );
 
-      if (targetSection) {
+      if (!targetSection) {
+        return;
+      }
+
+      if (targetSection.style.display !== "none") {
+        // ①既にregionTodayInfoが表示可能(loading/generating/ready、
+        // renderRegionTodayInfo()の既存状態管理をそのまま利用)。
         targetSection.scrollIntoView(
           {
             behavior: "smooth",
             block: "start"
           }
         );
+
+        return;
       }
+
+      // ②まだ表示可能になっていない(GPS未取得、または取得済みでも
+      // 情報未取得/エラー)。既存#locationButtonのonclick
+      // (ensureGoogleMapsLoaded(); getLocation())をそのまま起動する
+      // (GPS取得ロジックの複製はしない)。取得中である旨は既存の
+      // locationButton/locationMessageの表示切り替え(getLocation()が
+      // 既に行っている)でユーザーに伝わる。
+      const locationButtonElement =
+        document.getElementById(
+          "locationButton"
+        );
+
+      if (locationButtonElement) {
+        locationButtonElement.scrollIntoView(
+          {
+            behavior: "smooth",
+            block: "center"
+          }
+        );
+
+        locationButtonElement.click();
+      }
+
+      // regionTodayInfoSectionが表示された時点(triggerRegionTodayInfo()の
+      // 既存処理がstatusを更新し、renderRegionTodayInfo()が既存どおり
+      // 表示を切り替えるタイミング)で自動的にそこへ移動する。
+      waitForRegionTodayInfoSectionAndScrollIntoView();
     }
   );
 }
@@ -13874,14 +13990,36 @@ if (heroActionAreaElement) {
           "regionRecommendationSection"
         );
 
-      if (targetSection) {
-        targetSection.scrollIntoView(
-          {
-            behavior: "smooth",
-            block: "start"
-          }
-        );
+      if (!targetSection) {
+        return;
       }
+
+      // TOPヒーロー緊急変更｜「エリアから探す」無反応バグの修正。
+      // #regionRecommendationSectionはGPS未取得時style.display="none"の
+      // ままで、その中にある#regionRecommendationOtherAreaButton／
+      // 地域選択ピッカー(#regionRecommendationAreaPicker)も非表示領域内に
+      // 埋もれて画面上どこにも現れず、クリックしても無反応だった
+      // (調査で確認した実際の原因)。
+      // showRegionRecommendationsForArea()自体はGPS(userLatitude等)に
+      // 一切依存せず、areaName文字列とFirestore(window.machinauDb)だけで
+      // 動く。地域選択ピッカーの各ボタンもページ読み込み時に
+      // buildRegionRecommendationAreaPickerHtml()で既に描画済み(GPS非依存)。
+      // 唯一の問題は親sectionが隠れていたことだけなので、GPSを起動せず、
+      // このsection自体をここで可視化するだけにする(選択ロジック自体は
+      // 複製しない)。renderRegionRecommendationCards()は次に実行された
+      // 時点で改めてstyle.displayを実データに応じて設定し直すため、
+      // ここでの一時的な可視化と競合しない。
+      if (targetSection.style.display === "none") {
+        targetSection.style.display =
+          "";
+      }
+
+      targetSection.scrollIntoView(
+        {
+          behavior: "smooth",
+          block: "start"
+        }
+      );
 
       // 既存の「ほかの地域を見る」トグル処理(表示/非表示の切替のみ)を
       // そのまま起動する。地域選択ロジック自体は複製しない。
