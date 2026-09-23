@@ -341,6 +341,20 @@
       line-height: 1.8;
     }
 
+    /* 店舗投稿 一般公開停止 Phase1｜?mode=shop案内文言。既存.notice-boxと
+       同じ配色をそのまま踏襲し、新しいデザイン体系は作らない。 */
+    .post-mode-shop-unavailable-notice {
+      margin: 0 0 14px;
+      padding: 13px 14px;
+      border: 1px solid #cfeefa;
+      border-radius: 14px;
+      background: #effbff;
+      color: #24627e;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.8;
+    }
+
     /* Ver1.8 Phase2 STEP7-M(街で見つけた！投稿)｜最初に「情報の種類」を選ぶ
        2択UIの専用スタイル。ボタン自体は既存.location-button、注意文は既存
        .form-helpをそのまま再利用し、新規に追加するのはレイアウト用の
@@ -1178,6 +1192,18 @@
 
         <p class="post-mode-question">
           どんな「今」を届けますか？
+        </p>
+
+        <!-- 店舗投稿 一般公開停止 Phase1｜?mode=shopで直接アクセスされた
+             場合だけ表示する案内(代表指示)。isGeneralPublicShopSubmission
+             CurrentlyEnabled()がfalseの間、通常の選択画面では出さない
+             (無関係な利用者に不要な案内を見せないため)。 -->
+        <p
+          id="postModeShopUnavailableNotice"
+          class="post-mode-shop-unavailable-notice"
+          style="display:none;"
+        >
+          店舗・施設からの投稿は現在準備中です。「👀 街で見つけた！」からの投稿はご利用いただけます。
         </p>
 
         <div class="post-mode-options">
@@ -2142,6 +2168,31 @@
         "postModeStreetButton"
       );
 
+    const postModeShopUnavailableNotice =
+      document.getElementById(
+        "postModeShopUnavailableNotice"
+      );
+
+    // 店舗投稿 一般公開停止 Phase1｜正規店舗向けの投稿URL/token検証機構が
+    // 実装されるまでの間、一般公開状態ではshop投稿モードへの入口を閉じる
+    // (代表指示：一般ユーザーによる店舗なりすまし投稿を防ぐため)。
+    // shopフォーム本体・保存処理・applyPostMode("shop")自体・?mode=shopを
+    // 読み取るコードは一切削除せず、この1つの判定関数だけで有効/無効を
+    // 切り替える。将来、正規店舗URL(例：?mode=shop&token=xxxxx)の
+    // token検証ロジックへこの関数の中身を置き換えるだけで再開できる
+    // (呼び出し側・フォーム本体には一切手を入れない)。
+    function isGeneralPublicShopSubmissionCurrentlyEnabled() {
+      return false;
+    }
+
+    if (
+      !isGeneralPublicShopSubmissionCurrentlyEnabled() &&
+      postModeShopButton
+    ) {
+      postModeShopButton.style.display =
+        "none";
+    }
+
     const postModeSelectedIndicator =
       document.getElementById(
         "postModeSelectedIndicator"
@@ -2348,13 +2399,23 @@
         "mode"
       );
 
-    if (
-      requestedPostModeFromUrl === "street" ||
-      requestedPostModeFromUrl === "shop"
-    ) {
+    if (requestedPostModeFromUrl === "street") {
       applyPostMode(
-        requestedPostModeFromUrl
+        "street"
       );
+    } else if (requestedPostModeFromUrl === "shop") {
+      // 店舗投稿 一般公開停止 Phase1｜?mode=shopでの直接アクセスも同じ
+      // 判定関数で止める(代表指示)。applyPostMode("shop")自体は削除せず、
+      // 将来isGeneralPublicShopSubmissionCurrentlyEnabled()の中身を
+      // token検証等に置き換えた時にそのまま呼べる状態を維持する。
+      if (isGeneralPublicShopSubmissionCurrentlyEnabled()) {
+        applyPostMode(
+          "shop"
+        );
+      } else if (postModeShopUnavailableNotice) {
+        postModeShopUnavailableNotice.style.display =
+          "";
+      }
     }
 
     const newPostButton =
@@ -3905,6 +3966,24 @@ function requestCurrentLocationForPost() {
       );
 
       try {
+        // 店舗投稿 一般公開停止 Phase1(第2層)｜第1層(UIでshop選択肢を
+        // 隠す)を利用者が回避した場合(古いブックマーク・DOM改変・
+        // JavaScriptコンソール操作等でcurrentPostModeがshopのまま送信
+        // された場合)でも、Firestoreへの書き込み(database.collection
+        // ("submissions").add())より前にここで止める。Security Rules
+        // (第3層)の代替ではなく、通常操作・古い導線に対するUX上の防御。
+        // isGeneralPublicShopSubmissionCurrentlyEnabled()は上のpostMode
+        // 選択画面の表示制御と同じ判定関数を再利用する(判定基準を1箇所に
+        // 保つ)。shopフォーム自体・validateForm()・保存処理は無変更。
+        if (
+          currentPostMode !== "street" &&
+          !isGeneralPublicShopSubmissionCurrentlyEnabled()
+        ) {
+          throw new Error(
+            "店舗・施設からの投稿は現在準備中です。「街で見つけた！」からの投稿はご利用いただけます。"
+          );
+        }
+
         // Ver1.8 Phase2 STEP7-M(街で見つけた！投稿)｜街モードではユーザーに
         // title/categoryを直接入力・選択させない。validateForm()の既存必須
         // チェックを変更せず、送信直前にだけshopNameをtitleへ複製し、

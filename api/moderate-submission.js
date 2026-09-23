@@ -285,6 +285,19 @@ export function resolveSubmissionType(
     : "shop";
 }
 
+// 店舗投稿 一般公開停止 Phase1｜正規店舗向けの投稿URL/token検証機構が
+// 実装されるまでの間、一般公開状態(post.html?mode=shop相当)からのshop投稿は
+// AI自動審査による自動承認を行わない(代表指示：一般ユーザーによる店舗
+// なりすまし投稿を防ぐため)。既存の投稿フォーム・保存処理・Moderation・
+// pending/approved・admin承認・掲載番号・終了処理は一切削除しない。
+// post.html側のisGeneralPublicShopSubmissionCurrentlyEnabled()と対になる
+// サーバー側の判定関数で、この1箇所だけを将来の正規店舗token検証ロジックへ
+// 置き換えれば再開できる(呼び出し側・既存モデレーションロジックには
+// 一切手を入れない)。
+function isGeneralPublicShopSubmissionCurrentlyEnabled() {
+  return false;
+}
+
 
 // Ver1.8 Phase1｜AIコンシェルジュ。モデル名はここ1箇所のみで管理し、
 // 他の箇所へハードコードしない。AI_CONCIERGE_MODEL環境変数があれば
@@ -23168,6 +23181,26 @@ export default async function handler(
         success: true,
         message:
           "既に審査済みのため、再審査をスキップしました。"
+      });
+    }
+
+    // 店舗投稿 一般公開停止 Phase1｜ここまでに到達するのは、この関数の
+    // 冒頭でpublicationNumber/endCodeによる本人確認が成功し、かつ
+    // status==="pending"の投稿のみ(admin投稿は常にstatus:"approved"で
+    // 作られ、AI投稿・常設広告もこのpublicationNumber経由の審査トリガーを
+    // 使わないため、いずれもこの時点より前で対象外になっている)。
+    // resolveSubmissionType()は既存のAllowlist方式(street/shop以外・
+    // 未設定は安全側でshopへfallback)をそのまま利用するだけで、新しい
+    // Firestoreフィールドは追加しない。ドキュメント自体は削除・rejected化
+    // せずpendingのまま残す(Admin側で必要なら引き続き手動確認できる)。
+    if (
+      !isGeneralPublicShopSubmissionCurrentlyEnabled() &&
+      resolveSubmissionType(currentData) === "shop"
+    ) {
+      return response.status(403).json({
+        success: false,
+        message:
+          "店舗・施設からの投稿は現在準備中です。"
       });
     }
 

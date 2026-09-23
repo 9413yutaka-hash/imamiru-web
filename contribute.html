@@ -233,6 +233,25 @@
       box-shadow: 0 8px 20px rgba(5, 144, 194, 0.22);
     }
 
+    /* 店舗投稿 一般公開停止 Phase1｜「🏪 お店・施設の方はこちら」カードを
+       非操作状態にするための最小追加。既存.entry-card/.entry-card-cta
+       自体は変更せず、この2クラスを併用した時だけ見た目とcursorを変える
+       (代表指示：新しいデザイン体系を作らない、最小変更)。 */
+    .entry-card-disabled {
+      cursor: default;
+      opacity: 0.7;
+    }
+
+    .entry-card-disabled:active {
+      transform: none;
+    }
+
+    .entry-card-cta-disabled {
+      background: rgba(12, 54, 87, 0.12);
+      color: var(--subtext);
+      box-shadow: none;
+    }
+
     .notice-box {
       margin: 22px 0 30px;
       padding: 18px 18px;
@@ -357,10 +376,14 @@
       </span>
     </a>
 
-    <a
-      class="entry-card"
-      href="post.html?mode=shop"
-    >
+    <!-- 店舗投稿 一般公開停止 Phase1｜正規店舗向けの投稿URL/token検証機構が
+         実装されるまでの間、一般公開からはこのカードを非操作にする
+         (代表指示：一般ユーザーによる店舗なりすまし投稿を防ぐため)。
+         href="post.html?mode=shop"は削除せず、<a>を非リンクの<div>へ
+         一時的に変更するだけ。将来、店舗専用URLの検証を追加した時に
+         このコメントとdivタグを元の<a href="post.html?mode=shop">へ
+         戻すだけで再開できる。 -->
+    <div class="entry-card entry-card-disabled">
       <span class="entry-card-icon">🏪</span>
 
       <h2>
@@ -372,10 +395,10 @@
         タイムセールなど、お店の今を知らせる投稿です
       </p>
 
-      <span class="entry-card-cta">
-        お店の情報を投稿する →
+      <span class="entry-card-cta entry-card-cta-disabled">
+        現在準備中です
       </span>
-    </a>
+    </div>
 
     <div class="notice-box">
       <h2>
