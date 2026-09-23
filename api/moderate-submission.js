@@ -10020,6 +10020,1030 @@ async function handleRegionTodayInfoGetRequest(
 }
 
 
+// ============================================================
+// 多言語化 Phase B(店舗情報)
+// ============================================================
+// 「今、近くで楽しめる場所」の店舗説明(自由入力本文)を対象にした翻訳
+// キャッシュ。regionTodayInfoResultsの構造をそのまま複製せず、店舗データ
+// 本来の置き場所であるsubmissionsの各documentに、Phase Aと同じ考え方
+// (translations.{language} ＋ sourceHashによる原文更新検知)だけを適用する。
+// 店名・住所・カテゴリ・固定UIラベル(マチナウ運営より・マチナウ掲載中等)は
+// AI翻訳の対象にしない(店名/住所は事実の識別子、カテゴリ・固定ラベルは
+// 既存のtranslations.js／getCategoryDisplay()の言語別マッピングで0円対応
+// 済みのため)。
+
+// 1回のリクエストで翻訳対象にできる店舗数の上限(本部指示：一覧を開いた
+// だけで大量の店舗を一気に翻訳しない)。クライアント側は実際に画面に描画
+// されている店舗だけを送るため、通常この上限に達することはない
+// (TOP：最大6件、見つける全件表示でも実際に描画された分のみ)。
+const SHOP_TRANSLATION_MAX_IDS_PER_REQUEST =
+  20;
+
+// Phase Aの翻訳と同じ、単純翻訳に十分な既存の安価なモデル・経路を再利用する
+// (web_search不要、新しい外部翻訳APIは使わない)。Phase A用の定数とは
+// あえて独立させ(REGION_TODAY_INFO_TRANSLATION_MODEL等とは別定数)、
+// 将来どちらかだけを調整しても他方に影響しない構造にする。
+const SHOP_TRANSLATION_MODEL =
+  "gpt-4o-mini";
+
+const SHOP_TRANSLATION_ENDPOINT =
+  "https://api.openai.com/v1/chat/completions";
+
+const SHOP_TRANSLATION_TIMEOUT_MS =
+  30000;
+
+const SHOP_TRANSLATION_GENERATING_STALE_MS =
+  60 * 1000;
+
+// OpenAI公式ドキュメント(developers.openai.com/api/docs/models/gpt-4o-mini、
+// 実装時点で確認済み)の標準単価(Phase Aと同一モデルのため同じ単価)。
+const SHOP_TRANSLATION_INPUT_COST_PER_MILLION_USD =
+  0.15;
+
+const SHOP_TRANSLATION_OUTPUT_COST_PER_MILLION_USD =
+  0.6;
+
+// api/admin-post.jsのcontent上限(300)より少し余裕を持たせる(日本語→
+// 英語等、翻訳後に文字数が増えても本文の意味を削らずに収められるように
+// するため)。
+const SHOP_TRANSLATION_MESSAGE_MAX_LENGTH =
+  400;
+
+const SHOP_TRANSLATION_FIRESTORE_ID_MAX_LENGTH =
+  128;
+
+// languageの許可リストはPhase Aと同じ考え方(サイト全体でどの言語に
+// 対応しているか)のため、REGION_TODAY_INFO_SUPPORTED_LANGUAGES／
+// REGION_TODAY_INFO_SOURCE_LANGUAGEをそのまま再利用する(重複定義しない)。
+
+function sanitizeShopFirestoreId(
+  rawValue
+) {
+  if (typeof rawValue !== "string") {
+    return "";
+  }
+
+  const trimmedValue =
+    rawValue.trim();
+
+  if (
+    trimmedValue === "" ||
+    trimmedValue.length >
+      SHOP_TRANSLATION_FIRESTORE_ID_MAX_LENGTH ||
+    trimmedValue.includes("/")
+  ) {
+    return "";
+  }
+
+  return trimmedValue;
+}
+
+// convertSubmissionToShop()(app.js)と全く同じ優先順位で店舗説明の原文を
+// 取り出す。クライアントから送られた文章は一切信用せず、必ずこの関数で
+// サーバー側のFirestore実データから取得する(本部指示)。
+function getShopMessageFromSubmissionData(
+  data
+) {
+  const candidateValues =
+    [
+      data.content,
+      data.message,
+      data.description,
+      data.details
+    ];
+
+  for (
+    let index = 0;
+    index < candidateValues.length;
+    index += 1
+  ) {
+    const value =
+      candidateValues[index];
+
+    if (
+      typeof value === "string" &&
+      value.trim() !== ""
+    ) {
+      return value.trim();
+    }
+  }
+
+  return "";
+}
+
+// 既存の公開一覧(fetchApprovedSubmissionDocsForArea()等)と同じ可視性条件
+// (status==="approved" ＋ (期限内 または 常設広告))をこの1件取得の文脈でも
+// 再現する。この条件を満たさないdocumentは、存在確認や内容の手がかりを
+// 一切応答へ含めない(非公開データを本APIから探れないようにするため)。
+function isSubmissionVisibleToPublic(
+  data
+) {
+  if (data.status !== "approved") {
+    return false;
+  }
+
+  if (data.isPermanentAd === true) {
+    return true;
+  }
+
+  const expiresAtMillis =
+    data.expiresAt &&
+    typeof data.expiresAt.toMillis === "function"
+      ? data.expiresAt.toMillis()
+      : null;
+
+  return (
+    expiresAtMillis !== null &&
+    expiresAtMillis > Date.now()
+  );
+}
+
+// Phase Aのcomputeregion RegionTodayInfoFindingsHash()と同じ考え方
+// (AIを使わない、Node標準のnode:cryptoのみ)。店舗説明の原文1件分の
+// ハッシュを計算する。
+function computeShopMessageHash(
+  message
+) {
+  return createHash("sha256")
+    .update(
+      message,
+      "utf8"
+    )
+    .digest("hex");
+}
+
+function calculateShopTranslationEstimatedCostUsd(
+  inputTokens,
+  outputTokens
+) {
+  const inputCostUsd =
+    (inputTokens / 1000000) *
+    SHOP_TRANSLATION_INPUT_COST_PER_MILLION_USD;
+
+  const outputCostUsd =
+    (outputTokens / 1000000) *
+    SHOP_TRANSLATION_OUTPUT_COST_PER_MILLION_USD;
+
+  return (
+    inputCostUsd +
+    outputCostUsd
+  );
+}
+
+// 複数店舗の説明文を1回のリクエストでまとめて翻訳する(本部指示：一覧で
+// 大量の個別翻訳リクエストを発生させない)。店名・住所・価格・営業時間・
+// メニュー名等の事実を変更・創作させない指示を明示する。
+function buildShopTranslationPrompt(
+  items,
+  targetLanguage
+) {
+  const targetLanguageNamesByCode =
+    {
+      en: "English"
+    };
+
+  const targetLanguageName =
+    targetLanguageNamesByCode[targetLanguage] ||
+    targetLanguage;
+
+  const translatableItems =
+    items.map(
+      function(item) {
+        return {
+          id: item.firestoreId,
+          message: item.message
+        };
+      }
+    );
+
+  const systemInstruction =
+    "You are a precise, literal translator for a local business/travel " +
+    "information app. You will receive a JSON array of shop or spot " +
+    "description texts written in Japanese, each with an \"id\". " +
+    "Translate the \"message\" text of each item into " +
+    targetLanguageName + ". " +
+
+    "\n\nCRITICAL RULES (this is translation only, not research or " +
+    "copywriting): " +
+    "\n- This is a pure translation task. Do not search the web and do " +
+    "not verify, correct, or add facts. " +
+    "\n- Do not add, remove, or merge items. The output array must have " +
+    "exactly one entry per input item, with the same \"id\" value. " +
+    "\n- Do not invent, guess, or change any price, business hours, menu " +
+    "item name, address, or shop name mentioned in the text — translate " +
+    "the wording only, never the underlying fact. " +
+    "\n- Do not strengthen, exaggerate, or otherwise editorialize " +
+    "promotional wording beyond what the original text says. " +
+    "\n- If a shop's own proper name appears inside the text, keep it " +
+    "recognizable rather than inventing a different-sounding name. " +
+
+    "\n\nOUTPUT: respond with a JSON object of exactly this form: " +
+    "{\"items\":[{\"id\":\"...\",\"message\":\"...\"}, ...]}. Output " +
+    "nothing else — no preamble, no explanation, no markdown.";
+
+  const userContent =
+    JSON.stringify(
+      {
+        items: translatableItems
+      }
+    );
+
+  return {
+    systemInstruction: systemInstruction,
+    userContent: userContent
+  };
+}
+
+// AIの翻訳結果を検証し、firestoreId→翻訳済みmessageのMapを組み立てる。
+// 件数不一致・id不一致・重複・欠落があれば、無理に補わずnullを返す
+// (呼び出し側は翻訳失敗として扱い、保存しない)。
+function buildTranslatedShopMessages(
+  originalItems,
+  aiResponseItems
+) {
+  if (
+    !Array.isArray(aiResponseItems) ||
+    aiResponseItems.length !==
+      originalItems.length
+  ) {
+    return null;
+  }
+
+  const originalIds =
+    originalItems.map(
+      function(item) {
+        return item.firestoreId;
+      }
+    );
+
+  const translatedById =
+    {};
+
+  for (
+    let index = 0;
+    index < aiResponseItems.length;
+    index += 1
+  ) {
+    const aiItem =
+      aiResponseItems[index];
+
+    if (
+      !aiItem ||
+      typeof aiItem !== "object" ||
+      typeof aiItem.id !== "string" ||
+      !originalIds.includes(aiItem.id) ||
+      Object.prototype.hasOwnProperty.call(
+        translatedById,
+        aiItem.id
+      )
+    ) {
+      return null;
+    }
+
+    const translatedMessage =
+      stripCitationArtifactsFromAiText(
+        sanitizeRegionEditorialText(
+          aiItem.message,
+          SHOP_TRANSLATION_MESSAGE_MAX_LENGTH
+        )
+      );
+
+    if (translatedMessage === "") {
+      return null;
+    }
+
+    translatedById[aiItem.id] =
+      translatedMessage;
+  }
+
+  for (
+    let index = 0;
+    index < originalIds.length;
+    index += 1
+  ) {
+    if (
+      !Object.prototype.hasOwnProperty.call(
+        translatedById,
+        originalIds[index]
+      )
+    ) {
+      return null;
+    }
+  }
+
+  return translatedById;
+}
+
+async function callOpenAiShopTranslationBatch(
+  items,
+  targetLanguage
+) {
+  const apiKey =
+    process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    const configError =
+      new Error("OPENAI_API_KEY が設定されていません。");
+
+    configError.isMissingApiKey =
+      true;
+
+    throw configError;
+  }
+
+  const prompt =
+    buildShopTranslationPrompt(
+      items,
+      targetLanguage
+    );
+
+  const controller =
+    new AbortController();
+
+  const timeoutId =
+    setTimeout(
+      function() {
+        controller.abort();
+      },
+      SHOP_TRANSLATION_TIMEOUT_MS
+    );
+
+  let response;
+
+  try {
+    try {
+      response =
+        await fetch(
+          SHOP_TRANSLATION_ENDPOINT,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer " + apiKey
+            },
+
+            body: JSON.stringify({
+              model: SHOP_TRANSLATION_MODEL,
+              response_format: { type: "json_object" },
+
+              messages: [
+                {
+                  role: "system",
+                  content: prompt.systemInstruction
+                },
+
+                {
+                  role: "user",
+                  content: prompt.userContent
+                }
+              ]
+            }),
+
+            signal: controller.signal
+          }
+        );
+    } catch (fetchError) {
+      if (fetchError.name === "AbortError") {
+        const timeoutError =
+          new Error("店舗情報の翻訳がタイムアウトしました。");
+
+        timeoutError.isTransient =
+          true;
+
+        timeoutError.isTimeout =
+          true;
+
+        throw timeoutError;
+      }
+
+      const networkError =
+        new Error("店舗情報の翻訳呼び出しに失敗しました。");
+
+      networkError.isTransient =
+        true;
+
+      networkError.isNetworkError =
+        true;
+
+      throw networkError;
+    }
+  } finally {
+    clearTimeout(
+      timeoutId
+    );
+  }
+
+  if (!response.ok) {
+    const httpError =
+      new Error(
+        "OpenAI APIがエラーを返しました。status=" + response.status
+      );
+
+    httpError.isHttpError =
+      true;
+
+    httpError.httpStatus =
+      response.status;
+
+    httpError.isTransient =
+      true;
+
+    throw httpError;
+  }
+
+  let responseData;
+
+  try {
+    responseData =
+      await response.json();
+  } catch (jsonError) {
+    const parseError =
+      new Error("OpenAI APIの応答を解析できませんでした。");
+
+    parseError.isJsonError =
+      true;
+
+    parseError.isTransient =
+      true;
+
+    throw parseError;
+  }
+
+  const messageContent =
+    responseData &&
+    Array.isArray(responseData.choices) &&
+    responseData.choices[0] &&
+    responseData.choices[0].message &&
+    typeof responseData.choices[0].message.content === "string"
+      ? responseData.choices[0].message.content
+      : "";
+
+  if (messageContent === "") {
+    const shapeError =
+      new Error("OpenAI APIの応答形式が不正です。");
+
+    shapeError.isJsonError =
+      true;
+
+    shapeError.isTransient =
+      true;
+
+    throw shapeError;
+  }
+
+  let parsedContent;
+
+  try {
+    parsedContent =
+      JSON.parse(messageContent);
+  } catch (contentParseError) {
+    const shapeError =
+      new Error("店舗情報の翻訳結果がJSON形式ではありませんでした。");
+
+    shapeError.isJsonError =
+      true;
+
+    shapeError.isTransient =
+      true;
+
+    throw shapeError;
+  }
+
+  const translatedById =
+    buildTranslatedShopMessages(
+      items,
+      Array.isArray(parsedContent.items)
+        ? parsedContent.items
+        : null
+    );
+
+  if (translatedById === null) {
+    const mismatchError =
+      new Error(
+        "店舗情報の翻訳結果の件数または対応関係が一致しませんでした。"
+      );
+
+    mismatchError.isTransient =
+      true;
+
+    throw mismatchError;
+  }
+
+  const usage =
+    responseData.usage
+      ? {
+          inputTokens:
+            typeof responseData.usage.prompt_tokens === "number"
+              ? responseData.usage.prompt_tokens
+              : null,
+
+          outputTokens:
+            typeof responseData.usage.completion_tokens === "number"
+              ? responseData.usage.completion_tokens
+              : null,
+
+          totalTokens:
+            typeof responseData.usage.total_tokens === "number"
+              ? responseData.usage.total_tokens
+              : null
+        }
+      : null;
+
+  const estimatedCostUsd =
+    usage &&
+    typeof usage.inputTokens === "number" &&
+    typeof usage.outputTokens === "number"
+      ? calculateShopTranslationEstimatedCostUsd(
+          usage.inputTokens,
+          usage.outputTokens
+        )
+      : null;
+
+  return {
+    translatedById: translatedById,
+    usage: usage,
+    estimatedCostUsd: estimatedCostUsd
+  };
+}
+
+// runTransaction()による店舗×language単位の二重生成防止。Phase Aの
+// claimRegionTodayInfoTranslationGeneration()と全く同じパターンを、
+// submissionsの各documentへ適用する。
+async function claimShopTranslationGeneration(
+  database,
+  firestoreId,
+  language,
+  sourceHash
+) {
+  const documentRef =
+    database
+      .collection(
+        "submissions"
+      )
+      .doc(
+        firestoreId
+      );
+
+  return database.runTransaction(
+    async function(transaction) {
+      const snapshot =
+        await transaction.get(
+          documentRef
+        );
+
+      if (!snapshot.exists) {
+        return {
+          outcome: "error"
+        };
+      }
+
+      const data =
+        snapshot.data() || {};
+
+      const existingTranslations =
+        data.translations &&
+        typeof data.translations === "object"
+          ? data.translations
+          : {};
+
+      const existingTranslation =
+        existingTranslations[language];
+
+      if (
+        existingTranslation &&
+        existingTranslation.status === "ready" &&
+        existingTranslation.sourceHash === sourceHash
+      ) {
+        return {
+          outcome: "ready",
+
+          message:
+            typeof existingTranslation.message === "string"
+              ? existingTranslation.message
+              : ""
+        };
+      }
+
+      if (
+        existingTranslation &&
+        existingTranslation.status === "generating"
+      ) {
+        const startedAtMillis =
+          existingTranslation.generatingStartedAt &&
+          typeof existingTranslation.generatingStartedAt.toMillis === "function"
+            ? existingTranslation.generatingStartedAt.toMillis()
+            : null;
+
+        const isStale =
+          startedAtMillis === null ||
+          (
+            Date.now() -
+            startedAtMillis
+          ) >
+            SHOP_TRANSLATION_GENERATING_STALE_MS;
+
+        if (!isStale) {
+          return {
+            outcome: "generating"
+          };
+        }
+
+        // stale：このリクエストが再度生成権を獲得する(下へ続く)。
+      }
+
+      const translationFieldPath =
+        "translations." +
+        language;
+
+      const update =
+        {};
+
+      update[translationFieldPath] =
+        {
+          status: "generating",
+          sourceHash: sourceHash,
+
+          generatingStartedAt:
+            FieldValue.serverTimestamp(),
+
+          updatedAt:
+            FieldValue.serverTimestamp()
+        };
+
+      transaction.update(
+        documentRef,
+        update
+      );
+
+      return {
+        outcome: "claimed"
+      };
+    }
+  );
+}
+
+async function saveShopTranslationReadyResult(
+  database,
+  firestoreId,
+  language,
+  sourceHash,
+  translatedMessage,
+  usage,
+  estimatedCostUsd
+) {
+  const translationFieldPath =
+    "translations." +
+    language;
+
+  const update =
+    {};
+
+  update[translationFieldPath] =
+    {
+      status: "ready",
+      sourceHash: sourceHash,
+      message: translatedMessage,
+      model: SHOP_TRANSLATION_MODEL,
+      usage: usage,
+      estimatedCostUsd: estimatedCostUsd,
+
+      generatedAt:
+        FieldValue.serverTimestamp(),
+
+      updatedAt:
+        FieldValue.serverTimestamp()
+    };
+
+  await database
+    .collection(
+      "submissions"
+    )
+    .doc(
+      firestoreId
+    )
+    .update(
+      update
+    );
+}
+
+async function saveShopTranslationErrorResult(
+  database,
+  firestoreId,
+  language
+) {
+  const update =
+    {};
+
+  update["translations." + language + ".status"] =
+    "error";
+
+  update["translations." + language + ".updatedAt"] =
+    FieldValue.serverTimestamp();
+
+  await database
+    .collection(
+      "submissions"
+    )
+    .doc(
+      firestoreId
+    )
+    .update(
+      update
+    );
+}
+
+// 本番公開機能(旅行者向け)｜cityInfoGet/socialPatrol/regionTodayInfoGetと
+// 同じ認証方式(有効なFirebase IDトークンを持つユーザーなら誰でも可、
+// 匿名認証も許可)を採用する。Admin限定にしない。クライアントからは
+// firestoreIdの配列とlanguageだけを受け取り、翻訳対象の原文は必ず
+// サーバー側でsubmissionsから取得する(本部指示：クライアントの文章を
+// 翻訳原文として信用しない)。
+async function handleShopTranslationGetRequest(
+  request,
+  response
+) {
+  try {
+    const idToken =
+      readBearerToken(
+        request
+      );
+
+    if (idToken === "") {
+      return response.status(401).json({
+        success: false,
+        message: "認証情報がありません。"
+      });
+    }
+
+    const app =
+      getFirebaseAdminApp();
+
+    try {
+      await getAuth(app)
+        .verifyIdToken(
+          idToken
+        );
+    } catch (verifyError) {
+      return response.status(401).json({
+        success: false,
+        message: "認証情報が正しくありません。"
+      });
+    }
+
+    const database =
+      getFirestore(app);
+
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    // languageの許可リストはPhase Aと共通(REGION_TODAY_INFO_SUPPORTED_
+    // LANGUAGES／REGION_TODAY_INFO_SOURCE_LANGUAGE)をそのまま再利用する。
+    const requestedLanguage =
+      typeof requestBody.language === "string"
+        ? requestBody.language
+        : REGION_TODAY_INFO_SOURCE_LANGUAGE;
+
+    const language =
+      REGION_TODAY_INFO_SUPPORTED_LANGUAGES.includes(
+        requestedLanguage
+      )
+        ? requestedLanguage
+        : REGION_TODAY_INFO_SOURCE_LANGUAGE;
+
+    if (language === REGION_TODAY_INFO_SOURCE_LANGUAGE) {
+      // 日本語は翻訳不要(クライアントも通常この場合は呼ばないが、
+      // 念のため安全に空の結果を返す。OpenAI呼び出しは発生しない)。
+      return response.status(200).json({
+        success: true,
+        translations: {}
+      });
+    }
+
+    const rawFirestoreIds =
+      Array.isArray(requestBody.firestoreIds)
+        ? requestBody.firestoreIds
+        : [];
+
+    const firestoreIds =
+      [];
+
+    const seenFirestoreIds =
+      new Set();
+
+    for (
+      let index = 0;
+      index < rawFirestoreIds.length &&
+        firestoreIds.length <
+          SHOP_TRANSLATION_MAX_IDS_PER_REQUEST;
+      index += 1
+    ) {
+      const safeFirestoreId =
+        sanitizeShopFirestoreId(
+          rawFirestoreIds[index]
+        );
+
+      if (
+        safeFirestoreId !== "" &&
+        !seenFirestoreIds.has(safeFirestoreId)
+      ) {
+        seenFirestoreIds.add(
+          safeFirestoreId
+        );
+
+        firestoreIds.push(
+          safeFirestoreId
+        );
+      }
+    }
+
+    if (firestoreIds.length === 0) {
+      return response.status(200).json({
+        success: true,
+        translations: {}
+      });
+    }
+
+    const snapshots =
+      await Promise.all(
+        firestoreIds.map(
+          function(firestoreId) {
+            return database
+              .collection("submissions")
+              .doc(firestoreId)
+              .get();
+          }
+        )
+      );
+
+    const readyTranslations =
+      {};
+
+    const itemsToTranslate =
+      [];
+
+    for (
+      let index = 0;
+      index < firestoreIds.length;
+      index += 1
+    ) {
+      const snapshot =
+        snapshots[index];
+
+      const firestoreId =
+        firestoreIds[index];
+
+      if (!snapshot.exists) {
+        continue;
+      }
+
+      const data =
+        snapshot.data() || {};
+
+      if (!isSubmissionVisibleToPublic(data)) {
+        continue;
+      }
+
+      const message =
+        getShopMessageFromSubmissionData(
+          data
+        );
+
+      if (message === "") {
+        continue;
+      }
+
+      const sourceHash =
+        computeShopMessageHash(
+          message
+        );
+
+      let claimResult;
+
+      try {
+        claimResult =
+          await claimShopTranslationGeneration(
+            database,
+            firestoreId,
+            language,
+            sourceHash
+          );
+      } catch (claimError) {
+        console.error(
+          "店舗翻訳：ロック取得エラー：",
+          claimError
+        );
+
+        continue;
+      }
+
+      if (claimResult.outcome === "ready") {
+        readyTranslations[firestoreId] =
+          claimResult.message;
+      } else if (claimResult.outcome === "claimed") {
+        itemsToTranslate.push(
+          {
+            firestoreId: firestoreId,
+            message: message,
+            sourceHash: sourceHash
+          }
+        );
+      }
+
+      // "generating"・"error"は今回の応答には含めない(クライアントは
+      // 原文をそのまま表示し続ける、既存表示を壊さない安全な挙動)。
+    }
+
+    if (itemsToTranslate.length > 0) {
+      let translationBatchResult =
+        null;
+
+      try {
+        translationBatchResult =
+          await callOpenAiShopTranslationBatch(
+            itemsToTranslate,
+            language
+          );
+      } catch (translationError) {
+        console.error(
+          "店舗翻訳：生成エラー：",
+          translationError
+        );
+
+        await Promise.all(
+          itemsToTranslate.map(
+            function(item) {
+              return saveShopTranslationErrorResult(
+                database,
+                item.firestoreId,
+                language
+              ).catch(
+                function(saveErrorAfterTranslationError) {
+                  console.error(
+                    "店舗翻訳：エラー状態の保存にも失敗：",
+                    saveErrorAfterTranslationError
+                  );
+                }
+              );
+            }
+          )
+        );
+      }
+
+      if (translationBatchResult) {
+        await Promise.all(
+          itemsToTranslate.map(
+            function(item) {
+              const translatedMessage =
+                translationBatchResult.translatedById[
+                  item.firestoreId
+                ];
+
+              readyTranslations[item.firestoreId] =
+                translatedMessage;
+
+              return saveShopTranslationReadyResult(
+                database,
+                item.firestoreId,
+                language,
+                item.sourceHash,
+                translatedMessage,
+                translationBatchResult.usage,
+                translationBatchResult.estimatedCostUsd
+              ).catch(
+                function(saveError) {
+                  console.error(
+                    "店舗翻訳：保存エラー：",
+                    saveError
+                  );
+                }
+              );
+            }
+          )
+        );
+      }
+    }
+
+    return response.status(200).json({
+      success: true,
+      translations: readyTranslations
+    });
+  } catch (error) {
+    console.error(
+      "店舗翻訳：処理エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message: "店舗情報の翻訳中にエラーが発生しました。"
+    });
+  }
+}
+
+
 // Luna地域情報テストモード(代表専用の性能・実費計測プローブ)｜本番機能では
 // なく、GPT-5.6 Lunaが「今日だから意味がある街の今」をどの程度web_searchで
 // 発見できるか・実費がいくらかを1回だけ実測するための試験専用コード。
@@ -17204,6 +18228,19 @@ export default async function handler(
     requestBody.mode === "regionTodayInfoGet"
   ) {
     return handleRegionTodayInfoGetRequest(
+      request,
+      response
+    );
+  }
+
+  // 多言語化 Phase B(店舗情報)｜「今、近くで楽しめる場所」の店舗説明本文を
+  // 対象にしたAI翻訳キャッシュ。regionTodayInfoGetと同様、公開機能
+  // (旅行者向け)のため管理者/Editor限定にしない。既存モードのいずれにも
+  // 一切触れない。
+  if (
+    requestBody.mode === "shopTranslationGet"
+  ) {
+    return handleShopTranslationGetRequest(
       request,
       response
     );

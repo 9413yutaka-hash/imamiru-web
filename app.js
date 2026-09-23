@@ -10,6 +10,10 @@ let selectedCategory = "すべて";
 // bottom-navigation「見つける」/「ホーム」からのみ)。
 let isShowingAllShopCards = false;
 
+// 多言語化 Phase B｜renderShops()が直近に実際へ描画した店舗IDの一覧
+// (見えている店舗だけを翻訳対象にするため)。
+let lastRenderedShopCardIds = [];
+
 // ---- Ver1.7｜多言語化の器(固定UI文言専用) ----
 // ここで扱うのは画面の固定UI文言(見出し・ボタン・カテゴリー表示ラベル等)だけ。
 // category / area / sourceType / postType / authorType / selectedCategory と
@@ -163,6 +167,17 @@ function refreshShopCategoryTextForCurrentLanguage() {
   shops.forEach(function (shop) {
     const categoryDisplay = getCategoryDisplay(shop.category);
     shop.categoryText = categoryDisplay.categoryText;
+
+    // 多言語化 Phase B｜timeMessageが投稿者入力ではなく固定fallback文言
+    // だった場合だけ、同じ考え方で現在言語へ再計算する(投稿者の自由入力
+    // 本文はここでは書き換えない)。
+    if (shop.isTimeMessageFallback) {
+      shop.timeMessage =
+        getMachinauTranslation(
+          "shop_time_message_fallback",
+          getCurrentMachinauLanguage()
+        );
+    }
   });
 
   renderShops();
@@ -1711,19 +1726,40 @@ function convertSubmissionToShop(
       data.longitude
     );
 
-  const timeMessage =
-    getFirstText(
-      [
-        data.timeMessage,
-        data.period,
-        data.eventTime,
-        data.openingHours
-      ],
-      getMachinauTranslation(
-        "shop_time_message_fallback",
-        getCurrentMachinauLanguage()
-      )
+  // 多言語化 Phase B｜timeMessageが投稿者入力(data.timeMessage等)から来て
+  // いるか、翻訳キー由来のfallback文言かを記録する。fallbackの場合だけ
+  // 言語切替時に再計算できるようにするため(投稿者の自由入力本文は
+  // ここでは書き換えない、AI翻訳の対象は別途shop.messageで扱う)。
+  const hasRealTimeMessage =
+    [
+      data.timeMessage,
+      data.period,
+      data.eventTime,
+      data.openingHours
+    ].some(
+      function(value) {
+        return (
+          typeof value === "string" &&
+          value.trim() !== ""
+        );
+      }
     );
+
+  const timeMessage =
+    hasRealTimeMessage
+      ? getFirstText(
+          [
+            data.timeMessage,
+            data.period,
+            data.eventTime,
+            data.openingHours
+          ],
+          ""
+        )
+      : getMachinauTranslation(
+          "shop_time_message_fallback",
+          getCurrentMachinauLanguage()
+        );
 
   return {
     id:
@@ -1764,6 +1800,16 @@ function convertSubmissionToShop(
 
     timeMessage:
       timeMessage,
+
+    // 多言語化 Phase B｜言語切替時にtimeMessageを再計算してよいかの判定用。
+    isTimeMessageFallback:
+      !hasRealTimeMessage,
+
+    // 多言語化 Phase B｜shop.message(説明文)のAI翻訳結果を言語コードごとに
+    // 保持するキャッシュ({en:"...", ...}のように増やせる構造)。
+    // fetchShopTranslationsForVisibleShops()が取得後に書き込む。
+    translatedMessages:
+      {},
 
     address:
       address,
@@ -2624,6 +2670,16 @@ function renderShops() {
           6
         );
 
+  // 多言語化 Phase B｜実際に画面へ描画される店舗IDだけを覚えておく
+  // (fetchShopTranslationsForVisibleShops()が「今表示されている店舗」
+  // だけを対象に翻訳を取得するため。見えていない店舗まで一気に翻訳しない)。
+  lastRenderedShopCardIds =
+    topShopCardCandidates.map(
+      function(shop) {
+        return shop.firestoreId;
+      }
+    );
+
   const shopsSectionElement =
     document.getElementById(
       "shopsSection"
@@ -2673,6 +2729,20 @@ function renderShops() {
             favoriteShopIds.has(
               shop.firestoreId
             );
+
+          // 多言語化 Phase B｜翻訳キャッシュ(shop.translatedMessages)が
+          // あればそれを表示し、無ければ原文(日本語)のまま表示する。
+          // 翻訳の取得はfetchShopTranslationsForVisibleShops()が別途行う。
+          const currentCardLanguage =
+            getCurrentMachinauLanguage();
+
+          const displayMessage =
+            currentCardLanguage !== MACHINAU_DEFAULT_LANGUAGE &&
+            shop.translatedMessages &&
+            typeof shop.translatedMessages[currentCardLanguage] === "string" &&
+            shop.translatedMessages[currentCardLanguage] !== ""
+              ? shop.translatedMessages[currentCardLanguage]
+              : shop.message;
 
           const expiryDisplayText =
             getExpiryDisplayText(
@@ -2896,7 +2966,7 @@ function renderShops() {
 
                 <p class="shop-description">
                   ${escapeHtml(
-                    shop.message
+                    displayMessage
                   )}
                 </p>
 
@@ -3064,6 +3134,11 @@ function renderShops() {
     shopsList,
     shopCardsHtml
   );
+
+  // 多言語化 Phase B｜日本語以外が選択されている場合だけ、今回描画した
+  // 店舗のうち未翻訳のものをまとめて1回のリクエストで取得する
+  // (既に翻訳済み・取得中のものは内部でスキップされ、重複実行しない)。
+  refreshShopTranslationsIfNeeded();
 }
 
 // renderShops()専用。data-shop-id属性を持つ新しいHTML文字列を、
@@ -4380,19 +4455,41 @@ function openShopModal(
   modalTitle.textContent =
     selectedShop.name;
 
+  const modalCurrentLanguage =
+    getCurrentMachinauLanguage();
+
+  // 多言語化 Phase B｜翻訳キャッシュ(shop.translatedMessages)があれば
+  // それを表示し、無ければ既存どおり原文(日本語)をそのまま表示する。
+  // 翻訳の取得・生成自体はfetchShopTranslationsForVisibleShops()が
+  // 別途行う(このモーダル関数は取得済みの結果を読むだけ)。
+  const modalDisplayMessage =
+    modalCurrentLanguage !== MACHINAU_DEFAULT_LANGUAGE &&
+    selectedShop.translatedMessages &&
+    typeof selectedShop.translatedMessages[modalCurrentLanguage] === "string" &&
+    selectedShop.translatedMessages[modalCurrentLanguage] !== ""
+      ? selectedShop.translatedMessages[modalCurrentLanguage]
+      : selectedShop.message;
+
   let modalText =
     "📢 " +
     escapeHtml(
-      selectedShop.message
+      modalDisplayMessage
     );
 
   if (
     selectedShop.sourceLabel
   ) {
+    // 多言語化 Phase B｜sourceLabelはFirestoreに常に固定文字列
+    // ("マチナウ運営より")として保存された運営情報ラベルであり、AI翻訳
+    // すべき自由入力本文ではない。既存の店舗一覧カードと同じ意味の
+    // shop_admin_badge翻訳キー(0円の固定UI翻訳)をそのまま使う。
     modalText +=
-      "<br><br>🌺 " +
+      "<br><br>" +
       escapeHtml(
-        selectedShop.sourceLabel
+        getMachinauTranslation(
+          "shop_admin_badge",
+          modalCurrentLanguage
+        )
       );
   } else if (
     selectedShop.isPermanentAd
@@ -11858,6 +11955,189 @@ function refreshRegionTodayInfoForCurrentLanguage() {
     lastRegionTodayInfoLocationHierarchy,
     machinauSuggestionGpsSessionId
   );
+}
+
+// 多言語化 Phase B(店舗情報)｜「今、近くで楽しめる場所」で実際に画面に
+// 表示されている店舗の説明文(shop.message)だけを、選択言語がja以外の
+// ときだけまとめて1回のリクエストで翻訳取得する。日本語選択時は一切
+// 呼び出さない(AI翻訳費0円)。既に翻訳済み・現在取得中の店舗は
+// サーバー側で判断されるが、無駄なリクエスト自体を減らすため、
+// クライアント側でも「まだ翻訳を持っていない店舗」だけに絞り込む。
+// 同じ組み合わせ(言語＋店舗ID集合)を取得中は多重リクエストしない
+// (shopTranslationFetchInFlightKeyによる簡易ガード)。
+let shopTranslationFetchInFlightKey =
+  null;
+
+function refreshShopTranslationsIfNeeded() {
+  const language =
+    getCurrentMachinauLanguage();
+
+  if (language === MACHINAU_DEFAULT_LANGUAGE) {
+    return;
+  }
+
+  const shopIdsNeedingTranslation =
+    lastRenderedShopCardIds.filter(
+      function(firestoreId) {
+        const shop =
+          shops.find(
+            function(candidateShop) {
+              return (
+                candidateShop.firestoreId ===
+                firestoreId
+              );
+            }
+          );
+
+        return (
+          shop &&
+          typeof shop.message === "string" &&
+          shop.message.trim() !== "" &&
+          !(
+            shop.translatedMessages &&
+            typeof shop.translatedMessages[language] === "string" &&
+            shop.translatedMessages[language] !== ""
+          )
+        );
+      }
+    );
+
+  if (shopIdsNeedingTranslation.length === 0) {
+    return;
+  }
+
+  const fetchKey =
+    language +
+    ":" +
+    shopIdsNeedingTranslation
+      .slice()
+      .sort()
+      .join(",");
+
+  if (
+    shopTranslationFetchInFlightKey ===
+    fetchKey
+  ) {
+    // 同じ店舗集合・同じ言語のリクエストが既に進行中。
+    return;
+  }
+
+  shopTranslationFetchInFlightKey =
+    fetchKey;
+
+  fetchShopTranslations(
+    shopIdsNeedingTranslation,
+    language
+  )
+    .then(
+      function(translationsByShopId) {
+        shopTranslationFetchInFlightKey =
+          null;
+
+        if (!translationsByShopId) {
+          return;
+        }
+
+        let didUpdateAnyShop =
+          false;
+
+        Object.keys(
+          translationsByShopId
+        ).forEach(
+          function(firestoreId) {
+            const shop =
+              shops.find(
+                function(candidateShop) {
+                  return (
+                    candidateShop.firestoreId ===
+                    firestoreId
+                  );
+                }
+              );
+
+            if (!shop) {
+              return;
+            }
+
+            if (!shop.translatedMessages) {
+              shop.translatedMessages =
+                {};
+            }
+
+            shop.translatedMessages[language] =
+              translationsByShopId[firestoreId];
+
+            didUpdateAnyShop =
+              true;
+          }
+        );
+
+        if (didUpdateAnyShop) {
+          // 取得済みの翻訳をカード・モーダルへ反映するための再描画。
+          // renderShops()は末尾で再度refreshShopTranslationsIfNeeded()を
+          // 呼ぶが、今回取得した店舗は既にtranslatedMessagesを持つため、
+          // shopIdsNeedingTranslationが空になり、無限ループにはならない。
+          renderShops();
+        }
+      }
+    )
+    .catch(
+      function(error) {
+        // 店舗説明の翻訳は補助機能のため、失敗しても既存のTOP画面表示
+        // (日本語原文の表示)には一切影響させない。
+        shopTranslationFetchInFlightKey =
+          null;
+      }
+    );
+}
+
+async function fetchShopTranslations(
+  firestoreIds,
+  language
+) {
+  const idToken =
+    await getAnonymousIdTokenForLocationCollection();
+
+  const response =
+    await fetch(
+      "/api/moderate-submission",
+      {
+        method: "POST",
+
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + idToken
+        },
+
+        body: JSON.stringify({
+          mode: "shopTranslationGet",
+          firestoreIds: firestoreIds,
+          language: language
+        })
+      }
+    );
+
+  let responseData =
+    null;
+
+  try {
+    responseData =
+      await response.json();
+  } catch (jsonError) {
+    return null;
+  }
+
+  if (
+    !response.ok ||
+    !responseData ||
+    responseData.success !== true ||
+    !responseData.translations ||
+    typeof responseData.translations !== "object"
+  ) {
+    return null;
+  }
+
+  return responseData.translations;
 }
 
 // 件数を含む「もっと見る」ボタン文言。既存の翻訳方式は固定文言のみを
