@@ -204,6 +204,36 @@ const MACHINAU_TRANSLATIONS = {
     en: "This city's \"now\" has arrived! Check it out below."
   },
 
+  region_today_info_heading: {
+    ja: "今日、この地域で起きていること",
+    en: "What's happening in this area today"
+  },
+
+  region_today_info_loading: {
+    ja: "今日の地域情報を確認しています…",
+    en: "Checking today's local information…"
+  },
+
+  region_today_info_show_more: {
+    ja: "今日の情報をもっと見る",
+    en: "See more of today's updates"
+  },
+
+  region_today_info_show_less: {
+    ja: "閉じる",
+    en: "Close"
+  },
+
+  region_today_info_official_link: {
+    ja: "公式情報を見る",
+    en: "View official information"
+  },
+
+  region_today_info_detail_link: {
+    ja: "詳しく見る",
+    en: "See details"
+  },
+
   // 初心回帰後の新トップ体験 Phase1｜「近くの『今』」パネルの見出しと、
   // 種類ごとの短い一言テンプレート({TITLE}を実際のタイトルで置換)。
   // AIが自然文を生成するのではなく、既存データのタイトルを固定テンプレート

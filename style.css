@@ -1011,6 +1011,80 @@
       text-align: center;
     }
 
+    /* 広域region×localDate共有AI地域情報 Phase1 UI｜「今、近くで楽しめる
+       場所」(.shop-card、写真付き)と視覚的に混同しないよう、テキスト中心の
+       控えめなカードにする。色・角丸・余白は既存トークンを再利用する。 */
+    .region-today-info-loading {
+      padding: 14px;
+      border-radius: 14px;
+      background: #f0f6f9;
+      color: var(--subtext);
+      font-size: 12px;
+      line-height: 1.6;
+      text-align: center;
+    }
+
+    .region-today-info-card {
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: var(--white);
+      border: 1px solid var(--border);
+      margin-bottom: 10px;
+    }
+
+    .region-today-info-card:last-child {
+      margin-bottom: 0;
+    }
+
+    .region-today-info-area {
+      color: var(--blue);
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .region-today-info-name {
+      margin: 4px 0 0;
+      color: var(--navy);
+      font-size: 15px;
+      font-weight: 900;
+      line-height: 1.4;
+    }
+
+    .region-today-info-meta {
+      margin-top: 4px;
+      color: var(--subtext);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .region-today-info-description {
+      margin-top: 6px;
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .region-today-info-source-link {
+      display: inline-block;
+      margin-top: 8px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 900;
+      text-decoration: none;
+    }
+
+    .region-today-info-toggle-button {
+      width: 100%;
+      min-height: 42px;
+      border: none;
+      border-radius: 12px;
+      background: #edf4ff;
+      color: #2f68ad;
+      font-size: 12px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
     .bottom-navigation {
       position: fixed;
       z-index: 80;

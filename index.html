@@ -1109,6 +1109,49 @@
 
     </section>
 
+    <!-- 広域region×localDate共有AI地域情報 Phase1 UI｜「今日、この地域で
+         起きていること」。Phase1(mode:"regionTodayInfoGet")で既に実装済みの
+         キャッシュ・Luna調査ロジックには一切触れず、findingsの最小表示だけを
+         行う。findingsが無い/取得できない場合はセクションごと非表示にする
+         (既存のareaInfoSection等と同じ「空なら非表示」の慣習に合わせた)。 -->
+    <section
+      id="regionTodayInfoSection"
+      class="section"
+      style="display:none;"
+    >
+
+      <div class="section-header">
+
+        <div class="section-title-area">
+
+          <h2 data-i18n="region_today_info_heading">
+            今日、この地域で起きていること
+          </h2>
+
+        </div>
+
+      </div>
+
+      <div
+        id="regionTodayInfoLoading"
+        class="region-today-info-loading"
+        style="display:none;"
+        data-i18n="region_today_info_loading"
+      >
+        今日の地域情報を確認しています…
+      </div>
+
+      <div id="regionTodayInfoList"></div>
+
+      <button
+        type="button"
+        id="regionTodayInfoToggleButton"
+        class="region-today-info-toggle-button"
+        style="display:none;"
+      ></button>
+
+    </section>
+
     <!-- 初心回帰後の新トップ体験 Phase1｜街情報ボタン。全情報を旅行者へ
          押し付けず、興味を持った人だけが自分で開く入口。既存データを無理に
          3分類へ当てはめず、実際にaiSources.sourceTypeで確実に区別できる

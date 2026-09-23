@@ -9706,6 +9706,8 @@ document.addEventListener(
     initializeAwarenessNoticesInteractions();
 
     initializeAreaInfoInteractions();
+
+    initializeRegionTodayInfoInteractions();
   }
 );
 
@@ -11566,18 +11568,102 @@ async function triggerSocialPatrolForArea(
 }
 
 
-// 広域region×localDate共有AI地域情報 Phase1(本番機能)｜「今日、この地域で
-// 普段と違うこと」を広域region単位で取得する。表示UIはまだ実装せず(本部
-// 指示：デザイン判断は代表が行う)、データ経路の確認としてconsole.logへ
-// 出力するだけにとどめる。既存の店舗・天気・読み物・cityInfo・おすすめ・
-// AIコンシェルジュ等、他のどの既存処理にも一切触れない・依存しない
-// (失敗しても他機能に影響させない設計は既存のtriggerSocialPatrolForArea()
-// と同じ考え方)。
+// 広域region×localDate共有AI地域情報 Phase1(本番機能)＋Phase1 UI｜
+// 「今日、この地域で起きていること」。ここではPhase1で実装済みの
+// キャッシュ/Luna調査ロジック(mode:"regionTodayInfoGet"自体)には一切
+// 触れず、既に返ってくるfindingsの取得・少数回polling・最小表示だけを
+// 行う。既存の店舗・天気・読み物・cityInfo・おすすめ・AIコンシェルジュ等、
+// 他のどの既存処理にも一切触れない・依存しない(失敗しても他機能に
+// 影響させない設計は既存のtriggerSocialPatrolForArea()と同じ考え方)。
 let currentRegionTodayInfoStatus =
   null;
 
 let currentRegionTodayInfoFindings =
   [];
+
+let currentRegionTodayInfoMunicipality =
+  "";
+
+let isRegionTodayInfoExpanded =
+  false;
+
+// status:"generating"のときだけ短時間間隔で少数回だけ再取得する
+// (無限pollingは行わない)。Luna生成は最大90秒程度かかり得るため、
+// 5秒間隔×5回(追加で最大25秒)というLunaのタイムアウトより短い、
+// 安全側の小さな値にとどめる。それでもreadyにならない場合は
+// エラー表示にはせず、このセクションだけ静かに非表示にする。
+const REGION_TODAY_INFO_POLL_INTERVAL_MS =
+  5000;
+
+const REGION_TODAY_INFO_MAX_POLL_ATTEMPTS =
+  5;
+
+async function fetchRegionTodayInfoOnce(
+  latitude,
+  longitude,
+  locationHierarchy
+) {
+  const idToken =
+    await getAnonymousIdTokenForLocationCollection();
+
+  const response =
+    await fetch(
+      "/api/moderate-submission",
+      {
+        method: "POST",
+
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + idToken
+        },
+
+        body: JSON.stringify({
+          mode: "regionTodayInfoGet",
+          latitude: latitude,
+          longitude: longitude,
+          countryCode: locationHierarchy.countryCode,
+          countryName: locationHierarchy.countryName,
+          regionKey: locationHierarchy.regionKey,
+          regionName: locationHierarchy.regionName,
+          municipality: locationHierarchy.municipality
+        })
+      }
+    );
+
+  let responseData =
+    null;
+
+  try {
+    responseData =
+      await response.json();
+  } catch (jsonError) {
+    responseData =
+      null;
+  }
+
+  if (
+    !response.ok ||
+    !responseData ||
+    responseData.success !== true
+  ) {
+    return null;
+  }
+
+  return responseData;
+}
+
+function waitForMilliseconds(
+  milliseconds
+) {
+  return new Promise(
+    function(resolve) {
+      window.setTimeout(
+        resolve,
+        milliseconds
+      );
+    }
+  );
+}
 
 async function triggerRegionTodayInfo(
   latitude,
@@ -11600,86 +11686,439 @@ async function triggerRegionTodayInfo(
     return;
   }
 
+  currentRegionTodayInfoMunicipality =
+    typeof locationHierarchy.municipality === "string"
+      ? locationHierarchy.municipality
+      : "";
+
+  isRegionTodayInfoExpanded =
+    false;
+
+  currentRegionTodayInfoStatus =
+    "loading";
+
+  currentRegionTodayInfoFindings =
+    [];
+
+  renderRegionTodayInfo();
+
   try {
-    const idToken =
-      await getAnonymousIdTokenForLocationCollection();
+    for (
+      let attemptIndex = 0;
+      attemptIndex < REGION_TODAY_INFO_MAX_POLL_ATTEMPTS;
+      attemptIndex += 1
+    ) {
+      if (
+        gpsSessionId !==
+        machinauSuggestionGpsSessionId
+      ) {
+        // 応答を待つ間に別の場所へ移動済み。古い地域の結果を今の画面へ
+        // 反映しない。
+        return;
+      }
 
-    const response =
-      await fetch(
-        "/api/moderate-submission",
-        {
-          method: "POST",
+      const responseData =
+        await fetchRegionTodayInfoOnce(
+          latitude,
+          longitude,
+          locationHierarchy
+        );
 
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": "Bearer " + idToken
-          },
+      if (
+        gpsSessionId !==
+        machinauSuggestionGpsSessionId
+      ) {
+        return;
+      }
 
-          body: JSON.stringify({
-            mode: "regionTodayInfoGet",
-            latitude: latitude,
-            longitude: longitude,
-            countryCode: locationHierarchy.countryCode,
-            countryName: locationHierarchy.countryName,
-            regionKey: locationHierarchy.regionKey,
-            regionName: locationHierarchy.regionName,
-            municipality: locationHierarchy.municipality
-          })
+      if (!responseData) {
+        currentRegionTodayInfoStatus =
+          "error";
+
+        renderRegionTodayInfo();
+        renderCityNowGuidance();
+
+        return;
+      }
+
+      if (responseData.status === "ready") {
+        currentRegionTodayInfoStatus =
+          "ready";
+
+        currentRegionTodayInfoFindings =
+          Array.isArray(responseData.findings)
+            ? responseData.findings
+            : [];
+
+        renderRegionTodayInfo();
+        renderCityNowGuidance();
+
+        return;
+      }
+
+      if (responseData.status === "generating") {
+        currentRegionTodayInfoStatus =
+          "generating";
+
+        renderRegionTodayInfo();
+
+        if (
+          attemptIndex <
+          REGION_TODAY_INFO_MAX_POLL_ATTEMPTS - 1
+        ) {
+          await waitForMilliseconds(
+            REGION_TODAY_INFO_POLL_INTERVAL_MS
+          );
+
+          continue;
         }
-      );
 
-    let responseData =
-      null;
+        // 少数回のpollingでもreadyにならなかった場合、エラーを大きく
+        // 表示せず、このセクションだけ静かに非表示にする(本部指示)。
+        currentRegionTodayInfoStatus =
+          "error";
 
-    try {
-      responseData =
-        await response.json();
-    } catch (jsonError) {
-      return;
-    }
+        renderRegionTodayInfo();
+        renderCityNowGuidance();
 
-    if (
-      gpsSessionId !==
-      machinauSuggestionGpsSessionId
-    ) {
-      // 応答が届く間に別の場所へ移動済み。古い地域の結果を今の画面へ
-      // 反映しない。
-      return;
-    }
+        return;
+      }
 
-    if (
-      !response.ok ||
-      !responseData ||
-      responseData.success !== true
-    ) {
+      // status:"error"等の想定外の応答も同様に静かに非表示にする。
       currentRegionTodayInfoStatus =
         "error";
 
+      renderRegionTodayInfo();
+      renderCityNowGuidance();
+
       return;
     }
-
-    currentRegionTodayInfoStatus =
-      responseData.status;
-
-    currentRegionTodayInfoFindings =
-      Array.isArray(responseData.findings)
-        ? responseData.findings
-        : [];
-
-    // Phase1はデータ経路の確認が目的のため、表示UIはまだ作らず
-    // console.logで確認する(既存のAIConciergeTrace等と同じ診断ログの
-    // 考え方)。
-    console.log(
-      "[RegionTodayInfo] status=" +
-        currentRegionTodayInfoStatus +
-        " findingCount=" +
-        currentRegionTodayInfoFindings.length,
-      currentRegionTodayInfoFindings
-    );
   } catch (error) {
     // 広域地域情報は補助機能のため、失敗しても既存のTOP画面表示には
     // 一切影響させない。
+    currentRegionTodayInfoStatus =
+      "error";
+
+    renderRegionTodayInfo();
+    renderCityNowGuidance();
   }
+}
+
+// 件数を含む「もっと見る」ボタン文言。既存の翻訳方式は固定文言のみを
+// 対象とするため、件数部分だけは既存の管理画面(例：admin-post.html
+// existingImageNote)と同じ「翻訳済みの地の文＋数値の連結」方式で組み立てる。
+function buildRegionTodayInfoShowMoreLabel(
+  totalCount,
+  language
+) {
+  const baseLabel =
+    getMachinauTranslation(
+      "region_today_info_show_more",
+      language
+    );
+
+  return language === "ja"
+    ? baseLabel + "（" + totalCount + "件）"
+    : baseLabel + " (" + totalCount + ")";
+}
+
+// findingのsourceが実際に安全なhttp/httpsのURLである場合だけリンクを
+// 出す(既存のgetSafeWebsiteUrl()をそのまま再利用、javascript:/data:等の
+// 危険schemeはこの時点で自動的に除外される)。URLではない文字列(情報源の
+// 名称のみ等)の場合はリンクを出さない。
+function buildRegionTodayInfoCardHtml(
+  finding,
+  language
+) {
+  const htmlParts =
+    [
+      '<article class="region-today-info-card">'
+    ];
+
+  if (
+    typeof finding.area === "string" &&
+    finding.area.trim() !== ""
+  ) {
+    htmlParts.push(
+      '<div class="region-today-info-area">' +
+        escapeHtml(finding.area) +
+        "</div>"
+    );
+  }
+
+  if (
+    typeof finding.name === "string" &&
+    finding.name.trim() !== ""
+  ) {
+    htmlParts.push(
+      '<h3 class="region-today-info-name">' +
+        escapeHtml(finding.name) +
+        "</h3>"
+    );
+  }
+
+  const metaValues =
+    [
+      finding.time,
+      finding.place
+    ].filter(
+      function(value) {
+        return (
+          typeof value === "string" &&
+          value.trim() !== ""
+        );
+      }
+    );
+
+  if (metaValues.length > 0) {
+    htmlParts.push(
+      '<div class="region-today-info-meta">' +
+        escapeHtml(
+          metaValues.join(" / ")
+        ) +
+        "</div>"
+    );
+  }
+
+  if (
+    typeof finding.description === "string" &&
+    finding.description.trim() !== ""
+  ) {
+    htmlParts.push(
+      '<p class="region-today-info-description">' +
+        escapeHtml(finding.description) +
+        "</p>"
+    );
+  }
+
+  const sourceUrl =
+    getSafeWebsiteUrl(
+      finding.source
+    );
+
+  if (sourceUrl !== "") {
+    const linkLabel =
+      finding.isOfficial === true
+        ? getMachinauTranslation(
+            "region_today_info_official_link",
+            language
+          )
+        : getMachinauTranslation(
+            "region_today_info_detail_link",
+            language
+          );
+
+    htmlParts.push(
+      '<a class="region-today-info-source-link" href="' +
+        escapeHtml(sourceUrl) +
+        '" target="_blank" rel="noopener noreferrer">' +
+        escapeHtml(linkLabel) +
+        "</a>"
+    );
+  }
+
+  htmlParts.push("</article>");
+
+  return htmlParts.join("");
+}
+
+const REGION_TODAY_INFO_INITIAL_VISIBLE_COUNT =
+  3;
+
+function renderRegionTodayInfo() {
+  const section =
+    document.getElementById(
+      "regionTodayInfoSection"
+    );
+
+  const loadingElement =
+    document.getElementById(
+      "regionTodayInfoLoading"
+    );
+
+  const listElement =
+    document.getElementById(
+      "regionTodayInfoList"
+    );
+
+  const toggleButton =
+    document.getElementById(
+      "regionTodayInfoToggleButton"
+    );
+
+  if (
+    !section ||
+    !loadingElement ||
+    !listElement ||
+    !toggleButton
+  ) {
+    return;
+  }
+
+  if (
+    currentRegionTodayInfoStatus === "loading" ||
+    currentRegionTodayInfoStatus === "generating"
+  ) {
+    section.style.display =
+      "";
+
+    loadingElement.style.display =
+      "";
+
+    listElement.innerHTML =
+      "";
+
+    toggleButton.style.display =
+      "none";
+
+    return;
+  }
+
+  if (currentRegionTodayInfoStatus !== "ready") {
+    // null(未取得)・error等はセクションごと静かに非表示にする
+    // (本部指示：TOP全体にエラー表示を出さない)。
+    section.style.display =
+      "none";
+
+    loadingElement.style.display =
+      "none";
+
+    listElement.innerHTML =
+      "";
+
+    toggleButton.style.display =
+      "none";
+
+    return;
+  }
+
+  loadingElement.style.display =
+    "none";
+
+  const validFindings =
+    currentRegionTodayInfoFindings.filter(
+      function(finding) {
+        return (
+          finding &&
+          finding.isDateValid === true
+        );
+      }
+    );
+
+  if (validFindings.length === 0) {
+    section.style.display =
+      "none";
+
+    listElement.innerHTML =
+      "";
+
+    toggleButton.style.display =
+      "none";
+
+    return;
+  }
+
+  // finding.areaと現在地municipalityが完全一致する場合だけ先頭側へ
+  // 優先する(本部指示：曖昧な文字列類似判定・距離推測は行わない、
+  // 安定ソートで元の順序自体は保つ)。
+  const matchedFindings =
+    [];
+
+  const otherFindings =
+    [];
+
+  validFindings.forEach(
+    function(finding) {
+      if (
+        currentRegionTodayInfoMunicipality !== "" &&
+        finding.area ===
+          currentRegionTodayInfoMunicipality
+      ) {
+        matchedFindings.push(
+          finding
+        );
+      } else {
+        otherFindings.push(
+          finding
+        );
+      }
+    }
+  );
+
+  const orderedFindings =
+    matchedFindings.concat(
+      otherFindings
+    );
+
+  const visibleCount =
+    isRegionTodayInfoExpanded
+      ? orderedFindings.length
+      : Math.min(
+          REGION_TODAY_INFO_INITIAL_VISIBLE_COUNT,
+          orderedFindings.length
+        );
+
+  const language =
+    getCurrentMachinauLanguage();
+
+  listElement.innerHTML =
+    orderedFindings
+      .slice(0, visibleCount)
+      .map(
+        function(finding) {
+          return buildRegionTodayInfoCardHtml(
+            finding,
+            language
+          );
+        }
+      )
+      .join("");
+
+  section.style.display =
+    "";
+
+  if (
+    orderedFindings.length >
+    REGION_TODAY_INFO_INITIAL_VISIBLE_COUNT
+  ) {
+    toggleButton.style.display =
+      "";
+
+    toggleButton.textContent =
+      isRegionTodayInfoExpanded
+        ? getMachinauTranslation(
+            "region_today_info_show_less",
+            language
+          )
+        : buildRegionTodayInfoShowMoreLabel(
+            orderedFindings.length,
+            language
+          );
+  } else {
+    toggleButton.style.display =
+      "none";
+  }
+}
+
+function initializeRegionTodayInfoInteractions() {
+  const toggleButton =
+    document.getElementById(
+      "regionTodayInfoToggleButton"
+    );
+
+  if (!toggleButton) {
+    return;
+  }
+
+  toggleButton.addEventListener(
+    "click",
+    function() {
+      isRegionTodayInfoExpanded =
+        !isRegionTodayInfoExpanded;
+
+      renderRegionTodayInfo();
+    }
+  );
 }
 
 
@@ -11847,7 +12286,16 @@ function renderAreaInfoButtons() {
 // 案内枠の表示制御。文言自体はdata-i18nの一括置換で言語切替に追従する
 // (buildAwarenessNoticeText()のような動的組み立てが無いため、既存の
 // renderAwarenessNotices()と違いswitchMachinauLanguage()側の再描画呼び出し
-// は不要)。表示/非表示の判定だけ既存2枠と同じくuserAreaNameの有無で行う。
+// は不要)。
+// 広域region×localDate共有AI地域情報 Phase1 UI｜この帯は元々
+// userAreaNameの有無だけで表示していたが、「下をチェック！」の主な誘導先が
+// regionTodayInfo(今日、この地域で起きていること)になったため、
+// regionTodayInfoが実際にready・かつ表示対象(isDateValid:trueの
+// finding)が1件以上あるときだけ表示するよう条件を調整する(本部指示：
+// 0件/error時に「届いているよ」と表示したままにしない)。文言自体は
+// 変更しない。userAreaName確定直後(regionTodayInfo未確定)の初回呼び出しでは
+// 非表示になるが、triggerRegionTodayInfo()側でregionTodayInfoが確定した
+// 時点にも本関数を再度呼ぶため、確定後は正しく表示される。
 function renderCityNowGuidance() {
   const section =
     document.getElementById(
@@ -11858,10 +12306,28 @@ function renderCityNowGuidance() {
     return;
   }
 
+  const hasAreaName =
+    typeof userAreaName === "string" &&
+    userAreaName !== "";
+
+  const hasReadyRegionTodayInfo =
+    currentRegionTodayInfoStatus === "ready" &&
+    Array.isArray(
+      currentRegionTodayInfoFindings
+    ) &&
+    currentRegionTodayInfoFindings.some(
+      function(finding) {
+        return (
+          finding &&
+          finding.isDateValid === true
+        );
+      }
+    );
+
   section.style.display =
     (
-      typeof userAreaName === "string" &&
-      userAreaName !== ""
+      hasAreaName &&
+      hasReadyRegionTodayInfo
     )
       ? ""
       : "none";
