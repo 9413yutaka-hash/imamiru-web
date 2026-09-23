@@ -19,6 +19,11 @@ import {
   timingSafeEqual
 } from "node:crypto";
 
+// 広域region×localDate共有AI地域情報 Phase1｜緯度経度→IANAタイムゾーンを
+// 新しい有料APIを増やさずに解決するための軽量オフラインライブラリ(依存ゼロ、
+// ネットワーク通信なし。実機検証済み、commit 3a5e1fe参照)。
+import tzlookup from "@photostructure/tz-lookup";
+
 
 function getFirebaseAdminApp() {
   if (getApps().length > 0) {
@@ -7994,6 +7999,1200 @@ async function handleSocialPatrolRequest(
 }
 
 
+// ============================================================
+// 広域region×localDate共有AI地域情報 Phase1(本番機能)
+// ============================================================
+// 「今いる街とマチナウ、旅行者をつなぐ」ための本番機能。「今日のイベント
+// 一覧」ではなく、「今日、この地域で普段と違うこと」を1日1回・地域単位で
+// 共有調査する。以下のPhase1実装は、下方のLuna/Terra各Probe(比較実験の
+// 記録としてそのまま残す、無変更)とは完全に独立しており、Probeのコードを
+// 一切呼び出さない。世界対応のため、国・地域の固有名詞やadministrative
+// levelの前提はハードコードしない。
+
+const REGION_TODAY_INFO_RESULTS_COLLECTION =
+  "regionTodayInfoResults";
+
+// モデルはこの本番機能専用の独立定数として明示指定する(Probe用の
+// LUNA_PROBE_MODELとは意図的に別定数にし、Probeを直接本番化しない、という
+// 本部指示を構造的に担保する。既存のAI_CITY_INFO_MODEL等の環境変数ベースの
+// 設定にも一切触れない)。
+const REGION_TODAY_INFO_MODEL =
+  "gpt-5.6-luna";
+
+const REGION_TODAY_INFO_ENDPOINT =
+  "https://api.openai.com/v1/responses";
+
+const REGION_TODAY_INFO_REASONING_EFFORT =
+  "medium";
+
+// 広域region全体を検索するため、既存Luna県全域Probeで実証済みの90秒を
+// 踏襲する。
+const REGION_TODAY_INFO_TIMEOUT_MS =
+  90000;
+
+const REGION_TODAY_INFO_MAX_FINDINGS =
+  60;
+
+// 生成中(status:"generating")ロックが古すぎる場合は次のリクエストが
+// 再取得できるようにする閾値。Luna呼び出し自体のタイムアウト(90秒)に、
+// Firestore往復・ネットワーク遅延の余裕を持たせた3分とする(極端に長い
+// ロックにしない)。
+const REGION_TODAY_INFO_GENERATING_STALE_MS =
+  3 * 60 * 1000;
+
+const REGION_TODAY_INFO_FIELD_MAX_LENGTHS =
+  {
+    countryCode: 10,
+    countryName: 100,
+    regionKey: 300,
+    regionName: 100,
+    municipality: 100,
+    area: 80,
+    name: 80,
+    time: 60,
+    place: 80,
+    description: 200,
+    source: 80
+  };
+
+function sanitizeRegionTodayInfoKeyPart(
+  rawText
+) {
+  if (typeof rawText !== "string") {
+    return "";
+  }
+
+  return rawText
+    .trim()
+    .replace(/\//g, "");
+}
+
+// document IDはcountryCode＋regionKey(Google place_id)＋localDate(その
+// regionのtimezone基準のYYYY-MM-DD)から生成する。同じregion・同じ
+// localDateなら、別の旅行者でも必ず同じdocumentへ到達する。Firestore
+// document IDの制約(既存buildCityInfoRegionKey()と同じ安全確認："/"を
+// 含められない、"."単体・".."は不可、"__"で始まり"__"で終わる名前は
+// 予約済み、UTF-8で1500byte以内)を踏まえる。municipalityを含めないのが
+// 既存のbuildCityInfoRegionKey()(市区町村単位のキャッシュ)との意図的な
+// 違い(今回は広域region単位で共有するため)。
+function buildRegionTodayInfoDocumentId(
+  countryCode,
+  regionKey,
+  localDate
+) {
+  const safeCountryCode =
+    sanitizeRegionTodayInfoKeyPart(
+      countryCode
+    );
+
+  const safeRegionKey =
+    sanitizeRegionTodayInfoKeyPart(
+      regionKey
+    );
+
+  const safeLocalDate =
+    sanitizeRegionTodayInfoKeyPart(
+      localDate
+    );
+
+  if (
+    safeCountryCode === "" ||
+    safeRegionKey === "" ||
+    safeLocalDate === ""
+  ) {
+    return null;
+  }
+
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(
+      safeLocalDate
+    )
+  ) {
+    return null;
+  }
+
+  const documentId =
+    safeCountryCode +
+    "_" +
+    safeRegionKey +
+    "_" +
+    safeLocalDate;
+
+  if (
+    documentId === "." ||
+    documentId === ".."
+  ) {
+    return null;
+  }
+
+  if (
+    /^__.*__$/.test(
+      documentId
+    )
+  ) {
+    return null;
+  }
+
+  if (
+    Buffer.byteLength(
+      documentId,
+      "utf8"
+    ) > 1500
+  ) {
+    return null;
+  }
+
+  return documentId;
+}
+
+// 緯度経度の型・範囲だけを検証する(このファイル内の他のmodeにある
+// latitude/longitude検証と同じ考え方の最小版)。
+function getValidatedCoordinateOrNull(
+  rawValue,
+  minValue,
+  maxValue
+) {
+  if (
+    rawValue === null ||
+    rawValue === undefined ||
+    rawValue === ""
+  ) {
+    return null;
+  }
+
+  const parsedValue =
+    Number(
+      rawValue
+    );
+
+  if (
+    !Number.isFinite(
+      parsedValue
+    ) ||
+    parsedValue < minValue ||
+    parsedValue > maxValue
+  ) {
+    return null;
+  }
+
+  return parsedValue;
+}
+
+// region共有キャッシュの正式な日付判定に使うlocalDateは、必ずサーバー側で
+// 緯度経度から確定する(クライアントが送ったtimezone/localDateは信用しない、
+// 本部指示)。@photostructure/tz-lookup(依存ゼロ・オフライン、実機検証済み)
+// で緯度経度→IANAタイムゾーンを解決し、Intl.DateTimeFormatでそのタイム
+// ゾーン基準のYYYY-MM-DDを生成する。UTC日付・旅行者端末のtimezoneは
+// 一切使わない。
+function computeRegionLocalDate(
+  latitude,
+  longitude
+) {
+  let timeZoneId;
+
+  try {
+    timeZoneId =
+      tzlookup(
+        latitude,
+        longitude
+      );
+  } catch (error) {
+    return null;
+  }
+
+  if (
+    typeof timeZoneId !== "string" ||
+    timeZoneId === ""
+  ) {
+    return null;
+  }
+
+  let localDate;
+
+  try {
+    const formatter =
+      new Intl.DateTimeFormat(
+        "en-CA",
+        {
+          timeZone: timeZoneId,
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit"
+        }
+      );
+
+    localDate =
+      formatter.format(
+        new Date()
+      );
+  } catch (error) {
+    return null;
+  }
+
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(
+      localDate
+    )
+  ) {
+    return null;
+  }
+
+  return {
+    timeZoneId: timeZoneId,
+    localDate: localDate
+  };
+}
+
+function buildRegionTodayInfoJsonSchema() {
+  return {
+    type: "json_schema",
+    name: "region_today_info_result",
+    strict: true,
+
+    schema: {
+      type: "object",
+
+      properties: {
+        checked: {
+          type: "boolean"
+        },
+
+        findings: {
+          type: "array",
+
+          items: {
+            type: "object",
+
+            properties: {
+              area: {
+                type: "string"
+              },
+
+              name: {
+                type: "string"
+              },
+
+              time: {
+                type: "string"
+              },
+
+              place: {
+                type: "string"
+              },
+
+              description: {
+                type: "string"
+              },
+
+              source: {
+                type: "string"
+              },
+
+              isOfficial: {
+                type: "boolean"
+              },
+
+              isDateValid: {
+                type: "boolean"
+              }
+            },
+
+            required: [
+              "area",
+              "name",
+              "time",
+              "place",
+              "description",
+              "source",
+              "isOfficial",
+              "isDateValid"
+            ],
+
+            additionalProperties: false
+          }
+        }
+      },
+
+      required: ["checked", "findings"],
+      additionalProperties: false
+    }
+  };
+}
+
+// 本番専用instructions。国・都道府県/州・市区町村等の固有名詞や、地域固有の
+// 下位区分(北部/南部/離島等)は一切ハードコードしない(世界対応)。
+function buildRegionTodayInfoInstructions(
+  regionName,
+  municipalityName,
+  localDateIso
+) {
+  return (
+    "You are the bridge between a town and a traveler for a travel app, " +
+    "designed to work for any region in any country — do not assume any " +
+    "specific country, administrative structure, or fixed sub-division " +
+    "scheme. A traveler is currently in \"" + municipalityName + "\", " +
+    "within the broader region \"" + regionName + "\". The target date " +
+    "is explicitly " + localDateIso + " — use exactly this date as " +
+    "\"today\" for every judgment, not the actual current date. " +
+
+    "\n\nCENTRAL GOAL: find what is genuinely different from a normal " +
+    "day, today, in this region — information that reduces \"I wish I " +
+    "had known this\" and increases \"glad I knew this\" for a " +
+    "traveler currently in this region. This is NOT a task to build " +
+    "\"today's event list\" — the town is the main character, you are " +
+    "only the bridge to the traveler. Consider two internal angles as " +
+    "you search (do not label or expose these in your output, they are " +
+    "only how you should think): (1) things that exist only today — " +
+    "one-day/limited-time events, festivals, local observances, " +
+    "experiences, special openings, something on its first or last day; " +
+    "(2) things that are different today from normal — irregular " +
+    "closures, special hours, schedule changes, service suspensions, " +
+    "cancellations, postponements, or other temporary changes to how a " +
+    "place can be used or reached. Check both angles, but never force " +
+    "coverage of either — zero findings today is a completely valid " +
+    "and expected outcome. " +
+
+    "\n\nCOMBINE RELATED INFORMATION INTO ONE FINDING (critical): when " +
+    "multiple things you find belong to the same facility, the same " +
+    "event, or the same limited-time period, and would inform the same " +
+    "travel decision, merge them into a single finding instead of " +
+    "reporting them separately. For example, if a venue has both a " +
+    "special multi-day program AND unusual hours today as part of that " +
+    "same program, describe it as one finding a traveler can read once " +
+    "and understand (e.g. \"[venue name] — special program; open until " +
+    "[time] today, closed tomorrow as a makeup day.\"), not as two " +
+    "separate findings about the same venue and situation. " +
+
+    "\n\nSCOPE: \"" + municipalityName + "\" is only the traveler's " +
+    "current point of reference — do not limit your search to its " +
+    "immediate vicinity. Research the entire region \"" + regionName + "\" " +
+    "as a whole. Do not concentrate only on the most famous city or " +
+    "tourist spot within it. Do not invent or apply a fixed " +
+    "sub-division scheme (e.g. north/south/central zones, or a list of " +
+    "named sub-areas) — just make sure your search genuinely covers " +
+    "the region rather than one corner of it. There is no quota — do " +
+    "not pad with weak or generic findings to cover more area. " +
+
+    "\n\nSOURCES (priority order): national/regional/prefectural or " +
+    "state government sites, municipal/local government sites, tourism " +
+    "associations and official tourism sites, public facilities, " +
+    "transportation operators, event organizers, and official venue/" +
+    "shop sites. Where useful, also check reliable local media. Use web " +
+    "search normally — if a public social media post happens to come " +
+    "up in an ordinary search result you don't need to discard it, but " +
+    "do not treat searching social media platforms as a goal in " +
+    "itself. " +
+
+    "\n\nDATE/TIME/PLACE VERIFICATION (critical): before including a " +
+    "finding, check its date, time, and place. Only set \"isDateValid\":" +
+    "true if you can confirm it is genuinely valid on " + localDateIso + " " +
+    "specifically (not the day before or after, not \"this week\" in " +
+    "general, not an unclear or unstated date, not something already " +
+    "ended). If you cannot confirm this, set isDateValid:false rather " +
+    "than presenting stale or unclear information as confirmed for " +
+    "today. Set \"isOfficial\":true only when a government, official " +
+    "tourism, or venue/operator's own official source confirms the " +
+    "information. " +
+
+    "\n\nEXCLUDE: always-available tourist attractions, ordinary shops " +
+    "just operating normally, experiences available year-round, " +
+    "articles unrelated to this specific date, generic rankings, and " +
+    "standard travel-guide content — unless something about them is " +
+    "genuinely different today. This task is not about disaster or " +
+    "safety warnings (typhoons, tsunamis, evacuations, major " +
+    "emergencies) — that is handled by a separate system — but if such " +
+    "information appears incidentally during your normal research, you " +
+    "do not need to forcibly discard it. " +
+
+    "\n\nOUTPUT: each finding needs area (which part of \"" + regionName + "\" " +
+    "this belongs to, in your own words), name, time, place, a short " +
+    "Japanese description in your own words (not copied from a " +
+    "source), source (the organization/site name as plain text, never " +
+    "a raw URL), isOfficial, and isDateValid. Write area/name/time/" +
+    "place/description/source in Japanese. Set \"checked\":true once " +
+    "you have actually performed web searches (even if you found " +
+    "nothing) — never set it to true without actually searching. If " +
+    "you find nothing genuinely worthwhile, report an empty findings " +
+    "array — that is a valid, correct result. Do not output anything " +
+    "other than the JSON object described by the schema."
+  );
+}
+
+function buildRegionTodayInfoInputItems(
+  countryName,
+  regionName,
+  municipalityName,
+  localDateIso
+) {
+  return [
+    {
+      role: "user",
+
+      content: [
+        {
+          type: "input_text",
+
+          text:
+            JSON.stringify(
+              {
+                country: countryName,
+                region: regionName,
+                municipality: municipalityName,
+                localDateIso: localDateIso,
+
+                note:
+                  "municipality is only the traveler's current " +
+                  "reference point. Research the entire region, not " +
+                  "an area limited to the vicinity of municipality."
+              }
+            )
+        }
+      ]
+    }
+  ];
+}
+
+function sanitizeRegionTodayInfoFinding(
+  rawFinding
+) {
+  if (
+    !rawFinding ||
+    typeof rawFinding !== "object"
+  ) {
+    return null;
+  }
+
+  const description =
+    stripCitationArtifactsFromAiText(
+      sanitizeRegionEditorialText(
+        rawFinding.description,
+        REGION_TODAY_INFO_FIELD_MAX_LENGTHS.description
+      )
+    );
+
+  if (description === "") {
+    return null;
+  }
+
+  return {
+    area:
+      sanitizeRegionEditorialText(
+        rawFinding.area,
+        REGION_TODAY_INFO_FIELD_MAX_LENGTHS.area
+      ),
+
+    name:
+      sanitizeRegionEditorialText(
+        rawFinding.name,
+        REGION_TODAY_INFO_FIELD_MAX_LENGTHS.name
+      ),
+
+    time:
+      sanitizeRegionEditorialText(
+        rawFinding.time,
+        REGION_TODAY_INFO_FIELD_MAX_LENGTHS.time
+      ),
+
+    place:
+      sanitizeRegionEditorialText(
+        rawFinding.place,
+        REGION_TODAY_INFO_FIELD_MAX_LENGTHS.place
+      ),
+
+    description: description,
+
+    source:
+      sanitizeRegionEditorialText(
+        rawFinding.source,
+        REGION_TODAY_INFO_FIELD_MAX_LENGTHS.source
+      ),
+
+    isOfficial:
+      rawFinding.isOfficial === true,
+
+    isDateValid:
+      rawFinding.isDateValid === true
+  };
+}
+
+async function callOpenAiRegionTodayInfoResearch(
+  params
+) {
+  const apiKey =
+    process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    const configError =
+      new Error("OPENAI_API_KEY が設定されていません。");
+
+    configError.isMissingApiKey =
+      true;
+
+    throw configError;
+  }
+
+  const instructions =
+    buildRegionTodayInfoInstructions(
+      params.regionName,
+      params.municipality,
+      params.localDate
+    );
+
+  const inputItems =
+    buildRegionTodayInfoInputItems(
+      params.countryName,
+      params.regionName,
+      params.municipality,
+      params.localDate
+    );
+
+  const controller =
+    new AbortController();
+
+  const timeoutId =
+    setTimeout(
+      function() {
+        controller.abort();
+      },
+      REGION_TODAY_INFO_TIMEOUT_MS
+    );
+
+  let response;
+
+  try {
+    try {
+      response =
+        await fetch(
+          REGION_TODAY_INFO_ENDPOINT,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer " + apiKey
+            },
+
+            body: JSON.stringify({
+              model: REGION_TODAY_INFO_MODEL,
+              instructions: instructions,
+              input: inputItems,
+
+              tools: [
+                {
+                  type: "web_search"
+                }
+              ],
+
+              tool_choice: "auto",
+              include: ["web_search_call.action.sources"],
+
+              text: {
+                format:
+                  buildRegionTodayInfoJsonSchema()
+              },
+
+              reasoning: {
+                effort: REGION_TODAY_INFO_REASONING_EFFORT
+              }
+            }),
+
+            signal: controller.signal
+          }
+        );
+    } catch (fetchError) {
+      if (fetchError.name === "AbortError") {
+        const timeoutError =
+          new Error("広域地域情報の調査がタイムアウトしました。");
+
+        timeoutError.isTransient =
+          true;
+
+        timeoutError.isTimeout =
+          true;
+
+        throw timeoutError;
+      }
+
+      const networkError =
+        new Error("広域地域情報の調査呼び出しに失敗しました。");
+
+      networkError.isTransient =
+        true;
+
+      networkError.isNetworkError =
+        true;
+
+      throw networkError;
+    }
+  } finally {
+    clearTimeout(
+      timeoutId
+    );
+  }
+
+  if (!response.ok) {
+    const httpError =
+      new Error(
+        "OpenAI APIがエラーを返しました。status=" + response.status
+      );
+
+    httpError.isHttpError =
+      true;
+
+    httpError.httpStatus =
+      response.status;
+
+    httpError.isTransient =
+      true;
+
+    throw httpError;
+  }
+
+  let responseData;
+
+  try {
+    responseData =
+      await response.json();
+  } catch (jsonError) {
+    const parseError =
+      new Error("OpenAI APIの応答を解析できませんでした。");
+
+    parseError.isJsonError =
+      true;
+
+    parseError.isTransient =
+      true;
+
+    throw parseError;
+  }
+
+  const outputItems =
+    Array.isArray(responseData.output)
+      ? responseData.output
+      : [];
+
+  const consultedSources =
+    extractActualSourcesFromResponsesOutput(
+      outputItems
+    );
+
+  const webSearchCallCount =
+    outputItems.filter(
+      function(item) {
+        return (
+          item &&
+          item.type === "web_search_call"
+        );
+      }
+    ).length;
+
+  const rawText =
+    extractOutputTextFromResponsesOutput(
+      outputItems
+    );
+
+  if (rawText.trim() === "") {
+    const shapeError =
+      new Error("OpenAI APIの応答形式が不正です。");
+
+    shapeError.isJsonError =
+      true;
+
+    shapeError.isTransient =
+      true;
+
+    throw shapeError;
+  }
+
+  let parsedResult;
+
+  try {
+    parsedResult =
+      JSON.parse(rawText);
+  } catch (parseError) {
+    const shapeError =
+      new Error("広域地域情報の応答がJSON形式ではありませんでした。");
+
+    shapeError.isJsonError =
+      true;
+
+    shapeError.isTransient =
+      true;
+
+    throw shapeError;
+  }
+
+  const checked =
+    parsedResult.checked === true;
+
+  const rawFindings =
+    Array.isArray(parsedResult.findings)
+      ? parsedResult.findings
+      : [];
+
+  const findings =
+    rawFindings
+      .map(sanitizeRegionTodayInfoFinding)
+      .filter(
+        function(finding) {
+          return finding !== null;
+        }
+      )
+      .slice(0, REGION_TODAY_INFO_MAX_FINDINGS);
+
+  const usage =
+    responseData.usage
+      ? {
+          inputTokens:
+            typeof responseData.usage.input_tokens === "number"
+              ? responseData.usage.input_tokens
+              : null,
+
+          outputTokens:
+            typeof responseData.usage.output_tokens === "number"
+              ? responseData.usage.output_tokens
+              : null,
+
+          totalTokens:
+            typeof responseData.usage.total_tokens === "number"
+              ? responseData.usage.total_tokens
+              : null
+        }
+      : null;
+
+  const estimatedCostUsd =
+    usage &&
+    typeof usage.inputTokens === "number" &&
+    typeof usage.outputTokens === "number"
+      ? calculateLunaProbeEstimatedCostUsd(
+          REGION_TODAY_INFO_MODEL,
+          usage.inputTokens,
+          usage.outputTokens,
+          webSearchCallCount
+        )
+      : null;
+
+  return {
+    checked: checked,
+    findings: findings,
+    consultedSources: consultedSources,
+    usage: usage,
+    webSearchCallCount: webSearchCallCount,
+    estimatedCostUsd: estimatedCostUsd
+  };
+}
+
+// runTransaction()による二重生成防止。既存のclaimCommentRateLimit()
+// (読み取り→条件判定→アトミックに書き込む)と同じパターンを踏襲する。
+// 戻り値のoutcome："ready"(保存済みの結果をそのまま返せる)、
+// "generating"(他のリクエストが生成中、今回は生成しない)、
+// "claimed"(このリクエストが生成権を獲得した、Lunaを呼んでよい)。
+async function claimRegionTodayInfoGeneration(
+  database,
+  documentId,
+  locationContext
+) {
+  const documentRef =
+    database
+      .collection(
+        REGION_TODAY_INFO_RESULTS_COLLECTION
+      )
+      .doc(
+        documentId
+      );
+
+  return database.runTransaction(
+    async function(transaction) {
+      const snapshot =
+        await transaction.get(
+          documentRef
+        );
+
+      if (snapshot.exists) {
+        const data =
+          snapshot.data() || {};
+
+        if (data.status === "ready") {
+          return {
+            outcome: "ready",
+            data: data
+          };
+        }
+
+        if (data.status === "generating") {
+          const startedAtMillis =
+            data.generatingStartedAt &&
+            typeof data.generatingStartedAt.toMillis === "function"
+              ? data.generatingStartedAt.toMillis()
+              : null;
+
+          const isStale =
+            startedAtMillis === null ||
+            (
+              Date.now() -
+              startedAtMillis
+            ) >
+              REGION_TODAY_INFO_GENERATING_STALE_MS;
+
+          if (!isStale) {
+            return {
+              outcome: "generating"
+            };
+          }
+
+          // stale：このリクエストが再度生成権を獲得する(下へ続く)。
+        }
+
+        // status:"error"も再取得可能として扱う(下へ続く)。
+      }
+
+      transaction.set(
+        documentRef,
+        {
+          countryCode:
+            locationContext.countryCode,
+
+          countryName:
+            locationContext.countryName,
+
+          regionKey:
+            locationContext.regionKey,
+
+          regionName:
+            locationContext.regionName,
+
+          timezone:
+            locationContext.timezone,
+
+          localDate:
+            locationContext.localDate,
+
+          status: "generating",
+
+          generatingStartedAt:
+            FieldValue.serverTimestamp(),
+
+          updatedAt:
+            FieldValue.serverTimestamp()
+        },
+        { merge: true }
+      );
+
+      return {
+        outcome: "claimed"
+      };
+    }
+  );
+}
+
+async function saveRegionTodayInfoReadyResult(
+  database,
+  documentId,
+  researchResult
+) {
+  await database
+    .collection(
+      REGION_TODAY_INFO_RESULTS_COLLECTION
+    )
+    .doc(
+      documentId
+    )
+    .set(
+      {
+        status: "ready",
+        checked: researchResult.checked,
+        findings: researchResult.findings,
+        sources: researchResult.consultedSources,
+        usage: researchResult.usage,
+        webSearchCallCount: researchResult.webSearchCallCount,
+        estimatedCostUsd: researchResult.estimatedCostUsd,
+
+        generatedAt:
+          FieldValue.serverTimestamp(),
+
+        updatedAt:
+          FieldValue.serverTimestamp()
+      },
+      { merge: true }
+    );
+}
+
+async function saveRegionTodayInfoErrorResult(
+  database,
+  documentId
+) {
+  await database
+    .collection(
+      REGION_TODAY_INFO_RESULTS_COLLECTION
+    )
+    .doc(
+      documentId
+    )
+    .set(
+      {
+        status: "error",
+
+        updatedAt:
+          FieldValue.serverTimestamp()
+      },
+      { merge: true }
+    );
+}
+
+// 本番公開機能(旅行者向け)｜cityInfoGet/socialPatrolと同じ認証方式
+// (有効なFirebase IDトークンを持つユーザーなら誰でも可、匿名認証も許可)を
+// 採用する。Admin限定にしない。
+async function handleRegionTodayInfoGetRequest(
+  request,
+  response
+) {
+  try {
+    const idToken =
+      readBearerToken(
+        request
+      );
+
+    if (idToken === "") {
+      return response.status(401).json({
+        success: false,
+        message: "認証情報がありません。"
+      });
+    }
+
+    const app =
+      getFirebaseAdminApp();
+
+    try {
+      await getAuth(app)
+        .verifyIdToken(
+          idToken
+        );
+    } catch (verifyError) {
+      return response.status(401).json({
+        success: false,
+        message: "認証情報が正しくありません。"
+      });
+    }
+
+    const database =
+      getFirestore(app);
+
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    const latitude =
+      getValidatedCoordinateOrNull(
+        requestBody.latitude,
+        -90,
+        90
+      );
+
+    const longitude =
+      getValidatedCoordinateOrNull(
+        requestBody.longitude,
+        -180,
+        180
+      );
+
+    if (
+      latitude === null ||
+      longitude === null
+    ) {
+      return response.status(400).json({
+        success: false,
+        message: "現在地情報が正しくありません。"
+      });
+    }
+
+    // regionKey等はGeocoderで確認済みのクライアント値を使う(本部指示：
+    // Reverse Geocodingの二重呼び出しを増やさない、が最優先条件のため、
+    // 型・長さのみ検証し、緯度経度との独立した突合はしない。最小安全案)。
+    const countryCode =
+      sanitizeRegionEditorialText(
+        requestBody.countryCode,
+        REGION_TODAY_INFO_FIELD_MAX_LENGTHS.countryCode
+      );
+
+    const countryName =
+      sanitizeRegionEditorialText(
+        requestBody.countryName,
+        REGION_TODAY_INFO_FIELD_MAX_LENGTHS.countryName
+      );
+
+    const regionKey =
+      sanitizeRegionEditorialText(
+        requestBody.regionKey,
+        REGION_TODAY_INFO_FIELD_MAX_LENGTHS.regionKey
+      );
+
+    const regionName =
+      sanitizeRegionEditorialText(
+        requestBody.regionName,
+        REGION_TODAY_INFO_FIELD_MAX_LENGTHS.regionName
+      );
+
+    const municipality =
+      sanitizeRegionEditorialText(
+        requestBody.municipality,
+        REGION_TODAY_INFO_FIELD_MAX_LENGTHS.municipality
+      );
+
+    if (
+      countryCode === "" ||
+      regionKey === "" ||
+      regionName === ""
+    ) {
+      return response.status(400).json({
+        success: false,
+        message: "地域情報を正しく特定できませんでした。"
+      });
+    }
+
+    // localDateは必ずサーバー側で緯度経度から確定する(クライアント入力を
+    // 信用しない、本部指示)。
+    const localDateResult =
+      computeRegionLocalDate(
+        latitude,
+        longitude
+      );
+
+    if (!localDateResult) {
+      return response.status(400).json({
+        success: false,
+        message: "タイムゾーンを特定できませんでした。"
+      });
+    }
+
+    const documentId =
+      buildRegionTodayInfoDocumentId(
+        countryCode,
+        regionKey,
+        localDateResult.localDate
+      );
+
+    if (!documentId) {
+      return response.status(400).json({
+        success: false,
+        message: "地域情報を正しく処理できませんでした。"
+      });
+    }
+
+    const claimResult =
+      await claimRegionTodayInfoGeneration(
+        database,
+        documentId,
+        {
+          countryCode: countryCode,
+          countryName: countryName,
+          regionKey: regionKey,
+          regionName: regionName,
+          timezone: localDateResult.timeZoneId,
+          localDate: localDateResult.localDate
+        }
+      );
+
+    if (claimResult.outcome === "ready") {
+      return response.status(200).json({
+        success: true,
+        status: "ready",
+
+        checked:
+          claimResult.data.checked === true,
+
+        findings:
+          Array.isArray(claimResult.data.findings)
+            ? claimResult.data.findings
+            : []
+      });
+    }
+
+    if (claimResult.outcome === "generating") {
+      return response.status(200).json({
+        success: true,
+        status: "generating"
+      });
+    }
+
+    // claimResult.outcome === "claimed"：このリクエストだけがLunaを呼ぶ。
+    let researchResult;
+
+    try {
+      researchResult =
+        await callOpenAiRegionTodayInfoResearch(
+          {
+            countryName:
+              countryName !== ""
+                ? countryName
+                : countryCode,
+
+            regionName: regionName,
+            municipality: municipality,
+            localDate: localDateResult.localDate
+          }
+        );
+    } catch (aiError) {
+      console.error(
+        "広域地域情報：生成エラー：",
+        aiError
+      );
+
+      try {
+        await saveRegionTodayInfoErrorResult(
+          database,
+          documentId
+        );
+      } catch (saveErrorAfterAiError) {
+        console.error(
+          "広域地域情報：エラー状態の保存にも失敗：",
+          saveErrorAfterAiError
+        );
+      }
+
+      return response.status(200).json({
+        success: false,
+        status: "error",
+        message: "地域情報の取得中にエラーが発生しました。"
+      });
+    }
+
+    try {
+      await saveRegionTodayInfoReadyResult(
+        database,
+        documentId,
+        researchResult
+      );
+    } catch (saveError) {
+      // 保存に失敗しても、今回生成した結果はそのまま返す(socialPatrolと
+      // 同じ考え方。次回アクセス時は未保存のため再実行されるだけ)。
+      console.error(
+        "広域地域情報：保存エラー：",
+        saveError
+      );
+    }
+
+    return response.status(200).json({
+      success: true,
+      status: "ready",
+      checked: researchResult.checked,
+      findings: researchResult.findings
+    });
+  } catch (error) {
+    console.error(
+      "広域地域情報：処理エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      status: "error",
+      message: "地域情報の取得中にエラーが発生しました。"
+    });
+  }
+}
+
+
 // Luna地域情報テストモード(代表専用の性能・実費計測プローブ)｜本番機能では
 // なく、GPT-5.6 Lunaが「今日だから意味がある街の今」をどの程度web_searchで
 // 発見できるか・実費がいくらかを1回だけ実測するための試験専用コード。
@@ -15166,6 +16365,18 @@ export default async function handler(
     requestBody.mode === "socialPatrol"
   ) {
     return handleSocialPatrolRequest(
+      request,
+      response
+    );
+  }
+
+  // 広域region×localDate共有AI地域情報 Phase1(本番機能)｜cityInfoGet/
+  // socialPatrolと同様、公開機能(旅行者向け)のため管理者/Editor限定にしない。
+  // 既存モードのいずれにも一切触れない。
+  if (
+    requestBody.mode === "regionTodayInfoGet"
+  ) {
+    return handleRegionTodayInfoGetRequest(
       request,
       response
     );

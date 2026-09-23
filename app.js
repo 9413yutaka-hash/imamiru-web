@@ -5399,6 +5399,18 @@ function resolveAreaNameFromCoordinates(latitude, longitude) {
 // (administrative_area_level_1のlongName)・city(localityのlongName)の
 // 3階層を取り出す。既存のuserAreaName・地域優先度判定・AIコンシェルジュ・
 // 常設広告判定等、他のどの機能にも一切使わない(読み物一覧の取得だけに使う)。
+//
+// 広域region×localDate共有AI地域情報 Phase1｜既存の戻り値(country/
+// prefecture/city)・既存呼び出し元(loadDynamicColumnEntries())は一切
+// 変更せず、後方互換のまま以下を追加する(同じ1回のGeocoderレスポンスを
+// 再利用するだけで、新しいReverse Geocoding呼び出しは増やさない)。
+// - countryCode：countryと同じ値(短縮名)。新機能側の呼び名を明確にするため
+// - countryName：countryのlong_name(表示用)
+// - regionKey：address_componentsのplace_idではなく、results配列の中で
+//   types自体がadministrative_area_level_1を含む「result本体」の
+//   place_id(Production実測で取得可能と確認済み、言語非依存の安定識別子)
+// - regionName：prefectureと同じ値(表示用、新機能側の呼び名を明確にするため)
+// - municipality：cityと同じ値(新機能側の呼び名を明確にするため)
 function resolveLocationHierarchyFromCoordinates(
   latitude,
   longitude
@@ -5414,7 +5426,12 @@ function resolveLocationHierarchyFromCoordinates(
           {
             country: "",
             prefecture: "",
-            city: ""
+            city: "",
+            countryCode: "",
+            countryName: "",
+            regionKey: "",
+            regionName: "",
+            municipality: ""
           }
         );
         return;
@@ -5427,7 +5444,12 @@ function resolveLocationHierarchyFromCoordinates(
               {
                 country: "",
                 prefecture: "",
-                city: ""
+                city: "",
+                countryCode: "",
+                countryName: "",
+                regionKey: "",
+                regionName: "",
+                municipality: ""
               }
             );
           },
@@ -5488,7 +5510,12 @@ function resolveLocationHierarchyFromCoordinates(
                 {
                   country: "",
                   prefecture: "",
-                  city: ""
+                  city: "",
+                  countryCode: "",
+                  countryName: "",
+                  regionKey: "",
+                  regionName: "",
+                  municipality: ""
                 }
               );
               return;
@@ -5497,10 +5524,16 @@ function resolveLocationHierarchyFromCoordinates(
             let countryValue =
               "";
 
+            let countryNameValue =
+              "";
+
             let prefectureValue =
               "";
 
             let cityValue =
+              "";
+
+            let regionKeyValue =
               "";
 
             results.forEach(
@@ -5523,6 +5556,14 @@ function resolveLocationHierarchyFromCoordinates(
                   ) {
                     countryValue =
                       countryComponent.short_name;
+                  }
+
+                  if (
+                    countryComponent &&
+                    typeof countryComponent.long_name === "string"
+                  ) {
+                    countryNameValue =
+                      countryComponent.long_name;
                   }
                 }
 
@@ -5561,6 +5602,24 @@ function resolveLocationHierarchyFromCoordinates(
                       cityComponent.long_name;
                   }
                 }
+
+                // regionKeyはaddress_components内のplace_idではなく、
+                // result自身がadministrative_area_level_1を表す場合の
+                // result.place_id(言語非依存でProduction実測済み)を使う。
+                if (
+                  regionKeyValue === "" &&
+                  Array.isArray(
+                    result.types
+                  ) &&
+                  result.types.includes(
+                    "administrative_area_level_1"
+                  ) &&
+                  typeof result.place_id === "string" &&
+                  result.place_id !== ""
+                ) {
+                  regionKeyValue =
+                    result.place_id;
+                }
               }
             );
 
@@ -5568,7 +5627,12 @@ function resolveLocationHierarchyFromCoordinates(
               {
                 country: countryValue,
                 prefecture: prefectureValue,
-                city: cityValue
+                city: cityValue,
+                countryCode: countryValue,
+                countryName: countryNameValue,
+                regionKey: regionKeyValue,
+                regionName: prefectureValue,
+                municipality: cityValue
               }
             );
           }
@@ -5582,7 +5646,12 @@ function resolveLocationHierarchyFromCoordinates(
           {
             country: "",
             prefecture: "",
-            city: ""
+            city: "",
+            countryCode: "",
+            countryName: "",
+            regionKey: "",
+            regionName: "",
+            municipality: ""
           }
         );
       }
@@ -8631,6 +8700,17 @@ function getLocation() {
               loadDynamicColumnEntries(
                 locationHierarchy
               );
+
+              // 広域region×localDate共有AI地域情報 Phase1｜同じGeocoder
+              // 結果をそのまま再利用するだけで、新しいGeocoding呼び出しは
+              // 増やさない。失敗してもTOPの他機能には一切影響させない
+              // (triggerRegionTodayInfo自身が例外を握りつぶす設計)。
+              triggerRegionTodayInfo(
+                userLatitude,
+                userLongitude,
+                locationHierarchy,
+                suggestionGpsSessionId
+              );
             }
           )
           .catch(
@@ -11482,6 +11562,123 @@ async function triggerSocialPatrolForArea(
   } catch (error) {
     // SNS街巡回は補助機能のため、失敗しても「近くの今」の既存表示
     // (街を見るAI・店舗由来)には一切影響させない。
+  }
+}
+
+
+// 広域region×localDate共有AI地域情報 Phase1(本番機能)｜「今日、この地域で
+// 普段と違うこと」を広域region単位で取得する。表示UIはまだ実装せず(本部
+// 指示：デザイン判断は代表が行う)、データ経路の確認としてconsole.logへ
+// 出力するだけにとどめる。既存の店舗・天気・読み物・cityInfo・おすすめ・
+// AIコンシェルジュ等、他のどの既存処理にも一切触れない・依存しない
+// (失敗しても他機能に影響させない設計は既存のtriggerSocialPatrolForArea()
+// と同じ考え方)。
+let currentRegionTodayInfoStatus =
+  null;
+
+let currentRegionTodayInfoFindings =
+  [];
+
+async function triggerRegionTodayInfo(
+  latitude,
+  longitude,
+  locationHierarchy,
+  gpsSessionId
+) {
+  if (
+    !locationHierarchy ||
+    typeof locationHierarchy.countryCode !== "string" ||
+    locationHierarchy.countryCode === "" ||
+    typeof locationHierarchy.regionKey !== "string" ||
+    locationHierarchy.regionKey === "" ||
+    typeof locationHierarchy.regionName !== "string" ||
+    locationHierarchy.regionName === ""
+  ) {
+    // regionKey等が取得できなかった場合は静かに諦める(既存の
+    // resolveLocationHierarchyFromCoordinates()の失敗時フォールバックと
+    // 同じ考え方)。
+    return;
+  }
+
+  try {
+    const idToken =
+      await getAnonymousIdTokenForLocationCollection();
+
+    const response =
+      await fetch(
+        "/api/moderate-submission",
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + idToken
+          },
+
+          body: JSON.stringify({
+            mode: "regionTodayInfoGet",
+            latitude: latitude,
+            longitude: longitude,
+            countryCode: locationHierarchy.countryCode,
+            countryName: locationHierarchy.countryName,
+            regionKey: locationHierarchy.regionKey,
+            regionName: locationHierarchy.regionName,
+            municipality: locationHierarchy.municipality
+          })
+        }
+      );
+
+    let responseData =
+      null;
+
+    try {
+      responseData =
+        await response.json();
+    } catch (jsonError) {
+      return;
+    }
+
+    if (
+      gpsSessionId !==
+      machinauSuggestionGpsSessionId
+    ) {
+      // 応答が届く間に別の場所へ移動済み。古い地域の結果を今の画面へ
+      // 反映しない。
+      return;
+    }
+
+    if (
+      !response.ok ||
+      !responseData ||
+      responseData.success !== true
+    ) {
+      currentRegionTodayInfoStatus =
+        "error";
+
+      return;
+    }
+
+    currentRegionTodayInfoStatus =
+      responseData.status;
+
+    currentRegionTodayInfoFindings =
+      Array.isArray(responseData.findings)
+        ? responseData.findings
+        : [];
+
+    // Phase1はデータ経路の確認が目的のため、表示UIはまだ作らず
+    // console.logで確認する(既存のAIConciergeTrace等と同じ診断ログの
+    // 考え方)。
+    console.log(
+      "[RegionTodayInfo] status=" +
+        currentRegionTodayInfoStatus +
+        " findingCount=" +
+        currentRegionTodayInfoFindings.length,
+      currentRegionTodayInfoFindings
+    );
+  } catch (error) {
+    // 広域地域情報は補助機能のため、失敗しても既存のTOP画面表示には
+    // 一切影響させない。
   }
 }
 
