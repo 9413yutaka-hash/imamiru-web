@@ -11501,6 +11501,618 @@ async function saveShopTranslationErrorResult(
     );
 }
 
+// ============================================================
+// 多言語化 Phase D(地域のおすすめ｜submissions由来のtitle翻訳)
+// ============================================================
+// 「地域のおすすめ」に表示される街を見るAI由来アイテムのtitle
+// (shop.title)を翻訳・キャッシュする。既存Phase Bのmessage翻訳
+// (status/sourceHash/message/generatingStartedAt等、上のtranslations.
+// {language}直下のフィールド)には一切触れず、同じdocument内の
+// translations.{language}.titleTranslationという別のネストしたオブジェクトに
+// 独立して保存する。これにより：
+// ・title専用のsourceHashを持つため、titleだけ変わってもmessageの
+//   既存キャッシュ(sourceHash/status/message)は無効化されない。
+// ・messageだけ変わってもtitleTranslationには一切触れないため、title側の
+//   既存キャッシュも無効化されない。
+// ・既存のtranslations.{language}を読むコード(Phase Bのmessage処理)は
+//   titleTranslationという未知のキーが増えるだけで、既存の読み取り・
+//   書き込みロジックの挙動は一切変わらない(後方互換)。
+function getShopTitleFromSubmissionData(
+  data
+) {
+  const candidateValues =
+    [
+      data.title,
+      data.adTitle,
+      data.headline
+    ];
+
+  for (
+    let index = 0;
+    index < candidateValues.length;
+    index += 1
+  ) {
+    const value =
+      candidateValues[index];
+
+    if (
+      typeof value === "string" &&
+      value.trim() !== ""
+    ) {
+      return value.trim();
+    }
+  }
+
+  return "";
+}
+
+// 複数店舗のtitleを1回のリクエストでまとめて翻訳する。プロンプトの
+// 制約(事実創作禁止等)はbuildShopTranslationPrompt()(message用)と同じ
+// 考え方だが、対象がtitle(短い見出し)である点を明示する。
+function buildShopTitleTranslationPrompt(
+  items,
+  targetLanguage
+) {
+  const targetLanguageNamesByCode =
+    {
+      en: "English"
+    };
+
+  const targetLanguageName =
+    targetLanguageNamesByCode[targetLanguage] ||
+    targetLanguage;
+
+  const translatableItems =
+    items.map(
+      function(item) {
+        return {
+          id: item.firestoreId,
+          title: item.title
+        };
+      }
+    );
+
+  const systemInstruction =
+    "You are a precise, literal translator for a local business/travel " +
+    "information app. You will receive a JSON array of short headline " +
+    "texts (\"title\") written in Japanese, each with an \"id\". " +
+    "Translate the \"title\" text of each item into " +
+    targetLanguageName + ". " +
+
+    "\n\nCRITICAL RULES (this is translation only): " +
+    "\n- This is a pure translation task. Do not search the web, do not " +
+    "verify or add facts. " +
+    "\n- Do not add, remove, or merge items. The output array must have " +
+    "exactly one entry per input \"id\", with the same \"id\" values. " +
+    "\n- Do not invent, guess, or change any price, business hours, menu " +
+    "item name, address, or shop name mentioned in the text. Translate " +
+    "the wording only, never the underlying fact. " +
+    "\n- If a shop's own proper name appears inside the text, keep it " +
+    "recognizable rather than inventing a different-sounding name. " +
+
+    "\n\nOUTPUT: respond with a JSON object of exactly this form: " +
+    "{\"items\":[{\"id\":\"...\",\"title\":\"...\"}, ...]}. Output " +
+    "nothing else — no preamble, no explanation, no markdown.";
+
+  const userContent =
+    JSON.stringify(
+      {
+        items: translatableItems
+      }
+    );
+
+  return {
+    systemInstruction: systemInstruction,
+    userContent: userContent
+  };
+}
+
+function buildTranslatedShopTitles(
+  originalItems,
+  aiResponseItems
+) {
+  if (
+    !Array.isArray(aiResponseItems) ||
+    aiResponseItems.length !==
+      originalItems.length
+  ) {
+    return null;
+  }
+
+  const originalIds =
+    originalItems.map(
+      function(item) {
+        return item.firestoreId;
+      }
+    );
+
+  const translatedById =
+    {};
+
+  for (
+    let index = 0;
+    index < aiResponseItems.length;
+    index += 1
+  ) {
+    const aiItem =
+      aiResponseItems[index];
+
+    if (
+      !aiItem ||
+      typeof aiItem !== "object" ||
+      typeof aiItem.id !== "string" ||
+      !originalIds.includes(aiItem.id) ||
+      Object.prototype.hasOwnProperty.call(
+        translatedById,
+        aiItem.id
+      )
+    ) {
+      return null;
+    }
+
+    const translatedTitle =
+      stripCitationArtifactsFromAiText(
+        sanitizeRegionEditorialText(
+          aiItem.title,
+          SHOP_TRANSLATION_MESSAGE_MAX_LENGTH
+        )
+      );
+
+    if (translatedTitle === "") {
+      return null;
+    }
+
+    translatedById[aiItem.id] =
+      translatedTitle;
+  }
+
+  for (
+    let index = 0;
+    index < originalIds.length;
+    index += 1
+  ) {
+    if (
+      !Object.prototype.hasOwnProperty.call(
+        translatedById,
+        originalIds[index]
+      )
+    ) {
+      return null;
+    }
+  }
+
+  return translatedById;
+}
+
+async function callOpenAiShopTitleTranslationBatch(
+  items,
+  targetLanguage
+) {
+  const apiKey =
+    process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    const configError =
+      new Error("OPENAI_API_KEY が設定されていません。");
+
+    configError.isMissingApiKey =
+      true;
+
+    throw configError;
+  }
+
+  const prompt =
+    buildShopTitleTranslationPrompt(
+      items,
+      targetLanguage
+    );
+
+  const controller =
+    new AbortController();
+
+  const timeoutId =
+    setTimeout(
+      function() {
+        controller.abort();
+      },
+      SHOP_TRANSLATION_TIMEOUT_MS
+    );
+
+  let response;
+
+  try {
+    try {
+      response =
+        await fetch(
+          SHOP_TRANSLATION_ENDPOINT,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer " + apiKey
+            },
+
+            body: JSON.stringify({
+              model: SHOP_TRANSLATION_MODEL,
+              response_format: { type: "json_object" },
+
+              messages: [
+                {
+                  role: "system",
+                  content: prompt.systemInstruction
+                },
+
+                {
+                  role: "user",
+                  content: prompt.userContent
+                }
+              ]
+            }),
+
+            signal: controller.signal
+          }
+        );
+    } catch (fetchError) {
+      if (fetchError.name === "AbortError") {
+        const timeoutError =
+          new Error("店舗タイトルの翻訳がタイムアウトしました。");
+
+        timeoutError.isTransient =
+          true;
+
+        timeoutError.isTimeout =
+          true;
+
+        throw timeoutError;
+      }
+
+      const networkError =
+        new Error("店舗タイトルの翻訳呼び出しに失敗しました。");
+
+      networkError.isTransient =
+        true;
+
+      networkError.isNetworkError =
+        true;
+
+      throw networkError;
+    }
+  } finally {
+    clearTimeout(
+      timeoutId
+    );
+  }
+
+  if (!response.ok) {
+    const httpError =
+      new Error(
+        "OpenAI APIがエラーを返しました。status=" + response.status
+      );
+
+    httpError.isHttpError =
+      true;
+
+    httpError.httpStatus =
+      response.status;
+
+    httpError.isTransient =
+      true;
+
+    throw httpError;
+  }
+
+  let responseData;
+
+  try {
+    responseData =
+      await response.json();
+  } catch (jsonError) {
+    const parseError =
+      new Error("OpenAI APIの応答を解析できませんでした。");
+
+    parseError.isJsonError =
+      true;
+
+    parseError.isTransient =
+      true;
+
+    throw parseError;
+  }
+
+  const messageContent =
+    responseData &&
+    Array.isArray(responseData.choices) &&
+    responseData.choices[0] &&
+    responseData.choices[0].message &&
+    typeof responseData.choices[0].message.content === "string"
+      ? responseData.choices[0].message.content
+      : "";
+
+  if (messageContent === "") {
+    const shapeError =
+      new Error("OpenAI APIの応答形式が不正です。");
+
+    shapeError.isJsonError =
+      true;
+
+    shapeError.isTransient =
+      true;
+
+    throw shapeError;
+  }
+
+  let parsedContent;
+
+  try {
+    parsedContent =
+      JSON.parse(messageContent);
+  } catch (contentParseError) {
+    const shapeError =
+      new Error("店舗タイトルの翻訳結果がJSON形式ではありませんでした。");
+
+    shapeError.isJsonError =
+      true;
+
+    shapeError.isTransient =
+      true;
+
+    throw shapeError;
+  }
+
+  const translatedById =
+    buildTranslatedShopTitles(
+      items,
+      Array.isArray(parsedContent.items)
+        ? parsedContent.items
+        : null
+    );
+
+  if (translatedById === null) {
+    const mismatchError =
+      new Error(
+        "店舗タイトルの翻訳結果の件数または対応関係が一致しませんでした。"
+      );
+
+    mismatchError.isTransient =
+      true;
+
+    throw mismatchError;
+  }
+
+  const usage =
+    responseData.usage
+      ? {
+          inputTokens:
+            typeof responseData.usage.prompt_tokens === "number"
+              ? responseData.usage.prompt_tokens
+              : null,
+
+          outputTokens:
+            typeof responseData.usage.completion_tokens === "number"
+              ? responseData.usage.completion_tokens
+              : null,
+
+          totalTokens:
+            typeof responseData.usage.total_tokens === "number"
+              ? responseData.usage.total_tokens
+              : null
+        }
+      : null;
+
+  const estimatedCostUsd =
+    usage &&
+    typeof usage.inputTokens === "number" &&
+    typeof usage.outputTokens === "number"
+      ? calculateShopTranslationEstimatedCostUsd(
+          usage.inputTokens,
+          usage.outputTokens
+        )
+      : null;
+
+  return {
+    translatedById: translatedById,
+    usage: usage,
+    estimatedCostUsd: estimatedCostUsd
+  };
+}
+
+// runTransaction()による店舗×language単位の二重生成防止。
+// claimShopTranslationGeneration()(message用)と全く同じパターンだが、
+// 読み書きする場所がtranslations.{language}.titleTranslation(ネストした
+// 別オブジェクト)である点だけが違う。message用のstatus/sourceHash/message
+// には一切触れない。
+async function claimShopTitleTranslationGeneration(
+  database,
+  firestoreId,
+  language,
+  sourceHash
+) {
+  const documentRef =
+    database
+      .collection(
+        "submissions"
+      )
+      .doc(
+        firestoreId
+      );
+
+  return database.runTransaction(
+    async function(transaction) {
+      const snapshot =
+        await transaction.get(
+          documentRef
+        );
+
+      if (!snapshot.exists) {
+        return {
+          outcome: "error"
+        };
+      }
+
+      const data =
+        snapshot.data() || {};
+
+      const existingTranslations =
+        data.translations &&
+        typeof data.translations === "object"
+          ? data.translations
+          : {};
+
+      const existingTranslationForLanguage =
+        existingTranslations[language] &&
+        typeof existingTranslations[language] === "object"
+          ? existingTranslations[language]
+          : {};
+
+      const existingTitleTranslation =
+        existingTranslationForLanguage.titleTranslation;
+
+      if (
+        existingTitleTranslation &&
+        existingTitleTranslation.status === "ready" &&
+        existingTitleTranslation.sourceHash === sourceHash
+      ) {
+        return {
+          outcome: "ready",
+
+          title:
+            typeof existingTitleTranslation.title === "string"
+              ? existingTitleTranslation.title
+              : ""
+        };
+      }
+
+      if (
+        existingTitleTranslation &&
+        existingTitleTranslation.status === "generating"
+      ) {
+        const startedAtMillis =
+          existingTitleTranslation.generatingStartedAt &&
+          typeof existingTitleTranslation.generatingStartedAt.toMillis === "function"
+            ? existingTitleTranslation.generatingStartedAt.toMillis()
+            : null;
+
+        const isStale =
+          startedAtMillis === null ||
+          (
+            Date.now() -
+            startedAtMillis
+          ) >
+            SHOP_TRANSLATION_GENERATING_STALE_MS;
+
+        if (!isStale) {
+          return {
+            outcome: "generating"
+          };
+        }
+
+        // stale：このリクエストが再度生成権を獲得する(下へ続く)。
+      }
+
+      const titleTranslationFieldPath =
+        "translations." +
+        language +
+        ".titleTranslation";
+
+      const update =
+        {};
+
+      update[titleTranslationFieldPath] =
+        {
+          status: "generating",
+          sourceHash: sourceHash,
+
+          generatingStartedAt:
+            FieldValue.serverTimestamp(),
+
+          updatedAt:
+            FieldValue.serverTimestamp()
+        };
+
+      transaction.update(
+        documentRef,
+        update
+      );
+
+      return {
+        outcome: "claimed"
+      };
+    }
+  );
+}
+
+async function saveShopTitleTranslationReadyResult(
+  database,
+  firestoreId,
+  language,
+  sourceHash,
+  translatedTitle,
+  usage,
+  estimatedCostUsd
+) {
+  const titleTranslationFieldPath =
+    "translations." +
+    language +
+    ".titleTranslation";
+
+  const update =
+    {};
+
+  update[titleTranslationFieldPath] =
+    {
+      status: "ready",
+      sourceHash: sourceHash,
+      title: translatedTitle,
+      model: SHOP_TRANSLATION_MODEL,
+      usage: usage,
+      estimatedCostUsd: estimatedCostUsd,
+
+      generatedAt:
+        FieldValue.serverTimestamp(),
+
+      updatedAt:
+        FieldValue.serverTimestamp()
+    };
+
+  await database
+    .collection(
+      "submissions"
+    )
+    .doc(
+      firestoreId
+    )
+    .update(
+      update
+    );
+}
+
+async function saveShopTitleTranslationErrorResult(
+  database,
+  firestoreId,
+  language
+) {
+  const update =
+    {};
+
+  update["translations." + language + ".titleTranslation.status"] =
+    "error";
+
+  update["translations." + language + ".titleTranslation.updatedAt"] =
+    FieldValue.serverTimestamp();
+
+  await database
+    .collection(
+      "submissions"
+    )
+    .doc(
+      firestoreId
+    )
+    .update(
+      update
+    );
+}
+
 // 本番公開機能(旅行者向け)｜cityInfoGet/socialPatrol/regionTodayInfoGetと
 // 同じ認証方式(有効なFirebase IDトークンを持つユーザーなら誰でも可、
 // 匿名認証も許可)を採用する。Admin限定にしない。クライアントからは
@@ -11566,6 +12178,1170 @@ async function handleShopTranslationGetRequest(
       // 念のため安全に空の結果を返す。OpenAI呼び出しは発生しない)。
       return response.status(200).json({
         success: true,
+        translations: {},
+        titleTranslations: {}
+      });
+    }
+
+    // sanitizeShopFirestoreId＋上限＋重複排除の共通処理。message用
+    // (firestoreIds)・title用(titleFirestoreIds)のどちらにも同じ規則を
+    // 適用する(本部指示：地域のおすすめ拡張でも安全性は変えない)。
+    function sanitizeShopFirestoreIdList(
+      rawList
+    ) {
+      const safeList =
+        [];
+
+      const seenIds =
+        new Set();
+
+      for (
+        let index = 0;
+        index < rawList.length &&
+          safeList.length <
+            SHOP_TRANSLATION_MAX_IDS_PER_REQUEST;
+        index += 1
+      ) {
+        const safeFirestoreId =
+          sanitizeShopFirestoreId(
+            rawList[index]
+          );
+
+        if (
+          safeFirestoreId !== "" &&
+          !seenIds.has(safeFirestoreId)
+        ) {
+          seenIds.add(
+            safeFirestoreId
+          );
+
+          safeList.push(
+            safeFirestoreId
+          );
+        }
+      }
+
+      return safeList;
+    }
+
+    const firestoreIds =
+      sanitizeShopFirestoreIdList(
+        Array.isArray(requestBody.firestoreIds)
+          ? requestBody.firestoreIds
+          : []
+      );
+
+    // 多言語化 Phase D｜地域のおすすめ(街を見るAI由来アイテム)のtitle翻訳
+    // 専用。既存のfirestoreIds(message用)とは完全に独立した配列として
+    // 受け取る(本部指示：titleが無いからmessageまで再翻訳させない、
+    // 逆も同様)。
+    const titleFirestoreIds =
+      sanitizeShopFirestoreIdList(
+        Array.isArray(requestBody.titleFirestoreIds)
+          ? requestBody.titleFirestoreIds
+          : []
+      );
+
+    const readyTranslations =
+      {};
+
+    const titleReadyTranslations =
+      {};
+
+    if (firestoreIds.length > 0) {
+      const snapshots =
+        await Promise.all(
+          firestoreIds.map(
+            function(firestoreId) {
+              return database
+                .collection("submissions")
+                .doc(firestoreId)
+                .get();
+            }
+          )
+        );
+
+      const itemsToTranslate =
+        [];
+
+      for (
+        let index = 0;
+        index < firestoreIds.length;
+        index += 1
+      ) {
+        const snapshot =
+          snapshots[index];
+
+        const firestoreId =
+          firestoreIds[index];
+
+        if (!snapshot.exists) {
+          continue;
+        }
+
+        const data =
+          snapshot.data() || {};
+
+        if (!isSubmissionVisibleToPublic(data)) {
+          continue;
+        }
+
+        const message =
+          getShopMessageFromSubmissionData(
+            data
+          );
+
+        if (message === "") {
+          continue;
+        }
+
+        const sourceHash =
+          computeShopMessageHash(
+            message
+          );
+
+        let claimResult;
+
+        try {
+          claimResult =
+            await claimShopTranslationGeneration(
+              database,
+              firestoreId,
+              language,
+              sourceHash
+            );
+        } catch (claimError) {
+          console.error(
+            "店舗翻訳：ロック取得エラー：",
+            claimError
+          );
+
+          continue;
+        }
+
+        if (claimResult.outcome === "ready") {
+          readyTranslations[firestoreId] =
+            claimResult.message;
+        } else if (claimResult.outcome === "claimed") {
+          itemsToTranslate.push(
+            {
+              firestoreId: firestoreId,
+              message: message,
+              sourceHash: sourceHash
+            }
+          );
+        }
+
+        // "generating"・"error"は今回の応答には含めない(クライアントは
+        // 原文をそのまま表示し続ける、既存表示を壊さない安全な挙動)。
+      }
+
+      if (itemsToTranslate.length > 0) {
+        let translationBatchResult =
+          null;
+
+        try {
+          translationBatchResult =
+            await callOpenAiShopTranslationBatch(
+              itemsToTranslate,
+              language
+            );
+        } catch (translationError) {
+          console.error(
+            "店舗翻訳：生成エラー：",
+            translationError
+          );
+
+          await Promise.all(
+            itemsToTranslate.map(
+              function(item) {
+                return saveShopTranslationErrorResult(
+                  database,
+                  item.firestoreId,
+                  language
+                ).catch(
+                  function(saveErrorAfterTranslationError) {
+                    console.error(
+                      "店舗翻訳：エラー状態の保存にも失敗：",
+                      saveErrorAfterTranslationError
+                    );
+                  }
+                );
+              }
+            )
+          );
+        }
+
+        if (translationBatchResult) {
+          await Promise.all(
+            itemsToTranslate.map(
+              function(item) {
+                const translatedMessage =
+                  translationBatchResult.translatedById[
+                    item.firestoreId
+                  ];
+
+                readyTranslations[item.firestoreId] =
+                  translatedMessage;
+
+                return saveShopTranslationReadyResult(
+                  database,
+                  item.firestoreId,
+                  language,
+                  item.sourceHash,
+                  translatedMessage,
+                  translationBatchResult.usage,
+                  translationBatchResult.estimatedCostUsd
+                ).catch(
+                  function(saveError) {
+                    console.error(
+                      "店舗翻訳：保存エラー：",
+                      saveError
+                    );
+                  }
+                );
+              }
+            )
+          );
+        }
+      }
+    }
+
+    if (titleFirestoreIds.length > 0) {
+      const titleSnapshots =
+        await Promise.all(
+          titleFirestoreIds.map(
+            function(firestoreId) {
+              return database
+                .collection("submissions")
+                .doc(firestoreId)
+                .get();
+            }
+          )
+        );
+
+      const titleItemsToTranslate =
+        [];
+
+      for (
+        let index = 0;
+        index < titleFirestoreIds.length;
+        index += 1
+      ) {
+        const snapshot =
+          titleSnapshots[index];
+
+        const firestoreId =
+          titleFirestoreIds[index];
+
+        if (!snapshot.exists) {
+          continue;
+        }
+
+        const data =
+          snapshot.data() || {};
+
+        if (!isSubmissionVisibleToPublic(data)) {
+          continue;
+        }
+
+        const title =
+          getShopTitleFromSubmissionData(
+            data
+          );
+
+        if (title === "") {
+          continue;
+        }
+
+        const titleSourceHash =
+          computeShopMessageHash(
+            title
+          );
+
+        let titleClaimResult;
+
+        try {
+          titleClaimResult =
+            await claimShopTitleTranslationGeneration(
+              database,
+              firestoreId,
+              language,
+              titleSourceHash
+            );
+        } catch (claimError) {
+          console.error(
+            "店舗タイトル翻訳：ロック取得エラー：",
+            claimError
+          );
+
+          continue;
+        }
+
+        if (titleClaimResult.outcome === "ready") {
+          titleReadyTranslations[firestoreId] =
+            titleClaimResult.title;
+        } else if (titleClaimResult.outcome === "claimed") {
+          titleItemsToTranslate.push(
+            {
+              firestoreId: firestoreId,
+              title: title,
+              sourceHash: titleSourceHash
+            }
+          );
+        }
+
+        // "generating"・"error"は今回の応答には含めない(clientは
+        // 原文をそのまま表示し続ける)。
+      }
+
+      if (titleItemsToTranslate.length > 0) {
+        let titleTranslationBatchResult =
+          null;
+
+        try {
+          titleTranslationBatchResult =
+            await callOpenAiShopTitleTranslationBatch(
+              titleItemsToTranslate,
+              language
+            );
+        } catch (translationError) {
+          console.error(
+            "店舗タイトル翻訳：生成エラー：",
+            translationError
+          );
+
+          await Promise.all(
+            titleItemsToTranslate.map(
+              function(item) {
+                return saveShopTitleTranslationErrorResult(
+                  database,
+                  item.firestoreId,
+                  language
+                ).catch(
+                  function(saveErrorAfterTranslationError) {
+                    console.error(
+                      "店舗タイトル翻訳：エラー状態の保存にも失敗：",
+                      saveErrorAfterTranslationError
+                    );
+                  }
+                );
+              }
+            )
+          );
+        }
+
+        if (titleTranslationBatchResult) {
+          await Promise.all(
+            titleItemsToTranslate.map(
+              function(item) {
+                const translatedTitle =
+                  titleTranslationBatchResult.translatedById[
+                    item.firestoreId
+                  ];
+
+                titleReadyTranslations[item.firestoreId] =
+                  translatedTitle;
+
+                return saveShopTitleTranslationReadyResult(
+                  database,
+                  item.firestoreId,
+                  language,
+                  item.sourceHash,
+                  translatedTitle,
+                  titleTranslationBatchResult.usage,
+                  titleTranslationBatchResult.estimatedCostUsd
+                ).catch(
+                  function(saveError) {
+                    console.error(
+                      "店舗タイトル翻訳：保存エラー：",
+                      saveError
+                    );
+                  }
+                );
+              }
+            )
+          );
+        }
+      }
+    }
+
+    return response.status(200).json({
+      success: true,
+      translations: readyTranslations,
+      titleTranslations: titleReadyTranslations
+    });
+  } catch (error) {
+    console.error(
+      "店舗翻訳：処理エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message: "店舗情報の翻訳中にエラーが発生しました。"
+    });
+  }
+}
+
+
+// ============================================================
+// 多言語化 Phase D(地域のおすすめ｜regionRecommendations翻訳)
+// ============================================================
+// regionRecommendations/{docId}のtitle/content(人間がadmin-region-picks.
+// htmlで書いた中長期のおすすめ記事)をSource of Truthとして保持したまま、
+// Phase A〜Cと同じ「translations.{language} ＋ sourceHashによる原文更新
+// 検知」の考え方を追加する。既存の書き込み経路(admin-region-picks.htmlの
+// クライアント側add()/update())には一切触れない。Phase Bと同じく複数記事を
+// 1回のリクエストでbatch翻訳する(regionRecommendationsは1地域あたり
+// 複数件になり得るため)。
+
+const REGION_RECOMMENDATION_TRANSLATION_MAX_IDS_PER_REQUEST =
+  SHOP_TRANSLATION_MAX_IDS_PER_REQUEST;
+
+const REGION_RECOMMENDATION_TRANSLATION_MODEL =
+  "gpt-4o-mini";
+
+const REGION_RECOMMENDATION_TRANSLATION_ENDPOINT =
+  "https://api.openai.com/v1/chat/completions";
+
+const REGION_RECOMMENDATION_TRANSLATION_TIMEOUT_MS =
+  30000;
+
+const REGION_RECOMMENDATION_TRANSLATION_GENERATING_STALE_MS =
+  60 * 1000;
+
+const REGION_RECOMMENDATION_TRANSLATION_INPUT_COST_PER_MILLION_USD =
+  0.15;
+
+const REGION_RECOMMENDATION_TRANSLATION_OUTPUT_COST_PER_MILLION_USD =
+  0.6;
+
+// admin-region-picks.htmlの投稿フォームには文字数上限が無い(自由入力)ため、
+// 翻訳結果を安全に収める上限をサーバー側だけで持つ。日本語原文より
+// 英語訳の方が長くなりやすい点を踏まえ、Phase CのcityInfo翻訳と同じ
+// 「原文の目安より余裕を持たせる」考え方で設定する(実測値ではなく安全側の
+// 上限)。
+const REGION_RECOMMENDATION_TRANSLATED_TITLE_MAX_LENGTH =
+  150;
+
+const REGION_RECOMMENDATION_TRANSLATED_CONTENT_MAX_LENGTH =
+  3000;
+
+// isPublished:trueのみ翻訳対象にする(クライアント側の既存Firestore
+// クエリ(isPublished==true && targetAreas array-contains areaName)と
+// 同じ、公開されている記事だけが対象)。targetAreasの一致は、この
+// エンドポイントの安全性には影響しない(クライアントは既に自分自身の
+// FirestoreクエリでtargetAreasが一致する記事のIDしか知り得ないため)。
+function isRegionRecommendationVisibleToPublic(
+  data
+) {
+  return data.isPublished === true;
+}
+
+// admin-region-picks.htmlのtitleInput/contentInputがそのままFirestoreの
+// title/contentフィールドになる(既存admin-region-picks.htmlのフォーム
+// 実装で確認済み)。クライアントから送られた本文は一切信用せず、必ず
+// この関数でサーバー側のFirestore実データから取得する。
+function getRegionRecommendationTitleAndContent(
+  data
+) {
+  const title =
+    typeof data.title === "string"
+      ? data.title.trim()
+      : "";
+
+  const content =
+    typeof data.content === "string"
+      ? data.content.trim()
+      : "";
+
+  if (title === "" || content === "") {
+    return null;
+  }
+
+  return {
+    title: title,
+    content: content
+  };
+}
+
+// Phase Cのcomputeでのハッシュ化(computeCityInfoSourceHash())と同じ考え方
+// (AIを使わない、Node標準のnode:cryptoのみ、JSON.stringify()で構造化
+// してからハッシュ化する)。
+function computeRegionRecommendationSourceHash(
+  title,
+  content
+) {
+  const canonicalJson =
+    JSON.stringify(
+      {
+        title: title,
+        content: content
+      }
+    );
+
+  return createHash("sha256")
+    .update(
+      canonicalJson,
+      "utf8"
+    )
+    .digest("hex");
+}
+
+function calculateRegionRecommendationTranslationEstimatedCostUsd(
+  inputTokens,
+  outputTokens
+) {
+  const inputCostUsd =
+    (inputTokens / 1000000) *
+    REGION_RECOMMENDATION_TRANSLATION_INPUT_COST_PER_MILLION_USD;
+
+  const outputCostUsd =
+    (outputTokens / 1000000) *
+    REGION_RECOMMENDATION_TRANSLATION_OUTPUT_COST_PER_MILLION_USD;
+
+  return (
+    inputCostUsd +
+    outputCostUsd
+  );
+}
+
+// 複数記事のtitle/contentを1回のリクエストでまとめて翻訳する(Phase Bと
+// 同じくbatch方式)。地名・数値・歴史的事実等を変更・創作させない指示を
+// 明示する(本部指示：これは翻訳処理であり、事実調査・内容改善・観光
+// 情報の補足は禁止)。
+function buildRegionRecommendationTranslationPrompt(
+  items,
+  targetLanguage
+) {
+  const targetLanguageNamesByCode =
+    {
+      en: "English"
+    };
+
+  const targetLanguageName =
+    targetLanguageNamesByCode[targetLanguage] ||
+    targetLanguage;
+
+  const translatableItems =
+    items.map(
+      function(item) {
+        return {
+          id: item.firestoreId,
+          title: item.title,
+          content: item.content
+        };
+      }
+    );
+
+  const systemInstruction =
+    "You are a precise, literal translator for a Japanese local tourism " +
+    "app. You will receive a JSON array of short recommendation articles " +
+    "(each with \"id\", \"title\", \"content\") written in Japanese. " +
+    "Translate the \"title\" and \"content\" of each item into " +
+    targetLanguageName + ". " +
+
+    "\n\nCRITICAL RULES (this is translation only, not research): " +
+    "\n- This is a pure translation task. Do not search the web and do " +
+    "not verify, correct, add, or infer any fact not present in the " +
+    "original text. " +
+    "\n- Do not add, remove, or merge items. The output array must have " +
+    "exactly one entry per input item, with the same \"id\" value. " +
+    "\n- Never change or invent numbers, dates, prices, distances, " +
+    "facility names, or historical facts — translate the wording only, " +
+    "never the underlying fact. " +
+    "\n- Place names must NOT be translated by meaning into a " +
+    "different-sounding name; use the standard, widely-recognized " +
+    "English romanization instead of inventing one. " +
+    "\n- Do not strengthen, exaggerate, or otherwise editorialize beyond " +
+    "what the original text says. " +
+
+    "\n\nOUTPUT: respond with a JSON object of exactly this form: " +
+    "{\"items\":[{\"id\":\"...\",\"title\":\"...\",\"content\":\"...\"}, " +
+    "...]}. Output nothing else — no preamble, no explanation, no " +
+    "markdown.";
+
+  const userContent =
+    JSON.stringify(
+      {
+        items: translatableItems
+      }
+    );
+
+  return {
+    systemInstruction: systemInstruction,
+    userContent: userContent
+  };
+}
+
+function buildTranslatedRegionRecommendationItems(
+  originalItems,
+  aiResponseItems
+) {
+  if (
+    !Array.isArray(aiResponseItems) ||
+    aiResponseItems.length !==
+      originalItems.length
+  ) {
+    return null;
+  }
+
+  const originalIds =
+    originalItems.map(
+      function(item) {
+        return item.firestoreId;
+      }
+    );
+
+  const translatedById =
+    {};
+
+  for (
+    let index = 0;
+    index < aiResponseItems.length;
+    index += 1
+  ) {
+    const aiItem =
+      aiResponseItems[index];
+
+    if (
+      !aiItem ||
+      typeof aiItem !== "object" ||
+      typeof aiItem.id !== "string" ||
+      !originalIds.includes(aiItem.id) ||
+      Object.prototype.hasOwnProperty.call(
+        translatedById,
+        aiItem.id
+      )
+    ) {
+      return null;
+    }
+
+    const translatedTitle =
+      stripCitationArtifactsFromAiText(
+        sanitizeRegionEditorialText(
+          aiItem.title,
+          REGION_RECOMMENDATION_TRANSLATED_TITLE_MAX_LENGTH
+        )
+      );
+
+    const translatedContent =
+      stripCitationArtifactsFromAiText(
+        sanitizeRegionEditorialText(
+          aiItem.content,
+          REGION_RECOMMENDATION_TRANSLATED_CONTENT_MAX_LENGTH
+        )
+      );
+
+    if (
+      translatedTitle === "" ||
+      translatedContent === ""
+    ) {
+      return null;
+    }
+
+    translatedById[aiItem.id] =
+      {
+        title: translatedTitle,
+        content: translatedContent
+      };
+  }
+
+  for (
+    let index = 0;
+    index < originalIds.length;
+    index += 1
+  ) {
+    if (
+      !Object.prototype.hasOwnProperty.call(
+        translatedById,
+        originalIds[index]
+      )
+    ) {
+      return null;
+    }
+  }
+
+  return translatedById;
+}
+
+async function callOpenAiRegionRecommendationTranslationBatch(
+  items,
+  targetLanguage
+) {
+  const apiKey =
+    process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    const configError =
+      new Error("OPENAI_API_KEY が設定されていません。");
+
+    configError.isMissingApiKey =
+      true;
+
+    throw configError;
+  }
+
+  const prompt =
+    buildRegionRecommendationTranslationPrompt(
+      items,
+      targetLanguage
+    );
+
+  const controller =
+    new AbortController();
+
+  const timeoutId =
+    setTimeout(
+      function() {
+        controller.abort();
+      },
+      REGION_RECOMMENDATION_TRANSLATION_TIMEOUT_MS
+    );
+
+  let response;
+
+  try {
+    try {
+      response =
+        await fetch(
+          REGION_RECOMMENDATION_TRANSLATION_ENDPOINT,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer " + apiKey
+            },
+
+            body: JSON.stringify({
+              model: REGION_RECOMMENDATION_TRANSLATION_MODEL,
+              response_format: { type: "json_object" },
+
+              messages: [
+                {
+                  role: "system",
+                  content: prompt.systemInstruction
+                },
+
+                {
+                  role: "user",
+                  content: prompt.userContent
+                }
+              ]
+            }),
+
+            signal: controller.signal
+          }
+        );
+    } catch (fetchError) {
+      if (fetchError.name === "AbortError") {
+        const timeoutError =
+          new Error("地域のおすすめの翻訳がタイムアウトしました。");
+
+        timeoutError.isTransient =
+          true;
+
+        timeoutError.isTimeout =
+          true;
+
+        throw timeoutError;
+      }
+
+      const networkError =
+        new Error("地域のおすすめの翻訳呼び出しに失敗しました。");
+
+      networkError.isTransient =
+        true;
+
+      networkError.isNetworkError =
+        true;
+
+      throw networkError;
+    }
+  } finally {
+    clearTimeout(
+      timeoutId
+    );
+  }
+
+  if (!response.ok) {
+    const httpError =
+      new Error(
+        "OpenAI APIがエラーを返しました。status=" + response.status
+      );
+
+    httpError.isHttpError =
+      true;
+
+    httpError.httpStatus =
+      response.status;
+
+    httpError.isTransient =
+      true;
+
+    throw httpError;
+  }
+
+  let responseData;
+
+  try {
+    responseData =
+      await response.json();
+  } catch (jsonError) {
+    const parseError =
+      new Error("OpenAI APIの応答を解析できませんでした。");
+
+    parseError.isJsonError =
+      true;
+
+    parseError.isTransient =
+      true;
+
+    throw parseError;
+  }
+
+  const messageContent =
+    responseData &&
+    Array.isArray(responseData.choices) &&
+    responseData.choices[0] &&
+    responseData.choices[0].message &&
+    typeof responseData.choices[0].message.content === "string"
+      ? responseData.choices[0].message.content
+      : "";
+
+  if (messageContent === "") {
+    const shapeError =
+      new Error("OpenAI APIの応答形式が不正です。");
+
+    shapeError.isJsonError =
+      true;
+
+    shapeError.isTransient =
+      true;
+
+    throw shapeError;
+  }
+
+  let parsedContent;
+
+  try {
+    parsedContent =
+      JSON.parse(messageContent);
+  } catch (contentParseError) {
+    const shapeError =
+      new Error("地域のおすすめの翻訳結果がJSON形式ではありませんでした。");
+
+    shapeError.isJsonError =
+      true;
+
+    shapeError.isTransient =
+      true;
+
+    throw shapeError;
+  }
+
+  const translatedById =
+    buildTranslatedRegionRecommendationItems(
+      items,
+      Array.isArray(parsedContent.items)
+        ? parsedContent.items
+        : null
+    );
+
+  if (translatedById === null) {
+    const mismatchError =
+      new Error(
+        "地域のおすすめの翻訳結果の件数または対応関係が一致しませんでした。"
+      );
+
+    mismatchError.isTransient =
+      true;
+
+    throw mismatchError;
+  }
+
+  const usage =
+    responseData.usage
+      ? {
+          inputTokens:
+            typeof responseData.usage.prompt_tokens === "number"
+              ? responseData.usage.prompt_tokens
+              : null,
+
+          outputTokens:
+            typeof responseData.usage.completion_tokens === "number"
+              ? responseData.usage.completion_tokens
+              : null,
+
+          totalTokens:
+            typeof responseData.usage.total_tokens === "number"
+              ? responseData.usage.total_tokens
+              : null
+        }
+      : null;
+
+  const estimatedCostUsd =
+    usage &&
+    typeof usage.inputTokens === "number" &&
+    typeof usage.outputTokens === "number"
+      ? calculateRegionRecommendationTranslationEstimatedCostUsd(
+          usage.inputTokens,
+          usage.outputTokens
+        )
+      : null;
+
+  return {
+    translatedById: translatedById,
+    usage: usage,
+    estimatedCostUsd: estimatedCostUsd
+  };
+}
+
+// runTransaction()によるregionRecommendation×language単位の二重生成防止。
+// Phase A〜Cと同じready/generating(stale回収付き)/claimedパターンを、
+// regionRecommendationsの各documentへ適用する。
+async function claimRegionRecommendationTranslationGeneration(
+  database,
+  docId,
+  language,
+  sourceHash
+) {
+  const documentRef =
+    database
+      .collection("regionRecommendations")
+      .doc(docId);
+
+  return database.runTransaction(
+    async function(transaction) {
+      const snapshot =
+        await transaction.get(
+          documentRef
+        );
+
+      if (!snapshot.exists) {
+        return {
+          outcome: "error"
+        };
+      }
+
+      const data =
+        snapshot.data() || {};
+
+      const existingTranslations =
+        data.translations &&
+        typeof data.translations === "object"
+          ? data.translations
+          : {};
+
+      const existingTranslation =
+        existingTranslations[language];
+
+      if (
+        existingTranslation &&
+        existingTranslation.status === "ready" &&
+        existingTranslation.sourceHash === sourceHash
+      ) {
+        return {
+          outcome: "ready",
+
+          title:
+            typeof existingTranslation.title === "string"
+              ? existingTranslation.title
+              : "",
+
+          content:
+            typeof existingTranslation.content === "string"
+              ? existingTranslation.content
+              : ""
+        };
+      }
+
+      if (
+        existingTranslation &&
+        existingTranslation.status === "generating"
+      ) {
+        const startedAtMillis =
+          existingTranslation.generatingStartedAt &&
+          typeof existingTranslation.generatingStartedAt.toMillis === "function"
+            ? existingTranslation.generatingStartedAt.toMillis()
+            : null;
+
+        const isStale =
+          startedAtMillis === null ||
+          (
+            Date.now() -
+            startedAtMillis
+          ) >
+            REGION_RECOMMENDATION_TRANSLATION_GENERATING_STALE_MS;
+
+        if (!isStale) {
+          return {
+            outcome: "generating"
+          };
+        }
+
+        // stale：このリクエストが再度生成権を獲得する(下へ続く)。
+      }
+
+      const translationFieldPath =
+        "translations." +
+        language;
+
+      const update =
+        {};
+
+      update[translationFieldPath] =
+        {
+          status: "generating",
+          sourceHash: sourceHash,
+
+          generatingStartedAt:
+            FieldValue.serverTimestamp(),
+
+          updatedAt:
+            FieldValue.serverTimestamp()
+        };
+
+      transaction.update(
+        documentRef,
+        update
+      );
+
+      return {
+        outcome: "claimed"
+      };
+    }
+  );
+}
+
+async function saveRegionRecommendationTranslationReadyResult(
+  database,
+  docId,
+  language,
+  sourceHash,
+  translatedTitle,
+  translatedContent,
+  usage,
+  estimatedCostUsd
+) {
+  const translationFieldPath =
+    "translations." +
+    language;
+
+  const update =
+    {};
+
+  update[translationFieldPath] =
+    {
+      status: "ready",
+      sourceHash: sourceHash,
+      title: translatedTitle,
+      content: translatedContent,
+      model: REGION_RECOMMENDATION_TRANSLATION_MODEL,
+      usage: usage,
+      estimatedCostUsd: estimatedCostUsd,
+
+      generatedAt:
+        FieldValue.serverTimestamp(),
+
+      updatedAt:
+        FieldValue.serverTimestamp()
+    };
+
+  await database
+    .collection("regionRecommendations")
+    .doc(docId)
+    .update(
+      update
+    );
+}
+
+async function saveRegionRecommendationTranslationErrorResult(
+  database,
+  docId,
+  language
+) {
+  const update =
+    {};
+
+  update["translations." + language + ".status"] =
+    "error";
+
+  update["translations." + language + ".updatedAt"] =
+    FieldValue.serverTimestamp();
+
+  await database
+    .collection("regionRecommendations")
+    .doc(docId)
+    .update(
+      update
+    );
+}
+
+// 本番公開機能(旅行者向け)｜cityInfoGet/shopTranslationGetと同じ認証方式
+// (有効なFirebase IDトークンを持つユーザーなら誰でも可、匿名認証も許可)を
+// 採用する。管理者/Editor限定にしない(旅行者本人の画面表示のため)。
+// クライアントからはfirestoreId(regionRecommendationsのdocument ID)の
+// 配列とlanguageだけを受け取り、翻訳対象の原文は必ずサーバー側で
+// regionRecommendationsから取得する(本部指示：クライアントの文章を
+// 翻訳原文として信用しない)。
+async function handleRegionRecommendationTranslationGetRequest(
+  request,
+  response
+) {
+  try {
+    const idToken =
+      readBearerToken(
+        request
+      );
+
+    if (idToken === "") {
+      return response.status(401).json({
+        success: false,
+        message: "認証情報がありません。"
+      });
+    }
+
+    const app =
+      getFirebaseAdminApp();
+
+    try {
+      await getAuth(app)
+        .verifyIdToken(
+          idToken
+        );
+    } catch (verifyError) {
+      return response.status(401).json({
+        success: false,
+        message: "認証情報が正しくありません。"
+      });
+    }
+
+    const database =
+      getFirestore(app);
+
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    const requestedLanguage =
+      typeof requestBody.language === "string"
+        ? requestBody.language
+        : REGION_TODAY_INFO_SOURCE_LANGUAGE;
+
+    const language =
+      REGION_TODAY_INFO_SUPPORTED_LANGUAGES.includes(
+        requestedLanguage
+      )
+        ? requestedLanguage
+        : REGION_TODAY_INFO_SOURCE_LANGUAGE;
+
+    if (language === REGION_TODAY_INFO_SOURCE_LANGUAGE) {
+      return response.status(200).json({
+        success: true,
         translations: {}
       });
     }
@@ -11585,7 +13361,7 @@ async function handleShopTranslationGetRequest(
       let index = 0;
       index < rawFirestoreIds.length &&
         firestoreIds.length <
-          SHOP_TRANSLATION_MAX_IDS_PER_REQUEST;
+          REGION_RECOMMENDATION_TRANSLATION_MAX_IDS_PER_REQUEST;
       index += 1
     ) {
       const safeFirestoreId =
@@ -11617,10 +13393,10 @@ async function handleShopTranslationGetRequest(
     const snapshots =
       await Promise.all(
         firestoreIds.map(
-          function(firestoreId) {
+          function(docId) {
             return database
-              .collection("submissions")
-              .doc(firestoreId)
+              .collection("regionRecommendations")
+              .doc(docId)
               .get();
           }
         )
@@ -11640,7 +13416,7 @@ async function handleShopTranslationGetRequest(
       const snapshot =
         snapshots[index];
 
-      const firestoreId =
+      const docId =
         firestoreIds[index];
 
       if (!snapshot.exists) {
@@ -11650,37 +13426,38 @@ async function handleShopTranslationGetRequest(
       const data =
         snapshot.data() || {};
 
-      if (!isSubmissionVisibleToPublic(data)) {
+      if (!isRegionRecommendationVisibleToPublic(data)) {
         continue;
       }
 
-      const message =
-        getShopMessageFromSubmissionData(
+      const titleAndContent =
+        getRegionRecommendationTitleAndContent(
           data
         );
 
-      if (message === "") {
+      if (!titleAndContent) {
         continue;
       }
 
       const sourceHash =
-        computeShopMessageHash(
-          message
+        computeRegionRecommendationSourceHash(
+          titleAndContent.title,
+          titleAndContent.content
         );
 
       let claimResult;
 
       try {
         claimResult =
-          await claimShopTranslationGeneration(
+          await claimRegionRecommendationTranslationGeneration(
             database,
-            firestoreId,
+            docId,
             language,
             sourceHash
           );
       } catch (claimError) {
         console.error(
-          "店舗翻訳：ロック取得エラー：",
+          "地域のおすすめ翻訳：ロック取得エラー：",
           claimError
         );
 
@@ -11688,20 +13465,24 @@ async function handleShopTranslationGetRequest(
       }
 
       if (claimResult.outcome === "ready") {
-        readyTranslations[firestoreId] =
-          claimResult.message;
+        readyTranslations[docId] =
+          {
+            title: claimResult.title,
+            content: claimResult.content
+          };
       } else if (claimResult.outcome === "claimed") {
         itemsToTranslate.push(
           {
-            firestoreId: firestoreId,
-            message: message,
+            firestoreId: docId,
+            title: titleAndContent.title,
+            content: titleAndContent.content,
             sourceHash: sourceHash
           }
         );
       }
 
-      // "generating"・"error"は今回の応答には含めない(クライアントは
-      // 原文をそのまま表示し続ける、既存表示を壊さない安全な挙動)。
+      // "generating"・"error"は今回の応答には含めない(clientは原文を
+      // そのまま表示し続ける、既存表示を壊さない安全な挙動)。
     }
 
     if (itemsToTranslate.length > 0) {
@@ -11710,27 +13491,27 @@ async function handleShopTranslationGetRequest(
 
       try {
         translationBatchResult =
-          await callOpenAiShopTranslationBatch(
+          await callOpenAiRegionRecommendationTranslationBatch(
             itemsToTranslate,
             language
           );
       } catch (translationError) {
         console.error(
-          "店舗翻訳：生成エラー：",
+          "地域のおすすめ翻訳：生成エラー：",
           translationError
         );
 
         await Promise.all(
           itemsToTranslate.map(
             function(item) {
-              return saveShopTranslationErrorResult(
+              return saveRegionRecommendationTranslationErrorResult(
                 database,
                 item.firestoreId,
                 language
               ).catch(
                 function(saveErrorAfterTranslationError) {
                   console.error(
-                    "店舗翻訳：エラー状態の保存にも失敗：",
+                    "地域のおすすめ翻訳：エラー状態の保存にも失敗：",
                     saveErrorAfterTranslationError
                   );
                 }
@@ -11744,26 +13525,27 @@ async function handleShopTranslationGetRequest(
         await Promise.all(
           itemsToTranslate.map(
             function(item) {
-              const translatedMessage =
+              const translatedItem =
                 translationBatchResult.translatedById[
                   item.firestoreId
                 ];
 
               readyTranslations[item.firestoreId] =
-                translatedMessage;
+                translatedItem;
 
-              return saveShopTranslationReadyResult(
+              return saveRegionRecommendationTranslationReadyResult(
                 database,
                 item.firestoreId,
                 language,
                 item.sourceHash,
-                translatedMessage,
+                translatedItem.title,
+                translatedItem.content,
                 translationBatchResult.usage,
                 translationBatchResult.estimatedCostUsd
               ).catch(
                 function(saveError) {
                   console.error(
-                    "店舗翻訳：保存エラー：",
+                    "地域のおすすめ翻訳：保存エラー：",
                     saveError
                   );
                 }
@@ -11780,13 +13562,13 @@ async function handleShopTranslationGetRequest(
     });
   } catch (error) {
     console.error(
-      "店舗翻訳：処理エラー：",
+      "地域のおすすめ翻訳：処理エラー：",
       error
     );
 
     return response.status(500).json({
       success: false,
-      message: "店舗情報の翻訳中にエラーが発生しました。"
+      message: "地域のおすすめの翻訳中にエラーが発生しました。"
     });
   }
 }
@@ -18989,6 +20771,19 @@ export default async function handler(
     requestBody.mode === "shopTranslationGet"
   ) {
     return handleShopTranslationGetRequest(
+      request,
+      response
+    );
+  }
+
+  // 多言語化 Phase D(地域のおすすめ)｜regionRecommendationsのtitle/content
+  // (人間が書いた中長期おすすめ記事)を対象にしたAI翻訳キャッシュ。
+  // shopTranslationGetと同様、公開機能(旅行者向け)のため管理者/Editor
+  // 限定にしない。既存モードのいずれにも一切触れない。
+  if (
+    requestBody.mode === "regionRecommendationTranslationGet"
+  ) {
+    return handleRegionRecommendationTranslationGetRequest(
       request,
       response
     );

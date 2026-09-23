@@ -1817,6 +1817,15 @@ function convertSubmissionToShop(
     translatedMessages:
       {},
 
+    // 多言語化 Phase D｜shop.title(街を見るAI由来の見出し)のAI翻訳結果を
+    // 言語コードごとに保持するキャッシュ。translatedMessagesとは完全に
+    // 独立したフィールド・独立したFirestore側sourceHashで管理する
+    // (title/messageのどちらか一方だけが変わっても、もう一方の既存
+    // キャッシュを無効化しないため)。地域のおすすめ(街を見るAI由来の
+    // アイテム)のtitle表示にのみ使う。
+    translatedTitles:
+      {},
+
     address:
       address,
 
@@ -10731,6 +10740,20 @@ let isRegionRecommendationExpanded =
 const REGION_RECOMMENDATION_INITIAL_COUNT =
   3;
 
+// 多言語化 Phase D｜直近にrenderRegionRecommendationCards()が実際に
+// 描画した記事の一覧(regionRecommendations由来・submissions由来の両方を
+// 含む)。表示されていない記事まで一気に翻訳しないため。
+let lastRenderedRegionRecommendationArticles =
+  [];
+
+// 多言語化 Phase D｜regionRecommendations由来の記事のtitle/content翻訳
+// キャッシュ。{ [articleId]: { [language]: {title, content} } }の形。
+// submissions由来のtitle/contentはこことは別に、Phase Bと共有する
+// shop.translatedTitles/translatedMessagesの方を使う(同じ原文を二重に
+// キャッシュしない)。
+let regionRecommendationTranslationsCache =
+  {};
+
 
 // 1記事分のカードHTMLを組み立てる。画像が無い場合はimg要素自体を出さず、
 // websiteUrlが無い/安全でない場合はリンクを出さない(getSafeWebsiteUrl()を再利用)。
@@ -11010,10 +11033,26 @@ function renderRegionRecommendationCards() {
           REGION_RECOMMENDATION_INITIAL_COUNT
         );
 
+  // 多言語化 Phase D｜翻訳の取得対象を「今回実際に描画する記事だけ」に
+  // 絞り込むため、直近の描画対象idを覚えておく(Phase Bのshop-card
+  // 一覧と同じ考え方)。
+  lastRenderedRegionRecommendationArticles =
+    visibleArticles;
+
+  const currentLanguage =
+    getCurrentMachinauLanguage();
+
   regionRecommendationList.innerHTML =
     visibleArticles
       .map(
-        buildRegionRecommendationCardHtml
+        function(article) {
+          return buildRegionRecommendationCardHtml(
+            resolveRegionRecommendationDisplayArticle(
+              article,
+              currentLanguage
+            )
+          );
+        }
       )
       .join("");
 
@@ -11026,6 +11065,95 @@ function renderRegionRecommendationCards() {
 
   regionRecommendationSection.style.display =
     "";
+
+  // 多言語化 Phase D｜日本語以外が選択されている場合だけ、今回描画した
+  // 記事のうち未翻訳のものをまとめて取得する(既に翻訳済み・取得中のものは
+  // 内部でスキップされ、重複実行しない)。
+  refreshRegionRecommendationTranslationsIfNeeded();
+}
+
+// 多言語化 Phase D｜言語がja以外のとき、article(regionRecommendations
+// 由来またはsubmissions由来)を、翻訳が既にキャッシュ済みならその内容へ、
+// 無ければ原文のまま差し替えたコピーを返す。元のregionRecommendationArticles
+// 配列・shops配列そのものは書き換えない(常に新しいオブジェクトを返す)。
+function resolveRegionRecommendationDisplayArticle(
+  article,
+  language
+) {
+  if (language === MACHINAU_DEFAULT_LANGUAGE) {
+    return article;
+  }
+
+  if (article.sourceCollection === "regionRecommendations") {
+    const cachedTranslationsForArticle =
+      regionRecommendationTranslationsCache[article.id];
+
+    const cachedTranslation =
+      cachedTranslationsForArticle &&
+      cachedTranslationsForArticle[language];
+
+    if (
+      cachedTranslation &&
+      typeof cachedTranslation.title === "string" &&
+      typeof cachedTranslation.content === "string"
+    ) {
+      return Object.assign(
+        {},
+        article,
+        {
+          title: cachedTranslation.title,
+          content: cachedTranslation.content
+        }
+      );
+    }
+
+    return article;
+  }
+
+  if (article.sourceCollection === "submissions") {
+    const shop =
+      shops.find(
+        function(candidateShop) {
+          return (
+            candidateShop.firestoreId ===
+            article.id
+          );
+        }
+      );
+
+    if (!shop) {
+      return article;
+    }
+
+    const translatedTitle =
+      shop.translatedTitles &&
+      typeof shop.translatedTitles[language] === "string" &&
+      shop.translatedTitles[language] !== ""
+        ? shop.translatedTitles[language]
+        : article.title;
+
+    // 多言語化 Phase D｜このcontentはshop.messageと同一原文のため、
+    // Phase Bが既に持っているtranslatedMessagesキャッシュをそのまま
+    // 読むだけで、新しい翻訳キャッシュは作らない(本部指示：同じ原文を
+    // 別機能でもう一度AI翻訳しない)。
+    const translatedContent =
+      shop.translatedMessages &&
+      typeof shop.translatedMessages[language] === "string" &&
+      shop.translatedMessages[language] !== ""
+        ? shop.translatedMessages[language]
+        : article.content;
+
+    return Object.assign(
+      {},
+      article,
+      {
+        title: translatedTitle,
+        content: translatedContent
+      }
+    );
+  }
+
+  return article;
 }
 
 
@@ -11105,8 +11233,14 @@ async function showRegionRecommendationsForArea(
           // 既存のdocumentSnapshot.data()に加えてdocumentSnapshot.idも
           // 保持する(追加フィールドのみ、既存フィールド・呼び出し元の
           // 描画ロジックには一切影響しない)。
+          // 多言語化 Phase D｜このアイテムがregionRecommendations由来で
+          // あることを示す(submissions由来のAI情報と翻訳キャッシュの
+          // 置き場所を区別するため)。
           return Object.assign(
-            { id: documentSnapshot.id },
+            {
+              id: documentSnapshot.id,
+              sourceCollection: "regionRecommendations"
+            },
             documentSnapshot.data()
           );
         }
@@ -11261,6 +11395,13 @@ function selectActiveAiAreaInformation(
           // 他フィールドは無変更)。
           id:
             shop.firestoreId,
+
+          // 多言語化 Phase D｜このアイテムがsubmissions(街を見るAI由来)で
+          // あることを示す。翻訳表示時、regionRecommendationsとは別の
+          // キャッシュ置き場所(shop.translatedMessages/translatedTitles、
+          // Phase Bと共有)を参照するために使う。
+          sourceCollection:
+            "submissions",
 
           title:
             shop.title,
@@ -12177,6 +12318,437 @@ async function fetchShopTranslations(
   }
 
   return responseData.translations;
+}
+
+// 多言語化 Phase D｜shopTranslationGetのtitle専用拡張。既存の
+// fetchShopTranslations()(message専用、Phase B、無変更)とは別の
+// リクエストとして送る(本部指示：titleが無いからといってmessageまで
+// 再翻訳させない。逆にmessage取得のためだけにtitleリクエストを送らない)。
+async function fetchShopTitleTranslations(
+  firestoreIds,
+  language
+) {
+  const idToken =
+    await getAnonymousIdTokenForLocationCollection();
+
+  const response =
+    await fetch(
+      "/api/moderate-submission",
+      {
+        method: "POST",
+
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + idToken
+        },
+
+        body: JSON.stringify({
+          mode: "shopTranslationGet",
+          titleFirestoreIds: firestoreIds,
+          language: language
+        })
+      }
+    );
+
+  let responseData =
+    null;
+
+  try {
+    responseData =
+      await response.json();
+  } catch (jsonError) {
+    return null;
+  }
+
+  if (
+    !response.ok ||
+    !responseData ||
+    responseData.success !== true ||
+    !responseData.titleTranslations ||
+    typeof responseData.titleTranslations !== "object"
+  ) {
+    return null;
+  }
+
+  return responseData.titleTranslations;
+}
+
+// 多言語化 Phase D｜regionRecommendations由来の記事のtitle/content翻訳を
+// 取得する。新しいVercel Functionは作らず、既存/api/moderate-submissionへ
+// mode追加で対応する(regionTodayInfoGet/cityInfoGet/shopTranslationGetと
+// 同じ構成)。clientはfirestoreId(regionRecommendationsのdocument ID)と
+// languageだけを送り、実際のtitle/content原文はサーバー側が
+// regionRecommendationsから取得する(クライアント本文は信用しない)。
+async function fetchRegionRecommendationTranslations(
+  firestoreIds,
+  language
+) {
+  const idToken =
+    await getAnonymousIdTokenForLocationCollection();
+
+  const response =
+    await fetch(
+      "/api/moderate-submission",
+      {
+        method: "POST",
+
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + idToken
+        },
+
+        body: JSON.stringify({
+          mode: "regionRecommendationTranslationGet",
+          firestoreIds: firestoreIds,
+          language: language
+        })
+      }
+    );
+
+  let responseData =
+    null;
+
+  try {
+    responseData =
+      await response.json();
+  } catch (jsonError) {
+    return null;
+  }
+
+  if (
+    !response.ok ||
+    !responseData ||
+    responseData.success !== true ||
+    !responseData.translations ||
+    typeof responseData.translations !== "object"
+  ) {
+    return null;
+  }
+
+  return responseData.translations;
+}
+
+// 多言語化 Phase D｜「地域のおすすめ」の未翻訳分をまとめて取得する。
+// 対象を3系統に分ける：
+// 1) regionRecommendations由来のtitle+content(このセクション専用の
+//    新しいキャッシュ、regionRecommendationTranslationsCache)。
+// 2) submissions由来のtitle(Phase Bのtranslated Messagesとは独立した
+//    shop.translatedTitles、shopTranslationGetのtitleFirestoreIds経由)。
+// 3) submissions由来のcontent(=shop.message)。Phase Bのtranslated
+//    Messagesをそのまま参照するだけで、未取得ならPhase Bと全く同じ
+//    fetchShopTranslations()を呼ぶ(新しい翻訳経路を作らない、同じ原文を
+//    二重にOpenAIへ送らない)。
+// 日本語選択時は何もしない(AI翻訳費0円)。
+let regionRecommendationLegacyTranslationFetchInFlightKey =
+  null;
+
+let regionRecommendationAiTitleTranslationFetchInFlightKey =
+  null;
+
+function refreshRegionRecommendationTranslationsIfNeeded() {
+  const language =
+    getCurrentMachinauLanguage();
+
+  if (language === MACHINAU_DEFAULT_LANGUAGE) {
+    return;
+  }
+
+  const legacyArticleIdsNeedingTranslation =
+    [];
+
+  const aiArticleIdsNeedingTitleTranslation =
+    [];
+
+  const aiArticleIdsNeedingMessageTranslation =
+    [];
+
+  lastRenderedRegionRecommendationArticles.forEach(
+    function(article) {
+      if (article.sourceCollection === "regionRecommendations") {
+        const cachedTranslationsForArticle =
+          regionRecommendationTranslationsCache[article.id];
+
+        const hasCachedTranslation =
+          Boolean(
+            cachedTranslationsForArticle &&
+            cachedTranslationsForArticle[language]
+          );
+
+        if (!hasCachedTranslation) {
+          legacyArticleIdsNeedingTranslation.push(
+            article.id
+          );
+        }
+
+        return;
+      }
+
+      if (article.sourceCollection === "submissions") {
+        const shop =
+          shops.find(
+            function(candidateShop) {
+              return (
+                candidateShop.firestoreId ===
+                article.id
+              );
+            }
+          );
+
+        if (!shop) {
+          return;
+        }
+
+        const hasTranslatedTitle =
+          shop.translatedTitles &&
+          typeof shop.translatedTitles[language] === "string" &&
+          shop.translatedTitles[language] !== "";
+
+        if (
+          !hasTranslatedTitle &&
+          typeof shop.title === "string" &&
+          shop.title.trim() !== ""
+        ) {
+          aiArticleIdsNeedingTitleTranslation.push(
+            article.id
+          );
+        }
+
+        const hasTranslatedMessage =
+          shop.translatedMessages &&
+          typeof shop.translatedMessages[language] === "string" &&
+          shop.translatedMessages[language] !== "";
+
+        if (
+          !hasTranslatedMessage &&
+          typeof shop.message === "string" &&
+          shop.message.trim() !== ""
+        ) {
+          aiArticleIdsNeedingMessageTranslation.push(
+            article.id
+          );
+        }
+      }
+    }
+  );
+
+  if (legacyArticleIdsNeedingTranslation.length > 0) {
+    const fetchKey =
+      language +
+      ":" +
+      legacyArticleIdsNeedingTranslation
+        .slice()
+        .sort()
+        .join(",");
+
+    if (
+      regionRecommendationLegacyTranslationFetchInFlightKey !==
+      fetchKey
+    ) {
+      regionRecommendationLegacyTranslationFetchInFlightKey =
+        fetchKey;
+
+      fetchRegionRecommendationTranslations(
+        legacyArticleIdsNeedingTranslation,
+        language
+      )
+        .then(
+          function(translationsByArticleId) {
+            regionRecommendationLegacyTranslationFetchInFlightKey =
+              null;
+
+            if (!translationsByArticleId) {
+              return;
+            }
+
+            let didUpdateAnyArticle =
+              false;
+
+            Object.keys(
+              translationsByArticleId
+            ).forEach(
+              function(articleId) {
+                const translation =
+                  translationsByArticleId[articleId];
+
+                if (
+                  !translation ||
+                  typeof translation.title !== "string" ||
+                  typeof translation.content !== "string"
+                ) {
+                  return;
+                }
+
+                if (!regionRecommendationTranslationsCache[articleId]) {
+                  regionRecommendationTranslationsCache[articleId] =
+                    {};
+                }
+
+                regionRecommendationTranslationsCache[articleId][language] =
+                  translation;
+
+                didUpdateAnyArticle =
+                  true;
+              }
+            );
+
+            if (didUpdateAnyArticle) {
+              // Phase Bの店舗カードと同じ考え方：再描画時にrender...()が
+              // 末尾で再度この関数を呼ぶが、取得済みの記事は既に
+              // キャッシュを持つため対象から外れ、無限ループにはならない。
+              renderRegionRecommendationCards();
+            }
+          }
+        )
+        .catch(
+          function(error) {
+            regionRecommendationLegacyTranslationFetchInFlightKey =
+              null;
+          }
+        );
+    }
+  }
+
+  if (aiArticleIdsNeedingTitleTranslation.length > 0) {
+    const fetchKey =
+      language +
+      ":" +
+      aiArticleIdsNeedingTitleTranslation
+        .slice()
+        .sort()
+        .join(",");
+
+    if (
+      regionRecommendationAiTitleTranslationFetchInFlightKey !==
+      fetchKey
+    ) {
+      regionRecommendationAiTitleTranslationFetchInFlightKey =
+        fetchKey;
+
+      fetchShopTitleTranslations(
+        aiArticleIdsNeedingTitleTranslation,
+        language
+      )
+        .then(
+          function(titleTranslationsByShopId) {
+            regionRecommendationAiTitleTranslationFetchInFlightKey =
+              null;
+
+            if (!titleTranslationsByShopId) {
+              return;
+            }
+
+            let didUpdateAnyShop =
+              false;
+
+            Object.keys(
+              titleTranslationsByShopId
+            ).forEach(
+              function(firestoreId) {
+                const shop =
+                  shops.find(
+                    function(candidateShop) {
+                      return (
+                        candidateShop.firestoreId ===
+                        firestoreId
+                      );
+                    }
+                  );
+
+                if (!shop) {
+                  return;
+                }
+
+                if (!shop.translatedTitles) {
+                  shop.translatedTitles =
+                    {};
+                }
+
+                shop.translatedTitles[language] =
+                  titleTranslationsByShopId[firestoreId];
+
+                didUpdateAnyShop =
+                  true;
+              }
+            );
+
+            if (didUpdateAnyShop) {
+              renderRegionRecommendationCards();
+            }
+          }
+        )
+        .catch(
+          function(error) {
+            regionRecommendationAiTitleTranslationFetchInFlightKey =
+              null;
+          }
+        );
+    }
+  }
+
+  if (aiArticleIdsNeedingMessageTranslation.length > 0) {
+    // Phase Bのshop.translatedMessagesをそのまま共有するため、Phase Bの
+    // fetchShopTranslations()・shop.translatedMessages書き込みロジックを
+    // そのまま再利用する(新しい翻訳経路・新しいキャッシュを作らない)。
+    // Phase Bの店舗一覧側のin-flightガード(shopTranslationFetchInFlightKey)
+    // とは別のガードを使うが、実際の重複翻訳防止はサーバー側のtransaction
+    // lock(claimShopTranslationGeneration)が担うため、ここでの多重リクエスト
+    // 自体は安全側(コストは発生しない)。
+    fetchShopTranslations(
+      aiArticleIdsNeedingMessageTranslation,
+      language
+    )
+      .then(
+        function(translationsByShopId) {
+          if (!translationsByShopId) {
+            return;
+          }
+
+          let didUpdateAnyShop =
+            false;
+
+          Object.keys(
+            translationsByShopId
+          ).forEach(
+            function(firestoreId) {
+              const shop =
+                shops.find(
+                  function(candidateShop) {
+                    return (
+                      candidateShop.firestoreId ===
+                      firestoreId
+                    );
+                  }
+                );
+
+              if (!shop) {
+                return;
+              }
+
+              if (!shop.translatedMessages) {
+                shop.translatedMessages =
+                  {};
+              }
+
+              shop.translatedMessages[language] =
+                translationsByShopId[firestoreId];
+
+              didUpdateAnyShop =
+                true;
+            }
+          );
+
+          if (didUpdateAnyShop) {
+            renderRegionRecommendationCards();
+          }
+        }
+      )
+      .catch(
+        function(error) {
+          // 街の情報の翻訳は補助機能のため、失敗しても既存表示には
+          // 一切影響させない。
+        }
+      );
+  }
 }
 
 // 件数を含む「もっと見る」ボタン文言。既存の翻訳方式は固定文言のみを
