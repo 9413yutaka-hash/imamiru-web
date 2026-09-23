@@ -248,6 +248,12 @@ function switchMachinauLanguage(language) {
   // 再描画するだけでは正しい言語にならない。既存APIへ選択言語を伝えて
   // 再取得する(サーバー側の翻訳キャッシュがあればOpenAI再実行は発生しない)。
   refreshRegionTodayInfoForCurrentLanguage();
+
+  // 多言語化 Phase C｜「この街の情報」もFirestore由来の動的コンテンツ
+  // (Terraが生成した日本語原文)のため、regionTodayInfoと同じ理由で
+  // 既存APIへ選択言語を伝えて再取得する(表示済みの場合のみ、未表示なら
+  // 何もしない)。
+  refreshCityInfoForCurrentLanguage();
 }
 
 function initializeMachinauLanguageSwitcher() {
@@ -8488,7 +8494,12 @@ async function handleCityInfoButtonClick() {
 
           body: JSON.stringify({
             mode: "cityInfoGet",
-            targetArea: cityInfoCurrentAreaName
+            targetArea: cityInfoCurrentAreaName,
+
+            // 多言語化 Phase C｜独自の言語状態は作らず、既存の
+            // getCurrentMachinauLanguage()をそのまま使う(本部指示)。
+            language:
+              getCurrentMachinauLanguage()
           })
         }
       );
@@ -8540,6 +8551,34 @@ async function handleCityInfoButtonClick() {
     cityInfoButton.disabled =
       false;
   }
+}
+
+// 多言語化 Phase C｜言語切替のたびに新しい生成は発生させない。既に
+// 「この街の情報」を表示済み(cityInfoResultが表示中)の場合だけ、
+// handleCityInfoButtonClick()をそのまま再利用して現在言語で再取得する
+// (取得先は既存のcityInfoGetそのもの、新しい取得経路は作らない)。
+// サーバー側が既にその言語の翻訳キャッシュを持っていれば、OpenAI翻訳APIは
+// 呼ばれずFirestoreの保存済み結果がそのまま返る(本部指示：言語切替の
+// たびにAI翻訳APIを呼ばない)。まだ一度も「この街の情報」ボタンを押して
+// いない場合は何もしない(cityInfoResultセクション自体がまだ表示されて
+// いないため、Phase Aのregion TodayInfoと同じ考え方)。
+// この街の情報はモーダルではなく常時DOM上に存在するセクションのため、
+// handleCityInfoButtonClick()が成功時にcityInfoTitle/cityInfoContentへ
+// 直接書き込むだけで画面へ自動反映される(Phase Bの店舗詳細モーダルで
+// 判明した「非同期完了後にUIが自動更新されない」問題は、ここでは構造上
+// 発生しない)。
+function refreshCityInfoForCurrentLanguage() {
+  const cityInfoResult =
+    document.getElementById("cityInfoResult");
+
+  if (
+    !cityInfoResult ||
+    cityInfoResult.style.display === "none"
+  ) {
+    return;
+  }
+
+  handleCityInfoButtonClick();
 }
 
 const cityInfoButtonElement =

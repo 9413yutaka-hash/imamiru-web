@@ -7006,6 +7006,704 @@ async function saveCityInfoArticle(
     });
 }
 
+// ============================================================
+// 多言語化 Phase C(この街の情報)
+// ============================================================
+// cityInfoArticles/{regionKey}のtitle/content(日本語原文、Terra生成・
+// 90日キャッシュ)をSource of Truthとして保持したまま、Phase A/Bと同じ
+// 「translations.{language} ＋ sourceHashによる原文更新検知」の考え方だけを
+// 追加する。saveCityInfoArticle()(日本語原文の生成・90日キャッシュ)には
+// 一切手を加えない(90日ごとに原文が再生成されればsourceHashが自動的に
+// 変わり、古い翻訳は自然に無効化される)。単純翻訳のためTerra
+// (web_search)は使わず、Phase A/Bと同じgpt-4o-mini＋Chat Completionsを
+// 再利用する。language許可リストもPhase A/Bと共通のREGION_TODAY_INFO_
+// SUPPORTED_LANGUAGES／REGION_TODAY_INFO_SOURCE_LANGUAGEをそのまま使う
+// (新しい許可リストを重複定義しない)。
+
+const CITY_INFO_TRANSLATION_MODEL =
+  "gpt-4o-mini";
+
+const CITY_INFO_TRANSLATION_ENDPOINT =
+  "https://api.openai.com/v1/chat/completions";
+
+const CITY_INFO_TRANSLATION_TIMEOUT_MS =
+  30000;
+
+const CITY_INFO_TRANSLATION_GENERATING_STALE_MS =
+  60 * 1000;
+
+const CITY_INFO_TRANSLATION_INPUT_COST_PER_MILLION_USD =
+  0.15;
+
+const CITY_INFO_TRANSLATION_OUTPUT_COST_PER_MILLION_USD =
+  0.6;
+
+// CITY_INFO_TITLE_MAX_LENGTH/CITY_INFO_CONTENT_MAX_LENGTHは日本語原文
+// (60字/1600字)向けの上限。英語等の翻訳文は同じ内容でも文字数が増える
+// 傾向がある(例：「八重瀬町｜丘と海、古い獅子が見守る沖縄南部の町」(22字)→
+// 「Yaese Town: Hills, Sea, and Old Shisa Watching Over Southern
+// Okinawa」(60字超))ため、翻訳結果を不自然に途中で切り詰めないよう、
+// 翻訳専用の上限を別に持つ(Phase Bのshop.message翻訳で同じ理由により
+// 上限を300→400へ広げたのと同じ考え方)。
+const CITY_INFO_TRANSLATED_TITLE_MAX_LENGTH =
+  120;
+
+const CITY_INFO_TRANSLATED_CONTENT_MAX_LENGTH =
+  2400;
+
+// 日本語原文(title＋content)から決定論的sourceHashを作る(AI不使用、
+// Node標準のnode:cryptoのみ)。computeRegionTodayInfoFindingsHash()と
+// 同じくJSON.stringify()で構造化してからハッシュ化する(単純な文字列連結
+// だと、例えばtitle="A B"+content="C"とtitle="A"+content="B C"が同じ
+// ハッシュになってしまう曖昧さを避けるため)。
+function computeCityInfoSourceHash(
+  title,
+  content
+) {
+  const canonicalJson =
+    JSON.stringify(
+      {
+        title: title,
+        content: content
+      }
+    );
+
+  return createHash("sha256")
+    .update(
+      canonicalJson,
+      "utf8"
+    )
+    .digest("hex");
+}
+
+function calculateCityInfoTranslationEstimatedCostUsd(
+  inputTokens,
+  outputTokens
+) {
+  const inputCostUsd =
+    (inputTokens / 1000000) *
+    CITY_INFO_TRANSLATION_INPUT_COST_PER_MILLION_USD;
+
+  const outputCostUsd =
+    (outputTokens / 1000000) *
+    CITY_INFO_TRANSLATION_OUTPUT_COST_PER_MILLION_USD;
+
+  return (
+    inputCostUsd +
+    outputCostUsd
+  );
+}
+
+// 街紹介記事(title＋content)の翻訳専用プロンプト。人口・面積・年代・
+// 地名・施設名等の事実情報を一切変更・創作させないことを明示する
+// (本部指示：今回は調査AIではなく、既存日本語原文の純粋な翻訳)。
+// 固有の地名(市区町村・都道府県名)は、AIが意味で別の名前へ言い換える
+// ことを禁止し、標準的なローマ字表記＋行政区分(Town/City/Prefecture等)
+// への変換のみを許可する(Phase A/Bの「固有名詞は創作せず、認識できる形を
+// 保つ」方針を、地名についてより明示的にしたもの)。
+function buildCityInfoTranslationPrompt(
+  title,
+  content,
+  targetLanguage
+) {
+  const targetLanguageNamesByCode =
+    {
+      en: "English"
+    };
+
+  const targetLanguageName =
+    targetLanguageNamesByCode[targetLanguage] ||
+    targetLanguage;
+
+  const systemInstruction =
+    "You are a precise, literal translator for a Japanese local tourism " +
+    "app. You will receive a JSON object with \"title\" and \"content\", " +
+    "a short article introducing a Japanese municipality, written in " +
+    "Japanese. Translate both fields into " + targetLanguageName + " so " +
+    "that a traveler who cannot read Japanese can understand what kind " +
+    "of town this is. " +
+
+    "\n\nCRITICAL RULES (this is translation only, not research): " +
+    "\n- This is a pure translation task. Do not search the web and do " +
+    "not verify, correct, add, or infer any fact not present in the " +
+    "original text. " +
+    "\n- Never change or invent numbers: population figures, area " +
+    "(km²), historical years/eras, distances, counts, or any other " +
+    "numeric value must be translated exactly as given, never altered, " +
+    "rounded, or estimated. " +
+    "\n- Never invent facilities, cultural assets, historical events, or " +
+    "other details that are not explicitly present in the original text. " +
+    "\n- Place names (municipality, prefecture, districts, landmarks) " +
+    "must NOT be translated by meaning into a different-sounding name. " +
+    "Use the standard, widely-recognized English romanization of the " +
+    "Japanese name, adding the conventional administrative suffix only " +
+    "when appropriate (for example \"八重瀬町\" → \"Yaese Town\", " +
+    "\"那覇市\" → \"Naha City\", \"沖縄県\" → \"Okinawa Prefecture\"). Do " +
+    "not invent a name unrelated to the actual romanization. " +
+    "\n- Do not strengthen, exaggerate, or otherwise editorialize beyond " +
+    "what the original text says. " +
+
+    "\n\nOUTPUT: respond with a JSON object of exactly this form: " +
+    "{\"title\":\"...\",\"content\":\"...\"}. Output nothing else — no " +
+    "preamble, no explanation, no markdown.";
+
+  const userContent =
+    JSON.stringify(
+      {
+        title: title,
+        content: content
+      }
+    );
+
+  return {
+    systemInstruction: systemInstruction,
+    userContent: userContent
+  };
+}
+
+async function callOpenAiCityInfoTranslation(
+  title,
+  content,
+  targetLanguage
+) {
+  const apiKey =
+    process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    const configError =
+      new Error("OPENAI_API_KEY が設定されていません。");
+
+    configError.isMissingApiKey =
+      true;
+
+    throw configError;
+  }
+
+  const prompt =
+    buildCityInfoTranslationPrompt(
+      title,
+      content,
+      targetLanguage
+    );
+
+  const controller =
+    new AbortController();
+
+  const timeoutId =
+    setTimeout(
+      function() {
+        controller.abort();
+      },
+      CITY_INFO_TRANSLATION_TIMEOUT_MS
+    );
+
+  let response;
+
+  try {
+    try {
+      response =
+        await fetch(
+          CITY_INFO_TRANSLATION_ENDPOINT,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer " + apiKey
+            },
+
+            body: JSON.stringify({
+              model: CITY_INFO_TRANSLATION_MODEL,
+              response_format: { type: "json_object" },
+
+              messages: [
+                {
+                  role: "system",
+                  content: prompt.systemInstruction
+                },
+
+                {
+                  role: "user",
+                  content: prompt.userContent
+                }
+              ]
+            }),
+
+            signal: controller.signal
+          }
+        );
+    } catch (fetchError) {
+      if (fetchError.name === "AbortError") {
+        const timeoutError =
+          new Error("この街の情報の翻訳がタイムアウトしました。");
+
+        timeoutError.isTransient =
+          true;
+
+        timeoutError.isTimeout =
+          true;
+
+        throw timeoutError;
+      }
+
+      const networkError =
+        new Error("この街の情報の翻訳呼び出しに失敗しました。");
+
+      networkError.isTransient =
+        true;
+
+      networkError.isNetworkError =
+        true;
+
+      throw networkError;
+    }
+  } finally {
+    clearTimeout(
+      timeoutId
+    );
+  }
+
+  if (!response.ok) {
+    const httpError =
+      new Error(
+        "OpenAI APIがエラーを返しました。status=" + response.status
+      );
+
+    httpError.isHttpError =
+      true;
+
+    httpError.httpStatus =
+      response.status;
+
+    httpError.isTransient =
+      true;
+
+    throw httpError;
+  }
+
+  let responseData;
+
+  try {
+    responseData =
+      await response.json();
+  } catch (jsonError) {
+    const parseError =
+      new Error("OpenAI APIの応答を解析できませんでした。");
+
+    parseError.isJsonError =
+      true;
+
+    parseError.isTransient =
+      true;
+
+    throw parseError;
+  }
+
+  const messageContent =
+    responseData &&
+    Array.isArray(responseData.choices) &&
+    responseData.choices[0] &&
+    responseData.choices[0].message &&
+    typeof responseData.choices[0].message.content === "string"
+      ? responseData.choices[0].message.content
+      : "";
+
+  if (messageContent === "") {
+    const shapeError =
+      new Error("OpenAI APIの応答形式が不正です。");
+
+    shapeError.isJsonError =
+      true;
+
+    shapeError.isTransient =
+      true;
+
+    throw shapeError;
+  }
+
+  let parsedContent;
+
+  try {
+    parsedContent =
+      JSON.parse(messageContent);
+  } catch (contentParseError) {
+    const shapeError =
+      new Error("この街の情報の翻訳結果がJSON形式ではありませんでした。");
+
+    shapeError.isJsonError =
+      true;
+
+    shapeError.isTransient =
+      true;
+
+    throw shapeError;
+  }
+
+  const translatedTitle =
+    sanitizeRegionEditorialText(
+      stripCitationArtifactsFromAiText(
+        typeof parsedContent.title === "string"
+          ? parsedContent.title
+          : ""
+      ),
+      CITY_INFO_TRANSLATED_TITLE_MAX_LENGTH
+    );
+
+  const translatedContent =
+    sanitizeRegionEditorialText(
+      stripCitationArtifactsFromAiText(
+        typeof parsedContent.content === "string"
+          ? parsedContent.content
+          : ""
+      ),
+      CITY_INFO_TRANSLATED_CONTENT_MAX_LENGTH
+    );
+
+  if (
+    translatedTitle === "" ||
+    translatedContent === ""
+  ) {
+    const shapeError =
+      new Error("この街の情報の翻訳結果が空でした。");
+
+    shapeError.isTransient =
+      true;
+
+    throw shapeError;
+  }
+
+  const usage =
+    responseData.usage
+      ? {
+          inputTokens:
+            typeof responseData.usage.prompt_tokens === "number"
+              ? responseData.usage.prompt_tokens
+              : null,
+
+          outputTokens:
+            typeof responseData.usage.completion_tokens === "number"
+              ? responseData.usage.completion_tokens
+              : null,
+
+          totalTokens:
+            typeof responseData.usage.total_tokens === "number"
+              ? responseData.usage.total_tokens
+              : null
+        }
+      : null;
+
+  const estimatedCostUsd =
+    usage &&
+    typeof usage.inputTokens === "number" &&
+    typeof usage.outputTokens === "number"
+      ? calculateCityInfoTranslationEstimatedCostUsd(
+          usage.inputTokens,
+          usage.outputTokens
+        )
+      : null;
+
+  return {
+    title: translatedTitle,
+    content: translatedContent,
+    usage: usage,
+    estimatedCostUsd: estimatedCostUsd
+  };
+}
+
+// runTransaction()によるregionKey×language単位の二重生成防止。Phase A/Bの
+// claimRegionTodayInfoTranslationGeneration()/claimShopTranslationGeneration()
+// と全く同じパターンを、cityInfoArticlesの各documentへ適用する。
+async function claimCityInfoTranslationGeneration(
+  database,
+  regionKey,
+  language,
+  sourceHash
+) {
+  const documentRef =
+    database
+      .collection(CITY_INFO_ARTICLES_COLLECTION)
+      .doc(regionKey);
+
+  return database.runTransaction(
+    async function(transaction) {
+      const snapshot =
+        await transaction.get(
+          documentRef
+        );
+
+      if (!snapshot.exists) {
+        return {
+          outcome: "error"
+        };
+      }
+
+      const data =
+        snapshot.data() || {};
+
+      const existingTranslations =
+        data.translations &&
+        typeof data.translations === "object"
+          ? data.translations
+          : {};
+
+      const existingTranslation =
+        existingTranslations[language];
+
+      if (
+        existingTranslation &&
+        existingTranslation.status === "ready" &&
+        existingTranslation.sourceHash === sourceHash
+      ) {
+        return {
+          outcome: "ready",
+
+          title:
+            typeof existingTranslation.title === "string"
+              ? existingTranslation.title
+              : "",
+
+          content:
+            typeof existingTranslation.content === "string"
+              ? existingTranslation.content
+              : ""
+        };
+      }
+
+      if (
+        existingTranslation &&
+        existingTranslation.status === "generating"
+      ) {
+        const startedAtMillis =
+          existingTranslation.generatingStartedAt &&
+          typeof existingTranslation.generatingStartedAt.toMillis === "function"
+            ? existingTranslation.generatingStartedAt.toMillis()
+            : null;
+
+        const isStale =
+          startedAtMillis === null ||
+          (
+            Date.now() -
+            startedAtMillis
+          ) >
+            CITY_INFO_TRANSLATION_GENERATING_STALE_MS;
+
+        if (!isStale) {
+          return {
+            outcome: "generating"
+          };
+        }
+
+        // stale：このリクエストが再度生成権を獲得する(下へ続く)。
+      }
+
+      const translationFieldPath =
+        "translations." +
+        language;
+
+      const update =
+        {};
+
+      update[translationFieldPath] =
+        {
+          status: "generating",
+          sourceHash: sourceHash,
+
+          generatingStartedAt:
+            FieldValue.serverTimestamp(),
+
+          updatedAt:
+            FieldValue.serverTimestamp()
+        };
+
+      transaction.update(
+        documentRef,
+        update
+      );
+
+      return {
+        outcome: "claimed"
+      };
+    }
+  );
+}
+
+async function saveCityInfoTranslationReadyResult(
+  database,
+  regionKey,
+  language,
+  sourceHash,
+  translatedTitle,
+  translatedContent,
+  usage,
+  estimatedCostUsd
+) {
+  const translationFieldPath =
+    "translations." +
+    language;
+
+  const update =
+    {};
+
+  update[translationFieldPath] =
+    {
+      status: "ready",
+      sourceHash: sourceHash,
+      title: translatedTitle,
+      content: translatedContent,
+      model: CITY_INFO_TRANSLATION_MODEL,
+      usage: usage,
+      estimatedCostUsd: estimatedCostUsd,
+
+      generatedAt:
+        FieldValue.serverTimestamp(),
+
+      updatedAt:
+        FieldValue.serverTimestamp()
+    };
+
+  await database
+    .collection(CITY_INFO_ARTICLES_COLLECTION)
+    .doc(regionKey)
+    .update(
+      update
+    );
+}
+
+async function saveCityInfoTranslationErrorResult(
+  database,
+  regionKey,
+  language
+) {
+  const update =
+    {};
+
+  update["translations." + language + ".status"] =
+    "error";
+
+  update["translations." + language + ".updatedAt"] =
+    FieldValue.serverTimestamp();
+
+  await database
+    .collection(CITY_INFO_ARTICLES_COLLECTION)
+    .doc(regionKey)
+    .update(
+      update
+    );
+}
+
+// handleCityInfoGetRequest()の「日本語原文が確定した後」の共通後処理。
+// キャッシュ済み記事を返す経路・新規生成した記事を返す経路の両方から
+// 呼ばれる(日本語原文取得方法が違うだけで、言語別レスポンスの組み立て方は
+// 完全に同じにするため)。language===ja(原文言語)の場合は、この関数を
+// 呼ばなくても既存どおりの{title, content}をそのまま返せるよう、呼び出し側で
+// 先に分岐する(既存の日本語利用者の挙動・レスポンス形を一切変えないため)。
+async function resolveCityInfoTranslatedResponse(
+  database,
+  regionKey,
+  article,
+  language
+) {
+  const sourceHash =
+    computeCityInfoSourceHash(
+      article.title,
+      article.content
+    );
+
+  let claimResult;
+
+  try {
+    claimResult =
+      await claimCityInfoTranslationGeneration(
+        database,
+        regionKey,
+        language,
+        sourceHash
+      );
+  } catch (claimError) {
+    console.error(
+      "この街の情報：翻訳ロック取得エラー：",
+      claimError
+    );
+
+    // ロック取得に失敗しても、日本語原文をそのまま返せば既存表示は壊れない。
+    return {
+      cached: true,
+      title: article.title,
+      content: article.content
+    };
+  }
+
+  if (claimResult.outcome === "ready") {
+    return {
+      cached: true,
+      title: claimResult.title,
+      content: claimResult.content
+    };
+  }
+
+  if (claimResult.outcome !== "claimed") {
+    // "generating"(他の旅行者が翻訳中)・"error"(document不整合)の
+    // いずれも、今回は日本語原文をそのまま返す(既存表示を壊さない安全な
+    // 挙動、Phase Bのshop翻訳と同じ考え方)。
+    return {
+      cached: true,
+      title: article.title,
+      content: article.content
+    };
+  }
+
+  try {
+    const translationResult =
+      await callOpenAiCityInfoTranslation(
+        article.title,
+        article.content,
+        language
+      );
+
+    await saveCityInfoTranslationReadyResult(
+      database,
+      regionKey,
+      language,
+      sourceHash,
+      translationResult.title,
+      translationResult.content,
+      translationResult.usage,
+      translationResult.estimatedCostUsd
+    );
+
+    return {
+      cached: false,
+      title: translationResult.title,
+      content: translationResult.content
+    };
+  } catch (translationError) {
+    console.error(
+      "この街の情報：翻訳生成エラー：",
+      translationError
+    );
+
+    await saveCityInfoTranslationErrorResult(
+      database,
+      regionKey,
+      language
+    ).catch(
+      function(saveErrorAfterTranslationError) {
+        console.error(
+          "この街の情報：翻訳エラー状態の保存にも失敗：",
+          saveErrorAfterTranslationError
+        );
+      }
+    );
+
+    // 翻訳に失敗しても、日本語原文をそのまま返す(既存表示を壊さない)。
+    return {
+      cached: true,
+      title: article.title,
+      content: article.content
+    };
+  }
+}
+
 // 「この街の情報」Phase1｜公開機能(旅行者向け)のため、AIコンシェルジュ
 // (handleAiConciergeChatRequest)と同じ認証方式(有効なFirebase IDトークン
 // を持つユーザーなら誰でも可、匿名認証も許可、管理者/Editor限定にしない)
@@ -7077,6 +7775,22 @@ async function handleCityInfoGetRequest(
       });
     }
 
+    // 多言語化 Phase C｜languageの許可リストはPhase A/Bと共通
+    // (REGION_TODAY_INFO_SUPPORTED_LANGUAGES／REGION_TODAY_INFO_SOURCE_
+    // LANGUAGE)をそのまま再利用する。未指定・不正値は必ず原文言語(ja)として
+    // 扱う(既存の日本語利用者の挙動を一切変えない)。
+    const requestedLanguage =
+      typeof requestBody.language === "string"
+        ? requestBody.language
+        : REGION_TODAY_INFO_SOURCE_LANGUAGE;
+
+    const language =
+      REGION_TODAY_INFO_SUPPORTED_LANGUAGES.includes(
+        requestedLanguage
+      )
+        ? requestedLanguage
+        : REGION_TODAY_INFO_SOURCE_LANGUAGE;
+
     const cachedArticle =
       await fetchCityInfoArticleOrNull(
         database,
@@ -7084,11 +7798,28 @@ async function handleCityInfoGetRequest(
       );
 
     if (cachedArticle) {
+      if (language === REGION_TODAY_INFO_SOURCE_LANGUAGE) {
+        return response.status(200).json({
+          success: true,
+          cached: true,
+          title: cachedArticle.title,
+          content: cachedArticle.content
+        });
+      }
+
+      const translatedResponse =
+        await resolveCityInfoTranslatedResponse(
+          database,
+          regionKey,
+          cachedArticle,
+          language
+        );
+
       return response.status(200).json({
         success: true,
-        cached: true,
-        title: cachedArticle.title,
-        content: cachedArticle.content
+        cached: translatedResponse.cached,
+        title: translatedResponse.title,
+        content: translatedResponse.content
       });
     }
 
@@ -7146,11 +7877,28 @@ async function handleCityInfoGetRequest(
       );
     }
 
+    if (language === REGION_TODAY_INFO_SOURCE_LANGUAGE) {
+      return response.status(200).json({
+        success: true,
+        cached: false,
+        title: generatedArticle.title,
+        content: generatedArticle.content
+      });
+    }
+
+    const translatedResponseForNewArticle =
+      await resolveCityInfoTranslatedResponse(
+        database,
+        regionKey,
+        generatedArticle,
+        language
+      );
+
     return response.status(200).json({
       success: true,
-      cached: false,
-      title: generatedArticle.title,
-      content: generatedArticle.content
+      cached: translatedResponseForNewArticle.cached,
+      title: translatedResponseForNewArticle.title,
+      content: translatedResponseForNewArticle.content
     });
   } catch (error) {
     console.error(
