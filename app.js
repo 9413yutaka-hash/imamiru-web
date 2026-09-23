@@ -254,6 +254,11 @@ function switchMachinauLanguage(language) {
   // 既存APIへ選択言語を伝えて再取得する(表示済みの場合のみ、未表示なら
   // 何もしない)。
   refreshCityInfoForCurrentLanguage();
+
+  // 多言語化 最終Phase(マチナウ読み物)｜新しいFirestore取得は発生させず、
+  // 既に取得済みのlastLoadedDynamicColumnArticlesを現在言語で再描画する
+  // だけ(まだ一度も読み込まれていない場合は関数内で自然に何もしない)。
+  renderDynamicColumnEntries();
 }
 
 function initializeMachinauLanguageSwitcher() {
@@ -9873,6 +9878,47 @@ document.addEventListener(
 const TOP_DYNAMIC_COLUMN_ENTRY_MAX_COUNT =
   2;
 
+// 多言語化 最終Phase(マチナウ読み物)｜loadDynamicColumnEntries()が
+// 最後に取得した生データ(日本語原文)を覚えておく。言語切替のたびに
+// Firestore再取得しない(renderDynamicColumnEntries()が既存データを
+// 現在言語で再描画するだけにするため)。
+let lastLoadedDynamicColumnArticles =
+  [];
+
+// 多言語化 最終Phase｜columnArticles由来のsummary(title+description)
+// 翻訳キャッシュ。{ [slug]: { [language]: {title, description} } }の形。
+let columnArticleSummaryTranslationsCache =
+  {};
+
+// TOPカード・記事詳細ページの言語伝達方式(本部指示)：現在言語がSource
+// 言語(ja)ならクエリパラメータ無し、それ以外は?lang={language}を付ける。
+// REGION_TODAY_INFO_SUPPORTED_LANGUAGESと同じ言語コードをそのまま使う
+// (en専用のif分岐を増やさない、サーバー側buildColumnArticleUrlForLanguage()
+// と同じ考え方)。
+function buildColumnArticleUrlForLanguage(
+  slug,
+  language
+) {
+  const basePath =
+    "column/" +
+    encodeURIComponent(
+      slug
+    ) +
+    ".html";
+
+  if (language === MACHINAU_DEFAULT_LANGUAGE) {
+    return basePath;
+  }
+
+  return (
+    basePath +
+    "?lang=" +
+    encodeURIComponent(
+      language
+    )
+  );
+}
+
 // viewerLocation(country/prefecture/city、いずれも省略可)を渡すと、
 // resolveLocationHierarchyFromCoordinates()(このファイル内、既存の
 // userAreaName等とは独立)で取得した現在地に関連する読み物を優先表示する。
@@ -9948,27 +9994,59 @@ async function loadDynamicColumnEntries(
       return;
     }
 
-    // 呼び出しのたびに動的カードだけを作り直す(GPS取得前のfallback表示を
-    // GPS成功後の現在地優先表示へ置き換えるため)。既存の静的カード
-    // (typhoon-okinawa-travel、data-column-entry-dynamic属性を持たない)は
-        // 一切削除しない。
-    columnEntryCardList
-      .querySelectorAll(
-        "[data-column-entry-dynamic]"
-      )
-      .forEach(
-        function(existingCard) {
-          existingCard.remove();
-        }
-      );
+    lastLoadedDynamicColumnArticles =
+      responseData.articles;
 
-    responseData.articles
-      .slice(
-        0,
-        TOP_DYNAMIC_COLUMN_ENTRY_MAX_COUNT
-      )
-      .forEach(
-        function(article) {
+    renderDynamicColumnEntries();
+  } catch (error) {
+    console.error(
+      "マチナウ読み物の動的一覧取得に失敗しました(既存の表示には影響しません)：",
+      error
+    );
+  }
+}
+
+// 多言語化 最終Phase｜lastLoadedDynamicColumnArticles(取得済みの日本語
+// 原文配列)から、現在言語に応じてカードを再描画する。新しいFirestore
+// 取得は行わない(loadDynamicColumnEntries()が既に取得済みのデータを
+// 使うだけ)。言語切替時にswitchMachinauLanguage()から直接呼ばれる。
+function renderDynamicColumnEntries() {
+  const columnEntryCardList =
+    document.getElementById(
+      "columnEntryCardList"
+    );
+
+  if (!columnEntryCardList) {
+    return;
+  }
+
+  // 呼び出しのたびに動的カードだけを作り直す(GPS取得前のfallback表示を
+  // GPS成功後の現在地優先表示へ置き換える、または言語切替時の再描画に
+  // 対応するため)。既存の静的カード(typhoon-okinawa-travel、
+  // data-column-entry-dynamic属性を持たない)は一切削除しない。
+  columnEntryCardList
+    .querySelectorAll(
+      "[data-column-entry-dynamic]"
+    )
+    .forEach(
+      function(existingCard) {
+        existingCard.remove();
+      }
+    );
+
+  const currentLanguage =
+    getCurrentMachinauLanguage();
+
+  const visibleSlugs =
+    [];
+
+  lastLoadedDynamicColumnArticles
+    .slice(
+      0,
+      TOP_DYNAMIC_COLUMN_ENTRY_MAX_COUNT
+    )
+    .forEach(
+      function(article) {
         const slug =
           typeof article.slug === "string"
             ? article.slug
@@ -9977,6 +10055,36 @@ async function loadDynamicColumnEntries(
         if (slug === "") {
           return;
         }
+
+        visibleSlugs.push(
+          slug
+        );
+
+        // 多言語化 最終Phase｜翻訳キャッシュ(columnArticleSummaryTranslations
+        // Cache)があればそれを表示し、無ければ原文(日本語)のまま表示する。
+        // 翻訳の取得はrefreshColumnEntryTranslationsIfNeeded()が別途行う。
+        const cachedTranslationsForArticle =
+          columnArticleSummaryTranslationsCache[slug];
+
+        const cachedTranslation =
+          cachedTranslationsForArticle &&
+          cachedTranslationsForArticle[currentLanguage];
+
+        const displayTitle =
+          currentLanguage !== MACHINAU_DEFAULT_LANGUAGE &&
+          cachedTranslation &&
+          typeof cachedTranslation.title === "string" &&
+          cachedTranslation.title !== ""
+            ? cachedTranslation.title
+            : article.title;
+
+        const displayDescription =
+          currentLanguage !== MACHINAU_DEFAULT_LANGUAGE &&
+          cachedTranslation &&
+          typeof cachedTranslation.description === "string" &&
+          cachedTranslation.description !== ""
+            ? cachedTranslation.description
+            : article.description;
 
         const cardElement =
           document.createElement(
@@ -9995,21 +10103,29 @@ async function loadDynamicColumnEntries(
           <div class="region-recommendation-card-body">
             <p class="region-recommendation-card-title">
               ${escapeHtml(
-                article.title
+                displayTitle
               )}
             </p>
             <p class="region-recommendation-card-content">
               ${escapeHtml(
-                article.description
+                displayDescription
               )}
             </p>
             <a
               class="region-recommendation-card-link"
-              href="column/${encodeURIComponent(
-                slug
-              )}.html"
+              href="${escapeHtml(
+                buildColumnArticleUrlForLanguage(
+                  slug,
+                  currentLanguage
+                )
+              )}"
               onclick="if (typeof gtag === 'function' && (location.hostname === 'machinau.jp' || location.hostname === 'imamiru-web.vercel.app')) { gtag('event', 'column_entry_click', { article_slug: '${slug}' }); }"
-            >読む →</a>
+            >${escapeHtml(
+              getMachinauTranslation(
+                "column_entry_read_more_link",
+                currentLanguage
+              )
+            )}</a>
           </div>
         `;
 
@@ -10018,12 +10134,173 @@ async function loadDynamicColumnEntries(
         );
       }
     );
-  } catch (error) {
-    console.error(
-      "マチナウ読み物の動的一覧取得に失敗しました(既存の表示には影響しません)：",
-      error
-    );
+
+  // 多言語化 最終Phase｜日本語以外が選択されている場合だけ、今回描画した
+  // カードのうち未翻訳のものをまとめて取得する(既に翻訳済み・取得中の
+  // ものは内部でスキップされ、重複実行しない)。
+  refreshColumnEntryTranslationsIfNeeded(
+    visibleSlugs
+  );
+}
+
+// 多言語化 最終Phase｜表示中の読み物カードの未翻訳summaryだけをまとめて
+// 取得する(Phase B/Dと同じ「表示分だけbatch」方式)。
+let columnEntrySummaryTranslationFetchInFlightKey =
+  null;
+
+function refreshColumnEntryTranslationsIfNeeded(
+  visibleSlugs
+) {
+  const language =
+    getCurrentMachinauLanguage();
+
+  if (language === MACHINAU_DEFAULT_LANGUAGE) {
+    return;
   }
+
+  const slugsNeedingTranslation =
+    visibleSlugs.filter(
+      function(slug) {
+        const cachedTranslationsForArticle =
+          columnArticleSummaryTranslationsCache[slug];
+
+        return !(
+          cachedTranslationsForArticle &&
+          cachedTranslationsForArticle[language]
+        );
+      }
+    );
+
+  if (slugsNeedingTranslation.length === 0) {
+    return;
+  }
+
+  const fetchKey =
+    language +
+    ":" +
+    slugsNeedingTranslation
+      .slice()
+      .sort()
+      .join(",");
+
+  if (
+    columnEntrySummaryTranslationFetchInFlightKey ===
+    fetchKey
+  ) {
+    return;
+  }
+
+  columnEntrySummaryTranslationFetchInFlightKey =
+    fetchKey;
+
+  fetchColumnArticleSummaryTranslations(
+    slugsNeedingTranslation,
+    language
+  )
+    .then(
+      function(translationsBySlug) {
+        columnEntrySummaryTranslationFetchInFlightKey =
+          null;
+
+        if (!translationsBySlug) {
+          return;
+        }
+
+        let didUpdateAnyArticle =
+          false;
+
+        Object.keys(
+          translationsBySlug
+        ).forEach(
+          function(slug) {
+            const translation =
+              translationsBySlug[slug];
+
+            if (
+              !translation ||
+              typeof translation.title !== "string" ||
+              typeof translation.description !== "string"
+            ) {
+              return;
+            }
+
+            if (!columnArticleSummaryTranslationsCache[slug]) {
+              columnArticleSummaryTranslationsCache[slug] =
+                {};
+            }
+
+            columnArticleSummaryTranslationsCache[slug][language] =
+              translation;
+
+            didUpdateAnyArticle =
+              true;
+          }
+        );
+
+        if (didUpdateAnyArticle) {
+          // Phase B/Dの店舗カード・地域のおすすめと同じ考え方：再描画時に
+          // renderDynamicColumnEntries()が末尾で再度この関数を呼ぶが、
+          // 取得済みの記事は既にキャッシュを持つため対象から外れ、
+          // 無限ループにはならない。
+          renderDynamicColumnEntries();
+        }
+      }
+    )
+    .catch(
+      function(error) {
+        columnEntrySummaryTranslationFetchInFlightKey =
+          null;
+      }
+    );
+}
+
+async function fetchColumnArticleSummaryTranslations(
+  slugs,
+  language
+) {
+  const idToken =
+    await getAnonymousIdTokenForLocationCollection();
+
+  const response =
+    await fetch(
+      "/api/moderate-submission",
+      {
+        method: "POST",
+
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + idToken
+        },
+
+        body: JSON.stringify({
+          mode: "columnArticleTranslationGet",
+          firestoreIds: slugs,
+          language: language
+        })
+      }
+    );
+
+  let responseData =
+    null;
+
+  try {
+    responseData =
+      await response.json();
+  } catch (jsonError) {
+    return null;
+  }
+
+  if (
+    !response.ok ||
+    !responseData ||
+    responseData.success !== true ||
+    !responseData.translations ||
+    typeof responseData.translations !== "object"
+  ) {
+    return null;
+  }
+
+  return responseData.translations;
 }
 
 // ---- Ver1.7｜Google Maps遅延ロード ----

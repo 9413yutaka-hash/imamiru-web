@@ -18447,6 +18447,2060 @@ function formatDateForAttribute(
 }
 
 
+// ============================================================
+// 多言語化 最終Phase(マチナウ読み物｜動的記事)
+// ============================================================
+// columnArticles/{slug}のtitle/description/content(admin-column.htmlで
+// 人間が書いた記事、日本語原文)をSource of Truthとして保持したまま、
+// Phase A〜Dと同じ「translations.{language} ＋ sourceHashによる原文更新
+// 検知」の考え方を追加する。既存の書き込み経路(adminSaveColumnArticle)には
+// 一切触れない。
+//
+// 一覧用(title＋description＝summary)と本文用(content)を完全に独立した
+// サブオブジェクトとして管理する(Phase Dのtitle/message分離と同じ考え方)。
+// summaryは軽量・低コストなためTOP一覧描画時にbatch翻訳し、contentは
+// 6000字規模になり得るため記事詳細ページへの実際のアクセス時にだけ
+// (1記事1回)翻訳する(本部指示：読まれない本文まで一括翻訳しない)。
+//
+// 記事詳細ページ(handleRenderColumnArticleRequest())はapp.js/index.htmlと
+// 完全に独立したサーバー生成HTMLのため、固定UI文言はtranslations.jsを
+// 再利用できない。そのため、このページ専用の小さな固定辞書
+// (COLUMN_ARTICLE_PAGE_UI_TEXT)をサーバー側だけに持つ。
+
+const COLUMN_ARTICLE_TRANSLATION_MODEL =
+  "gpt-4o-mini";
+
+const COLUMN_ARTICLE_TRANSLATION_ENDPOINT =
+  "https://api.openai.com/v1/chat/completions";
+
+// summary(title+description)は短文のため既存の翻訳タイムアウトと揃える。
+const COLUMN_ARTICLE_SUMMARY_TRANSLATION_TIMEOUT_MS =
+  30000;
+
+// content(最大6000字)はsummaryより時間がかかる可能性があるため、
+// 少し余裕を持たせる(本部指示：詳細ページはHTML完成まで待ってよいため、
+// タイムアウトを短く切り詰めすぎない)。
+const COLUMN_ARTICLE_CONTENT_TRANSLATION_TIMEOUT_MS =
+  45000;
+
+const COLUMN_ARTICLE_TRANSLATION_GENERATING_STALE_MS =
+  60 * 1000;
+
+const COLUMN_ARTICLE_TRANSLATION_INPUT_COST_PER_MILLION_USD =
+  0.15;
+
+const COLUMN_ARTICLE_TRANSLATION_OUTPUT_COST_PER_MILLION_USD =
+  0.6;
+
+const COLUMN_ARTICLE_SUMMARY_TRANSLATION_MAX_IDS_PER_REQUEST =
+  SHOP_TRANSLATION_MAX_IDS_PER_REQUEST;
+
+// 原文の上限(COLUMN_TITLE_MAX_LENGTH=60／COLUMN_DESCRIPTION_MAX_LENGTH=120／
+// COLUMN_CONTENT_MAX_LENGTH=6000)より、翻訳結果を安全に収める上限を
+// 少し広げる(英語訳は同じ内容でも文字数が増えやすいため、Phase C/Dと
+// 同じ考え方)。
+const COLUMN_ARTICLE_TRANSLATED_TITLE_MAX_LENGTH =
+  150;
+
+const COLUMN_ARTICLE_TRANSLATED_DESCRIPTION_MAX_LENGTH =
+  300;
+
+const COLUMN_ARTICLE_TRANSLATED_CONTENT_MAX_LENGTH =
+  9000;
+
+// categoryは4種類の固定enum(ALLOWED_COLUMN_CATEGORIES)のため、AI翻訳では
+// なくサーバー側の静的対応表で処理する(本部指示)。将来言語を追加する
+// 場合は、この対応表に言語コードを1行追加するだけでよい。
+const COLUMN_CATEGORY_DISPLAY_LABELS =
+  {
+    "文化・背景": {
+      ja: "文化・背景",
+      en: "Culture & Background"
+    },
+
+    "楽しみ方": {
+      ja: "楽しみ方",
+      en: "How to Enjoy"
+    },
+
+    "安全・備え": {
+      ja: "安全・備え",
+      en: "Safety & Preparedness"
+    },
+
+    "マチナウの想い": {
+      ja: "マチナウの想い",
+      en: "Machinau's Thoughts"
+    }
+  };
+
+function getColumnCategoryDisplayLabel(
+  category,
+  language
+) {
+  const entry =
+    COLUMN_CATEGORY_DISPLAY_LABELS[category];
+
+  if (!entry) {
+    // 未知のcategory(既存データ不整合等)は原文をそのまま返す
+    // (存在しないラベルを作らない、安全側のfallback)。
+    return category;
+  }
+
+  return (
+    entry[language] ||
+    entry[REGION_TODAY_INFO_SOURCE_LANGUAGE] ||
+    category
+  );
+}
+
+// 記事詳細ページ(buildColumnArticleHtml())専用の固定UI文言辞書。
+// app.js/translations.jsとは独立したページのため、ここに複製管理する
+// (既存のALLOWED_COLUMN_CATEGORIES等と同じ「複製管理」の方針を踏襲)。
+// ja側の値は、既存コードに元々ハードコードされていた文言と一字一句
+// 同じものを使う(language==="ja"のレンダリング結果が既存と完全に
+// 一致するようにするため、表示上のリグレッションを避ける)。
+const COLUMN_ARTICLE_PAGE_UI_TEXT =
+  {
+    brandName: {
+      ja: "マチナウ",
+      en: "Machinau"
+    },
+
+    titleSuffix: {
+      ja: "｜マチナウ",
+      en: " | Machinau"
+    },
+
+    publishedLabel: {
+      ja: "公開日：",
+      en: "Published: "
+    },
+
+    updatedLabel: {
+      ja: "／更新日：",
+      en: " / Updated: "
+    },
+
+    ctaText: {
+      ja: "天気・交通・地域の「今」を確認して、このあとの判断材料に。",
+      en: "Check the weather, transit, and what's happening now to help plan what's next."
+    },
+
+    ctaButton: {
+      ja: "今の沖縄をマチナウで見る",
+      en: "See Okinawa right now on Machinau"
+    },
+
+    byline: {
+      ja: "マチナウ運営",
+      en: "Machinau Team"
+    },
+
+    backLink: {
+      ja: "← マチナウTOPへ戻る",
+      en: "← Back to Machinau"
+    },
+
+    languageSwitchLabelJapanese: {
+      ja: "日本語",
+      en: "日本語"
+    },
+
+    languageSwitchLabelEnglish: {
+      ja: "English",
+      en: "English"
+    },
+
+    commentSectionHeading: {
+      ja: "この記事にコメントする",
+      en: "Leave a Comment"
+    },
+
+    commentNicknameLabel: {
+      ja: "ニックネーム",
+      en: "Nickname"
+    },
+
+    commentNicknamePlaceholder: {
+      ja: "例：旅好き",
+      en: "e.g. Traveler"
+    },
+
+    commentTextLabel: {
+      ja: "コメント",
+      en: "Comment"
+    },
+
+    commentTextPlaceholder: {
+      ja: "この記事についてのご感想や、実際に体験したことなどをどうぞ",
+      en: "Share your thoughts or experience about this article"
+    },
+
+    commentWebsiteLabel: {
+      ja: "ウェブサイト",
+      en: "Website"
+    },
+
+    commentSubmitButton: {
+      ja: "コメントを投稿する",
+      en: "Post Comment"
+    },
+
+    commentSubmitting: {
+      ja: "投稿しています…",
+      en: "Posting…"
+    },
+
+    commentLoadingPlaceholder: {
+      ja: "コメントを読み込んでいます…",
+      en: "Loading comments…"
+    },
+
+    commentEmptyState: {
+      ja: "まだコメントはありません。最初のコメントを投稿してみませんか？",
+      en: "No comments yet. Be the first to share your thoughts!"
+    },
+
+    commentLoadError: {
+      ja: "コメントを読み込めませんでした。時間をおいて再度お試しください。",
+      en: "Couldn't load comments. Please try again later."
+    },
+
+    commentGenericError: {
+      ja: "応答を読み取れませんでした。",
+      en: "Couldn't read the response."
+    },
+
+    commentPostFailedFallback: {
+      ja: "コメントを投稿できませんでした。",
+      en: "Couldn't post your comment."
+    },
+
+    commentPostSuccess: {
+      ja: "コメントを投稿しました。",
+      en: "Your comment has been posted."
+    },
+
+    commentPostError: {
+      ja: "コメントの投稿に失敗しました。時間をおいて、もう一度お試しください。",
+      en: "Failed to post your comment. Please try again later."
+    }
+  };
+
+function getColumnArticlePageText(
+  key,
+  language
+) {
+  const entry =
+    COLUMN_ARTICLE_PAGE_UI_TEXT[key];
+
+  if (!entry) {
+    return "";
+  }
+
+  return (
+    entry[language] ||
+    entry[REGION_TODAY_INFO_SOURCE_LANGUAGE] ||
+    ""
+  );
+}
+
+// 公開日・更新日の表示だけを言語別にする。既存のformatDateForDisplay()
+// (ja固定、"年"/"月"/"日")自体は無変更のまま維持し(他の呼び出し元が
+// 無いことをこのPhaseの調査で確認済みだが、念のため既存関数には触れない)、
+// ja以外の言語の時だけIntl.DateTimeFormat(標準機能)で組み立てる。
+function formatColumnArticleDateForDisplay(
+  date,
+  language
+) {
+  if (language === REGION_TODAY_INFO_SOURCE_LANGUAGE) {
+    return formatDateForDisplay(
+      date
+    );
+  }
+
+  if (
+    !(date instanceof Date) ||
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return "";
+  }
+
+  const localeByLanguage =
+    {
+      en: "en-US"
+    };
+
+  const locale =
+    localeByLanguage[language] ||
+    "en-US";
+
+  try {
+    return new Intl.DateTimeFormat(
+      locale,
+      {
+        year: "numeric",
+        month: "long",
+        day: "numeric"
+      }
+    ).format(
+      date
+    );
+  } catch (formatError) {
+    return formatDateForDisplay(
+      date
+    );
+  }
+}
+
+// 現在言語がSource言語(ja)ならクエリパラメータ無し、それ以外は
+// ?lang={language}を付ける。REGION_TODAY_INFO_SUPPORTED_LANGUAGESに
+// 言語コードを追加するだけで、新しい言語のURLもこの1関数だけで自動的に
+// 正しく組み立てられる(en専用のif分岐を増やさない、本部指示)。
+function buildColumnArticleUrlForLanguage(
+  slug,
+  language
+) {
+  const basePath =
+    "/column/" +
+    encodeURIComponent(slug) +
+    ".html";
+
+  if (language === REGION_TODAY_INFO_SOURCE_LANGUAGE) {
+    return basePath;
+  }
+
+  return (
+    basePath +
+    "?lang=" +
+    encodeURIComponent(language)
+  );
+}
+
+// 記事詳細ページ内の小さな言語切替UI。REGION_TODAY_INFO_SUPPORTED_
+// LANGUAGESを列挙するだけなので、将来言語が増えてもこの関数を変更する
+// 必要はない。通常のリンク(<a href>)のみで、JavaScriptによるSPA化は
+// 行わない(本部指示)。
+const COLUMN_ARTICLE_LANGUAGE_SWITCH_LABEL_KEYS_BY_LANGUAGE =
+  {
+    ja: "languageSwitchLabelJapanese",
+    en: "languageSwitchLabelEnglish"
+  };
+
+function buildColumnArticleLanguageSwitchHtml(
+  slug,
+  currentLanguage
+) {
+  const linksHtml =
+    REGION_TODAY_INFO_SUPPORTED_LANGUAGES.map(
+      function(languageCode) {
+        const labelKey =
+          COLUMN_ARTICLE_LANGUAGE_SWITCH_LABEL_KEYS_BY_LANGUAGE[
+            languageCode
+          ] ||
+          "";
+
+        const label =
+          labelKey !== ""
+            ? getColumnArticlePageText(
+                labelKey,
+                currentLanguage
+              )
+            : languageCode;
+
+        const isActive =
+          languageCode ===
+          currentLanguage;
+
+        return (
+          '<a href="' +
+          escapeHtmlForRender(
+            buildColumnArticleUrlForLanguage(
+              slug,
+              languageCode
+            )
+          ) +
+          '" class="article-language-link' +
+          (isActive ? " active" : "") +
+          '">' +
+          escapeHtmlForRender(
+            label
+          ) +
+          "</a>"
+        );
+      }
+    ).join(
+      " "
+    );
+
+  return (
+    '<div class="article-language-switch">' +
+    linksHtml +
+    "</div>"
+  );
+}
+
+// 記事詳細ページのSEO(hreflang)対応。?lang=パラメータで同一記事の
+// 複数言語版が存在するようになるため、Googleの標準的な多言語ページ
+// 対応方式(各言語版が自分自身へのcanonicalを持ち、hreflangで相互に
+// 言語版の存在を知らせる)を最小構成で追加する。既存のcanonical構造
+// (常にhttps://machinau.jp/column/{slug}.htmlを指す1本のcanonical)を
+// 大きく作り変えず、ja版は既存と同じURLのまま、追加のhreflang alternate
+// タグだけを新設する(大規模SEO改修はしない、本部指示)。
+function buildColumnArticleHreflangLinksHtml(
+  slug
+) {
+  const alternateLinksHtml =
+    REGION_TODAY_INFO_SUPPORTED_LANGUAGES.map(
+      function(languageCode) {
+        return (
+          '<link rel="alternate" hreflang="' +
+          escapeHtmlForRender(
+            languageCode
+          ) +
+          '" href="https://machinau.jp' +
+          escapeHtmlForRender(
+            buildColumnArticleUrlForLanguage(
+              slug,
+              languageCode
+            )
+          ) +
+          '">'
+        );
+      }
+    ).join(
+      "\n  "
+    );
+
+  const defaultHrefHtml =
+    '<link rel="alternate" hreflang="x-default" href="https://machinau.jp' +
+    escapeHtmlForRender(
+      buildColumnArticleUrlForLanguage(
+        slug,
+        REGION_TODAY_INFO_SOURCE_LANGUAGE
+      )
+    ) +
+    '">';
+
+  return (
+    alternateLinksHtml +
+    "\n  " +
+    defaultHrefHtml
+  );
+}
+
+// status===COLUMN_STATUS_PUBLISHEDのみ翻訳対象にする(TOP一覧の既存
+// 取得条件・記事詳細ページの既存表示条件と同じ公開範囲)。
+function isColumnArticleVisibleToPublic(
+  data
+) {
+  return (
+    data.status ===
+    COLUMN_STATUS_PUBLISHED
+  );
+}
+
+// admin-column.htmlのtitleInput/descriptionInputがそのままFirestoreの
+// title/descriptionフィールドになる(既存admin-column.htmlのフォーム
+// 実装で確認済み)。クライアントから送られた本文は一切信用せず、必ず
+// この関数でサーバー側のFirestore実データから取得する。
+function getColumnArticleSummaryFromData(
+  data
+) {
+  const title =
+    typeof data.title === "string"
+      ? data.title.trim()
+      : "";
+
+  const description =
+    typeof data.description === "string"
+      ? data.description.trim()
+      : "";
+
+  if (
+    title === "" ||
+    description === ""
+  ) {
+    return null;
+  }
+
+  return {
+    title: title,
+    description: description
+  };
+}
+
+function computeColumnArticleSummaryHash(
+  title,
+  description
+) {
+  const canonicalJson =
+    JSON.stringify(
+      {
+        title: title,
+        description: description
+      }
+    );
+
+  return createHash("sha256")
+    .update(
+      canonicalJson,
+      "utf8"
+    )
+    .digest("hex");
+}
+
+function calculateColumnArticleTranslationEstimatedCostUsd(
+  inputTokens,
+  outputTokens
+) {
+  const inputCostUsd =
+    (inputTokens / 1000000) *
+    COLUMN_ARTICLE_TRANSLATION_INPUT_COST_PER_MILLION_USD;
+
+  const outputCostUsd =
+    (outputTokens / 1000000) *
+    COLUMN_ARTICLE_TRANSLATION_OUTPUT_COST_PER_MILLION_USD;
+
+  return (
+    inputCostUsd +
+    outputCostUsd
+  );
+}
+
+// ---- summary(title+description)のbatch翻訳 ----
+// 複数記事のtitle/descriptionを1回のリクエストでまとめて翻訳する
+// (Phase B/Dと同じbatch方式)。TOP一覧は現在2記事程度のため、通常は
+// 1回のリクエストで全件処理できる。
+
+function buildColumnArticleSummaryTranslationPrompt(
+  items,
+  targetLanguage
+) {
+  const targetLanguageNamesByCode =
+    {
+      en: "English"
+    };
+
+  const targetLanguageName =
+    targetLanguageNamesByCode[targetLanguage] ||
+    targetLanguage;
+
+  const translatableItems =
+    items.map(
+      function(item) {
+        return {
+          id: item.slug,
+          title: item.title,
+          description: item.description
+        };
+      }
+    );
+
+  const systemInstruction =
+    "You are a precise, literal translator for a Japanese local tourism " +
+    "app. You will receive a JSON array of article list previews (each " +
+    "with \"id\", \"title\", \"description\") written in Japanese. " +
+    "Translate the \"title\" and \"description\" of each item into " +
+    targetLanguageName + ". " +
+
+    "\n\nCRITICAL RULES (this is translation only, not research): " +
+    "\n- This is a pure translation task. Do not search the web and do " +
+    "not verify, correct, add, or infer any fact not present in the " +
+    "original text. " +
+    "\n- Do not add, remove, or merge items. The output array must have " +
+    "exactly one entry per input item, with the same \"id\" value. " +
+    "\n- Never change or invent numbers, dates, place names, or facts — " +
+    "translate the wording only, never the underlying fact. " +
+    "\n- Place names must NOT be translated by meaning into a " +
+    "different-sounding name; use the standard, widely-recognized " +
+    "English romanization instead of inventing one. " +
+
+    "\n\nOUTPUT: respond with a JSON object of exactly this form: " +
+    "{\"items\":[{\"id\":\"...\",\"title\":\"...\"," +
+    "\"description\":\"...\"}, ...]}. Output nothing else — no " +
+    "preamble, no explanation, no markdown.";
+
+  const userContent =
+    JSON.stringify(
+      {
+        items: translatableItems
+      }
+    );
+
+  return {
+    systemInstruction: systemInstruction,
+    userContent: userContent
+  };
+}
+
+function buildTranslatedColumnArticleSummaries(
+  originalItems,
+  aiResponseItems
+) {
+  if (
+    !Array.isArray(aiResponseItems) ||
+    aiResponseItems.length !==
+      originalItems.length
+  ) {
+    return null;
+  }
+
+  const originalIds =
+    originalItems.map(
+      function(item) {
+        return item.slug;
+      }
+    );
+
+  const translatedById =
+    {};
+
+  for (
+    let index = 0;
+    index < aiResponseItems.length;
+    index += 1
+  ) {
+    const aiItem =
+      aiResponseItems[index];
+
+    if (
+      !aiItem ||
+      typeof aiItem !== "object" ||
+      typeof aiItem.id !== "string" ||
+      !originalIds.includes(aiItem.id) ||
+      Object.prototype.hasOwnProperty.call(
+        translatedById,
+        aiItem.id
+      )
+    ) {
+      return null;
+    }
+
+    const translatedTitle =
+      stripCitationArtifactsFromAiText(
+        sanitizeRegionEditorialText(
+          aiItem.title,
+          COLUMN_ARTICLE_TRANSLATED_TITLE_MAX_LENGTH
+        )
+      );
+
+    const translatedDescription =
+      stripCitationArtifactsFromAiText(
+        sanitizeRegionEditorialText(
+          aiItem.description,
+          COLUMN_ARTICLE_TRANSLATED_DESCRIPTION_MAX_LENGTH
+        )
+      );
+
+    if (
+      translatedTitle === "" ||
+      translatedDescription === ""
+    ) {
+      return null;
+    }
+
+    translatedById[aiItem.id] =
+      {
+        title: translatedTitle,
+        description: translatedDescription
+      };
+  }
+
+  for (
+    let index = 0;
+    index < originalIds.length;
+    index += 1
+  ) {
+    if (
+      !Object.prototype.hasOwnProperty.call(
+        translatedById,
+        originalIds[index]
+      )
+    ) {
+      return null;
+    }
+  }
+
+  return translatedById;
+}
+
+async function callOpenAiColumnArticleSummaryTranslationBatch(
+  items,
+  targetLanguage
+) {
+  const apiKey =
+    process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    const configError =
+      new Error("OPENAI_API_KEY が設定されていません。");
+
+    configError.isMissingApiKey =
+      true;
+
+    throw configError;
+  }
+
+  const prompt =
+    buildColumnArticleSummaryTranslationPrompt(
+      items,
+      targetLanguage
+    );
+
+  const controller =
+    new AbortController();
+
+  const timeoutId =
+    setTimeout(
+      function() {
+        controller.abort();
+      },
+      COLUMN_ARTICLE_SUMMARY_TRANSLATION_TIMEOUT_MS
+    );
+
+  let response;
+
+  try {
+    try {
+      response =
+        await fetch(
+          COLUMN_ARTICLE_TRANSLATION_ENDPOINT,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer " + apiKey
+            },
+
+            body: JSON.stringify({
+              model: COLUMN_ARTICLE_TRANSLATION_MODEL,
+              response_format: { type: "json_object" },
+
+              messages: [
+                {
+                  role: "system",
+                  content: prompt.systemInstruction
+                },
+
+                {
+                  role: "user",
+                  content: prompt.userContent
+                }
+              ]
+            }),
+
+            signal: controller.signal
+          }
+        );
+    } catch (fetchError) {
+      if (fetchError.name === "AbortError") {
+        const timeoutError =
+          new Error("読み物一覧の翻訳がタイムアウトしました。");
+
+        timeoutError.isTransient =
+          true;
+
+        timeoutError.isTimeout =
+          true;
+
+        throw timeoutError;
+      }
+
+      const networkError =
+        new Error("読み物一覧の翻訳呼び出しに失敗しました。");
+
+      networkError.isTransient =
+        true;
+
+      networkError.isNetworkError =
+        true;
+
+      throw networkError;
+    }
+  } finally {
+    clearTimeout(
+      timeoutId
+    );
+  }
+
+  if (!response.ok) {
+    const httpError =
+      new Error(
+        "OpenAI APIがエラーを返しました。status=" + response.status
+      );
+
+    httpError.isHttpError =
+      true;
+
+    httpError.httpStatus =
+      response.status;
+
+    httpError.isTransient =
+      true;
+
+    throw httpError;
+  }
+
+  let responseData;
+
+  try {
+    responseData =
+      await response.json();
+  } catch (jsonError) {
+    const parseError =
+      new Error("OpenAI APIの応答を解析できませんでした。");
+
+    parseError.isJsonError =
+      true;
+
+    parseError.isTransient =
+      true;
+
+    throw parseError;
+  }
+
+  const messageContent =
+    responseData &&
+    Array.isArray(responseData.choices) &&
+    responseData.choices[0] &&
+    responseData.choices[0].message &&
+    typeof responseData.choices[0].message.content === "string"
+      ? responseData.choices[0].message.content
+      : "";
+
+  if (messageContent === "") {
+    const shapeError =
+      new Error("OpenAI APIの応答形式が不正です。");
+
+    shapeError.isJsonError =
+      true;
+
+    shapeError.isTransient =
+      true;
+
+    throw shapeError;
+  }
+
+  let parsedContent;
+
+  try {
+    parsedContent =
+      JSON.parse(messageContent);
+  } catch (contentParseError) {
+    const shapeError =
+      new Error("読み物一覧の翻訳結果がJSON形式ではありませんでした。");
+
+    shapeError.isJsonError =
+      true;
+
+    shapeError.isTransient =
+      true;
+
+    throw shapeError;
+  }
+
+  const translatedById =
+    buildTranslatedColumnArticleSummaries(
+      items,
+      Array.isArray(parsedContent.items)
+        ? parsedContent.items
+        : null
+    );
+
+  if (translatedById === null) {
+    const mismatchError =
+      new Error(
+        "読み物一覧の翻訳結果の件数または対応関係が一致しませんでした。"
+      );
+
+    mismatchError.isTransient =
+      true;
+
+    throw mismatchError;
+  }
+
+  const usage =
+    responseData.usage
+      ? {
+          inputTokens:
+            typeof responseData.usage.prompt_tokens === "number"
+              ? responseData.usage.prompt_tokens
+              : null,
+
+          outputTokens:
+            typeof responseData.usage.completion_tokens === "number"
+              ? responseData.usage.completion_tokens
+              : null,
+
+          totalTokens:
+            typeof responseData.usage.total_tokens === "number"
+              ? responseData.usage.total_tokens
+              : null
+        }
+      : null;
+
+  const estimatedCostUsd =
+    usage &&
+    typeof usage.inputTokens === "number" &&
+    typeof usage.outputTokens === "number"
+      ? calculateColumnArticleTranslationEstimatedCostUsd(
+          usage.inputTokens,
+          usage.outputTokens
+        )
+      : null;
+
+  return {
+    translatedById: translatedById,
+    usage: usage,
+    estimatedCostUsd: estimatedCostUsd
+  };
+}
+
+// runTransaction()によるslug×language単位の二重生成防止(summary専用)。
+// Phase A〜Dと同じready/generating(stale回収付き)/claimedパターンを、
+// columnArticlesのtranslations.{language}.summaryへ適用する。
+async function claimColumnArticleSummaryTranslationGeneration(
+  database,
+  slug,
+  language,
+  sourceHash
+) {
+  const documentRef =
+    database
+      .collection(COLUMN_ARTICLES_COLLECTION)
+      .doc(slug);
+
+  return database.runTransaction(
+    async function(transaction) {
+      const snapshot =
+        await transaction.get(
+          documentRef
+        );
+
+      if (!snapshot.exists) {
+        return {
+          outcome: "error"
+        };
+      }
+
+      const data =
+        snapshot.data() || {};
+
+      const existingTranslations =
+        data.translations &&
+        typeof data.translations === "object"
+          ? data.translations
+          : {};
+
+      const existingTranslationForLanguage =
+        existingTranslations[language] &&
+        typeof existingTranslations[language] === "object"
+          ? existingTranslations[language]
+          : {};
+
+      const existingSummaryTranslation =
+        existingTranslationForLanguage.summary;
+
+      if (
+        existingSummaryTranslation &&
+        existingSummaryTranslation.status === "ready" &&
+        existingSummaryTranslation.sourceHash === sourceHash
+      ) {
+        return {
+          outcome: "ready",
+
+          title:
+            typeof existingSummaryTranslation.title === "string"
+              ? existingSummaryTranslation.title
+              : "",
+
+          description:
+            typeof existingSummaryTranslation.description === "string"
+              ? existingSummaryTranslation.description
+              : ""
+        };
+      }
+
+      if (
+        existingSummaryTranslation &&
+        existingSummaryTranslation.status === "generating"
+      ) {
+        const startedAtMillis =
+          existingSummaryTranslation.generatingStartedAt &&
+          typeof existingSummaryTranslation.generatingStartedAt.toMillis === "function"
+            ? existingSummaryTranslation.generatingStartedAt.toMillis()
+            : null;
+
+        const isStale =
+          startedAtMillis === null ||
+          (
+            Date.now() -
+            startedAtMillis
+          ) >
+            COLUMN_ARTICLE_TRANSLATION_GENERATING_STALE_MS;
+
+        if (!isStale) {
+          return {
+            outcome: "generating"
+          };
+        }
+
+        // stale：このリクエストが再度生成権を獲得する(下へ続く)。
+      }
+
+      const summaryFieldPath =
+        "translations." +
+        language +
+        ".summary";
+
+      const update =
+        {};
+
+      update[summaryFieldPath] =
+        {
+          status: "generating",
+          sourceHash: sourceHash,
+
+          generatingStartedAt:
+            FieldValue.serverTimestamp(),
+
+          updatedAt:
+            FieldValue.serverTimestamp()
+        };
+
+      transaction.update(
+        documentRef,
+        update
+      );
+
+      return {
+        outcome: "claimed"
+      };
+    }
+  );
+}
+
+async function saveColumnArticleSummaryTranslationReadyResult(
+  database,
+  slug,
+  language,
+  sourceHash,
+  translatedTitle,
+  translatedDescription,
+  usage,
+  estimatedCostUsd
+) {
+  const summaryFieldPath =
+    "translations." +
+    language +
+    ".summary";
+
+  const update =
+    {};
+
+  update[summaryFieldPath] =
+    {
+      status: "ready",
+      sourceHash: sourceHash,
+      title: translatedTitle,
+      description: translatedDescription,
+      model: COLUMN_ARTICLE_TRANSLATION_MODEL,
+      usage: usage,
+      estimatedCostUsd: estimatedCostUsd,
+
+      generatedAt:
+        FieldValue.serverTimestamp(),
+
+      updatedAt:
+        FieldValue.serverTimestamp()
+    };
+
+  await database
+    .collection(COLUMN_ARTICLES_COLLECTION)
+    .doc(slug)
+    .update(
+      update
+    );
+}
+
+async function saveColumnArticleSummaryTranslationErrorResult(
+  database,
+  slug,
+  language
+) {
+  const update =
+    {};
+
+  update["translations." + language + ".summary.status"] =
+    "error";
+
+  update["translations." + language + ".summary.updatedAt"] =
+    FieldValue.serverTimestamp();
+
+  await database
+    .collection(COLUMN_ARTICLES_COLLECTION)
+    .doc(slug)
+    .update(
+      update
+    );
+}
+
+// ---- content(本文)の単体翻訳 ----
+// 記事詳細ページへの実際のアクセス時にだけ、1記事1回で翻訳する
+// (batchしない、そもそも1回のレンダリングで対象は常に1記事のため)。
+
+function buildColumnArticleContentTranslationPrompt(
+  content,
+  targetLanguage
+) {
+  const targetLanguageNamesByCode =
+    {
+      en: "English"
+    };
+
+  const targetLanguageName =
+    targetLanguageNamesByCode[targetLanguage] ||
+    targetLanguage;
+
+  const systemInstruction =
+    "You are a precise, literal translator for a Japanese local tourism " +
+    "magazine (\"マチナウ読み物\" / Machinau Reads), which shares the " +
+    "\"memory of the town\" — real cultural background, local knowledge, " +
+    "and the author's own perspective. You will receive the plain-text " +
+    "body of one article, written in Japanese, with paragraphs " +
+    "separated by a blank line. Translate the entire body into " +
+    targetLanguageName + ". " +
+
+    "\n\nCRITICAL RULES (this is translation only, not research): " +
+    "\n- This is a pure translation task. Do not search the web and do " +
+    "not verify, correct, add, or infer any fact not present in the " +
+    "original text. " +
+    "\n- Do not add, remove, reorder, or merge paragraphs. Preserve the " +
+    "exact same paragraph structure: the number of paragraphs and their " +
+    "order must match the original exactly, separated by a single " +
+    "blank line between paragraphs (matching the input format). " +
+    "\n- Never change or invent numbers, dates, historical facts, or " +
+    "place names. Place names must use standard, widely-recognized " +
+    "English romanization rather than an invented or meaning-based " +
+    "translation. " +
+    "\n- Do not invent URLs or web links that are not in the original " +
+    "text. " +
+    "\n- As much as possible, preserve the author's own voice and tone " +
+    "rather than flattening it into generic travel-guide language. " +
+    "\n- The output must be plain text only — no HTML tags, no " +
+    "Markdown formatting (no \"#\", \"*\", \"-\", or similar markup). " +
+
+    "\n\nOUTPUT: respond with a JSON object of exactly this form: " +
+    "{\"content\":\"...\"}. Output nothing else — no preamble, no " +
+    "explanation, no markdown.";
+
+  const userContent =
+    JSON.stringify(
+      {
+        content: content
+      }
+    );
+
+  return {
+    systemInstruction: systemInstruction,
+    userContent: userContent
+  };
+}
+
+async function callOpenAiColumnArticleContentTranslation(
+  content,
+  targetLanguage
+) {
+  const apiKey =
+    process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    const configError =
+      new Error("OPENAI_API_KEY が設定されていません。");
+
+    configError.isMissingApiKey =
+      true;
+
+    throw configError;
+  }
+
+  const prompt =
+    buildColumnArticleContentTranslationPrompt(
+      content,
+      targetLanguage
+    );
+
+  const controller =
+    new AbortController();
+
+  const timeoutId =
+    setTimeout(
+      function() {
+        controller.abort();
+      },
+      COLUMN_ARTICLE_CONTENT_TRANSLATION_TIMEOUT_MS
+    );
+
+  let response;
+
+  try {
+    try {
+      response =
+        await fetch(
+          COLUMN_ARTICLE_TRANSLATION_ENDPOINT,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer " + apiKey
+            },
+
+            body: JSON.stringify({
+              model: COLUMN_ARTICLE_TRANSLATION_MODEL,
+              response_format: { type: "json_object" },
+
+              messages: [
+                {
+                  role: "system",
+                  content: prompt.systemInstruction
+                },
+
+                {
+                  role: "user",
+                  content: prompt.userContent
+                }
+              ]
+            }),
+
+            signal: controller.signal
+          }
+        );
+    } catch (fetchError) {
+      if (fetchError.name === "AbortError") {
+        const timeoutError =
+          new Error("読み物本文の翻訳がタイムアウトしました。");
+
+        timeoutError.isTransient =
+          true;
+
+        timeoutError.isTimeout =
+          true;
+
+        throw timeoutError;
+      }
+
+      const networkError =
+        new Error("読み物本文の翻訳呼び出しに失敗しました。");
+
+      networkError.isTransient =
+        true;
+
+      networkError.isNetworkError =
+        true;
+
+      throw networkError;
+    }
+  } finally {
+    clearTimeout(
+      timeoutId
+    );
+  }
+
+  if (!response.ok) {
+    const httpError =
+      new Error(
+        "OpenAI APIがエラーを返しました。status=" + response.status
+      );
+
+    httpError.isHttpError =
+      true;
+
+    httpError.httpStatus =
+      response.status;
+
+    httpError.isTransient =
+      true;
+
+    throw httpError;
+  }
+
+  let responseData;
+
+  try {
+    responseData =
+      await response.json();
+  } catch (jsonError) {
+    const parseError =
+      new Error("OpenAI APIの応答を解析できませんでした。");
+
+    parseError.isJsonError =
+      true;
+
+    parseError.isTransient =
+      true;
+
+    throw parseError;
+  }
+
+  const messageContent =
+    responseData &&
+    Array.isArray(responseData.choices) &&
+    responseData.choices[0] &&
+    responseData.choices[0].message &&
+    typeof responseData.choices[0].message.content === "string"
+      ? responseData.choices[0].message.content
+      : "";
+
+  if (messageContent === "") {
+    const shapeError =
+      new Error("OpenAI APIの応答形式が不正です。");
+
+    shapeError.isJsonError =
+      true;
+
+    shapeError.isTransient =
+      true;
+
+    throw shapeError;
+  }
+
+  let parsedContent;
+
+  try {
+    parsedContent =
+      JSON.parse(messageContent);
+  } catch (contentParseError) {
+    const shapeError =
+      new Error("読み物本文の翻訳結果がJSON形式ではありませんでした。");
+
+    shapeError.isJsonError =
+      true;
+
+    shapeError.isTransient =
+      true;
+
+    throw shapeError;
+  }
+
+  const translatedContent =
+    stripCitationArtifactsFromAiText(
+      sanitizeRegionEditorialText(
+        typeof parsedContent.content === "string"
+          ? parsedContent.content
+          : "",
+        COLUMN_ARTICLE_TRANSLATED_CONTENT_MAX_LENGTH
+      )
+    );
+
+  if (translatedContent === "") {
+    const shapeError =
+      new Error("読み物本文の翻訳結果が空でした。");
+
+    shapeError.isTransient =
+      true;
+
+    throw shapeError;
+  }
+
+  const usage =
+    responseData.usage
+      ? {
+          inputTokens:
+            typeof responseData.usage.prompt_tokens === "number"
+              ? responseData.usage.prompt_tokens
+              : null,
+
+          outputTokens:
+            typeof responseData.usage.completion_tokens === "number"
+              ? responseData.usage.completion_tokens
+              : null,
+
+          totalTokens:
+            typeof responseData.usage.total_tokens === "number"
+              ? responseData.usage.total_tokens
+              : null
+        }
+      : null;
+
+  const estimatedCostUsd =
+    usage &&
+    typeof usage.inputTokens === "number" &&
+    typeof usage.outputTokens === "number"
+      ? calculateColumnArticleTranslationEstimatedCostUsd(
+          usage.inputTokens,
+          usage.outputTokens
+        )
+      : null;
+
+  return {
+    content: translatedContent,
+    usage: usage,
+    estimatedCostUsd: estimatedCostUsd
+  };
+}
+
+// runTransaction()によるslug×language単位の二重生成防止(content専用)。
+// summary用のclaimColumnArticleSummaryTranslationGeneration()とは完全に
+// 独立したネストしたオブジェクト(translations.{language}.content)を
+// 読み書きするため、本文だけの更新がsummaryキャッシュへ影響することはなく、
+// 逆も同様。
+async function claimColumnArticleContentTranslationGeneration(
+  database,
+  slug,
+  language,
+  sourceHash
+) {
+  const documentRef =
+    database
+      .collection(COLUMN_ARTICLES_COLLECTION)
+      .doc(slug);
+
+  return database.runTransaction(
+    async function(transaction) {
+      const snapshot =
+        await transaction.get(
+          documentRef
+        );
+
+      if (!snapshot.exists) {
+        return {
+          outcome: "error"
+        };
+      }
+
+      const data =
+        snapshot.data() || {};
+
+      const existingTranslations =
+        data.translations &&
+        typeof data.translations === "object"
+          ? data.translations
+          : {};
+
+      const existingTranslationForLanguage =
+        existingTranslations[language] &&
+        typeof existingTranslations[language] === "object"
+          ? existingTranslations[language]
+          : {};
+
+      const existingContentTranslation =
+        existingTranslationForLanguage.content;
+
+      if (
+        existingContentTranslation &&
+        existingContentTranslation.status === "ready" &&
+        existingContentTranslation.sourceHash === sourceHash
+      ) {
+        return {
+          outcome: "ready",
+
+          content:
+            typeof existingContentTranslation.content === "string"
+              ? existingContentTranslation.content
+              : ""
+        };
+      }
+
+      if (
+        existingContentTranslation &&
+        existingContentTranslation.status === "generating"
+      ) {
+        const startedAtMillis =
+          existingContentTranslation.generatingStartedAt &&
+          typeof existingContentTranslation.generatingStartedAt.toMillis === "function"
+            ? existingContentTranslation.generatingStartedAt.toMillis()
+            : null;
+
+        const isStale =
+          startedAtMillis === null ||
+          (
+            Date.now() -
+            startedAtMillis
+          ) >
+            COLUMN_ARTICLE_TRANSLATION_GENERATING_STALE_MS;
+
+        if (!isStale) {
+          return {
+            outcome: "generating"
+          };
+        }
+
+        // stale：このリクエストが再度生成権を獲得する(下へ続く)。
+      }
+
+      const contentFieldPath =
+        "translations." +
+        language +
+        ".content";
+
+      const update =
+        {};
+
+      update[contentFieldPath] =
+        {
+          status: "generating",
+          sourceHash: sourceHash,
+
+          generatingStartedAt:
+            FieldValue.serverTimestamp(),
+
+          updatedAt:
+            FieldValue.serverTimestamp()
+        };
+
+      transaction.update(
+        documentRef,
+        update
+      );
+
+      return {
+        outcome: "claimed"
+      };
+    }
+  );
+}
+
+async function saveColumnArticleContentTranslationReadyResult(
+  database,
+  slug,
+  language,
+  sourceHash,
+  translatedContent,
+  usage,
+  estimatedCostUsd
+) {
+  const contentFieldPath =
+    "translations." +
+    language +
+    ".content";
+
+  const update =
+    {};
+
+  update[contentFieldPath] =
+    {
+      status: "ready",
+      sourceHash: sourceHash,
+      content: translatedContent,
+      model: COLUMN_ARTICLE_TRANSLATION_MODEL,
+      usage: usage,
+      estimatedCostUsd: estimatedCostUsd,
+
+      generatedAt:
+        FieldValue.serverTimestamp(),
+
+      updatedAt:
+        FieldValue.serverTimestamp()
+    };
+
+  await database
+    .collection(COLUMN_ARTICLES_COLLECTION)
+    .doc(slug)
+    .update(
+      update
+    );
+}
+
+async function saveColumnArticleContentTranslationErrorResult(
+  database,
+  slug,
+  language
+) {
+  const update =
+    {};
+
+  update["translations." + language + ".content.status"] =
+    "error";
+
+  update["translations." + language + ".content.updatedAt"] =
+    FieldValue.serverTimestamp();
+
+  await database
+    .collection(COLUMN_ARTICLES_COLLECTION)
+    .doc(slug)
+    .update(
+      update
+    );
+}
+
+// summary翻訳を1記事ぶんだけ解決する共通処理(TOP一覧のbatch経路・
+// 記事詳細ページの単体経路の両方から呼ばれる、ロジックの重複を避けるため)。
+// 呼び出し元がclaim結果を見てbatch対象かどうかを判断できるよう、
+// claim結果とtitleAndDescriptionをそのまま返す。
+async function resolveColumnArticleSummaryTranslationSingle(
+  database,
+  slug,
+  titleAndDescription,
+  language
+) {
+  const sourceHash =
+    computeColumnArticleSummaryHash(
+      titleAndDescription.title,
+      titleAndDescription.description
+    );
+
+  const claimResult =
+    await claimColumnArticleSummaryTranslationGeneration(
+      database,
+      slug,
+      language,
+      sourceHash
+    );
+
+  if (claimResult.outcome === "ready") {
+    return {
+      title: claimResult.title,
+      description: claimResult.description
+    };
+  }
+
+  if (claimResult.outcome !== "claimed") {
+    // "generating"(他の旅行者が翻訳中)・"error"(document不整合)の
+    // いずれも、日本語原文をそのまま返す(既存表示を壊さない安全な挙動)。
+    return {
+      title: titleAndDescription.title,
+      description: titleAndDescription.description
+    };
+  }
+
+  try {
+    const translationBatchResult =
+      await callOpenAiColumnArticleSummaryTranslationBatch(
+        [
+          {
+            slug: slug,
+            title: titleAndDescription.title,
+            description: titleAndDescription.description
+          }
+        ],
+        language
+      );
+
+    const translatedItem =
+      translationBatchResult.translatedById[slug];
+
+    await saveColumnArticleSummaryTranslationReadyResult(
+      database,
+      slug,
+      language,
+      sourceHash,
+      translatedItem.title,
+      translatedItem.description,
+      translationBatchResult.usage,
+      translationBatchResult.estimatedCostUsd
+    );
+
+    return {
+      title: translatedItem.title,
+      description: translatedItem.description
+    };
+  } catch (translationError) {
+    console.error(
+      "読み物summary翻訳：生成エラー：",
+      translationError
+    );
+
+    await saveColumnArticleSummaryTranslationErrorResult(
+      database,
+      slug,
+      language
+    ).catch(
+      function(saveErrorAfterTranslationError) {
+        console.error(
+          "読み物summary翻訳：エラー状態の保存にも失敗：",
+          saveErrorAfterTranslationError
+        );
+      }
+    );
+
+    return {
+      title: titleAndDescription.title,
+      description: titleAndDescription.description
+    };
+  }
+}
+
+// 本文(content)は必ず「記事詳細ページへの実際のアクセス」からしか
+// 呼ばれない(TOP一覧・summary batchからは絶対に呼ばない、本部指示)。
+async function resolveColumnArticleContentTranslation(
+  database,
+  slug,
+  content,
+  language
+) {
+  const sourceHash =
+    computeShopMessageHash(
+      content
+    );
+
+  const claimResult =
+    await claimColumnArticleContentTranslationGeneration(
+      database,
+      slug,
+      language,
+      sourceHash
+    );
+
+  if (claimResult.outcome === "ready") {
+    return {
+      content: claimResult.content,
+      isFallbackToSource: false
+    };
+  }
+
+  if (claimResult.outcome !== "claimed") {
+    // "generating"・"error"のいずれも、日本語原文を安全に表示する
+    // (本部指示：500で真っ白にするより日本語原文フォールバックを優先)。
+    return {
+      content: content,
+      isFallbackToSource: true
+    };
+  }
+
+  try {
+    const translationResult =
+      await callOpenAiColumnArticleContentTranslation(
+        content,
+        language
+      );
+
+    await saveColumnArticleContentTranslationReadyResult(
+      database,
+      slug,
+      language,
+      sourceHash,
+      translationResult.content,
+      translationResult.usage,
+      translationResult.estimatedCostUsd
+    );
+
+    return {
+      content: translationResult.content,
+      isFallbackToSource: false
+    };
+  } catch (translationError) {
+    console.error(
+      "読み物content翻訳：生成エラー：",
+      translationError
+    );
+
+    await saveColumnArticleContentTranslationErrorResult(
+      database,
+      slug,
+      language
+    ).catch(
+      function(saveErrorAfterTranslationError) {
+        console.error(
+          "読み物content翻訳：エラー状態の保存にも失敗：",
+          saveErrorAfterTranslationError
+        );
+      }
+    );
+
+    return {
+      content: content,
+      isFallbackToSource: true
+    };
+  }
+}
+
+// TOP一覧(loadDynamicColumnEntries())向け。表示中の未翻訳summaryだけを
+// まとめてbatch翻訳する。clientからはslug(document ID)とlanguageだけを
+// 受け取り、翻訳対象の原文は必ずサーバー側でcolumnArticlesから取得する
+// (本部指示：クライアントの文章を翻訳原文として信用しない)。
+async function handleColumnArticleTranslationGetRequest(
+  request,
+  response
+) {
+  try {
+    const idToken =
+      readBearerToken(
+        request
+      );
+
+    if (idToken === "") {
+      return response.status(401).json({
+        success: false,
+        message: "認証情報がありません。"
+      });
+    }
+
+    const app =
+      getFirebaseAdminApp();
+
+    try {
+      await getAuth(app)
+        .verifyIdToken(
+          idToken
+        );
+    } catch (verifyError) {
+      return response.status(401).json({
+        success: false,
+        message: "認証情報が正しくありません。"
+      });
+    }
+
+    const database =
+      getFirestore(app);
+
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    const requestedLanguage =
+      typeof requestBody.language === "string"
+        ? requestBody.language
+        : REGION_TODAY_INFO_SOURCE_LANGUAGE;
+
+    const language =
+      REGION_TODAY_INFO_SUPPORTED_LANGUAGES.includes(
+        requestedLanguage
+      )
+        ? requestedLanguage
+        : REGION_TODAY_INFO_SOURCE_LANGUAGE;
+
+    if (language === REGION_TODAY_INFO_SOURCE_LANGUAGE) {
+      return response.status(200).json({
+        success: true,
+        translations: {}
+      });
+    }
+
+    const rawSlugs =
+      Array.isArray(requestBody.firestoreIds)
+        ? requestBody.firestoreIds
+        : [];
+
+    const slugs =
+      [];
+
+    const seenSlugs =
+      new Set();
+
+    for (
+      let index = 0;
+      index < rawSlugs.length &&
+        slugs.length <
+          COLUMN_ARTICLE_SUMMARY_TRANSLATION_MAX_IDS_PER_REQUEST;
+      index += 1
+    ) {
+      const safeSlug =
+        sanitizeShopFirestoreId(
+          rawSlugs[index]
+        );
+
+      if (
+        safeSlug !== "" &&
+        !seenSlugs.has(safeSlug)
+      ) {
+        seenSlugs.add(
+          safeSlug
+        );
+
+        slugs.push(
+          safeSlug
+        );
+      }
+    }
+
+    if (slugs.length === 0) {
+      return response.status(200).json({
+        success: true,
+        translations: {}
+      });
+    }
+
+    const snapshots =
+      await Promise.all(
+        slugs.map(
+          function(slug) {
+            return database
+              .collection(COLUMN_ARTICLES_COLLECTION)
+              .doc(slug)
+              .get();
+          }
+        )
+      );
+
+    const readyTranslations =
+      {};
+
+    const itemsToTranslate =
+      [];
+
+    for (
+      let index = 0;
+      index < slugs.length;
+      index += 1
+    ) {
+      const snapshot =
+        snapshots[index];
+
+      const slug =
+        slugs[index];
+
+      if (!snapshot.exists) {
+        continue;
+      }
+
+      const data =
+        snapshot.data() || {};
+
+      if (!isColumnArticleVisibleToPublic(data)) {
+        continue;
+      }
+
+      const titleAndDescription =
+        getColumnArticleSummaryFromData(
+          data
+        );
+
+      if (!titleAndDescription) {
+        continue;
+      }
+
+      const sourceHash =
+        computeColumnArticleSummaryHash(
+          titleAndDescription.title,
+          titleAndDescription.description
+        );
+
+      let claimResult;
+
+      try {
+        claimResult =
+          await claimColumnArticleSummaryTranslationGeneration(
+            database,
+            slug,
+            language,
+            sourceHash
+          );
+      } catch (claimError) {
+        console.error(
+          "読み物summary翻訳：ロック取得エラー：",
+          claimError
+        );
+
+        continue;
+      }
+
+      if (claimResult.outcome === "ready") {
+        readyTranslations[slug] =
+          {
+            title: claimResult.title,
+            description: claimResult.description
+          };
+      } else if (claimResult.outcome === "claimed") {
+        itemsToTranslate.push(
+          {
+            slug: slug,
+            title: titleAndDescription.title,
+            description: titleAndDescription.description,
+            sourceHash: sourceHash
+          }
+        );
+      }
+
+      // "generating"・"error"は今回の応答には含めない(clientは原文を
+      // そのまま表示し続ける、既存表示を壊さない安全な挙動)。
+    }
+
+    if (itemsToTranslate.length > 0) {
+      let translationBatchResult =
+        null;
+
+      try {
+        translationBatchResult =
+          await callOpenAiColumnArticleSummaryTranslationBatch(
+            itemsToTranslate,
+            language
+          );
+      } catch (translationError) {
+        console.error(
+          "読み物summary翻訳：生成エラー：",
+          translationError
+        );
+
+        await Promise.all(
+          itemsToTranslate.map(
+            function(item) {
+              return saveColumnArticleSummaryTranslationErrorResult(
+                database,
+                item.slug,
+                language
+              ).catch(
+                function(saveErrorAfterTranslationError) {
+                  console.error(
+                    "読み物summary翻訳：エラー状態の保存にも失敗：",
+                    saveErrorAfterTranslationError
+                  );
+                }
+              );
+            }
+          )
+        );
+      }
+
+      if (translationBatchResult) {
+        await Promise.all(
+          itemsToTranslate.map(
+            function(item) {
+              const translatedItem =
+                translationBatchResult.translatedById[
+                  item.slug
+                ];
+
+              readyTranslations[item.slug] =
+                translatedItem;
+
+              return saveColumnArticleSummaryTranslationReadyResult(
+                database,
+                item.slug,
+                language,
+                item.sourceHash,
+                translatedItem.title,
+                translatedItem.description,
+                translationBatchResult.usage,
+                translationBatchResult.estimatedCostUsd
+              ).catch(
+                function(saveError) {
+                  console.error(
+                    "読み物summary翻訳：保存エラー：",
+                    saveError
+                  );
+                }
+              );
+            }
+          )
+        );
+      }
+    }
+
+    return response.status(200).json({
+      success: true,
+      translations: readyTranslations
+    });
+  } catch (error) {
+    console.error(
+      "読み物summary翻訳：処理エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message: "読み物一覧の翻訳中にエラーが発生しました。"
+    });
+  }
+}
+
+
 // 本文(プレーンテキスト、admin-column.htmlのtextareaからそのまま届く)を
 // 空行区切りの段落として扱い、各段落をエスケープした<p>へ変換する。
 // 管理者入力であってもHTMLタグは一切許可しない(admin-post.js等、既存の
@@ -18498,22 +20552,31 @@ function buildColumnArticleParagraphsHtml(
 // 方式・コメントセクション構造を再利用する(見た目を統一するため、既存の
 // 静的HTMLからCSSブロックを複製している。既存ファイル自体は変更しない)。
 function buildColumnArticleHtml(
-  article
+  article,
+  language
 ) {
+  // 多言語化 最終Phase｜?lang=パラメータで同一記事の複数言語版が
+  // 存在するようになるため、各言語版は自分自身のURLへcanonicalする
+  // (Googleの標準的な多言語ページ対応方式、buildColumnArticleHreflangLinksHtml()
+  // が生成するhreflang alternateタグと対になる)。
   const canonicalUrl =
-    "https://machinau.jp/column/" +
-    article.slug +
-    ".html";
+    "https://machinau.jp" +
+    buildColumnArticleUrlForLanguage(
+      article.slug,
+      language
+    );
 
   const publishedDisplay =
-    formatDateForDisplay(
-      article.publishedAtDate
+    formatColumnArticleDateForDisplay(
+      article.publishedAtDate,
+      language
     );
 
   const updatedDisplay =
-    formatDateForDisplay(
+    formatColumnArticleDateForDisplay(
       article.updatedAtDate ||
-        article.publishedAtDate
+        article.publishedAtDate,
+      language
     );
 
   const publishedAttribute =
@@ -18539,11 +20602,33 @@ function buildColumnArticleHtml(
 
   const escapedCategory =
     escapeHtmlForRender(
-      article.category
+      getColumnCategoryDisplayLabel(
+        article.category,
+        language
+      )
     );
 
   const escapedSlugForJs =
     JSON.stringify(
+      article.slug
+    );
+
+  const escapedTitleSuffix =
+    escapeHtmlForRender(
+      getColumnArticlePageText(
+        "titleSuffix",
+        language
+      )
+    );
+
+  const languageSwitchHtml =
+    buildColumnArticleLanguageSwitchHtml(
+      article.slug,
+      language
+    );
+
+  const hreflangLinksHtml =
+    buildColumnArticleHreflangLinksHtml(
       article.slug
     );
 
@@ -18603,7 +20688,7 @@ function buildColumnArticleHtml(
       : "";
 
   return `<!DOCTYPE html>
-<html lang="ja">
+<html lang="${language}">
 <head>
   <script>
     (function () {
@@ -18632,13 +20717,14 @@ function buildColumnArticleHtml(
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#0788c9">
   <meta name="description" content="${escapedDescription}">
-  <title>${escapedTitle}｜マチナウ</title>
+  <title>${escapedTitle}${escapedTitleSuffix}</title>
   <link rel="canonical" href="${canonicalUrl}">
+  ${hreflangLinksHtml}
   <link rel="icon" type="image/png" href="/favicon.png?v=2">
   <link rel="manifest" href="/manifest.json?v=2">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2">
   <meta property="og:type" content="article">
-  <meta property="og:title" content="${escapedTitle}｜マチナウ">
+  <meta property="og:title" content="${escapedTitle}${escapedTitleSuffix}">
   <meta property="og:description" content="${escapedDescription}">
   <meta property="og:url" content="${canonicalUrl}">
   <meta property="og:image" content="${ogImageUrl}">
@@ -18651,10 +20737,10 @@ function buildColumnArticleHtml(
     "headline": ${JSON.stringify(article.title)},
     "description": ${JSON.stringify(article.description)},
     "image": ${JSON.stringify(ogImageUrl)},
-    "author": { "@type": "Organization", "name": "マチナウ運営" },
+    "author": { "@type": "Organization", "name": ${JSON.stringify(getColumnArticlePageText("byline", language))} },
     "publisher": {
       "@type": "Organization",
-      "name": "マチナウ",
+      "name": ${JSON.stringify(getColumnArticlePageText("brandName", language))},
       "logo": { "@type": "ImageObject", "url": "https://machinau.jp/icon-512.png?v=2" }
     },
     "datePublished": "${publishedAttribute}",
@@ -18697,6 +20783,15 @@ function buildColumnArticleHtml(
       border-radius: 9px; background: rgba(255, 255, 255, 0.2); font-size: 15px;
     }
     .page-header h1 { margin: 0; font-size: 22px; line-height: 1.5; }
+    .article-language-switch {
+      margin: 0 0 14px; font-size: 12px; text-align: right; color: var(--subtext);
+    }
+    .article-language-switch a {
+      color: var(--subtext); text-decoration: none; margin-left: 10px;
+    }
+    .article-language-switch a.active {
+      color: var(--blue); font-weight: 900; text-decoration: underline;
+    }
     main { width: min(100%, 680px); margin: -20px auto 0; padding: 0 18px; }
     .card {
       background: var(--white); border-radius: 22px;
@@ -18770,21 +20865,24 @@ function buildColumnArticleHtml(
   </style>
 </head>
 <body>
+  ${article.contentTranslationFallback ? "<!-- content-translation: fallback-ja -->" : ""}
 
   <div class="page-header">
-    <div class="brand-mini"><span class="brand-mini-icon"><img src="/icon-192.png?v=2" alt="" style="width:100%;height:100%;object-fit:contain;border-radius:inherit;"></span>マチナウ</div>
+    <div class="brand-mini"><span class="brand-mini-icon"><img src="/icon-192.png?v=2" alt="" style="width:100%;height:100%;object-fit:contain;border-radius:inherit;"></span>${escapeHtmlForRender(getColumnArticlePageText("brandName", language))}</div>
     <h1>${escapedTitle}</h1>
   </div>
 
   <main>
     <div class="card">
 
+      ${languageSwitchHtml}
+
       ${regionBreadcrumbHtml}
 
       <span class="article-category">${escapedCategory}</span>
 
       <p class="article-meta">
-        公開日：<time datetime="${publishedAttribute}">${publishedDisplay}</time>／更新日：<time datetime="${updatedAttribute}">${updatedDisplay}</time>
+        ${escapeHtmlForRender(getColumnArticlePageText("publishedLabel", language))}<time datetime="${publishedAttribute}">${publishedDisplay}</time>${escapeHtmlForRender(getColumnArticlePageText("updatedLabel", language))}<time datetime="${updatedAttribute}">${updatedDisplay}</time>
       </p>
 
       ${mainImageHtml}
@@ -18796,44 +20894,54 @@ function buildColumnArticleHtml(
       )}
 
       <div class="cta-section">
-        <p>天気・交通・地域の「今」を確認して、このあとの判断材料に。</p>
-        <a class="cta-button" href="../" onclick="if (typeof gtag === 'function') { gtag('event', 'column_cta_click', { article_slug: ${escapedSlugForJs} }); }">今の沖縄をマチナウで見る</a>
+        <p>${escapeHtmlForRender(getColumnArticlePageText("ctaText", language))}</p>
+        <a class="cta-button" href="../" onclick="if (typeof gtag === 'function') { gtag('event', 'column_cta_click', { article_slug: ${escapedSlugForJs} }); }">${escapeHtmlForRender(getColumnArticlePageText("ctaButton", language))}</a>
       </div>
 
-      <p class="byline">マチナウ運営</p>
+      <p class="byline">${escapeHtmlForRender(getColumnArticlePageText("byline", language))}</p>
 
       <div class="comment-section">
-        <h2>この記事にコメントする</h2>
+        <h2>${escapeHtmlForRender(getColumnArticlePageText("commentSectionHeading", language))}</h2>
 
         <form id="commentForm" class="comment-form" novalidate>
           <div>
-            <label for="commentNicknameInput">ニックネーム</label>
-            <input id="commentNicknameInput" type="text" maxlength="20" placeholder="例：旅好き" autocomplete="off">
+            <label for="commentNicknameInput">${escapeHtmlForRender(getColumnArticlePageText("commentNicknameLabel", language))}</label>
+            <input id="commentNicknameInput" type="text" maxlength="20" placeholder="${escapeHtmlForRender(getColumnArticlePageText("commentNicknamePlaceholder", language))}" autocomplete="off">
           </div>
           <div>
-            <label for="commentTextInput">コメント</label>
-            <textarea id="commentTextInput" maxlength="500" placeholder="この記事についてのご感想や、実際に体験したことなどをどうぞ"></textarea>
+            <label for="commentTextInput">${escapeHtmlForRender(getColumnArticlePageText("commentTextLabel", language))}</label>
+            <textarea id="commentTextInput" maxlength="500" placeholder="${escapeHtmlForRender(getColumnArticlePageText("commentTextPlaceholder", language))}"></textarea>
           </div>
           <div class="comment-honeypot-field" aria-hidden="true">
-            <label for="commentContactField">ウェブサイト</label>
+            <label for="commentContactField">${escapeHtmlForRender(getColumnArticlePageText("commentWebsiteLabel", language))}</label>
             <input id="commentContactField" type="text" tabindex="-1" autocomplete="off">
           </div>
-          <button id="commentSubmitButton" class="comment-submit-button" type="submit">コメントを投稿する</button>
+          <button id="commentSubmitButton" class="comment-submit-button" type="submit">${escapeHtmlForRender(getColumnArticlePageText("commentSubmitButton", language))}</button>
           <p id="commentStatusMessage" class="comment-status-message" role="status" aria-live="polite"></p>
         </form>
 
         <div id="commentList" class="comment-list">
-          <div class="comment-empty-state">コメントを読み込んでいます…</div>
+          <div class="comment-empty-state">${escapeHtmlForRender(getColumnArticlePageText("commentLoadingPlaceholder", language))}</div>
         </div>
       </div>
 
-      <a class="back-link" href="../">← マチナウTOPへ戻る</a>
+      <a class="back-link" href="../">${escapeHtmlForRender(getColumnArticlePageText("backLink", language))}</a>
 
     </div>
   </main>
 
   <script>
     const ARTICLE_SLUG = ${escapedSlugForJs};
+    const PAGE_LANGUAGE = ${JSON.stringify(language)};
+    const COMMENT_TIME_LOCALE = PAGE_LANGUAGE === "en" ? "en-US" : "ja-JP";
+    const TEXT_COMMENT_SUBMITTING = ${JSON.stringify(getColumnArticlePageText("commentSubmitting", language))};
+    const TEXT_COMMENT_SUBMIT_BUTTON = ${JSON.stringify(getColumnArticlePageText("commentSubmitButton", language))};
+    const TEXT_COMMENT_GENERIC_ERROR = ${JSON.stringify(getColumnArticlePageText("commentGenericError", language))};
+    const TEXT_COMMENT_POST_FAILED_FALLBACK = ${JSON.stringify(getColumnArticlePageText("commentPostFailedFallback", language))};
+    const TEXT_COMMENT_POST_SUCCESS = ${JSON.stringify(getColumnArticlePageText("commentPostSuccess", language))};
+    const TEXT_COMMENT_POST_ERROR = ${JSON.stringify(getColumnArticlePageText("commentPostError", language))};
+    const TEXT_COMMENT_EMPTY_STATE = ${JSON.stringify(getColumnArticlePageText("commentEmptyState", language))};
+    const TEXT_COMMENT_LOAD_ERROR = ${JSON.stringify(getColumnArticlePageText("commentLoadError", language))};
     const commentForm = document.getElementById("commentForm");
     const commentNicknameInput = document.getElementById("commentNicknameInput");
     const commentTextInput = document.getElementById("commentTextInput");
@@ -18860,7 +20968,7 @@ function buildColumnArticleHtml(
       if (typeof isoString !== "string" || isoString === "") return "";
       const parsedDate = new Date(isoString);
       if (Number.isNaN(parsedDate.getTime())) return "";
-      return parsedDate.toLocaleString("ja-JP");
+      return parsedDate.toLocaleString(COMMENT_TIME_LOCALE);
     }
 
     function renderCommentItemHtml(comment) {
@@ -18876,7 +20984,7 @@ function buildColumnArticleHtml(
 
     function renderComments(comments) {
       if (!Array.isArray(comments) || comments.length === 0) {
-        commentList.innerHTML = '<div class="comment-empty-state">まだコメントはありません。最初のコメントを投稿してみませんか？</div>';
+        commentList.innerHTML = '<div class="comment-empty-state">' + escapeCommentHtml(TEXT_COMMENT_EMPTY_STATE) + '</div>';
         return;
       }
       commentList.innerHTML = comments.map(renderCommentItemHtml).join("");
@@ -18892,7 +21000,7 @@ function buildColumnArticleHtml(
         renderComments(responseData.comments);
       } catch (error) {
         console.error("コメント一覧の取得に失敗しました：", error);
-        commentList.innerHTML = '<div class="comment-empty-state">コメントを読み込めませんでした。時間をおいて再度お試しください。</div>';
+        commentList.innerHTML = '<div class="comment-empty-state">' + escapeCommentHtml(TEXT_COMMENT_LOAD_ERROR) + '</div>';
       }
     }
 
@@ -18900,7 +21008,7 @@ function buildColumnArticleHtml(
       event.preventDefault();
       showCommentStatus("", "");
       commentSubmitButton.disabled = true;
-      commentSubmitButton.textContent = "投稿しています…";
+      commentSubmitButton.textContent = TEXT_COMMENT_SUBMITTING;
       try {
         const response = await fetch("/api/moderate-submission", {
           method: "POST",
@@ -18914,9 +21022,9 @@ function buildColumnArticleHtml(
           })
         });
         let responseData = null;
-        try { responseData = await response.json(); } catch (jsonError) { throw new Error("応答を読み取れませんでした。"); }
+        try { responseData = await response.json(); } catch (jsonError) { throw new Error(TEXT_COMMENT_GENERIC_ERROR); }
         if (!responseData || responseData.success !== true) {
-          showCommentStatus((responseData && responseData.message) || "コメントを投稿できませんでした。", "error");
+          showCommentStatus((responseData && responseData.message) || TEXT_COMMENT_POST_FAILED_FALLBACK, "error");
           return;
         }
         if (responseData.comment) {
@@ -18925,13 +21033,13 @@ function buildColumnArticleHtml(
           commentList.insertAdjacentHTML("afterbegin", renderCommentItemHtml(responseData.comment));
         }
         commentTextInput.value = "";
-        showCommentStatus("コメントを投稿しました。", "success");
+        showCommentStatus(TEXT_COMMENT_POST_SUCCESS, "success");
       } catch (error) {
         console.error("コメント投稿に失敗しました：", error);
-        showCommentStatus("コメントの投稿に失敗しました。時間をおいて、もう一度お試しください。", "error");
+        showCommentStatus(TEXT_COMMENT_POST_ERROR, "error");
       } finally {
         commentSubmitButton.disabled = false;
-        commentSubmitButton.textContent = "コメントを投稿する";
+        commentSubmitButton.textContent = TEXT_COMMENT_SUBMIT_BUTTON;
       }
     });
 
@@ -19030,14 +21138,98 @@ async function handleRenderColumnArticleRequest(
     const data =
       documentSnapshot.data();
 
+    // 多言語化 最終Phase｜?lang=クエリパラメータで言語を伝達する
+    // (本部指示：TOPの現在言語をURLへ引き継ぐ)。許可リストはPhase A〜Dと
+    // 共通(REGION_TODAY_INFO_SUPPORTED_LANGUAGES)、未指定・不正値は必ず
+    // 原文言語(ja)にfallbackする(既存の日本語利用者の挙動を一切変えない)。
+    const requestedLanguage =
+      request.query &&
+      typeof request.query.lang === "string"
+        ? request.query.lang.trim()
+        : REGION_TODAY_INFO_SOURCE_LANGUAGE;
+
+    const language =
+      REGION_TODAY_INFO_SUPPORTED_LANGUAGES.includes(
+        requestedLanguage
+      )
+        ? requestedLanguage
+        : REGION_TODAY_INFO_SOURCE_LANGUAGE;
+
+    const originalTitle =
+      typeof data.title === "string"
+        ? data.title
+        : "";
+
+    const originalDescription =
+      typeof data.description === "string"
+        ? data.description
+        : "";
+
+    const originalContent =
+      typeof data.content === "string"
+        ? data.content
+        : "";
+
+    let displayTitle =
+      originalTitle;
+
+    let displayDescription =
+      originalDescription;
+
+    let displayContent =
+      originalContent;
+
+    let contentTranslationFallback =
+      false;
+
+    if (language !== REGION_TODAY_INFO_SOURCE_LANGUAGE) {
+      const titleAndDescription =
+        getColumnArticleSummaryFromData(
+          data
+        );
+
+      if (titleAndDescription) {
+        const summaryDisplay =
+          await resolveColumnArticleSummaryTranslationSingle(
+            database,
+            slug,
+            titleAndDescription,
+            language
+          );
+
+        displayTitle =
+          summaryDisplay.title;
+
+        displayDescription =
+          summaryDisplay.description;
+      }
+
+      if (originalContent !== "") {
+        const contentDisplay =
+          await resolveColumnArticleContentTranslation(
+            database,
+            slug,
+            originalContent,
+            language
+          );
+
+        displayContent =
+          contentDisplay.content;
+
+        contentTranslationFallback =
+          contentDisplay.isFallbackToSource;
+      }
+    }
+
     const html =
       buildColumnArticleHtml(
         {
           slug: slug,
-          title: data.title,
+          title: displayTitle,
           category: data.category,
-          description: data.description,
-          content: data.content,
+          description: displayDescription,
+          content: displayContent,
+          contentTranslationFallback: contentTranslationFallback,
 
           regionCountryLabel:
             getCountryDisplayLabel(
@@ -19074,7 +21266,8 @@ async function handleRenderColumnArticleRequest(
             toDateFromFirestoreValue(
               data.updatedAt
             )
-        }
+        },
+        language
       );
 
     response.setHeader(
@@ -20784,6 +22977,19 @@ export default async function handler(
     requestBody.mode === "regionRecommendationTranslationGet"
   ) {
     return handleRegionRecommendationTranslationGetRequest(
+      request,
+      response
+    );
+  }
+
+  // 多言語化 最終Phase(マチナウ読み物)｜columnArticlesのtitle/description
+  // (TOP一覧のsummary)を対象にしたAI翻訳キャッシュ。regionRecommendation
+  // TranslationGetと同様、公開機能(旅行者向け)のため管理者/Editor限定に
+  // しない。既存モードのいずれにも一切触れない。
+  if (
+    requestBody.mode === "columnArticleTranslationGet"
+  ) {
+    return handleColumnArticleTranslationGetRequest(
       request,
       response
     );

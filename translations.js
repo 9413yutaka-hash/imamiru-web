@@ -1139,6 +1139,12 @@ const MACHINAU_TRANSLATIONS = {
     en: "Read More"
   },
 
+  // 多言語化 最終Phase(マチナウ読み物)｜TOPの読み物カードのリンク文言。
+  column_entry_read_more_link: {
+    ja: "読む →",
+    en: "Read →"
+  },
+
   region_recommendation_collapse_button: {
     ja: "閉じる",
     en: "Close"
