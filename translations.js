@@ -744,6 +744,28 @@ const MACHINAU_TRANSLATIONS = {
     en: "Read →"
   },
 
+  // 多言語化 最終仕上げ｜index.html内に直書きされている静的な台風記事カード
+  // (typhoon-okinawa-travel、Firestore無関係)のtitle/description。
+  // この記事は1件しか無いため、Firestore翻訳cache/AI翻訳ではなく、
+  // 既存のtranslations.js固定翻訳として管理する(本部指示)。
+  column_entry_typhoon_title: {
+    ja: "台風接近時、沖縄旅行はどう判断する？",
+    en: "A Typhoon Is Approaching Okinawa — How Do You Decide?"
+  },
+
+  column_entry_typhoon_description: {
+    ja: "台風が近づいたとき、何を確認してどう判断すればよいか。そのときどきで自分なりに判断するための考え方を整理しました。",
+    en: "When a typhoon is approaching, what should you check, and how should you decide? Here's a way of thinking that can help you judge for yourself, case by case."
+  },
+
+  // 多言語化 最終仕上げ｜「マチナウ読み物をもっと見る →」(column-list.htmlへの
+  // 導線)。既存はハードコードで固定言語スイッチャーに未対応だったため、
+  // 他のcolumn_entry_*キーと同じ場所へ追加する。
+  column_entry_more_link: {
+    ja: "マチナウ読み物をもっと見る →",
+    en: "See More Machinau Reads →"
+  },
+
   region_recommendation_other_area_button: {
     ja: "ほかの地域を見る",
     en: "See Other Areas"
