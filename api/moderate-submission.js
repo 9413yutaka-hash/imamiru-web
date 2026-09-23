@@ -8055,6 +8055,60 @@ const REGION_TODAY_INFO_FIELD_MAX_LENGTHS =
     source: 80
   };
 
+// ============================================================
+// 多言語化 Phase A(regionTodayInfoのみ)
+// ============================================================
+// 日本語原文をSource of Truthとして維持し、Luna地域調査は言語ごとに
+// 再実行しない(本部指示)。非日本語リクエストの場合だけ、既存の日本語
+// findingsをgpt-4o-miniで翻訳し、同じdocument内のtranslations.{language}
+// サブフィールドへ共有キャッシュとして保存する。既存のjaのみの動作
+// (claimRegionTodayInfoGeneration()・callOpenAiRegionTodayInfoResearch()・
+// saveRegionTodayInfoReadyResult()等)は一切変更しない。
+//
+// クライアント側のtranslations.jsが持つMACHINAU_SUPPORTED_LANGUAGES
+// (["ja","en"])とは別ファイル(api側はtranslations.jsを読み込めない)の
+// ため、サーバー側にも同じ値を独立して保持する(既存のALLOWED_COLUMN_
+// CATEGORIES等と同じ「複製管理」の方針を踏襲)。クライアント入力の
+// languageは必ずこの許可リストと突き合わせてから使う(本部指示：任意
+// 文字列をそのままFirestore field pathへ入れない)。
+const REGION_TODAY_INFO_SOURCE_LANGUAGE =
+  "ja";
+
+const REGION_TODAY_INFO_SUPPORTED_LANGUAGES =
+  [
+    "ja",
+    "en"
+  ];
+
+// 単純翻訳にはweb_search・高度な推論は不要なため、既存コード内で最も
+// 安価なgpt-4o-mini(既にAI_CONCIERGE_MODEL等で本番実績のある、Chat
+// Completions経由のモデル)を翻訳専用に使う。新しいAPIエンドポイント・
+// 新しい外部翻訳APIは使わない。
+const REGION_TODAY_INFO_TRANSLATION_MODEL =
+  "gpt-4o-mini";
+
+const REGION_TODAY_INFO_TRANSLATION_ENDPOINT =
+  "https://api.openai.com/v1/chat/completions";
+
+// 翻訳はweb_searchを伴わないため、既存のAI_FACT_EXTRACTION_TIMEOUT_MS等と
+// 同程度の短いタイムアウトで十分(Luna地域調査の90秒より大幅に短い)。
+const REGION_TODAY_INFO_TRANSLATION_TIMEOUT_MS =
+  30000;
+
+// 翻訳生成はLuna地域調査(最大90秒)よりずっと短時間で完了するため、
+// generatingロックのstale判定もそれに応じて短くする(極端に長いロックに
+// しない、本部指示)。
+const REGION_TODAY_INFO_TRANSLATION_GENERATING_STALE_MS =
+  60 * 1000;
+
+// OpenAI公式ドキュメント(developers.openai.com/api/docs/models/gpt-4o-mini、
+// 実装時点で確認済み)の標準単価。
+const REGION_TODAY_INFO_TRANSLATION_INPUT_COST_PER_MILLION_USD =
+  0.15;
+
+const REGION_TODAY_INFO_TRANSLATION_OUTPUT_COST_PER_MILLION_USD =
+  0.6;
+
 function sanitizeRegionTodayInfoKeyPart(
   rawText
 ) {
@@ -8939,6 +8993,636 @@ async function saveRegionTodayInfoErrorResult(
     );
 }
 
+// 日本語findingsから決定論的なhashを作る(AIを使わない、Node標準の
+// node:cryptoのみ使用)。原文が同じ限り同じhashになるため、翻訳キャッシュの
+// sourceHashと比較して「原文が変わっていないか」を判定できる。
+function computeRegionTodayInfoFindingsHash(
+  findings
+) {
+  const canonicalJson =
+    JSON.stringify(
+      findings
+    );
+
+  return createHash("sha256")
+    .update(
+      canonicalJson,
+      "utf8"
+    )
+    .digest("hex");
+}
+
+function calculateRegionTodayInfoTranslationEstimatedCostUsd(
+  inputTokens,
+  outputTokens
+) {
+  const inputCostUsd =
+    (inputTokens / 1000000) *
+    REGION_TODAY_INFO_TRANSLATION_INPUT_COST_PER_MILLION_USD;
+
+  const outputCostUsd =
+    (outputTokens / 1000000) *
+    REGION_TODAY_INFO_TRANSLATION_OUTPUT_COST_PER_MILLION_USD;
+
+  return (
+    inputCostUsd +
+    outputCostUsd
+  );
+}
+
+// 翻訳先言語のみを指示する(area/name/time/place/descriptionだけを翻訳
+// 対象にする、本部指示)。sourceは無理な意訳で一次情報の識別性を壊さない
+// ため、isOfficial/isDateValidはbooleanのため、いずれも翻訳対象に含めず
+// 原文からそのまま引き継ぐ(呼び出し側のbuildTranslatedRegionTodayInfoFindings()
+// が実施)。件数・対応関係(index)を変えないことを強く指示し、事実の
+// 追加・削除・要約・日付/時間/場所の変更・新しい検索を明示的に禁止する。
+function buildRegionTodayInfoTranslationPrompt(
+  findings,
+  targetLanguage
+) {
+  // 言語コードをそのまま自然言語名としてプロンプトへ埋め込まない
+  // (将来言語を増やす際にこの対応表へ追記するだけでよい設計にする)。
+  const targetLanguageNamesByCode =
+    {
+      en: "English"
+    };
+
+  const targetLanguageName =
+    targetLanguageNamesByCode[targetLanguage] ||
+    targetLanguage;
+
+  const translatableFindings =
+    findings.map(
+      function(finding, index) {
+        return {
+          index: index,
+          area: finding.area,
+          name: finding.name,
+          time: finding.time,
+          place: finding.place,
+          description: finding.description
+        };
+      }
+    );
+
+  const systemInstruction =
+    "You are a precise, literal translator for a travel information " +
+    "app. You will receive a JSON array of \"findings\" (each with " +
+    "index/area/name/time/place/description) written in Japanese. " +
+    "Translate ONLY the text of area, name, time, place, and " +
+    "description into " + targetLanguageName + ". " +
+
+    "\n\nCRITICAL RULES (this is translation only, not research): " +
+    "\n- This is a pure translation task. Do not search the web, do " +
+    "not add new information, and do not verify or correct facts. " +
+    "\n- Do not add, remove, merge, split, or reorder findings. The " +
+    "output array must have exactly the same number of items as the " +
+    "input, and each item must keep its original \"index\" value " +
+    "unchanged. " +
+    "\n- Do not summarize away details — translate the full meaning of " +
+    "each field. " +
+    "\n- Do not change any date, time, or place meaning during " +
+    "translation — translate the wording only, never the underlying " +
+    "fact. Do not guess or invent an address, coordinate, or time that " +
+    "was not in the original text. " +
+    "\n- Keep organization/facility names recognizable. If you are " +
+    "confident of a commonly used " + targetLanguageName + " name for a " +
+    "well-known place, you may use it; otherwise translate/transliterate " +
+    "conservatively rather than inventing a name. " +
+
+    "\n\nOUTPUT: respond with a JSON object of exactly this form: " +
+    "{\"findings\":[{\"index\":0,\"area\":\"...\",\"name\":\"...\"," +
+    "\"time\":\"...\",\"place\":\"...\",\"description\":\"...\"}, ...]}. " +
+    "Output nothing else — no preamble, no explanation, no markdown.";
+
+  const userContent =
+    JSON.stringify(
+      {
+        findings: translatableFindings
+      }
+    );
+
+  return {
+    systemInstruction: systemInstruction,
+    userContent: userContent
+  };
+}
+
+// AIの翻訳結果を検証し、原文と1対1で対応する安全なfindings配列を組み立てる。
+// 件数不一致・index不一致・必須項目の欠落があれば、無理に補わずnullを返す
+// (呼び出し側は翻訳失敗として扱い、保存しない)。source/isOfficial/
+// isDateValidは翻訳せず原文からそのまま引き継ぐ(本部指示)。
+function buildTranslatedRegionTodayInfoFindings(
+  originalFindings,
+  aiResponseFindings
+) {
+  if (
+    !Array.isArray(aiResponseFindings) ||
+    aiResponseFindings.length !==
+      originalFindings.length
+  ) {
+    return null;
+  }
+
+  const translatedFindings =
+    [];
+
+  for (
+    let index = 0;
+    index < originalFindings.length;
+    index += 1
+  ) {
+    const aiItem =
+      aiResponseFindings[index];
+
+    if (
+      !aiItem ||
+      typeof aiItem !== "object" ||
+      aiItem.index !== index
+    ) {
+      return null;
+    }
+
+    const originalFinding =
+      originalFindings[index];
+
+    const description =
+      stripCitationArtifactsFromAiText(
+        sanitizeRegionEditorialText(
+          aiItem.description,
+          REGION_TODAY_INFO_FIELD_MAX_LENGTHS.description
+        )
+      );
+
+    if (description === "") {
+      return null;
+    }
+
+    translatedFindings.push(
+      {
+        area:
+          sanitizeRegionEditorialText(
+            aiItem.area,
+            REGION_TODAY_INFO_FIELD_MAX_LENGTHS.area
+          ),
+
+        name:
+          sanitizeRegionEditorialText(
+            aiItem.name,
+            REGION_TODAY_INFO_FIELD_MAX_LENGTHS.name
+          ),
+
+        time:
+          sanitizeRegionEditorialText(
+            aiItem.time,
+            REGION_TODAY_INFO_FIELD_MAX_LENGTHS.time
+          ),
+
+        place:
+          sanitizeRegionEditorialText(
+            aiItem.place,
+            REGION_TODAY_INFO_FIELD_MAX_LENGTHS.place
+          ),
+
+        description: description,
+
+        // 翻訳対象外(本部指示)：原文をそのまま引き継ぐ。
+        source: originalFinding.source,
+        isOfficial: originalFinding.isOfficial,
+        isDateValid: originalFinding.isDateValid
+      }
+    );
+  }
+
+  return translatedFindings;
+}
+
+async function callOpenAiRegionTodayInfoTranslation(
+  findings,
+  targetLanguage
+) {
+  const apiKey =
+    process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    const configError =
+      new Error("OPENAI_API_KEY が設定されていません。");
+
+    configError.isMissingApiKey =
+      true;
+
+    throw configError;
+  }
+
+  const prompt =
+    buildRegionTodayInfoTranslationPrompt(
+      findings,
+      targetLanguage
+    );
+
+  const controller =
+    new AbortController();
+
+  const timeoutId =
+    setTimeout(
+      function() {
+        controller.abort();
+      },
+      REGION_TODAY_INFO_TRANSLATION_TIMEOUT_MS
+    );
+
+  let response;
+
+  try {
+    try {
+      response =
+        await fetch(
+          REGION_TODAY_INFO_TRANSLATION_ENDPOINT,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer " + apiKey
+            },
+
+            body: JSON.stringify({
+              model: REGION_TODAY_INFO_TRANSLATION_MODEL,
+              response_format: { type: "json_object" },
+
+              messages: [
+                {
+                  role: "system",
+                  content: prompt.systemInstruction
+                },
+
+                {
+                  role: "user",
+                  content: prompt.userContent
+                }
+              ]
+            }),
+
+            signal: controller.signal
+          }
+        );
+    } catch (fetchError) {
+      if (fetchError.name === "AbortError") {
+        const timeoutError =
+          new Error("広域地域情報の翻訳がタイムアウトしました。");
+
+        timeoutError.isTransient =
+          true;
+
+        timeoutError.isTimeout =
+          true;
+
+        throw timeoutError;
+      }
+
+      const networkError =
+        new Error("広域地域情報の翻訳呼び出しに失敗しました。");
+
+      networkError.isTransient =
+        true;
+
+      networkError.isNetworkError =
+        true;
+
+      throw networkError;
+    }
+  } finally {
+    clearTimeout(
+      timeoutId
+    );
+  }
+
+  if (!response.ok) {
+    const httpError =
+      new Error(
+        "OpenAI APIがエラーを返しました。status=" + response.status
+      );
+
+    httpError.isHttpError =
+      true;
+
+    httpError.httpStatus =
+      response.status;
+
+    httpError.isTransient =
+      true;
+
+    throw httpError;
+  }
+
+  let responseData;
+
+  try {
+    responseData =
+      await response.json();
+  } catch (jsonError) {
+    const parseError =
+      new Error("OpenAI APIの応答を解析できませんでした。");
+
+    parseError.isJsonError =
+      true;
+
+    parseError.isTransient =
+      true;
+
+    throw parseError;
+  }
+
+  const messageContent =
+    responseData &&
+    Array.isArray(responseData.choices) &&
+    responseData.choices[0] &&
+    responseData.choices[0].message &&
+    typeof responseData.choices[0].message.content === "string"
+      ? responseData.choices[0].message.content
+      : "";
+
+  if (messageContent === "") {
+    const shapeError =
+      new Error("OpenAI APIの応答形式が不正です。");
+
+    shapeError.isJsonError =
+      true;
+
+    shapeError.isTransient =
+      true;
+
+    throw shapeError;
+  }
+
+  let parsedContent;
+
+  try {
+    parsedContent =
+      JSON.parse(messageContent);
+  } catch (contentParseError) {
+    const shapeError =
+      new Error("広域地域情報の翻訳結果がJSON形式ではありませんでした。");
+
+    shapeError.isJsonError =
+      true;
+
+    shapeError.isTransient =
+      true;
+
+    throw shapeError;
+  }
+
+  const translatedFindings =
+    buildTranslatedRegionTodayInfoFindings(
+      findings,
+      Array.isArray(parsedContent.findings)
+        ? parsedContent.findings
+        : null
+    );
+
+  if (translatedFindings === null) {
+    // 件数・対応関係が一致しない翻訳結果は保存しない(本部指示：原文との
+    // 対応保証)。一時的な不整合として扱い、再試行可能にする。
+    const mismatchError =
+      new Error(
+        "広域地域情報の翻訳結果の件数または対応関係が一致しませんでした。"
+      );
+
+    mismatchError.isTransient =
+      true;
+
+    throw mismatchError;
+  }
+
+  const usage =
+    responseData.usage
+      ? {
+          // Chat Completions APIのusageはprompt_tokens/completion_tokens
+          // (Responses APIのinput_tokens/output_tokensとは異なる名前)。
+          inputTokens:
+            typeof responseData.usage.prompt_tokens === "number"
+              ? responseData.usage.prompt_tokens
+              : null,
+
+          outputTokens:
+            typeof responseData.usage.completion_tokens === "number"
+              ? responseData.usage.completion_tokens
+              : null,
+
+          totalTokens:
+            typeof responseData.usage.total_tokens === "number"
+              ? responseData.usage.total_tokens
+              : null
+        }
+      : null;
+
+  const estimatedCostUsd =
+    usage &&
+    typeof usage.inputTokens === "number" &&
+    typeof usage.outputTokens === "number"
+      ? calculateRegionTodayInfoTranslationEstimatedCostUsd(
+          usage.inputTokens,
+          usage.outputTokens
+        )
+      : null;
+
+  return {
+    findings: translatedFindings,
+    usage: usage,
+    estimatedCostUsd: estimatedCostUsd
+  };
+}
+
+// runTransaction()による翻訳の二重生成防止。既存のclaimRegionTodayInfoGeneration()
+// と全く同じパターンを、document内のネストしたtranslations.{language}
+// フィールドに対して適用する。Firestoreのtransaction.update()はドット区切り
+// フィールドパスを厳密にその1箇所だけへ適用するため(setのmerge:trueと違い
+// 兄弟言語のtranslationsを巻き込まない)、他言語の翻訳や既存のjaデータ
+// (status/findings等)には一切影響しない。
+async function claimRegionTodayInfoTranslationGeneration(
+  database,
+  documentId,
+  language,
+  sourceHash
+) {
+  const documentRef =
+    database
+      .collection(
+        REGION_TODAY_INFO_RESULTS_COLLECTION
+      )
+      .doc(
+        documentId
+      );
+
+  return database.runTransaction(
+    async function(transaction) {
+      const snapshot =
+        await transaction.get(
+          documentRef
+        );
+
+      if (!snapshot.exists) {
+        return {
+          outcome: "error"
+        };
+      }
+
+      const data =
+        snapshot.data() || {};
+
+      const existingTranslations =
+        data.translations &&
+        typeof data.translations === "object"
+          ? data.translations
+          : {};
+
+      const existingTranslation =
+        existingTranslations[language];
+
+      if (
+        existingTranslation &&
+        existingTranslation.status === "ready" &&
+        existingTranslation.sourceHash === sourceHash
+      ) {
+        return {
+          outcome: "ready",
+
+          findings:
+            Array.isArray(existingTranslation.findings)
+              ? existingTranslation.findings
+              : []
+        };
+      }
+
+      if (
+        existingTranslation &&
+        existingTranslation.status === "generating"
+      ) {
+        const startedAtMillis =
+          existingTranslation.generatingStartedAt &&
+          typeof existingTranslation.generatingStartedAt.toMillis === "function"
+            ? existingTranslation.generatingStartedAt.toMillis()
+            : null;
+
+        const isStale =
+          startedAtMillis === null ||
+          (
+            Date.now() -
+            startedAtMillis
+          ) >
+            REGION_TODAY_INFO_TRANSLATION_GENERATING_STALE_MS;
+
+        if (!isStale) {
+          return {
+            outcome: "generating"
+          };
+        }
+
+        // stale：このリクエストが再度生成権を獲得する(下へ続く)。
+      }
+
+      // 未生成・ready済みだがsourceHash不一致(原文更新)・stale generating・
+      // errorのいずれも、ここで新規に翻訳の生成権を獲得する。
+      const translationFieldPath =
+        "translations." +
+        language;
+
+      const update =
+        {};
+
+      update[translationFieldPath] =
+        {
+          status: "generating",
+          sourceHash: sourceHash,
+
+          generatingStartedAt:
+            FieldValue.serverTimestamp(),
+
+          updatedAt:
+            FieldValue.serverTimestamp()
+        };
+
+      transaction.update(
+        documentRef,
+        update
+      );
+
+      return {
+        outcome: "claimed"
+      };
+    }
+  );
+}
+
+async function saveRegionTodayInfoTranslationReadyResult(
+  database,
+  documentId,
+  language,
+  sourceHash,
+  translationResult
+) {
+  const translationFieldPath =
+    "translations." +
+    language;
+
+  const update =
+    {};
+
+  update[translationFieldPath] =
+    {
+      status: "ready",
+      sourceHash: sourceHash,
+      findings: translationResult.findings,
+      model: REGION_TODAY_INFO_TRANSLATION_MODEL,
+      usage: translationResult.usage,
+      estimatedCostUsd: translationResult.estimatedCostUsd,
+
+      generatedAt:
+        FieldValue.serverTimestamp(),
+
+      updatedAt:
+        FieldValue.serverTimestamp()
+    };
+
+  await database
+    .collection(
+      REGION_TODAY_INFO_RESULTS_COLLECTION
+    )
+    .doc(
+      documentId
+    )
+    .update(
+      update
+    );
+}
+
+async function saveRegionTodayInfoTranslationErrorResult(
+  database,
+  documentId,
+  language
+) {
+  const update =
+    {};
+
+  update["translations." + language + ".status"] =
+    "error";
+
+  update["translations." + language + ".updatedAt"] =
+    FieldValue.serverTimestamp();
+
+  await database
+    .collection(
+      REGION_TODAY_INFO_RESULTS_COLLECTION
+    )
+    .doc(
+      documentId
+    )
+    .update(
+      update
+    );
+}
+
 // 本番公開機能(旅行者向け)｜cityInfoGet/socialPatrolと同じ認証方式
 // (有効なFirebase IDトークンを持つユーザーなら誰でも可、匿名認証も許可)を
 // 採用する。Admin限定にしない。
@@ -8981,6 +9665,23 @@ async function handleRegionTodayInfoGetRequest(
       readRequestBody(
         request
       );
+
+    // languageはクライアント入力のため、許可リスト(サーバー側で独立管理、
+    // REGION_TODAY_INFO_SUPPORTED_LANGUAGES)と厳密に突き合わせる。任意
+    // 文字列をそのままpromptやFirestore field pathへ渡さない(本部指示)。
+    // 未指定・不正値は必ず原文言語(ja)として扱う(既存の日本語利用者の
+    // 挙動を一切変えない)。
+    const requestedLanguage =
+      typeof requestBody.language === "string"
+        ? requestBody.language
+        : REGION_TODAY_INFO_SOURCE_LANGUAGE;
+
+    const language =
+      REGION_TODAY_INFO_SUPPORTED_LANGUAGES.includes(
+        requestedLanguage
+      )
+        ? requestedLanguage
+        : REGION_TODAY_INFO_SOURCE_LANGUAGE;
 
     const latitude =
       getValidatedCoordinateOrNull(
@@ -9093,63 +9794,187 @@ async function handleRegionTodayInfoGetRequest(
         }
       );
 
+    // 日本語(readyJaChecked/readyJaFindings)を確定させるまでは、既存の
+    // ja専用ロジック(claimRegionTodayInfoGeneration()・
+    // callOpenAiRegionTodayInfoResearch()・saveRegionTodayInfoReadyResult())
+    // を一切変更しない。languageがjaの場合はここで確定した日本語結果を
+    // そのまま返す(既存動作と完全に同じ)。languageが非jaの場合だけ、
+    // この後で翻訳キャッシュを確認・生成する。
+
+    let readyJaChecked;
+    let readyJaFindings;
+
     if (claimResult.outcome === "ready") {
+      readyJaChecked =
+        claimResult.data.checked === true;
+
+      readyJaFindings =
+        Array.isArray(claimResult.data.findings)
+          ? claimResult.data.findings
+          : [];
+    } else if (claimResult.outcome === "generating") {
+      return response.status(200).json({
+        success: true,
+        status: "generating"
+      });
+    } else {
+      // claimResult.outcome === "claimed"：このリクエストだけがLunaを呼ぶ。
+      let researchResult;
+
+      try {
+        researchResult =
+          await callOpenAiRegionTodayInfoResearch(
+            {
+              countryName:
+                countryName !== ""
+                  ? countryName
+                  : countryCode,
+
+              regionName: regionName,
+              municipality: municipality,
+              localDate: localDateResult.localDate
+            }
+          );
+      } catch (aiError) {
+        console.error(
+          "広域地域情報：生成エラー：",
+          aiError
+        );
+
+        try {
+          await saveRegionTodayInfoErrorResult(
+            database,
+            documentId
+          );
+        } catch (saveErrorAfterAiError) {
+          console.error(
+            "広域地域情報：エラー状態の保存にも失敗：",
+            saveErrorAfterAiError
+          );
+        }
+
+        return response.status(200).json({
+          success: false,
+          status: "error",
+          message: "地域情報の取得中にエラーが発生しました。"
+        });
+      }
+
+      try {
+        await saveRegionTodayInfoReadyResult(
+          database,
+          documentId,
+          researchResult
+        );
+      } catch (saveError) {
+        // 保存に失敗しても、今回生成した結果はそのまま返す(socialPatrolと
+        // 同じ考え方。次回アクセス時は未保存のため再実行されるだけ)。
+        console.error(
+          "広域地域情報：保存エラー：",
+          saveError
+        );
+      }
+
+      readyJaChecked =
+        researchResult.checked;
+
+      readyJaFindings =
+        researchResult.findings;
+    }
+
+    // 多言語化 Phase A｜languageがja(既定値含む)ならここで確定済みの
+    // 日本語結果をそのまま返す(既存動作と完全に同じ、翻訳APIは一切呼ばない)。
+    if (language === REGION_TODAY_INFO_SOURCE_LANGUAGE) {
       return response.status(200).json({
         success: true,
         status: "ready",
-
-        checked:
-          claimResult.data.checked === true,
-
-        findings:
-          Array.isArray(claimResult.data.findings)
-            ? claimResult.data.findings
-            : []
+        checked: readyJaChecked,
+        findings: readyJaFindings
       });
     }
 
-    if (claimResult.outcome === "generating") {
+    // 翻訳対象が0件なら翻訳する内容が無い(翻訳APIを呼ぶ必要が無い)。
+    if (readyJaFindings.length === 0) {
+      return response.status(200).json({
+        success: true,
+        status: "ready",
+        checked: readyJaChecked,
+        findings: []
+      });
+    }
+
+    const sourceHash =
+      computeRegionTodayInfoFindingsHash(
+        readyJaFindings
+      );
+
+    const translationClaimResult =
+      await claimRegionTodayInfoTranslationGeneration(
+        database,
+        documentId,
+        language,
+        sourceHash
+      );
+
+    if (translationClaimResult.outcome === "ready") {
+      return response.status(200).json({
+        success: true,
+        status: "ready",
+        checked: true,
+        findings: translationClaimResult.findings
+      });
+    }
+
+    if (translationClaimResult.outcome === "generating") {
       return response.status(200).json({
         success: true,
         status: "generating"
       });
     }
 
-    // claimResult.outcome === "claimed"：このリクエストだけがLunaを呼ぶ。
-    let researchResult;
+    if (translationClaimResult.outcome === "error") {
+      // 親document自体が無い等の異常系(通常到達しない)。既存UIを壊さない
+      // 最も安全なフォールバックとして、既存のエラー表示経路(セクションを
+      // 静かに非表示にする)をそのまま使う。
+      return response.status(200).json({
+        success: false,
+        status: "error",
+        message: "地域情報の取得中にエラーが発生しました。"
+      });
+    }
+
+    // translationClaimResult.outcome === "claimed"：
+    // このリクエストだけが翻訳を生成する。
+    let translationResult;
 
     try {
-      researchResult =
-        await callOpenAiRegionTodayInfoResearch(
-          {
-            countryName:
-              countryName !== ""
-                ? countryName
-                : countryCode,
-
-            regionName: regionName,
-            municipality: municipality,
-            localDate: localDateResult.localDate
-          }
+      translationResult =
+        await callOpenAiRegionTodayInfoTranslation(
+          readyJaFindings,
+          language
         );
-    } catch (aiError) {
+    } catch (translationError) {
       console.error(
-        "広域地域情報：生成エラー：",
-        aiError
+        "広域地域情報：翻訳生成エラー：",
+        translationError
       );
 
       try {
-        await saveRegionTodayInfoErrorResult(
+        await saveRegionTodayInfoTranslationErrorResult(
           database,
-          documentId
+          documentId,
+          language
         );
-      } catch (saveErrorAfterAiError) {
+      } catch (saveErrorAfterTranslationError) {
         console.error(
-          "広域地域情報：エラー状態の保存にも失敗：",
-          saveErrorAfterAiError
+          "広域地域情報：翻訳エラー状態の保存にも失敗：",
+          saveErrorAfterTranslationError
         );
       }
 
+      // 本部指示：失敗した日本語本文を「翻訳済み」として保存・返却しない。
+      // 既存UIを壊さない最も安全なフォールバックとして、既存のエラー
+      // 表示経路(セクションを静かに非表示にする)をそのまま使う。
       return response.status(200).json({
         success: false,
         status: "error",
@@ -9158,25 +9983,27 @@ async function handleRegionTodayInfoGetRequest(
     }
 
     try {
-      await saveRegionTodayInfoReadyResult(
+      await saveRegionTodayInfoTranslationReadyResult(
         database,
         documentId,
-        researchResult
+        language,
+        sourceHash,
+        translationResult
       );
-    } catch (saveError) {
-      // 保存に失敗しても、今回生成した結果はそのまま返す(socialPatrolと
-      // 同じ考え方。次回アクセス時は未保存のため再実行されるだけ)。
+    } catch (saveTranslationError) {
+      // 保存に失敗しても、今回生成した翻訳結果はそのまま返す(既存のja側
+      // 保存失敗時と同じ考え方)。
       console.error(
-        "広域地域情報：保存エラー：",
-        saveError
+        "広域地域情報：翻訳保存エラー：",
+        saveTranslationError
       );
     }
 
     return response.status(200).json({
       success: true,
       status: "ready",
-      checked: researchResult.checked,
-      findings: researchResult.findings
+      checked: true,
+      findings: translationResult.findings
     });
   } catch (error) {
     console.error(

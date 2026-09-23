@@ -227,6 +227,12 @@ function switchMachinauLanguage(language) {
   // Hero写真のalt文言(shop_image_altキー)を現在言語へ即時反映する。
   // 候補選定・画像URL・Firestore再取得は発生しない(既存候補を再利用するだけ)。
   updateHeroPhoto();
+
+  // 多言語化 Phase A｜regionTodayInfoはFirestore由来の動的コンテンツ
+  // (日本語原文そのもの)のため、他の項目と違って既に取得済みのデータを
+  // 再描画するだけでは正しい言語にならない。既存APIへ選択言語を伝えて
+  // 再取得する(サーバー側の翻訳キャッシュがあればOpenAI再実行は発生しない)。
+  refreshRegionTodayInfoForCurrentLanguage();
 }
 
 function initializeMachinauLanguageSwitcher() {
@@ -11625,7 +11631,12 @@ async function fetchRegionTodayInfoOnce(
           countryName: locationHierarchy.countryName,
           regionKey: locationHierarchy.regionKey,
           regionName: locationHierarchy.regionName,
-          municipality: locationHierarchy.municipality
+          municipality: locationHierarchy.municipality,
+
+          // 多言語化 Phase A｜独自の言語状態は作らず、既存の
+          // getCurrentMachinauLanguage()をそのまま使う(本部指示)。
+          language:
+            getCurrentMachinauLanguage()
         })
       }
     );
@@ -11665,6 +11676,18 @@ function waitForMilliseconds(
   );
 }
 
+// 多言語化 Phase A｜言語切替時に再取得するため、直近のGPS取得結果を
+// 覚えておく(新しいGPS取得は発生させない、既存のuserLatitude/
+// userLongitude等とは別に、regionTodayInfo専用の値として保持する)。
+let lastRegionTodayInfoLatitude =
+  null;
+
+let lastRegionTodayInfoLongitude =
+  null;
+
+let lastRegionTodayInfoLocationHierarchy =
+  null;
+
 async function triggerRegionTodayInfo(
   latitude,
   longitude,
@@ -11685,6 +11708,15 @@ async function triggerRegionTodayInfo(
     // 同じ考え方)。
     return;
   }
+
+  lastRegionTodayInfoLatitude =
+    latitude;
+
+  lastRegionTodayInfoLongitude =
+    longitude;
+
+  lastRegionTodayInfoLocationHierarchy =
+    locationHierarchy;
 
   currentRegionTodayInfoMunicipality =
     typeof locationHierarchy.municipality === "string"
@@ -11802,6 +11834,30 @@ async function triggerRegionTodayInfo(
     renderRegionTodayInfo();
     renderCityNowGuidance();
   }
+}
+
+// 多言語化 Phase A｜言語切替のたびに新しいGPS取得は発生させず、直近の
+// 緯度経度・地域階層情報をそのまま使って再取得する。取得先は既存の
+// triggerRegionTodayInfo()そのもの(新しい取得経路は作らない)。サーバー側が
+// 既にその言語の翻訳キャッシュを持っていれば、OpenAI翻訳APIは呼ばれず
+// Firestoreの保存済み結果がそのまま返る(本部指示：言語切替のたびにAI翻訳
+// APIを呼ばない)。GPSがまだ一度も成功していない場合は何もしない
+// (regionTodayInfoセクション自体がまだ表示されていないため)。
+function refreshRegionTodayInfoForCurrentLanguage() {
+  if (
+    lastRegionTodayInfoLatitude === null ||
+    lastRegionTodayInfoLongitude === null ||
+    !lastRegionTodayInfoLocationHierarchy
+  ) {
+    return;
+  }
+
+  triggerRegionTodayInfo(
+    lastRegionTodayInfoLatitude,
+    lastRegionTodayInfoLongitude,
+    lastRegionTodayInfoLocationHierarchy,
+    machinauSuggestionGpsSessionId
+  );
 }
 
 // 件数を含む「もっと見る」ボタン文言。既存の翻訳方式は固定文言のみを
