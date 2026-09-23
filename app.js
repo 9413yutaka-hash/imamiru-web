@@ -13799,6 +13799,131 @@ if (regionRecommendationBackToCurrentButtonElement) {
 }
 
 
+// TOPヒーロー緊急変更｜新ヒーローの4入口(#heroActionToday/#heroActionNearby/
+// #heroActionArea/#heroActionReads)を、既存の各セクション・既存処理へ
+// 接続する。新しい機能・新しいGPS/地域選択ロジックは一切作らず、
+// 既存の該当要素をsmooth scrollまたはclick代理実行するだけの薄い配線。
+const heroActionTodayElement =
+  document.getElementById(
+    "heroActionToday"
+  );
+
+if (heroActionTodayElement) {
+  heroActionTodayElement.addEventListener(
+    "click",
+    function() {
+      const targetSection =
+        document.getElementById(
+          "regionTodayInfoSection"
+        );
+
+      if (targetSection) {
+        targetSection.scrollIntoView(
+          {
+            behavior: "smooth",
+            block: "start"
+          }
+        );
+      }
+    }
+  );
+}
+
+const heroActionNearbyElement =
+  document.getElementById(
+    "heroActionNearby"
+  );
+
+if (heroActionNearbyElement) {
+  heroActionNearbyElement.addEventListener(
+    "click",
+    function() {
+      // 既存locationButtonのonclick(ensureGoogleMapsLoaded()＋
+      // getLocation())をそのまま起動する。GPS取得ロジック自体は
+      // 複製しない。
+      const locationButtonElement =
+        document.getElementById(
+          "locationButton"
+        );
+
+      if (locationButtonElement) {
+        locationButtonElement.scrollIntoView(
+          {
+            behavior: "smooth",
+            block: "center"
+          }
+        );
+
+        locationButtonElement.click();
+      }
+    }
+  );
+}
+
+const heroActionAreaElement =
+  document.getElementById(
+    "heroActionArea"
+  );
+
+if (heroActionAreaElement) {
+  heroActionAreaElement.addEventListener(
+    "click",
+    function() {
+      const targetSection =
+        document.getElementById(
+          "regionRecommendationSection"
+        );
+
+      if (targetSection) {
+        targetSection.scrollIntoView(
+          {
+            behavior: "smooth",
+            block: "start"
+          }
+        );
+      }
+
+      // 既存の「ほかの地域を見る」トグル処理(表示/非表示の切替のみ)を
+      // そのまま起動する。地域選択ロジック自体は複製しない。
+      const otherAreaButtonElement =
+        document.getElementById(
+          "regionRecommendationOtherAreaButton"
+        );
+
+      if (otherAreaButtonElement) {
+        otherAreaButtonElement.click();
+      }
+    }
+  );
+}
+
+const heroActionReadsElement =
+  document.getElementById(
+    "heroActionReads"
+  );
+
+if (heroActionReadsElement) {
+  heroActionReadsElement.addEventListener(
+    "click",
+    function() {
+      const targetSection =
+        document.getElementById(
+          "columnEntrySection"
+        );
+
+      if (targetSection) {
+        targetSection.scrollIntoView(
+          {
+            behavior: "smooth",
+            block: "start"
+          }
+        );
+      }
+    }
+  );
+}
+
+
 // 「⚡ 今、知っておきたいこと」統合表示。
 // updateFlashBanner()・shopMatchesFlashBannerKeywords()・
 // selectSuggestionCandidate()・updateSuggestionCard()のいずれの本体も

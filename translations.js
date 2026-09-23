@@ -33,6 +33,59 @@ const MACHINAU_TRANSLATIONS = {
     en: "Machinau — hear what's happening in your city right now"
   },
 
+  // TOPヒーロー緊急変更｜新ヒーロー(背景画像＋本物のHTML)の
+  // メイン/サブコピー・4入口(hero_action_*)。下のhero_heading/hero_kicker
+  // (STEP3の旧ヒーロー由来、参照箇所なし)とは別物。
+  hero_main_copy: {
+    ja: "沖縄の今を知れば、<br>もっと、いい旅になる。",
+    en: "Know what's happening in Okinawa,<br>and make your trip even better."
+  },
+
+  hero_sub_copy: {
+    ja: "天気・交通・おでかけ情報で、<br>沖縄の「今」をあなたに。",
+    en: "Weather, transportation, and things to do—<br>Okinawa's “now,” right when you need it."
+  },
+
+  hero_action_today_title: {
+    ja: "今日の沖縄",
+    en: "Today in Okinawa"
+  },
+
+  hero_action_today_caption: {
+    ja: "天気・災害・運行情報",
+    en: "Weather, alerts & transportation"
+  },
+
+  hero_action_nearby_title: {
+    ja: "近くを探す",
+    en: "Near Me"
+  },
+
+  hero_action_nearby_caption: {
+    ja: "今いる場所から",
+    en: "From where you are now"
+  },
+
+  hero_action_area_title: {
+    ja: "エリアから探す",
+    en: "Explore by Area"
+  },
+
+  hero_action_area_caption: {
+    ja: "市町村・エリアで",
+    en: "Cities & areas"
+  },
+
+  hero_action_reads_title: {
+    ja: "マチナウ読み物",
+    en: "Machinau Reads"
+  },
+
+  hero_action_reads_caption: {
+    ja: "旅のヒント・ストーリー",
+    en: "Travel tips & stories"
+  },
+
   // トップ画面再設計 STEP3で旧ヒーローのDOMは削除したが、キーは既存の
   // 「削除せず残す」方針に合わせて残置する(参照箇所は無くなったが、
   // データとして残しても実害が無いため)。

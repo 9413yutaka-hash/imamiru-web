@@ -718,22 +718,63 @@
     </div>
   </header>
 
-  <!-- トップ画面再設計 STEP4｜代表承認済みの実写バナー画像を新しいビジュアル
-       入口として採用。画像内に既に「マチナウ、今の街の声を聞こう！」の
-       文言が入っているため、STEP3のopening-intro(HTMLテキストのみの
-       見出し)は削除し、二重表示にしない(opening_headingキー自体は
-       translations.jsに残置し、将来言語ごとのメインコピーをHTML側で
-       出す余地は残す)。既存のheroPhoto実投稿写真枠(#heroPhotoWrapper等、
-       GPS/Firestoreの既存ロジックは無変更のまま)をこのビジュアル直下へ
-       再配置して活かす。 -->
+  <!-- TOPヒーロー緊急変更｜旧opening-visual-banner.png(文言・4分類ボタン・
+       矢印・ドットが画像へ焼き込まれた1枚絵)を廃止し、背景(実写画像)と
+       操作部分(本物のHTML)を分離した新ヒーローに置き換える。画像には
+       一切の文字・ボタンを焼き込まない(本部の最重要指示)。既存の
+       heroPhoto実投稿写真枠(#heroPhotoWrapper等、GPS/Firestoreの既存
+       ロジックは無変更のまま)は、このヒーロー直下に既存どおり再配置して
+       活かす(DOM上の位置・.opening-visual-photo-area配下の構造は無変更)。
+       class名はhero-*という汎用名にし、国名(okinawa等)をDOM/CSSへ
+       埋め込まない(将来の他地域展開を妨げない、本部指示)。 -->
   <section class="opening-visual">
 
-    <img
-      class="opening-visual-banner"
-      src="opening-visual-banner.png"
-      data-i18n-alt="opening_visual_alt"
-      alt="マチナウ、今の街の声を聞こう！"
-    >
+    <section class="hero-section" id="heroSection">
+
+      <div class="hero-background" aria-hidden="true"></div>
+      <div class="hero-overlay" aria-hidden="true"></div>
+
+      <div class="hero-content">
+
+        <h1 class="hero-main-copy" data-i18n="hero_main_copy">
+          沖縄の今を知れば、<br>もっと、いい旅になる。
+        </h1>
+
+        <p class="hero-sub-copy" data-i18n="hero_sub_copy">
+          天気・交通・おでかけ情報で、<br>沖縄の「今」をあなたに。
+        </p>
+
+        <div class="hero-action-grid">
+
+          <button type="button" class="hero-action-card" id="heroActionToday">
+            <span class="hero-action-icon" aria-hidden="true">☀️</span>
+            <span class="hero-action-title" data-i18n="hero_action_today_title">今日の沖縄</span>
+            <span class="hero-action-caption" data-i18n="hero_action_today_caption">天気・災害・運行情報</span>
+          </button>
+
+          <button type="button" class="hero-action-card" id="heroActionNearby">
+            <span class="hero-action-icon" aria-hidden="true">📍</span>
+            <span class="hero-action-title" data-i18n="hero_action_nearby_title">近くを探す</span>
+            <span class="hero-action-caption" data-i18n="hero_action_nearby_caption">今いる場所から</span>
+          </button>
+
+          <button type="button" class="hero-action-card" id="heroActionArea">
+            <span class="hero-action-icon" aria-hidden="true">🗺️</span>
+            <span class="hero-action-title" data-i18n="hero_action_area_title">エリアから探す</span>
+            <span class="hero-action-caption" data-i18n="hero_action_area_caption">市町村・エリアで</span>
+          </button>
+
+          <button type="button" class="hero-action-card" id="heroActionReads">
+            <span class="hero-action-icon" aria-hidden="true">📖</span>
+            <span class="hero-action-title" data-i18n="hero_action_reads_title">マチナウ読み物</span>
+            <span class="hero-action-caption" data-i18n="hero_action_reads_caption">旅のヒント・ストーリー</span>
+          </button>
+
+        </div>
+
+      </div>
+
+    </section>
 
     <div class="opening-visual-photo-area">
       <div id="heroPhotoWrapper" class="opening-visual-photo-wrapper" style="display:none;">
