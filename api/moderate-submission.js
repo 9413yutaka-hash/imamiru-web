@@ -1428,6 +1428,185 @@ async function handleAdminUpdateStoreAccountNameRequest(
 }
 
 
+// 店舗管理Phase3 STEP3｜店舗別投稿履歴。storeId(永続識別子)のみで紐付け、
+// 店舗名では一切照合しない(本部指示：storeAccounts.storeNameを後から
+// 変更しても、過去submissionsのstoreIdは不変のため紐付けが崩れない)。
+// Firestoreクエリはstoreの等値whereのみ(orderBy(createdAt)を組み合わせない、
+// 新しい複合indexを要求しない設計、本部指示)。並べ替えはこの関数内の
+// JS配列sortで行う。publisherType==="verified_shop"の絞り込みも、
+// Firestore側の追加whereではなく取得後のJSフィルタで行う(同じ理由)。
+// レスポンスにはendCodeHash/tokenHash等の秘密情報を一切含めない。
+async function handleAdminListStoreSubmissionsRequest(
+  request,
+  response
+) {
+  try {
+    const authResult =
+      await requireAdmin(
+        request
+      );
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({
+        success: false,
+        message: authResult.message
+      });
+    }
+
+    const database =
+      authResult.database;
+
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    const storeId =
+      typeof requestBody.storeId === "string"
+        ? requestBody.storeId.trim()
+        : "";
+
+    if (storeId === "") {
+      return response.status(400).json({
+        success: false,
+        message: "storeIdを指定してください。"
+      });
+    }
+
+    const storeAccountSnapshot =
+      await database
+        .collection(STORE_ACCOUNTS_COLLECTION)
+        .doc(storeId)
+        .get();
+
+    if (!storeAccountSnapshot.exists) {
+      return response.status(404).json({
+        success: false,
+        message: "対象の店舗が見つかりませんでした。"
+      });
+    }
+
+    const submissionsQuerySnapshot =
+      await database
+        .collection("submissions")
+        .where(
+          "storeId",
+          "==",
+          storeId
+        )
+        .get();
+
+    const currentTimeMillis =
+      Date.now();
+
+    const submissions =
+      submissionsQuerySnapshot.docs
+        .filter(
+          function(documentSnapshot) {
+            const data =
+              documentSnapshot.data() ||
+              {};
+
+            // 認証済み店舗投稿(handleShopSubmissionCreateRequest経由)だけを
+            // 対象にする。過去の一般shop投稿・運営による店舗紹介には
+            // publisherType:"verified_shop"が存在しないため自然に除外される。
+            return data.publisherType === "verified_shop";
+          }
+        )
+        .map(
+          function(documentSnapshot) {
+            const data =
+              documentSnapshot.data() ||
+              {};
+
+            const createdAtMillis =
+              data.createdAt &&
+              typeof data.createdAt.toMillis === "function"
+                ? data.createdAt.toMillis()
+                : 0;
+
+            const expiresAtMillis =
+              data.expiresAt &&
+              typeof data.expiresAt.toMillis === "function"
+                ? data.expiresAt.toMillis()
+                : 0;
+
+            const status =
+              typeof data.status === "string"
+                ? data.status
+                : "";
+
+            // TOPの既存掲載判定(handlePublicSubmissionsListRequest)と同じ
+            // 基準：status==="approved" かつ (isPermanentAd===true または
+            // expiresAt > 現在時刻)。新しい独自ルールは作らない(本部指示)。
+            const isPermanentAd =
+              data.isPermanentAd === true;
+
+            const isCurrentlyLive =
+              status === "approved" &&
+              (
+                isPermanentAd ||
+                expiresAtMillis > currentTimeMillis
+              );
+
+            return {
+              documentId:
+                documentSnapshot.id,
+
+              title:
+                typeof data.title === "string"
+                  ? data.title
+                  : "",
+
+              content:
+                typeof data.content === "string"
+                  ? data.content
+                  : "",
+
+              status: status,
+
+              isCurrentlyLive: isCurrentlyLive,
+
+              createdAtMillis: createdAtMillis,
+
+              expiresAtMillis: expiresAtMillis,
+
+              publicationNumber:
+                typeof data.publicationNumber === "string"
+                  ? data.publicationNumber
+                  : ""
+            };
+          }
+        );
+
+    submissions.sort(
+      function(a, b) {
+        return (
+          b.createdAtMillis -
+          a.createdAtMillis
+        );
+      }
+    );
+
+    return response.status(200).json({
+      success: true,
+      storeId: storeId,
+      submissions: submissions
+    });
+  } catch (error) {
+    console.error(
+      "店舗別投稿履歴取得：処理エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message: "投稿履歴の取得中にエラーが発生しました。"
+    });
+  }
+}
+
+
 // Ver1.8 Phase1｜AIコンシェルジュ。モデル名はここ1箇所のみで管理し、
 // 他の箇所へハードコードしない。AI_CONCIERGE_MODEL環境変数があれば
 // それを優先する(未設定時のみ既定値を使う)。
@@ -23981,6 +24160,15 @@ export default async function handler(
     requestBody.mode === "adminUpdateStoreAccountName"
   ) {
     return handleAdminUpdateStoreAccountNameRequest(
+      request,
+      response
+    );
+  }
+
+  if (
+    requestBody.mode === "adminListStoreSubmissions"
+  ) {
+    return handleAdminListStoreSubmissionsRequest(
       request,
       response
     );

@@ -578,6 +578,121 @@
       });
     }
 
+    // 店舗管理Phase3 STEP3｜TOPの既存掲載判定(handlePublicSubmissionsListRequest、
+    // status==="approved" かつ expiresAt > 現在時刻)をサーバー側で計算した
+    // isCurrentlyLiveをそのまま使う。ここで新しい独自ルールは作らない。
+    function getStoreSubmissionStatusLabel(submission) {
+      if (submission.status === "approved") {
+        return submission.isCurrentlyLive ? "掲載中" : "終了(期限切れ)";
+      }
+
+      if (submission.status === "pending") {
+        return "審査待ち";
+      }
+
+      if (submission.status === "rejected") {
+        return "却下";
+      }
+
+      if (submission.status === "expired") {
+        return "終了";
+      }
+
+      // 実コード上、上記4値以外のstatusが存在した場合の安全なフォールバック。
+      return "不明(" + (submission.status || "未設定") + ")";
+    }
+
+    function getStoreSubmissionStatusBadgeClass(submission) {
+      if (submission.status === "approved" && submission.isCurrentlyLive) {
+        return "enabled";
+      }
+
+      if (submission.status === "pending") {
+        return "";
+      }
+
+      return "disabled";
+    }
+
+    function formatStoreSubmissionDateTime(millis) {
+      if (!millis) {
+        return "-";
+      }
+
+      try {
+        return new Date(millis).toLocaleString("ja-JP", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit"
+        });
+      } catch (error) {
+        return "-";
+      }
+    }
+
+    function buildStoreSubmissionHistoryItemHtml(submission) {
+      const statusLabel = getStoreSubmissionStatusLabel(submission);
+      const statusBadgeClass = getStoreSubmissionStatusBadgeClass(submission);
+      const content = typeof submission.content === "string" ? submission.content : "";
+      const contentPreview = content.length > 80 ? content.slice(0, 80) + "…" : content;
+
+      const metaParts = [
+        "投稿日時：" + formatStoreSubmissionDateTime(submission.createdAtMillis)
+      ];
+
+      if (submission.expiresAtMillis) {
+        metaParts.push("掲載期限：" + formatStoreSubmissionDateTime(submission.expiresAtMillis));
+      }
+
+      if (submission.publicationNumber) {
+        metaParts.push("掲載番号：" + submission.publicationNumber);
+      }
+
+      return (
+        '<div class="store-history-item" style="padding:8px 0; border-top:1px solid var(--border);">' +
+          '<div class="store-row-top">' +
+            '<span class="store-name" style="font-size:13px;">' + escapeHtmlText(submission.title || "(無題)") + '</span>' +
+            '<span class="status-badge ' + statusBadgeClass + '">' + escapeHtmlText(statusLabel) + '</span>' +
+          '</div>' +
+          '<div style="font-size:12px; color:var(--subtext); margin-top:4px;">' +
+            escapeHtmlText(metaParts.join("　/　")) +
+          '</div>' +
+          '<p style="margin:6px 0 0; font-size:13px;">' + escapeHtmlText(contentPreview) + '</p>' +
+        '</div>'
+      );
+    }
+
+    async function loadStoreSubmissionHistory(storeId, historyBox) {
+      const messageEl = historyBox.querySelector(".store-history-message");
+      const listEl = historyBox.querySelector(".store-history-list");
+
+      messageEl.textContent = "読み込んでいます…";
+      listEl.innerHTML = "";
+
+      try {
+        const responseData = await callShopsApi("adminListStoreSubmissions", {
+          storeId: storeId
+        });
+
+        const submissions = Array.isArray(responseData.submissions)
+          ? responseData.submissions
+          : [];
+
+        if (submissions.length === 0) {
+          messageEl.textContent = "この店舗からの投稿はまだありません。";
+          return;
+        }
+
+        messageEl.textContent = "";
+        listEl.innerHTML = submissions.map(buildStoreSubmissionHistoryItemHtml).join("");
+      } catch (error) {
+        console.error("投稿履歴の取得に失敗しました：", error);
+        messageEl.textContent = error.message || "投稿履歴を取得できませんでした。";
+      }
+    }
+
     function renderStoreAccounts(storeAccounts, hasAnyStores) {
       if (!Array.isArray(storeAccounts) || storeAccounts.length === 0) {
         storeList.innerHTML = hasAnyStores
@@ -603,6 +718,7 @@
               '<div class="store-row-actions">' +
                 '<button type="button" class="secondary-button" data-action="rotate">token再発行</button>' +
                 '<button type="button" class="secondary-button" data-action="rename">店舗名を編集</button>' +
+                '<button type="button" class="secondary-button" data-action="history">投稿履歴を見る</button>' +
                 '<button type="button" class="' + (storeAccount.enabled ? "danger-button" : "secondary-button") + '" data-action="toggle">' + toggleLabel + '</button>' +
               '</div>' +
               '<div class="issued-url-box store-rename-box" style="display:none;">' +
@@ -619,6 +735,10 @@
               '<div class="issued-url-box store-issued-url" style="display:none;">' +
                 '<strong>この専用URLは今だけ表示されます。必ずコピーして店舗へお渡しください。</strong>' +
                 '<div class="store-issued-url-text"></div>' +
+              '</div>' +
+              '<div class="issued-url-box store-history-box" style="display:none;">' +
+                '<div class="store-history-message"></div>' +
+                '<div class="store-history-list"></div>' +
               '</div>' +
             '</div>'
           );
@@ -728,6 +848,21 @@
 
           if (renameBox) {
             renameBox.style.display = "none";
+          }
+        } else if (action === "history") {
+          const historyBox = storeRow.querySelector(".store-history-box");
+
+          if (!historyBox) {
+            return;
+          }
+
+          if (historyBox.style.display === "none") {
+            historyBox.style.display = "";
+            actionButton.textContent = "投稿履歴を閉じる";
+            await loadStoreSubmissionHistory(storeId, historyBox);
+          } else {
+            historyBox.style.display = "none";
+            actionButton.textContent = "投稿履歴を見る";
           }
         } else if (action === "rename-save") {
           const renameInput = storeRow.querySelector(".store-rename-input");
