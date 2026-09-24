@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <meta name="robots" content="noindex, nofollow">
+
+  <title>
+    店舗専用投稿URL管理｜マチナウ運営
+  </title>
+
+  <style>
+    :root {
+      --navy: #071a33;
+      --blue: #0788c9;
+      --sky: #dff7ff;
+      --green: #19a96b;
+      --red: #ef5a67;
+      --white: #ffffff;
+      --text: #15233a;
+      --subtext: #697386;
+      --border: #e2eaf1;
+      --background: #f4f8fb;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Yu Gothic", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+      background: var(--background);
+      color: var(--text);
+    }
+
+    header {
+      background: var(--navy);
+      color: var(--white);
+      padding: 18px 20px;
+    }
+
+    header .page-label {
+      font-size: 12px;
+      opacity: 0.8;
+    }
+
+    header h1 {
+      margin: 4px 0 0;
+      font-size: 20px;
+    }
+
+    header a {
+      display: inline-block;
+      margin-top: 10px;
+      color: var(--sky);
+      font-size: 13px;
+      text-decoration: none;
+    }
+
+    main {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 20px 16px 60px;
+    }
+
+    .panel {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 24px;
+    }
+
+    .panel h2 {
+      margin: 0 0 14px;
+      font-size: 16px;
+    }
+
+    .field {
+      margin-bottom: 16px;
+    }
+
+    .field label {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .field input[type="text"],
+    .field input[type="password"] {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    .primary-button {
+      background: linear-gradient(135deg, var(--blue), #04b7d7);
+      color: var(--white);
+      border: none;
+      border-radius: 12px;
+      padding: 11px 18px;
+      font-size: 14px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .primary-button:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+    .secondary-button {
+      background: var(--white);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 8px 14px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .danger-button {
+      background: var(--white);
+      color: var(--red);
+      border: 1px solid var(--red);
+      border-radius: 10px;
+      padding: 8px 14px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .message-box {
+      font-size: 13px;
+      margin-top: 10px;
+      min-height: 1em;
+    }
+
+    .message-box.error {
+      color: var(--red);
+    }
+
+    .message-box.success {
+      color: var(--green);
+    }
+
+    #adminArea {
+      display: none;
+    }
+
+    #adminArea.visible {
+      display: block;
+    }
+
+    .store-row {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      margin-bottom: 10px;
+    }
+
+    .store-row-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .store-name {
+      font-weight: 900;
+      font-size: 14px;
+    }
+
+    .status-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 999px;
+    }
+
+    .status-badge.enabled {
+      background: #e3f7ee;
+      color: var(--green);
+    }
+
+    .status-badge.disabled {
+      background: #f1f2f5;
+      color: var(--subtext);
+    }
+
+    .store-row-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .issued-url-box {
+      margin-top: 10px;
+      padding: 10px 12px;
+      background: var(--sky);
+      border-radius: 10px;
+      font-size: 12px;
+      word-break: break-all;
+    }
+
+    .issued-url-box strong {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--navy);
+      font-size: 12px;
+    }
+
+    .empty-state {
+      color: var(--subtext);
+      font-size: 13px;
+      text-align: center;
+      padding: 16px 0;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="page-label">
+      マチナウ運営
+    </div>
+
+    <h1>
+      店舗専用投稿URL管理
+    </h1>
+
+    <a href="admin.html">
+      ← 管理トップへ戻る
+    </a>
+  </header>
+
+  <main>
+
+    <section id="loginPanel" class="panel">
+      <h2>
+        管理者ログイン
+      </h2>
+
+      <form id="loginForm" novalidate>
+        <div class="field">
+          <label for="adminEmail">
+            メールアドレス
+          </label>
+
+          <input
+            id="adminEmail"
+            type="text"
+            autocomplete="email"
+            required
+          >
+        </div>
+
+        <div class="field">
+          <label for="adminPassword">
+            パスワード
+          </label>
+
+          <input
+            id="adminPassword"
+            type="password"
+            autocomplete="current-password"
+            required
+          >
+        </div>
+
+        <button id="loginButton" class="primary-button" type="submit">
+          管理画面へログイン
+        </button>
+      </form>
+
+      <div id="loginMessage" class="message-box" role="status" aria-live="polite"></div>
+    </section>
+
+    <section id="adminArea">
+
+      <!-- 店舗専用投稿URL Phase2(1店舗MVP)｜過剰な店舗管理システムには
+           しない(本部指示)。店舗名入力・登録・専用URL発行・一覧・
+           有効/無効切替・token再発行のみの最小構成。 -->
+      <div class="panel">
+        <h2>
+          新規店舗登録
+        </h2>
+
+        <form id="createStoreForm" novalidate>
+          <div class="field">
+            <label for="newStoreNameInput">
+              店舗名(正式名称)
+            </label>
+
+            <input
+              id="newStoreNameInput"
+              type="text"
+              maxlength="50"
+              required
+            >
+          </div>
+
+          <button id="createStoreButton" class="primary-button" type="submit">
+            店舗を登録して専用URLを発行する
+          </button>
+        </form>
+
+        <div id="createStoreMessage" class="message-box" role="status" aria-live="polite"></div>
+
+        <div id="createStoreIssuedUrlBox" class="issued-url-box" style="display:none;">
+          <strong>
+            この専用URLは今だけ表示されます。必ずコピーして店舗へお渡しください。
+          </strong>
+
+          <div id="createStoreIssuedUrlText"></div>
+
+          <button
+            id="createStoreCopyButton"
+            type="button"
+            class="secondary-button"
+            style="margin-top:8px;"
+          >
+            URLをコピー
+          </button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>
+          登録済み店舗一覧
+        </h2>
+
+        <div id="storeListMessage" class="message-box" role="status" aria-live="polite"></div>
+
+        <div id="storeList"></div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore-compat.js"></script>
+  <script src="firebase.js"></script>
+
+  <script>
+    const ADMIN_EMAIL =
+      "9413yutaka@gmail.com";
+
+    function escapeHtmlText(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    // admin-column.htmlのcallColumnApi(mode, payload)と全く同じ構成
+    // (既存の管理画面API呼び出しパターンをそのまま踏襲、複製しない
+    // ロジックはFunction側のmodeハンドラに集約されている)。
+    async function getAdminIdToken() {
+      const currentUser = firebase.auth().currentUser;
+
+      if (!currentUser) {
+        throw new Error(
+          "ログイン状態を確認できませんでした。再度ログインしてください。"
+        );
+      }
+
+      return currentUser.getIdToken();
+    }
+
+    async function callShopsApi(mode, payload) {
+      const idToken = await getAdminIdToken();
+
+      const response = await fetch("/api/moderate-submission", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + idToken
+        },
+        body: JSON.stringify(Object.assign({ mode: mode }, payload || {}))
+      });
+
+      let responseData = null;
+
+      try {
+        responseData = await response.json();
+      } catch (jsonError) {
+        throw new Error("応答を読み取れませんでした。");
+      }
+
+      if (!response.ok || !responseData || responseData.success !== true) {
+        throw new Error(
+          (responseData && responseData.message) || "処理に失敗しました。"
+        );
+      }
+
+      return responseData;
+    }
+
+    const loginPanel = document.getElementById("loginPanel");
+    const adminArea = document.getElementById("adminArea");
+    const loginForm = document.getElementById("loginForm");
+    const loginButton = document.getElementById("loginButton");
+    const loginMessage = document.getElementById("loginMessage");
+
+    const createStoreForm = document.getElementById("createStoreForm");
+    const createStoreButton = document.getElementById("createStoreButton");
+    const newStoreNameInput = document.getElementById("newStoreNameInput");
+    const createStoreMessage = document.getElementById("createStoreMessage");
+    const createStoreIssuedUrlBox = document.getElementById("createStoreIssuedUrlBox");
+    const createStoreIssuedUrlText = document.getElementById("createStoreIssuedUrlText");
+    const createStoreCopyButton = document.getElementById("createStoreCopyButton");
+
+    const storeListMessage = document.getElementById("storeListMessage");
+    const storeList = document.getElementById("storeList");
+
+    function showLoginMessage(text, type) {
+      loginMessage.textContent = text;
+      loginMessage.className = "message-box" + (type ? " " + type : "");
+    }
+
+    function clearLoginMessage() {
+      loginMessage.textContent = "";
+      loginMessage.className = "message-box";
+    }
+
+    function showMessage(element, text, type) {
+      element.textContent = text;
+      element.className = "message-box" + (type ? " " + type : "");
+    }
+
+    // storeId + 生tokenから専用URLを組み立てる。post.html側の
+    // requestedStoreIdFromUrl/requestedStoreTokenFromUrlの読み取り方
+    // (mode=shop&store={storeId}&token={rawToken})とそのまま対応する。
+    function buildStoreSubmissionUrl(storeId, token) {
+      return (
+        "https://machinau.jp/post.html?mode=shop&store=" +
+        encodeURIComponent(storeId) +
+        "&token=" +
+        encodeURIComponent(token)
+      );
+    }
+
+    let lastCreatedStoreUrl = "";
+
+    createStoreForm.addEventListener("submit", async function(event) {
+      event.preventDefault();
+
+      showMessage(createStoreMessage, "", "");
+      createStoreIssuedUrlBox.style.display = "none";
+
+      const storeName = newStoreNameInput.value.trim();
+
+      if (storeName === "") {
+        showMessage(createStoreMessage, "店舗名を入力してください。", "error");
+        return;
+      }
+
+      createStoreButton.disabled = true;
+      createStoreButton.textContent = "登録しています…";
+
+      try {
+        const responseData = await callShopsApi("adminCreateStoreAccount", {
+          storeName: storeName
+        });
+
+        const issuedUrl = buildStoreSubmissionUrl(
+          responseData.storeId,
+          responseData.token
+        );
+
+        lastCreatedStoreUrl = issuedUrl;
+
+        createStoreIssuedUrlText.textContent = issuedUrl;
+        createStoreIssuedUrlBox.style.display = "";
+
+        newStoreNameInput.value = "";
+
+        showMessage(createStoreMessage, "店舗を登録しました。", "success");
+
+        await loadStoreAccounts();
+      } catch (error) {
+        console.error("店舗登録に失敗しました：", error);
+        showMessage(createStoreMessage, error.message || "登録に失敗しました。", "error");
+      } finally {
+        createStoreButton.disabled = false;
+        createStoreButton.textContent = "店舗を登録して専用URLを発行する";
+      }
+    });
+
+    createStoreCopyButton.addEventListener("click", async function() {
+      if (!lastCreatedStoreUrl) {
+        return;
+      }
+
+      try {
+        await navigator.clipboard.writeText(lastCreatedStoreUrl);
+
+        const originalText = createStoreCopyButton.textContent;
+        createStoreCopyButton.textContent = "コピーしました";
+
+        window.setTimeout(function() {
+          createStoreCopyButton.textContent = originalText;
+        }, 1500);
+      } catch (error) {
+        console.error("URLのコピーに失敗しました：", error);
+      }
+    });
+
+    function renderStoreAccounts(storeAccounts) {
+      if (!Array.isArray(storeAccounts) || storeAccounts.length === 0) {
+        storeList.innerHTML = '<p class="empty-state">登録済みの店舗はまだありません。</p>';
+        return;
+      }
+
+      storeList.innerHTML = storeAccounts
+        .map(function(storeAccount) {
+          const statusClass = storeAccount.enabled ? "enabled" : "disabled";
+          const statusLabel = storeAccount.enabled ? "有効" : "無効";
+          const toggleLabel = storeAccount.enabled ? "無効化する" : "有効化する";
+
+          return (
+            '<div class="store-row" data-store-id="' +
+            escapeHtmlText(storeAccount.storeId) +
+            '">' +
+              '<div class="store-row-top">' +
+                '<span class="store-name">' + escapeHtmlText(storeAccount.storeName) + '</span>' +
+                '<span class="status-badge ' + statusClass + '">' + statusLabel + '</span>' +
+              '</div>' +
+              '<div class="store-row-actions">' +
+                '<button type="button" class="secondary-button" data-action="rotate">token再発行</button>' +
+                '<button type="button" class="' + (storeAccount.enabled ? "danger-button" : "secondary-button") + '" data-action="toggle">' + toggleLabel + '</button>' +
+              '</div>' +
+              '<div class="issued-url-box store-issued-url" style="display:none;">' +
+                '<strong>この専用URLは今だけ表示されます。必ずコピーして店舗へお渡しください。</strong>' +
+                '<div class="store-issued-url-text"></div>' +
+              '</div>' +
+            '</div>'
+          );
+        })
+        .join("");
+    }
+
+    async function loadStoreAccounts() {
+      showMessage(storeListMessage, "読み込んでいます…", "");
+
+      try {
+        const responseData = await callShopsApi("adminListStoreAccounts", {});
+        renderStoreAccounts(responseData.storeAccounts);
+        showMessage(storeListMessage, "", "");
+      } catch (error) {
+        console.error("店舗一覧の取得に失敗しました：", error);
+        showMessage(storeListMessage, error.message || "店舗一覧を取得できませんでした。", "error");
+      }
+    }
+
+    storeList.addEventListener("click", async function(event) {
+      const actionButton = event.target.closest("button[data-action]");
+
+      if (!actionButton) {
+        return;
+      }
+
+      const storeRow = actionButton.closest(".store-row");
+
+      if (!storeRow) {
+        return;
+      }
+
+      const storeId = storeRow.getAttribute("data-store-id");
+      const action = actionButton.getAttribute("data-action");
+
+      actionButton.disabled = true;
+
+      try {
+        if (action === "rotate") {
+          const responseData = await callShopsApi("adminRotateStoreToken", {
+            storeId: storeId
+          });
+
+          const issuedUrl = buildStoreSubmissionUrl(
+            responseData.storeId,
+            responseData.token
+          );
+
+          const issuedUrlBox = storeRow.querySelector(".store-issued-url");
+          const issuedUrlText = storeRow.querySelector(".store-issued-url-text");
+
+          if (issuedUrlBox && issuedUrlText) {
+            issuedUrlText.textContent = issuedUrl;
+            issuedUrlBox.style.display = "";
+          }
+        } else if (action === "toggle") {
+          const isCurrentlyEnabled =
+            storeRow.querySelector(".status-badge").classList.contains("enabled");
+
+          await callShopsApi("adminSetStoreEnabled", {
+            storeId: storeId,
+            enabled: !isCurrentlyEnabled
+          });
+
+          await loadStoreAccounts();
+        }
+      } catch (error) {
+        console.error("店舗操作に失敗しました：", error);
+        showMessage(storeListMessage, error.message || "操作に失敗しました。", "error");
+      } finally {
+        actionButton.disabled = false;
+      }
+    });
+
+    loginForm.addEventListener("submit", async function(event) {
+      event.preventDefault();
+
+      clearLoginMessage();
+
+      const email = document.getElementById("adminEmail").value.trim().toLowerCase();
+      const password = document.getElementById("adminPassword").value;
+
+      if (email !== ADMIN_EMAIL.toLowerCase()) {
+        showLoginMessage("このメールアドレスには管理者権限がありません。", "error");
+        return;
+      }
+
+      loginButton.disabled = true;
+      loginButton.textContent = "ログインしています…";
+
+      try {
+        await firebase.auth().signInWithEmailAndPassword(email, password);
+      } catch (error) {
+        console.error("❌ 管理者ログインに失敗しました", error);
+        showLoginMessage("ログインできませんでした。メールアドレスとパスワードを確認してください。", "error");
+      } finally {
+        loginButton.disabled = false;
+        loginButton.textContent = "管理画面へログイン";
+      }
+    });
+
+    // admin.htmlの管理者判定と同一パターン。Firebase Anonymous Authの
+    // ユーザーはemailを持たないため、この判定で自動的に非管理者として
+    // 扱われる(request.auth != null だけでは判定しない)。
+    firebase.auth().onAuthStateChanged(async function(user) {
+      clearLoginMessage();
+
+      if (user && user.email && user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+        loginPanel.style.display = "none";
+        adminArea.classList.add("visible");
+
+        await loadStoreAccounts();
+        return;
+      }
+
+      if (user) {
+        try {
+          await firebase.auth().signOut();
+        } catch (error) {
+          console.error("管理者以外のユーザーをログアウトできませんでした", error);
+        }
+
+        showLoginMessage("このアカウントには管理者権限がありません。", "error");
+      }
+
+      loginPanel.style.display = "block";
+      adminArea.classList.remove("visible");
+    });
+  </script>
+
+</body>
+</html>
