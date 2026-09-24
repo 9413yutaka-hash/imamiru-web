@@ -1327,6 +1327,107 @@ async function handleAdminSetStoreEnabledRequest(
 }
 
 
+// 店舗管理Phase3 STEP2｜正式店舗名の編集。storeId(永続識別子)・
+// tokenHash・enabled・createdAtには一切触れず、storeName＋updatedAtだけを
+// 更新する(他の管理APIと同じ、指定フィールドのみ書き換わる.update()を使う
+// ため、クライアントがtokenHash/enabled等を送っても無視される)。
+// 過去のsubmissions.shopNameは意図的に一括更新しない(今回の正式仕様：
+// 変更後の新規投稿だけ新店舗名になる)。
+async function handleAdminUpdateStoreAccountNameRequest(
+  request,
+  response
+) {
+  try {
+    const authResult =
+      await requireAdmin(
+        request
+      );
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({
+        success: false,
+        message: authResult.message
+      });
+    }
+
+    const database =
+      authResult.database;
+
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    const storeId =
+      typeof requestBody.storeId === "string"
+        ? requestBody.storeId.trim()
+        : "";
+
+    if (storeId === "") {
+      return response.status(400).json({
+        success: false,
+        message: "storeIdを指定してください。"
+      });
+    }
+
+    // 新規店舗登録時(handleAdminCreateStoreAccountRequest)と同じ上限値
+    // (SHOP_SUBMISSION_FIELD_MAX_LENGTHS.title)を再利用する(複製しない)。
+    const storeName =
+      sanitizeRegionEditorialText(
+        requestBody.storeName,
+        SHOP_SUBMISSION_FIELD_MAX_LENGTHS.title
+      );
+
+    if (storeName === "") {
+      return response.status(400).json({
+        success: false,
+        message: "店舗名を入力してください。"
+      });
+    }
+
+    const storeAccountRef =
+      database
+        .collection(STORE_ACCOUNTS_COLLECTION)
+        .doc(storeId);
+
+    const storeAccountSnapshot =
+      await storeAccountRef.get();
+
+    if (!storeAccountSnapshot.exists) {
+      return response.status(404).json({
+        success: false,
+        message: "対象の店舗が見つかりませんでした。"
+      });
+    }
+
+    await storeAccountRef.update(
+      {
+        storeName: storeName,
+
+        updatedAt:
+          FieldValue.serverTimestamp()
+      }
+    );
+
+    return response.status(200).json({
+      success: true,
+      storeId: storeId,
+      storeName: storeName
+    });
+  } catch (error) {
+    console.error(
+      "店舗名更新：処理エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message: "店舗名の更新中にエラーが発生しました。"
+    });
+  }
+}
+
+
 // Ver1.8 Phase1｜AIコンシェルジュ。モデル名はここ1箇所のみで管理し、
 // 他の箇所へハードコードしない。AI_CONCIERGE_MODEL環境変数があれば
 // それを優先する(未設定時のみ既定値を使う)。
@@ -23871,6 +23972,15 @@ export default async function handler(
     requestBody.mode === "adminSetStoreEnabled"
   ) {
     return handleAdminSetStoreEnabledRequest(
+      request,
+      response
+    );
+  }
+
+  if (
+    requestBody.mode === "adminUpdateStoreAccountName"
+  ) {
+    return handleAdminUpdateStoreAccountNameRequest(
       request,
       response
     );

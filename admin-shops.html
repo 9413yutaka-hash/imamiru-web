@@ -602,7 +602,19 @@
               '</div>' +
               '<div class="store-row-actions">' +
                 '<button type="button" class="secondary-button" data-action="rotate">token再発行</button>' +
+                '<button type="button" class="secondary-button" data-action="rename">店舗名を編集</button>' +
                 '<button type="button" class="' + (storeAccount.enabled ? "danger-button" : "secondary-button") + '" data-action="toggle">' + toggleLabel + '</button>' +
+              '</div>' +
+              '<div class="issued-url-box store-rename-box" style="display:none;">' +
+                '<div class="field" style="margin-bottom:0;">' +
+                  '<label>新しい正式店舗名</label>' +
+                  '<input type="text" class="store-rename-input" maxlength="50" value="' + escapeHtmlText(storeAccount.storeName) + '">' +
+                '</div>' +
+                '<div class="store-row-actions" style="margin-top:8px;">' +
+                  '<button type="button" class="primary-button" data-action="rename-save">保存</button>' +
+                  '<button type="button" class="secondary-button" data-action="rename-cancel">キャンセル</button>' +
+                '</div>' +
+                '<p style="margin:8px 0 0; font-size:12px; color:var(--subtext);">店舗名の変更は今後の新規投稿に反映されます。過去の投稿名は変更されません。</p>' +
               '</div>' +
               '<div class="issued-url-box store-issued-url" style="display:none;">' +
                 '<strong>この専用URLは今だけ表示されます。必ずコピーして店舗へお渡しください。</strong>' +
@@ -694,6 +706,46 @@
           });
 
           await loadStoreAccounts();
+        } else if (action === "rename") {
+          const renameBox = storeRow.querySelector(".store-rename-box");
+          const renameInput = storeRow.querySelector(".store-rename-input");
+
+          if (renameBox) {
+            renameBox.style.display = "";
+          }
+
+          if (renameInput) {
+            renameInput.focus();
+          }
+        } else if (action === "rename-cancel") {
+          const renameBox = storeRow.querySelector(".store-rename-box");
+          const renameInput = storeRow.querySelector(".store-rename-input");
+          const currentStoreName = storeRow.querySelector(".store-name");
+
+          if (renameInput && currentStoreName) {
+            renameInput.value = currentStoreName.textContent;
+          }
+
+          if (renameBox) {
+            renameBox.style.display = "none";
+          }
+        } else if (action === "rename-save") {
+          const renameInput = storeRow.querySelector(".store-rename-input");
+          const newStoreName = renameInput ? renameInput.value.trim() : "";
+
+          if (newStoreName === "") {
+            showMessage(storeListMessage, "店舗名を入力してください。", "error");
+            return;
+          }
+
+          await callShopsApi("adminUpdateStoreAccountName", {
+            storeId: storeId,
+            storeName: newStoreName
+          });
+
+          await loadStoreAccounts();
+
+          showMessage(storeListMessage, "店舗名を更新しました。", "success");
         }
       } catch (error) {
         console.error("店舗操作に失敗しました：", error);
