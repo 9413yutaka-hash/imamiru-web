@@ -2193,6 +2193,18 @@
         "none";
     }
 
+    // 店舗専用投稿URL Phase2｜cloudinaryAnonymousAuthPromise(single-flight
+    // 用の状態変数、実体・関数定義はgetAnonymousIdTokenForImageUpload()
+    // 側に残したまま変更しない)を、ページロード直後に実行される
+    // attemptVerifiedShopEntry()より前でletの初期化(TDZ)を完了させるため
+    // だけに、宣言位置のみここへ移動した(元の位置にあった時、
+    // getAnonymousIdTokenForImageUpload()の呼び出しがまだ実行されていない
+    // このletの初期化行より前に発生し、"Cannot access
+    // 'cloudinaryAnonymousAuthPromise' before initialization"になっていた)。
+    // 認証ロジック自体・値の使われ方は一切変更しない。
+    let cloudinaryAnonymousAuthPromise =
+      null;
+
     // 店舗専用投稿URL Phase2(1店舗MVP)｜?mode=shop&store={storeId}&
     // token={rawToken}で開かれた場合だけの検証済み経路。一般公開の
     // isGeneralPublicShopSubmissionCurrentlyEnabled()とは独立した、
@@ -3370,8 +3382,8 @@
     // 何回も並行実行されないよう、進行中のサインイン処理を1つの
     // Promiseにまとめて使い回す(single-flight)。失敗時は次回リトライ
     // できるようリセットする。
-    let cloudinaryAnonymousAuthPromise =
-      null;
+    // (cloudinaryAnonymousAuthPromiseのlet宣言は、店舗専用投稿URL Phase2の
+    // TDZ問題解消のため上部へ移動済み。ここでは同じ変数をそのまま使う。)
 
     function getAnonymousIdTokenForImageUpload() {
       if (
