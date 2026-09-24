@@ -344,6 +344,21 @@
           登録済み店舗一覧
         </h2>
 
+        <!-- 店舗管理Phase3 STEP1｜既存の一覧取得(adminListStoreAccounts)は
+             変更せず、取得済みデータへのクライアント側フィルタとして検索を
+             追加する(新規APIモード・新規Firestore検索は不要、本部指示)。 -->
+        <div class="field">
+          <label for="storeSearchInput">
+            店舗名 / storeIdで検索
+          </label>
+
+          <input
+            id="storeSearchInput"
+            type="text"
+            placeholder="例：マチナウ　/　storeIdの一部"
+          >
+        </div>
+
         <div id="storeListMessage" class="message-box" role="status" aria-live="polite"></div>
 
         <div id="storeList"></div>
@@ -429,6 +444,7 @@
     const createStoreIssuedUrlText = document.getElementById("createStoreIssuedUrlText");
     const createStoreCopyButton = document.getElementById("createStoreCopyButton");
 
+    const storeSearchInput = document.getElementById("storeSearchInput");
     const storeListMessage = document.getElementById("storeListMessage");
     const storeList = document.getElementById("storeList");
 
@@ -525,9 +541,48 @@
       }
     });
 
-    function renderStoreAccounts(storeAccounts) {
+    // 店舗管理Phase3 STEP1｜adminListStoreAccountsで取得した全店舗を保持し、
+    // 検索欄の入力のたびにこのキャッシュへクライアント側フィルタ・並べ替えを
+    // かけて再描画する(再取得・新規APIモードは不要)。
+    let allStoreAccounts = [];
+
+    // 有効店舗を先に、同じ状態の中は正式店舗名で安定して並べる。
+    // localeCompare("ja")は既存ブラウザで安全に使える日本語比較方法。
+    function compareStoreAccountsForDisplay(a, b) {
+      if (a.enabled !== b.enabled) {
+        return a.enabled ? -1 : 1;
+      }
+
+      return String(a.storeName || "").localeCompare(
+        String(b.storeName || ""),
+        "ja"
+      );
+    }
+
+    // 正式店舗名・storeIdへの部分一致(大文字小文字を区別しない)。
+    function filterStoreAccountsByQuery(storeAccounts, query) {
+      const normalizedQuery = String(query || "").trim().toLowerCase();
+
+      if (normalizedQuery === "") {
+        return storeAccounts;
+      }
+
+      return storeAccounts.filter(function(storeAccount) {
+        const storeName = String(storeAccount.storeName || "").toLowerCase();
+        const storeId = String(storeAccount.storeId || "").toLowerCase();
+
+        return (
+          storeName.indexOf(normalizedQuery) !== -1 ||
+          storeId.indexOf(normalizedQuery) !== -1
+        );
+      });
+    }
+
+    function renderStoreAccounts(storeAccounts, hasAnyStores) {
       if (!Array.isArray(storeAccounts) || storeAccounts.length === 0) {
-        storeList.innerHTML = '<p class="empty-state">登録済みの店舗はまだありません。</p>';
+        storeList.innerHTML = hasAnyStores
+          ? '<p class="empty-state">該当する店舗がありません。</p>'
+          : '<p class="empty-state">登録済みの店舗はまだありません。</p>';
         return;
       }
 
@@ -559,17 +614,38 @@
         .join("");
     }
 
+    // 現在の検索欄の値でallStoreAccountsを絞り込み、再描画する。
+    function renderStoreListForCurrentSearch() {
+      const filteredStoreAccounts = filterStoreAccountsByQuery(
+        allStoreAccounts,
+        storeSearchInput ? storeSearchInput.value : ""
+      );
+
+      renderStoreAccounts(filteredStoreAccounts, allStoreAccounts.length > 0);
+    }
+
     async function loadStoreAccounts() {
       showMessage(storeListMessage, "読み込んでいます…", "");
 
       try {
         const responseData = await callShopsApi("adminListStoreAccounts", {});
-        renderStoreAccounts(responseData.storeAccounts);
+
+        allStoreAccounts = Array.isArray(responseData.storeAccounts)
+          ? responseData.storeAccounts.slice().sort(compareStoreAccountsForDisplay)
+          : [];
+
+        renderStoreListForCurrentSearch();
         showMessage(storeListMessage, "", "");
       } catch (error) {
         console.error("店舗一覧の取得に失敗しました：", error);
         showMessage(storeListMessage, error.message || "店舗一覧を取得できませんでした。", "error");
       }
+    }
+
+    if (storeSearchInput) {
+      storeSearchInput.addEventListener("input", function() {
+        renderStoreListForCurrentSearch();
+      });
     }
 
     storeList.addEventListener("click", async function(event) {
