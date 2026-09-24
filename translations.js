@@ -1079,6 +1079,11 @@ const MACHINAU_TRANSLATIONS = {
     en: "Shared by a Machinau user"
   },
 
+  shop_verified_badge: {
+    ja: "🏪 お店から",
+    en: "🏪 From the shop"
+  },
+
   shop_permanent_ad_badge: {
     ja: "店舗広告",
     en: "Shop advertisement"

@@ -779,11 +779,16 @@ async function handleShopSubmissionCreateRequest(
 
     // server確定フィールド：shopName(storeAccounts.storeNameで固定)、
     // storeId(token検証済みの値)、submissionType("shop"固定)、status
-    // (この後のModeration結果で確定)。publisherType/authorType/
-    // sourceTrustは今回追加しない(本部指示、既存意味を壊さないため
-    // authorTypeは未設定のまま維持)。
+    // (この後のModeration結果で確定)。authorType/sourceTrustは今回も
+    // 追加しない(既存意味を壊さないため未設定のまま維持)。publisherType
+    // (発信元表示Phase1)は、この関数がtoken検証成功後にしか到達しない
+    // ためリテラル固定で追加する。requestBody.publisherType等、
+    // クライアント由来の値は一切参照・信用しない(本部指示)。
     const submissionData =
       {
+        publisherType:
+          "verified_shop",
+
         shopName:
           validationResult.storeName,
 

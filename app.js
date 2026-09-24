@@ -1932,7 +1932,15 @@ function convertSubmissionToShop(
         : "",
 
     isPermanentAd:
-      data.isPermanentAd === true
+      data.isPermanentAd === true,
+
+    // 発信元表示Phase1｜api/moderate-submission.jsのhandleShopSubmissionCreateRequest()
+    // だけがサーバー側で設定する値("verified_shop")をそのまま通す。
+    // submissionType/storeId単独では発信元表示を判定しない(本部指示)。
+    publisherType:
+      typeof data.publisherType === "string"
+        ? data.publisherType.trim()
+        : ""
   };
 }
 
@@ -2972,7 +2980,18 @@ function renderShops() {
                           </span>
                         </div>
                       `
-                      : `
+                      : shop.publisherType === "verified_shop"
+                        ? `
+                          <div class="user-post-badge-row">
+                            <span class="user-post-badge">
+                              ${getMachinauTranslation(
+                                "shop_verified_badge",
+                                getCurrentMachinauLanguage()
+                              )}
+                            </span>
+                          </div>
+                        `
+                        : `
                       <div class="user-post-badge-row">
                         <span class="user-post-badge">
                           ${getMachinauTranslation(
@@ -4519,6 +4538,21 @@ function openShopModal(
       escapeHtml(
         getMachinauTranslation(
           "shop_permanent_ad_badge",
+          getCurrentMachinauLanguage()
+        )
+      );
+  } else if (
+    selectedShop.publisherType === "verified_shop"
+  ) {
+    // 発信元表示Phase1｜TOPカード(renderShops())と同じ条件・同じ優先順位
+    // (sourceLabel／isPermanentAdの後、一般ユーザー投稿フォールバックの前)
+    // で判定する。TOPで「🏪 お店から」なのにモーダルで「マチナウユーザー
+    // からの情報」に戻る不整合を作らない(本部指示)。
+    modalText +=
+      "<br><br>" +
+      escapeHtml(
+        getMachinauTranslation(
+          "shop_verified_badge",
           getCurrentMachinauLanguage()
         )
       );
