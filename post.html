@@ -2472,6 +2472,13 @@
       submissionForm.style.display =
         "";
 
+      // 店舗専用投稿URL Phase2｜「選び直す」は既定で表示する(street/一般shop
+      // 選択画面の既存挙動)。認証済み店舗専用URL経由の場合だけ、下のshop分岐
+      // 内でnoneにする(新しいstateは増やさず、既存のisVerifiedShopSubmission()
+      // /verifiedStoreNameをそのまま使う)。
+      postModeReselectButton.style.display =
+        "";
+
       if (
         mode ===
         "street"
@@ -2503,8 +2510,26 @@
         contentLabelText.textContent =
           CONTENT_LABEL_TEXT_STREET;
       } else {
-        postModeSelectedLabel.textContent =
-          "選択中：🏪 お店・施設からのお知らせ";
+        // 店舗専用投稿URL Phase2｜token検証済み(isVerifiedShopSubmission())の
+        // 場合だけ、正式店舗名(verifiedStoreName、handleShopTokenValidateRequest
+        // がstoreAccounts.storeNameから返した値)を使った固定表示にし、
+        // 「選び直す」(street/一般shopへの切り替え導線)を隠す。一般公開の
+        // shop選択(postModeShopButton経由、現在は準備中で到達しない)は
+        // 従来通りの文言・「選び直す」表示のまま変更しない。
+        if (
+          isVerifiedShopSubmission()
+        ) {
+          postModeSelectedLabel.textContent =
+            "🏪 " +
+            verifiedStoreName +
+            "からのお知らせ";
+
+          postModeReselectButton.style.display =
+            "none";
+        } else {
+          postModeSelectedLabel.textContent =
+            "選択中：🏪 お店・施設からのお知らせ";
+        }
 
         titleFormGroup.style.display =
           "";
