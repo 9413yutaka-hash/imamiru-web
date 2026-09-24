@@ -2252,6 +2252,11 @@
         responseData =
           await response.json();
       } catch (jsonError) {
+        console.error(
+          "店舗専用URL検証エラー(応答解析)：",
+          jsonError
+        );
+
         return { valid: false };
       }
 
@@ -2326,6 +2331,13 @@
           showShopUrlInvalidNotice();
         }
       } catch (error) {
+        console.error(
+          "店舗専用URL検証エラー：",
+          error,
+          error && error.code,
+          error && error.message
+        );
+
         showShopUrlInvalidNotice();
       } finally {
         try {
