@@ -11626,9 +11626,16 @@ async function fetchCommunityBoardPostsForCurrentArea(
 // 「ほかの地域を見る」経由の表示(showRegionRecommendationsForArea())とは
 // 完全に独立した別経路で、互いのDOM書き込みは競合しない
 // (呼ばれるタイミングが重ならない：GPS確定時と手動選択時のみ)。
+// 街の掲示板 Phase4｜この関数は現在地表示(isManualSelection=false)と、
+// 「ほかの地域を見る」からの手動選択表示(isManualSelection=true)の
+// 両方から共有で呼ばれる(関数名・既存呼び出し元は変更しない、最小実装)。
+// 手動選択時は「戻る」ボタンを表示し、現在地投稿専用の「今いる街について
+// 投稿する」リンクは非表示にする(遠隔地投稿はまだ実装しないため、
+// 誤解を招くリンクを出さない、本部指示)。
 function renderCommunityBoardForCurrentArea(
   regionName,
-  posts
+  posts,
+  isManualSelection
 ) {
   const section =
     document.getElementById(
@@ -11682,10 +11689,24 @@ function renderCommunityBoardForCurrentArea(
   }
 
   if (backButton) {
-    // 現在地の掲示板を表示している間は「戻る」ボタンは不要
-    // (既存showRegionRecommendationsForArea()の手動選択時にだけ表示される)。
     backButton.style.display =
-      "none";
+      isManualSelection
+        ? ""
+        : "none";
+  }
+
+  const postLink =
+    document.getElementById(
+      "communityBoardPostLink"
+    );
+
+  if (postLink) {
+    // 遠隔地閲覧中は「今いる街について投稿する」を出さない
+    // (現在地投稿であることが前提のリンクのため、誤解を防ぐ、本部指示)。
+    postLink.style.display =
+      isManualSelection
+        ? "none"
+        : "";
   }
 
   if (
@@ -11748,7 +11769,199 @@ async function loadCommunityBoardForCurrentArea(
 
   renderCommunityBoardForCurrentArea(
     regionName,
-    posts
+    posts,
+    false
+  );
+}
+
+
+// 街の掲示板 Phase4｜「ほかの地域を見る」で選択された市区町村名を、
+// 現在地経路(resolveLocationHierarchyFromCoordinates())と全く同じ考え方
+// (locality result自身のplace_id)でgooglePlaceIdへ解決する。Phase0で
+// Production実機確認済みの順方向Geocoderの使い方(geocode({address:...}))
+// をそのまま使い、新しいGoogle APIは追加しない。既存のGPS用関数
+// (resolveAreaNameFromCoordinates()等)は一切変更しない、完全に独立した
+// 関数。
+//
+// 沖縄限定の住所補完(", 沖縄県, 日本")は、現在の地域ピッカーUIが
+// OKINAWA_MUNICIPALITY_TO_REGION_NAME(沖縄41市町村)のみを選択肢にしている
+// ことに合わせた、今回のUI範囲内の一時的な補完。OKINAWA_MUNICIPALITY_TO_
+// REGION_NAME自体はcommunityBoardPostsの地域IDには使わず、選択肢生成にしか
+// 使わない(本部指示)。将来ピッカーが全国・世界対応になった時点で、この
+// 補完文字列の組み立て方だけを見直せばよく、地域ID自体の設計
+// (countryCode+googlePlaceId→Machinau regionId)には影響しない。
+function resolveGooglePlaceIdForAreaName(
+  areaName
+) {
+  return new Promise(
+    function(resolve) {
+      if (
+        typeof google === "undefined" ||
+        !google.maps ||
+        !google.maps.Geocoder
+      ) {
+        resolve(null);
+        return;
+      }
+
+      const timeoutId =
+        setTimeout(
+          function() {
+            resolve(null);
+          },
+          AREA_NAME_RESOLUTION_TIMEOUT_MS
+        );
+
+      function findComponent(
+        addressComponents,
+        typeName
+      ) {
+        if (
+          !Array.isArray(
+            addressComponents
+          )
+        ) {
+          return null;
+        }
+
+        return (
+          addressComponents.find(
+            function(component) {
+              return (
+                Array.isArray(
+                  component.types
+                ) &&
+                component.types.includes(
+                  typeName
+                )
+              );
+            }
+          ) ||
+          null
+        );
+      }
+
+      try {
+        const geocoder =
+          new google.maps.Geocoder();
+
+        geocoder.geocode(
+          {
+            address:
+              areaName +
+              ", 沖縄県, 日本"
+          },
+          function(results, status) {
+            clearTimeout(
+              timeoutId
+            );
+
+            if (
+              status !== "OK" ||
+              !Array.isArray(results)
+            ) {
+              resolve(null);
+              return;
+            }
+
+            const localityResult =
+              results.find(
+                function(result) {
+                  return (
+                    Array.isArray(result.types) &&
+                    result.types.includes("locality") &&
+                    typeof result.place_id === "string" &&
+                    result.place_id !== ""
+                  );
+                }
+              );
+
+            if (!localityResult) {
+              resolve(null);
+              return;
+            }
+
+            const countryComponent =
+              findComponent(
+                localityResult.address_components,
+                "country"
+              );
+
+            const localityComponent =
+              findComponent(
+                localityResult.address_components,
+                "locality"
+              );
+
+            const countryCode =
+              countryComponent &&
+              typeof countryComponent.short_name === "string"
+                ? countryComponent.short_name
+                : "";
+
+            const regionName =
+              localityComponent &&
+              typeof localityComponent.long_name === "string"
+                ? localityComponent.long_name
+                : areaName;
+
+            if (countryCode === "") {
+              resolve(null);
+              return;
+            }
+
+            resolve(
+              {
+                googlePlaceId: localityResult.place_id,
+                countryCode: countryCode,
+                regionName: regionName
+              }
+            );
+          }
+        );
+      } catch (error) {
+        clearTimeout(
+          timeoutId
+        );
+
+        resolve(null);
+      }
+    }
+  );
+}
+
+// 「ほかの地域を見る」から選択された地域の掲示板を取得・描画する。
+// 解決に失敗した場合(Geocoder未読み込み・該当なし等)も、選択した
+// areaNameの表示のまま「まだ投稿がありません」を出す安全側フォールバックとし、
+// 画面を壊さない(既存showRegionRecommendationsForArea()の失敗時と同じ方針)。
+async function loadCommunityBoardForSelectedArea(
+  areaName
+) {
+  const resolvedRegion =
+    await resolveGooglePlaceIdForAreaName(
+      areaName
+    );
+
+  if (!resolvedRegion) {
+    renderCommunityBoardForCurrentArea(
+      areaName,
+      [],
+      true
+    );
+
+    return;
+  }
+
+  const posts =
+    await fetchCommunityBoardPostsForCurrentArea(
+      resolvedRegion.googlePlaceId,
+      resolvedRegion.countryCode
+    );
+
+  renderCommunityBoardForCurrentArea(
+    resolvedRegion.regionName,
+    posts,
+    true
   );
 }
 
@@ -14076,9 +14289,13 @@ if (regionRecommendationAreaPickerElement) {
       regionRecommendationAreaPickerElement.style.display =
         "none";
 
-      showRegionRecommendationsForArea(
-        selectedAreaName,
-        true
+      // 街の掲示板 Phase4｜「ほかの地域を見る」の選択先を、従来の
+      // regionRecommendations表示(showRegionRecommendationsForArea())から
+      // 掲示板表示へ切り替える。showRegionRecommendationsForArea()自体・
+      // regionRecommendationsコレクション・翻訳キャッシュ・admin-region-
+      // picks.html等は一切削除せず残す(呼ばれなくなるだけ、本部指示)。
+      loadCommunityBoardForSelectedArea(
+        selectedAreaName
       );
     }
   );
@@ -14111,6 +14328,9 @@ if (regionRecommendationBackToCurrentButtonElement) {
       if (
         currentCommunityBoardGooglePlaceId !== ""
       ) {
+        // loadCommunityBoardForCurrentArea()は内部でisManualSelection:false
+        // を渡すため、「戻る」ボタン・投稿リンクの表示状態も正しく現在地
+        // 表示用に戻る。
         loadCommunityBoardForCurrentArea(
           currentCommunityBoardGooglePlaceId,
           currentCommunityBoardCountryCode,
