@@ -295,6 +295,19 @@
       margin-top: 12px;
     }
 
+    /* 街の掲示板(仮称) Phase5｜地域代表画像。掲示板の「街の顔」であり
+       投稿カードの画像ではないため、既存.region-recommendation-card imgとは
+       別に、控えめな比率(高さ150px)のバナー風スタイルにする。 */
+    .community-board-region-image {
+      width: 100%;
+      max-height: 150px;
+      object-fit: cover;
+      display: block;
+      border-radius: 14px;
+      margin-bottom: 12px;
+      background: #e9f1f5;
+    }
+
     /* Ver1.8 Phase2 STEP4(TOP→コラム入口)｜「マチナウ読みもの」セクションの
        補足文専用。カード本体は既存.region-recommendation-card系クラスを
        そのまま再利用するため、新規クラスはこの1つのみ追加する。 */
@@ -1541,6 +1554,11 @@
       <h2 id="regionRecommendationHeading" data-i18n="region_recommendation_heading_default">
         📍 この地域のおすすめ
       </h2>
+
+      <!-- 街の掲示板 Phase5｜地域代表画像(1地域につき1枚、投稿カードの
+           中には入れない)。空の場合はJSがinnerHTMLを空のままにし、
+           何もDOMへ出さない。 -->
+      <div id="communityBoardRegionImageBox"></div>
 
       <div id="regionRecommendationList"></div>
 

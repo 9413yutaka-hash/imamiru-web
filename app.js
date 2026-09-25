@@ -11564,17 +11564,26 @@ function buildCommunityBoardPostItemHtml(
 // communityBoardPostCreate/community-board-post.htmlと同じ、既存の匿名
 // Firebase Authentication単発ヘルパーをそのまま再利用する(新しい認証方式は
 // 作らない)。
+// 街の掲示板 Phase5｜戻り値を{posts, imageUrl}へ拡張する(地域代表画像)。
+// imageUrlは投稿とは別の「地域」単位の情報のため、posts配列の要素には
+// 含めない(サーバー側communityBoardPostsListの設計とも一致)。
 async function fetchCommunityBoardPostsForCurrentArea(
   googlePlaceId,
   countryCode
 ) {
+  const emptyResult =
+    {
+      posts: [],
+      imageUrl: ""
+    };
+
   if (
     !window.firebase ||
     !firebase.auth ||
     googlePlaceId === "" ||
     countryCode === ""
   ) {
-    return [];
+    return emptyResult;
   }
 
   try {
@@ -11611,14 +11620,21 @@ async function fetchCommunityBoardPostsForCurrentArea(
       responseData.success !== true ||
       !Array.isArray(responseData.posts)
     ) {
-      return [];
+      return emptyResult;
     }
 
-    return responseData.posts;
+    return {
+      posts: responseData.posts,
+
+      imageUrl:
+        typeof responseData.regionImageUrl === "string"
+          ? responseData.regionImageUrl
+          : ""
+    };
   } catch (error) {
     // 掲示板の取得に失敗しても、TOPの他機能には一切影響させない
     // (既存regionRecommendations取得の失敗時と同じ方針)。
-    return [];
+    return emptyResult;
   }
 }
 
@@ -11632,10 +11648,14 @@ async function fetchCommunityBoardPostsForCurrentArea(
 // 手動選択時は「戻る」ボタンを表示し、現在地投稿専用の「今いる街について
 // 投稿する」リンクは非表示にする(遠隔地投稿はまだ実装しないため、
 // 誤解を招くリンクを出さない、本部指示)。
+// 街の掲示板 Phase5｜imageUrlは地域代表画像(1地域につき1枚、投稿カードの
+// 中には入れない)。空文字/未指定の場合はimg要素自体を生成しない
+// (壊れた画像アイコンや空枠を出さない、本部指示)。
 function renderCommunityBoardForCurrentArea(
   regionName,
   posts,
-  isManualSelection
+  isManualSelection,
+  imageUrl
 ) {
   const section =
     document.getElementById(
@@ -11645,6 +11665,11 @@ function renderCommunityBoardForCurrentArea(
   const heading =
     document.getElementById(
       "regionRecommendationHeading"
+    );
+
+  const imageBox =
+    document.getElementById(
+      "communityBoardRegionImageBox"
     );
 
   const list =
@@ -11681,6 +11706,25 @@ function renderCommunityBoardForCurrentArea(
       "{AREA}",
       regionName
     );
+
+  if (imageBox) {
+    const safeRegionImageUrl =
+      getSafeImageUrl(
+        imageUrl
+      );
+
+    imageBox.innerHTML =
+      safeRegionImageUrl !== ""
+        ? '<img class="community-board-region-image" src="' +
+          escapeHtmlForCommunityBoard(
+            buildOptimizedImageUrl(
+              safeRegionImageUrl,
+              { width: OPTIMIZED_IMAGE_WIDTH_REGION_RECOMMENDATION }
+            )
+          ) +
+          '" alt="" loading="lazy" onerror="handleBrokenImage(this)">'
+        : "";
+  }
 
   if (moreButton) {
     // Phase3では上位10件の固定表示のみ(ページネーション未実装)。
@@ -11761,7 +11805,7 @@ async function loadCommunityBoardForCurrentArea(
   currentCommunityBoardRegionName =
     regionName;
 
-  const posts =
+  const fetchResult =
     await fetchCommunityBoardPostsForCurrentArea(
       googlePlaceId,
       countryCode
@@ -11769,8 +11813,9 @@ async function loadCommunityBoardForCurrentArea(
 
   renderCommunityBoardForCurrentArea(
     regionName,
-    posts,
-    false
+    fetchResult.posts,
+    false,
+    fetchResult.imageUrl
   );
 }
 
@@ -11946,13 +11991,14 @@ async function loadCommunityBoardForSelectedArea(
     renderCommunityBoardForCurrentArea(
       areaName,
       [],
-      true
+      true,
+      ""
     );
 
     return;
   }
 
-  const posts =
+  const fetchResult =
     await fetchCommunityBoardPostsForCurrentArea(
       resolvedRegion.googlePlaceId,
       resolvedRegion.countryCode
@@ -11960,8 +12006,9 @@ async function loadCommunityBoardForSelectedArea(
 
   renderCommunityBoardForCurrentArea(
     resolvedRegion.regionName,
-    posts,
-    true
+    fetchResult.posts,
+    true,
+    fetchResult.imageUrl
   );
 }
 

@@ -2255,9 +2255,87 @@ async function handleAdminListCommunityBoardPostsRequest(
         items;
     }
 
+    // 街の掲示板 Phase5｜表示中の投稿から重複のないregionIdだけを集め、
+    // その地域の現在の代表画像(regions.imageUrl/imagePublicId)を
+    // まとめて返す。全国の地域を一覧取得するのではなく、実際に投稿が
+    // 存在する(＝管理画面に表示されている)地域だけをオンデマンドで
+    // 対象にする(本部指示)。
+    const distinctRegionIds =
+      Array.from(
+        new Set(
+          statusNames
+            .reduce(
+              function(allItems, statusName) {
+                return allItems.concat(
+                  postsByStatus[statusName]
+                );
+              },
+              []
+            )
+            .map(
+              function(item) {
+                return item.regionId;
+              }
+            )
+            .filter(
+              function(regionId) {
+                return (
+                  typeof regionId === "string" &&
+                  regionId !== ""
+                );
+              }
+            )
+        )
+      );
+
+    const regionsById =
+      {};
+
+    for (
+      let index = 0;
+      index < distinctRegionIds.length;
+      index += 1
+    ) {
+      const regionId =
+        distinctRegionIds[index];
+
+      const regionSnapshot =
+        await database
+          .collection("regions")
+          .doc(regionId)
+          .get();
+
+      if (!regionSnapshot.exists) {
+        continue;
+      }
+
+      const regionData =
+        regionSnapshot.data() ||
+        {};
+
+      regionsById[regionId] =
+        {
+          regionName:
+            typeof regionData.regionName === "string"
+              ? regionData.regionName
+              : "",
+
+          imageUrl:
+            typeof regionData.imageUrl === "string"
+              ? regionData.imageUrl
+              : "",
+
+          imagePublicId:
+            typeof regionData.imagePublicId === "string"
+              ? regionData.imagePublicId
+              : ""
+        };
+    }
+
     return response.status(200).json({
       success: true,
-      postsByStatus: postsByStatus
+      postsByStatus: postsByStatus,
+      regionsById: regionsById
     });
   } catch (error) {
     console.error(
@@ -2581,6 +2659,115 @@ async function handleAdminDisableCommunityBoardPostRequest(
 }
 
 
+// 街の掲示板(仮称) Phase5｜地域代表画像の登録・変更・参照解除。
+// 1地域(regions/{regionId})につき1枚の代表画像で、投稿単位の画像ではない。
+// Google place_idではなくMachinau独自regionId(regions.doc()の自動生成ID、
+// 既にPhase1で確定済み)へ紐付ける。この操作はregionの新規作成を一切
+// 行わない：既存regionドキュメントのimageUrl/imagePublicIdだけを更新する
+// (存在しないregionIdは404で拒否)。imageUrl/imagePublicIdの両方を空文字/
+// 未指定で送ると「画像を外す」動作になる(Cloudinary側の実ファイル削除は
+// 今回行わない、既知の仕様としてFirestore参照だけを外す)。
+async function handleAdminSetRegionImageRequest(
+  request,
+  response
+) {
+  try {
+    const authResult =
+      await requireAdmin(
+        request
+      );
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({
+        success: false,
+        message: authResult.message
+      });
+    }
+
+    const database =
+      authResult.database;
+
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    const regionId =
+      typeof requestBody.regionId === "string"
+        ? requestBody.regionId.trim()
+        : "";
+
+    if (regionId === "") {
+      return response.status(400).json({
+        success: false,
+        message: "regionIdを指定してください。"
+      });
+    }
+
+    const regionRef =
+      database
+        .collection("regions")
+        .doc(regionId);
+
+    const regionSnapshot =
+      await regionRef.get();
+
+    if (!regionSnapshot.exists) {
+      return response.status(404).json({
+        success: false,
+        message: "対象の地域が見つかりませんでした。"
+      });
+    }
+
+    const imageUrl =
+      typeof requestBody.imageUrl === "string"
+        ? requestBody.imageUrl.trim().slice(0, 500)
+        : "";
+
+    const imagePublicId =
+      typeof requestBody.imagePublicId === "string"
+        ? requestBody.imagePublicId.trim().slice(0, 300)
+        : "";
+
+    // imageUrlが空文字の場合は「画像を外す」とみなし、imagePublicIdも
+    // 必ず一緒に空文字にする(片方だけ残る不整合を防ぐ)。
+    const nextImageUrl =
+      imageUrl;
+
+    const nextImagePublicId =
+      imageUrl === ""
+        ? ""
+        : imagePublicId;
+
+    await regionRef.update(
+      {
+        imageUrl: nextImageUrl,
+        imagePublicId: nextImagePublicId,
+
+        updatedAt:
+          FieldValue.serverTimestamp()
+      }
+    );
+
+    return response.status(200).json({
+      success: true,
+      regionId: regionId,
+      imageUrl: nextImageUrl
+    });
+  } catch (error) {
+    console.error(
+      "街の掲示板：地域代表画像の更新エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message: "地域代表画像の更新中にエラーが発生しました。"
+    });
+  }
+}
+
+
 // ============================================================
 // 街の掲示板(仮称) Phase3｜旅行者向け公開一覧取得
 // ============================================================
@@ -2712,6 +2899,28 @@ async function handleCommunityBoardPostsListRequest(
       });
     }
 
+    // 街の掲示板 Phase5｜地域代表画像。regions/{regionId}を1回だけ読み、
+    // imageUrlが存在する場合だけ公開レスポンスへ含める(imagePublicId・
+    // その他regionsの内部フィールドは公開しない)。この読み取りは既存の
+    // regionId解決結果をそのまま使うだけで、新しいregion解決ロジックは
+    // 追加しない。
+    const regionSnapshot =
+      await database
+        .collection("regions")
+        .doc(regionId)
+        .get();
+
+    const regionData =
+      regionSnapshot.exists
+        ? regionSnapshot.data() || {}
+        : {};
+
+    const safeRegionImageUrl =
+      typeof regionData.imageUrl === "string" &&
+      regionData.imageUrl.trim() !== ""
+        ? regionData.imageUrl.trim()
+        : "";
+
     const querySnapshot =
       await database
         .collection("communityBoardPosts")
@@ -2776,14 +2985,24 @@ async function handleCommunityBoardPostsListRequest(
       }
     );
 
-    return response.status(200).json({
-      success: true,
-      posts:
-        posts.slice(
-          0,
-          COMMUNITY_BOARD_PUBLIC_LIST_DISPLAY_LIMIT
-        )
-    });
+    const jsonResponseBody =
+      {
+        success: true,
+        posts:
+          posts.slice(
+            0,
+            COMMUNITY_BOARD_PUBLIC_LIST_DISPLAY_LIMIT
+          )
+      };
+
+    if (safeRegionImageUrl !== "") {
+      jsonResponseBody.regionImageUrl =
+        safeRegionImageUrl;
+    }
+
+    return response.status(200).json(
+      jsonResponseBody
+    );
   } catch (error) {
     console.error(
       "街の掲示板：公開一覧取得エラー：",
@@ -25422,6 +25641,15 @@ export default async function handler(
     requestBody.mode === "adminDisableCommunityBoardPost"
   ) {
     return handleAdminDisableCommunityBoardPostRequest(
+      request,
+      response
+    );
+  }
+
+  if (
+    requestBody.mode === "adminSetRegionImage"
+  ) {
+    return handleAdminSetRegionImageRequest(
       request,
       response
     );
