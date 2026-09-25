@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <meta name="robots" content="noindex, nofollow">
+
+  <title>
+    街の掲示板 管理｜マチナウ運営
+  </title>
+
+  <style>
+    :root {
+      --navy: #071a33;
+      --blue: #0788c9;
+      --sky: #dff7ff;
+      --green: #19a96b;
+      --red: #ef5a67;
+      --amber: #b8860b;
+      --white: #ffffff;
+      --text: #15233a;
+      --subtext: #697386;
+      --border: #e2eaf1;
+      --background: #f4f8fb;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Yu Gothic", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+      background: var(--background);
+      color: var(--text);
+    }
+
+    header {
+      background: var(--navy);
+      color: var(--white);
+      padding: 18px 20px;
+    }
+
+    header .page-label {
+      font-size: 12px;
+      opacity: 0.8;
+    }
+
+    header h1 {
+      margin: 4px 0 0;
+      font-size: 20px;
+    }
+
+    header a {
+      display: inline-block;
+      margin-top: 10px;
+      color: rgba(255, 255, 255, 0.85);
+      font-size: 12px;
+      text-decoration: none;
+    }
+
+    main {
+      width: min(100%, 760px);
+      margin: 0 auto;
+      padding: 20px 18px 60px;
+    }
+
+    .panel {
+      margin-bottom: 20px;
+      padding: 20px;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: var(--white);
+      box-shadow: 0 12px 32px rgba(20, 52, 82, 0.08);
+    }
+
+    .panel h2 {
+      margin: 0 0 14px;
+      font-size: 16px;
+    }
+
+    .field {
+      margin-bottom: 16px;
+    }
+
+    .field label {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .field input[type="text"],
+    .field input[type="password"] {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    .primary-button {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--blue), #04b7d7);
+      color: var(--white);
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .primary-button:disabled,
+    .secondary-button:disabled,
+    .danger-button:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+
+    .secondary-button {
+      padding: 10px 16px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--white);
+      color: var(--navy);
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .danger-button {
+      padding: 10px 16px;
+      border: 1px solid var(--red);
+      border-radius: 10px;
+      background: #fff0f1;
+      color: var(--red);
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .message-box {
+      margin-top: 10px;
+      font-size: 13px;
+    }
+
+    .message-box.error {
+      color: #b8354a;
+    }
+
+    .message-box.success {
+      color: #17845a;
+    }
+
+    #adminArea {
+      display: none;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+
+    .summary-card {
+      padding: 12px 10px;
+      border-radius: 12px;
+      text-align: center;
+      background: var(--sky);
+    }
+
+    .summary-card .summary-count {
+      font-size: 22px;
+      font-weight: 900;
+      color: var(--navy);
+    }
+
+    .summary-card .summary-label {
+      margin-top: 4px;
+      font-size: 11px;
+      color: var(--subtext);
+      font-weight: 700;
+    }
+
+    .board-post-item {
+      padding: 14px 0;
+      border-top: 1px solid var(--border);
+    }
+
+    .board-post-item:first-child {
+      border-top: none;
+    }
+
+    .board-post-text {
+      margin: 0 0 8px;
+      font-size: 15px;
+      line-height: 1.7;
+      white-space: pre-wrap;
+    }
+
+    .board-post-meta {
+      font-size: 12px;
+      color: var(--subtext);
+      line-height: 1.8;
+    }
+
+    .status-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 999px;
+    }
+
+    .status-badge.pending {
+      background: #fff6e0;
+      color: var(--amber);
+    }
+
+    .status-badge.approved {
+      background: #e3f7ee;
+      color: var(--green);
+    }
+
+    .status-badge.rejected,
+    .status-badge.expired {
+      background: #f1f2f5;
+      color: var(--subtext);
+    }
+
+    .board-post-actions {
+      margin-top: 10px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .empty-state {
+      color: var(--subtext);
+      font-size: 13px;
+      text-align: center;
+      padding: 16px 0;
+    }
+  </style>
+</head>
+
+<body>
+
+  <header>
+    <div class="page-label">
+      マチナウ運営専用
+    </div>
+
+    <h1>
+      街の掲示板 管理
+    </h1>
+
+    <a href="admin.html">← 管理トップへ戻る</a>
+  </header>
+
+  <main>
+
+    <section id="loginPanel" class="panel">
+      <h2>管理者ログイン</h2>
+
+      <form id="loginForm" novalidate>
+        <div class="field">
+          <label for="adminEmail">メールアドレス</label>
+          <input id="adminEmail" type="text" autocomplete="username" required>
+        </div>
+
+        <div class="field">
+          <label for="adminPassword">パスワード</label>
+          <input id="adminPassword" type="password" autocomplete="current-password" required>
+        </div>
+
+        <button id="loginButton" class="primary-button" type="submit">
+          管理画面へログイン
+        </button>
+      </form>
+
+      <div id="loginMessage" class="message-box" role="status" aria-live="polite"></div>
+    </section>
+
+    <section id="adminArea">
+
+      <div class="panel">
+        <h2>現在の状況</h2>
+
+        <div class="summary-grid">
+          <div class="summary-card">
+            <div class="summary-count" id="summaryPendingCount">0</div>
+            <div class="summary-label">審査待ち</div>
+          </div>
+
+          <div class="summary-card">
+            <div class="summary-count" id="summaryApprovedCount">0</div>
+            <div class="summary-label">掲載中</div>
+          </div>
+
+          <div class="summary-card">
+            <div class="summary-count" id="summaryRejectedCount">0</div>
+            <div class="summary-label">却下</div>
+          </div>
+
+          <div class="summary-card">
+            <div class="summary-count" id="summaryExpiredCount">0</div>
+            <div class="summary-label">掲載終了</div>
+          </div>
+        </div>
+
+        <div style="margin-top:14px;">
+          <button id="refreshButton" class="secondary-button" type="button">
+            🔄 一覧を更新
+          </button>
+        </div>
+
+        <div id="listMessage" class="message-box" role="status" aria-live="polite"></div>
+      </div>
+
+      <div class="panel">
+        <h2>審査待ち</h2>
+        <div id="pendingList"></div>
+      </div>
+
+      <div class="panel">
+        <h2>掲載中</h2>
+        <div id="approvedList"></div>
+      </div>
+
+      <div class="panel">
+        <h2>却下</h2>
+        <div id="rejectedList"></div>
+      </div>
+
+      <div class="panel">
+        <h2>掲載終了</h2>
+        <div id="expiredList"></div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore-compat.js"></script>
+  <script src="firebase.js"></script>
+
+  <script>
+    const ADMIN_EMAIL =
+      "9413yutaka@gmail.com";
+
+    function escapeHtmlText(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    // 既存admin-shops.html/admin-column.htmlのcallXxxApi(mode, payload)と
+    // 全く同じ構成(既存の管理画面API呼び出しパターンをそのまま踏襲)。
+    async function getAdminIdToken() {
+      const currentUser = firebase.auth().currentUser;
+
+      if (!currentUser) {
+        throw new Error("ログイン状態を確認できませんでした。再度ログインしてください。");
+      }
+
+      return currentUser.getIdToken();
+    }
+
+    async function callCommunityBoardApi(mode, payload) {
+      const idToken = await getAdminIdToken();
+
+      const response = await fetch("/api/moderate-submission", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + idToken
+        },
+        body: JSON.stringify(Object.assign({ mode: mode }, payload || {}))
+      });
+
+      let responseData = null;
+
+      try {
+        responseData = await response.json();
+      } catch (jsonError) {
+        throw new Error("応答を読み取れませんでした。");
+      }
+
+      if (!response.ok || !responseData || responseData.success !== true) {
+        throw new Error((responseData && responseData.message) || "処理に失敗しました。");
+      }
+
+      return responseData;
+    }
+
+    const loginPanel = document.getElementById("loginPanel");
+    const adminArea = document.getElementById("adminArea");
+    const loginForm = document.getElementById("loginForm");
+    const loginButton = document.getElementById("loginButton");
+    const loginMessage = document.getElementById("loginMessage");
+
+    const refreshButton = document.getElementById("refreshButton");
+    const listMessage = document.getElementById("listMessage");
+
+    const summaryPendingCount = document.getElementById("summaryPendingCount");
+    const summaryApprovedCount = document.getElementById("summaryApprovedCount");
+    const summaryRejectedCount = document.getElementById("summaryRejectedCount");
+    const summaryExpiredCount = document.getElementById("summaryExpiredCount");
+
+    const pendingList = document.getElementById("pendingList");
+    const approvedList = document.getElementById("approvedList");
+    const rejectedList = document.getElementById("rejectedList");
+    const expiredList = document.getElementById("expiredList");
+
+    function showLoginMessage(text, type) {
+      loginMessage.textContent = text;
+      loginMessage.className = "message-box" + (type ? " " + type : "");
+    }
+
+    function clearLoginMessage() {
+      loginMessage.textContent = "";
+      loginMessage.className = "message-box";
+    }
+
+    function showMessage(element, text, type) {
+      element.textContent = text;
+      element.className = "message-box" + (type ? " " + type : "");
+    }
+
+    function formatBoardPostDateTime(millis) {
+      if (!millis) {
+        return "-";
+      }
+
+      try {
+        return new Date(millis).toLocaleString("ja-JP", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit"
+        });
+      } catch (error) {
+        return "-";
+      }
+    }
+
+    function getStatusLabel(status) {
+      if (status === "pending") return "審査待ち";
+      if (status === "approved") return "掲載中";
+      if (status === "rejected") return "却下";
+      if (status === "expired") return "掲載終了";
+      return "不明(" + (status || "未設定") + ")";
+    }
+
+    function buildBoardPostItemHtml(post) {
+      const statusLabel = getStatusLabel(post.status);
+
+      const metaParts = [
+        "投稿日時：" + formatBoardPostDateTime(post.createdAtMillis),
+        "地域：" + (post.regionName || "-") + "（" + (post.countryCode || "-") + "）"
+      ];
+
+      if (post.aiReviewStatus) {
+        metaParts.push("Moderation：" + post.aiReviewStatus);
+      }
+
+      if (post.approvedAtMillis) {
+        metaParts.push("承認日時：" + formatBoardPostDateTime(post.approvedAtMillis));
+      }
+
+      if (post.disabledAtMillis) {
+        metaParts.push("掲載終了日時：" + formatBoardPostDateTime(post.disabledAtMillis));
+      }
+
+      const reviewReasonHtml = post.aiReviewReason
+        ? '<div class="board-post-meta">Moderation理由：' + escapeHtmlText(post.aiReviewReason) + '</div>'
+        : "";
+
+      const referenceHtml =
+        (post.regionId || post.googlePlaceId)
+          ? '<div class="board-post-meta">regionId：' + escapeHtmlText(post.regionId || "-") +
+            '　/　googlePlaceId：' + escapeHtmlText(post.googlePlaceId || "-") + '</div>'
+          : "";
+
+      let actionsHtml = "";
+
+      if (post.status === "pending") {
+        actionsHtml =
+          '<div class="board-post-actions">' +
+            '<button type="button" class="primary-button" data-action="approve">承認して掲載</button>' +
+            '<button type="button" class="danger-button" data-action="reject">却下</button>' +
+          '</div>';
+      } else if (post.status === "approved") {
+        actionsHtml =
+          '<div class="board-post-actions">' +
+            '<button type="button" class="danger-button" data-action="disable">掲載を終了する</button>' +
+          '</div>';
+      }
+
+      return (
+        '<div class="board-post-item" data-post-id="' + escapeHtmlText(post.postId) + '">' +
+          '<p class="board-post-text">' + escapeHtmlText(post.text) + '</p>' +
+          '<div class="board-post-meta">' +
+            '<span class="status-badge ' + escapeHtmlText(post.status) + '">' + escapeHtmlText(statusLabel) + '</span>' +
+            '　' + escapeHtmlText(metaParts.join("　/　")) +
+          '</div>' +
+          reviewReasonHtml +
+          referenceHtml +
+          actionsHtml +
+        '</div>'
+      );
+    }
+
+    function renderBoardPostList(listElement, posts) {
+      if (!Array.isArray(posts) || posts.length === 0) {
+        listElement.innerHTML = '<p class="empty-state">該当する投稿はありません。</p>';
+        return;
+      }
+
+      listElement.innerHTML = posts.map(buildBoardPostItemHtml).join("");
+    }
+
+    async function loadCommunityBoardPosts() {
+      showMessage(listMessage, "読み込んでいます…", "");
+
+      try {
+        const responseData = await callCommunityBoardApi("adminListCommunityBoardPosts", {});
+        const postsByStatus = responseData.postsByStatus || {};
+
+        const pending = Array.isArray(postsByStatus.pending) ? postsByStatus.pending : [];
+        const approved = Array.isArray(postsByStatus.approved) ? postsByStatus.approved : [];
+        const rejected = Array.isArray(postsByStatus.rejected) ? postsByStatus.rejected : [];
+        const expired = Array.isArray(postsByStatus.expired) ? postsByStatus.expired : [];
+
+        summaryPendingCount.textContent = String(pending.length);
+        summaryApprovedCount.textContent = String(approved.length);
+        summaryRejectedCount.textContent = String(rejected.length);
+        summaryExpiredCount.textContent = String(expired.length);
+
+        renderBoardPostList(pendingList, pending);
+        renderBoardPostList(approvedList, approved);
+        renderBoardPostList(rejectedList, rejected);
+        renderBoardPostList(expiredList, expired);
+
+        showMessage(listMessage, "", "");
+      } catch (error) {
+        console.error("街の掲示板：一覧取得に失敗しました：", error);
+        showMessage(listMessage, error.message || "一覧を取得できませんでした。", "error");
+      }
+    }
+
+    refreshButton.addEventListener("click", function () {
+      loadCommunityBoardPosts();
+    });
+
+    const boardPanels = [pendingList, approvedList, rejectedList, expiredList];
+
+    boardPanels.forEach(function (listElement) {
+      listElement.addEventListener("click", async function (event) {
+        const actionButton = event.target.closest("button[data-action]");
+
+        if (!actionButton) {
+          return;
+        }
+
+        const itemElement = actionButton.closest(".board-post-item");
+
+        if (!itemElement) {
+          return;
+        }
+
+        const postId = itemElement.getAttribute("data-post-id");
+        const action = actionButton.getAttribute("data-action");
+
+        const confirmMessages = {
+          approve: "この投稿を承認して掲載しますか？",
+          reject: "この投稿を却下しますか？",
+          disable: "この投稿の掲載を終了しますか？"
+        };
+
+        if (!window.confirm(confirmMessages[action] || "実行しますか？")) {
+          return;
+        }
+
+        const modeByAction = {
+          approve: "adminApproveCommunityBoardPost",
+          reject: "adminRejectCommunityBoardPost",
+          disable: "adminDisableCommunityBoardPost"
+        };
+
+        const mode = modeByAction[action];
+
+        if (!mode) {
+          return;
+        }
+
+        const allButtons = itemElement.querySelectorAll("button");
+        allButtons.forEach(function (button) {
+          button.disabled = true;
+        });
+
+        try {
+          await callCommunityBoardApi(mode, { postId: postId });
+          await loadCommunityBoardPosts();
+        } catch (error) {
+          console.error("街の掲示板：操作に失敗しました：", error);
+          showMessage(listMessage, error.message || "操作に失敗しました。", "error");
+          allButtons.forEach(function (button) {
+            button.disabled = false;
+          });
+        }
+      });
+    });
+
+    loginForm.addEventListener("submit", async function (event) {
+      event.preventDefault();
+
+      clearLoginMessage();
+
+      const email = document.getElementById("adminEmail").value.trim().toLowerCase();
+      const password = document.getElementById("adminPassword").value;
+
+      if (email !== ADMIN_EMAIL.toLowerCase()) {
+        showLoginMessage("このメールアドレスには管理者権限がありません。", "error");
+        return;
+      }
+
+      loginButton.disabled = true;
+      loginButton.textContent = "ログインしています…";
+
+      try {
+        await firebase.auth().signInWithEmailAndPassword(email, password);
+      } catch (error) {
+        console.error("❌ 管理者ログインに失敗しました", error);
+        showLoginMessage("ログインできませんでした。メールアドレスとパスワードを確認してください。", "error");
+      } finally {
+        loginButton.disabled = false;
+        loginButton.textContent = "管理画面へログイン";
+      }
+    });
+
+    firebase.auth().onAuthStateChanged(async function (user) {
+      if (user && user.email && user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+        loginPanel.style.display = "none";
+        adminArea.style.display = "block";
+        await loadCommunityBoardPosts();
+      } else {
+        loginPanel.style.display = "block";
+        adminArea.style.display = "none";
+      }
+    });
+  </script>
+
+</body>
+</html>

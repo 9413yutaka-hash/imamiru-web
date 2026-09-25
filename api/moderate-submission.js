@@ -2085,6 +2085,502 @@ async function handleCommunityBoardPostCreateRequest(
 }
 
 
+// ============================================================
+// 街の掲示板(仮称) Phase2｜運営管理(承認・却下・掲載停止)
+// ============================================================
+// statusはPhase1で保存済みの値("pending")および既存submissions.statusの
+// 語彙(approved/rejected/expired)をそのまま流用する。新しいstatus値は
+// 追加しない(本部指示)。expiresAtは今回も持たせない(運営操作による
+// 終了のみ、時間による自動終了ではない)。
+
+// 一覧表示用：status別に等値whereのみで取得する(orderByと組み合わせない
+// ため新しい複合indexを要求しない、店舗管理Phase3のadminListStoreSubmissions
+// と同じ方針)。並べ替えは取得後にこの関数内のJS配列sortで行う。
+// 将来件数が増えた場合の安全策として、statusごとに上限件数を設ける。
+const COMMUNITY_BOARD_ADMIN_LIST_LIMITS =
+  {
+    pending: 200,
+    approved: 200,
+    rejected: 100,
+    expired: 100
+  };
+
+function convertCommunityBoardPostSnapshotToAdminListItem(
+  documentSnapshot
+) {
+  const data =
+    documentSnapshot.data() ||
+    {};
+
+  const createdAtMillis =
+    data.createdAt &&
+    typeof data.createdAt.toMillis === "function"
+      ? data.createdAt.toMillis()
+      : 0;
+
+  const approvedAtMillis =
+    data.approvedAt &&
+    typeof data.approvedAt.toMillis === "function"
+      ? data.approvedAt.toMillis()
+      : null;
+
+  const disabledAtMillis =
+    data.disabledAt &&
+    typeof data.disabledAt.toMillis === "function"
+      ? data.disabledAt.toMillis()
+      : null;
+
+  return {
+    postId:
+      documentSnapshot.id,
+
+    text:
+      typeof data.text === "string"
+        ? data.text
+        : "",
+
+    regionName:
+      typeof data.regionName === "string"
+        ? data.regionName
+        : "",
+
+    countryCode:
+      typeof data.countryCode === "string"
+        ? data.countryCode
+        : "",
+
+    administrativeLevel:
+      typeof data.administrativeLevel === "string"
+        ? data.administrativeLevel
+        : "",
+
+    // 秘密情報ではないが運用上の補助情報として最小限だけ返す
+    // (endCodeHash/tokenHash相当の秘密情報は今回のcommunityBoardPosts
+    // には存在しない)。
+    regionId:
+      typeof data.regionId === "string"
+        ? data.regionId
+        : "",
+
+    googlePlaceId:
+      typeof data.googlePlaceId === "string"
+        ? data.googlePlaceId
+        : "",
+
+    status:
+      typeof data.status === "string"
+        ? data.status
+        : "",
+
+    aiReviewStatus:
+      typeof data.aiReviewStatus === "string"
+        ? data.aiReviewStatus
+        : "",
+
+    aiReviewReason:
+      typeof data.aiReviewReason === "string"
+        ? data.aiReviewReason
+        : "",
+
+    createdAtMillis: createdAtMillis,
+    approvedAtMillis: approvedAtMillis,
+    disabledAtMillis: disabledAtMillis
+  };
+}
+
+async function handleAdminListCommunityBoardPostsRequest(
+  request,
+  response
+) {
+  try {
+    const authResult =
+      await requireAdmin(
+        request
+      );
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({
+        success: false,
+        message: authResult.message
+      });
+    }
+
+    const database =
+      authResult.database;
+
+    const statusNames =
+      Object.keys(
+        COMMUNITY_BOARD_ADMIN_LIST_LIMITS
+      );
+
+    const postsByStatus =
+      {};
+
+    for (
+      let index = 0;
+      index < statusNames.length;
+      index += 1
+    ) {
+      const statusName =
+        statusNames[index];
+
+      const querySnapshot =
+        await database
+          .collection("communityBoardPosts")
+          .where(
+            "status",
+            "==",
+            statusName
+          )
+          .limit(
+            COMMUNITY_BOARD_ADMIN_LIST_LIMITS[statusName]
+          )
+          .get();
+
+      const items =
+        querySnapshot.docs.map(
+          convertCommunityBoardPostSnapshotToAdminListItem
+        );
+
+      items.sort(
+        function(a, b) {
+          return (
+            b.createdAtMillis -
+            a.createdAtMillis
+          );
+        }
+      );
+
+      postsByStatus[statusName] =
+        items;
+    }
+
+    return response.status(200).json({
+      success: true,
+      postsByStatus: postsByStatus
+    });
+  } catch (error) {
+    console.error(
+      "街の掲示板：一覧取得エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message: "投稿一覧の取得中にエラーが発生しました。"
+    });
+  }
+}
+
+// pending/approved/rejected/expired間の状態遷移をtransaction内で検証する
+// 共通処理。requiredCurrentStatus以外からの遷移は409で拒否する(本部指示：
+// 状態遷移をサーバー側で必ず検証、rejected/expired→approvedの復活も
+// 今回作らない)。
+async function applyCommunityBoardPostStatusTransition(
+  database,
+  postId,
+  requiredCurrentStatus,
+  updateFields
+) {
+  const postRef =
+    database
+      .collection("communityBoardPosts")
+      .doc(postId);
+
+  return database.runTransaction(
+    async function(transaction) {
+      const snapshot =
+        await transaction.get(
+          postRef
+        );
+
+      if (!snapshot.exists) {
+        return {
+          outcome: "not_found"
+        };
+      }
+
+      const currentData =
+        snapshot.data() ||
+        {};
+
+      const currentStatus =
+        typeof currentData.status === "string"
+          ? currentData.status
+          : "";
+
+      if (currentStatus !== requiredCurrentStatus) {
+        return {
+          outcome: "invalid_transition",
+          currentStatus: currentStatus
+        };
+      }
+
+      transaction.update(
+        postRef,
+        updateFields
+      );
+
+      return {
+        outcome: "ok"
+      };
+    }
+  );
+}
+
+async function handleAdminApproveCommunityBoardPostRequest(
+  request,
+  response
+) {
+  try {
+    const authResult =
+      await requireAdmin(
+        request
+      );
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({
+        success: false,
+        message: authResult.message
+      });
+    }
+
+    const database =
+      authResult.database;
+
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    const postId =
+      typeof requestBody.postId === "string"
+        ? requestBody.postId.trim()
+        : "";
+
+    if (postId === "") {
+      return response.status(400).json({
+        success: false,
+        message: "postIdを指定してください。"
+      });
+    }
+
+    const transitionResult =
+      await applyCommunityBoardPostStatusTransition(
+        database,
+        postId,
+        "pending",
+        {
+          status: "approved",
+
+          approvedAt:
+            FieldValue.serverTimestamp(),
+
+          updatedAt:
+            FieldValue.serverTimestamp()
+        }
+      );
+
+    if (transitionResult.outcome === "not_found") {
+      return response.status(404).json({
+        success: false,
+        message: "対象の投稿が見つかりませんでした。"
+      });
+    }
+
+    if (transitionResult.outcome === "invalid_transition") {
+      return response.status(409).json({
+        success: false,
+        message: "この投稿は既に審査待ち以外の状態のため、承認できません。"
+      });
+    }
+
+    return response.status(200).json({
+      success: true,
+      postId: postId,
+      status: "approved"
+    });
+  } catch (error) {
+    console.error(
+      "街の掲示板：承認エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message: "承認処理中にエラーが発生しました。"
+    });
+  }
+}
+
+async function handleAdminRejectCommunityBoardPostRequest(
+  request,
+  response
+) {
+  try {
+    const authResult =
+      await requireAdmin(
+        request
+      );
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({
+        success: false,
+        message: authResult.message
+      });
+    }
+
+    const database =
+      authResult.database;
+
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    const postId =
+      typeof requestBody.postId === "string"
+        ? requestBody.postId.trim()
+        : "";
+
+    if (postId === "") {
+      return response.status(400).json({
+        success: false,
+        message: "postIdを指定してください。"
+      });
+    }
+
+    const transitionResult =
+      await applyCommunityBoardPostStatusTransition(
+        database,
+        postId,
+        "pending",
+        {
+          status: "rejected",
+
+          updatedAt:
+            FieldValue.serverTimestamp()
+        }
+      );
+
+    if (transitionResult.outcome === "not_found") {
+      return response.status(404).json({
+        success: false,
+        message: "対象の投稿が見つかりませんでした。"
+      });
+    }
+
+    if (transitionResult.outcome === "invalid_transition") {
+      return response.status(409).json({
+        success: false,
+        message: "この投稿は既に審査待ち以外の状態のため、却下できません。"
+      });
+    }
+
+    return response.status(200).json({
+      success: true,
+      postId: postId,
+      status: "rejected"
+    });
+  } catch (error) {
+    console.error(
+      "街の掲示板：却下エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message: "却下処理中にエラーが発生しました。"
+    });
+  }
+}
+
+async function handleAdminDisableCommunityBoardPostRequest(
+  request,
+  response
+) {
+  try {
+    const authResult =
+      await requireAdmin(
+        request
+      );
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({
+        success: false,
+        message: authResult.message
+      });
+    }
+
+    const database =
+      authResult.database;
+
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    const postId =
+      typeof requestBody.postId === "string"
+        ? requestBody.postId.trim()
+        : "";
+
+    if (postId === "") {
+      return response.status(400).json({
+        success: false,
+        message: "postIdを指定してください。"
+      });
+    }
+
+    const transitionResult =
+      await applyCommunityBoardPostStatusTransition(
+        database,
+        postId,
+        "approved",
+        {
+          status: "expired",
+
+          disabledAt:
+            FieldValue.serverTimestamp(),
+
+          updatedAt:
+            FieldValue.serverTimestamp()
+        }
+      );
+
+    if (transitionResult.outcome === "not_found") {
+      return response.status(404).json({
+        success: false,
+        message: "対象の投稿が見つかりませんでした。"
+      });
+    }
+
+    if (transitionResult.outcome === "invalid_transition") {
+      return response.status(409).json({
+        success: false,
+        message: "この投稿は現在掲載中ではないため、掲載を終了できません。"
+      });
+    }
+
+    return response.status(200).json({
+      success: true,
+      postId: postId,
+      status: "expired"
+    });
+  } catch (error) {
+    console.error(
+      "街の掲示板：掲載停止エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message: "掲載停止処理中にエラーが発生しました。"
+    });
+  }
+}
+
+
 // Ver1.8 Phase1｜AIコンシェルジュ。モデル名はここ1箇所のみで管理し、
 // 他の箇所へハードコードしない。AI_CONCIERGE_MODEL環境変数があれば
 // それを優先する(未設定時のみ既定値を使う)。
@@ -24660,6 +25156,44 @@ export default async function handler(
     requestBody.mode === "communityBoardPostCreate"
   ) {
     return handleCommunityBoardPostCreateRequest(
+      request,
+      response
+    );
+  }
+
+  // 街の掲示板(仮称) Phase2｜代表(Admin)専用の運営管理。既存requireAdmin()
+  // をそのまま再利用する(新しい認証方式は作らない)。
+  if (
+    requestBody.mode === "adminListCommunityBoardPosts"
+  ) {
+    return handleAdminListCommunityBoardPostsRequest(
+      request,
+      response
+    );
+  }
+
+  if (
+    requestBody.mode === "adminApproveCommunityBoardPost"
+  ) {
+    return handleAdminApproveCommunityBoardPostRequest(
+      request,
+      response
+    );
+  }
+
+  if (
+    requestBody.mode === "adminRejectCommunityBoardPost"
+  ) {
+    return handleAdminRejectCommunityBoardPostRequest(
+      request,
+      response
+    );
+  }
+
+  if (
+    requestBody.mode === "adminDisableCommunityBoardPost"
+  ) {
+    return handleAdminDisableCommunityBoardPostRequest(
       request,
       response
     );
