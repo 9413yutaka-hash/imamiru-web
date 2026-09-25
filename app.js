@@ -5588,7 +5588,8 @@ function resolveLocationHierarchyFromCoordinates(
             countryName: "",
             regionKey: "",
             regionName: "",
-            municipality: ""
+            municipality: "",
+            municipalityPlaceId: ""
           }
         );
         return;
@@ -5606,7 +5607,8 @@ function resolveLocationHierarchyFromCoordinates(
                 countryName: "",
                 regionKey: "",
                 regionName: "",
-                municipality: ""
+                municipality: "",
+                municipalityPlaceId: ""
               }
             );
           },
@@ -5672,7 +5674,8 @@ function resolveLocationHierarchyFromCoordinates(
                   countryName: "",
                   regionKey: "",
                   regionName: "",
-                  municipality: ""
+                  municipality: "",
+                  municipalityPlaceId: ""
                 }
               );
               return;
@@ -5691,6 +5694,9 @@ function resolveLocationHierarchyFromCoordinates(
               "";
 
             let regionKeyValue =
+              "";
+
+            let municipalityPlaceIdValue =
               "";
 
             results.forEach(
@@ -5777,6 +5783,28 @@ function resolveLocationHierarchyFromCoordinates(
                   regionKeyValue =
                     result.place_id;
                 }
+
+                // 街の掲示板 Phase3｜同じ考え方で、市区町村(locality)を
+                // 表すresult自身のplace_idも追加で取り出す(Phase0で実機
+                // 確認済みの手法)。既存のregionKeyValue(都道府県レベル)・
+                // cityValue(locality長い表示名)には一切触れず、新しい
+                // フィールドとして追加するだけ(既存呼び出し元
+                // loadDynamicColumnEntries()・triggerRegionTodayInfo()の
+                // 既存挙動には影響しない)。
+                if (
+                  municipalityPlaceIdValue === "" &&
+                  Array.isArray(
+                    result.types
+                  ) &&
+                  result.types.includes(
+                    "locality"
+                  ) &&
+                  typeof result.place_id === "string" &&
+                  result.place_id !== ""
+                ) {
+                  municipalityPlaceIdValue =
+                    result.place_id;
+                }
               }
             );
 
@@ -5789,7 +5817,8 @@ function resolveLocationHierarchyFromCoordinates(
                 countryName: countryNameValue,
                 regionKey: regionKeyValue,
                 regionName: prefectureValue,
-                municipality: cityValue
+                municipality: cityValue,
+                municipalityPlaceId: municipalityPlaceIdValue
               }
             );
           }
@@ -5808,7 +5837,8 @@ function resolveLocationHierarchyFromCoordinates(
             countryName: "",
             regionKey: "",
             regionName: "",
-            municipality: ""
+            municipality: "",
+            municipalityPlaceId: ""
           }
         );
       }
@@ -8901,6 +8931,18 @@ function getLocation() {
                 locationHierarchy,
                 suggestionGpsSessionId
               );
+
+              // 街の掲示板 Phase3｜同じGeocoder結果(locationHierarchy)を
+              // そのまま再利用するだけで、新しいGeocoding呼び出しは増やさない。
+              // municipalityPlaceIdが取得できなかった場合(古いブラウザ・
+              // Geocoder失敗等)はloadCommunityBoardForCurrentArea()内で
+              // 何もせず終わる(既存のisPermanentAd等、他の描画処理に
+              // 影響させない)。
+              loadCommunityBoardForCurrentArea(
+                locationHierarchy.municipalityPlaceId,
+                locationHierarchy.countryCode,
+                locationHierarchy.municipality
+              );
             }
           )
           .catch(
@@ -8960,9 +9002,16 @@ function getLocation() {
                 areaName
               );
 
-              loadRegionRecommendations(
-                areaName
-              );
+              // 街の掲示板 Phase3｜現在地の主表示をregionRecommendations
+              // からcommunityBoardPostsへ切り替えるため、GPS確定時の自動呼び出しを
+              // ここでは停止する。loadRegionRecommendations()/
+              // showRegionRecommendationsForArea()自体・regionRecommendations
+              // コレクション・翻訳キャッシュ・admin-region-picks.html等の
+              // 管理機能は一切削除せず残す(「ほかの地域を見る」「現在地の
+              // おすすめに戻る」からは引き続き呼ばれる、本部指示)。現在地の
+              // 掲示板表示はresolveLocationHierarchyFromCoordinates()の
+              // .then()内、loadCommunityBoardForCurrentArea()で行う。
+              // loadRegionRecommendations(areaName);
 
               // 「この街の情報」Phase1｜ここではボタンを表示するだけで、
               // AIは一切呼ばない(本部指示：GPS取得時にはAIを呼ばない)。
@@ -11468,6 +11517,242 @@ function resolveRegionRecommendationDisplayArticle(
 }
 
 
+// 街の掲示板(仮称) Phase3｜既存regionRecommendations(showRegionRecommendations
+// ForArea()、この直後の関数)は削除・変更せず、その関数はそのまま残す
+// (「ほかの地域を見る」「現在地のおすすめに戻る」からは引き続き呼ばれる、
+// 本部指示)。現在地(GPS)から得られた市区町村を旅行者へ表示する主表示だけを、
+// この新しい関数群でcommunityBoardPostsベースへ切り替える。
+// regionRecommendationSection/regionRecommendationHeading/
+// regionRecommendationListという既存のDOM/CSSクラスをそのまま再利用し、
+// 新しいデザイン体系は作らない。
+
+// 「現在地のおすすめに戻る」ボタンから、現在地の掲示板を再取得できるよう
+// 直近に解決したgooglePlaceId/countryCode/表示名を保持しておく。
+let currentCommunityBoardGooglePlaceId =
+  "";
+
+let currentCommunityBoardCountryCode =
+  "";
+
+let currentCommunityBoardRegionName =
+  "";
+
+function escapeHtmlForCommunityBoard(
+  text
+) {
+  return escapeHtml(
+    typeof text === "string"
+      ? text
+      : ""
+  );
+}
+
+function buildCommunityBoardPostItemHtml(
+  post
+) {
+  return (
+    '<div class="community-board-post-item">' +
+      '<p class="community-board-post-text">' +
+      escapeHtmlForCommunityBoard(
+        post.text
+      ) +
+      '</p>' +
+    '</div>'
+  );
+}
+
+// communityBoardPostCreate/community-board-post.htmlと同じ、既存の匿名
+// Firebase Authentication単発ヘルパーをそのまま再利用する(新しい認証方式は
+// 作らない)。
+async function fetchCommunityBoardPostsForCurrentArea(
+  googlePlaceId,
+  countryCode
+) {
+  if (
+    !window.firebase ||
+    !firebase.auth ||
+    googlePlaceId === "" ||
+    countryCode === ""
+  ) {
+    return [];
+  }
+
+  try {
+    const idToken =
+      await getAnonymousIdTokenForLocationCollection();
+
+    const response =
+      await fetch(
+        "/api/moderate-submission",
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + idToken
+          },
+
+          body: JSON.stringify(
+            {
+              mode: "communityBoardPostsList",
+              googlePlaceId: googlePlaceId,
+              countryCode: countryCode
+            }
+          )
+        }
+      );
+
+    const responseData =
+      await response.json();
+
+    if (
+      !response.ok ||
+      !responseData ||
+      responseData.success !== true ||
+      !Array.isArray(responseData.posts)
+    ) {
+      return [];
+    }
+
+    return responseData.posts;
+  } catch (error) {
+    // 掲示板の取得に失敗しても、TOPの他機能には一切影響させない
+    // (既存regionRecommendations取得の失敗時と同じ方針)。
+    return [];
+  }
+}
+
+// 現在地(GPS)由来の掲示板を、既存regionRecommendationSectionへ描画する。
+// 「ほかの地域を見る」経由の表示(showRegionRecommendationsForArea())とは
+// 完全に独立した別経路で、互いのDOM書き込みは競合しない
+// (呼ばれるタイミングが重ならない：GPS確定時と手動選択時のみ)。
+function renderCommunityBoardForCurrentArea(
+  regionName,
+  posts
+) {
+  const section =
+    document.getElementById(
+      "regionRecommendationSection"
+    );
+
+  const heading =
+    document.getElementById(
+      "regionRecommendationHeading"
+    );
+
+  const list =
+    document.getElementById(
+      "regionRecommendationList"
+    );
+
+  const moreButton =
+    document.getElementById(
+      "regionRecommendationMoreButton"
+    );
+
+  const backButton =
+    document.getElementById(
+      "regionRecommendationBackToCurrentButton"
+    );
+
+  if (
+    !section ||
+    !heading ||
+    !list
+  ) {
+    return;
+  }
+
+  const currentLanguage =
+    getCurrentMachinauLanguage();
+
+  heading.textContent =
+    getMachinauTranslation(
+      "community_board_heading_dynamic",
+      currentLanguage
+    ).replace(
+      "{AREA}",
+      regionName
+    );
+
+  if (moreButton) {
+    // Phase3では上位10件の固定表示のみ(ページネーション未実装)。
+    moreButton.style.display =
+      "none";
+  }
+
+  if (backButton) {
+    // 現在地の掲示板を表示している間は「戻る」ボタンは不要
+    // (既存showRegionRecommendationsForArea()の手動選択時にだけ表示される)。
+    backButton.style.display =
+      "none";
+  }
+
+  if (
+    !Array.isArray(posts) ||
+    posts.length === 0
+  ) {
+    list.innerHTML =
+      '<p class="region-recommendation-empty-message">' +
+      escapeHtmlForCommunityBoard(
+        getMachinauTranslation(
+          "community_board_empty",
+          currentLanguage
+        )
+      ) +
+      '</p>';
+  } else {
+    list.innerHTML =
+      posts
+        .map(
+          buildCommunityBoardPostItemHtml
+        )
+        .join("");
+  }
+
+  section.style.display =
+    "";
+}
+
+// GPS確定時のcommunityBoardPosts取得・描画をまとめる。呼び出し元
+// (resolveLocationHierarchyFromCoordinates().then())からgooglePlaceId等が
+// 渡された場合だけ実行し、取得できなかった場合はセクション自体に触れない
+// (既存のisPermanentAd等、他の描画処理に影響させない)。
+async function loadCommunityBoardForCurrentArea(
+  googlePlaceId,
+  countryCode,
+  regionName
+) {
+  if (
+    googlePlaceId === "" ||
+    countryCode === "" ||
+    regionName === ""
+  ) {
+    return;
+  }
+
+  currentCommunityBoardGooglePlaceId =
+    googlePlaceId;
+
+  currentCommunityBoardCountryCode =
+    countryCode;
+
+  currentCommunityBoardRegionName =
+    regionName;
+
+  const posts =
+    await fetchCommunityBoardPostsForCurrentArea(
+      googlePlaceId,
+      countryCode
+    );
+
+  renderCommunityBoardForCurrentArea(
+    regionName,
+    posts
+  );
+}
+
+
 // 指定した市町村名(areaName)の地域おすすめを取得・描画する共通処理。
 // isManualSelectionは「ほかの地域を見る」からの選択かどうかのフラグで、
 // userAreaName自体は一切書き換えない(GPS・地図・距離計算・店舗表示に影響なし)。
@@ -13819,7 +14104,19 @@ if (regionRecommendationBackToCurrentButtonElement) {
   regionRecommendationBackToCurrentButtonElement.addEventListener(
     "click",
     function() {
+      // 街の掲示板 Phase3｜「現在地のおすすめに戻る」は、現在地の主表示が
+      // 掲示板へ切り替わったことに合わせて、直近に解決済みのgooglePlaceId等
+      // (loadCommunityBoardForCurrentArea()が保持)を使って現在地の掲示板へ
+      // 戻す。showRegionRecommendationsForArea()自体は変更しない。
       if (
+        currentCommunityBoardGooglePlaceId !== ""
+      ) {
+        loadCommunityBoardForCurrentArea(
+          currentCommunityBoardGooglePlaceId,
+          currentCommunityBoardCountryCode,
+          currentCommunityBoardRegionName
+        );
+      } else if (
         typeof userAreaName === "string" &&
         userAreaName !== ""
       ) {

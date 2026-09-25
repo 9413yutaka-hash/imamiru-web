@@ -270,6 +270,31 @@
       padding: 10px 0;
     }
 
+    /* 街の掲示板(仮称) Phase3｜派手なカード広告にはせず、この街について
+       誰かが残した一言が並んでいる雰囲気を優先する(本部指示)。既存の
+       .region-recommendation-card系(画像・リンク付き)とは意図的に分け、
+       新規クラスをこの最小限だけ追加する。 */
+    .community-board-post-item {
+      padding: 12px 0;
+      border-top: 1px solid var(--border);
+    }
+
+    .community-board-post-item:first-child {
+      border-top: none;
+    }
+
+    .community-board-post-text {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.8;
+      color: var(--text);
+      white-space: pre-wrap;
+    }
+
+    .community-board-post-link-row {
+      margin-top: 12px;
+    }
+
     /* Ver1.8 Phase2 STEP4(TOP→コラム入口)｜「マチナウ読みもの」セクションの
        補足文専用。カード本体は既存.region-recommendation-card系クラスを
        そのまま再利用するため、新規クラスはこの1つのみ追加する。 */
@@ -1518,6 +1543,17 @@
       </h2>
 
       <div id="regionRecommendationList"></div>
+
+      <div class="community-board-post-link-row">
+        <a
+          id="communityBoardPostLink"
+          class="secondary-link-button"
+          href="community-board-post.html"
+          data-i18n="community_board_post_link"
+        >
+          今いる街について投稿する
+        </a>
+      </div>
 
       <button
         id="regionRecommendationMoreButton"

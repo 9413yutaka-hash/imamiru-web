@@ -1240,6 +1240,21 @@ const MACHINAU_TRANSLATIONS = {
     en: "📍 Recommendations in {AREA}"
   },
 
+  community_board_heading_dynamic: {
+    ja: "📌 {AREA}の掲示板",
+    en: "📌 {AREA} Community Board"
+  },
+
+  community_board_empty: {
+    ja: "この街の掲示板は、まだ投稿がありません。",
+    en: "There are no posts on this community board yet."
+  },
+
+  community_board_post_link: {
+    ja: "今いる街について投稿する",
+    en: "Post about the city you're in now"
+  },
+
   slider_prev_button: {
     ja: "前の写真",
     en: "Previous photo"

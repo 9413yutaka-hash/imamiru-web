@@ -2581,6 +2581,223 @@ async function handleAdminDisableCommunityBoardPostRequest(
 }
 
 
+// ============================================================
+// 街の掲示板(仮称) Phase3｜旅行者向け公開一覧取得
+// ============================================================
+// 公開機能(旅行者向け)のため、shopTokenValidate/cityInfoGet等と同じ
+// 一般的なIDトークン(匿名認証を含む)で利用できる。requireAdmin()は
+// 使わないが、regionsByGooglePlaceIdの検索のみで新規regions作成は行わない
+// (閲覧だけで地域マスターを増やさない、本部指示)。regionIdをクライアントの
+// 自己申告のまま信用せず、必ずgooglePlaceIdからサーバー側で解決し直す。
+//
+// クエリはregionId(等値)＋status(等値、"approved"固定)のみを組み合わせる。
+// 複数の等値where同士はFirestoreの仕様上、新しい複合indexを必要としない
+// (indexが必要になるのはorderBy等を異なるフィールドの範囲条件と組み合わせた
+// 場合)。orderByは使わず、上限50件を取得してからこの関数内のJS配列sortで
+// createdAt降順に並べ、上位10件だけを返す。将来1地域の承認済み投稿が
+// 50件を超える規模になった場合は、regionId＋status＋createdAtの複合index
+// とカーソルベースのページネーションが別途必要になる(今回は未実装、
+// B判定として報告する)。
+const COMMUNITY_BOARD_PUBLIC_LIST_FETCH_LIMIT =
+  50;
+
+const COMMUNITY_BOARD_PUBLIC_LIST_DISPLAY_LIMIT =
+  10;
+
+async function handleCommunityBoardPostsListRequest(
+  request,
+  response
+) {
+  try {
+    const idToken =
+      readBearerToken(
+        request
+      );
+
+    if (idToken === "") {
+      return response.status(401).json({
+        success: false,
+        message: "認証情報がありません。"
+      });
+    }
+
+    const app =
+      getFirebaseAdminApp();
+
+    try {
+      await getAuth(app)
+        .verifyIdToken(
+          idToken
+        );
+    } catch (verifyError) {
+      return response.status(401).json({
+        success: false,
+        message: "認証情報が正しくありません。"
+      });
+    }
+
+    const database =
+      getFirestore(app);
+
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    const googlePlaceId =
+      typeof requestBody.googlePlaceId === "string"
+        ? requestBody.googlePlaceId
+            .trim()
+            .slice(0, COMMUNITY_BOARD_POST_FIELD_MAX_LENGTHS.googlePlaceId)
+        : "";
+
+    const countryCode =
+      typeof requestBody.countryCode === "string"
+        ? requestBody.countryCode
+            .trim()
+            .slice(0, COMMUNITY_BOARD_POST_FIELD_MAX_LENGTHS.countryCode)
+        : "";
+
+    if (
+      googlePlaceId === "" ||
+      countryCode === ""
+    ) {
+      return response.status(400).json({
+        success: false,
+        message: "地域情報を確認できませんでした。"
+      });
+    }
+
+    const indexKey =
+      buildCommunityBoardRegionIndexKey(
+        countryCode,
+        googlePlaceId
+      );
+
+    if (indexKey === null) {
+      return response.status(400).json({
+        success: false,
+        message: "地域情報を確認できませんでした。"
+      });
+    }
+
+    // 閲覧だけではregionsByGooglePlaceId/regionsを新規作成しない(本部指示)。
+    // 存在しなければ、その地域はまだ投稿が無いとみなし空配列を返す。
+    const indexSnapshot =
+      await database
+        .collection("regionsByGooglePlaceId")
+        .doc(indexKey)
+        .get();
+
+    if (!indexSnapshot.exists) {
+      return response.status(200).json({
+        success: true,
+        posts: []
+      });
+    }
+
+    const indexData =
+      indexSnapshot.data() ||
+      {};
+
+    const regionId =
+      typeof indexData.regionId === "string"
+        ? indexData.regionId
+        : "";
+
+    if (regionId === "") {
+      return response.status(200).json({
+        success: true,
+        posts: []
+      });
+    }
+
+    const querySnapshot =
+      await database
+        .collection("communityBoardPosts")
+        .where(
+          "regionId",
+          "==",
+          regionId
+        )
+        .where(
+          "status",
+          "==",
+          "approved"
+        )
+        .limit(
+          COMMUNITY_BOARD_PUBLIC_LIST_FETCH_LIMIT
+        )
+        .get();
+
+    const posts =
+      querySnapshot.docs.map(
+        function(documentSnapshot) {
+          const data =
+            documentSnapshot.data() ||
+            {};
+
+          const createdAtMillis =
+            data.createdAt &&
+            typeof data.createdAt.toMillis === "function"
+              ? data.createdAt.toMillis()
+              : 0;
+
+          return {
+            postId:
+              documentSnapshot.id,
+
+            text:
+              typeof data.text === "string"
+                ? data.text
+                : "",
+
+            regionId:
+              typeof data.regionId === "string"
+                ? data.regionId
+                : "",
+
+            regionName:
+              typeof data.regionName === "string"
+                ? data.regionName
+                : "",
+
+            createdAtMillis: createdAtMillis
+          };
+        }
+      );
+
+    posts.sort(
+      function(a, b) {
+        return (
+          b.createdAtMillis -
+          a.createdAtMillis
+        );
+      }
+    );
+
+    return response.status(200).json({
+      success: true,
+      posts:
+        posts.slice(
+          0,
+          COMMUNITY_BOARD_PUBLIC_LIST_DISPLAY_LIMIT
+        )
+    });
+  } catch (error) {
+    console.error(
+      "街の掲示板：公開一覧取得エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message: "掲示板の取得中にエラーが発生しました。"
+    });
+  }
+}
+
+
 // Ver1.8 Phase1｜AIコンシェルジュ。モデル名はここ1箇所のみで管理し、
 // 他の箇所へハードコードしない。AI_CONCIERGE_MODEL環境変数があれば
 // それを優先する(未設定時のみ既定値を使う)。
@@ -25156,6 +25373,17 @@ export default async function handler(
     requestBody.mode === "communityBoardPostCreate"
   ) {
     return handleCommunityBoardPostCreateRequest(
+      request,
+      response
+    );
+  }
+
+  // 街の掲示板(仮称) Phase3｜旅行者向け公開一覧取得。管理者権限は不要
+  // (shopTokenValidate等と同じ、匿名認証を含む一般的なIDトークンで利用可)。
+  if (
+    requestBody.mode === "communityBoardPostsList"
+  ) {
+    return handleCommunityBoardPostsListRequest(
       request,
       response
     );
