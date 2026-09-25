@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <meta name="robots" content="noindex, nofollow">
+
+  <title>
+    街の掲示板（仮称）投稿｜マチナウ
+  </title>
+
+  <!-- 街の掲示板 Phase1｜まだ本番導線には出さない実験ページ(URL直打ちで
+       テストする想定、本部指示)。street/shop投稿(post.html)とは完全に
+       独立した新規ページとして作成し、既存post.htmlのフォーム・GPS処理・
+       Firestore書き込みロジックには一切触れない。 -->
+  <style>
+    :root {
+      --navy: #071a33;
+      --blue: #0788c9;
+      --cyan: #04b7d7;
+      --sky: #dff7ff;
+      --white: #ffffff;
+      --text: #15233a;
+      --subtext: #697386;
+      --border: #e2eaf1;
+      --background: #f4f8fb;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0 0 60px;
+      font-family:
+        "Yu Gothic",
+        "Hiragino Kaku Gothic ProN",
+        "Meiryo",
+        sans-serif;
+      background: var(--background);
+      color: var(--text);
+    }
+
+    header {
+      padding: 28px 18px 40px;
+      background: linear-gradient(135deg, #0687c5, #13c3ce);
+      color: var(--white);
+    }
+
+    header .page-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    header h1 {
+      margin: 16px 0 0;
+      font-size: clamp(20px, 5vw, 26px);
+      line-height: 1.5;
+    }
+
+    header p {
+      margin: 10px 0 0;
+      max-width: 560px;
+      color: rgba(255, 255, 255, 0.92);
+      font-size: 13px;
+      line-height: 1.8;
+    }
+
+    main {
+      width: min(100%, 560px);
+      margin: -22px auto 0;
+      padding: 0 18px;
+    }
+
+    .panel {
+      margin-bottom: 16px;
+      padding: 20px;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: var(--white);
+      box-shadow: 0 14px 40px rgba(20, 52, 82, 0.10);
+    }
+
+    .field {
+      margin-bottom: 16px;
+    }
+
+    .field label {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 110px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 15px;
+      font-family: inherit;
+      resize: vertical;
+    }
+
+    .char-count {
+      margin-top: 4px;
+      font-size: 12px;
+      color: var(--subtext);
+      text-align: right;
+    }
+
+    .region-box {
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--sky);
+      font-size: 13px;
+    }
+
+    .primary-button {
+      display: block;
+      width: 100%;
+      padding: 13px;
+      border: none;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      color: var(--white);
+      font-size: 15px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .primary-button:disabled {
+      opacity: 0.55;
+      cursor: default;
+    }
+
+    .secondary-button {
+      display: block;
+      width: 100%;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--white);
+      color: var(--navy);
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .message-box {
+      margin-top: 10px;
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .message-box.error {
+      color: #b8354a;
+    }
+
+    .message-box.success {
+      color: #17845a;
+    }
+
+    .completion-box {
+      display: none;
+      padding: 18px;
+      border: 1px solid #cfeefa;
+      border-radius: 14px;
+      background: #effbff;
+      color: #24627e;
+      font-size: 14px;
+      line-height: 1.9;
+    }
+  </style>
+</head>
+
+<body>
+
+  <header>
+    <div class="page-label">
+      📋 街の掲示板（仮称）
+    </div>
+
+    <h1>
+      この街を訪れる人に、知ってほしいことを残そう
+    </h1>
+
+    <p>
+      「豊見城といえばマンゴーだよ」「ここから見る夕日がきれいだよ」など、旅行者や次にこの街を訪れる人へ伝えたいひとことを投稿できます。内容を確認のうえ、街の掲示板に掲載します。
+    </p>
+  </header>
+
+  <main>
+
+    <div class="panel" id="formPanel">
+
+      <div class="field">
+        <label>
+          現在地
+        </label>
+
+        <button
+          id="detectLocationButton"
+          type="button"
+          class="secondary-button"
+        >
+          現在地から対象の街を調べる
+        </button>
+
+        <div
+          id="regionResultBox"
+          class="region-box"
+          style="display:none; margin-top:10px;"
+        ></div>
+
+        <div
+          id="locationMessage"
+          class="message-box"
+        ></div>
+      </div>
+
+      <div class="field">
+        <label for="postTextInput">
+          投稿内容
+        </label>
+
+        <textarea
+          id="postTextInput"
+          maxlength="300"
+          placeholder="例：豊見城といえばマンゴーだよ。ぜひ食べてみて！"
+        ></textarea>
+
+        <div class="char-count">
+          <span id="charCountText">0</span> / 300
+        </div>
+      </div>
+
+      <button
+        id="submitButton"
+        type="button"
+        class="primary-button"
+        disabled
+      >
+        投稿する
+      </button>
+
+      <div
+        id="submitMessage"
+        class="message-box"
+      ></div>
+
+    </div>
+
+    <div
+      id="completionBox"
+      class="completion-box"
+    >
+      投稿ありがとうございます。<br>
+      内容を確認後、街の掲示板に掲載します。
+    </div>
+
+  </main>
+
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"></script>
+  <script src="firebase.js"></script>
+
+  <script>
+    // 既存app.jsのGOOGLE_MAPS_SCRIPT_URLと同じ公開鍵(クライアント公開前提、
+    // referrer制限あり)をそのまま使う。新しい鍵は発行しない。
+    const GOOGLE_MAPS_SCRIPT_URL =
+      "https://maps.googleapis.com/maps/api/js?key=AIzaSyC7LLuNBYIXKT1YcrIaiuwyFssKQyMMjkU&libraries=places";
+
+    let googleMapsLoadPromise = null;
+
+    function ensureGoogleMapsLoadedForCommunityBoard() {
+      if (googleMapsLoadPromise) {
+        return googleMapsLoadPromise;
+      }
+
+      if (typeof google !== "undefined" && google.maps && google.maps.Geocoder) {
+        googleMapsLoadPromise = Promise.resolve(true);
+        return googleMapsLoadPromise;
+      }
+
+      googleMapsLoadPromise = new Promise(function (resolve) {
+        const script = document.createElement("script");
+        script.src = GOOGLE_MAPS_SCRIPT_URL;
+        script.async = true;
+        script.defer = true;
+
+        script.onload = function () {
+          resolve(true);
+        };
+
+        script.onerror = function () {
+          googleMapsLoadPromise = null;
+          resolve(false);
+        };
+
+        document.head.appendChild(script);
+      });
+
+      return googleMapsLoadPromise;
+    }
+
+    function findAddressComponent(addressComponents, typeName) {
+      if (!Array.isArray(addressComponents)) {
+        return null;
+      }
+
+      return (
+        addressComponents.find(function (component) {
+          return Array.isArray(component.types) && component.types.includes(typeName);
+        }) || null
+      );
+    }
+
+    // Phase0実証済み：那覇市の順方向/逆方向Geocoderがいずれも
+    // types=["locality","political"]の同一place_idへ到達することを
+    // 実機確認済み。Phase1では現在地(逆Geocoder)経路のみを実装する。
+    // 国別のtype優先順位(postal_town等)への対応は将来工程。
+    function resolveCommunityBoardRegionFromGeocoderResults(results) {
+      const localityResult =
+        Array.isArray(results)
+          ? results.find(function (result) {
+              return (
+                Array.isArray(result.types) &&
+                result.types.includes("locality") &&
+                typeof result.place_id === "string" &&
+                result.place_id !== ""
+              );
+            })
+          : null;
+
+      if (!localityResult) {
+        return null;
+      }
+
+      const countryComponent = findAddressComponent(
+        localityResult.address_components,
+        "country"
+      );
+
+      const localityComponent = findAddressComponent(
+        localityResult.address_components,
+        "locality"
+      );
+
+      const countryCode =
+        countryComponent && typeof countryComponent.short_name === "string"
+          ? countryComponent.short_name
+          : "";
+
+      const regionName =
+        localityComponent && typeof localityComponent.long_name === "string"
+          ? localityComponent.long_name
+          : "";
+
+      if (countryCode === "" || regionName === "") {
+        return null;
+      }
+
+      return {
+        googlePlaceId: localityResult.place_id,
+        countryCode: countryCode,
+        regionName: regionName,
+        administrativeLevel: "locality"
+      };
+    }
+
+    let resolvedCommunityBoardRegion = null;
+
+    const detectLocationButton = document.getElementById("detectLocationButton");
+    const regionResultBox = document.getElementById("regionResultBox");
+    const locationMessage = document.getElementById("locationMessage");
+    const postTextInput = document.getElementById("postTextInput");
+    const charCountText = document.getElementById("charCountText");
+    const submitButton = document.getElementById("submitButton");
+    const submitMessage = document.getElementById("submitMessage");
+    const formPanel = document.getElementById("formPanel");
+    const completionBox = document.getElementById("completionBox");
+
+    function showMessage(element, text, type) {
+      element.textContent = text;
+      element.className = "message-box" + (type ? " " + type : "");
+    }
+
+    function updateSubmitButtonEnabled() {
+      submitButton.disabled = !(
+        resolvedCommunityBoardRegion &&
+        postTextInput.value.trim() !== ""
+      );
+    }
+
+    postTextInput.addEventListener("input", function () {
+      charCountText.textContent = String(postTextInput.value.length);
+      updateSubmitButtonEnabled();
+    });
+
+    detectLocationButton.addEventListener("click", function () {
+      if (!navigator.geolocation) {
+        showMessage(locationMessage, "この端末では現在地を取得できません。", "error");
+        return;
+      }
+
+      detectLocationButton.disabled = true;
+      showMessage(locationMessage, "現在地を取得しています…", "");
+      regionResultBox.style.display = "none";
+
+      navigator.geolocation.getCurrentPosition(
+        async function (position) {
+          try {
+            const mapsLoaded = await ensureGoogleMapsLoadedForCommunityBoard();
+
+            if (!mapsLoaded) {
+              showMessage(locationMessage, "地図情報の読み込みに失敗しました。時間をおいて、もう一度お試しください。", "error");
+              return;
+            }
+
+            const geocoder = new google.maps.Geocoder();
+
+            geocoder.geocode(
+              {
+                location: {
+                  lat: position.coords.latitude,
+                  lng: position.coords.longitude
+                }
+              },
+              function (results, status) {
+                if (status !== "OK" || !Array.isArray(results)) {
+                  showMessage(locationMessage, "対象の街を特定できませんでした。", "error");
+                  return;
+                }
+
+                const region = resolveCommunityBoardRegionFromGeocoderResults(results);
+
+                if (!region) {
+                  showMessage(locationMessage, "対象の街を特定できませんでした。", "error");
+                  return;
+                }
+
+                resolvedCommunityBoardRegion = region;
+
+                regionResultBox.textContent = "対象の街：" + region.regionName;
+                regionResultBox.style.display = "";
+
+                showMessage(locationMessage, "", "");
+                updateSubmitButtonEnabled();
+              }
+            );
+          } catch (error) {
+            console.error("街の特定に失敗しました：", error);
+            showMessage(locationMessage, "対象の街を特定できませんでした。", "error");
+          } finally {
+            detectLocationButton.disabled = false;
+          }
+        },
+        function () {
+          detectLocationButton.disabled = false;
+          showMessage(locationMessage, "現在地を取得できませんでした。位置情報の利用を許可してください。", "error");
+        }
+      );
+    });
+
+    let anonymousAuthPromise = null;
+
+    function getAnonymousIdTokenForCommunityBoard() {
+      if (typeof firebase === "undefined" || !firebase.auth) {
+        return Promise.reject(new Error("投稿の準備ができませんでした。"));
+      }
+
+      const auth = firebase.auth();
+
+      if (auth.currentUser) {
+        return auth.currentUser.getIdToken();
+      }
+
+      if (!anonymousAuthPromise) {
+        anonymousAuthPromise = auth
+          .signInAnonymously()
+          .then(function (credential) {
+            return credential.user;
+          })
+          .catch(function (error) {
+            anonymousAuthPromise = null;
+            throw error;
+          });
+      }
+
+      return anonymousAuthPromise.then(function (user) {
+        return user.getIdToken();
+      });
+    }
+
+    submitButton.addEventListener("click", async function () {
+      if (!resolvedCommunityBoardRegion) {
+        showMessage(submitMessage, "先に現在地から対象の街を調べてください。", "error");
+        return;
+      }
+
+      const text = postTextInput.value.trim();
+
+      if (text === "") {
+        showMessage(submitMessage, "投稿内容を入力してください。", "error");
+        return;
+      }
+
+      submitButton.disabled = true;
+      showMessage(submitMessage, "送信しています…", "");
+
+      try {
+        const idToken = await getAnonymousIdTokenForCommunityBoard();
+
+        const response = await fetch("/api/moderate-submission", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + idToken
+          },
+          body: JSON.stringify({
+            mode: "communityBoardPostCreate",
+            text: text,
+            googlePlaceId: resolvedCommunityBoardRegion.googlePlaceId,
+            countryCode: resolvedCommunityBoardRegion.countryCode,
+            regionName: resolvedCommunityBoardRegion.regionName,
+            administrativeLevel: resolvedCommunityBoardRegion.administrativeLevel
+          })
+        });
+
+        let responseData = null;
+
+        try {
+          responseData = await response.json();
+        } catch (jsonError) {
+          throw new Error("投稿の送信に失敗しました。");
+        }
+
+        if (!response.ok || !responseData || responseData.success !== true) {
+          throw new Error((responseData && responseData.message) || "投稿の送信に失敗しました。");
+        }
+
+        formPanel.style.display = "none";
+        completionBox.style.display = "block";
+      } catch (error) {
+        console.error("街の掲示板投稿エラー：", error);
+        showMessage(submitMessage, error.message || "投稿の送信に失敗しました。", "error");
+        submitButton.disabled = false;
+      }
+    });
+  </script>
+
+</body>
+</html>

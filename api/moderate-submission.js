@@ -1607,6 +1607,484 @@ async function handleAdminListStoreSubmissionsRequest(
 }
 
 
+// ============================================================
+// 街の掲示板(仮称) Phase1
+// ============================================================
+// 沖縄41市町村固定配列(OKINAWA_MUNICIPALITY_TO_REGION_NAME等)には一切
+// 依存しない、日本全国→世界展開を見据えたオンデマンド地域マスター。
+// regionName(表示名文字列)だけで地域を識別せず、Google Geocoderの
+// place_id(googlePlaceId)を「地域を突き止めるための外部参照キー」として
+// 使い、Machinau独自のregionId(Firestore自動生成document ID)を
+// 実際の内部識別子とする(Phase0調査で合意した正式方針：
+// Google place_idそのものをMachinau永久regionIdにはしない)。
+//
+// regions/{regionId} (自動生成ID、最小6フィールドのみ)
+//   googlePlaceId / countryCode / regionName / administrativeLevel
+//   createdAt / updatedAt
+//
+// regionsByGooglePlaceId/{countryCode_googlePlaceId} (検索専用の内部index、
+// 表には出さない)
+//   regionId: 対応するregions document ID
+//   createdAt
+//
+// 同じgooglePlaceIdに対して同時に2件のregionが作られないよう、
+// regionsByGooglePlaceId側の決定的なdocument ID(countryCode+googlePlaceId
+// から機械的に組み立てる、Firestoreのクエリを使わない)に対して
+// runTransaction()を使う。これは既存のclaimRegionRecommendation
+// TranslationGeneration()等と全く同じ「決定的キーのdocumentへの
+// transaction.get()→無ければtransaction.set()」パターンで、Firestore
+// トランザクションの競合検知(同じdocumentを読んだ後に他方が先に書き込むと
+// 自動リトライされる)にそのまま乗る、実証済みの安全な手法。
+const COMMUNITY_BOARD_POST_FIELD_MAX_LENGTHS =
+  {
+    // 既存の「本文」系上限(SHOP_SUBMISSION_FIELD_MAX_LENGTHS.content)を
+    // そのまま再利用する(掲示板用に新しい極端な値を作らない、本部指示)。
+    text: SHOP_SUBMISSION_FIELD_MAX_LENGTHS.content,
+
+    // 既存の「地名」系上限(SHOP_SUBMISSION_FIELD_MAX_LENGTHS.address)を
+    // そのまま再利用する。
+    regionName: SHOP_SUBMISSION_FIELD_MAX_LENGTHS.address,
+
+    googlePlaceId: 300,
+    countryCode: 10,
+    administrativeLevel: 60
+  };
+
+function sanitizeCommunityBoardRegionIndexKeyPart(
+  rawText
+) {
+  if (typeof rawText !== "string") {
+    return "";
+  }
+
+  // Google place_id・ISO countryCodeはいずれも"/"を含まない既知の文字集合
+  // だが、Firestore document IDの安全確認(既存buildCityInfoRegionKey()等と
+  // 同じ発想)として"/"だけは念のため除去する。
+  return rawText
+    .trim()
+    .replace(/\//g, "");
+}
+
+function buildCommunityBoardRegionIndexKey(
+  countryCode,
+  googlePlaceId
+) {
+  const safeCountryCode =
+    sanitizeCommunityBoardRegionIndexKeyPart(
+      countryCode
+    );
+
+  const safeGooglePlaceId =
+    sanitizeCommunityBoardRegionIndexKeyPart(
+      googlePlaceId
+    );
+
+  if (
+    safeCountryCode === "" ||
+    safeGooglePlaceId === ""
+  ) {
+    return null;
+  }
+
+  const indexKey =
+    safeCountryCode +
+    "_" +
+    safeGooglePlaceId;
+
+  if (
+    indexKey === "." ||
+    indexKey === ".."
+  ) {
+    return null;
+  }
+
+  if (/^__.*__$/.test(indexKey)) {
+    return null;
+  }
+
+  if (Buffer.byteLength(indexKey, "utf8") > 1500) {
+    return null;
+  }
+
+  return indexKey;
+}
+
+// googlePlaceIdから既存regionを検索し、無ければ作成する。Machinau独自
+// regionId(regions.doc()の自動生成ID)を返す。同じgooglePlaceIdに対する
+// 同時リクエストでも重複regionが作られないことをtransactionで保証する。
+async function resolveOrCreateCommunityBoardRegion(
+  database,
+  googlePlaceId,
+  countryCode,
+  regionName,
+  administrativeLevel
+) {
+  const indexKey =
+    buildCommunityBoardRegionIndexKey(
+      countryCode,
+      googlePlaceId
+    );
+
+  if (indexKey === null) {
+    return null;
+  }
+
+  const indexRef =
+    database
+      .collection("regionsByGooglePlaceId")
+      .doc(indexKey);
+
+  const regionsCollectionRef =
+    database.collection("regions");
+
+  return database.runTransaction(
+    async function(transaction) {
+      const indexSnapshot =
+        await transaction.get(
+          indexRef
+        );
+
+      if (indexSnapshot.exists) {
+        const indexData =
+          indexSnapshot.data() ||
+          {};
+
+        return typeof indexData.regionId === "string"
+          ? indexData.regionId
+          : null;
+      }
+
+      const newRegionRef =
+        regionsCollectionRef.doc();
+
+      transaction.set(
+        newRegionRef,
+        {
+          googlePlaceId: googlePlaceId,
+          countryCode: countryCode,
+          regionName: regionName,
+          administrativeLevel: administrativeLevel,
+
+          createdAt:
+            FieldValue.serverTimestamp(),
+
+          updatedAt:
+            FieldValue.serverTimestamp()
+        }
+      );
+
+      transaction.set(
+        indexRef,
+        {
+          regionId: newRegionRef.id,
+
+          createdAt:
+            FieldValue.serverTimestamp()
+        }
+      );
+
+      return newRegionRef.id;
+    }
+  );
+}
+
+// クライアントから届く自由入力(text/googlePlaceId/countryCode/regionName/
+// administrativeLevel)だけを取り出し、サニタイズする。regionId・status・
+// approvedAt・disabledAtに対応する値はここでは一切扱わない(呼び出し元の
+// handleCommunityBoardPostCreateRequest()がすべてサーバー側で確定する)。
+function sanitizeCommunityBoardPostFormData(
+  requestBody
+) {
+  const text =
+    sanitizeRegionEditorialText(
+      requestBody.text,
+      COMMUNITY_BOARD_POST_FIELD_MAX_LENGTHS.text
+    );
+
+  const googlePlaceId =
+    typeof requestBody.googlePlaceId === "string"
+      ? requestBody.googlePlaceId
+          .trim()
+          .slice(0, COMMUNITY_BOARD_POST_FIELD_MAX_LENGTHS.googlePlaceId)
+      : "";
+
+  const countryCode =
+    typeof requestBody.countryCode === "string"
+      ? requestBody.countryCode
+          .trim()
+          .slice(0, COMMUNITY_BOARD_POST_FIELD_MAX_LENGTHS.countryCode)
+      : "";
+
+  const regionName =
+    sanitizeRegionEditorialText(
+      requestBody.regionName,
+      COMMUNITY_BOARD_POST_FIELD_MAX_LENGTHS.regionName
+    );
+
+  const administrativeLevel =
+    typeof requestBody.administrativeLevel === "string"
+      ? requestBody.administrativeLevel
+          .trim()
+          .slice(0, COMMUNITY_BOARD_POST_FIELD_MAX_LENGTHS.administrativeLevel)
+      : "";
+
+  return {
+    text: text,
+    googlePlaceId: googlePlaceId,
+    countryCode: countryCode,
+    regionName: regionName,
+    administrativeLevel: administrativeLevel
+  };
+}
+
+async function handleCommunityBoardPostCreateRequest(
+  request,
+  response
+) {
+  try {
+    const idToken =
+      readBearerToken(
+        request
+      );
+
+    if (idToken === "") {
+      return response.status(401).json({
+        success: false,
+        message: "認証情報がありません。"
+      });
+    }
+
+    const app =
+      getFirebaseAdminApp();
+
+    try {
+      await getAuth(app)
+        .verifyIdToken(
+          idToken
+        );
+    } catch (verifyError) {
+      return response.status(401).json({
+        success: false,
+        message: "認証情報が正しくありません。"
+      });
+    }
+
+    const database =
+      getFirestore(app);
+
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    const formData =
+      sanitizeCommunityBoardPostFormData(
+        requestBody
+      );
+
+    if (
+      formData.text === "" ||
+      formData.googlePlaceId === "" ||
+      formData.countryCode === "" ||
+      formData.regionName === ""
+    ) {
+      return response.status(400).json({
+        success: false,
+        message: "入力内容を確認してください。"
+      });
+    }
+
+    const regionId =
+      await resolveOrCreateCommunityBoardRegion(
+        database,
+        formData.googlePlaceId,
+        formData.countryCode,
+        formData.regionName,
+        formData.administrativeLevel
+      );
+
+    if (!regionId) {
+      return response.status(400).json({
+        success: false,
+        message: "地域情報を確認できませんでした。"
+      });
+    }
+
+    // server確定フィールド：regionId(上で解決済みの値)、status("pending"
+    // 固定)、approvedAt/disabledAt(null固定)。クライアントから同名の値が
+    // 送られてきても一切参照しない。
+    const postData =
+      {
+        text:
+          formData.text,
+
+        regionId: regionId,
+
+        googlePlaceId:
+          formData.googlePlaceId,
+
+        countryCode:
+          formData.countryCode,
+
+        regionName:
+          formData.regionName,
+
+        administrativeLevel:
+          formData.administrativeLevel,
+
+        status:
+          "pending",
+
+        approvedAt: null,
+
+        disabledAt: null,
+
+        createdAt:
+          FieldValue.serverTimestamp(),
+
+        updatedAt:
+          FieldValue.serverTimestamp()
+      };
+
+    const postDocumentReference =
+      await database
+        .collection("communityBoardPosts")
+        .add(
+          postData
+        );
+
+    // 既存Moderation関数群(buildModerationInput/callOpenAiModeration/
+    // matchesSafetyCriticalKeywords/buildReviewReason/classifyModerationError/
+    // AI_REVIEW_VERSION、いずれもexport済みの独立関数)をそのまま呼び出す。
+    // shopSubmissionCreateと異なり、Moderationが安全判定でも絶対に
+    // status:"approved"へは進めない(今回Phase1の正式仕様：人間承認は
+    // Phase2で実装する)。aiReviewStatus/aiReviewReasonは、その人間承認
+    // 作業のための参考情報としてのみ記録する。
+    try {
+      const moderationInputData =
+        {
+          content: formData.text
+        };
+
+      const inputItems =
+        buildModerationInput(
+          moderationInputData
+        );
+
+      const moderationResults =
+        await callOpenAiModeration(
+          inputItems
+        );
+
+      const allSafe =
+        moderationResults.every(
+          function(result) {
+            return (
+              result &&
+              result.flagged === false
+            );
+          }
+        );
+
+      const isSafetyCriticalContent =
+        matchesSafetyCriticalKeywords(
+          moderationInputData
+        );
+
+      if (
+        allSafe &&
+        !isSafetyCriticalContent
+      ) {
+        await postDocumentReference.update(
+          {
+            aiReviewStatus:
+              "SAFE",
+
+            aiReviewedAt:
+              FieldValue.serverTimestamp(),
+
+            aiReviewVersion:
+              AI_REVIEW_VERSION
+          }
+        );
+      } else {
+        const reasonText =
+          allSafe && isSafetyCriticalContent
+            ? "安全・災害・交通に関する情報の可能性があるため、内容を人間が確認します。"
+            : buildReviewReason(
+                moderationResults
+              );
+
+        await postDocumentReference.update(
+          {
+            aiReviewStatus:
+              "REVIEW",
+
+            aiReviewReason:
+              reasonText,
+
+            aiReviewedAt:
+              FieldValue.serverTimestamp(),
+
+            aiReviewVersion:
+              AI_REVIEW_VERSION
+          }
+        );
+      }
+    } catch (moderationError) {
+      const reasonText =
+        classifyModerationError(
+          moderationError
+        );
+
+      await postDocumentReference.update(
+        {
+          aiReviewStatus:
+            "ERROR",
+
+          aiReviewReason:
+            reasonText,
+
+          aiReviewedAt:
+            FieldValue.serverTimestamp(),
+
+          aiReviewVersion:
+            AI_REVIEW_VERSION
+        }
+      ).catch(
+        function(updateError) {
+          console.error(
+            "街の掲示板：AI審査エラー状態の保存にも失敗：",
+            updateError
+          );
+        }
+      );
+
+      console.error(
+        "街の掲示板：AI自動審査エラー：",
+        moderationError
+      );
+    }
+
+    return response.status(200).json({
+      success: true,
+      postId: postDocumentReference.id,
+      regionId: regionId
+    });
+  } catch (error) {
+    console.error(
+      "街の掲示板投稿：処理エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message: "投稿の送信中にエラーが発生しました。時間をおいて、もう一度お試しください。"
+    });
+  }
+}
+
+
 // Ver1.8 Phase1｜AIコンシェルジュ。モデル名はここ1箇所のみで管理し、
 // 他の箇所へハードコードしない。AI_CONCIERGE_MODEL環境変数があれば
 // それを優先する(未設定時のみ既定値を使う)。
@@ -24169,6 +24647,19 @@ export default async function handler(
     requestBody.mode === "adminListStoreSubmissions"
   ) {
     return handleAdminListStoreSubmissionsRequest(
+      request,
+      response
+    );
+  }
+
+  // 街の掲示板(仮称) Phase1｜公開機能(旅行者/地元の人向け)のため、
+  // 店舗token検証系とは独立した、匿名認証を含む一般的なIDトークンで
+  // 利用できるモード(shopTokenValidate等と同じ認証方式)。既存モードの
+  // いずれにも一切触れない。
+  if (
+    requestBody.mode === "communityBoardPostCreate"
+  ) {
+    return handleCommunityBoardPostCreateRequest(
       request,
       response
     );
