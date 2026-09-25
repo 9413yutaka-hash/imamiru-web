@@ -210,6 +210,21 @@
       color: rgba(255, 255, 255, 0.92);
       line-height: 1.8;
     }
+
+    /* TOPへ戻る導線｜投稿ボタンより目立たせない補助リンク。 */
+    .top-back-link-row {
+      margin: 4px 0 0;
+      text-align: center;
+    }
+
+    .top-back-link {
+      display: inline-block;
+      padding: 10px 8px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--subtext);
+      text-decoration: none;
+    }
   </style>
 </head>
 
@@ -304,6 +319,10 @@
       投稿ありがとうございます。<br>
       内容を確認後、街の掲示板に掲載します。
     </div>
+
+    <p class="top-back-link-row">
+      <a class="top-back-link" href="/index.html">← マチナウTOPへ戻る</a>
+    </p>
 
   </main>
 
