@@ -1255,6 +1255,11 @@ const MACHINAU_TRANSLATIONS = {
     en: "Post about the city you're in now"
   },
 
+  community_board_post_link_remote: {
+    ja: "{AREA}について投稿する",
+    en: "Post about {AREA}"
+  },
+
   slider_prev_button: {
     ja: "前の写真",
     en: "Previous photo"

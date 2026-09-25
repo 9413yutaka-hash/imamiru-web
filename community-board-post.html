@@ -186,6 +186,30 @@
       font-size: 14px;
       line-height: 1.9;
     }
+
+    /* 街の掲示板 Phase6｜遠隔地(現在地以外)へ投稿する場合の投稿先明示バナー。
+       現在地投稿(既存Phase1)の見た目は一切変更せず、遠隔地の場合だけこの
+       バナーを表示する。 */
+    .remote-region-banner {
+      display: none;
+      margin-bottom: 16px;
+      padding: 14px 16px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.14);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .remote-region-banner h2 {
+      margin: 0 0 6px;
+      font-size: 16px;
+    }
+
+    .remote-region-banner p {
+      margin: 0;
+      font-size: 12.5px;
+      color: rgba(255, 255, 255, 0.92);
+      line-height: 1.8;
+    }
   </style>
 </head>
 
@@ -203,13 +227,20 @@
     <p>
       「豊見城といえばマンゴーだよ」「ここから見る夕日がきれいだよ」など、旅行者や次にこの街を訪れる人へ伝えたいひとことを投稿できます。内容を確認のうえ、街の掲示板に掲載します。
     </p>
+
+    <!-- 街の掲示板 Phase6｜遠隔地投稿時だけ表示する投稿先バナー
+         (「現在地にいます」という表現は使わない、本部指示)。 -->
+    <div id="remoteRegionBanner" class="remote-region-banner">
+      <h2 id="remoteRegionBannerHeading"></h2>
+      <p id="remoteRegionBannerDescription"></p>
+    </div>
   </header>
 
   <main>
 
     <div class="panel" id="formPanel">
 
-      <div class="field">
+      <div class="field" id="currentLocationField">
         <label>
           現在地
         </label>
@@ -388,6 +419,7 @@
     let resolvedCommunityBoardRegion = null;
 
     const detectLocationButton = document.getElementById("detectLocationButton");
+    const currentLocationField = document.getElementById("currentLocationField");
     const regionResultBox = document.getElementById("regionResultBox");
     const locationMessage = document.getElementById("locationMessage");
     const postTextInput = document.getElementById("postTextInput");
@@ -396,6 +428,9 @@
     const submitMessage = document.getElementById("submitMessage");
     const formPanel = document.getElementById("formPanel");
     const completionBox = document.getElementById("completionBox");
+    const remoteRegionBanner = document.getElementById("remoteRegionBanner");
+    const remoteRegionBannerHeading = document.getElementById("remoteRegionBannerHeading");
+    const remoteRegionBannerDescription = document.getElementById("remoteRegionBannerDescription");
 
     function showMessage(element, text, type) {
       element.textContent = text;
@@ -407,6 +442,46 @@
         resolvedCommunityBoardRegion &&
         postTextInput.value.trim() !== ""
       );
+    }
+
+    // 街の掲示板 Phase6｜TOPの「○○について投稿する」リンクが付けた
+    // URLパラメータを読み取る。regionId自体はここでもどこでも一切扱わない
+    // (サーバー側が毎回googlePlaceId/countryCodeから解決する、本部指示)。
+    // Phase4のresolveGooglePlaceIdForAreaName()と同じ4フィールドのみを
+    // 受け渡しに使う既存の考え方をそのまま踏襲する。
+    const remotePostUrlParams = new URLSearchParams(window.location.search);
+    const remoteGooglePlaceId = remotePostUrlParams.get("googlePlaceId") || "";
+    const remoteCountryCode = remotePostUrlParams.get("countryCode") || "";
+    const remoteRegionName = remotePostUrlParams.get("regionName") || "";
+    const remoteAdministrativeLevel = remotePostUrlParams.get("administrativeLevel") || "";
+
+    const isRemotePostMode =
+      remoteGooglePlaceId !== "" &&
+      remoteCountryCode !== "" &&
+      remoteRegionName !== "";
+
+    if (isRemotePostMode) {
+      resolvedCommunityBoardRegion = {
+        googlePlaceId: remoteGooglePlaceId,
+        countryCode: remoteCountryCode,
+        regionName: remoteRegionName,
+        administrativeLevel: remoteAdministrativeLevel
+      };
+
+      // 現在地取得の導線ごと隠す(GPSを要求しない、投稿先はすでに確定済み、
+      // 本部指示)。「現在地にいます」という表現は使わない。
+      if (currentLocationField) {
+        currentLocationField.style.display = "none";
+      }
+
+      if (remoteRegionBanner && remoteRegionBannerHeading && remoteRegionBannerDescription) {
+        remoteRegionBannerHeading.textContent = "📌 " + remoteRegionName + "の掲示板に投稿";
+        remoteRegionBannerDescription.textContent =
+          remoteRegionName + "について知っていること、今の情報、おすすめなどを教えてください。";
+        remoteRegionBanner.style.display = "block";
+      }
+
+      updateSubmitButtonEnabled();
     }
 
     postTextInput.addEventListener("input", function () {

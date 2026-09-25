@@ -11651,11 +11651,18 @@ async function fetchCommunityBoardPostsForCurrentArea(
 // 街の掲示板 Phase5｜imageUrlは地域代表画像(1地域につき1枚、投稿カードの
 // 中には入れない)。空文字/未指定の場合はimg要素自体を生成しない
 // (壊れた画像アイコンや空枠を出さない、本部指示)。
+// 街の掲示板 Phase6｜remoteRegionInfoは「ほかの地域を見る」経由の場合だけ
+// {googlePlaceId, countryCode, administrativeLevel}を渡す(現在地表示では
+// 未指定のまま、既存呼び出し元loadCommunityBoardForCurrentArea()は無変更)。
+// 投稿リンクの遷移先URLを組み立てるためだけに使い、regionIdの解決自体は
+// 引き続きサーバー側(communityBoardPostCreate→resolveOrCreateCommunityBoardRegion())
+// が行う。
 function renderCommunityBoardForCurrentArea(
   regionName,
   posts,
   isManualSelection,
-  imageUrl
+  imageUrl,
+  remoteRegionInfo
 ) {
   const section =
     document.getElementById(
@@ -11745,12 +11752,75 @@ function renderCommunityBoardForCurrentArea(
     );
 
   if (postLink) {
-    // 遠隔地閲覧中は「今いる街について投稿する」を出さない
-    // (現在地投稿であることが前提のリンクのため、誤解を防ぐ、本部指示)。
-    postLink.style.display =
-      isManualSelection
-        ? "none"
-        : "";
+    if (
+      isManualSelection &&
+      remoteRegionInfo &&
+      remoteRegionInfo.googlePlaceId
+    ) {
+      // 街の掲示板 Phase6｜遠隔地表示中は「○○について投稿する」に文言を
+      // 差し替え、投稿先地域をURLパラメータで渡す(community-board-post.html
+      // 側でこれを読み取り、サーバーへ送るgooglePlaceId/countryCode/
+      // regionName/administrativeLevelとして使う。regionId自体はここでは
+      // 一切扱わない、サーバー側で毎回解決する、本部指示)。data-i18nを
+      // 一時的に外し、静的翻訳の巻き戻りで文言が消えないようにする。
+      postLink.removeAttribute(
+        "data-i18n"
+      );
+
+      postLink.textContent =
+        getMachinauTranslation(
+          "community_board_post_link_remote",
+          currentLanguage
+        ).replace(
+          "{AREA}",
+          regionName
+        );
+
+      const remotePostParams =
+        new URLSearchParams(
+          {
+            googlePlaceId: remoteRegionInfo.googlePlaceId,
+            countryCode: remoteRegionInfo.countryCode || "",
+            regionName: regionName || "",
+            administrativeLevel: remoteRegionInfo.administrativeLevel || ""
+          }
+        );
+
+      postLink.setAttribute(
+        "href",
+        "community-board-post.html?" +
+          remotePostParams.toString()
+      );
+
+      postLink.style.display =
+        "";
+    } else if (isManualSelection) {
+      // 遠隔地の地域解決に失敗した場合は、誤った投稿先を示さないよう
+      // リンク自体を出さない(本部指示：投稿先を間違えないUI)。
+      postLink.style.display =
+        "none";
+    } else {
+      // 現在地表示：既存Phase3の「今いる街について投稿する」に戻す
+      // (data-i18nを再度付け直し、通常の多言語切り替えに追従させる)。
+      postLink.setAttribute(
+        "data-i18n",
+        "community_board_post_link"
+      );
+
+      postLink.textContent =
+        getMachinauTranslation(
+          "community_board_post_link",
+          currentLanguage
+        );
+
+      postLink.setAttribute(
+        "href",
+        "community-board-post.html"
+      );
+
+      postLink.style.display =
+        "";
+    }
   }
 
   if (
@@ -11959,7 +12029,14 @@ function resolveGooglePlaceIdForAreaName(
               {
                 googlePlaceId: localityResult.place_id,
                 countryCode: countryCode,
-                regionName: regionName
+                regionName: regionName,
+
+                // 街の掲示板 Phase6｜このresolveGooglePlaceIdForAreaName()は
+                // localityタイプのresultにしかマッチしないため、常に
+                // "locality"で確定できる(community-board-post.htmlの
+                // 現在地取得処理と同じ既存の考え方をそのまま踏襲、
+                // 国・都道府県名の新規ハードコードではない)。
+                administrativeLevel: "locality"
               }
             );
           }
@@ -12008,7 +12085,8 @@ async function loadCommunityBoardForSelectedArea(
     resolvedRegion.regionName,
     fetchResult.posts,
     true,
-    fetchResult.imageUrl
+    fetchResult.imageUrl,
+    resolvedRegion
   );
 }
 
