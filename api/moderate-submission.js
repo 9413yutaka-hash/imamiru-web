@@ -5,6 +5,7 @@ import {
 } from "firebase-admin/app";
 
 import {
+  FieldPath,
   FieldValue,
   Timestamp,
   getFirestore
@@ -2514,22 +2515,149 @@ async function handleCommunityBoardPostCreateRequest(
 // 追加しない(本部指示)。expiresAtは今回も持たせない(運営操作による
 // 終了のみ、時間による自動終了ではない)。
 
-// 一覧表示用：status別に等値whereのみで取得する(orderByと組み合わせない
-// ため新しい複合indexを要求しない、店舗管理Phase3のadminListStoreSubmissions
-// と同じ方針)。並べ替えは取得後にこの関数内のJS配列sortで行う。
-// 街の掲示板 Phase8｜pending/approvedは「Firestoreに保存する件数」と
-// 「管理画面で一度に取得・表示する件数」を分ける方針のため、保存件数に
-// 上限は設けず、この定数は管理画面の取得上限としてのみ扱う。
-// rejected/expiredはPhase8からFirestore側の保持件数自体を最新
-// COMMUNITY_BOARD_HISTORY_KEEP_COUNT件に揃えるため、この取得上限も
-// 同じ値にする(保存件数と表示件数が一致する状態)。
+// 一覧表示用のページサイズ／取得上限。
+// 街の掲示板 Phase13｜pending/approvedは、200件を超えると一部投稿が
+// 管理画面から恒久的に取りこぼされ得る問題(orderByを伴わない等値
+// where+limitは返却順序が保証されないため)が総点検で判明したため、
+// Firestore cursor paginationへ変更した。この定数のpending/approved値は
+// 「一度に取得する上限」から「1ページあたりの件数」へ意味が変わる
+// (総件数の上限ではない、保存件数に上限は無いまま)。
+// rejected/expiredはPhase8からFirestore側の保持件数自体が最新
+// COMMUNITY_BOARD_HISTORY_KEEP_COUNT(10)件に揃っているため、pagination
+// 自体が不要で、従来どおり等値where+limitのみで全件を一括取得する
+// (本部指示によりPhase13では変更しない)。
 const COMMUNITY_BOARD_ADMIN_LIST_LIMITS =
   {
-    pending: 200,
-    approved: 200,
+    pending: 50,
+    approved: 50,
     rejected: 10,
     expired: 10
   };
+
+// 街の掲示板 Phase13｜pending/approvedそれぞれのcursor pagination方向。
+// pending＝古い投稿から先(FIFOで審査漏れを防ぐ)、approved＝新しい投稿
+// から先(公開TOPの並び順・従来の管理画面表示と同じ感覚を維持)。
+const COMMUNITY_BOARD_ADMIN_PAGINATED_STATUSES =
+  {
+    pending: "asc",
+    approved: "desc"
+  };
+
+// クライアントから届くcursorを検証する。createdAtMillis/postIdのみで
+// 秘密情報を含まないため署名等は行わないが、型・値を検証し、不正な値を
+// そのままFirestoreクエリへ渡さない。
+function sanitizeCommunityBoardAdminListCursor(
+  rawCursor
+) {
+  if (
+    !rawCursor ||
+    typeof rawCursor !== "object"
+  ) {
+    return null;
+  }
+
+  const createdAtMillis =
+    rawCursor.createdAtMillis;
+
+  const postId =
+    rawCursor.postId;
+
+  if (
+    typeof createdAtMillis !== "number" ||
+    !Number.isFinite(createdAtMillis) ||
+    typeof postId !== "string" ||
+    postId === "" ||
+    postId.length > 200
+  ) {
+    return null;
+  }
+
+  return {
+    createdAtMillis: createdAtMillis,
+    postId: postId
+  };
+}
+
+// status(pending/approvedのみ)の1ページ分を取得する。pageSize+1件要求し、
+// pageSize件を超えて返ってきた場合だけhasMore:trueとする(過剰な設計を
+// 避けるため、別のcount()クエリは追加しない)。
+async function fetchCommunityBoardAdminListPage(
+  database,
+  statusName,
+  cursor
+) {
+  const direction =
+    COMMUNITY_BOARD_ADMIN_PAGINATED_STATUSES[statusName];
+
+  const pageSize =
+    COMMUNITY_BOARD_ADMIN_LIST_LIMITS[statusName];
+
+  let query =
+    database
+      .collection("communityBoardPosts")
+      .where(
+        "status",
+        "==",
+        statusName
+      )
+      .orderBy(
+        "createdAt",
+        direction
+      )
+      .orderBy(
+        FieldPath.documentId(),
+        direction
+      );
+
+  if (cursor) {
+    query =
+      query.startAfter(
+        Timestamp.fromMillis(
+          cursor.createdAtMillis
+        ),
+        cursor.postId
+      );
+  }
+
+  const querySnapshot =
+    await query
+      .limit(
+        pageSize + 1
+      )
+      .get();
+
+  const hasMore =
+    querySnapshot.docs.length > pageSize;
+
+  const docsForThisPage =
+    hasMore
+      ? querySnapshot.docs.slice(0, pageSize)
+      : querySnapshot.docs;
+
+  const items =
+    docsForThisPage.map(
+      convertCommunityBoardPostSnapshotToAdminListItem
+    );
+
+  const lastItem =
+    items.length > 0
+      ? items[items.length - 1]
+      : null;
+
+  const nextCursor =
+    hasMore && lastItem
+      ? {
+          createdAtMillis: lastItem.createdAtMillis,
+          postId: lastItem.postId
+        }
+      : null;
+
+  return {
+    items: items,
+    hasMore: hasMore,
+    nextCursor: nextCursor
+  };
+}
 
 // rejected/expiredともに、地域を問わずマチナウ運営全体でこの件数だけを
 // Firestoreに保持する(本部指示：地域ごとではなく全体で最新10件)。
@@ -2655,12 +2783,89 @@ async function handleAdminListCommunityBoardPostsRequest(
     const database =
       authResult.database;
 
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    // 街の掲示板 Phase13｜loadMoreStatusが指定された場合は、その1つの
+    // status(pending/approvedのみ)だけを1ページ追加取得する軽量経路。
+    // regionsById(地域代表画像)はこの経路では返さない(新しい地域が
+    // 追加ページにだけ現れた場合は、既存の「更新」ボタンによる全件再取得で
+    // 表示される、過剰設計を避けるための意図的な割り切り)。
+    const loadMoreStatus =
+      typeof requestBody.loadMoreStatus === "string"
+        ? requestBody.loadMoreStatus
+        : "";
+
+    if (loadMoreStatus !== "") {
+      if (
+        !Object.prototype.hasOwnProperty.call(
+          COMMUNITY_BOARD_ADMIN_PAGINATED_STATUSES,
+          loadMoreStatus
+        )
+      ) {
+        return response.status(400).json({
+          success: false,
+          message: "対象のstatusを確認できませんでした。"
+        });
+      }
+
+      const hasCursorInput =
+        requestBody.cursor !== undefined &&
+        requestBody.cursor !== null;
+
+      const cursor =
+        sanitizeCommunityBoardAdminListCursor(
+          requestBody.cursor
+        );
+
+      // cursorが指定されているのに不正だった場合は、静かに1ページ目へ
+      // 巻き戻さず追加読み込み自体を拒否する(既に見た投稿が重複表示され
+      // ないようにするため)。
+      if (
+        hasCursorInput &&
+        cursor === null
+      ) {
+        return response.status(400).json({
+          success: false,
+          message: "読み込み位置を確認できませんでした。画面を再読み込みしてください。"
+        });
+      }
+
+      const page =
+        await fetchCommunityBoardAdminListPage(
+          database,
+          loadMoreStatus,
+          cursor
+        );
+
+      return response.status(200).json({
+        success: true,
+        status: loadMoreStatus,
+        posts: page.items,
+        hasMore: page.hasMore,
+        nextCursor: page.nextCursor
+      });
+    }
+
+    // 街の掲示板 Phase13｜初回一覧取得(4status一括)。pending/approvedは
+    // 新しいcursor pagination対応のfetchCommunityBoardAdminListPage()で
+    // 1ページ目を取得し、rejected/expiredはPhase8方針(全世界合計最新10件)
+    // により総件数自体が少ないため、従来どおり等値where+limit+JS sortの
+    // まま変更しない。
     const statusNames =
       Object.keys(
         COMMUNITY_BOARD_ADMIN_LIST_LIMITS
       );
 
     const postsByStatus =
+      {};
+
+    const cursorsByStatus =
+      {};
+
+    const hasMoreByStatus =
       {};
 
     for (
@@ -2671,6 +2876,33 @@ async function handleAdminListCommunityBoardPostsRequest(
       const statusName =
         statusNames[index];
 
+      if (
+        Object.prototype.hasOwnProperty.call(
+          COMMUNITY_BOARD_ADMIN_PAGINATED_STATUSES,
+          statusName
+        )
+      ) {
+        const page =
+          await fetchCommunityBoardAdminListPage(
+            database,
+            statusName,
+            null
+          );
+
+        postsByStatus[statusName] =
+          page.items;
+
+        cursorsByStatus[statusName] =
+          page.nextCursor;
+
+        hasMoreByStatus[statusName] =
+          page.hasMore;
+
+        continue;
+      }
+
+      // rejected/expired｜Phase8から無変更(等値where+limit(10)のみ、
+      // 新しい複合indexを要求しない)。
       const querySnapshot =
         await database
           .collection("communityBoardPosts")
@@ -2700,6 +2932,9 @@ async function handleAdminListCommunityBoardPostsRequest(
 
       postsByStatus[statusName] =
         items;
+
+      hasMoreByStatus[statusName] =
+        false;
     }
 
     // 街の掲示板 Phase5｜表示中の投稿から重複のないregionIdだけを集め、
@@ -2792,15 +3027,21 @@ async function handleAdminListCommunityBoardPostsRequest(
     }
 
     // 街の掲示板 Phase8｜「掲載中 200」等の件数表示が、全国・世界で
-    // 実際に200件しかないという誤解を生まないよう、取得上限自体を
+    // 実際に件数しかないという誤解を生まないよう、取得上限自体を
     // クライアントへ渡す。新しいFirestore count()集計は追加しない
-    // (本部指示)。表示側で「取得件数 === 上限」の場合だけ「200+」等の
-    // 表記にする判断に使う。
+    // (本部指示)。
+    // 街の掲示板 Phase13｜pending/approvedについては、上記のhasMore
+    // (実際に次ページが存在するかどうかの正確な判定)をクライアントへ渡し、
+    // 「取得件数 === 取得上限」という近似ではなく正確な「+」表示判定に
+    // 使えるようにする(limitsフィールド自体は既存の呼び出し元との
+    // 互換のため残す)。
     return response.status(200).json({
       success: true,
       postsByStatus: postsByStatus,
       regionsById: regionsById,
-      limits: COMMUNITY_BOARD_ADMIN_LIST_LIMITS
+      limits: COMMUNITY_BOARD_ADMIN_LIST_LIMITS,
+      cursors: cursorsByStatus,
+      hasMore: hasMoreByStatus
     });
   } catch (error) {
     console.error(

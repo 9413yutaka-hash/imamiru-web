@@ -372,11 +372,16 @@
       <div class="panel">
         <h2>審査待ち</h2>
         <div id="pendingList"></div>
+        <!-- 街の掲示板 Phase13｜200件超の取りこぼし防止のためcursor
+             paginationへ変更。ページ番号UIは作らず、既存refreshButtonと
+             同じ.secondary-buttonの「さらに読み込む」だけを追加する。 -->
+        <button id="pendingLoadMoreButton" class="secondary-button" type="button" style="display:none; margin-top:10px;">さらに読み込む</button>
       </div>
 
       <div class="panel">
         <h2>掲載中</h2>
         <div id="approvedList"></div>
+        <button id="approvedLoadMoreButton" class="secondary-button" type="button" style="display:none; margin-top:10px;">さらに読み込む</button>
       </div>
 
       <div class="panel">
@@ -467,6 +472,18 @@
     const pendingList = document.getElementById("pendingList");
     const approvedList = document.getElementById("approvedList");
     const rejectedList = document.getElementById("rejectedList");
+    const pendingLoadMoreButton = document.getElementById("pendingLoadMoreButton");
+    const approvedLoadMoreButton = document.getElementById("approvedLoadMoreButton");
+
+    // 街の掲示板 Phase13｜pending/approvedのcursor pagination状態。
+    // rejected/expiredはPhase8方針(全世界合計最新10件)のため対象外のまま。
+    // 承認/却下/掲載終了操作後はloadCommunityBoardPosts()を再度呼ぶだけで
+    // 1ページ目へリセットされる(深いページ位置を維持する複雑な実装は
+    // 行わない、本部指示)。
+    const communityBoardPagination = {
+      pending: { cursor: null, hasMore: false, loading: false },
+      approved: { cursor: null, hasMore: false, loading: false }
+    };
     const expiredList = document.getElementById("expiredList");
     const regionImageList = document.getElementById("regionImageList");
 
@@ -727,27 +744,46 @@
       }
     });
 
+    // 街の掲示板 Phase13｜pending/approvedの「さらに読み込む」ボタンの
+    // 表示状態を、サーバーが返したhasMoreに応じて切り替えるだけの薄い
+    // ヘルパー。承認/却下/掲載終了操作の再取得時にも共通で使う。
+    function updateLoadMoreButtonVisibility(button, hasMore) {
+      if (!button) {
+        return;
+      }
+
+      button.style.display =
+        hasMore ? "" : "none";
+
+      button.disabled = false;
+    }
+
     async function loadCommunityBoardPosts() {
       showMessage(listMessage, "読み込んでいます…", "");
+
+      // 街の掲示板 Phase13｜全件再取得は常に1ページ目からやり直す
+      // (承認/却下/掲載終了後もこれをそのまま呼ぶため、深いページ位置を
+      // 保持する複雑な実装は行わない、本部指示)。
+      communityBoardPagination.pending.cursor = null;
+      communityBoardPagination.approved.cursor = null;
 
       try {
         const responseData = await callCommunityBoardApi("adminListCommunityBoardPosts", {});
         const postsByStatus = responseData.postsByStatus || {};
+        const hasMoreByStatus = responseData.hasMore || {};
+        const cursorsByStatus = responseData.cursors || {};
 
         const pending = Array.isArray(postsByStatus.pending) ? postsByStatus.pending : [];
         const approved = Array.isArray(postsByStatus.approved) ? postsByStatus.approved : [];
         const rejected = Array.isArray(postsByStatus.rejected) ? postsByStatus.rejected : [];
         const expired = Array.isArray(postsByStatus.expired) ? postsByStatus.expired : [];
 
-        // 街の掲示板 Phase8｜「掲載中 200」等が全国・世界の正確な総数だと
-        // 誤解されないよう、取得件数が取得上限(サーバーが返すlimits)と
-        // 一致する場合だけ「200+」のように表示する。新しいFirestore
-        // count()集計は追加しない(本部指示)。
-        const limits = responseData.limits || {};
-
+        // 街の掲示板 Phase13｜「掲載中 200」等が全国・世界の正確な総数だと
+        // 誤解されないよう、サーバーが返す実際のhasMore(次ページの有無)を
+        // 使って「+」表示を判定する(Phase8時点の「取得上限と一致したら+」
+        // という近似から、cursor pagination導入により正確な判定へ更新)。
         function formatSummaryCount(items, statusName) {
-          const limit = limits[statusName];
-          const suffix = (typeof limit === "number" && items.length >= limit) ? "+" : "";
+          const suffix = hasMoreByStatus[statusName] ? "+" : "";
           return String(items.length) + suffix;
         }
 
@@ -761,6 +797,14 @@
         renderBoardPostList(rejectedList, rejected);
         renderBoardPostList(expiredList, expired);
 
+        communityBoardPagination.pending.cursor = cursorsByStatus.pending || null;
+        communityBoardPagination.pending.hasMore = !!hasMoreByStatus.pending;
+        communityBoardPagination.approved.cursor = cursorsByStatus.approved || null;
+        communityBoardPagination.approved.hasMore = !!hasMoreByStatus.approved;
+
+        updateLoadMoreButtonVisibility(pendingLoadMoreButton, communityBoardPagination.pending.hasMore);
+        updateLoadMoreButtonVisibility(approvedLoadMoreButton, communityBoardPagination.approved.hasMore);
+
         renderRegionImageList(responseData.regionsById || {});
 
         showMessage(listMessage, "", "");
@@ -768,6 +812,70 @@
         console.error("街の掲示板：一覧取得に失敗しました：", error);
         showMessage(listMessage, error.message || "一覧を取得できませんでした。", "error");
       }
+    }
+
+    // 街の掲示板 Phase13｜「さらに読み込む」の共通処理。該当statusの
+    // 次ページだけをサーバーへ要求し、既存の一覧DOMの下へ追記する
+    // (置き換えではない)。地域代表画像一覧はこの経路では更新しない
+    // (新しい地域が追加ページにだけ現れた場合は、既存の「更新」ボタンで
+    // 全体再取得すれば表示される、過剰設計を避けるための意図的な割り切り)。
+    async function loadMoreCommunityBoardPosts(statusName, listElement, buttonElement) {
+      const paginationState = communityBoardPagination[statusName];
+
+      if (!paginationState || paginationState.loading || !paginationState.hasMore) {
+        return;
+      }
+
+      paginationState.loading = true;
+      buttonElement.disabled = true;
+      buttonElement.textContent = "読み込んでいます…";
+
+      try {
+        const responseData = await callCommunityBoardApi("adminListCommunityBoardPosts", {
+          loadMoreStatus: statusName,
+          cursor: paginationState.cursor
+        });
+
+        const newPosts = Array.isArray(responseData.posts) ? responseData.posts : [];
+
+        if (newPosts.length > 0) {
+          const existingHtml = listElement.innerHTML;
+          const isEmptyState = listElement.querySelector(".empty-state") !== null;
+
+          listElement.innerHTML =
+            (isEmptyState ? "" : existingHtml) +
+            newPosts.map(buildBoardPostItemHtml).join("");
+        }
+
+        paginationState.cursor = responseData.nextCursor || null;
+        paginationState.hasMore = !!responseData.hasMore;
+
+        updateLoadMoreButtonVisibility(buttonElement, paginationState.hasMore);
+      } catch (error) {
+        console.error("街の掲示板：追加読み込みに失敗しました：", error);
+        showMessage(listMessage, error.message || "追加の読み込みに失敗しました。", "error");
+      } finally {
+        paginationState.loading = false;
+        buttonElement.textContent = "さらに読み込む";
+        // hasMoreがtrueのまま(＝失敗時、または次ページがまだ残っている
+        // 場合)はボタンを再度押せるようにする。falseになった場合は
+        // updateLoadMoreButtonVisibility()側で既にdisplay:noneにしている。
+        if (paginationState.hasMore) {
+          buttonElement.disabled = false;
+        }
+      }
+    }
+
+    if (pendingLoadMoreButton) {
+      pendingLoadMoreButton.addEventListener("click", function () {
+        loadMoreCommunityBoardPosts("pending", pendingList, pendingLoadMoreButton);
+      });
+    }
+
+    if (approvedLoadMoreButton) {
+      approvedLoadMoreButton.addEventListener("click", function () {
+        loadMoreCommunityBoardPosts("approved", approvedList, approvedLoadMoreButton);
+      });
     }
 
     refreshButton.addEventListener("click", function () {
