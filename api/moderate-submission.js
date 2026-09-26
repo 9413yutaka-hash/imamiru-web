@@ -1941,79 +1941,6 @@ async function resolveTrustedCommunityBoardRegionInfoFromGoogle(
   };
 }
 
-// 街の掲示板 Phase12 STEP2｜上記resolveTrustedCommunityBoardRegionInfo
-// FromGoogle()がProduction環境で実際にGoogleと通信できるかどうかだけを
-// 確認する、一時的な読み取り専用診断モード。Firestoreへは一切書き込まない
-// (region作成・投稿作成なし)。既存communityBoardPostCreate/
-// communityBoardPostsListと同じ認証方式(匿名を含む一般的なFirebase ID
-// token)を使う。この実通信確認が成功した場合のみ、Phase12本実装で
-// resolveOrCreateCommunityBoardRegion()へ組み込む(本部指示)。
-async function handleCommunityBoardRegionGoogleVerifyProbeRequest(
-  request,
-  response
-) {
-  try {
-    const idToken =
-      readBearerToken(
-        request
-      );
-
-    if (idToken === "") {
-      return response.status(401).json({
-        success: false,
-        message: "認証情報がありません。"
-      });
-    }
-
-    const app =
-      getFirebaseAdminApp();
-
-    try {
-      await getAuth(app)
-        .verifyIdToken(
-          idToken
-        );
-    } catch (verifyError) {
-      return response.status(401).json({
-        success: false,
-        message: "認証情報が正しくありません。"
-      });
-    }
-
-    const requestBody =
-      readRequestBody(
-        request
-      );
-
-    const googlePlaceId =
-      typeof requestBody.googlePlaceId === "string"
-        ? requestBody.googlePlaceId.trim()
-        : "";
-
-    if (googlePlaceId === "") {
-      return response.status(400).json({
-        success: false,
-        message: "googlePlaceIdを指定してください。"
-      });
-    }
-
-    const result =
-      await resolveTrustedCommunityBoardRegionInfoFromGoogle(
-        googlePlaceId
-      );
-
-    return response.status(200).json({
-      success: result !== null,
-      result: result
-    });
-  } catch (error) {
-    return response.status(500).json({
-      success: false,
-      message: "検証中にエラーが発生しました。"
-    });
-  }
-}
-
 // 街の掲示板 Phase12｜regionsByGooglePlaceId/{indexKey}→regions/{regionId}を
 // 読み、Firestoreに保存済みの信頼できる地域情報だけを返す(クライアント値は
 // 一切参照しない)。regionドキュメントが存在しない/必須フィールドが欠けて
@@ -26321,18 +26248,6 @@ export default async function handler(
     requestBody.mode === "communityBoardPostsList"
   ) {
     return handleCommunityBoardPostsListRequest(
-      request,
-      response
-    );
-  }
-
-  // 街の掲示板 Phase12 STEP2｜Google実通信確認専用の一時診断モード。
-  // Firestoreへは一切書き込まない(region作成・投稿作成なし)。この確認が
-  // 成功した場合のみPhase12本実装へ進む(本部指示)。
-  if (
-    requestBody.mode === "communityBoardRegionGoogleVerifyProbe"
-  ) {
-    return handleCommunityBoardRegionGoogleVerifyProbeRequest(
       request,
       response
     );
