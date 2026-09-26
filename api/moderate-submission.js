@@ -2990,17 +2990,16 @@ async function handleAdminSetRegionImageRequest(
 // (閲覧だけで地域マスターを増やさない、本部指示)。regionIdをクライアントの
 // 自己申告のまま信用せず、必ずgooglePlaceIdからサーバー側で解決し直す。
 //
-// クエリはregionId(等値)＋status(等値、"approved"固定)のみを組み合わせる。
-// 複数の等値where同士はFirestoreの仕様上、新しい複合indexを必要としない
-// (indexが必要になるのはorderBy等を異なるフィールドの範囲条件と組み合わせた
-// 場合)。orderByは使わず、上限50件を取得してからこの関数内のJS配列sortで
-// createdAt降順に並べ、上位10件だけを返す。将来1地域の承認済み投稿が
-// 50件を超える規模になった場合は、regionId＋status＋createdAtの複合index
-// とカーソルベースのページネーションが別途必要になる(今回は未実装、
-// B判定として報告する)。
-const COMMUNITY_BOARD_PUBLIC_LIST_FETCH_LIMIT =
-  50;
-
+// 街の掲示板 Phase9｜regionId(等値)＋status(等値、"approved"固定)＋
+// createdAt(降順)を組み合わせた複合index
+// (communityBoardPosts: regionId Asc, status Asc, createdAt Desc,
+// Query scope: Collection)を代表がFirebase Consoleで作成・有効化済み。
+// これによりFirestore自身に「対象地域のapproved投稿のうち、最新10件」を
+// 直接返させる。以前の「50件を多めに取得してからJS側でsort＋slice」という
+// 方式(1地域のapproved投稿が50件を超えると真の最新10件が保証されない
+// 既知の問題があった)は廃止した。新しいindexは追加していない
+// (firestore.indexes.json等も新規作成しない、既存のConsole作成分を
+// そのまま利用する)。
 const COMMUNITY_BOARD_PUBLIC_LIST_DISPLAY_LIMIT =
   10;
 
@@ -3147,8 +3146,12 @@ async function handleCommunityBoardPostsListRequest(
           "==",
           "approved"
         )
+        .orderBy(
+          "createdAt",
+          "desc"
+        )
         .limit(
-          COMMUNITY_BOARD_PUBLIC_LIST_FETCH_LIMIT
+          COMMUNITY_BOARD_PUBLIC_LIST_DISPLAY_LIMIT
         )
         .get();
 
@@ -3189,23 +3192,13 @@ async function handleCommunityBoardPostsListRequest(
         }
       );
 
-    posts.sort(
-      function(a, b) {
-        return (
-          b.createdAtMillis -
-          a.createdAtMillis
-        );
-      }
-    );
-
+    // 街の掲示板 Phase9｜Firestore自身がorderBy("createdAt","desc")＋
+    // limit(10)で既に新しい順・最大10件を保証しているため、以前あった
+    // JS側のsort()・slice(0,10)は不要になった(重複処理の削除)。
     const jsonResponseBody =
       {
         success: true,
-        posts:
-          posts.slice(
-            0,
-            COMMUNITY_BOARD_PUBLIC_LIST_DISPLAY_LIMIT
-          )
+        posts: posts
       };
 
     if (safeRegionImageUrl !== "") {
