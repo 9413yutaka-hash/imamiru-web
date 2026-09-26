@@ -375,6 +375,36 @@ function escapeHtml(text) {
     .replaceAll("'", "&#039;");
 }
 
+// 広告実証前 GA4最低限行動計測｜index.htmlに既存のgtag.js(Measurement ID
+// G-PGM7GNVQX8、新規読み込みなし)をそのまま利用する。既存のcolumn_entry_click
+// 等と同じ考え方(machinau.jp/imamiru-web.vercel.app限定、gtag未ロード時は
+// 何もしない)を踏襲し、Analytics送信の失敗・未ロードがGPS・地域検索・
+// 掲示板・店舗表示等の本体機能に一切影響しないようにする。
+function sendMachinauAnalyticsEvent(
+  eventName,
+  eventParams
+) {
+  try {
+    if (
+      typeof gtag !== "function" ||
+      (
+        location.hostname !== "machinau.jp" &&
+        location.hostname !== "imamiru-web.vercel.app"
+      )
+    ) {
+      return;
+    }
+
+    gtag(
+      "event",
+      eventName,
+      eventParams || {}
+    );
+  } catch (error) {
+    // Analytics送信の失敗が本体機能に影響しないようにする(意図的に握りつぶす)。
+  }
+}
+
 function degreesToRadians(degrees) {
   return degrees * Math.PI / 180;
 }
@@ -4351,6 +4381,18 @@ function openShopModal(
   if (!selectedShop) {
     return;
   }
+
+  // 広告実証前 GA4最低限行動計測｜店舗一覧・地図・AIコンシェルジュ提案等、
+  // 現行UI上の店舗詳細表示の入口はすべてこの共有関数を呼ぶ設計のため、
+  // ここ1箇所に追加するだけで「旅行者が店舗情報を見るために操作した」を
+  // 網羅的に計測できる(呼び出し元ごとに個別追加しない)。実在する店舗の
+  // Firestore文書ID(個人情報ではない)だけをパラメータとして送る。
+  sendMachinauAnalyticsEvent(
+    "shop_view",
+    {
+      shop_id: firestoreId
+    }
+  );
 
   const modal =
     document.getElementById(
@@ -14934,6 +14976,18 @@ if (regionRecommendationAreaPickerElement) {
       return;
     }
 
+    // 広告実証前 GA4最低限行動計測｜検索を実行した時点(入力検証を通過し、
+    // 実際に地域解決を開始する瞬間)で1回だけ送信する。解決の成否は問わない。
+    // 自由記述本文等の大量送信は避け、都道府県名と入力された市区町村名
+    // だけを送る。
+    sendMachinauAnalyticsEvent(
+      "region_search",
+      {
+        prefecture: selectedPrefectureName,
+        search_term: enteredAreaName
+      }
+    );
+
     communityBoardAreaSearchButtonElement.disabled =
       true;
 
@@ -15169,6 +15223,28 @@ if (heroActionTodayElement) {
   );
 }
 
+// 広告実証前 GA4最低限行動計測｜既存#locationButtonのonclick属性
+// (ensureGoogleMapsLoaded(); getLocation())は一切変更せず、addEventListener
+// で計測だけを追加する。#heroActionNearby(「近くを探す」)は既存コードが
+// #locationButton.click()を代理実行する設計のため、ここに1箇所だけ
+// 追加すれば両方の入口を計測できる(GPS取得の成否ではなく、旅行者が
+// 現在地ボタンを押した事実だけを計測する)。
+const locationButtonElementForAnalytics =
+  document.getElementById(
+    "locationButton"
+  );
+
+if (locationButtonElementForAnalytics) {
+  locationButtonElementForAnalytics.addEventListener(
+    "click",
+    function() {
+      sendMachinauAnalyticsEvent(
+        "location_button_click"
+      );
+    }
+  );
+}
+
 const heroActionNearbyElement =
   document.getElementById(
     "heroActionNearby"
@@ -15209,6 +15285,17 @@ if (heroActionAreaElement) {
   heroActionAreaElement.addEventListener(
     "click",
     function() {
+      // 広告実証前 GA4最低限行動計測｜現行UI上で「街の掲示板を見る」に
+      // 相当する独立した操作は他に存在しない(現在地掲示板はGPS成功時に
+      // 自動表示、遠隔地掲示板は地域検索実行の結果として表示されるため、
+      // それぞれlocation_button_click/region_searchで計測済み)。
+      // この#heroActionArea(「エリアから探す」)は、掲示板を含む
+      // #regionRecommendationSectionを可視化・スクロール表示することだけを
+      // 目的とした、唯一の独立した「見る」操作のため、ここで計測する。
+      sendMachinauAnalyticsEvent(
+        "community_board_view"
+      );
+
       const targetSection =
         document.getElementById(
           "regionRecommendationSection"

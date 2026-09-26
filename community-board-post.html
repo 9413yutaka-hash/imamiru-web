@@ -14,6 +14,34 @@
     街の掲示板（仮称）投稿｜マチナウ
   </title>
 
+  <!-- 広告実証前 GA4最低限行動計測｜index.html・column記事ページと同じ
+       Measurement ID(G-PGM7GNVQX8)・同じ考え方(machinau.jp/
+       imamiru-web.vercel.app限定でのみ読み込み、Preview/localhostでは
+       送信しない)。新しいMeasurement IDは作らず、gtag.jsの二重読み込みも
+       発生しない(このページに他のgtag読み込みは存在しない)。 -->
+  <script>
+    (function () {
+      if (location.hostname !== "machinau.jp" && location.hostname !== "imamiru-web.vercel.app") {
+        return;
+      }
+
+      window.dataLayer = window.dataLayer || [];
+
+      window.gtag = function () {
+        dataLayer.push(arguments);
+      };
+
+      gtag("js", new Date());
+      gtag("config", "G-PGM7GNVQX8");
+
+      const gaScript = document.createElement("script");
+      gaScript.async = true;
+      gaScript.src =
+        "https://www.googletagmanager.com/gtag/js?id=G-PGM7GNVQX8";
+      document.head.appendChild(gaScript);
+    })();
+  </script>
+
   <!-- 街の掲示板 Phase1｜まだ本番導線には出さない実験ページ(URL直打ちで
        テストする想定、本部指示)。street/shop投稿(post.html)とは完全に
        独立した新規ページとして作成し、既存post.htmlのフォーム・GPS処理・
@@ -652,6 +680,18 @@
 
         formPanel.style.display = "none";
         completionBox.style.display = "block";
+
+        // 広告実証前 GA4最低限行動計測｜サーバーの投稿作成成功(success:true)
+        // が確定した、この1箇所でのみ送信する(pendingでも成功扱い)。
+        // 投稿本文・IP・個人情報・地域情報は一切送らない。gtag未ロード時は
+        // 何もしない(本体機能である投稿完了表示には影響させない)。
+        try {
+          if (typeof gtag === "function") {
+            gtag("event", "community_board_post_success");
+          }
+        } catch (analyticsError) {
+          // Analytics送信の失敗が投稿完了表示に影響しないようにする。
+        }
       } catch (error) {
         console.error("街の掲示板投稿エラー：", error);
         showMessage(submitMessage, error.message || "投稿の送信に失敗しました。", "error");
