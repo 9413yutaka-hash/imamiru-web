@@ -1894,6 +1894,29 @@ async function handleCommunityBoardPostCreateRequest(
       });
     }
 
+    // 街の掲示板 Phase7｜スパム対策。入力の基本検証を通過したリクエストに
+    // だけクールダウン枠を消費させ(不正リクエストで枠を無駄にしない)、
+    // region解決・Firestore書き込み・OpenAI Moderation呼び出し(費用が
+    // 発生する処理)より前に判定する。生IPはFirestoreへ保存せず、既存
+    // hashClientIpAddress()と同じ一方向ハッシュ化のみを使う。
+    const communityBoardIpHash =
+      hashClientIpAddress(
+        request
+      );
+
+    const communityBoardRateLimitOk =
+      await claimCommunityBoardRateLimit(
+        database,
+        communityBoardIpHash
+      );
+
+    if (!communityBoardRateLimitOk) {
+      return response.status(429).json({
+        success: false,
+        message: "短時間に続けて投稿されています。少し待ってから、もう一度お試しください。"
+      });
+    }
+
     const regionId =
       await resolveOrCreateCommunityBoardRegion(
         database,
@@ -19574,12 +19597,16 @@ function hashClientIpAddress(
 
 
 // claimSourceForLocationCollection()(api/admin-source-collect.js)と同じ
-// Firestore transactionによるクールダウン判定の考え方を、コメント投稿の
-// 簡易スパム対策に転用したもの。ipHashが空(IP不明)の場合は判定自体を
+// Firestore transactionによるクールダウン判定の考え方を、collection名・
+// cooldown値だけを引数化して汎用化したもの(同一ipHashにつきdocは1件のみ、
+// 成功のたびにlastSubmittedAtを上書きするだけで、新規docが乱立しない
+// 既存設計はそのまま維持)。ipHashが空(IP不明)の場合は判定自体を
 // スキップしtrue(投稿許可)を返す。
-async function claimCommentRateLimit(
+async function claimRateLimit(
   database,
-  ipHash
+  collectionName,
+  ipHash,
+  cooldownMilliseconds
 ) {
   if (ipHash === "") {
     return true;
@@ -19588,7 +19615,7 @@ async function claimCommentRateLimit(
   const rateLimitRef =
     database
       .collection(
-        COMMENT_RATE_LIMITS_COLLECTION
+        collectionName
       )
       .doc(
         ipHash
@@ -19620,7 +19647,7 @@ async function claimCommentRateLimit(
         (
           nowMilliseconds -
           lastSubmittedAtMillis
-        ) < COMMENT_RATE_LIMIT_COOLDOWN_MILLISECONDS
+        ) < cooldownMilliseconds
       ) {
         return false;
       }
@@ -19635,6 +19662,48 @@ async function claimCommentRateLimit(
 
       return true;
     }
+  );
+}
+
+// 街の掲示板 Phase7以前から存在するコメント用クールダウン(既存の挙動・
+// 引数は一切変更しない、薄いラッパー化のみ)。
+async function claimCommentRateLimit(
+  database,
+  ipHash
+) {
+  return claimRateLimit(
+    database,
+    COMMENT_RATE_LIMITS_COLLECTION,
+    ipHash,
+    COMMENT_RATE_LIMIT_COOLDOWN_MILLISECONDS
+  );
+}
+
+// 街の掲示板 Phase7｜スパム対策(短時間の連続投稿防止)。コメント用の
+// commentRateLimitsとは別のcollectionを使い、「コメントを投稿した直後は
+// 掲示板投稿までブロックされる」といった機能間の意図しない干渉が
+// 起きないようキー空間を分離する。現在地投稿・遠隔地投稿は同じ
+// communityBoardPostCreateへ収束するため、同じクールダウンが両方へ
+// 適用される(地域を変えて連投しても回避できない)。
+const COMMUNITY_BOARD_RATE_LIMITS_COLLECTION =
+  "communityBoardRateLimits";
+
+// 「同一投稿元から1分に1件程度」という本部方針をそのまま採用する。
+// 既存コメント側の30秒より長いのは、コメントより文字数上限が小さく
+// 参照範囲が狭いコメントと異なり、掲示板は承認後に長期間掲載され続ける
+// (Phase2〜6で確立済みの方針)ため、より慎重な間隔にする判断。
+const COMMUNITY_BOARD_RATE_LIMIT_COOLDOWN_MILLISECONDS =
+  60 * 1000;
+
+async function claimCommunityBoardRateLimit(
+  database,
+  ipHash
+) {
+  return claimRateLimit(
+    database,
+    COMMUNITY_BOARD_RATE_LIMITS_COLLECTION,
+    ipHash,
+    COMMUNITY_BOARD_RATE_LIMIT_COOLDOWN_MILLISECONDS
   );
 }
 
