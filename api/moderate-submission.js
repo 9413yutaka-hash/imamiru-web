@@ -1709,6 +1709,300 @@ function buildCommunityBoardRegionIndexKey(
   return indexKey;
 }
 
+// 街の掲示板 Phase12 STEP2｜Production実通信確認専用の一時ヘルパー。
+// api/edit-ad.jsのgeocodeAddress()と同じprocess.env.GOOGLE_MAPS_API_KEY・
+// 同じGeocoding APIエンドポイントを使い、addressパラメータの代わりに
+// place_idパラメータで照会するだけの、Google公式ドキュメント記載の
+// 別の使い方(新しいAPIキー・新しいGoogle API製品は一切追加しない)。
+// この関数自体はまだどこからも呼ばれない(既存機能への組み込みはPhase12
+// STEP4以降、この実通信確認が成功した場合のみ行う、本部指示)。
+function findAddressComponentByType(
+  addressComponents,
+  typeName
+) {
+  if (
+    !Array.isArray(
+      addressComponents
+    )
+  ) {
+    return null;
+  }
+
+  return (
+    addressComponents.find(
+      function(component) {
+        return (
+          Array.isArray(
+            component.types
+          ) &&
+          component.types.includes(
+            typeName
+          )
+        );
+      }
+    ) ||
+    null
+  );
+}
+
+const COMMUNITY_BOARD_GOOGLE_VERIFICATION_TIMEOUT_MS =
+  8000;
+
+// place_idをGoogleへ照会し、country/locality/sublocality_level_1から
+// 正式なcountryCode/regionName/administrativeLevelを再構築する。
+// Phase10/11で実証済みの「locality優先、無ければsublocality_level_1
+// (親locality+区を連結)」ロジックと完全に同じ考え方をサーバー側でも使う。
+// 失敗時(APIキー未設定・タイムアウト・Google側エラー・country取得不能・
+// locality/sublocality_level_1いずれも取得不能・place_id不一致)は
+// 例外を投げずnullを返す(呼び出し元がregion作成を諦める判断をするため)。
+async function resolveTrustedCommunityBoardRegionInfoFromGoogle(
+  googlePlaceId
+) {
+  const apiKey =
+    process.env.GOOGLE_MAPS_API_KEY;
+
+  if (
+    !apiKey ||
+    typeof googlePlaceId !== "string" ||
+    googlePlaceId === ""
+  ) {
+    return null;
+  }
+
+  const requestUrl =
+    new URL(
+      "https://maps.googleapis.com/maps/api/geocode/json"
+    );
+
+  requestUrl.searchParams.set(
+    "place_id",
+    googlePlaceId
+  );
+
+  requestUrl.searchParams.set(
+    "key",
+    apiKey
+  );
+
+  const abortController =
+    new AbortController();
+
+  const timeoutId =
+    setTimeout(
+      function() {
+        abortController.abort();
+      },
+      COMMUNITY_BOARD_GOOGLE_VERIFICATION_TIMEOUT_MS
+    );
+
+  let responseData;
+
+  try {
+    const response =
+      await fetch(
+        requestUrl,
+        {
+          signal: abortController.signal
+        }
+      );
+
+    responseData =
+      await response.json();
+  } catch (error) {
+    return null;
+  } finally {
+    clearTimeout(
+      timeoutId
+    );
+  }
+
+  if (
+    !responseData ||
+    responseData.status !== "OK" ||
+    !Array.isArray(
+      responseData.results
+    ) ||
+    responseData.results.length === 0
+  ) {
+    return null;
+  }
+
+  const result =
+    responseData.results[0];
+
+  // Phase10/11の実測通り、place_id自身の照会は単一の正式resultを返す
+  // 設計のため、results[0]をそのまま採用する。Googleが返したplace_idが
+  // 照会したものと一致することも念のため確認する。
+  if (
+    typeof result.place_id !== "string" ||
+    result.place_id !== googlePlaceId
+  ) {
+    return null;
+  }
+
+  const countryComponent =
+    findAddressComponentByType(
+      result.address_components,
+      "country"
+    );
+
+  const countryCode =
+    countryComponent &&
+    typeof countryComponent.short_name === "string"
+      ? countryComponent.short_name
+      : "";
+
+  if (countryCode === "") {
+    return null;
+  }
+
+  const isLocality =
+    Array.isArray(result.types) &&
+    result.types.includes("locality");
+
+  const isSublocalityLevel1 =
+    Array.isArray(result.types) &&
+    result.types.includes("sublocality_level_1");
+
+  let administrativeLevel =
+    "";
+
+  let regionName =
+    "";
+
+  if (isLocality) {
+    const localityComponent =
+      findAddressComponentByType(
+        result.address_components,
+        "locality"
+      );
+
+    if (
+      localityComponent &&
+      typeof localityComponent.long_name === "string"
+    ) {
+      administrativeLevel =
+        "locality";
+
+      regionName =
+        localityComponent.long_name;
+    }
+  } else if (isSublocalityLevel1) {
+    const parentCityComponent =
+      findAddressComponentByType(
+        result.address_components,
+        "locality"
+      );
+
+    const wardComponent =
+      findAddressComponentByType(
+        result.address_components,
+        "sublocality_level_1"
+      );
+
+    if (
+      parentCityComponent &&
+      typeof parentCityComponent.long_name === "string" &&
+      wardComponent &&
+      typeof wardComponent.long_name === "string"
+    ) {
+      administrativeLevel =
+        "sublocality_level_1";
+
+      regionName =
+        parentCityComponent.long_name +
+        wardComponent.long_name;
+    }
+  }
+
+  if (
+    administrativeLevel === "" ||
+    regionName === ""
+  ) {
+    return null;
+  }
+
+  return {
+    googlePlaceId: result.place_id,
+    countryCode: countryCode,
+    regionName: regionName,
+    administrativeLevel: administrativeLevel
+  };
+}
+
+// 街の掲示板 Phase12 STEP2｜上記resolveTrustedCommunityBoardRegionInfo
+// FromGoogle()がProduction環境で実際にGoogleと通信できるかどうかだけを
+// 確認する、一時的な読み取り専用診断モード。Firestoreへは一切書き込まない
+// (region作成・投稿作成なし)。既存communityBoardPostCreate/
+// communityBoardPostsListと同じ認証方式(匿名を含む一般的なFirebase ID
+// token)を使う。この実通信確認が成功した場合のみ、Phase12本実装で
+// resolveOrCreateCommunityBoardRegion()へ組み込む(本部指示)。
+async function handleCommunityBoardRegionGoogleVerifyProbeRequest(
+  request,
+  response
+) {
+  try {
+    const idToken =
+      readBearerToken(
+        request
+      );
+
+    if (idToken === "") {
+      return response.status(401).json({
+        success: false,
+        message: "認証情報がありません。"
+      });
+    }
+
+    const app =
+      getFirebaseAdminApp();
+
+    try {
+      await getAuth(app)
+        .verifyIdToken(
+          idToken
+        );
+    } catch (verifyError) {
+      return response.status(401).json({
+        success: false,
+        message: "認証情報が正しくありません。"
+      });
+    }
+
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    const googlePlaceId =
+      typeof requestBody.googlePlaceId === "string"
+        ? requestBody.googlePlaceId.trim()
+        : "";
+
+    if (googlePlaceId === "") {
+      return response.status(400).json({
+        success: false,
+        message: "googlePlaceIdを指定してください。"
+      });
+    }
+
+    const result =
+      await resolveTrustedCommunityBoardRegionInfoFromGoogle(
+        googlePlaceId
+      );
+
+    return response.status(200).json({
+      success: result !== null,
+      result: result
+    });
+  } catch (error) {
+    return response.status(500).json({
+      success: false,
+      message: "検証中にエラーが発生しました。"
+    });
+  }
+}
+
 // googlePlaceIdから既存regionを検索し、無ければ作成する。Machinau独自
 // regionId(regions.doc()の自動生成ID)を返す。同じgooglePlaceIdに対する
 // 同時リクエストでも重複regionが作られないことをtransactionで保証する。
@@ -25855,6 +26149,18 @@ export default async function handler(
     requestBody.mode === "communityBoardPostsList"
   ) {
     return handleCommunityBoardPostsListRequest(
+      request,
+      response
+    );
+  }
+
+  // 街の掲示板 Phase12 STEP2｜Google実通信確認専用の一時診断モード。
+  // Firestoreへは一切書き込まない(region作成・投稿作成なし)。この確認が
+  // 成功した場合のみPhase12本実装へ進む(本部指示)。
+  if (
+    requestBody.mode === "communityBoardRegionGoogleVerifyProbe"
+  ) {
+    return handleCommunityBoardRegionGoogleVerifyProbeRequest(
       request,
       response
     );
