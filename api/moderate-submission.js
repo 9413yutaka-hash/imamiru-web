@@ -2491,7 +2491,7 @@ async function handleCommunityBoardPostCreateRequest(
     return response.status(200).json({
       success: true,
       postId: postDocumentReference.id,
-      regionId: regionId
+      regionId: regionInfo.regionId
     });
   } catch (error) {
     console.error(
