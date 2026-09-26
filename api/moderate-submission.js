@@ -1779,6 +1779,17 @@ async function resolveTrustedCommunityBoardRegionInfoFromGoogle(
     googlePlaceId
   );
 
+  // 街の掲示板 Phase12｜実通信確認で判明した通り、languageを指定しない
+  // 場合Googleはサーバー環境の既定(英語)でregionNameを返してしまい、
+  // 既存region(八重瀬町・豊見城市等)や、クライアント側Geocoder(ブラウザの
+  // 言語設定に従い日本語で返る)と表記が食い違う。マチナウは現在日本語
+  // 表示が前提のため、明示的に日本語を指定する(将来の世界展開時に
+  // 見直すべき点として残す、既存countryCode/regionName設計自体は変更しない)。
+  requestUrl.searchParams.set(
+    "language",
+    "ja"
+  );
+
   requestUrl.searchParams.set(
     "key",
     apiKey
