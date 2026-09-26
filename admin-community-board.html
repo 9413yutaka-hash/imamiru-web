@@ -527,6 +527,10 @@
         metaParts.push("承認日時：" + formatBoardPostDateTime(post.approvedAtMillis));
       }
 
+      if (post.rejectedAtMillis) {
+        metaParts.push("却下日時：" + formatBoardPostDateTime(post.rejectedAtMillis));
+      }
+
       if (post.disabledAtMillis) {
         metaParts.push("掲載終了日時：" + formatBoardPostDateTime(post.disabledAtMillis));
       }
@@ -735,10 +739,22 @@
         const rejected = Array.isArray(postsByStatus.rejected) ? postsByStatus.rejected : [];
         const expired = Array.isArray(postsByStatus.expired) ? postsByStatus.expired : [];
 
-        summaryPendingCount.textContent = String(pending.length);
-        summaryApprovedCount.textContent = String(approved.length);
-        summaryRejectedCount.textContent = String(rejected.length);
-        summaryExpiredCount.textContent = String(expired.length);
+        // 街の掲示板 Phase8｜「掲載中 200」等が全国・世界の正確な総数だと
+        // 誤解されないよう、取得件数が取得上限(サーバーが返すlimits)と
+        // 一致する場合だけ「200+」のように表示する。新しいFirestore
+        // count()集計は追加しない(本部指示)。
+        const limits = responseData.limits || {};
+
+        function formatSummaryCount(items, statusName) {
+          const limit = limits[statusName];
+          const suffix = (typeof limit === "number" && items.length >= limit) ? "+" : "";
+          return String(items.length) + suffix;
+        }
+
+        summaryPendingCount.textContent = formatSummaryCount(pending, "pending");
+        summaryApprovedCount.textContent = formatSummaryCount(approved, "approved");
+        summaryRejectedCount.textContent = formatSummaryCount(rejected, "rejected");
+        summaryExpiredCount.textContent = formatSummaryCount(expired, "expired");
 
         renderBoardPostList(pendingList, pending);
         renderBoardPostList(approvedList, approved);

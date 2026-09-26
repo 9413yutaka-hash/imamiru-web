@@ -1960,6 +1960,11 @@ async function handleCommunityBoardPostCreateRequest(
 
         approvedAt: null,
 
+        // 街の掲示板 Phase8｜却下日時(rejectedAt、cleanupの「古い順」判定に
+        // 使う)。作成時点ではまだ却下されていないためnullで初期化する
+        // (approvedAt/disabledAtと同じ既存の考え方)。
+        rejectedAt: null,
+
         disabledAt: null,
 
         createdAt:
@@ -2119,14 +2124,31 @@ async function handleCommunityBoardPostCreateRequest(
 // 一覧表示用：status別に等値whereのみで取得する(orderByと組み合わせない
 // ため新しい複合indexを要求しない、店舗管理Phase3のadminListStoreSubmissions
 // と同じ方針)。並べ替えは取得後にこの関数内のJS配列sortで行う。
-// 将来件数が増えた場合の安全策として、statusごとに上限件数を設ける。
+// 街の掲示板 Phase8｜pending/approvedは「Firestoreに保存する件数」と
+// 「管理画面で一度に取得・表示する件数」を分ける方針のため、保存件数に
+// 上限は設けず、この定数は管理画面の取得上限としてのみ扱う。
+// rejected/expiredはPhase8からFirestore側の保持件数自体を最新
+// COMMUNITY_BOARD_HISTORY_KEEP_COUNT件に揃えるため、この取得上限も
+// 同じ値にする(保存件数と表示件数が一致する状態)。
 const COMMUNITY_BOARD_ADMIN_LIST_LIMITS =
   {
     pending: 200,
     approved: 200,
-    rejected: 100,
-    expired: 100
+    rejected: 10,
+    expired: 10
   };
+
+// rejected/expiredともに、地域を問わずマチナウ運営全体でこの件数だけを
+// Firestoreに保持する(本部指示：地域ごとではなく全体で最新10件)。
+const COMMUNITY_BOARD_HISTORY_KEEP_COUNT =
+  10;
+
+// cleanup時に一度に読む上限。定常状態ではrejected/expiredは
+// COMMUNITY_BOARD_HISTORY_KEEP_COUNT件程度にしかならないが、Phase8導入
+// 時点で既にそれを超える既存データが残っている場合に備えた安全な
+// 読み取り上限(単純な等値where＋limitのみ、新しい複合indexは不要)。
+const COMMUNITY_BOARD_CLEANUP_FETCH_SAFETY_LIMIT =
+  500;
 
 function convertCommunityBoardPostSnapshotToAdminListItem(
   documentSnapshot
@@ -2151,6 +2173,14 @@ function convertCommunityBoardPostSnapshotToAdminListItem(
     data.disabledAt &&
     typeof data.disabledAt.toMillis === "function"
       ? data.disabledAt.toMillis()
+      : null;
+
+  // 街の掲示板 Phase8｜rejectedAt(却下日時)。approvedAtMillis/
+  // disabledAtMillisと同じ考え方で、存在する場合だけmillis化する。
+  const rejectedAtMillis =
+    data.rejectedAt &&
+    typeof data.rejectedAt.toMillis === "function"
+      ? data.rejectedAt.toMillis()
       : null;
 
   return {
@@ -2207,6 +2237,7 @@ function convertCommunityBoardPostSnapshotToAdminListItem(
 
     createdAtMillis: createdAtMillis,
     approvedAtMillis: approvedAtMillis,
+    rejectedAtMillis: rejectedAtMillis,
     disabledAtMillis: disabledAtMillis
   };
 }
@@ -2311,6 +2342,21 @@ async function handleAdminListCommunityBoardPostsRequest(
         )
       );
 
+    // 街の掲示板 Phase8｜地域数が増えるほど逐次awaitは遅くなるため、
+    // Promise.all()で並列取得する(各読み取りは独立しており共有状態が
+    // 無いため安全)。取得内容・返す値は無変更。
+    const regionSnapshots =
+      await Promise.all(
+        distinctRegionIds.map(
+          function(regionId) {
+            return database
+              .collection("regions")
+              .doc(regionId)
+              .get();
+          }
+        )
+      );
+
     const regionsById =
       {};
 
@@ -2323,10 +2369,7 @@ async function handleAdminListCommunityBoardPostsRequest(
         distinctRegionIds[index];
 
       const regionSnapshot =
-        await database
-          .collection("regions")
-          .doc(regionId)
-          .get();
+        regionSnapshots[index];
 
       if (!regionSnapshot.exists) {
         continue;
@@ -2355,10 +2398,16 @@ async function handleAdminListCommunityBoardPostsRequest(
         };
     }
 
+    // 街の掲示板 Phase8｜「掲載中 200」等の件数表示が、全国・世界で
+    // 実際に200件しかないという誤解を生まないよう、取得上限自体を
+    // クライアントへ渡す。新しいFirestore count()集計は追加しない
+    // (本部指示)。表示側で「取得件数 === 上限」の場合だけ「200+」等の
+    // 表記にする判断に使う。
     return response.status(200).json({
       success: true,
       postsByStatus: postsByStatus,
-      regionsById: regionsById
+      regionsById: regionsById,
+      limits: COMMUNITY_BOARD_ADMIN_LIST_LIMITS
     });
   } catch (error) {
     console.error(
@@ -2427,6 +2476,105 @@ async function applyCommunityBoardPostStatusTransition(
       };
     }
   );
+}
+
+// 街の掲示板 Phase8｜rejected/expiredは地域を問わず全体で最新
+// COMMUNITY_BOARD_HISTORY_KEEP_COUNT件だけをFirestoreに保持し、
+// それを超える古いものは実データを削除する(単に管理画面の表示件数を
+// 絞るのではなく、保存件数自体を絞る、本部指示)。
+//
+// 削除対象は必ずstatus等値whereで絞り込んだドキュメントだけであり、
+// pending/approvedを含む他statusを削除することは構造的にできない。
+// クエリはstatus等値＋limit(安全上限)のみで、orderByと組み合わせない
+// ため新しい複合indexを要求しない(rejected/expiredは定常状態で
+// COMMUNITY_BOARD_HISTORY_KEEP_COUNT件程度にしかならないため、
+// この安全上限内で全件を読める)。並べ替え・「保持する最新N件」の
+// 判定はこの関数内のJS配列sortで行う。
+//
+// 呼び出し元(reject/expireハンドラ)からはbest-effortとして呼ばれ、
+// ここが失敗してもstatus遷移自体は成功として扱う(本部指示：管理操作を
+// 壊すより、古い履歴が一時的に残る方が安全)。
+async function cleanupOldCommunityBoardPostsByStatus(
+  database,
+  status,
+  timestampFieldName,
+  keepCount
+) {
+  const querySnapshot =
+    await database
+      .collection("communityBoardPosts")
+      .where(
+        "status",
+        "==",
+        status
+      )
+      .limit(
+        COMMUNITY_BOARD_CLEANUP_FETCH_SAFETY_LIMIT
+      )
+      .get();
+
+  if (querySnapshot.size <= keepCount) {
+    return {
+      deletedCount: 0
+    };
+  }
+
+  const items =
+    querySnapshot.docs.map(
+      function(documentSnapshot) {
+        const data =
+          documentSnapshot.data() ||
+          {};
+
+        const timestampValue =
+          data[timestampFieldName];
+
+        const timestampMillis =
+          timestampValue &&
+          typeof timestampValue.toMillis === "function"
+            ? timestampValue.toMillis()
+            : 0;
+
+        return {
+          ref: documentSnapshot.ref,
+          timestampMillis: timestampMillis
+        };
+      }
+    );
+
+  // 新しい順に並べ、先頭keepCount件を残し、それ以降(古いもの)だけを
+  // 削除対象にする。timestampが取得できない(0扱いの)ドキュメントは
+  // 最も古い扱いとなり、優先的に削除対象になる(安全側)。
+  items.sort(
+    function(a, b) {
+      return (
+        b.timestampMillis -
+        a.timestampMillis
+      );
+    }
+  );
+
+  const itemsToDelete =
+    items.slice(
+      keepCount
+    );
+
+  const batch =
+    database.batch();
+
+  itemsToDelete.forEach(
+    function(item) {
+      batch.delete(
+        item.ref
+      );
+    }
+  );
+
+  await batch.commit();
+
+  return {
+    deletedCount: itemsToDelete.length
+  };
 }
 
 async function handleAdminApproveCommunityBoardPostRequest(
@@ -2551,6 +2699,9 @@ async function handleAdminRejectCommunityBoardPostRequest(
       });
     }
 
+    // 街の掲示板 Phase8｜rejected専用のタイムスタンプ(却下日時)を新設する。
+    // updatedAtだけに頼ると将来別の更新でも書き換わり得り、cleanupの
+    // 「古い順」判定が不正確になるため、最小変更として追加する。
     const transitionResult =
       await applyCommunityBoardPostStatusTransition(
         database,
@@ -2558,6 +2709,9 @@ async function handleAdminRejectCommunityBoardPostRequest(
         "pending",
         {
           status: "rejected",
+
+          rejectedAt:
+            FieldValue.serverTimestamp(),
 
           updatedAt:
             FieldValue.serverTimestamp()
@@ -2576,6 +2730,23 @@ async function handleAdminRejectCommunityBoardPostRequest(
         success: false,
         message: "この投稿は既に審査待ち以外の状態のため、却下できません。"
       });
+    }
+
+    // 街の掲示板 Phase8｜rejected全体(地域を問わず)を最新
+    // COMMUNITY_BOARD_HISTORY_KEEP_COUNT件だけに整理する。ここが失敗
+    // しても却下処理自体は成功として扱う(本部指示)。
+    try {
+      await cleanupOldCommunityBoardPostsByStatus(
+        database,
+        "rejected",
+        "rejectedAt",
+        COMMUNITY_BOARD_HISTORY_KEEP_COUNT
+      );
+    } catch (cleanupError) {
+      console.error(
+        "街の掲示板：rejected履歴の整理エラー：",
+        cleanupError
+      );
     }
 
     return response.status(200).json({
@@ -2661,6 +2832,25 @@ async function handleAdminDisableCommunityBoardPostRequest(
         success: false,
         message: "この投稿は現在掲載中ではないため、掲載を終了できません。"
       });
+    }
+
+    // 街の掲示板 Phase8｜expired全体(地域を問わず)を最新
+    // COMMUNITY_BOARD_HISTORY_KEEP_COUNT件だけに整理する。既存の
+    // disabledAt(掲載終了日時)をそのまま「古い順」の基準に使う
+    // (新しいtimestampは追加しない)。ここが失敗しても掲載停止処理
+    // 自体は成功として扱う(本部指示)。
+    try {
+      await cleanupOldCommunityBoardPostsByStatus(
+        database,
+        "expired",
+        "disabledAt",
+        COMMUNITY_BOARD_HISTORY_KEEP_COUNT
+      );
+    } catch (cleanupError) {
+      console.error(
+        "街の掲示板：expired履歴の整理エラー：",
+        cleanupError
+      );
     }
 
     return response.status(200).json({
