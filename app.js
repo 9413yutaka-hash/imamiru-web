@@ -155,6 +155,20 @@ function applyMachinauLanguage(language) {
     }
   });
 
+  // 街の掲示板 Phase10｜上記aria-label/alt方式と全く同じ考え方をinput要素の
+  // placeholder属性にも適用する。対象はdata-i18n-placeholder属性を持つ
+  // 要素のみで、既存のdata-i18n(innerHTML)・data-i18n-aria-label・
+  // data-i18n-altの挙動には一切影響しない(全国街名検索フォームの入力欄
+  // placeholderを多言語化するために追加)。
+  document.querySelectorAll("[data-i18n-placeholder]").forEach(function (element) {
+    const key = element.getAttribute("data-i18n-placeholder");
+    const translatedText = getMachinauTranslation(key, language);
+
+    if (translatedText) {
+      element.setAttribute("placeholder", translatedText);
+    }
+  });
+
   updateLocationButtonLanguage(language);
   updateLanguageSwitcherUi(language);
 }
@@ -12052,27 +12066,309 @@ function resolveGooglePlaceIdForAreaName(
   );
 }
 
+// 街の掲示板 Phase10｜「ほかの地域を見る」の全国対応(都道府県＋市区町村検索)
+// 用の新しい地域解決関数。Phase10-Aで実測した以下の結果を踏まえる：
+//   ・渋谷区/墨田区/札幌市/八重瀬町 → locality型resultとして単体で取得できる
+//   ・横浜市中区/大阪市北区 → locality型resultは存在せず、
+//     sublocality_level_1型resultとしてのみ取得できる(区自身のplace_id)
+//   ・都道府県を付けずに「中央区」等を検索すると、Googleが複数候補を
+//     返さず1件へ黙って絞り込む場合がある(誤爆リスク実測済み)
+// そのため、この関数は必ず「都道府県名＋街名」で検索し、返ってきた
+// resultのadministrative_area_level_1が選択都道府県と一致するものだけを
+// 候補とする(STEP8)。既存resolveGooglePlaceIdForAreaName()(沖縄県固定、
+// locality限定、Phase10時点で唯一の呼び出し元だったloadCommunityBoard
+// ForSelectedArea()がこちらの新関数を使うよう切り替わるため未使用になるが、
+// 本部指示によりこの関数自体・OKINAWA_MUNICIPALITY_TO_REGION_NAME・
+// 「マチナウからの提案」等の既存利用箇所は一切削除しない)とは完全に独立した
+// 新規関数として追加する。
+function resolveGooglePlaceIdForPrefectureAndAreaName(
+  prefectureName,
+  areaName
+) {
+  return new Promise(
+    async function(resolve) {
+      const safePrefectureName =
+        typeof prefectureName === "string"
+          ? prefectureName.trim()
+          : "";
+
+      const safeAreaName =
+        typeof areaName === "string"
+          ? areaName.trim()
+          : "";
+
+      if (
+        safePrefectureName === "" ||
+        safeAreaName === ""
+      ) {
+        resolve(null);
+        return;
+      }
+
+      // ensureGoogleMapsLoaded()は失敗時も例外を投げず必ずresolveするため、
+      // ここでもawaitするだけで安全に使える(既存триggerRegionTodayInfo()等
+      // と同じ既存の考え方)。「ほかの地域を見る」はGPS取得より先に押される
+      // 場合があり、地図セクションの遅延読み込みが未実行のままの可能性がある。
+      await ensureGoogleMapsLoaded();
+
+      if (
+        typeof google === "undefined" ||
+        !google.maps ||
+        !google.maps.Geocoder
+      ) {
+        resolve(null);
+        return;
+      }
+
+      const timeoutId =
+        setTimeout(
+          function() {
+            resolve(null);
+          },
+          AREA_NAME_RESOLUTION_TIMEOUT_MS
+        );
+
+      function findComponent(
+        addressComponents,
+        typeName
+      ) {
+        if (
+          !Array.isArray(
+            addressComponents
+          )
+        ) {
+          return null;
+        }
+
+        return (
+          addressComponents.find(
+            function(component) {
+              return (
+                Array.isArray(
+                  component.types
+                ) &&
+                component.types.includes(
+                  typeName
+                )
+              );
+            }
+          ) ||
+          null
+        );
+      }
+
+      try {
+        const geocoder =
+          new google.maps.Geocoder();
+
+        // 街の掲示板 Phase10 STEP4｜検索文字列は「都道府県＋街名＋, 日本」に
+        // 固定する(Phase10-Aで確認済みの、都道府県を付けない検索がGoogle側で
+        // 黙って1件に絞り込まれてしまうリスクを避けるため)。
+        const searchAddress =
+          safePrefectureName +
+          safeAreaName +
+          ", 日本";
+
+        geocoder.geocode(
+          {
+            address: searchAddress
+          },
+          function(results, status) {
+            clearTimeout(
+              timeoutId
+            );
+
+            if (
+              status !== "OK" ||
+              !Array.isArray(results) ||
+              results.length === 0
+            ) {
+              resolve(null);
+              return;
+            }
+
+            // 街の掲示板 Phase10 STEP8/STEP10｜results[0]を無条件採用せず、
+            // country==JP かつ administrative_area_level_1が選択都道府県と
+            // 一致するresultだけを候補にする(都道府県整合性確認)。
+            const validCandidates =
+              results.filter(
+                function(result) {
+                  const countryComponent =
+                    findComponent(
+                      result.address_components,
+                      "country"
+                    );
+
+                  const prefectureComponent =
+                    findComponent(
+                      result.address_components,
+                      "administrative_area_level_1"
+                    );
+
+                  const isJapan =
+                    countryComponent &&
+                    typeof countryComponent.short_name === "string" &&
+                    countryComponent.short_name === "JP";
+
+                  const prefectureMatches =
+                    prefectureComponent &&
+                    typeof prefectureComponent.long_name === "string" &&
+                    prefectureComponent.long_name === safePrefectureName;
+
+                  return (
+                    isJapan &&
+                    prefectureMatches
+                  );
+                }
+              );
+
+            // 街の掲示板 Phase10 STEP5｜locality優先、無ければ
+            // sublocality_level_1(Phase10-Aで実測できたのはこの2種類のみ。
+            // sublocalityは実データで確認していないため推測で追加しない)。
+            const localityCandidate =
+              validCandidates.find(
+                function(result) {
+                  return (
+                    Array.isArray(result.types) &&
+                    result.types.includes("locality")
+                  );
+                }
+              );
+
+            const subLocalityLevel1Candidate =
+              validCandidates.find(
+                function(result) {
+                  return (
+                    Array.isArray(result.types) &&
+                    result.types.includes("sublocality_level_1")
+                  );
+                }
+              );
+
+            const chosenResult =
+              localityCandidate ||
+              subLocalityLevel1Candidate;
+
+            if (
+              !chosenResult ||
+              typeof chosenResult.place_id !== "string" ||
+              chosenResult.place_id === ""
+            ) {
+              resolve(null);
+              return;
+            }
+
+            const administrativeLevel =
+              localityCandidate
+                ? "locality"
+                : "sublocality_level_1";
+
+            const countryComponent =
+              findComponent(
+                chosenResult.address_components,
+                "country"
+              );
+
+            const countryCode =
+              countryComponent &&
+              typeof countryComponent.short_name === "string"
+                ? countryComponent.short_name
+                : "";
+
+            let regionName =
+              "";
+
+            if (administrativeLevel === "locality") {
+              const localityComponent =
+                findComponent(
+                  chosenResult.address_components,
+                  "locality"
+                );
+
+              regionName =
+                localityComponent &&
+                typeof localityComponent.long_name === "string"
+                  ? localityComponent.long_name
+                  : "";
+            } else {
+              // 街の掲示板 Phase10 STEP6｜sublocality_level_1(政令指定都市の
+              // 区等)は、同じresult内のlocality(親市名)＋sublocality_level_1
+              // (区名)を組み合わせる。Phase10-A実測(横浜市中区/大阪市北区)で、
+              // この2つが同一result内の別コンポーネントとして重複なく
+              // 存在することを確認済み。
+              const parentCityComponent =
+                findComponent(
+                  chosenResult.address_components,
+                  "locality"
+                );
+
+              const wardComponent =
+                findComponent(
+                  chosenResult.address_components,
+                  "sublocality_level_1"
+                );
+
+              if (
+                parentCityComponent &&
+                typeof parentCityComponent.long_name === "string" &&
+                wardComponent &&
+                typeof wardComponent.long_name === "string"
+              ) {
+                regionName =
+                  parentCityComponent.long_name +
+                  wardComponent.long_name;
+              }
+            }
+
+            if (
+              countryCode === "" ||
+              regionName === ""
+            ) {
+              resolve(null);
+              return;
+            }
+
+            resolve(
+              {
+                googlePlaceId: chosenResult.place_id,
+                countryCode: countryCode,
+                regionName: regionName,
+                administrativeLevel: administrativeLevel
+              }
+            );
+          }
+        );
+      } catch (error) {
+        clearTimeout(
+          timeoutId
+        );
+
+        resolve(null);
+      }
+    }
+  );
+}
+
 // 「ほかの地域を見る」から選択された地域の掲示板を取得・描画する。
-// 解決に失敗した場合(Geocoder未読み込み・該当なし等)も、選択した
-// areaNameの表示のまま「まだ投稿がありません」を出す安全側フォールバックとし、
-// 画面を壊さない(既存showRegionRecommendationsForArea()の失敗時と同じ方針)。
+// 街の掲示板 Phase10｜全国対応に伴い、resolveGooglePlaceIdForAreaName()
+// (沖縄県固定)からresolveGooglePlaceIdForPrefectureAndAreaName()
+// (都道府県＋街名)へ切り替える。また、解決に失敗した場合の挙動も変更する：
+// 従来は「まだ投稿がありません」で掲示板を表示する安全側フォールバックだったが、
+// 全国自由入力では誤った街の掲示板を開いたと誤解されるリスクがあるため、
+// 掲示板側には一切進まず、呼び出し元(検索フォーム)がエラー文言を表示できる
+// よう戻り値で成否を返すだけにする(本部指示)。
 async function loadCommunityBoardForSelectedArea(
+  prefectureName,
   areaName
 ) {
   const resolvedRegion =
-    await resolveGooglePlaceIdForAreaName(
+    await resolveGooglePlaceIdForPrefectureAndAreaName(
+      prefectureName,
       areaName
     );
 
   if (!resolvedRegion) {
-    renderCommunityBoardForCurrentArea(
-      areaName,
-      [],
-      true,
-      ""
-    );
-
-    return;
+    return false;
   }
 
   const fetchResult =
@@ -12088,6 +12384,8 @@ async function loadCommunityBoardForSelectedArea(
     fetchResult.imageUrl,
     resolvedRegion
   );
+
+  return true;
 }
 
 
@@ -14351,6 +14649,61 @@ function buildRegionRecommendationAreaPickerHtml() {
 }
 
 
+// 街の掲示板 Phase10｜全国対応の都道府県選択に使う47都道府県の固定配列。
+// 全国約1,700自治体マスタは作らず、Firestoreにも保存しない、クライアント
+// だけの小さな定数(本部指示)。OKINAWA_MUNICIPALITY_TO_REGION_NAME・
+// buildRegionRecommendationAreaPickerHtml()は削除せず、掲示板の地域選択
+// UIから使われなくなるだけ(既存Phase4と同じ考え方)。
+const JAPAN_PREFECTURES =
+  [
+    "北海道", "青森県", "岩手県", "宮城県", "秋田県", "山形県", "福島県",
+    "茨城県", "栃木県", "群馬県", "埼玉県", "千葉県", "東京都", "神奈川県",
+    "新潟県", "富山県", "石川県", "福井県", "山梨県", "長野県", "岐阜県",
+    "静岡県", "愛知県", "三重県", "滋賀県", "京都府", "大阪府", "兵庫県",
+    "奈良県", "和歌山県", "鳥取県", "島根県", "岡山県", "広島県", "山口県",
+    "徳島県", "香川県", "愛媛県", "高知県", "福岡県", "佐賀県", "長崎県",
+    "熊本県", "大分県", "宮崎県", "鹿児島県", "沖縄県"
+  ];
+
+// 街の掲示板 Phase10｜「ほかの地域を見る」の入口を、沖縄41市町村固定ボタン
+// (buildRegionRecommendationAreaPickerHtml())から、都道府県選択＋市区町村
+// 名入力の全国検索フォームへ差し替える。旅行者にlocality/sublocality_level_1
+// 等のGoogle内部の行政レベルを意識させない、シンプルな2項目＋ボタンのみの
+// 構成にする(本部指示)。
+function buildCommunityBoardAreaSearchFormHtml() {
+  const prefectureOptionsHtml =
+    JAPAN_PREFECTURES
+      .map(
+        function(prefectureName) {
+          return (
+            '<option value="' +
+            escapeHtml(prefectureName) +
+            '">' +
+            escapeHtml(prefectureName) +
+            "</option>"
+          );
+        }
+      )
+      .join("");
+
+  return (
+    '<div class="community-board-area-search-field">' +
+      '<label for="communityBoardPrefectureSelect" data-i18n="community_board_prefecture_label">都道府県</label>' +
+      '<select id="communityBoardPrefectureSelect" class="community-board-area-search-select">' +
+        '<option value="" data-i18n="community_board_prefecture_placeholder">選択してください</option>' +
+        prefectureOptionsHtml +
+      "</select>" +
+    "</div>" +
+    '<div class="community-board-area-search-field">' +
+      '<label for="communityBoardAreaNameInput" data-i18n="community_board_area_name_label">市区町村</label>' +
+      '<input type="text" id="communityBoardAreaNameInput" class="community-board-area-search-input" data-i18n-placeholder="community_board_area_name_placeholder" placeholder="例：渋谷区">' +
+    "</div>" +
+    '<button type="button" id="communityBoardAreaSearchButton" class="location-button" data-i18n="community_board_area_search_button">この街を見る</button>' +
+    '<p id="communityBoardAreaSearchError" class="community-board-area-search-error" style="display:none;"></p>'
+  );
+}
+
+
 const regionRecommendationMoreButtonElement =
   document.getElementById(
     "regionRecommendationMoreButton"
@@ -14396,34 +14749,130 @@ const regionRecommendationBackToCurrentButtonElement =
   );
 
 if (regionRecommendationAreaPickerElement) {
+  // 街の掲示板 Phase10｜沖縄41市町村固定ボタン(buildRegionRecommendation
+  // AreaPickerHtml())の代わりに、全国対応の都道府県＋市区町村検索フォームを
+  // 描画する。showRegionRecommendationsForArea()・regionRecommendations
+  // コレクション・admin-region-picks.html・OKINAWA_MUNICIPALITY_TO_
+  // REGION_NAME・buildRegionRecommendationAreaPickerHtml()自体は一切削除
+  // せず残す(呼ばれなくなるだけ、本部指示)。
   regionRecommendationAreaPickerElement.innerHTML =
-    buildRegionRecommendationAreaPickerHtml();
+    buildCommunityBoardAreaSearchFormHtml();
 
-  regionRecommendationAreaPickerElement.addEventListener(
-    "click",
-    function(event) {
-      const selectedAreaName =
-        event.target.getAttribute(
-          "data-area"
-        );
+  const communityBoardPrefectureSelectElement =
+    document.getElementById(
+      "communityBoardPrefectureSelect"
+    );
 
-      if (!selectedAreaName) {
-        return;
-      }
+  const communityBoardAreaNameInputElement =
+    document.getElementById(
+      "communityBoardAreaNameInput"
+    );
 
+  const communityBoardAreaSearchButtonElement =
+    document.getElementById(
+      "communityBoardAreaSearchButton"
+    );
+
+  const communityBoardAreaSearchErrorElement =
+    document.getElementById(
+      "communityBoardAreaSearchError"
+    );
+
+  function showCommunityBoardAreaSearchError() {
+    if (!communityBoardAreaSearchErrorElement) {
+      return;
+    }
+
+    communityBoardAreaSearchErrorElement.textContent =
+      getMachinauTranslation(
+        "community_board_area_search_error",
+        getCurrentMachinauLanguage()
+      );
+
+    communityBoardAreaSearchErrorElement.style.display =
+      "";
+  }
+
+  function hideCommunityBoardAreaSearchError() {
+    if (!communityBoardAreaSearchErrorElement) {
+      return;
+    }
+
+    communityBoardAreaSearchErrorElement.style.display =
+      "none";
+  }
+
+  // 街の掲示板 Phase10 STEP9｜解決に失敗した場合は掲示板API・投稿APIへは
+  // 一切進まず、検索フォームの下にエラー文言を表示するだけにする
+  // (誤った街の掲示板を開かない、本部指示)。二重送信防止のため、
+  // 実行中はボタンを無効化する(community-board-post.htmlの既存submit
+  // ボタン無効化と同じ考え方)。
+  async function handleCommunityBoardAreaSearchSubmit() {
+    if (
+      !communityBoardAreaSearchButtonElement ||
+      communityBoardAreaSearchButtonElement.disabled
+    ) {
+      return;
+    }
+
+    hideCommunityBoardAreaSearchError();
+
+    const selectedPrefectureName =
+      communityBoardPrefectureSelectElement
+        ? communityBoardPrefectureSelectElement.value
+        : "";
+
+    const enteredAreaName =
+      communityBoardAreaNameInputElement
+        ? communityBoardAreaNameInputElement.value.trim()
+        : "";
+
+    if (
+      selectedPrefectureName === "" ||
+      enteredAreaName === ""
+    ) {
+      showCommunityBoardAreaSearchError();
+      return;
+    }
+
+    communityBoardAreaSearchButtonElement.disabled =
+      true;
+
+    const succeeded =
+      await loadCommunityBoardForSelectedArea(
+        selectedPrefectureName,
+        enteredAreaName
+      );
+
+    communityBoardAreaSearchButtonElement.disabled =
+      false;
+
+    if (succeeded) {
       regionRecommendationAreaPickerElement.style.display =
         "none";
-
-      // 街の掲示板 Phase4｜「ほかの地域を見る」の選択先を、従来の
-      // regionRecommendations表示(showRegionRecommendationsForArea())から
-      // 掲示板表示へ切り替える。showRegionRecommendationsForArea()自体・
-      // regionRecommendationsコレクション・翻訳キャッシュ・admin-region-
-      // picks.html等は一切削除せず残す(呼ばれなくなるだけ、本部指示)。
-      loadCommunityBoardForSelectedArea(
-        selectedAreaName
-      );
+    } else {
+      showCommunityBoardAreaSearchError();
     }
-  );
+  }
+
+  if (communityBoardAreaSearchButtonElement) {
+    communityBoardAreaSearchButtonElement.addEventListener(
+      "click",
+      handleCommunityBoardAreaSearchSubmit
+    );
+  }
+
+  if (communityBoardAreaNameInputElement) {
+    communityBoardAreaNameInputElement.addEventListener(
+      "keydown",
+      function(event) {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          handleCommunityBoardAreaSearchSubmit();
+        }
+      }
+    );
+  }
 }
 
 if (

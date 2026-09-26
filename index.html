@@ -270,6 +270,40 @@
       padding: 10px 0;
     }
 
+    /* 街の掲示板 Phase10｜「ほかの地域を見る」の全国対応(都道府県＋
+       市区町村検索)フォーム専用の最小CSS。既存.region-recommendation-
+       area-picker(枠自体)はそのまま再利用し、中身の見た目だけをここで
+       追加する。 */
+    .community-board-area-search-field {
+      margin-bottom: 10px;
+    }
+
+    .community-board-area-search-field label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--navy);
+      margin-bottom: 4px;
+    }
+
+    .community-board-area-search-select,
+    .community-board-area-search-input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 14px;
+      font-family: inherit;
+      background: #ffffff;
+      color: var(--navy);
+    }
+
+    .community-board-area-search-error {
+      margin: 10px 0 0;
+      font-size: 12px;
+      color: #b8354a;
+    }
+
     /* 街の掲示板(仮称) Phase3｜派手なカード広告にはせず、この街について
        誰かが残した一言が並んでいる雰囲気を優先する(本部指示)。既存の
        .region-recommendation-card系(画像・リンク付き)とは意図的に分け、

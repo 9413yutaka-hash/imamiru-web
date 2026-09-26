@@ -1260,6 +1260,36 @@ const MACHINAU_TRANSLATIONS = {
     en: "Post about {AREA}"
   },
 
+  community_board_prefecture_label: {
+    ja: "都道府県",
+    en: "Prefecture"
+  },
+
+  community_board_prefecture_placeholder: {
+    ja: "選択してください",
+    en: "Please select"
+  },
+
+  community_board_area_name_label: {
+    ja: "市区町村",
+    en: "City / Ward / Town / Village"
+  },
+
+  community_board_area_name_placeholder: {
+    ja: "例：渋谷区",
+    en: "e.g. Shibuya-ku"
+  },
+
+  community_board_area_search_button: {
+    ja: "この街を見る",
+    en: "View this city"
+  },
+
+  community_board_area_search_error: {
+    ja: "街を確認できませんでした。都道府県と市区町村名を確認してください。",
+    en: "We couldn't confirm this city. Please check the prefecture and city/ward/town/village name."
+  },
+
   slider_prev_button: {
     ja: "前の写真",
     en: "Previous photo"
