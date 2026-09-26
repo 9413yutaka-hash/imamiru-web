@@ -2014,39 +2014,173 @@ async function handleCommunityBoardRegionGoogleVerifyProbeRequest(
   }
 }
 
-// googlePlaceIdから既存regionを検索し、無ければ作成する。Machinau独自
-// regionId(regions.doc()の自動生成ID)を返す。同じgooglePlaceIdに対する
-// 同時リクエストでも重複regionが作られないことをtransactionで保証する。
-async function resolveOrCreateCommunityBoardRegion(
+// 街の掲示板 Phase12｜regionsByGooglePlaceId/{indexKey}→regions/{regionId}を
+// 読み、Firestoreに保存済みの信頼できる地域情報だけを返す(クライアント値は
+// 一切参照しない)。regionドキュメントが存在しない/必須フィールドが欠けて
+// いる場合はnullを返す(壊れたregionを黙って信用しない)。
+async function loadTrustedCommunityBoardRegionInfoByIndexKey(
   database,
-  googlePlaceId,
-  countryCode,
-  regionName,
-  administrativeLevel
+  indexKey
 ) {
-  const indexKey =
-    buildCommunityBoardRegionIndexKey(
-      countryCode,
-      googlePlaceId
-    );
+  const indexSnapshot =
+    await database
+      .collection("regionsByGooglePlaceId")
+      .doc(indexKey)
+      .get();
 
-  if (indexKey === null) {
+  if (!indexSnapshot.exists) {
     return null;
   }
 
-  const indexRef =
-    database
-      .collection("regionsByGooglePlaceId")
-      .doc(indexKey);
+  const indexData =
+    indexSnapshot.data() ||
+    {};
+
+  const regionId =
+    typeof indexData.regionId === "string"
+      ? indexData.regionId
+      : "";
+
+  if (regionId === "") {
+    return null;
+  }
+
+  const regionSnapshot =
+    await database
+      .collection("regions")
+      .doc(regionId)
+      .get();
+
+  return buildTrustedCommunityBoardRegionInfoFromRegionSnapshot(
+    regionId,
+    regionSnapshot
+  );
+}
+
+function buildTrustedCommunityBoardRegionInfoFromRegionSnapshot(
+  regionId,
+  regionSnapshot
+) {
+  if (!regionSnapshot.exists) {
+    return null;
+  }
+
+  const regionData =
+    regionSnapshot.data() ||
+    {};
+
+  if (
+    typeof regionData.googlePlaceId !== "string" ||
+    regionData.googlePlaceId === "" ||
+    typeof regionData.countryCode !== "string" ||
+    regionData.countryCode === "" ||
+    typeof regionData.regionName !== "string" ||
+    regionData.regionName === "" ||
+    typeof regionData.administrativeLevel !== "string" ||
+    regionData.administrativeLevel === ""
+  ) {
+    return null;
+  }
+
+  return {
+    regionId: regionId,
+    googlePlaceId: regionData.googlePlaceId,
+    countryCode: regionData.countryCode,
+    regionName: regionData.regionName,
+    administrativeLevel: regionData.administrativeLevel
+  };
+}
+
+// googlePlaceIdから既存regionを検索し、無ければGoogle検証を経て作成する。
+// 街の掲示板 Phase12｜クライアントが送るcountryCode/regionName/
+// administrativeLevelを最終的な正として一切使わない(Phase12-A調査で
+// 確認済みの改ざんリスクへの対応)。
+//
+// 1. まずクライアントのcountryCode+googlePlaceIdでregionsByGooglePlaceId
+//    を引く(Firestoreのみ、Google API呼び出しなし)。正しいcountryCodeを
+//    送ってくる正規のクライアントは、既存regionであればここで確定し
+//    Google APIは一切呼ばれない(費用最小化)。
+// 2. 見つからなかった場合(本当に新規の地域、またはcountryCodeが送信側で
+//    食い違っている＝Phase12-Aで確認した改ざんの可能性)は、
+//    googlePlaceIdだけを使ってGoogleへ照会し、正式なcountryCode/
+//    regionName/administrativeLevelを取得する。ここでAPI 0回に固執せず、
+//    安全性を優先する(本部指示)。
+// 3. Googleが返した正式なcountryCode+googlePlaceIdで改めてindexKeyを
+//    組み立て、transaction内でもう一度確認する(Google問い合わせ中に
+//    他のリクエストが同じregionを先に作成する競合、および
+//    クライアントcountryCode改ざんによりStep1では見つからなかったが
+//    実は既存regionだった場合の両方に対応)。既に存在すれば新規作成せず
+//    既存regionを採用し、重複regionを作らない。
+// 4. Google検証に失敗した場合(タイムアウト・エラー・country取得不能・
+//    locality/sublocality_level_1いずれも取得不能・place_id不一致等)は
+//    regionを作成せずnullを返す(検証できなかったのに作成することを避ける)。
+//
+// Google API呼び出しはtransactionの外側だけで行い、Firestore transaction
+// 内でGoogleへの通信を保持しない(長時間ロックを避ける、本部指示)。
+async function resolveOrCreateCommunityBoardRegion(
+  database,
+  clientGooglePlaceId,
+  clientCountryCode
+) {
+  const clientHintIndexKey =
+    buildCommunityBoardRegionIndexKey(
+      clientCountryCode,
+      clientGooglePlaceId
+    );
+
+  if (clientHintIndexKey !== null) {
+    const existingByClientHint =
+      await loadTrustedCommunityBoardRegionInfoByIndexKey(
+        database,
+        clientHintIndexKey
+      );
+
+    if (existingByClientHint !== null) {
+      return existingByClientHint;
+    }
+  }
+
+  // Step1で見つからなかった場合だけGoogleへ照会する(新規地域、または
+  // countryCode不一致のいずれか)。
+  const googleVerifiedInfo =
+    await resolveTrustedCommunityBoardRegionInfoFromGoogle(
+      clientGooglePlaceId
+    );
+
+  if (googleVerifiedInfo === null) {
+    return null;
+  }
+
+  // 街の掲示板 Phase12｜現在は日本国内運用のみを対象とする(世界展開時の
+  // 国許可ロジック拡張は別途検討、regions/regionsByGooglePlaceIdの
+  // データ構造自体は国非依存のまま変更していない)。
+  if (googleVerifiedInfo.countryCode !== "JP") {
+    return null;
+  }
+
+  const trueIndexKey =
+    buildCommunityBoardRegionIndexKey(
+      googleVerifiedInfo.countryCode,
+      googleVerifiedInfo.googlePlaceId
+    );
+
+  if (trueIndexKey === null) {
+    return null;
+  }
 
   const regionsCollectionRef =
     database.collection("regions");
+
+  const trueIndexRef =
+    database
+      .collection("regionsByGooglePlaceId")
+      .doc(trueIndexKey);
 
   return database.runTransaction(
     async function(transaction) {
       const indexSnapshot =
         await transaction.get(
-          indexRef
+          trueIndexRef
         );
 
       if (indexSnapshot.exists) {
@@ -2054,9 +2188,26 @@ async function resolveOrCreateCommunityBoardRegion(
           indexSnapshot.data() ||
           {};
 
-        return typeof indexData.regionId === "string"
-          ? indexData.regionId
-          : null;
+        const regionId =
+          typeof indexData.regionId === "string"
+            ? indexData.regionId
+            : "";
+
+        if (regionId === "") {
+          return null;
+        }
+
+        const regionSnapshot =
+          await transaction.get(
+            regionsCollectionRef.doc(
+              regionId
+            )
+          );
+
+        return buildTrustedCommunityBoardRegionInfoFromRegionSnapshot(
+          regionId,
+          regionSnapshot
+        );
       }
 
       const newRegionRef =
@@ -2065,10 +2216,10 @@ async function resolveOrCreateCommunityBoardRegion(
       transaction.set(
         newRegionRef,
         {
-          googlePlaceId: googlePlaceId,
-          countryCode: countryCode,
-          regionName: regionName,
-          administrativeLevel: administrativeLevel,
+          googlePlaceId: googleVerifiedInfo.googlePlaceId,
+          countryCode: googleVerifiedInfo.countryCode,
+          regionName: googleVerifiedInfo.regionName,
+          administrativeLevel: googleVerifiedInfo.administrativeLevel,
 
           createdAt:
             FieldValue.serverTimestamp(),
@@ -2079,7 +2230,7 @@ async function resolveOrCreateCommunityBoardRegion(
       );
 
       transaction.set(
-        indexRef,
+        trueIndexRef,
         {
           regionId: newRegionRef.id,
 
@@ -2088,7 +2239,13 @@ async function resolveOrCreateCommunityBoardRegion(
         }
       );
 
-      return newRegionRef.id;
+      return {
+        regionId: newRegionRef.id,
+        googlePlaceId: googleVerifiedInfo.googlePlaceId,
+        countryCode: googleVerifiedInfo.countryCode,
+        regionName: googleVerifiedInfo.regionName,
+        administrativeLevel: googleVerifiedInfo.administrativeLevel
+      };
     }
   );
 }
@@ -2222,43 +2379,47 @@ async function handleCommunityBoardPostCreateRequest(
       });
     }
 
-    const regionId =
+    // 街の掲示板 Phase12｜resolveOrCreateCommunityBoardRegion()は、既存
+    // regionであればFirestoreに保存済みの信頼できる値を、新規regionで
+    // あればGoogle検証済みの値だけを返す(クライアントのregionName/
+    // administrativeLevel、および食い違うcountryCodeは一切採用されない)。
+    const regionInfo =
       await resolveOrCreateCommunityBoardRegion(
         database,
         formData.googlePlaceId,
-        formData.countryCode,
-        formData.regionName,
-        formData.administrativeLevel
+        formData.countryCode
       );
 
-    if (!regionId) {
+    if (!regionInfo) {
       return response.status(400).json({
         success: false,
-        message: "地域情報を確認できませんでした。"
+        message: "地域情報を確認できませんでした。時間をおいて、もう一度お試しください。"
       });
     }
 
-    // server確定フィールド：regionId(上で解決済みの値)、status("pending"
-    // 固定)、approvedAt/disabledAt(null固定)。クライアントから同名の値が
-    // 送られてきても一切参照しない。
+    // server確定フィールド：regionId・googlePlaceId・countryCode・
+    // regionName・administrativeLevel(いずれもregionInfo、Phase12以降は
+    // クライアント送信値を一切コピーしない)、status("pending"固定)、
+    // approvedAt/disabledAt(null固定)。
     const postData =
       {
         text:
           formData.text,
 
-        regionId: regionId,
+        regionId:
+          regionInfo.regionId,
 
         googlePlaceId:
-          formData.googlePlaceId,
+          regionInfo.googlePlaceId,
 
         countryCode:
-          formData.countryCode,
+          regionInfo.countryCode,
 
         regionName:
-          formData.regionName,
+          regionInfo.regionName,
 
         administrativeLevel:
-          formData.administrativeLevel,
+          regionInfo.administrativeLevel,
 
         status:
           "pending",
