@@ -5603,7 +5603,9 @@ function resolveLocationHierarchyFromCoordinates(
             regionKey: "",
             regionName: "",
             municipality: "",
-            municipalityPlaceId: ""
+            municipalityPlaceId: "",
+            communityBoardPlaceId: "",
+            communityBoardRegionName: ""
           }
         );
         return;
@@ -5622,7 +5624,16 @@ function resolveLocationHierarchyFromCoordinates(
                 regionKey: "",
                 regionName: "",
                 municipality: "",
-                municipalityPlaceId: ""
+                municipalityPlaceId: "",
+
+                // 街の掲示板 Phase11｜政令指定都市の区(横浜市中区/大阪市北区等)を
+                // GPS現在地からも正しい「街」として掲示板に接続するための、
+                // 掲示板専用の新フィールド。既存のcity/municipality/
+                // municipalityPlaceId(loadDynamicColumnEntries()・
+                // triggerRegionTodayInfo()が使用中、無変更)には一切触れず、
+                // 追加するだけ。失敗時は空文字のまま(既存の空状態と同じ)。
+                communityBoardPlaceId: "",
+                communityBoardRegionName: ""
               }
             );
           },
@@ -5689,7 +5700,9 @@ function resolveLocationHierarchyFromCoordinates(
                   regionKey: "",
                   regionName: "",
                   municipality: "",
-                  municipalityPlaceId: ""
+                  municipalityPlaceId: "",
+                  communityBoardPlaceId: "",
+                  communityBoardRegionName: ""
                 }
               );
               return;
@@ -5711,6 +5724,19 @@ function resolveLocationHierarchyFromCoordinates(
               "";
 
             let municipalityPlaceIdValue =
+              "";
+
+            // 街の掲示板 Phase11｜政令指定都市の区(横浜市中区/大阪市北区等)を
+            // Reverse Geocodeから正しく識別するための追加変数。Phase11実測で、
+            // Reverse Geocodeのresults配列には「区」自身を表す
+            // sublocality_level_1型resultと、「市」を表すlocality型result
+            // (municipalityPlaceIdValueが既に採用しているもの)が両方
+            // 同時に含まれることを確認した。既存のcityValue・
+            // municipalityPlaceIdValueの決定方法は一切変更しない。
+            let sublocalityLevel1PlaceIdValue =
+              "";
+
+            let sublocalityLevel1RegionNameValue =
               "";
 
             results.forEach(
@@ -5819,8 +5845,71 @@ function resolveLocationHierarchyFromCoordinates(
                   municipalityPlaceIdValue =
                     result.place_id;
                 }
+
+                // 街の掲示板 Phase11｜Phase10-A/Phase11実測(横浜市中区・
+                // 大阪市北区)で確認済みの通り、区自身を表すresultは
+                // types.includes("sublocality_level_1")かつpolitical、
+                // その同じresultのaddress_components内に親市(locality)と
+                // 区自身(sublocality_level_1)の両方が存在する。この2つを
+                // 連結してregionNameとする(Phase10の遠隔検索と同じ考え方)。
+                // 東京23区(渋谷区/墨田区で実測確認済み)はsublocality_level_1
+                // 型resultを持たないため、この分岐には入らずlocalityのまま
+                // (無理にsublocality扱いへ変更しない、本部指示)。
+                if (
+                  sublocalityLevel1PlaceIdValue === "" &&
+                  Array.isArray(
+                    result.types
+                  ) &&
+                  result.types.includes(
+                    "sublocality_level_1"
+                  ) &&
+                  typeof result.place_id === "string" &&
+                  result.place_id !== ""
+                ) {
+                  const parentCityComponent =
+                    findComponent(
+                      result.address_components,
+                      "locality"
+                    );
+
+                  const wardComponent =
+                    findComponent(
+                      result.address_components,
+                      "sublocality_level_1"
+                    );
+
+                  if (
+                    parentCityComponent &&
+                    typeof parentCityComponent.long_name === "string" &&
+                    wardComponent &&
+                    typeof wardComponent.long_name === "string"
+                  ) {
+                    sublocalityLevel1PlaceIdValue =
+                      result.place_id;
+
+                    sublocalityLevel1RegionNameValue =
+                      parentCityComponent.long_name +
+                      wardComponent.long_name;
+                  }
+                }
               }
             );
+
+            // 街の掲示板 Phase11｜区自身を安全に識別できた場合(横浜市中区・
+            // 大阪市北区等)はその区のgooglePlaceId/regionNameを、それ以外
+            // (渋谷区・八重瀬町・札幌市等、東京23区含む)は既存のlocality
+            // ベースの値(municipalityPlaceIdValue/cityValue)をそのまま
+            // 掲示板専用フィールドに使う。city/municipality/
+            // municipalityPlaceId自体は一切変更しない。
+            const communityBoardPlaceIdValue =
+              sublocalityLevel1PlaceIdValue !== ""
+                ? sublocalityLevel1PlaceIdValue
+                : municipalityPlaceIdValue;
+
+            const communityBoardRegionNameValue =
+              sublocalityLevel1PlaceIdValue !== ""
+                ? sublocalityLevel1RegionNameValue
+                : cityValue;
 
             resolve(
               {
@@ -5832,7 +5921,9 @@ function resolveLocationHierarchyFromCoordinates(
                 regionKey: regionKeyValue,
                 regionName: prefectureValue,
                 municipality: cityValue,
-                municipalityPlaceId: municipalityPlaceIdValue
+                municipalityPlaceId: municipalityPlaceIdValue,
+                communityBoardPlaceId: communityBoardPlaceIdValue,
+                communityBoardRegionName: communityBoardRegionNameValue
               }
             );
           }
@@ -5852,7 +5943,9 @@ function resolveLocationHierarchyFromCoordinates(
             regionKey: "",
             regionName: "",
             municipality: "",
-            municipalityPlaceId: ""
+            municipalityPlaceId: "",
+            communityBoardPlaceId: "",
+            communityBoardRegionName: ""
           }
         );
       }
@@ -8948,14 +9041,20 @@ function getLocation() {
 
               // 街の掲示板 Phase3｜同じGeocoder結果(locationHierarchy)を
               // そのまま再利用するだけで、新しいGeocoding呼び出しは増やさない。
-              // municipalityPlaceIdが取得できなかった場合(古いブラウザ・
-              // Geocoder失敗等)はloadCommunityBoardForCurrentArea()内で
-              // 何もせず終わる(既存のisPermanentAd等、他の描画処理に
-              // 影響させない)。
+              // communityBoardPlaceId/communityBoardRegionNameが取得できな
+              // かった場合(古いブラウザ・Geocoder失敗等)はloadCommunityBoard
+              // ForCurrentArea()内で何もせず終わる(既存のisPermanentAd等、
+              // 他の描画処理に影響させない)。
+              // 街の掲示板 Phase11｜政令指定都市の区(横浜市中区/大阪市北区等)
+              // にいる場合は、既存のmunicipalityPlaceId/municipality(市単位、
+              // loadDynamicColumnEntries()・triggerRegionTodayInfo()が引き
+              // 続き使用中、無変更)ではなく、区単位のcommunityBoardPlaceId/
+              // communityBoardRegionNameを使う(Phase10の遠隔検索「横浜市中区」
+              // 選択時と同じgooglePlaceIdへ到達させるため)。
               loadCommunityBoardForCurrentArea(
-                locationHierarchy.municipalityPlaceId,
+                locationHierarchy.communityBoardPlaceId,
                 locationHierarchy.countryCode,
-                locationHierarchy.municipality
+                locationHierarchy.communityBoardRegionName
               );
             }
           )
