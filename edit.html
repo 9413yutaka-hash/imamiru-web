@@ -439,6 +439,13 @@
       opacity: 0.65;
     }
 
+    /* 店舗参加導線 Phase1｜登録店舗名(変更不可)の見た目 */
+    input[readonly] {
+      background: #f1f5f8;
+      color: #5b6b7b;
+      cursor: default;
+    }
+
     .lookup-button,
     .save-button {
       width: 100%;
@@ -904,6 +911,15 @@
             required
           >
 
+          <!-- 店舗参加導線 Phase1｜店舗専用URLから投稿された投稿のときだけ表示 -->
+          <p
+            id="shopNameLockedNote"
+            class="form-help"
+            style="display:none;"
+          >
+            🏪 登録されている店舗名のため、ここでは変更できません。
+          </p>
+
         </div>
 
         <div class="form-group">
@@ -1260,6 +1276,11 @@
         "shopName"
       );
 
+    const shopNameLockedNote =
+      document.getElementById(
+        "shopNameLockedNote"
+      );
+
     const titleInput =
       document.getElementById(
         "title"
@@ -1504,6 +1525,20 @@
       shopNameInput.value =
         submission.shopName ||
         "";
+
+      // 店舗参加導線 Phase1｜店舗専用URLから投稿された投稿は、登録店舗名を
+      // 変更できない(サーバー側でも保存済みの店舗名を維持する)。保存中の
+      // disabled切り替え(setSaveSubmitting)と干渉しないよう、readOnlyで制御する。
+      const isVerifiedShop =
+        submission.isVerifiedShop === true;
+
+      shopNameInput.readOnly =
+        isVerifiedShop;
+
+      shopNameLockedNote.style.display =
+        isVerifiedShop
+          ? "block"
+          : "none";
 
       titleInput.value =
         submission.title ||

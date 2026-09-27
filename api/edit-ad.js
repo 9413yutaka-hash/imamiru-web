@@ -666,6 +666,12 @@ export default async function handler(
           shopName:
             currentData.shopName || "",
 
+          // 店舗参加導線 Phase1｜店舗専用URLから投稿された(publisherType:
+          // "verified_shop")投稿かどうか。edit.htmlが登録店舗名の欄を
+          // 編集不可にするためだけに使う(既存項目は変更せず追加のみ)。
+          isVerifiedShop:
+            currentData.publisherType === "verified_shop",
+
           title:
             currentData.title || "",
 
@@ -755,10 +761,20 @@ export default async function handler(
     // 1回のみで、編集した場合だけ追加で1回実行される(新規投稿の
     // 呼び出し回数は変わらない)。新しいVercel Functionは作らず、
     // api/moderate-submission.jsのexport済み関数をそのまま再利用する。
+    // 店舗参加導線 Phase1｜店舗専用URLから投稿された(publisherType:
+    // "verified_shop")投稿の店舗名は、登録時にサーバー側で固定した正式名称の
+    // ため、編集リクエストで別の店舗名が送られても保存済みの値を維持する
+    // (画面側の編集不可はあくまで見た目。改変したリクエストでも変更させない)。
+    // 一般投稿は従来どおり、入力された店舗名で更新する。
+    const savedShopName =
+      currentData.publisherType === "verified_shop"
+        ? String(currentData.shopName || "")
+        : editableFields.shopName;
+
     const editedDataForModeration =
       {
         shopName:
-          editableFields.shopName,
+          savedShopName,
 
         title:
           editableFields.title,
@@ -854,7 +870,7 @@ export default async function handler(
     const updatePayload =
       {
         shopName:
-          editableFields.shopName,
+          savedShopName,
 
         title:
           editableFields.title,
