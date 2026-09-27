@@ -8855,6 +8855,214 @@ function triggerLocationBasedCollection(
     );
 }
 
+// TOP復帰時の現在地自動復元 Phase1｜「現在値ボタン」でGPS取得した現在地を
+// 同じタブ内(sessionStorage)にだけ保持し、別ページからTOPへ戻ったときに
+// 30分以内ならGPS・Geocoderを使わずに同じ表示へ戻す。Firestore・サーバーへは
+// 一切送らない。手動の地域選択(「ほかの地域を見る」)は保存・復元の対象外
+// (保存はapplyUserLocation()のGPS取得時だけ行う)。
+const SAVED_USER_LOCATION_STORAGE_KEY =
+  "machinauTopSavedUserLocation";
+
+const SAVED_USER_LOCATION_MAX_AGE_MILLISECONDS =
+  30 * 60 * 1000;
+
+// resolveLocationHierarchyFromCoordinates()が返す地域階層データの項目
+// (すべて文字列)。保存時・復元時ともこの項目だけを扱う。
+const SAVED_LOCATION_HIERARCHY_KEYS = [
+  "country",
+  "prefecture",
+  "city",
+  "countryCode",
+  "countryName",
+  "regionKey",
+  "regionName",
+  "municipality",
+  "municipalityPlaceId",
+  "communityBoardPlaceId",
+  "communityBoardRegionName"
+];
+
+// TOP初期表示時に読み込んだ復元待ちデータ。店舗データの読み込み完了後に
+// 1回だけ適用する(applyPendingRestoredUserLocation())。
+let pendingRestoredUserLocation =
+  null;
+
+function sanitizeSavedLocationHierarchy(
+  locationHierarchy
+) {
+  if (
+    !locationHierarchy ||
+    typeof locationHierarchy !== "object"
+  ) {
+    return null;
+  }
+
+  const sanitizedHierarchy =
+    {};
+
+  for (const key of SAVED_LOCATION_HIERARCHY_KEYS) {
+    if (typeof locationHierarchy[key] !== "string") {
+      return null;
+    }
+
+    sanitizedHierarchy[key] =
+      locationHierarchy[key];
+  }
+
+  return sanitizedHierarchy;
+}
+
+function writeSavedUserLocation(
+  savedUserLocationEntry
+) {
+  try {
+    sessionStorage.setItem(
+      SAVED_USER_LOCATION_STORAGE_KEY,
+      JSON.stringify(
+        savedUserLocationEntry
+      )
+    );
+  } catch (error) {
+    // sessionStorageが利用できない環境でも現在地機能自体は継続する
+  }
+}
+
+function removeSavedUserLocation() {
+  try {
+    sessionStorage.removeItem(
+      SAVED_USER_LOCATION_STORAGE_KEY
+    );
+  } catch (error) {
+    // sessionStorageが利用できない環境でも現在地機能自体は継続する
+  }
+}
+
+// 保存データを読み、30分以内かつ正しい形式のときだけ復元用データを返す。
+// 期限切れ・壊れたデータ・不正値は削除してnullを返す(従来の未取得状態)。
+function readSavedUserLocation() {
+  let rawSavedUserLocation =
+    null;
+
+  try {
+    rawSavedUserLocation =
+      sessionStorage.getItem(
+        SAVED_USER_LOCATION_STORAGE_KEY
+      );
+  } catch (error) {
+    return null;
+  }
+
+  if (!rawSavedUserLocation) {
+    return null;
+  }
+
+  let savedUserLocation =
+    null;
+
+  try {
+    savedUserLocation =
+      JSON.parse(
+        rawSavedUserLocation
+      );
+  } catch (error) {
+    removeSavedUserLocation();
+    return null;
+  }
+
+  const locationHierarchy =
+    savedUserLocation &&
+    savedUserLocation.locationHierarchy !== null
+      ? sanitizeSavedLocationHierarchy(
+          savedUserLocation.locationHierarchy
+        )
+      : null;
+
+  const isValidSavedUserLocation =
+    savedUserLocation !== null &&
+    typeof savedUserLocation === "object" &&
+    Number.isFinite(savedUserLocation.latitude) &&
+    Math.abs(savedUserLocation.latitude) <= 90 &&
+    Number.isFinite(savedUserLocation.longitude) &&
+    Math.abs(savedUserLocation.longitude) <= 180 &&
+    Number.isFinite(savedUserLocation.savedAt) &&
+    (
+      savedUserLocation.areaName === null ||
+      (
+        typeof savedUserLocation.areaName === "string" &&
+        savedUserLocation.areaName.trim() !== ""
+      )
+    ) &&
+    (
+      savedUserLocation.locationHierarchy === null ||
+      locationHierarchy !== null
+    );
+
+  if (!isValidSavedUserLocation) {
+    removeSavedUserLocation();
+    return null;
+  }
+
+  const savedAgeMilliseconds =
+    Date.now() -
+    savedUserLocation.savedAt;
+
+  if (
+    savedAgeMilliseconds < 0 ||
+    savedAgeMilliseconds >
+      SAVED_USER_LOCATION_MAX_AGE_MILLISECONDS
+  ) {
+    removeSavedUserLocation();
+    return null;
+  }
+
+  return {
+    latitude: savedUserLocation.latitude,
+    longitude: savedUserLocation.longitude,
+    areaName: savedUserLocation.areaName,
+    locationHierarchy: locationHierarchy
+  };
+}
+
+// 店舗データの読み込み完了(applyLoadedSubmissions())後に呼ばれる。
+// DOMContentLoaded内の他の初期化処理がすべて終わった後に適用するため、
+// setTimeoutで次のタスクへ回す。その間に「現在値ボタン」でGPS取得に
+// 成功していれば、applyUserLocation()がpendingRestoredUserLocationを
+// 破棄しているため、古い保存位置で上書きしない。
+function applyPendingRestoredUserLocation() {
+  if (!pendingRestoredUserLocation) {
+    return;
+  }
+
+  window.setTimeout(
+    function() {
+      const restoredUserLocation =
+        pendingRestoredUserLocation;
+
+      pendingRestoredUserLocation =
+        null;
+
+      if (!restoredUserLocation) {
+        return;
+      }
+
+      try {
+        applyUserLocation(
+          restoredUserLocation.latitude,
+          restoredUserLocation.longitude,
+          restoredUserLocation
+        );
+      } catch (error) {
+        // 復元に失敗してもTOPの表示自体は止めない(従来の未取得状態のまま)
+        console.error(
+          "前回の現在地の復元に失敗しました：",
+          error
+        );
+      }
+    },
+    0
+  );
+}
+
 
 function getLocation() {
   const locationButton =
@@ -8935,275 +9143,11 @@ function getLocation() {
   navigator.geolocation
     .getCurrentPosition(
       function(position) {
-        userLatitude =
-          position
-            .coords
-            .latitude;
-
-        userLongitude =
-          position
-            .coords
-            .longitude;
-
-        resetLocationPermissionGuide();
-
-        currentMapLink.href =
-          createGoogleMapUrl(
-            userLatitude,
-            userLongitude,
-            "",
-            ""
-          );
-
-        currentMapLink.style.display =
-          "block";
-
-        locationButton.disabled =
-          false;
-
-        locationButton.textContent =
-          getMachinauTranslation(
-            "location_button_update",
-            getCurrentMachinauLanguage()
-          );
-
-        // 現在地ファーストUX STEP2｜取得成功と同時に見出しも「取得後」
-        // 状態へ切り替える(location_message自体はこの後もsorting→success
-        // の遷移を続けるため、ここでは変更しない)。
-        if (locationHeading) {
-          locationHeading.textContent =
-            getMachinauTranslation(
-              "location_heading_after",
-              getCurrentMachinauLanguage()
-            );
-        }
-
-        showCurrentLocationMarker(
-          userLatitude,
-          userLongitude
+        applyUserLocation(
+          position.coords.latitude,
+          position.coords.longitude,
+          null
         );
-
-        // 画像UX改善Phase2｜GPS確定直後にshopsListを距離順で即時全面再描画
-        // すると、直前まで見えていた写真が別店舗の写真へ入れ替わったように
-        // 見える(距離未確定→確定で並びが変わること自体は正しい挙動)。
-        // 「並び替え中」であることを明示する短い遷移を挟むことで、
-        // 「原因不明で写真が変わった」という体験を「現在地に合わせて
-        // 更新された」という体験に変える。距離順ロジック・再描画方式
-        // 自体は変更しない(最も安全で小さい実装、という指示に基づく採用。
-        // 完了報告のOption A参照)。
-        locationMessage.textContent =
-          getMachinauTranslation(
-            "location_message_sorting",
-            getCurrentMachinauLanguage()
-          );
-
-        window.setTimeout(
-          function() {
-            renderShops();
-
-            locationMessage.textContent =
-              getMachinauTranslation(
-                "location_message_success",
-                getCurrentMachinauLanguage()
-              );
-          },
-          450
-        );
-
-        machinauSuggestionGpsSessionId += 1;
-
-        const suggestionGpsSessionId =
-          machinauSuggestionGpsSessionId;
-
-        latestWeatherForMachinauSuggestion =
-          null;
-
-        isAreaNameResolvedForMachinauSuggestion =
-          false;
-
-        fetchWeather(
-          userLatitude,
-          userLongitude
-        )
-          .then(function(weather) {
-            updateWeatherDisplay(
-              weather,
-              getMachinauTranslation(
-                "weather_location_current",
-                getCurrentMachinauLanguage()
-              )
-            );
-
-            if (
-              suggestionGpsSessionId ===
-              machinauSuggestionGpsSessionId
-            ) {
-              latestWeatherForMachinauSuggestion =
-                weather;
-
-              tryGenerateMachinauSuggestion(
-                suggestionGpsSessionId
-              );
-
-              // マチナウAI一本化 Phase1｜天気が確定した時点でも、
-              // OpenAIを呼ばずに第一声を更新する(area未確定ならarea無しの
-              // 文言のまま、area確定済みなら天気を反映した文言へ)。
-              updateAiConciergeChatInitialMessage();
-            }
-          })
-          .catch(function(error) {
-            // 天候取得の失敗はrenderShops()等の既存フローに影響させない
-          });
-
-        // Ver1.8 Phase2(地域連動基盤)｜resolveAreaNameFromCoordinates()
-        // (直下)とは別の独立したGeocoder呼び出し。マチナウ読み物の
-        // 地域マッチングだけに使い、userAreaName等の既存状態には一切書き込まない。
-        // 失敗してもTOPの他機能に影響しない(loadDynamicColumnEntries()自身が
-        // 例外を握りつぶす設計のため、ここでもcatchのみ)。
-        resolveLocationHierarchyFromCoordinates(
-          userLatitude,
-          userLongitude
-        )
-          .then(
-            function(locationHierarchy) {
-              loadDynamicColumnEntries(
-                locationHierarchy
-              );
-
-              // 広域region×localDate共有AI地域情報 Phase1｜同じGeocoder
-              // 結果をそのまま再利用するだけで、新しいGeocoding呼び出しは
-              // 増やさない。失敗してもTOPの他機能には一切影響させない
-              // (triggerRegionTodayInfo自身が例外を握りつぶす設計)。
-              triggerRegionTodayInfo(
-                userLatitude,
-                userLongitude,
-                locationHierarchy,
-                suggestionGpsSessionId
-              );
-
-              // 街の掲示板 Phase3｜同じGeocoder結果(locationHierarchy)を
-              // そのまま再利用するだけで、新しいGeocoding呼び出しは増やさない。
-              // communityBoardPlaceId/communityBoardRegionNameが取得できな
-              // かった場合(古いブラウザ・Geocoder失敗等)はloadCommunityBoard
-              // ForCurrentArea()内で何もせず終わる(既存のisPermanentAd等、
-              // 他の描画処理に影響させない)。
-              // 街の掲示板 Phase11｜政令指定都市の区(横浜市中区/大阪市北区等)
-              // にいる場合は、既存のmunicipalityPlaceId/municipality(市単位、
-              // loadDynamicColumnEntries()・triggerRegionTodayInfo()が引き
-              // 続き使用中、無変更)ではなく、区単位のcommunityBoardPlaceId/
-              // communityBoardRegionNameを使う(Phase10の遠隔検索「横浜市中区」
-              // 選択時と同じgooglePlaceIdへ到達させるため)。
-              loadCommunityBoardForCurrentArea(
-                locationHierarchy.communityBoardPlaceId,
-                locationHierarchy.countryCode,
-                locationHierarchy.communityBoardRegionName
-              );
-            }
-          )
-          .catch(
-            function(error) {
-              // 読み物の地域連動表示に失敗しても、TOPの他機能には影響させない
-            }
-          );
-
-        resolveAreaNameFromCoordinates(
-          userLatitude,
-          userLongitude
-        )
-          .then(function(areaName) {
-            if (areaName) {
-              userAreaName = areaName;
-
-              renderShops();
-
-              // 初心回帰後の新トップ体験 Phase1｜現在地取得・更新の
-              // タイミングでのみ「気づきの一言」を再判定する(移動だけでの
-              // 自動更新はしない、60秒タイマー等のrenderShops()呼び出しでは
-              // 再描画しない)。新しいFirestore読み取り・API呼び出しは
-              // 発生しない(既にロード済みのshops配列から組み立てるのみ)。
-              renderAwarenessNotices();
-
-              // 初心回帰後の新トップ体験 Phase1｜街情報ボタンも同じ
-              // タイミングでのみ再判定する(新しいFirestore読み取り・
-              // API呼び出しは発生しない、既にロード済みのshops配列から
-              // 組み立てるのみ)。
-              renderAreaInfoButtons();
-
-              // トップ画面整理｜旧「近くの『今』」「気になることを聞く」の
-              // 統合案内枠も同じタイミングでのみ表示判定する(新しい
-              // Firestore読み取り・API呼び出しは発生しない)。
-              renderCityNowGuidance();
-
-              // SNS街巡回(socialPatrol) Phase1｜新しい地域が確定した
-              // 時点で、前の地域のSNS巡回結果をいったんクリアしてから
-              // (古い地域の話題を新しい地域の下に出し続けない)、新しい
-              // 地域について非同期でSNS街巡回を開始する。結果は
-              // triggerSocialPatrolForArea()内でgpsSessionIdを確認した
-              // 上で反映される。
-              currentSocialPatrolFindings =
-                [];
-
-              currentSocialPatrolChecked =
-                false;
-
-              if (SOCIAL_PATROL_TRAVELER_DISPLAY_ENABLED) {
-                triggerSocialPatrolForArea(
-                  areaName,
-                  suggestionGpsSessionId
-                );
-              }
-
-              triggerLocationBasedCollection(
-                areaName
-              );
-
-              // 街の掲示板 Phase3｜現在地の主表示をregionRecommendations
-              // からcommunityBoardPostsへ切り替えるため、GPS確定時の自動呼び出しを
-              // ここでは停止する。loadRegionRecommendations()/
-              // showRegionRecommendationsForArea()自体・regionRecommendations
-              // コレクション・翻訳キャッシュ・admin-region-picks.html等の
-              // 管理機能は一切削除せず残す(「ほかの地域を見る」「現在地の
-              // おすすめに戻る」からは引き続き呼ばれる、本部指示)。現在地の
-              // 掲示板表示はresolveLocationHierarchyFromCoordinates()の
-              // .then()内、loadCommunityBoardForCurrentArea()で行う。
-              // loadRegionRecommendations(areaName);
-
-              // 「この街の情報」Phase1｜ここではボタンを表示するだけで、
-              // AIは一切呼ばない(本部指示：GPS取得時にはAIを呼ばない)。
-              // 実際の生成・取得はshowCityInfoSection()内ではなく、
-              // ボタン押下時のhandleCityInfoButtonClick()でのみ行う。
-              showCityInfoSection(
-                areaName
-              );
-
-              // マチナウAI一本化 Phase1｜地域名が確定した時点でも、
-              // OpenAIを呼ばずに第一声を更新する(天気未確定なら
-              // 「地域名だけ」の文言、天気確定済みなら天気を反映した文言)。
-              updateAiConciergeChatInitialMessage();
-            }
-
-            if (
-              suggestionGpsSessionId ===
-              machinauSuggestionGpsSessionId
-            ) {
-              isAreaNameResolvedForMachinauSuggestion =
-                true;
-
-              tryGenerateMachinauSuggestion(
-                suggestionGpsSessionId
-              );
-            }
-          })
-          .catch(function(error) {
-            // Ver1.8 Phase1(診断ログ・実機切り分け用)
-            console.log(
-              "[AIConcierge Trace] areaRejected sessionMatch=" +
-                (suggestionGpsSessionId ===
-                  machinauSuggestionGpsSessionId)
-            );
-
-            // 地域名取得の失敗は既存フローに影響させない
-          });
       },
 
       function(error) {
@@ -9290,6 +9234,399 @@ function getLocation() {
           60000
       }
     );
+}
+
+// TOP復帰時の現在地自動復元 Phase1｜getLocation()のGPS取得成功時の処理を
+// そのまま切り出した共通関数。GPSで新規取得した場合(restoredLocation:null)と、
+// sessionStorageの保存内容から復元した場合(restoredLocation:保存データ)の
+// 両方が、同じ表示再構築処理を通る。GPS取得時の処理内容・順序は従来と同じ。
+// 復元時だけ次の点が異なる：
+// ・Google Geocoderを呼ばず、保存済みのuserAreaName・地域階層データを使う
+// ・位置情報起点のAI記事収集(triggerLocationBasedCollection)は再実行しない
+// ・sessionStorageへの保存(上書き)はしない
+function applyUserLocation(
+  latitude,
+  longitude,
+  restoredLocation
+) {
+  const isRestoredLocation =
+    restoredLocation !== null;
+
+  const locationButton =
+    document.getElementById(
+      "locationButton"
+    );
+
+  const locationMessage =
+    document.getElementById(
+      "locationMessage"
+    );
+
+  const currentMapLink =
+    document.getElementById(
+      "currentMapLink"
+    );
+
+  const locationHeading =
+    document.getElementById(
+      "locationHeading"
+    );
+
+  if (
+    !locationButton ||
+    !locationMessage ||
+    !currentMapLink
+  ) {
+    return;
+  }
+
+  // GPSで新しく取得できた場合は、まだ適用されていない復元待ちデータを
+  // 破棄する(古い保存位置で最新のGPS結果を上書きしないため)。
+  if (!isRestoredLocation) {
+    pendingRestoredUserLocation =
+      null;
+  }
+
+  userLatitude =
+    latitude;
+
+  userLongitude =
+    longitude;
+
+  // GPS取得時だけ、復元用に保存する。地域名・地域階層データは
+  // Geocoderの結果が出た時点で、同じGPSセッションの場合だけ追記する。
+  const savedUserLocationEntry =
+    isRestoredLocation
+      ? null
+      : {
+          latitude: latitude,
+          longitude: longitude,
+          areaName: null,
+          locationHierarchy: null,
+          savedAt: Date.now()
+        };
+
+  if (savedUserLocationEntry) {
+    writeSavedUserLocation(
+      savedUserLocationEntry
+    );
+  }
+
+  resetLocationPermissionGuide();
+
+  currentMapLink.href =
+    createGoogleMapUrl(
+      userLatitude,
+      userLongitude,
+      "",
+      ""
+    );
+
+  currentMapLink.style.display =
+    "block";
+
+  locationButton.disabled =
+    false;
+
+  locationButton.textContent =
+    getMachinauTranslation(
+      "location_button_update",
+      getCurrentMachinauLanguage()
+    );
+
+  // 現在地ファーストUX STEP2｜取得成功と同時に見出しも「取得後」
+  // 状態へ切り替える(location_message自体はこの後もsorting→success
+  // の遷移を続けるため、ここでは変更しない)。
+  if (locationHeading) {
+    locationHeading.textContent =
+      getMachinauTranslation(
+        "location_heading_after",
+        getCurrentMachinauLanguage()
+      );
+  }
+
+  showCurrentLocationMarker(
+    userLatitude,
+    userLongitude
+  );
+
+  // 画像UX改善Phase2｜GPS確定直後にshopsListを距離順で即時全面再描画
+  // すると、直前まで見えていた写真が別店舗の写真へ入れ替わったように
+  // 見える(距離未確定→確定で並びが変わること自体は正しい挙動)。
+  // 「並び替え中」であることを明示する短い遷移を挟むことで、
+  // 「原因不明で写真が変わった」という体験を「現在地に合わせて
+  // 更新された」という体験に変える。距離順ロジック・再描画方式
+  // 自体は変更しない(最も安全で小さい実装、という指示に基づく採用。
+  // 完了報告のOption A参照)。
+  locationMessage.textContent =
+    getMachinauTranslation(
+      "location_message_sorting",
+      getCurrentMachinauLanguage()
+    );
+
+  window.setTimeout(
+    function() {
+      renderShops();
+
+      locationMessage.textContent =
+        getMachinauTranslation(
+          "location_message_success",
+          getCurrentMachinauLanguage()
+        );
+    },
+    450
+  );
+
+  machinauSuggestionGpsSessionId += 1;
+
+  const suggestionGpsSessionId =
+    machinauSuggestionGpsSessionId;
+
+  latestWeatherForMachinauSuggestion =
+    null;
+
+  isAreaNameResolvedForMachinauSuggestion =
+    false;
+
+  fetchWeather(
+    userLatitude,
+    userLongitude
+  )
+    .then(function(weather) {
+      updateWeatherDisplay(
+        weather,
+        getMachinauTranslation(
+          "weather_location_current",
+          getCurrentMachinauLanguage()
+        )
+      );
+
+      if (
+        suggestionGpsSessionId ===
+        machinauSuggestionGpsSessionId
+      ) {
+        latestWeatherForMachinauSuggestion =
+          weather;
+
+        tryGenerateMachinauSuggestion(
+          suggestionGpsSessionId
+        );
+
+        // マチナウAI一本化 Phase1｜天気が確定した時点でも、
+        // OpenAIを呼ばずに第一声を更新する(area未確定ならarea無しの
+        // 文言のまま、area確定済みなら天気を反映した文言へ)。
+        updateAiConciergeChatInitialMessage();
+      }
+    })
+    .catch(function(error) {
+      // 天候取得の失敗はrenderShops()等の既存フローに影響させない
+    });
+
+  // Ver1.8 Phase2(地域連動基盤)｜resolveAreaNameFromCoordinates()
+  // (直下)とは別の独立したGeocoder呼び出し。マチナウ読み物の
+  // 地域マッチングだけに使い、userAreaName等の既存状態には一切書き込まない。
+  // 失敗してもTOPの他機能に影響しない(loadDynamicColumnEntries()自身が
+  // 例外を握りつぶす設計のため、ここでもcatchのみ)。
+  // TOP復帰時の現在地自動復元 Phase1｜復元時はGeocoderを呼ばず、保存済みの
+  // 地域階層データを使う(保存前に離脱した等で無い場合は、この処理自体を
+  // 行わない)。GPS取得時は従来どおりGeocoderで解決する(失敗時も空文字の
+  // オブジェクトで解決されるため、nullにはならない)。
+  const locationHierarchyPromise =
+    isRestoredLocation
+      ? Promise.resolve(
+          restoredLocation.locationHierarchy
+        )
+      : resolveLocationHierarchyFromCoordinates(
+          userLatitude,
+          userLongitude
+        );
+
+  locationHierarchyPromise
+    .then(
+      function(locationHierarchy) {
+        if (!locationHierarchy) {
+          return;
+        }
+
+        if (
+          savedUserLocationEntry &&
+          suggestionGpsSessionId ===
+            machinauSuggestionGpsSessionId
+        ) {
+          savedUserLocationEntry.locationHierarchy =
+            sanitizeSavedLocationHierarchy(
+              locationHierarchy
+            );
+
+          writeSavedUserLocation(
+            savedUserLocationEntry
+          );
+        }
+
+        loadDynamicColumnEntries(
+          locationHierarchy
+        );
+
+        // 広域region×localDate共有AI地域情報 Phase1｜同じGeocoder
+        // 結果をそのまま再利用するだけで、新しいGeocoding呼び出しは
+        // 増やさない。失敗してもTOPの他機能には一切影響させない
+        // (triggerRegionTodayInfo自身が例外を握りつぶす設計)。
+        triggerRegionTodayInfo(
+          userLatitude,
+          userLongitude,
+          locationHierarchy,
+          suggestionGpsSessionId
+        );
+
+        // 街の掲示板 Phase3｜同じGeocoder結果(locationHierarchy)を
+        // そのまま再利用するだけで、新しいGeocoding呼び出しは増やさない。
+        // communityBoardPlaceId/communityBoardRegionNameが取得できな
+        // かった場合(古いブラウザ・Geocoder失敗等)はloadCommunityBoard
+        // ForCurrentArea()内で何もせず終わる(既存のisPermanentAd等、
+        // 他の描画処理に影響させない)。
+        // 街の掲示板 Phase11｜政令指定都市の区(横浜市中区/大阪市北区等)
+        // にいる場合は、既存のmunicipalityPlaceId/municipality(市単位、
+        // loadDynamicColumnEntries()・triggerRegionTodayInfo()が引き
+        // 続き使用中、無変更)ではなく、区単位のcommunityBoardPlaceId/
+        // communityBoardRegionNameを使う(Phase10の遠隔検索「横浜市中区」
+        // 選択時と同じgooglePlaceIdへ到達させるため)。
+        loadCommunityBoardForCurrentArea(
+          locationHierarchy.communityBoardPlaceId,
+          locationHierarchy.countryCode,
+          locationHierarchy.communityBoardRegionName
+        );
+      }
+    )
+    .catch(
+      function(error) {
+        // 読み物の地域連動表示に失敗しても、TOPの他機能には影響させない
+      }
+    );
+
+  // TOP復帰時の現在地自動復元 Phase1｜復元時はGeocoderを呼ばず、保存済みの
+  // userAreaName(地域名が取れなかった場合はnull)をそのまま使う。
+  const areaNamePromise =
+    isRestoredLocation
+      ? Promise.resolve(
+          restoredLocation.areaName
+        )
+      : resolveAreaNameFromCoordinates(
+          userLatitude,
+          userLongitude
+        );
+
+  areaNamePromise
+    .then(function(areaName) {
+      if (
+        savedUserLocationEntry &&
+        suggestionGpsSessionId ===
+          machinauSuggestionGpsSessionId
+      ) {
+        savedUserLocationEntry.areaName =
+          areaName || null;
+
+        writeSavedUserLocation(
+          savedUserLocationEntry
+        );
+      }
+
+      if (areaName) {
+        userAreaName = areaName;
+
+        renderShops();
+
+        // 初心回帰後の新トップ体験 Phase1｜現在地取得・更新の
+        // タイミングでのみ「気づきの一言」を再判定する(移動だけでの
+        // 自動更新はしない、60秒タイマー等のrenderShops()呼び出しでは
+        // 再描画しない)。新しいFirestore読み取り・API呼び出しは
+        // 発生しない(既にロード済みのshops配列から組み立てるのみ)。
+        renderAwarenessNotices();
+
+        // 初心回帰後の新トップ体験 Phase1｜街情報ボタンも同じ
+        // タイミングでのみ再判定する(新しいFirestore読み取り・
+        // API呼び出しは発生しない、既にロード済みのshops配列から
+        // 組み立てるのみ)。
+        renderAreaInfoButtons();
+
+        // トップ画面整理｜旧「近くの『今』」「気になることを聞く」の
+        // 統合案内枠も同じタイミングでのみ表示判定する(新しい
+        // Firestore読み取り・API呼び出しは発生しない)。
+        renderCityNowGuidance();
+
+        // SNS街巡回(socialPatrol) Phase1｜新しい地域が確定した
+        // 時点で、前の地域のSNS巡回結果をいったんクリアしてから
+        // (古い地域の話題を新しい地域の下に出し続けない)、新しい
+        // 地域について非同期でSNS街巡回を開始する。結果は
+        // triggerSocialPatrolForArea()内でgpsSessionIdを確認した
+        // 上で反映される。
+        currentSocialPatrolFindings =
+          [];
+
+        currentSocialPatrolChecked =
+          false;
+
+        if (SOCIAL_PATROL_TRAVELER_DISPLAY_ENABLED) {
+          triggerSocialPatrolForArea(
+            areaName,
+            suggestionGpsSessionId
+          );
+        }
+
+        // TOP復帰時の現在地自動復元 Phase1｜復元時は位置情報起点の
+        // AI記事収集を再実行しない(TOPへ戻るたびに収集APIが動くのを防ぐ)。
+        if (!isRestoredLocation) {
+          triggerLocationBasedCollection(
+            areaName
+          );
+        }
+
+        // 街の掲示板 Phase3｜現在地の主表示をregionRecommendations
+        // からcommunityBoardPostsへ切り替えるため、GPS確定時の自動呼び出しを
+        // ここでは停止する。loadRegionRecommendations()/
+        // showRegionRecommendationsForArea()自体・regionRecommendations
+        // コレクション・翻訳キャッシュ・admin-region-picks.html等の
+        // 管理機能は一切削除せず残す(「ほかの地域を見る」「現在地の
+        // おすすめに戻る」からは引き続き呼ばれる、本部指示)。現在地の
+        // 掲示板表示はresolveLocationHierarchyFromCoordinates()の
+        // .then()内、loadCommunityBoardForCurrentArea()で行う。
+        // loadRegionRecommendations(areaName);
+
+        // 「この街の情報」Phase1｜ここではボタンを表示するだけで、
+        // AIは一切呼ばない(本部指示：GPS取得時にはAIを呼ばない)。
+        // 実際の生成・取得はshowCityInfoSection()内ではなく、
+        // ボタン押下時のhandleCityInfoButtonClick()でのみ行う。
+        showCityInfoSection(
+          areaName
+        );
+
+        // マチナウAI一本化 Phase1｜地域名が確定した時点でも、
+        // OpenAIを呼ばずに第一声を更新する(天気未確定なら
+        // 「地域名だけ」の文言、天気確定済みなら天気を反映した文言)。
+        updateAiConciergeChatInitialMessage();
+      }
+
+      if (
+        suggestionGpsSessionId ===
+        machinauSuggestionGpsSessionId
+      ) {
+        isAreaNameResolvedForMachinauSuggestion =
+          true;
+
+        tryGenerateMachinauSuggestion(
+          suggestionGpsSessionId
+        );
+      }
+    })
+    .catch(function(error) {
+      // Ver1.8 Phase1(診断ログ・実機切り分け用)
+      console.log(
+        "[AIConcierge Trace] areaRejected sessionMatch=" +
+          (suggestionGpsSessionId ===
+            machinauSuggestionGpsSessionId)
+      );
+
+      // 地域名取得の失敗は既存フローに影響させない
+    });
 }
 
 
@@ -9800,6 +10137,10 @@ function applyLoadedSubmissions(
 
   markShopsLoadedForMachinauSuggestion();
 
+  // TOP復帰時の現在地自動復元 Phase1｜店舗データが揃ってから、保存済みの
+  // 現在地を1回だけ適用する(復元待ちデータが無ければ何もしない)。
+  applyPendingRestoredUserLocation();
+
   console.log(
     "✅ 期限内の広告を読み込みました：" +
     shops.length +
@@ -10085,6 +10426,12 @@ document.addEventListener(
   function() {
     hideSampleNotice();
 
+    // TOP復帰時の現在地自動復元 Phase1｜30分以内の保存位置があれば読み込み、
+    // 店舗データの読み込み完了後に適用する(loadApprovedSubmissions()より前に
+    // 読む。セッションキャッシュ時は同期的に読み込みが完了するため)。
+    pendingRestoredUserLocation =
+      readSavedUserLocation();
+
     loadApprovedSubmissions();
 
     startExpiryDisplayRefreshTimer();
@@ -10162,6 +10509,12 @@ function buildColumnArticleUrlForLanguage(
 // userAreaName等とは独立)で取得した現在地に関連する読み物を優先表示する。
 // 省略時(GPS未取得時等)は単純な新着順にフォールバックする
 // (現在地が取得できない場合でも壊れないように)。
+// TOP復帰時の現在地自動復元 Phase1｜初期表示時(現在地なし)と現在地の復元時
+// (現在地あり)の取得がほぼ同時に走るため、後から開始した取得の結果だけを
+// 表示に使う(先に開始した取得の応答が遅れて届いても上書きしない)。
+let latestDynamicColumnEntriesRequestId =
+  0;
+
 async function loadDynamicColumnEntries(
   viewerLocation
 ) {
@@ -10173,6 +10526,11 @@ async function loadDynamicColumnEntries(
   if (!columnEntryCardList) {
     return;
   }
+
+  latestDynamicColumnEntriesRequestId += 1;
+
+  const requestId =
+    latestDynamicColumnEntriesRequestId;
 
   try {
     const searchParams =
@@ -10229,6 +10587,10 @@ async function loadDynamicColumnEntries(
         responseData.articles
       )
     ) {
+      return;
+    }
+
+    if (requestId !== latestDynamicColumnEntriesRequestId) {
       return;
     }
 
