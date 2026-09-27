@@ -1342,6 +1342,7 @@
       color: #425b6b;
       font-size: 14px;
       line-height: 1.8;
+      white-space: pre-line;
     }
 
     .modal-map-button {
