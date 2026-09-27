@@ -881,6 +881,13 @@ const MACHINAU_TRANSLATIONS = {
     en: "Share what's happening"
   },
 
+  // 店舗・施設参加導線 Phase2｜フッターの店舗・施設向け入口(shop.htmlへ)。
+  // shop.html自体は日本語のみ。
+  footer_shop_link: {
+    ja: "お店・施設の方へ｜マチナウに無料で投稿できます",
+    en: "For shops & venues | Post on Machinau for free"
+  },
+
   location_geolocation_unsupported: {
     ja: "このブラウザでは位置情報を利用できません。",
     en: "This browser doesn't support location access."

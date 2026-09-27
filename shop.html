@@ -15,12 +15,17 @@
 
   <meta
     name="description"
-    content="マチナウへ店舗・イベント情報を掲載する運営者様向けの入口ページです。投稿・編集・掲載終了はこちらから行えます。"
+    content="お店・施設の方へ。マチナウでは、お店・施設からも街の「今」を旅行者へ投稿できます。現在、マチナウへの店舗・施設からの投稿は無料です。"
   >
 
   <title>
-    店舗・イベント運営者様へ｜マチナウ
+    お店・施設の方へ｜マチナウ
   </title>
+
+  <link
+    rel="canonical"
+    href="https://machinau.jp/shop.html"
+  >
 
   <link
     rel="icon"
@@ -28,72 +33,51 @@
     href="/favicon.png?v=2"
   >
 
+  <!-- 店舗・施設参加導線 Phase2｜まだマチナウに参加していないお店・施設向けの
+       参加前の案内ページ。申し込みは外部のGoogleフォームで受け付け、運営が
+       確認後にadmin-shops.htmlで専用投稿URLを発行する(このページから一般の
+       post.htmlへは誘導しない。一般の店舗投稿は閉じているため)。
+       既存利用店舗向けの編集・掲載終了の入口はページ下部に残す。 -->
+
   <style>
     :root {
       --navy: #071a33;
-      --navy-light: #0d294a;
       --blue: #0788c9;
       --cyan: #04b7d7;
       --sky: #dff7ff;
-      --green: #19a96b;
-      --red: #ef5a67;
       --white: #ffffff;
       --text: #15233a;
       --subtext: #697386;
       --border: #e2eaf1;
       --background: #f4f8fb;
-      --shadow:
-        0 18px 50px
-        rgba(20, 52, 82, 0.12);
+      --shadow: 0 18px 50px rgba(20, 52, 82, 0.12);
     }
 
     * {
       box-sizing: border-box;
     }
 
-    html {
-      scroll-behavior: smooth;
-    }
-
     body {
       margin: 0;
-      min-height: 100vh;
+      padding: 0 0 60px;
       font-family:
         "Yu Gothic",
         "Hiragino Kaku Gothic ProN",
         "Meiryo",
         sans-serif;
-      background:
-        linear-gradient(
-          180deg,
-          #e9faff 0,
-          var(--background) 360px
-        );
+      background: var(--background);
       color: var(--text);
     }
 
-    button,
-    input,
-    a {
-      font-family: inherit;
-    }
-
-    a {
-      color: inherit;
-      text-decoration: none;
-    }
-
+    /* ヘッダー/ヒーロー/カードはcontribute.html・shop-guide.htmlと同じ
+       クラス構成・見た目(店舗・投稿系ページの世界観をそろえる)。 */
     .top-bar {
       position: sticky;
       top: 0;
       z-index: 50;
-      border-bottom:
-        1px solid
-        rgba(12, 54, 87, 0.08);
-      background:
-        rgba(255, 255, 255, 0.94);
-      backdrop-filter:
-        blur(16px);
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(12, 54, 87, 0.08);
     }
 
     .top-bar-inner {
@@ -119,25 +103,10 @@
       place-items: center;
       flex-shrink: 0;
       border-radius: 14px;
-      background:
-        linear-gradient(
-          135deg,
-          var(--blue),
-          var(--cyan)
-        );
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
       color: var(--white);
       font-size: 21px;
-      box-shadow:
-        0 8px 20px
-        rgba(4, 158, 199, 0.25);
-    }
-
-    .brand-name {
-      margin: 0;
-      color: var(--navy);
-      font-size: 21px;
-      font-weight: 900;
-      letter-spacing: 0.08em;
+      box-shadow: 0 8px 20px rgba(4, 158, 199, 0.25);
     }
 
     .brand-caption {
@@ -149,28 +118,19 @@
 
     .home-link {
       padding: 9px 13px;
-      border:
-        1px solid
-        var(--border);
+      border: 1px solid var(--border);
       border-radius: 999px;
       background: var(--white);
       color: var(--navy);
       font-size: 12px;
       font-weight: 900;
       white-space: nowrap;
+      text-decoration: none;
     }
 
     .page-hero {
-      padding:
-        42px
-        18px
-        86px;
-      background:
-        linear-gradient(
-          135deg,
-          #0687c5,
-          #13c3ce
-        );
+      padding: 42px 18px 70px;
+      background: linear-gradient(135deg, #0687c5, #13c3ce);
       color: var(--white);
     }
 
@@ -184,241 +144,288 @@
       align-items: center;
       gap: 7px;
       padding: 8px 12px;
-      border:
-        1px solid
-        rgba(255, 255, 255, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.3);
       border-radius: 999px;
-      background:
-        rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.12);
       font-size: 11px;
       font-weight: 900;
     }
 
     .page-hero h1 {
       margin: 20px 0 0;
-      font-size:
-        clamp(
-          28px,
-          6vw,
-          40px
-        );
-      line-height: 1.3;
+      font-size: clamp(24px, 6vw, 34px);
+      line-height: 1.4;
       letter-spacing: 0.02em;
     }
 
     .page-hero p {
+      margin: 14px 0 0;
       max-width: 600px;
-      margin: 16px 0 0;
-      color:
-        rgba(255, 255, 255, 0.92);
+      color: rgba(255, 255, 255, 0.92);
       font-size: 14px;
       font-weight: 700;
-      line-height: 1.9;
+      line-height: 1.8;
+    }
+
+    .free-badge {
+      display: inline-block;
+      margin-top: 16px;
+      padding: 9px 14px;
+      border-radius: 12px;
+      background: var(--white);
+      color: var(--blue);
+      font-size: 13px;
+      font-weight: 900;
+      line-height: 1.6;
+    }
+
+    .hero-start-link {
+      display: inline-block;
+      margin-top: 14px;
+      color: var(--white);
+      font-size: 13px;
+      font-weight: 900;
+      text-decoration: underline;
+      text-underline-offset: 3px;
     }
 
     main {
-      width: min(100%, 720px);
-      margin: 0 auto;
-      padding:
-        0
-        16px
-        70px;
+      width: min(100%, 640px);
+      margin: -38px auto 0;
+      padding: 0 18px;
     }
 
-    .form-card {
-      margin-top: -55px;
-      padding: 28px;
-      border:
-        1px solid
-        rgba(12, 54, 87, 0.08);
-      border-radius: 26px;
+    /* スマホで文末の「す。」等だけが次の行に残らないよう段落の折り返しを
+       整える(文字サイズ・改行位置は固定しない。未対応ブラウザは通常の折り返し)。 */
+    .page-hero p,
+    .free-badge,
+    .guide-card p,
+    .guide-list li,
+    .step-list li,
+    .soft-note {
+      text-wrap: pretty;
+    }
+
+    .page-hero h1,
+    .guide-card h2,
+    .existing-card h2 {
+      text-wrap: balance;
+    }
+
+    .guide-card {
+      margin-bottom: 16px;
+      padding: 22px 20px;
+      border: 1px solid rgba(12, 54, 87, 0.08);
+      border-radius: 22px;
       background: var(--white);
       box-shadow: var(--shadow);
     }
 
-    .form-heading {
-      margin-bottom: 24px;
-    }
-
-    .form-heading h2 {
-      margin: 0;
-      color: var(--navy);
-      font-size: 22px;
-    }
-
-    .form-heading p {
-      margin: 9px 0 0;
-      color: var(--subtext);
-      font-size: 13px;
-      line-height: 1.8;
-    }
-
-    .entry-list {
-      display: grid;
-      gap: 14px;
-    }
-
-    .entry-link {
-      display: flex;
+    .guide-card-icon {
+      display: inline-flex;
       align-items: center;
-      gap: 16px;
-      padding: 20px;
-      border-radius: 18px;
-      background:
-        linear-gradient(
-          135deg,
-          var(--blue),
-          var(--cyan)
-        );
-      color: var(--white);
-      box-shadow:
-        0 13px 28px
-        rgba(4, 158, 199, 0.24);
-      transition:
-        transform 0.2s;
+      justify-content: center;
+      width: 42px;
+      height: 42px;
+      border-radius: 13px;
+      background: var(--sky);
+      font-size: 21px;
+      margin-bottom: 10px;
     }
 
-    .entry-link:hover {
-      transform:
-        translateY(-2px);
+    .guide-card h2 {
+      margin: 0 0 10px;
+      color: var(--navy);
+      font-size: 18px;
+      line-height: 1.5;
     }
 
-    .entry-link.entry-caution {
-      background:
-        linear-gradient(
-          135deg,
-          #e84f5f,
-          #f27d62
-        );
-      box-shadow:
-        0 13px 28px
-        rgba(232, 79, 95, 0.24);
+    .guide-card p {
+      margin: 0 0 10px;
+      color: #3d5163;
+      font-size: 13.5px;
+      line-height: 1.85;
     }
 
-    .entry-icon {
-      flex-shrink: 0;
-      width: 46px;
-      height: 46px;
+    .guide-list {
+      margin: 0;
+      padding-left: 20px;
+      color: #3d5163;
+      font-size: 13.5px;
+      line-height: 1.85;
+    }
+
+    .guide-list li + li {
+      margin-top: 4px;
+    }
+
+    .step-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      counter-reset: guide-step;
+    }
+
+    .step-list li {
+      position: relative;
+      padding: 1px 0 0 40px;
+      color: #3d5163;
+      font-size: 13.5px;
+      line-height: 1.85;
+      counter-increment: guide-step;
+    }
+
+    .step-list li + li {
+      margin-top: 10px;
+    }
+
+    .step-list li::before {
+      content: counter(guide-step);
+      position: absolute;
+      top: 1px;
+      left: 0;
+      width: 28px;
+      height: 28px;
       display: grid;
       place-items: center;
-      border-radius: 14px;
-      background:
-        rgba(255, 255, 255, 0.18);
-      font-size: 22px;
-    }
-
-    .entry-text {
-      display: grid;
-      gap: 4px;
-    }
-
-    .entry-title {
-      font-size: 16px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      color: var(--white);
+      font-size: 13px;
       font-weight: 900;
     }
 
-    .entry-description {
-      font-size: 12px;
-      font-weight: 700;
-      color:
-        rgba(255, 255, 255, 0.9);
-      line-height: 1.6;
+    .soft-note {
+      margin: 14px 0 0;
+      padding: 12px 14px;
+      border-radius: 13px;
+      background: #effbff;
+      color: #24627e;
+      font-size: 12.5px;
+      line-height: 1.8;
     }
 
-    .traveler-link-area {
-      margin-top: 26px;
-      padding-top: 20px;
-      border-top:
-        1px solid
-        var(--border);
+    .guide-card a:not(.apply-button):not(.small-link-button) {
+      color: var(--blue);
+      font-weight: 700;
+    }
+
+    .apply-area {
+      margin-top: 18px;
       text-align: center;
     }
 
-    .traveler-link {
-      display: inline-flex;
+    .apply-button {
+      display: flex;
       align-items: center;
+      justify-content: center;
       gap: 6px;
-      padding: 9px 15px;
-      border:
-        1px solid
-        var(--border);
-      border-radius: 999px;
+      width: 100%;
+      min-height: 56px;
+      padding: 8px 14px;
+      border-radius: 15px;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      color: var(--white);
+      font-size: 16px;
+      font-weight: 900;
+      text-decoration: none;
+      box-shadow: 0 10px 24px rgba(5, 144, 194, 0.25);
+    }
+
+    .apply-note {
+      margin: 8px 0 0;
       color: var(--subtext);
+      font-size: 11.5px;
+      line-height: 1.7;
+    }
+
+    .existing-card {
+      margin: 26px 0 18px;
+      padding: 18px 18px;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: var(--white);
+    }
+
+    .existing-card h2 {
+      margin: 0 0 8px;
+      color: var(--navy);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .existing-card p {
+      margin: 0;
+      color: #4b5f71;
+      font-size: 12.5px;
+      line-height: 1.8;
+      text-wrap: pretty;
+    }
+
+    .existing-links {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .small-link-button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 42px;
+      padding: 6px 8px;
+      border: 1px solid var(--border);
+      border-radius: 11px;
+      background: #f8fbfd;
+      color: var(--navy);
+      font-size: 12.5px;
+      font-weight: 900;
+      text-align: center;
+      text-decoration: none;
+    }
+
+    .existing-guide-link {
+      display: inline-block;
+      margin-top: 10px;
+      color: var(--blue);
       font-size: 12px;
-      font-weight: 800;
+      font-weight: 700;
+    }
+
+    .back-link {
+      display: inline-block;
+      margin-top: 4px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--blue);
+      text-decoration: none;
     }
 
     footer {
-      padding:
-        0
-        18px
-        35px;
+      padding: 26px 18px 0;
       color: #8c9aa8;
       text-align: center;
       font-size: 10px;
       line-height: 1.8;
     }
 
-    @media (
-      max-width: 620px
-    ) {
-      .form-card {
-        padding:
-          22px
-          17px;
-        border-radius: 22px;
-      }
-
-      .entry-link {
-        padding: 17px;
-      }
-    }
-
-    @media (
-      max-width: 420px
-    ) {
-      .top-bar-inner {
-        padding:
-          11px
-          13px;
-      }
-
-      .brand-icon {
-        width: 38px;
-        height: 38px;
-      }
-
-      .brand-name {
-        font-size: 18px;
-      }
-
-      .home-link {
-        padding:
-          8px
-          10px;
-        font-size: 10px;
-      }
-
+    @media (max-width: 480px) {
       .page-hero {
-        padding:
-          34px
-          15px
-          78px;
+        padding: 34px 15px 60px;
       }
 
       main {
-        padding-right: 12px;
-        padding-left: 12px;
+        padding-right: 14px;
+        padding-left: 14px;
       }
 
-      .entry-icon {
-        width: 40px;
-        height: 40px;
-        font-size: 19px;
+      .guide-card {
+        padding: 20px 17px;
       }
 
-      .entry-title {
-        font-size: 14px;
+      .existing-links {
+        grid-template-columns: 1fr;
       }
     }
   </style>
@@ -441,7 +448,7 @@
 
         <div>
           <p class="brand-caption">
-            店舗・イベント運営者様向け
+            リアルタイム観光コンシェルジュ
           </p>
         </div>
 
@@ -451,7 +458,7 @@
         class="home-link"
         href="index.html"
       >
-        旅人向けトップページへ
+        ← トップへ戻る
       </a>
 
     </div>
@@ -461,105 +468,208 @@
     <div class="page-hero-inner">
 
       <div class="hero-label">
-        🏪 店舗・イベント運営者様
+        🏪 お店・施設の方へ
       </div>
 
       <h1>
-        店舗・イベント運営者様へ
+        お店・施設の「今」を、旅行者へ。
       </h1>
 
       <p>
-        広告の投稿・編集・掲載終了はこちらから行えます。
+        マチナウでは、お店・施設からも街の「今」を投稿できます。<br>
+        イベント、新商品、今日のお知らせ、営業時間の変更など、旅行者に知ってほしい情報を届けられます。
       </p>
+
+      <div class="free-badge">
+        現在、マチナウへの店舗・施設からの投稿は無料です。
+      </div>
+
+      <div>
+        <a
+          class="hero-start-link"
+          href="#start"
+        >
+          はじめ方を見る ↓
+        </a>
+      </div>
 
     </div>
   </section>
 
   <main>
 
-    <section class="form-card">
+    <section class="guide-card">
+      <span class="guide-card-icon">🏪</span>
 
-      <div class="form-heading">
-        <h2>
-          お手続きを選んでください
-        </h2>
+      <h2>
+        マチナウでできること
+      </h2>
 
-        <p>
-          目的に合わせて、以下からお進みください。
+      <ul class="guide-list">
+        <li>
+          お店・施設の名前で投稿でき、旅行者には「🏪 お店から」と表示されます。
+        </li>
+        <li>
+          写真付きで投稿できます(写真なしでも投稿できます)。
+        </li>
+        <li>
+          住所や現在地を入れると地図にも表示され、近くにいる旅行者に見つけてもらいやすくなります。
+        </li>
+      </ul>
+
+      <p class="soft-note">
+        飲食店、カフェ、宿泊施設、観光施設、体験事業者、小売店、美容・リラクゼーション、イベント運営者など、旅行者に街の「今」を届けるお店・施設の方にご利用いただけます。
+      </p>
+    </section>
+
+    <section class="guide-card">
+      <span class="guide-card-icon">📝</span>
+
+      <h2>
+        投稿できる内容
+      </h2>
+
+      <ul class="guide-list">
+        <li>
+          今日のお知らせ
+        </li>
+        <li>
+          イベント
+        </li>
+        <li>
+          おすすめ商品やメニュー
+        </li>
+        <li>
+          営業時間などの案内
+        </li>
+        <li>
+          旅行者に知ってほしい情報
+        </li>
+      </ul>
+
+      <p class="soft-note">
+        タイトルと内容を自由に書いて投稿します。
+      </p>
+    </section>
+
+    <section class="guide-card">
+      <span class="guide-card-icon">📷</span>
+
+      <h2>
+        写真と掲載時間
+      </h2>
+
+      <ul class="guide-list">
+        <li>
+          写真なしでも投稿できます。
+        </li>
+        <li>
+          写真は最大5枚まで。JPG・PNG・WEBPに対応し、1枚10MBまでです。
+        </li>
+        <li>
+          掲載時間は、投稿のたびに3時間・6時間・12時間・24時間から選べます。時間が過ぎると、自動的に表示されなくなります。
+        </li>
+      </ul>
+    </section>
+
+    <section class="guide-card">
+      <span class="guide-card-icon">✅</span>
+
+      <h2>
+        投稿内容の確認
+      </h2>
+
+      <p>
+        投稿内容は自動で確認し、問題がなければそのまま掲載されます。内容によっては、運営が確認してから掲載します。
+      </p>
+
+      <p>
+        ご自身のお店・施設について、事実に基づいて投稿してください。ほかの人の写真や文章を無断で使わないでください。
+      </p>
+
+      <p class="soft-note">
+        詳しくは<a href="terms.html">利用規約</a>をご覧ください。
+      </p>
+    </section>
+
+    <section
+      id="start"
+      class="guide-card"
+    >
+      <span class="guide-card-icon">🚀</span>
+
+      <h2>
+        はじめ方
+      </h2>
+
+      <ol class="step-list">
+        <li>
+          下のボタンから、無料投稿をお申し込みください。
+        </li>
+        <li>
+          マチナウ運営が、お店・施設を確認します。
+        </li>
+        <li>
+          あなたのお店・施設専用の投稿ページ(URL)を発行します。
+        </li>
+        <li>
+          専用の投稿ページと投稿ガイドをお渡しします。
+        </li>
+        <li>
+          以後は、その専用ページからご自身で投稿できます。
+        </li>
+      </ol>
+
+      <div class="apply-area">
+        <a
+          class="apply-button"
+          href="https://docs.google.com/forms/d/e/1FAIpQLScuo2rOjqG1_PQMFgZfmjlipTQpDoRkQ1DUxUyi2tQs5j_8IQ/viewform?usp=publish-editor"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          無料投稿を申し込む ↗
+        </a>
+
+        <p class="apply-note">
+          お申し込みフォーム(Googleフォーム)が新しいタブで開きます。
         </p>
       </div>
+    </section>
 
-      <div class="entry-list">
+    <section class="existing-card">
+      <h2>
+        すでにマチナウの専用投稿URLをお持ちの方へ
+      </h2>
 
+      <p>
+        新しい投稿は、運営からお渡しした専用URLから行ってください。
+      </p>
+
+      <div class="existing-links">
         <a
-          class="entry-link"
-          href="post.html"
-        >
-          <span class="entry-icon">
-            📢
-          </span>
-
-          <span class="entry-text">
-            <span class="entry-title">
-              広告を投稿する
-            </span>
-
-            <span class="entry-description">
-              新しく店舗・イベント情報を掲載します。
-            </span>
-          </span>
-        </a>
-
-        <a
-          class="entry-link"
+          class="small-link-button"
           href="edit.html"
         >
-          <span class="entry-icon">
-            ✏️
-          </span>
-
-          <span class="entry-text">
-            <span class="entry-title">
-              投稿内容を編集する
-            </span>
-
-            <span class="entry-description">
-              掲載中の内容を修正します。
-            </span>
-          </span>
+          ✏️ 投稿内容を編集する
         </a>
 
         <a
-          class="entry-link entry-caution"
+          class="small-link-button"
           href="end.html"
         >
-          <span class="entry-icon">
-            🛑
-          </span>
-
-          <span class="entry-text">
-            <span class="entry-title">
-              掲載を終了する
-            </span>
-
-            <span class="entry-description">
-              予定より早く掲載を終了します。
-            </span>
-          </span>
-        </a>
-
-      </div>
-
-      <div class="traveler-link-area">
-        <a
-          class="traveler-link"
-          href="index.html"
-        >
-          旅人向けトップページへ
+          🛑 掲載を終了する
         </a>
       </div>
 
+      <a
+        class="existing-guide-link"
+        href="shop-guide.html"
+      >
+        投稿ガイドを見る
+      </a>
     </section>
+
+    <a class="back-link" href="index.html">← マチナウTOPへ戻る</a>
 
   </main>
 
