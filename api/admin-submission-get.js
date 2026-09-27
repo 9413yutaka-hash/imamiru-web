@@ -184,6 +184,25 @@ export default async function handler(
         websiteUrl:
           data.websiteUrl || "",
 
+        // 運営投稿の編集画面を「前回投稿内容から編集」にする対応｜店舗投稿の
+        // 安全化＋運営店舗属性 共通化(takeout/paymentMethods)・常設店舗広告
+        // (shopName)のいずれも、このAPI新設時点ではレスポンスに含まれて
+        // おらず、編集画面を開いても復元されない状態だった。既存の
+        // area(STEP7-G2A)と同じ「|| ""」「Array.isArrayチェック」パターンで
+        // 追加する(新規Firestore read・スキーマ変更は無し)。
+        shopName:
+          data.shopName || "",
+
+        takeout:
+          data.takeout === true,
+
+        paymentMethods:
+          Array.isArray(
+            data.paymentMethods
+          )
+            ? data.paymentMethods
+            : [],
+
         sourceLabel:
           data.sourceLabel || "",
 

@@ -1394,7 +1394,10 @@
       );
 
       for (const file of incomingFiles) {
-        if (selectedImageFiles.length >= MAX_IMAGE_COUNT) {
+        if (
+          existingImageUrls.length + selectedImageFiles.length >=
+          MAX_IMAGE_COUNT
+        ) {
           showMessage("error", "写真は最大5枚まで選択できます。");
           break;
         }
@@ -1425,36 +1428,92 @@
       renderImagePreviews();
     }
 
-    function renderImagePreviews() {
-      imageCount.textContent =
-        selectedImageFiles.length + " / " + MAX_IMAGE_COUNT + "枚";
+    // 運営投稿の編集画面を「前回投稿内容から編集」にする対応｜編集時は
+    // 既存写真(existingImageUrls)を「置き換え」ではなく「保持したまま
+    // 削除・追加できる」対象として扱う。新規投稿時はexistingImageUrlsが
+    // 常に空配列のままのため、この関数の挙動・見た目は従来と変わらない。
+    function removeExistingImage(index) {
+      existingImageUrls.splice(index, 1);
+      renderImagePreviews();
+    }
 
-      if (selectedImageFiles.length === 0) {
-        imagePreviewList.innerHTML = "";
-        imageSelectButton.textContent = "＋ 写真を選ぶ";
-        return;
+    function createImagePreviewItem(imageSrc, altText, ariaLabel, onRemove, isTopImage) {
+      const previewItem = document.createElement("div");
+      previewItem.className = "image-preview-item";
+
+      const image = document.createElement("img");
+      image.src = imageSrc;
+      image.alt = altText;
+
+      const numberLabel = document.createElement("span");
+      numberLabel.className = "image-number";
+
+      const removeButton = document.createElement("button");
+      removeButton.className = "image-remove-button";
+      removeButton.type = "button";
+      removeButton.setAttribute("aria-label", ariaLabel);
+      removeButton.textContent = "✕";
+      removeButton.addEventListener("click", onRemove);
+
+      previewItem.appendChild(image);
+      previewItem.appendChild(numberLabel);
+      previewItem.appendChild(removeButton);
+
+      if (isTopImage) {
+        const firstLabel = document.createElement("span");
+        firstLabel.className = "first-image-label";
+        firstLabel.textContent = "トップ画像";
+        previewItem.appendChild(firstLabel);
       }
 
-      imageSelectButton.textContent =
-        selectedImageFiles.length < MAX_IMAGE_COUNT
-          ? "＋ 写真を追加する"
-          : "写真を5枚選択済み";
+      return { previewItem: previewItem, numberLabel: numberLabel };
+    }
 
-      imageSelectButton.disabled =
-        selectedImageFiles.length >= MAX_IMAGE_COUNT;
+    // 運営投稿の編集画面を「前回投稿内容から編集」にする対応｜既存写真
+    // (existingImageUrls)と新規選択写真(selectedImageFiles)をこの順で
+    // 連結して1つのプレビュー一覧として描画する。合計枚数・「トップ画像」
+    // ラベル(全体の先頭1件)・5枚上限のボタン無効化も、この合計を基準に
+    // 判定する。新規投稿時はexistingImageUrlsが常に空配列のため、
+    // 見た目・枚数表示・ボタン挙動は従来と完全に同じになる。
+    function renderImagePreviews() {
+      const totalCount = existingImageUrls.length + selectedImageFiles.length;
+
+      imageCount.textContent = totalCount + " / " + MAX_IMAGE_COUNT + "枚";
 
       imagePreviewList.innerHTML = "";
 
-      selectedImageFiles.forEach(function(file, index) {
+      let displayIndex = 0;
+
+      existingImageUrls.forEach(function(imageUrl, existingIndex) {
+        const built = createImagePreviewItem(
+          imageUrl,
+          "登録済みの写真" + (existingIndex + 1),
+          "登録済みの写真" + (existingIndex + 1) + "を削除",
+          function() {
+            removeExistingImage(existingIndex);
+          },
+          displayIndex === 0
+        );
+
+        built.numberLabel.textContent = displayIndex + 1;
+        imagePreviewList.appendChild(built.previewItem);
+        displayIndex += 1;
+      });
+
+      selectedImageFiles.forEach(function(file, fileIndex) {
         const previewUrl = URL.createObjectURL(file);
 
-        const previewItem = document.createElement("div");
-        previewItem.className = "image-preview-item";
+        const built = createImagePreviewItem(
+          previewUrl,
+          "選択した写真" + (fileIndex + 1),
+          "写真" + (fileIndex + 1) + "を削除",
+          function() {
+            removeSelectedImage(fileIndex);
+          },
+          displayIndex === 0
+        );
 
-        const image = document.createElement("img");
-        image.src = previewUrl;
-        image.alt = "選択した写真" + (index + 1);
-        image.addEventListener(
+        built.previewItem.querySelector("img").addEventListener(
           "load",
           function() {
             URL.revokeObjectURL(previewUrl);
@@ -1462,32 +1521,32 @@
           { once: true }
         );
 
-        const numberLabel = document.createElement("span");
-        numberLabel.className = "image-number";
-        numberLabel.textContent = index + 1;
-
-        const removeButton = document.createElement("button");
-        removeButton.className = "image-remove-button";
-        removeButton.type = "button";
-        removeButton.setAttribute("aria-label", "写真" + (index + 1) + "を削除");
-        removeButton.textContent = "✕";
-        removeButton.addEventListener("click", function() {
-          removeSelectedImage(index);
-        });
-
-        previewItem.appendChild(image);
-        previewItem.appendChild(numberLabel);
-        previewItem.appendChild(removeButton);
-
-        if (index === 0) {
-          const firstLabel = document.createElement("span");
-          firstLabel.className = "first-image-label";
-          firstLabel.textContent = "トップ画像";
-          previewItem.appendChild(firstLabel);
-        }
-
-        imagePreviewList.appendChild(previewItem);
+        built.numberLabel.textContent = displayIndex + 1;
+        imagePreviewList.appendChild(built.previewItem);
+        displayIndex += 1;
       });
+
+      if (totalCount === 0) {
+        imageSelectButton.textContent = "＋ 写真を選ぶ";
+      } else if (totalCount < MAX_IMAGE_COUNT) {
+        imageSelectButton.textContent = "＋ 写真を追加する";
+      } else {
+        imageSelectButton.textContent = "写真を5枚選択済み";
+      }
+
+      imageSelectButton.disabled = totalCount >= MAX_IMAGE_COUNT;
+
+      // 表示文言の見直し｜「新しい写真を選択すると、これらの写真と
+      // 入れ替わります。」は今回の仕様(既存写真を保持したまま削除・追加)と
+      // 矛盾するため廃止し、実際の操作方法を説明する文言に変更する。
+      // 既存写真が1枚も無くなった場合は非表示に戻す(新規投稿時と同じ状態)。
+      if (existingImageUrls.length > 0) {
+        existingImageNote.textContent =
+          "登録済みの写真を確認し、削除・追加できます（最大5枚）。";
+        existingImageNote.style.display = "block";
+      } else {
+        existingImageNote.style.display = "none";
+      }
     }
 
     async function compressImageFile(file) {
@@ -1975,14 +2034,15 @@
           82
         );
 
-        const imageUrls =
-          uploadedImages.length > 0
-            ? uploadedImages.map(function(image) {
-                return image.url;
-              })
-            : isEditMode
-              ? existingImageUrls
-              : [];
+        // 運営投稿の編集画面を「前回投稿内容から編集」にする対応｜従来は
+        // 新規写真を1枚でも選択すると既存写真全部が置き換わっていたが、
+        // 「既存写真＋新規追加写真＝最大5枚」の仕様に変更する。新規投稿時は
+        // existingImageUrlsが常に空配列のため、挙動は従来と完全に同じ。
+        const imageUrls = existingImageUrls.concat(
+          uploadedImages.map(function(image) {
+            return image.url;
+          })
+        );
 
         const currentUser = firebase.auth().currentUser;
 
@@ -2236,15 +2296,7 @@
         ? submission.imageUrls
         : [];
 
-      if (existingImageUrls.length > 0) {
-        existingImageNote.textContent =
-          "現在" +
-          existingImageUrls.length +
-          "枚の写真が登録されています。新しい写真を選択すると、これらの写真と入れ替わります。";
-        existingImageNote.style.display = "block";
-      } else {
-        existingImageNote.style.display = "none";
-      }
+      renderImagePreviews();
 
       updateCharacterCounts();
     }
@@ -2360,7 +2412,7 @@
     locationButton.addEventListener("click", requestCurrentLocationForPost);
 
     imageSelectButton.addEventListener("click", function() {
-      if (selectedImageFiles.length < MAX_IMAGE_COUNT) {
+      if (existingImageUrls.length + selectedImageFiles.length < MAX_IMAGE_COUNT) {
         imageInput.click();
       }
     });
