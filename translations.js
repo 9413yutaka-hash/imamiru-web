@@ -1280,6 +1280,16 @@ const MACHINAU_TRANSLATIONS = {
     en: "e.g. Shibuya-ku"
   },
 
+  community_board_area_name_select_placeholder_before: {
+    ja: "先に都道府県を選択してください",
+    en: "Please select a prefecture first"
+  },
+
+  community_board_area_name_select_placeholder_after: {
+    ja: "選択してください",
+    en: "Please select"
+  },
+
   community_board_area_search_button: {
     ja: "この街を見る",
     en: "View this city"

@@ -1819,6 +1819,10 @@
       <a href="mailto:yutaka9413@gmail.com" data-i18n="footer_contact_link">お問い合わせ</a>
       <a href="contribute.html" data-i18n="footer_contribute_link">街の「今」を投稿する</a>
     </div>
+
+    <div class="footer-data-credit" style="margin-top: 8px; font-size: 11px; opacity: 0.6;">
+      市区町村データ：<a href="https://github.com/geolonia/japanese-addresses" target="_blank" rel="noopener noreferrer" style="color: inherit;">Geolonia 住所データ</a>（<a href="https://creativecommons.org/licenses/by/4.0/deed.ja" target="_blank" rel="noopener noreferrer" style="color: inherit;">CC BY 4.0</a>）
+    </div>
   </footer>
 
   <nav class="bottom-navigation">
@@ -1999,6 +2003,9 @@
 
   <!-- 固定UI文言専用の翻訳辞書(投稿本文は扱わない)。app.jsより先に読み込む -->
   <script src="translations.js"></script>
+
+  <!-- 街の掲示板：全国市区町村の選択肢データ(静的・出典クレジットはフッター参照)。app.jsより先に読み込む -->
+  <script src="japan-municipalities.js"></script>
 
   <!-- トップページの動き -->
   <script src="app.js"></script>

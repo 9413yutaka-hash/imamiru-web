@@ -14837,7 +14837,9 @@ function buildCommunityBoardAreaSearchFormHtml() {
     "</div>" +
     '<div class="community-board-area-search-field">' +
       '<label for="communityBoardAreaNameInput" data-i18n="community_board_area_name_label">市区町村</label>' +
-      '<input type="text" id="communityBoardAreaNameInput" class="community-board-area-search-input" data-i18n-placeholder="community_board_area_name_placeholder" placeholder="例：渋谷区">' +
+      '<select id="communityBoardAreaNameInput" class="community-board-area-search-select" disabled>' +
+        '<option value="" data-i18n="community_board_area_name_select_placeholder_before">先に都道府県を選択してください</option>' +
+      "</select>" +
     "</div>" +
     '<button type="button" id="communityBoardAreaSearchButton" class="location-button" data-i18n="community_board_area_search_button">この街を見る</button>' +
     '<p id="communityBoardAreaSearchError" class="community-board-area-search-error" style="display:none;"></p>'
@@ -14908,6 +14910,95 @@ if (regionRecommendationAreaPickerElement) {
     document.getElementById(
       "communityBoardAreaNameInput"
     );
+
+  // 街の掲示板 Phase10-B｜市区町村を自由入力からGeoloniaベースの静的な
+  // 全国データ(japan-municitalities.js／JAPAN_MUNICIPALITIES_BY_PREFECTURE)
+  // による選択式に変更。都道府県が選ばれるまでは無効化した状態にし、
+  // resolveGooglePlaceIdForPrefectureAndAreaName()等の解決ロジックには
+  // 一切手を入れない(渡す値が自由入力から選択式の文字列に変わるだけ)。
+  function populateCommunityBoardAreaNameOptions(prefectureName) {
+    if (!communityBoardAreaNameInputElement) {
+      return;
+    }
+
+    communityBoardAreaNameInputElement.innerHTML =
+      "";
+
+    const municipalityNames =
+      (typeof JAPAN_MUNICIPALITIES_BY_PREFECTURE !== "undefined" &&
+        JAPAN_MUNICIPALITIES_BY_PREFECTURE[prefectureName]) ||
+      null;
+
+    if (!municipalityNames) {
+      const placeholderOption =
+        document.createElement("option");
+
+      placeholderOption.value =
+        "";
+
+      placeholderOption.textContent =
+        getMachinauTranslation(
+          "community_board_area_name_select_placeholder_before",
+          getCurrentMachinauLanguage()
+        );
+
+      communityBoardAreaNameInputElement.appendChild(
+        placeholderOption
+      );
+
+      communityBoardAreaNameInputElement.disabled =
+        true;
+
+      return;
+    }
+
+    const placeholderOption =
+      document.createElement("option");
+
+    placeholderOption.value =
+      "";
+
+    placeholderOption.textContent =
+      getMachinauTranslation(
+        "community_board_area_name_select_placeholder_after",
+        getCurrentMachinauLanguage()
+      );
+
+    communityBoardAreaNameInputElement.appendChild(
+      placeholderOption
+    );
+
+    municipalityNames.forEach(
+      function(municipalityName) {
+        const municipalityOption =
+          document.createElement("option");
+
+        municipalityOption.value =
+          municipalityName;
+
+        municipalityOption.textContent =
+          municipalityName;
+
+        communityBoardAreaNameInputElement.appendChild(
+          municipalityOption
+        );
+      }
+    );
+
+    communityBoardAreaNameInputElement.disabled =
+      false;
+  }
+
+  if (communityBoardPrefectureSelectElement) {
+    communityBoardPrefectureSelectElement.addEventListener(
+      "change",
+      function() {
+        populateCommunityBoardAreaNameOptions(
+          communityBoardPrefectureSelectElement.value
+        );
+      }
+    );
+  }
 
   const communityBoardAreaSearchButtonElement =
     document.getElementById(
