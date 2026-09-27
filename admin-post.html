@@ -583,6 +583,107 @@
       text-align: center;
     }
 
+    /* 投稿前スマホプレビュー Phase1｜送信ボタン直前の確認用ボタンと、
+       横幅390pxのiframe(内部で本番と同じ/style.cssを読み込む)を載せる
+       管理画面専用オーバーレイ。旅行者側の見た目はiframe内のstyle.cssだけで
+       決まり、ここのCSSは枠の見た目にしか使わない。 */
+    .preview-button {
+      width: 100%;
+      min-height: 52px;
+      margin-top: 24px;
+      border: 2px solid var(--blue);
+      border-radius: 16px;
+      background: var(--white);
+      color: var(--blue);
+      font-size: 15px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .preview-button + .submit-button {
+      margin-top: 12px;
+    }
+
+    .preview-overlay {
+      position: fixed;
+      z-index: 1000;
+      inset: 0;
+      display: none;
+      overflow-y: auto;
+      padding: 14px 12px 24px;
+      background: rgba(7, 26, 51, 0.82);
+    }
+
+    .preview-overlay.visible {
+      display: block;
+    }
+
+    .preview-panel {
+      width: 390px;
+      max-width: 100%;
+      margin: 0 auto;
+    }
+
+    .preview-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+      color: var(--white);
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .preview-close-button {
+      min-height: 40px;
+      padding: 0 18px;
+      border: none;
+      border-radius: 12px;
+      background: var(--white);
+      color: var(--navy);
+      font-size: 14px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .preview-card-label-box {
+      margin-bottom: 10px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: var(--white);
+      color: var(--subtext);
+      font-size: 11px;
+      line-height: 1.6;
+    }
+
+    .preview-card-label {
+      display: inline-block;
+      margin-top: 4px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      background: var(--navy);
+      color: var(--white);
+      font-size: 12px;
+      font-weight: 900;
+      word-break: break-all;
+    }
+
+    .preview-card-label.empty {
+      background: #e2eaf1;
+      color: var(--subtext);
+    }
+
+    .preview-frame {
+      display: block;
+      width: 390px;
+      max-width: 100%;
+      height: 90vh;
+      border: none;
+      border-radius: 18px;
+      background: var(--white);
+    }
+
     footer {
       padding: 0 18px 35px;
       color: #8c9aa8;
@@ -1136,6 +1237,16 @@
 
         </div>
 
+        <!-- 投稿前スマホプレビュー Phase1｜type="button"のため押しても
+             フォーム送信(submitAdminPost)は実行されない。 -->
+        <button
+          id="previewButton"
+          class="preview-button"
+          type="button"
+        >
+          📱 スマホでプレビュー
+        </button>
+
         <button
           id="submitButton"
           class="submit-button"
@@ -1198,6 +1309,43 @@
     </section>
 
   </main>
+
+  <div
+    id="previewOverlay"
+    class="preview-overlay"
+    role="dialog"
+    aria-modal="true"
+    aria-label="スマホ表示プレビュー"
+  >
+    <div class="preview-panel">
+
+      <div class="preview-header">
+        <span>📱 スマホ表示プレビュー(幅390px)</span>
+        <button
+          id="previewCloseButton"
+          class="preview-close-button"
+          type="button"
+        >
+          閉じる
+        </button>
+      </div>
+
+      <div class="preview-card-label-box">
+        情報タイトルは、TOPのカードでは写真の上にこのように表示されます(詳細画面には表示されません)。<br>
+        <span
+          id="previewCardLabel"
+          class="preview-card-label"
+        ></span>
+      </div>
+
+      <iframe
+        id="previewFrame"
+        class="preview-frame"
+        title="旅行者向け詳細表示のプレビュー"
+      ></iframe>
+
+    </div>
+  </div>
 
   <footer>
     マチナウ Web Version 1.2<br>
@@ -2405,6 +2553,368 @@
 
       updateCharacterCounts();
     }
+
+    // 投稿前スマホプレビュー Phase1｜ボタンを押した瞬間のフォーム値から、
+    // 旅行者側の詳細モーダル(app.jsのopenShopModal())と同じ構造のHTMLを
+    // iframe内に組み立てる。app.js自体は読み込まない(Firebase初期化・
+    // GA4 shop_view等を管理画面から発生させないため)。見た目はiframe内で
+    // 本番と同じ/style.cssを読み込むことで揃える(.modal-messageの
+    // white-space: pre-lineもそのまま効く)。
+    // フォーム・selectedImageFiles・existingImageUrlsは読むだけで一切
+    // 変更しない。Firestore・Cloudinaryへの通信も行わない。
+    // ※openShopModal()の表示内容を変更した場合は、この関数群も合わせること。
+    const previewButton = document.getElementById("previewButton");
+    const previewOverlay = document.getElementById("previewOverlay");
+    const previewCloseButton = document.getElementById("previewCloseButton");
+    const previewCardLabel = document.getElementById("previewCardLabel");
+    const previewFrame = document.getElementById("previewFrame");
+
+    let previewObjectUrls = [];
+
+    // app.jsのgetCategoryDisplay()のうち、admin-post.htmlで選べる
+    // 9カテゴリー分(日本語表示)と同じ値。
+    const PREVIEW_CATEGORY_DISPLAY = {
+      "グルメ": { categoryText: "グルメ・飲食店", emoji: "🍜", visualClass: "visual-food" },
+      "カフェ・スイーツ": { categoryText: "カフェ・スイーツ", emoji: "🥭", visualClass: "visual-cafe" },
+      "ショッピング": { categoryText: "ショッピング・お土産", emoji: "🛍️", visualClass: "visual-shopping" },
+      "イベント": { categoryText: "イベント・体験", emoji: "🎵", visualClass: "visual-event" },
+      "観光・体験": { categoryText: "観光・体験", emoji: "🏝️", visualClass: "visual-sightseeing" },
+      "ナイトスポット": { categoryText: "ナイトスポット・夜の沖縄", emoji: "🌃", visualClass: "visual-bar" },
+      "美容・リラクゼーション": { categoryText: "美容・リラクゼーション", emoji: "💆", visualClass: "visual-beauty" },
+      "宿泊": { categoryText: "宿泊", emoji: "🏨", visualClass: "visual-stay" },
+      "お知らせ": { categoryText: "お知らせ", emoji: "📢", visualClass: "visual-official" }
+    };
+
+    function revokePreviewObjectUrls() {
+      previewObjectUrls.forEach(function(objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      });
+
+      previewObjectUrls = [];
+    }
+
+    // app.jsのgetExpiryDisplayText()と同じ判定(日本語表示)。
+    function getPreviewExpiryText(expiresAtMilliseconds) {
+      const remainingMilliseconds = expiresAtMilliseconds - Date.now();
+
+      if (expiresAtMilliseconds <= 0 || remainingMilliseconds <= 0) {
+        return "🆕 新着";
+      }
+
+      if (remainingMilliseconds < 60 * 60 * 1000) {
+        return "⚡ あと" + Math.max(1, Math.ceil(remainingMilliseconds / 60000)) + "分";
+      }
+
+      if (remainingMilliseconds <= 24 * 60 * 60 * 1000) {
+        return "🔥 今日だけ";
+      }
+
+      return "🆕 新着";
+    }
+
+    function buildAdminPostPreviewHtml(imageSources) {
+      const isPermanentAd = isPermanentAdCheckbox.checked;
+
+      const categoryDisplay =
+        PREVIEW_CATEGORY_DISPLAY[categoryInput.value] ||
+        { categoryText: "", emoji: "🌺", visualClass: "visual-event" };
+
+      // 通常の運営投稿はpostType:"admin"のため営業状態を付けない。常設店舗
+      // 広告はpostType未設定(=店舗扱い)かつ営業時間を持たないため、本番では
+      // 「・掲載中」が付く(app.jsのgetBusinessStatus())。
+      const categoryText =
+        isPermanentAd && categoryDisplay.categoryText
+          ? categoryDisplay.categoryText + "・掲載中"
+          : categoryDisplay.categoryText;
+
+      // api/admin-post.jsは通常投稿のshopNameを"マチナウ運営"固定で保存する。
+      const displayName = isPermanentAd
+        ? shopNameInput.value.trim()
+        : "マチナウ運営";
+
+      const address = addressInput.value.trim();
+
+      // 保存時(submitAdminPost・API)と同じくtrim()した本文を使う。
+      let modalText = "📢 " + escapeHtml(contentInput.value.trim());
+
+      // 運営投稿は常にsourceLabel("マチナウ運営より")付きで保存されるため、
+      // 本番ではsourceLabelの分岐が常に優先される。
+      modalText += "<br><br>" + escapeHtml("🌺 マチナウ運営より");
+
+      if (address) {
+        modalText += "<br><br>📍 " + escapeHtml(address);
+      }
+
+      if (takeoutInput.checked) {
+        modalText += "<br><br>🥡 テイクアウトOK";
+      }
+
+      // app.jsのgetPaymentBadgeTexts()と同じ規則：カード・QRは表示し、
+      // 現金は「現金のみ」の場合だけ表示する。
+      const paymentBadgeTexts = [];
+
+      if (paymentCardInput.checked) {
+        paymentBadgeTexts.push("💳 カードOK");
+      }
+
+      if (paymentQrInput.checked) {
+        paymentBadgeTexts.push("📱 QR決済OK");
+      }
+
+      if (
+        paymentCashInput.checked &&
+        !paymentCardInput.checked &&
+        !paymentQrInput.checked
+      ) {
+        paymentBadgeTexts.push("💴 現金のみ");
+      }
+
+      if (paymentBadgeTexts.length > 0) {
+        modalText += "<br><br>" + paymentBadgeTexts.join("　");
+      }
+
+      // 運営投稿はtimeMessageを保存しないため、本番では固定文言になる。
+      modalText += "<br><br>" + escapeHtml("⚡ マチナウ掲載中");
+
+      let expiresAtMilliseconds = 0;
+
+      if (!isPermanentAd && expiresAtInput.value !== "") {
+        const expiresAtTime = new Date(expiresAtInput.value).getTime();
+
+        if (!Number.isNaN(expiresAtTime)) {
+          expiresAtMilliseconds = expiresAtTime;
+        }
+      }
+
+      modalText += "<br><br>" + escapeHtml(getPreviewExpiryText(expiresAtMilliseconds));
+
+      const hasMapDestination =
+        (Number.isFinite(capturedLatitude) && Number.isFinite(capturedLongitude)) ||
+        address !== "";
+
+      const hasWebsiteUrl = /^https?:\/\//.test(websiteUrlInput.value.trim());
+
+      const visualInnerHtml =
+        imageSources.length > 0
+          ? '<span id="modalEmoji" style="display:none;"></span>'
+          : '<span id="modalEmoji">' + escapeHtml(categoryDisplay.emoji) + "</span>";
+
+      // .modal-messageはwhite-space: pre-lineのため、要素内に余計な改行・
+      // 空白を入れないよう1行で組み立てる。リンクはhrefを持たせない
+      // (プレビューからGoogleマップ・情報元ページへ遷移させない)。
+      return (
+        '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">' +
+        '<meta name="viewport" content="width=device-width, initial-scale=1.0">' +
+        '<link rel="stylesheet" href="/style.css">' +
+        "</head><body>" +
+        '<div id="shopModal" class="modal-overlay visible">' +
+        '<div class="modal-card">' +
+        '<div id="modalVisual" class="modal-visual ' + escapeHtml(categoryDisplay.visualClass) + '" style="position:relative;">' +
+        visualInnerHtml +
+        "</div>" +
+        '<div class="modal-content">' +
+        '<button id="previewModalClose" class="modal-close" type="button" aria-label="閉じる">✕</button>' +
+        '<div id="modalCategory" class="modal-category">' + escapeHtml(categoryText) + "</div>" +
+        '<h2 id="modalTitle" class="modal-title">' + escapeHtml(displayName) + "</h2>" +
+        '<div id="modalMessage" class="modal-message">' + modalText + "</div>" +
+        (hasMapDestination
+          ? '<a id="modalMapButton" class="modal-map-button" aria-disabled="true" style="cursor:default;">📍 Googleマップで場所を見る</a>'
+          : "") +
+        (hasWebsiteUrl
+          ? '<a id="modalWebsiteButton" class="modal-map-button" aria-disabled="true" style="cursor:default;">🔗 お店のページを見る</a>'
+          : "") +
+        "</div>" +
+        "</div>" +
+        "</div>" +
+        "</body></html>"
+      );
+    }
+
+    // app.jsのcreateModalSlider()と同じ見た目(インラインスタイルの値も同じ)の
+    // 写真切替を、iframe内のDOMへ組み立てる。
+    function setupPreviewSlider(frameDocument, imageSources) {
+      const modalVisual = frameDocument.getElementById("modalVisual");
+
+      if (!modalVisual || imageSources.length === 0) {
+        return;
+      }
+
+      let currentIndex = 0;
+
+      modalVisual.style.overflow = "hidden";
+      modalVisual.style.backgroundImage = "none";
+      modalVisual.style.touchAction = "pan-y";
+
+      const slider = frameDocument.createElement("div");
+      slider.style.cssText =
+        "position:absolute;inset:0;z-index:4;overflow:hidden;background:#e9f1f5;";
+
+      const image = frameDocument.createElement("img");
+      image.alt = "投稿写真";
+      image.draggable = false;
+      image.style.cssText =
+        "position:absolute;inset:0;width:100%;height:100%;display:block;" +
+        "object-fit:contain;user-select:none;";
+      slider.appendChild(image);
+
+      const counter = frameDocument.createElement("div");
+      counter.style.cssText =
+        "position:absolute;top:12px;right:12px;z-index:9;padding:6px 10px;" +
+        "border-radius:999px;background:rgba(7, 26, 51, 0.76);color:#ffffff;" +
+        "font-size:11px;font-weight:900;pointer-events:none;";
+      slider.appendChild(counter);
+
+      const dots = frameDocument.createElement("div");
+      dots.style.cssText =
+        "position:absolute;right:60px;bottom:13px;left:60px;z-index:9;display:flex;" +
+        "align-items:center;justify-content:center;gap:7px;";
+
+      const dotButtons = imageSources.map(function(imageSource, index) {
+        const dot = frameDocument.createElement("button");
+        dot.type = "button";
+        dot.setAttribute("aria-label", (index + 1) + "枚目の写真を表示");
+        dot.style.cssText =
+          "width:9px;height:9px;padding:0;border:2px solid rgba(255, 255, 255, 0.95);" +
+          "border-radius:50%;cursor:pointer;box-shadow:0 2px 7px rgba(0, 0, 0, 0.22);" +
+          "transition:transform 0.2s, background 0.2s;";
+        dot.addEventListener("click", function() {
+          showSlide(index);
+        });
+        dots.appendChild(dot);
+        return dot;
+      });
+
+      slider.appendChild(dots);
+
+      function createArrowButton(text, ariaLabel, side, onClick) {
+        const button = frameDocument.createElement("button");
+        button.type = "button";
+        button.textContent = text;
+        button.setAttribute("aria-label", ariaLabel);
+        button.style.cssText =
+          "position:absolute;top:50%;" + side + ":12px;z-index:8;width:42px;height:42px;" +
+          "display:grid;place-items:center;padding:0;border:none;border-radius:50%;" +
+          "background:rgba(7, 26, 51, 0.72);color:#ffffff;font-size:22px;font-weight:900;" +
+          "cursor:pointer;transform:translateY(-50%);box-shadow:0 6px 18px rgba(0, 0, 0, 0.2);";
+        button.addEventListener("click", onClick);
+        slider.appendChild(button);
+      }
+
+      function showSlide(index) {
+        currentIndex = (index + imageSources.length) % imageSources.length;
+        image.src = imageSources[currentIndex];
+        counter.textContent = (currentIndex + 1) + " / " + imageSources.length;
+
+        dotButtons.forEach(function(dot, dotIndex) {
+          const isActive = dotIndex === currentIndex;
+          dot.style.background = isActive ? "#ffffff" : "rgba(7, 26, 51, 0.55)";
+          dot.style.transform = isActive ? "scale(1.35)" : "scale(1)";
+        });
+      }
+
+      if (imageSources.length > 1) {
+        createArrowButton("‹", "前の写真", "left", function() {
+          showSlide(currentIndex - 1);
+        });
+
+        createArrowButton("›", "次の写真", "right", function() {
+          showSlide(currentIndex + 1);
+        });
+      }
+
+      modalVisual.appendChild(slider);
+      showSlide(0);
+    }
+
+    function openAdminPostPreview() {
+      revokePreviewObjectUrls();
+
+      // 保存時と同じ順番(既存写真→新規選択写真)。削除済みの既存写真は
+      // existingImageUrlsから既に外れているため表示されない。新規写真は
+      // Cloudinaryへアップロードせず、ブラウザ内の一時URLで表示する。
+      const newImageUrls = selectedImageFiles.map(function(file) {
+        return URL.createObjectURL(file);
+      });
+
+      previewObjectUrls = newImageUrls.slice();
+
+      const imageSources = existingImageUrls
+        .concat(newImageUrls)
+        .slice(0, MAX_IMAGE_COUNT);
+
+      const cardTitle = titleInput.value.trim();
+
+      previewCardLabel.textContent = cardTitle
+        ? "⚡ " + cardTitle
+        : "(情報タイトル未入力)";
+      previewCardLabel.classList.toggle("empty", cardTitle === "");
+
+      previewFrame.onload = function() {
+        const frameDocument = previewFrame.contentDocument;
+
+        if (!frameDocument) {
+          return;
+        }
+
+        // プレビュー内のリンク等からの画面遷移を止める(見た目確認専用)。
+        frameDocument.addEventListener(
+          "click",
+          function(event) {
+            if (event.target.closest("a")) {
+              event.preventDefault();
+            }
+          },
+          true
+        );
+
+        frameDocument.addEventListener("keydown", handlePreviewKeydown);
+
+        const modalCloseButton = frameDocument.getElementById("previewModalClose");
+
+        if (modalCloseButton) {
+          modalCloseButton.addEventListener("click", closeAdminPostPreview);
+        }
+
+        setupPreviewSlider(frameDocument, imageSources);
+      };
+
+      previewFrame.srcdoc = buildAdminPostPreviewHtml(imageSources);
+
+      previewOverlay.classList.add("visible");
+      document.body.style.overflow = "hidden";
+      previewCloseButton.focus();
+    }
+
+    // 閉じる操作は表示を隠して一時URLを解放するだけ。フォームの入力内容・
+    // 写真の選択状態には一切触れない。
+    function closeAdminPostPreview() {
+      if (!previewOverlay.classList.contains("visible")) {
+        return;
+      }
+
+      previewOverlay.classList.remove("visible");
+      document.body.style.overflow = "";
+      previewFrame.onload = null;
+      previewFrame.srcdoc = "";
+      revokePreviewObjectUrls();
+      previewButton.focus();
+    }
+
+    function handlePreviewKeydown(event) {
+      if (event.key === "Escape") {
+        closeAdminPostPreview();
+      }
+    }
+
+    previewButton.addEventListener("click", openAdminPostPreview);
+    previewCloseButton.addEventListener("click", closeAdminPostPreview);
+    document.addEventListener("keydown", handlePreviewKeydown);
+
+    previewOverlay.addEventListener("click", function(event) {
+      if (event.target === previewOverlay) {
+        closeAdminPostPreview();
+      }
+    });
 
     titleInput.addEventListener("input", updateCharacterCounts);
     contentInput.addEventListener("input", updateCharacterCounts);
