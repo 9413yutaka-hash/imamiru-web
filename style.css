@@ -1532,6 +1532,27 @@
         padding: 4px 7px;
         font-size: 10px;
       }
+
+      /* 店舗カード下部の縦位置揃え｜横並びのカードは#shopsListのflex
+         (stretch)で既に同じ高さになっているため、カード内を縦flexにして
+         店舗名・カテゴリーの行数差で生じた余白を「店舗広告」の上へ回し、
+         「店舗広告」「📍 現在値ボタン」をカード間で同じ位置に揃える。
+         見つける全件表示(.shops-show-all)は対象外。 */
+      #shopsSection:not(.shops-show-all) .shop-card {
+        display: flex;
+        flex-direction: column;
+      }
+
+      #shopsSection:not(.shops-show-all) .shop-body {
+        flex: 1 1 auto;
+        display: flex;
+        flex-direction: column;
+      }
+
+      #shopsSection:not(.shops-show-all) .user-post-badge-row {
+        margin-top: auto;
+        padding-top: 4px;
+      }
     }
 
     /* 見つける全件表示モード(#shopsSection.shops-show-all)専用。
