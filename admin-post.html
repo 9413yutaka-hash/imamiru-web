@@ -1366,6 +1366,14 @@
 
   <script src="firebase.js"></script>
 
+  <!-- 住所を緯度・経度へ変換するGoogle Maps(post.htmlと同じ読み込み方・同じキー)。
+       地図は表示せず、保存時のGeocoderだけに使う。 -->
+  <script
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyC7LLuNBYIXKT1YcrIaiuwyFssKQyMMjkU"
+    async
+    defer
+  ></script>
+
   <script>
     const CLOUDINARY_CLOUD_NAME = "cdhyctnp";
     const CLOUDINARY_UPLOAD_PRESET = "machinau_signed_upload";
@@ -1387,6 +1395,14 @@
     let capturedLatitude = null;
     let capturedLongitude = null;
     let capturedAccuracy = null;
+
+    // 住所→座標 Phase1｜capturedLatitude/Longitudeの出どころを区別する。
+    // 「📍 現在地を取得」で取った座標はそのまま使う。編集時に既存投稿から
+    // 復元した座標は、住所が読み込み時から変わっていない場合だけ使う
+    // (住所を変えたのに古い座標を保存しないため)。
+    let capturedCoordinatesFromDevice = false;
+    let loadedSubmissionAddress = null;
+
     let hasSubmittedSuccessfully = false;
     let existingImageUrls = [];
 
@@ -1899,6 +1915,120 @@
       locationMessageBox.textContent = message;
     }
 
+    // 住所→座標 Phase1｜post.htmlのconvertAddressToCoordinates()と同じ
+    // Google Geocoder呼び出し(address＋region:"JP"、先頭の結果を採用)。
+    async function convertAddressToCoordinates(address) {
+      const trimmedAddress = String(address || "").trim();
+
+      if (trimmedAddress === "") {
+        return {
+          latitude: null,
+          longitude: null
+        };
+      }
+
+      if (
+        typeof google === "undefined" ||
+        !google.maps ||
+        !google.maps.Geocoder
+      ) {
+        throw new Error(
+          "地図機能の準備が完了していません。"
+        );
+      }
+
+      const geocoder = new google.maps.Geocoder();
+
+      const response = await geocoder.geocode({
+        address: trimmedAddress,
+        region: "JP"
+      });
+
+      if (!response.results || response.results.length === 0) {
+        throw new Error(
+          "入力された住所の場所を確認できませんでした。"
+        );
+      }
+
+      const location = response.results[0].geometry.location;
+
+      return {
+        latitude: location.lat(),
+        longitude: location.lng()
+      };
+    }
+
+    // Google Mapsはasyncで読み込むため、保存時にまだ準備中なら少しだけ待つ。
+    async function waitForGoogleGeocoder(timeoutMilliseconds) {
+      const startedAt = Date.now();
+
+      while (
+        typeof google === "undefined" ||
+        !google.maps ||
+        !google.maps.Geocoder
+      ) {
+        if (Date.now() - startedAt > timeoutMilliseconds) {
+          return false;
+        }
+
+        await new Promise(function(resolve) {
+          window.setTimeout(resolve, 200);
+        });
+      }
+
+      return true;
+    }
+
+    // 保存時に使う座標を決める。
+    // 1. 「📍 現在地を取得」で取った座標 → そのまま使う
+    // 2. 編集時に復元した座標で、住所が読み込み時から変わっていない → そのまま使う
+    // 3. それ以外で住所がある → 住所からGeocoderで取得
+    // 4. 取得できない → 座標なし(null)で保存し、推測の座標は入れない
+    //    (住所を変えた場合も古い座標は使わない)
+    async function resolveCoordinatesForSubmit() {
+      const address = addressInput.value.trim();
+
+      const hasCapturedCoordinates =
+        Number.isFinite(capturedLatitude) &&
+        Number.isFinite(capturedLongitude);
+
+      if (hasCapturedCoordinates && capturedCoordinatesFromDevice) {
+        return { latitude: capturedLatitude, longitude: capturedLongitude, geocodeFailed: false };
+      }
+
+      if (
+        hasCapturedCoordinates &&
+        loadedSubmissionAddress !== null &&
+        address === loadedSubmissionAddress
+      ) {
+        return { latitude: capturedLatitude, longitude: capturedLongitude, geocodeFailed: false };
+      }
+
+      if (address === "") {
+        return { latitude: null, longitude: null, geocodeFailed: false };
+      }
+
+      try {
+        const isGeocoderReady = await waitForGoogleGeocoder(8000);
+
+        if (!isGeocoderReady) {
+          throw new Error("地図機能の準備が完了していません。");
+        }
+
+        const coordinates = await convertAddressToCoordinates(address);
+
+        return {
+          latitude: coordinates.latitude,
+          longitude: coordinates.longitude,
+          geocodeFailed: false
+        };
+      } catch (error) {
+        console.error("住所から位置を取得できませんでした：", error);
+
+        return { latitude: null, longitude: null, geocodeFailed: true };
+      }
+    }
+
     function requestCurrentLocationForPost() {
       if (!navigator.geolocation) {
         showLocationMessage("error", "このブラウザでは位置情報を利用できません。");
@@ -1913,6 +2043,7 @@
           capturedLatitude = position.coords.latitude;
           capturedLongitude = position.coords.longitude;
           capturedAccuracy = position.coords.accuracy;
+          capturedCoordinatesFromDevice = true;
 
           const roundedAccuracy = Math.round(capturedAccuracy);
 
@@ -2202,6 +2333,17 @@
 
         const idToken = await currentUser.getIdToken();
 
+        setProgress("住所から地図上の位置を確認しています…", 78);
+
+        const coordinates = await resolveCoordinatesForSubmit();
+
+        setProgress(
+          isEditMode
+            ? "地域情報を更新しています…"
+            : "地域情報をマチナウへ送信しています…",
+          82
+        );
+
         const paymentMethods = [];
 
         if (paymentCashInput.checked) {
@@ -2221,8 +2363,8 @@
           category: categoryInput.value,
           content: contentInput.value.trim(),
           address: addressInput.value.trim(),
-          latitude: capturedLatitude,
-          longitude: capturedLongitude,
+          latitude: coordinates.latitude,
+          longitude: coordinates.longitude,
           imageUrls: imageUrls,
           websiteUrl: websiteUrlInput.value.trim(),
           area: areaInput.value.trim(),
@@ -2306,6 +2448,12 @@
 
         showAdminPostSuccessMessage();
 
+        if (coordinates.geocodeFailed) {
+          messageBox.textContent +=
+            "（住所から地図上の位置を取得できなかったため、位置情報なしで保存しました。" +
+            "近い順の並び替えには使われません。住所を確認して編集・保存し直すと、もう一度取得します。）";
+        }
+
         messageBox.scrollIntoView({ behavior: "smooth", block: "center" });
 
         submitButton.style.display = "none";
@@ -2334,6 +2482,8 @@
       capturedLatitude = null;
       capturedLongitude = null;
       capturedAccuracy = null;
+      capturedCoordinatesFromDevice = false;
+      loadedSubmissionAddress = null;
       hasSubmittedSuccessfully = false;
 
       locationButton.disabled = false;
@@ -2395,6 +2545,7 @@
       categoryInput.value = submission.category || "";
       contentInput.value = submission.content || "";
       addressInput.value = submission.address || "";
+      loadedSubmissionAddress = addressInput.value.trim();
       websiteUrlInput.value = submission.websiteUrl || "";
 
       // 店舗投稿の安全化＋運営店舗属性 共通化｜既存投稿にフィールドが
