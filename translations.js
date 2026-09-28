@@ -154,6 +154,13 @@ const MACHINAU_TRANSLATIONS = {
     en: "Share what's happening →"
   },
 
+  // TOP参加CTA内の店舗・施設向け第2導線(shop.htmlへ)。footer_shop_linkと同じ
+  // 考え方の文言。shop.html自体は日本語のみ。
+  contribute_cta_shop_link: {
+    ja: "お店・施設の方へ｜無料で情報を掲載できます →",
+    en: "For shops & venues | List your info for free →"
+  },
+
   category_all: {
     ja: "すべて",
     en: "All"

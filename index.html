@@ -590,6 +590,23 @@
       box-shadow: 0 8px 20px rgba(5, 144, 194, 0.22);
     }
 
+    /* 店舗・施設向けの第2導線。メインボタンより弱いテキストリンクとし、
+       旅行者向けTOPが事業者募集ページに見えないようにする。 */
+    .contribute-cta-shop-link {
+      display: block;
+      width: fit-content;
+      max-width: 100%;
+      margin: 12px auto 0;
+      padding: 6px 4px;
+      color: var(--blue);
+      font-size: 12.5px;
+      font-weight: 700;
+      line-height: 1.6;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      text-wrap: balance;
+    }
+
     /* 会話型マチナウAI Phase1(MVP)専用の最小CSS。style.cssは変更しない。 */
     .ai-concierge-chat-messages {
       display: flex;
@@ -1568,6 +1585,16 @@
         data-i18n="contribute_cta_button"
       >
         街の情報を投稿する →
+      </a>
+
+      <!-- 店舗・施設向けの控えめな第2導線。主役は上の投稿ボタンのまま、
+           参加前の案内ページ(shop.html)へテキストリンクで案内する。 -->
+      <a
+        class="contribute-cta-shop-link"
+        href="shop.html"
+        data-i18n="contribute_cta_shop_link"
+      >
+        お店・施設の方へ｜無料で情報を掲載できます →
       </a>
 
     </section>
