@@ -14,7 +14,7 @@
     content="#071a33"
   >
 
-  <title>管理本部｜マチナウ</title>
+  <title>マチナウ管理本部</title>
 
   <style>
     :root {
@@ -1008,7 +1008,7 @@
 
         <div>
           <p class="brand-name">
-            マチナウ管理
+            マチナウ管理本部
           </p>
 
           <p class="brand-caption">
@@ -1317,19 +1317,6 @@
 
           <span
             id="approvedCount"
-            class="summary-value"
-          >
-            0件
-          </span>
-        </div>
-
-        <div class="summary-card">
-          <span class="summary-label">
-            掲載終了済み
-          </span>
-
-          <span
-            id="rejectedCount"
             class="summary-value"
           >
             0件
@@ -1667,11 +1654,6 @@
         "approvedCount"
       );
 
-    const rejectedCount =
-      document.getElementById(
-        "rejectedCount"
-      );
-
     const loginUserMessage =
       document.getElementById(
         "loginUserMessage"
@@ -1867,9 +1849,8 @@
         currentApprovedSubmissions.length +
         "件";
 
-      rejectedCount.textContent =
-        currentInactiveSubmissions.length +
-        "件";
+      // 掲載終了済みの件数は日常運用での重要度が低いため上部には表示しない
+      // (一覧は下の「却下・掲載終了済みの投稿」で引き続き確認できる)。
     }
 
     function setCardButtonsDisabled(
