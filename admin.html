@@ -14,7 +14,7 @@
     content="#071a33"
   >
 
-  <title>運営管理画面｜マチナウ</title>
+  <title>管理本部｜マチナウ</title>
 
   <style>
     :root {
@@ -239,7 +239,15 @@
 
     .form-field {
       display: grid;
+      grid-template-columns: minmax(0, 1fr);
       gap: 7px;
+    }
+
+    /* 長い記事名のoptionでselectが画面幅を超え、横スクロールが出ないようにする */
+    .form-field select {
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
     }
 
     .form-field label {
@@ -297,22 +305,160 @@
       cursor: wait;
     }
 
-    .post-entry-actions {
-      display: flex;
-      align-items: stretch;
-      gap: 12px;
+    .admin-menu {
+      display: grid;
+      grid-template-columns:
+        repeat(
+          auto-fill,
+          minmax(min(260px, 100%), 1fr)
+        );
+      gap: 13px;
       margin-top: 18px;
     }
 
-    .post-entry-actions .primary-button {
-      flex: 1;
-      margin-top: 0;
+    .admin-menu-group {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 14px;
+      border-radius: 16px;
+      background: #f4f8fb;
+      border: 1px solid var(--border);
     }
 
-    .secondary-entry-button {
+    .admin-menu-group-title {
+      margin: 0 0 2px;
+      color: var(--subtext);
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+    }
+
+    .admin-menu-link {
+      position: relative;
+      display: grid;
+      gap: 3px;
+      padding: 11px 32px 11px 13px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--white);
+      transition:
+        border-color 0.15s,
+        box-shadow 0.15s;
+    }
+
+    .admin-menu-link::after {
+      content: "→";
+      position: absolute;
+      top: 50%;
+      right: 12px;
+      transform: translateY(-50%);
+      color: var(--blue);
+      font-weight: 900;
+    }
+
+    .admin-menu-link.is-in-page::after {
+      content: "↓";
+    }
+
+    a.admin-menu-link:hover,
+    a.admin-menu-link:focus-visible {
+      border-color: var(--cyan);
+      box-shadow:
+        0 0 0 3px
+        rgba(4, 183, 215, 0.12);
+      outline: none;
+    }
+
+    .admin-menu-link.is-featured {
+      border-color: #9fd9ea;
+      background: #edf7fb;
+    }
+
+    .admin-menu-link.is-pending {
+      background: transparent;
+      border-style: dashed;
+      cursor: default;
+    }
+
+    .admin-menu-link.is-pending::after {
+      content: none;
+    }
+
+    .admin-menu-link-title {
       color: var(--navy);
-      background: #eef5f8;
-      box-shadow: none;
+      font-size: 14px;
+      font-weight: 900;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+    }
+
+    .admin-menu-link.is-pending .admin-menu-link-title {
+      color: var(--subtext);
+    }
+
+    .admin-menu-link-note {
+      color: var(--subtext);
+      font-size: 11px;
+      line-height: 1.6;
+      overflow-wrap: anywhere;
+    }
+
+    .admin-menu-badge {
+      display: inline-block;
+      margin-left: 6px;
+      padding: 1px 7px;
+      border-radius: 999px;
+      background: var(--orange-light);
+      color: #a45a17;
+      font-size: 10px;
+      font-weight: 900;
+      vertical-align: middle;
+    }
+
+    .admin-section-divider {
+      margin-top: 28px;
+      padding-top: 22px;
+      border-top: 1px solid var(--border);
+    }
+
+    /* sticky上部バーに見出しが隠れないよう、ページ内移動先に余白を取る */
+    #submissionReviewSection,
+    #commentAdminSection,
+    #editorAdminSection {
+      scroll-margin-top: 90px;
+    }
+
+    .admin-legacy-links {
+      margin-top: 34px;
+      padding-top: 16px;
+      border-top: 1px dashed var(--border);
+    }
+
+    .admin-legacy-title {
+      margin: 0 0 8px;
+      color: var(--subtext);
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .admin-legacy-link {
+      display: inline-grid;
+      gap: 2px;
+      max-width: 100%;
+    }
+
+    .admin-legacy-link-title {
+      color: var(--subtext);
+      font-size: 12px;
+      font-weight: 800;
+      text-decoration: underline;
+    }
+
+    .admin-legacy-link-note {
+      color: var(--subtext);
+      font-size: 10px;
     }
 
     .logout-button {
@@ -741,10 +887,6 @@
       .refresh-button {
         width: 100%;
       }
-
-      .post-entry-actions {
-        flex-direction: column;
-      }
     }
 
     @media (max-width: 520px) {
@@ -760,6 +902,53 @@
       .page-heading,
       .panel {
         padding: 19px 16px;
+      }
+
+      /* スマホでは各カテゴリー内の入口を罫線区切りの行にして縦の長さを抑える */
+      .admin-menu {
+        gap: 10px;
+      }
+
+      .admin-menu-group {
+        gap: 0;
+        padding: 10px 12px 4px;
+      }
+
+      .admin-menu-group-title {
+        margin-bottom: 4px;
+      }
+
+      .admin-menu-link {
+        gap: 1px;
+        padding: 9px 26px 9px 0;
+        border: none;
+        border-top: 1px solid var(--border);
+        border-radius: 0;
+        background: transparent;
+      }
+
+      .admin-menu-link::after {
+        right: 4px;
+      }
+
+      .admin-menu-link.is-featured {
+        margin: 0 -12px;
+        padding-left: 12px;
+        padding-right: 38px;
+        border-top-color: #9fd9ea;
+      }
+
+      .admin-menu-link.is-featured::after {
+        right: 16px;
+      }
+
+      .admin-menu-link.is-pending {
+        border-style: solid none none;
+      }
+
+      a.admin-menu-link:focus-visible {
+        box-shadow: none;
+        background: #edf7fb;
       }
 
       .panel-header {
@@ -829,12 +1018,11 @@
       </div>
 
       <h1>
-        広告申請の管理
+        マチナウ管理本部
       </h1>
 
       <p>
-        店舗やイベント運営者から届いた申請内容を確認し、
-        掲載または却下します。
+        運営に必要な管理画面へ、ここから移動できます。
       </p>
 
     </section>
@@ -921,7 +1109,7 @@
 
         <div class="panel-title">
           <h2>
-            投稿管理
+            管理メニュー
           </h2>
 
           <p id="loginUserMessage">
@@ -939,47 +1127,160 @@
 
       </div>
 
-      <div class="post-entry-actions">
+      <!-- 管理本部 Phase1｜既存管理画面への総合入口。リンクと見出しだけで、
+      データ・API・既存JSには一切関与しない。「→」は別画面、「↓」は
+      このページ内の既存セクションへの移動。 -->
+      <nav
+        class="admin-menu"
+        aria-label="管理メニュー"
+      >
 
-        <a
-          id="adminPostLink"
-          class="primary-button"
-          href="admin-post.html"
-          style="
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-          "
-        >
-          🏙️ 地域情報を投稿する
-        </a>
+        <section class="admin-menu-group">
+          <h3 class="admin-menu-group-title">
+            投稿
+          </h3>
 
-        <a
-          id="columnEditorLink"
-          class="primary-button secondary-entry-button"
-          href="admin-column.html"
-          style="
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-          "
-        >
-          📖 マチナウ読み物を書く
-        </a>
+          <a
+            class="admin-menu-link is-in-page"
+            href="#submissionReviewSection"
+          >
+            <span class="admin-menu-link-title">投稿を確認する</span>
+            <span class="admin-menu-link-note">一般投稿の採用・却下・掲載終了</span>
+          </a>
 
-        <a
-          id="aiEditorLink"
-          class="primary-button secondary-entry-button"
-          href="ai-editor.html"
-          style="
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-          "
-        >
-          🤖 AI編集部
-        </a>
+          <a
+            id="adminPostLink"
+            class="admin-menu-link"
+            href="admin-post.html"
+          >
+            <span class="admin-menu-link-title">地域情報を投稿する</span>
+            <span class="admin-menu-link-note">街の「今」を運営から投稿</span>
+          </a>
+        </section>
 
+        <section class="admin-menu-group">
+          <h3 class="admin-menu-group-title">
+            地域
+          </h3>
+
+          <a
+            class="admin-menu-link is-featured"
+            href="admin-community-board.html"
+          >
+            <span class="admin-menu-link-title">地域の掲示板を確認する</span>
+            <span class="admin-menu-link-note">掲示板投稿の採用・却下／地域代表画像の設定</span>
+          </a>
+
+          <a
+            class="admin-menu-link"
+            href="admin-region-profiles.html"
+          >
+            <span class="admin-menu-link-title">地域プロフィール</span>
+            <span class="admin-menu-link-note">街の記憶・写真の登録（現在は八重瀬町のみ）</span>
+          </a>
+        </section>
+
+        <section class="admin-menu-group">
+          <h3 class="admin-menu-group-title">
+            店舗・施設
+          </h3>
+
+          <a
+            class="admin-menu-link"
+            href="admin-shops.html"
+          >
+            <span class="admin-menu-link-title">店舗・施設を管理する</span>
+            <span class="admin-menu-link-note">店舗登録・専用投稿URLの発行</span>
+          </a>
+
+          <!-- 将来枠｜Googleフォーム申込みの管理へ置き換える予定。
+          現在はリンクなしの表示のみ。 -->
+          <div
+            class="admin-menu-link is-pending"
+            aria-disabled="true"
+          >
+            <span class="admin-menu-link-title">
+              店舗・施設からの申込み
+              <span class="admin-menu-badge">準備中</span>
+            </span>
+            <span class="admin-menu-link-note">現在はGoogleフォームとメール通知で受付</span>
+          </div>
+        </section>
+
+        <section class="admin-menu-group">
+          <h3 class="admin-menu-group-title">
+            読み物
+          </h3>
+
+          <a
+            id="columnEditorLink"
+            class="admin-menu-link"
+            href="admin-column.html"
+          >
+            <span class="admin-menu-link-title">マチナウ読み物を管理する</span>
+            <span class="admin-menu-link-note">記事の作成・編集・公開</span>
+          </a>
+
+          <a
+            class="admin-menu-link is-in-page"
+            href="#commentAdminSection"
+          >
+            <span class="admin-menu-link-title">読み物のコメント管理</span>
+            <span class="admin-menu-link-note">コメントの確認・非表示</span>
+          </a>
+        </section>
+
+        <section class="admin-menu-group">
+          <h3 class="admin-menu-group-title">
+            AI・運営ツール
+          </h3>
+
+          <a
+            id="aiEditorLink"
+            class="admin-menu-link"
+            href="ai-editor.html"
+          >
+            <span class="admin-menu-link-title">AI編集部</span>
+            <span class="admin-menu-link-note">元情報から運営投稿の下書きを作成</span>
+          </a>
+
+          <a
+            class="admin-menu-link"
+            href="ai-sources.html"
+          >
+            <span class="admin-menu-link-title">情報源管理</span>
+            <span class="admin-menu-link-note">AI収集用の公式サイトなどを登録</span>
+          </a>
+        </section>
+
+        <section class="admin-menu-group">
+          <h3 class="admin-menu-group-title">
+            アカウント
+          </h3>
+
+          <a
+            class="admin-menu-link is-in-page"
+            href="#editorAdminSection"
+          >
+            <span class="admin-menu-link-title">運営投稿担当（Editor）の管理</span>
+            <span class="admin-menu-link-note">担当者アカウントの作成・停止</span>
+          </a>
+        </section>
+
+      </nav>
+
+      <div
+        id="submissionReviewSection"
+        class="panel-header admin-section-divider"
+      >
+        <div class="panel-title">
+          <h2>
+            投稿を確認する
+          </h2>
+          <p>
+            一般投稿の採用・却下・掲載終了を行います。
+          </p>
+        </div>
       </div>
 
       <div class="summary-grid">
@@ -1128,7 +1429,11 @@
         もっと見る
       </button>
 
-      <div class="panel-header" style="margin-top: 30px;">
+      <div
+        id="commentAdminSection"
+        class="panel-header"
+        style="margin-top: 30px;"
+      >
         <div class="panel-title">
           <h2>
             コメント管理（マチナウ読み物）
@@ -1173,7 +1478,11 @@
         </div>
       </div>
 
-      <div class="panel-header" style="margin-top: 30px;">
+      <div
+        id="editorAdminSection"
+        class="panel-header"
+        style="margin-top: 30px;"
+      >
         <div class="panel-title">
           <h2>
             運営投稿担当（Editor）の管理
@@ -1229,6 +1538,21 @@
         <div class="empty-state">
           読み込んでいます…
         </div>
+      </div>
+
+      <!-- 管理本部 Phase1｜旧機能への入口。削除せず、目立たない形で残す。 -->
+      <div class="admin-legacy-links">
+        <h3 class="admin-legacy-title">
+          旧機能
+        </h3>
+
+        <a
+          class="admin-legacy-link"
+          href="admin-region-picks.html"
+        >
+          <span class="admin-legacy-link-title">地域のおすすめ（旧）</span>
+          <span class="admin-legacy-link-note">旧機能。一部画面で現在も使用</span>
+        </a>
       </div>
 
     </section>
