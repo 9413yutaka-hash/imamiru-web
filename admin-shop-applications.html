@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <meta name="robots" content="noindex, nofollow">
+
+  <title>
+    店舗・施設からの申込み｜マチナウ運営
+  </title>
+
+  <!-- 店舗・施設申込み Phase1｜shop-apply.htmlから届いた申込みを代表が確認し、
+       対応状況(未対応→対応中→完了)を管理する。店舗登録・専用URL発行は
+       自動では行わず、既存のadmin-shops.htmlで代表が行う。申込み内容は
+       すべてtextContentで表示し、innerHTMLへ入力値を入れない。 -->
+
+  <style>
+    :root {
+      --navy: #071a33;
+      --blue: #0788c9;
+      --sky: #dff7ff;
+      --green: #19a96b;
+      --red: #ef5a67;
+      --orange: #e88932;
+      --white: #ffffff;
+      --text: #15233a;
+      --subtext: #697386;
+      --border: #e2eaf1;
+      --background: #f4f8fb;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Yu Gothic", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+      background: var(--background);
+      color: var(--text);
+    }
+
+    header {
+      background: var(--navy);
+      color: var(--white);
+      padding: 18px 20px;
+    }
+
+    header .page-label {
+      font-size: 12px;
+      opacity: 0.8;
+    }
+
+    header h1 {
+      margin: 4px 0 0;
+      font-size: 20px;
+    }
+
+    header a {
+      display: inline-block;
+      margin-top: 10px;
+      color: var(--sky);
+      font-size: 13px;
+      text-decoration: none;
+    }
+
+    main {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 20px 16px 60px;
+    }
+
+    .panel {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .panel h2 {
+      margin: 0 0 14px;
+      font-size: 16px;
+    }
+
+    .field {
+      margin-bottom: 16px;
+    }
+
+    .field label {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .field input[type="text"],
+    .field input[type="password"] {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    .primary-button {
+      background: linear-gradient(135deg, var(--blue), #04b7d7);
+      color: var(--white);
+      border: none;
+      border-radius: 12px;
+      padding: 11px 18px;
+      font-size: 14px;
+      font-weight: 900;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .primary-button:disabled,
+    .secondary-button:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+    .secondary-button {
+      background: var(--white);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 14px;
+      font-size: 12px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .message-box {
+      font-size: 13px;
+      margin-top: 10px;
+      min-height: 1em;
+    }
+
+    .message-box.error {
+      color: var(--red);
+    }
+
+    .message-box.success {
+      color: var(--green);
+    }
+
+    #adminArea {
+      display: none;
+    }
+
+    #adminArea.visible {
+      display: block;
+    }
+
+    /* 未対応件数(最重要)。 */
+    .pending-summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .pending-summary-count {
+      font-size: 22px;
+      font-weight: 900;
+      color: var(--navy);
+    }
+
+    .pending-summary-count.has-pending {
+      color: #b4541a;
+    }
+
+    .pending-summary-sub {
+      margin-top: 4px;
+      color: var(--subtext);
+      font-size: 12px;
+    }
+
+    .flow-list {
+      margin: 0;
+      padding-left: 20px;
+      font-size: 13px;
+      line-height: 1.9;
+    }
+
+    .shops-link {
+      display: inline-flex;
+      align-items: center;
+      margin-top: 12px;
+      padding: 10px 14px;
+      border-radius: 12px;
+      background: var(--sky);
+      color: var(--navy);
+      font-size: 13px;
+      font-weight: 900;
+      text-decoration: none;
+    }
+
+    .filter-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .filter-button {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--white);
+      color: var(--text);
+      padding: 7px 13px;
+      font-size: 12px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .filter-button.active {
+      border-color: var(--navy);
+      background: var(--navy);
+      color: var(--white);
+    }
+
+    .application-card {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+
+    .application-card.status-pending {
+      border-color: #f2c79c;
+      border-left: 5px solid var(--orange);
+      background: #fffaf4;
+    }
+
+    .application-card-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .application-shop-name {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 900;
+      overflow-wrap: anywhere;
+    }
+
+    .application-date {
+      margin-top: 4px;
+      color: var(--subtext);
+      font-size: 12px;
+    }
+
+    .status-badge {
+      flex-shrink: 0;
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .status-badge.pending {
+      background: #fde7d2;
+      color: #a14a10;
+    }
+
+    .status-badge.contacted {
+      background: #e1f1fb;
+      color: #0a6aa0;
+    }
+
+    .status-badge.completed {
+      background: #e3f7ee;
+      color: #137a4e;
+    }
+
+    .application-details {
+      display: grid;
+      grid-template-columns: 90px minmax(0, 1fr);
+      gap: 6px 10px;
+      margin: 12px 0 0;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .application-details dt {
+      color: var(--subtext);
+      font-weight: 700;
+    }
+
+    .application-details dd {
+      margin: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .application-details dd.note {
+      white-space: pre-wrap;
+    }
+
+    .application-details a {
+      color: var(--blue);
+      font-weight: 700;
+    }
+
+    .application-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .empty-state {
+      color: var(--subtext);
+      font-size: 13px;
+      text-align: center;
+      padding: 16px 0;
+    }
+
+    @media (max-width: 480px) {
+      .application-details {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 2px;
+      }
+
+      .application-details dd {
+        margin-bottom: 6px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="page-label">
+      マチナウ運営
+    </div>
+
+    <h1>
+      店舗・施設からの申込み
+    </h1>
+
+    <a href="admin.html">
+      ← 管理本部へ戻る
+    </a>
+  </header>
+
+  <main>
+
+    <section id="loginPanel" class="panel">
+      <h2>
+        管理者ログイン
+      </h2>
+
+      <form id="loginForm" novalidate>
+        <div class="field">
+          <label for="adminEmail">
+            メールアドレス
+          </label>
+
+          <input
+            id="adminEmail"
+            type="text"
+            autocomplete="email"
+            required
+          >
+        </div>
+
+        <div class="field">
+          <label for="adminPassword">
+            パスワード
+          </label>
+
+          <input
+            id="adminPassword"
+            type="password"
+            autocomplete="current-password"
+            required
+          >
+        </div>
+
+        <button id="loginButton" class="primary-button" type="submit">
+          管理画面へログイン
+        </button>
+      </form>
+
+      <div id="loginMessage" class="message-box" role="status" aria-live="polite"></div>
+    </section>
+
+    <section id="adminArea">
+
+      <div class="panel">
+        <div class="pending-summary">
+          <div>
+            <div id="pendingSummaryCount" class="pending-summary-count">
+              未対応 -件
+            </div>
+            <div id="otherSummaryText" class="pending-summary-sub"></div>
+          </div>
+
+          <button id="refreshButton" class="secondary-button" type="button">
+            🔄 一覧を更新
+          </button>
+        </div>
+
+        <div id="listMessage" class="message-box" role="status" aria-live="polite"></div>
+      </div>
+
+      <div class="panel">
+        <h2>
+          対応の流れ
+        </h2>
+
+        <ol class="flow-list">
+          <li>申込み内容を確認し、連絡先へ連絡する</li>
+          <li>連絡したら「対応中にする」を押す</li>
+          <li>「店舗・施設を管理する」で店舗登録・専用URLを発行し、お渡しする</li>
+          <li>お渡しできたら「完了にする」を押す</li>
+        </ol>
+
+        <a class="shops-link" href="admin-shops.html">
+          🏪 店舗・施設を管理する（店舗登録・専用URLの発行）→
+        </a>
+      </div>
+
+      <div class="panel">
+        <h2>
+          申込み一覧
+        </h2>
+
+        <div id="filterBar" class="filter-bar" role="group" aria-label="対応状況で絞り込む"></div>
+
+        <div id="applicationList"></div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore-compat.js"></script>
+  <script src="firebase.js"></script>
+
+  <script>
+    const ADMIN_EMAIL =
+      "9413yutaka@gmail.com";
+
+    const STATUS_LABELS = {
+      pending: "未対応",
+      contacted: "対応中",
+      completed: "完了"
+    };
+
+    // 状態ごとに押せる操作(次の状態と表示名)。
+    const STATUS_ACTIONS = {
+      pending: [
+        { status: "contacted", label: "対応中にする" },
+        { status: "completed", label: "完了にする" }
+      ],
+      contacted: [
+        { status: "completed", label: "完了にする" },
+        { status: "pending", label: "未対応に戻す" }
+      ],
+      completed: [
+        { status: "contacted", label: "対応中に戻す" }
+      ]
+    };
+
+    const STATUS_SORT_ORDER = {
+      pending: 0,
+      contacted: 1,
+      completed: 2
+    };
+
+    const FILTERS = [
+      { value: "pending", label: "未対応" },
+      { value: "contacted", label: "対応中" },
+      { value: "completed", label: "完了" },
+      { value: "all", label: "すべて" }
+    ];
+
+    async function getAdminIdToken() {
+      const currentUser = firebase.auth().currentUser;
+
+      if (!currentUser) {
+        throw new Error(
+          "ログイン状態を確認できませんでした。再度ログインしてください。"
+        );
+      }
+
+      return currentUser.getIdToken();
+    }
+
+    // admin-shops.htmlのcallShopsApi(mode, payload)と同じ構成。
+    async function callApplicationsApi(mode, payload) {
+      const idToken = await getAdminIdToken();
+
+      const response = await fetch("/api/moderate-submission", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + idToken
+        },
+        body: JSON.stringify(Object.assign({ mode: mode }, payload || {}))
+      });
+
+      let responseData = null;
+
+      try {
+        responseData = await response.json();
+      } catch (jsonError) {
+        throw new Error("応答を読み取れませんでした。");
+      }
+
+      if (!response.ok || !responseData || responseData.success !== true) {
+        throw new Error(
+          (responseData && responseData.message) || "処理に失敗しました。"
+        );
+      }
+
+      return responseData;
+    }
+
+    const loginPanel = document.getElementById("loginPanel");
+    const adminArea = document.getElementById("adminArea");
+    const loginForm = document.getElementById("loginForm");
+    const loginButton = document.getElementById("loginButton");
+    const loginMessage = document.getElementById("loginMessage");
+
+    const pendingSummaryCount = document.getElementById("pendingSummaryCount");
+    const otherSummaryText = document.getElementById("otherSummaryText");
+    const refreshButton = document.getElementById("refreshButton");
+    const listMessage = document.getElementById("listMessage");
+    const filterBar = document.getElementById("filterBar");
+    const applicationList = document.getElementById("applicationList");
+
+    let allApplications = [];
+    let currentFilter = "pending";
+    let hasChosenFilter = false;
+
+    function showMessage(element, text, type) {
+      element.textContent = text;
+      element.className = "message-box" + (type ? " " + type : "");
+    }
+
+    function formatDateTime(millis) {
+      if (!millis) {
+        return "-";
+      }
+
+      try {
+        return new Date(millis).toLocaleString("ja-JP", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit"
+        });
+      } catch (error) {
+        return "-";
+      }
+    }
+
+    function countByStatus(status) {
+      return allApplications.filter(function(application) {
+        return application.status === status;
+      }).length;
+    }
+
+    function renderSummary() {
+      const pendingCount = countByStatus("pending");
+
+      pendingSummaryCount.textContent = "未対応 " + pendingCount + "件";
+      pendingSummaryCount.classList.toggle("has-pending", pendingCount > 0);
+
+      otherSummaryText.textContent =
+        "対応中 " + countByStatus("contacted") + "件　/　完了 " + countByStatus("completed") + "件";
+    }
+
+    function renderFilterBar() {
+      filterBar.textContent = "";
+
+      FILTERS.forEach(function(filter) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "filter-button" + (filter.value === currentFilter ? " active" : "");
+        button.setAttribute("aria-pressed", filter.value === currentFilter ? "true" : "false");
+
+        const count =
+          filter.value === "all"
+            ? allApplications.length
+            : countByStatus(filter.value);
+
+        button.textContent = filter.label + "（" + count + "）";
+
+        button.addEventListener("click", function() {
+          currentFilter = filter.value;
+          hasChosenFilter = true;
+          renderFilterBar();
+          renderApplicationList();
+        });
+
+        filterBar.appendChild(button);
+      });
+    }
+
+    function appendDetailRow(detailsElement, label, valueNode) {
+      const dt = document.createElement("dt");
+      dt.textContent = label;
+
+      const dd = document.createElement("dd");
+      dd.appendChild(valueNode);
+
+      detailsElement.appendChild(dt);
+      detailsElement.appendChild(dd);
+
+      return dd;
+    }
+
+    function textNode(value) {
+      return document.createTextNode(value && value !== "" ? value : "-");
+    }
+
+    // 連絡先がメールアドレス/電話番号の形なら、そのまま押せるリンクにする。
+    function buildContactNode(contact) {
+      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact)) {
+        const link = document.createElement("a");
+        link.href = "mailto:" + contact;
+        link.textContent = contact;
+        return link;
+      }
+
+      const phoneDigits = contact.replace(/[^0-9+]/g, "");
+
+      if (phoneDigits.length >= 10) {
+        const link = document.createElement("a");
+        link.href = "tel:" + phoneDigits;
+        link.textContent = contact;
+        return link;
+      }
+
+      return textNode(contact);
+    }
+
+    // http(s)のURLだけをリンクにする(それ以外はそのまま文字として表示)。
+    function buildWebsiteNode(websiteOrSns) {
+      if (/^https?:\/\/\S+$/i.test(websiteOrSns)) {
+        const link = document.createElement("a");
+        link.href = websiteOrSns;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = websiteOrSns;
+        return link;
+      }
+
+      return textNode(websiteOrSns);
+    }
+
+    function buildApplicationCard(application) {
+      const card = document.createElement("article");
+      card.className = "application-card status-" + application.status;
+
+      const top = document.createElement("div");
+      top.className = "application-card-top";
+
+      const titleBox = document.createElement("div");
+
+      const shopName = document.createElement("h3");
+      shopName.className = "application-shop-name";
+      shopName.textContent = application.shopName || "(名称未記入)";
+
+      const date = document.createElement("div");
+      date.className = "application-date";
+      date.textContent = "申込日時：" + formatDateTime(application.createdAtMillis);
+
+      titleBox.appendChild(shopName);
+      titleBox.appendChild(date);
+
+      const badge = document.createElement("span");
+      badge.className = "status-badge " + application.status;
+      badge.textContent = STATUS_LABELS[application.status] || application.status;
+
+      top.appendChild(titleBox);
+      top.appendChild(badge);
+      card.appendChild(top);
+
+      const details = document.createElement("dl");
+      details.className = "application-details";
+
+      appendDetailRow(details, "所在地", textNode(application.address));
+      appendDetailRow(details, "担当者", textNode(application.contactName));
+      appendDetailRow(details, "連絡先", buildContactNode(application.contact || ""));
+      appendDetailRow(details, "Web/SNS", buildWebsiteNode(application.websiteOrSns || ""));
+
+      const noteCell = appendDetailRow(details, "備考", textNode(application.note));
+      noteCell.classList.add("note");
+
+      card.appendChild(details);
+
+      const actions = document.createElement("div");
+      actions.className = "application-actions";
+
+      (STATUS_ACTIONS[application.status] || []).forEach(function(action) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = action.status === "contacted" && application.status === "pending"
+          ? "primary-button"
+          : "secondary-button";
+        button.textContent = action.label;
+
+        button.addEventListener("click", function() {
+          updateApplicationStatus(application.id, action.status, button);
+        });
+
+        actions.appendChild(button);
+      });
+
+      card.appendChild(actions);
+
+      return card;
+    }
+
+    function renderApplicationList() {
+      applicationList.textContent = "";
+
+      const visibleApplications = allApplications
+        .filter(function(application) {
+          return currentFilter === "all" || application.status === currentFilter;
+        })
+        .sort(function(a, b) {
+          const statusDifference =
+            STATUS_SORT_ORDER[a.status] - STATUS_SORT_ORDER[b.status];
+
+          if (statusDifference !== 0) {
+            return statusDifference;
+          }
+
+          return b.createdAtMillis - a.createdAtMillis;
+        });
+
+      if (visibleApplications.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "empty-state";
+        empty.textContent =
+          allApplications.length === 0
+            ? "まだ申込みはありません。"
+            : "この状態の申込みはありません。";
+        applicationList.appendChild(empty);
+        return;
+      }
+
+      visibleApplications.forEach(function(application) {
+        applicationList.appendChild(buildApplicationCard(application));
+      });
+    }
+
+    async function loadApplications() {
+      showMessage(listMessage, "読み込んでいます…", "");
+      refreshButton.disabled = true;
+
+      try {
+        const responseData = await callApplicationsApi("adminListShopApplications", {});
+
+        allApplications = Array.isArray(responseData.applications)
+          ? responseData.applications
+          : [];
+
+        // 最初の表示だけ、未対応が無ければ「すべて」を開く。
+        if (!hasChosenFilter) {
+          currentFilter = countByStatus("pending") > 0 ? "pending" : "all";
+        }
+
+        renderSummary();
+        renderFilterBar();
+        renderApplicationList();
+        showMessage(listMessage, "", "");
+      } catch (error) {
+        console.error("申込み一覧の取得に失敗しました：", error);
+        showMessage(listMessage, error.message || "申込み一覧を取得できませんでした。", "error");
+      } finally {
+        refreshButton.disabled = false;
+      }
+    }
+
+    async function updateApplicationStatus(applicationId, nextStatus, button) {
+      button.disabled = true;
+
+      try {
+        await callApplicationsApi("adminUpdateShopApplicationStatus", {
+          applicationId: applicationId,
+          status: nextStatus
+        });
+
+        await loadApplications();
+
+        showMessage(
+          listMessage,
+          "「" + STATUS_LABELS[nextStatus] + "」に変更しました。",
+          "success"
+        );
+      } catch (error) {
+        console.error("対応状況の変更に失敗しました：", error);
+        showMessage(listMessage, error.message || "対応状況を変更できませんでした。", "error");
+        button.disabled = false;
+      }
+    }
+
+    refreshButton.addEventListener("click", function() {
+      loadApplications();
+    });
+
+    loginForm.addEventListener("submit", async function(event) {
+      event.preventDefault();
+
+      showMessage(loginMessage, "", "");
+
+      const email = document.getElementById("adminEmail").value.trim().toLowerCase();
+      const password = document.getElementById("adminPassword").value;
+
+      if (email !== ADMIN_EMAIL.toLowerCase()) {
+        showMessage(loginMessage, "このメールアドレスには管理者権限がありません。", "error");
+        return;
+      }
+
+      loginButton.disabled = true;
+      loginButton.textContent = "ログインしています…";
+
+      try {
+        await firebase.auth().signInWithEmailAndPassword(email, password);
+      } catch (error) {
+        console.error("❌ 管理者ログインに失敗しました", error);
+        showMessage(loginMessage, "ログインできませんでした。メールアドレスとパスワードを確認してください。", "error");
+      } finally {
+        loginButton.disabled = false;
+        loginButton.textContent = "管理画面へログイン";
+      }
+    });
+
+    // admin.html・admin-shops.htmlの管理者判定と同一パターン。
+    firebase.auth().onAuthStateChanged(async function(user) {
+      showMessage(loginMessage, "", "");
+
+      if (user && user.email && user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+        loginPanel.style.display = "none";
+        adminArea.classList.add("visible");
+
+        await loadApplications();
+        return;
+      }
+
+      if (user) {
+        try {
+          await firebase.auth().signOut();
+        } catch (error) {
+          console.error("管理者以外のユーザーをログアウトできませんでした", error);
+        }
+
+        showMessage(loginMessage, "このアカウントには管理者権限がありません。", "error");
+      }
+
+      loginPanel.style.display = "block";
+      adminArea.classList.remove("visible");
+    });
+  </script>
+
+</body>
+</html>

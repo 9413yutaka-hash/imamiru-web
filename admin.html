@@ -376,26 +376,12 @@
       background: #edf7fb;
     }
 
-    .admin-menu-link.is-pending {
-      background: transparent;
-      border-style: dashed;
-      cursor: default;
-    }
-
-    .admin-menu-link.is-pending::after {
-      content: none;
-    }
-
     .admin-menu-link-title {
       color: var(--navy);
       font-size: 14px;
       font-weight: 900;
       line-height: 1.5;
       overflow-wrap: anywhere;
-    }
-
-    .admin-menu-link.is-pending .admin-menu-link-title {
-      color: var(--subtext);
     }
 
     .admin-menu-link-note {
@@ -405,16 +391,53 @@
       overflow-wrap: anywhere;
     }
 
-    .admin-menu-badge {
+    /* 店舗・施設申込みの未対応件数。0件はグレー、1件以上はオレンジ。 */
+    .admin-count-badge {
       display: inline-block;
       margin-left: 6px;
-      padding: 1px 7px;
+      padding: 1px 8px;
       border-radius: 999px;
-      background: var(--orange-light);
-      color: #a45a17;
-      font-size: 10px;
+      background: #eef3f7;
+      color: var(--subtext);
+      font-size: 11px;
       font-weight: 900;
       vertical-align: middle;
+      white-space: nowrap;
+    }
+
+    .admin-count-badge.has-pending {
+      background: var(--orange);
+      color: var(--white);
+    }
+
+    .admin-alert {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 6px 12px;
+      margin-top: 18px;
+      padding: 13px 15px;
+      border: 1px solid #f2c79c;
+      border-left: 5px solid var(--orange);
+      border-radius: 14px;
+      background: var(--orange-light);
+      color: #8a4410;
+    }
+
+    .admin-alert[hidden] {
+      display: none;
+    }
+
+    .admin-alert-title {
+      font-size: 14px;
+      font-weight: 900;
+    }
+
+    .admin-alert-count {
+      font-size: 13px;
+      font-weight: 900;
+      white-space: nowrap;
     }
 
     .admin-section-divider {
@@ -942,10 +965,6 @@
         right: 16px;
       }
 
-      .admin-menu-link.is-pending {
-        border-style: solid none none;
-      }
-
       a.admin-menu-link:focus-visible {
         box-shadow: none;
         background: #edf7fb;
@@ -1130,6 +1149,19 @@
       <!-- 管理本部 Phase1｜既存管理画面への総合入口。リンクと見出しだけで、
       データ・API・既存JSには一切関与しない。「→」は別画面、「↓」は
       このページ内の既存セクションへの移動。 -->
+      <a
+        id="shopApplicationAlert"
+        class="admin-alert"
+        href="admin-shop-applications.html"
+        hidden
+      >
+        <span class="admin-alert-title">🏪 店舗・施設から新しい申込みがあります</span>
+        <span
+          id="shopApplicationAlertCount"
+          class="admin-alert-count"
+        ></span>
+      </a>
+
       <nav
         class="admin-menu"
         aria-label="管理メニュー"
@@ -1193,18 +1225,21 @@
             <span class="admin-menu-link-note">店舗登録・専用投稿URLの発行</span>
           </a>
 
-          <!-- 将来枠｜Googleフォーム申込みの管理へ置き換える予定。
-          現在はリンクなしの表示のみ。 -->
-          <div
-            class="admin-menu-link is-pending"
-            aria-disabled="true"
+          <!-- 店舗・施設申込み Phase1｜shop-apply.htmlからの申込みを確認する。
+          未対応件数はログイン後にloadShopApplicationPendingCount()が表示する。 -->
+          <a
+            class="admin-menu-link"
+            href="admin-shop-applications.html"
           >
             <span class="admin-menu-link-title">
               店舗・施設からの申込み
-              <span class="admin-menu-badge">準備中</span>
+              <span
+                id="shopApplicationPendingBadge"
+                class="admin-count-badge"
+              >未対応 -件</span>
             </span>
-            <span class="admin-menu-link-note">現在はGoogleフォームとメール通知で受付</span>
-          </div>
+            <span class="admin-menu-link-note">新しい申込みの確認・対応状況の管理</span>
+          </a>
         </section>
 
         <section class="admin-menu-group">
@@ -3314,6 +3349,90 @@
       }
     }
 
+    // 店舗・施設申込み Phase1｜管理メニューの「未対応 ○件」と、未対応がある
+    // ときだけ出す上部のお知らせを更新する(mode:"adminCountPendingShopApplications"、
+    // 代表(Admin)専用)。取得に失敗しても他の管理機能には影響させない。
+    async function loadShopApplicationPendingCount() {
+      const pendingBadge =
+        document.getElementById("shopApplicationPendingBadge");
+
+      const alertLink =
+        document.getElementById("shopApplicationAlert");
+
+      const alertCount =
+        document.getElementById("shopApplicationAlertCount");
+
+      try {
+        const currentUser =
+          firebase.auth().currentUser;
+
+        if (!currentUser) {
+          return;
+        }
+
+        const idToken =
+          await currentUser.getIdToken();
+
+        const response =
+          await fetch(
+            "/api/moderate-submission",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + idToken
+              },
+              body: JSON.stringify({
+                mode: "adminCountPendingShopApplications"
+              })
+            }
+          );
+
+        const responseData =
+          await response.json();
+
+        if (
+          !response.ok ||
+          !responseData ||
+          responseData.success !== true ||
+          typeof responseData.pendingCount !== "number"
+        ) {
+          throw new Error(
+            (responseData && responseData.message) ||
+              "未対応件数を取得できませんでした。"
+          );
+        }
+
+        const pendingCount =
+          responseData.pendingCount;
+
+        pendingBadge.textContent =
+          "未対応 " + pendingCount + "件";
+
+        pendingBadge.classList.toggle(
+          "has-pending",
+          pendingCount > 0
+        );
+
+        alertCount.textContent =
+          "未対応 " + pendingCount + "件 →";
+
+        alertLink.hidden =
+          pendingCount === 0;
+      } catch (error) {
+        console.error(
+          "店舗・施設申込みの未対応件数を取得できませんでした",
+          error
+        );
+
+        pendingBadge.textContent =
+          "未対応 件数取得エラー";
+
+        alertLink.hidden =
+          true;
+      }
+    }
+
     // マチナウ読み物投稿機能(Phase1)｜公開済みのFirestore読み物を、
     // コメント管理の対象記事の選択肢へ動的に追加する(取得失敗時はcatchのみ)。
     // 新しい読み物を公開するたびにこのファイルを編集する必要をなくすための対応。
@@ -3768,6 +3887,8 @@
             loginUserMessage.textContent =
               user.email +
               " でログインしています。";
+
+            loadShopApplicationPendingCount();
 
             await loadSubmissions();
 

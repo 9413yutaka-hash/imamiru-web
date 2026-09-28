@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <meta
+    name="theme-color"
+    content="#0788c9"
+  >
+
+  <meta
+    name="description"
+    content="マチナウへの無料投稿のお申し込み（お店・施設向け）。現在、マチナウへの店舗・施設からの投稿は無料です。"
+  >
+
+  <title>
+    無料投稿のお申し込み｜マチナウ
+  </title>
+
+  <link
+    rel="canonical"
+    href="https://machinau.jp/shop-apply.html"
+  >
+
+  <link
+    rel="icon"
+    type="image/png"
+    href="/favicon.png?v=2"
+  >
+
+  <!-- 店舗・施設申込み Phase1｜shop.htmlの「無料投稿を申し込む」から開く
+       申込みフォーム。送信内容は/api/moderate-submission
+       (mode:"shopApplicationCreate")経由でのみ保存し、Firestoreへは直接
+       書き込まない。代表はadmin-shop-applications.htmlで確認する。 -->
+
+  <style>
+    :root {
+      --navy: #071a33;
+      --blue: #0788c9;
+      --cyan: #04b7d7;
+      --sky: #dff7ff;
+      --white: #ffffff;
+      --text: #15233a;
+      --subtext: #697386;
+      --border: #e2eaf1;
+      --background: #f4f8fb;
+      --red: #d94f4f;
+      --shadow: 0 18px 50px rgba(20, 52, 82, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0 0 60px;
+      font-family:
+        "Yu Gothic",
+        "Hiragino Kaku Gothic ProN",
+        "Meiryo",
+        sans-serif;
+      background: var(--background);
+      color: var(--text);
+    }
+
+    /* ヘッダー/ヒーロー/カードはshop.htmlと同じクラス構成・見た目。 */
+    .top-bar {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(12, 54, 87, 0.08);
+    }
+
+    .top-bar-inner {
+      width: min(100%, 760px);
+      margin: 0 auto;
+      padding: 13px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .brand-area {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-icon {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      box-shadow: 0 8px 20px rgba(4, 158, 199, 0.25);
+    }
+
+    .brand-caption {
+      margin: 2px 0 0;
+      color: var(--subtext);
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .home-link {
+      padding: 9px 13px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--white);
+      color: var(--navy);
+      font-size: 12px;
+      font-weight: 900;
+      white-space: nowrap;
+      text-decoration: none;
+    }
+
+    .page-hero {
+      padding: 42px 18px 70px;
+      background: linear-gradient(135deg, #0687c5, #13c3ce);
+      color: var(--white);
+    }
+
+    .page-hero-inner {
+      width: min(100%, 720px);
+      margin: 0 auto;
+    }
+
+    .hero-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 8px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .page-hero h1 {
+      margin: 20px 0 0;
+      font-size: clamp(24px, 6vw, 32px);
+      line-height: 1.4;
+      letter-spacing: 0.02em;
+      text-wrap: balance;
+    }
+
+    .free-badge {
+      display: inline-block;
+      margin-top: 16px;
+      padding: 9px 14px;
+      border-radius: 12px;
+      background: var(--white);
+      color: var(--blue);
+      font-size: 13px;
+      font-weight: 900;
+      line-height: 1.6;
+      text-wrap: pretty;
+    }
+
+    main {
+      width: min(100%, 640px);
+      margin: -38px auto 0;
+      padding: 0 18px;
+    }
+
+    .guide-card {
+      margin-bottom: 16px;
+      padding: 22px 20px;
+      border: 1px solid rgba(12, 54, 87, 0.08);
+      border-radius: 22px;
+      background: var(--white);
+      box-shadow: var(--shadow);
+    }
+
+    .guide-card h2 {
+      margin: 0 0 10px;
+      color: var(--navy);
+      font-size: 18px;
+      line-height: 1.5;
+      text-wrap: balance;
+    }
+
+    .guide-card p {
+      margin: 0 0 10px;
+      color: #3d5163;
+      font-size: 13.5px;
+      line-height: 1.85;
+      text-wrap: pretty;
+    }
+
+    .step-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      counter-reset: apply-step;
+    }
+
+    .step-list li {
+      position: relative;
+      padding: 1px 0 0 40px;
+      color: #3d5163;
+      font-size: 13.5px;
+      line-height: 1.85;
+      counter-increment: apply-step;
+      text-wrap: pretty;
+    }
+
+    .step-list li + li {
+      margin-top: 10px;
+    }
+
+    .step-list li::before {
+      content: counter(apply-step);
+      position: absolute;
+      top: 1px;
+      left: 0;
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      color: var(--white);
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .form-field {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+
+    .form-field label {
+      color: var(--navy);
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .required-mark,
+    .optional-mark {
+      display: inline-block;
+      margin-left: 6px;
+      padding: 1px 7px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 900;
+      vertical-align: middle;
+    }
+
+    .required-mark {
+      background: #fff0f0;
+      color: #b23b3b;
+    }
+
+    .optional-mark {
+      background: #eef3f7;
+      color: var(--subtext);
+    }
+
+    .field-hint {
+      margin: 0;
+      color: var(--subtext);
+      font-size: 11.5px;
+      line-height: 1.6;
+    }
+
+    .form-field input,
+    .form-field textarea {
+      width: 100%;
+      min-width: 0;
+      padding: 12px 13px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #fbfdfe;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 16px;
+      outline: none;
+    }
+
+    .form-field textarea {
+      min-height: 110px;
+      resize: vertical;
+      line-height: 1.7;
+    }
+
+    .form-field input:focus,
+    .form-field textarea:focus {
+      border-color: var(--cyan);
+      background: var(--white);
+      box-shadow: 0 0 0 4px rgba(4, 183, 215, 0.12);
+    }
+
+    /* bot対策の入力欄(人間には見えない)。 */
+    .confirmation-field {
+      position: absolute;
+      left: -9999px;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+    }
+
+    .submit-button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      min-height: 56px;
+      padding: 8px 14px;
+      border: none;
+      border-radius: 15px;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      color: var(--white);
+      font-family: inherit;
+      font-size: 16px;
+      font-weight: 900;
+      cursor: pointer;
+      box-shadow: 0 10px 24px rgba(5, 144, 194, 0.25);
+    }
+
+    .submit-button:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+    .privacy-note {
+      margin: 10px 0 0;
+      color: var(--subtext);
+      font-size: 11.5px;
+      line-height: 1.7;
+      text-wrap: pretty;
+    }
+
+    .privacy-note a {
+      color: var(--blue);
+      font-weight: 700;
+    }
+
+    .form-message {
+      display: none;
+      margin: 0 0 14px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: #fff0f0;
+      border: 1px solid #f3c7c7;
+      color: #a93d3d;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.7;
+    }
+
+    .form-message.visible {
+      display: block;
+    }
+
+    .complete-card {
+      display: none;
+      text-align: center;
+    }
+
+    .complete-card.visible {
+      display: block;
+    }
+
+    .complete-icon {
+      display: inline-grid;
+      place-items: center;
+      width: 56px;
+      height: 56px;
+      margin-bottom: 8px;
+      border-radius: 50%;
+      background: var(--sky);
+      font-size: 26px;
+    }
+
+    .back-link {
+      display: inline-block;
+      margin-top: 4px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--blue);
+      text-decoration: none;
+    }
+
+    footer {
+      padding: 26px 18px 0;
+      color: #8c9aa8;
+      text-align: center;
+      font-size: 10px;
+      line-height: 1.8;
+    }
+
+    @media (max-width: 480px) {
+      .page-hero {
+        padding: 34px 15px 60px;
+      }
+
+      main {
+        padding-right: 14px;
+        padding-left: 14px;
+      }
+
+      .guide-card {
+        padding: 20px 17px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <header class="top-bar">
+    <div class="top-bar-inner">
+
+      <div class="brand-area">
+
+        <div class="brand-icon">
+          <img
+            src="/icon-192.png?v=2"
+            alt="マチナウ"
+            style="width:100%;height:100%;object-fit:contain;border-radius:inherit;"
+          >
+        </div>
+
+        <div>
+          <p class="brand-caption">
+            リアルタイム観光コンシェルジュ
+          </p>
+        </div>
+
+      </div>
+
+      <a
+        class="home-link"
+        href="shop.html"
+      >
+        ← お店・施設の方へ
+      </a>
+
+    </div>
+  </header>
+
+  <section class="page-hero">
+    <div class="page-hero-inner">
+
+      <div class="hero-label">
+        🏪 お店・施設向け
+      </div>
+
+      <h1>
+        マチナウ 無料投稿のお申し込み
+      </h1>
+
+      <div class="free-badge">
+        現在、マチナウへの店舗・施設からの投稿は無料です。
+      </div>
+
+    </div>
+  </section>
+
+  <main>
+
+    <section
+      id="applyIntroCard"
+      class="guide-card"
+    >
+      <h2>
+        お申し込み後の流れ
+      </h2>
+
+      <ol class="step-list">
+        <li>
+          このページのフォームからお申し込みください。
+        </li>
+        <li>
+          お申し込み後、運営がお店・施設を確認し、ご記入の連絡先へご連絡します。
+        </li>
+        <li>
+          確認後、お店専用の投稿ページ（URL）と投稿ガイドをお渡しします。
+        </li>
+      </ol>
+    </section>
+
+    <section
+      id="applyFormCard"
+      class="guide-card"
+    >
+      <h2>
+        お申し込みフォーム
+      </h2>
+
+      <form
+        id="applyForm"
+        novalidate
+      >
+
+        <div
+          id="formMessage"
+          class="form-message"
+          role="alert"
+        ></div>
+
+        <div class="form-field">
+          <label for="shopNameInput">
+            店舗・施設名
+            <span class="required-mark">必須</span>
+          </label>
+          <input
+            id="shopNameInput"
+            name="shopName"
+            type="text"
+            maxlength="60"
+            autocomplete="organization"
+            required
+          >
+        </div>
+
+        <div class="form-field">
+          <label for="addressInput">
+            所在地
+            <span class="required-mark">必須</span>
+          </label>
+          <input
+            id="addressInput"
+            name="address"
+            type="text"
+            maxlength="120"
+            autocomplete="street-address"
+            placeholder="例：沖縄県那覇市〇〇1-2-3"
+            required
+          >
+        </div>
+
+        <div class="form-field">
+          <label for="contactNameInput">
+            担当者名
+            <span class="required-mark">必須</span>
+          </label>
+          <input
+            id="contactNameInput"
+            name="contactName"
+            type="text"
+            maxlength="40"
+            autocomplete="name"
+            required
+          >
+        </div>
+
+        <div class="form-field">
+          <label for="contactInput">
+            連絡先
+            <span class="required-mark">必須</span>
+          </label>
+          <p class="field-hint">
+            メールアドレスまたは電話番号をご記入ください。
+          </p>
+          <input
+            id="contactInput"
+            name="contact"
+            type="text"
+            maxlength="100"
+            autocomplete="email"
+            placeholder="例：info@example.com / 098-000-0000"
+            required
+          >
+        </div>
+
+        <div class="form-field">
+          <label for="websiteOrSnsInput">
+            WebサイトまたはSNS
+            <span class="optional-mark">任意</span>
+          </label>
+          <input
+            id="websiteOrSnsInput"
+            name="websiteOrSns"
+            type="text"
+            maxlength="300"
+            autocomplete="url"
+            placeholder="例：https://example.com / Instagram @example"
+          >
+        </div>
+
+        <div class="form-field">
+          <label for="noteInput">
+            備考
+            <span class="optional-mark">任意</span>
+          </label>
+          <textarea
+            id="noteInput"
+            name="note"
+            maxlength="1000"
+            placeholder="ご質問や、お店・施設について伝えたいことがあればご記入ください。"
+          ></textarea>
+        </div>
+
+        <div
+          class="confirmation-field"
+          aria-hidden="true"
+        >
+          <label for="confirmationFieldInput">確認用（入力しないでください）</label>
+          <input
+            id="confirmationFieldInput"
+            type="text"
+            tabindex="-1"
+            autocomplete="off"
+          >
+        </div>
+
+        <button
+          id="submitButton"
+          class="submit-button"
+          type="submit"
+        >
+          この内容で申し込む
+        </button>
+
+        <p class="privacy-note">
+          ご記入いただいた担当者名・連絡先は、お申し込みの確認とご連絡のためにのみ使用し、公開されることはありません。
+          詳しくは<a href="privacy.html">プライバシーポリシー</a>をご覧ください。
+        </p>
+
+      </form>
+    </section>
+
+    <section
+      id="completeCard"
+      class="guide-card complete-card"
+      role="status"
+      aria-live="polite"
+    >
+      <div class="complete-icon">✅</div>
+
+      <h2>
+        お申し込みありがとうございました。
+      </h2>
+
+      <p>
+        運営がお店・施設を確認のうえ、ご記入の連絡先へご連絡いたします。
+      </p>
+    </section>
+
+    <a class="back-link" href="shop.html">← お店・施設の方へ戻る</a>
+
+  </main>
+
+  <footer>
+    マチナウ Web Version 1.2
+    <br>
+    沖縄の「今」を、旅人へ。
+  </footer>
+
+  <script>
+    (function() {
+      const applyForm = document.getElementById("applyForm");
+      const submitButton = document.getElementById("submitButton");
+      const formMessage = document.getElementById("formMessage");
+      const applyIntroCard = document.getElementById("applyIntroCard");
+      const applyFormCard = document.getElementById("applyFormCard");
+      const completeCard = document.getElementById("completeCard");
+
+      const inputs = {
+        shopName: document.getElementById("shopNameInput"),
+        address: document.getElementById("addressInput"),
+        contactName: document.getElementById("contactNameInput"),
+        contact: document.getElementById("contactInput"),
+        websiteOrSns: document.getElementById("websiteOrSnsInput"),
+        note: document.getElementById("noteInput")
+      };
+
+      const requiredLabels = {
+        shopName: "店舗・施設名",
+        address: "所在地",
+        contactName: "担当者名",
+        contact: "連絡先"
+      };
+
+      function showFormMessage(text) {
+        formMessage.textContent = text;
+        formMessage.classList.add("visible");
+        formMessage.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+
+      function clearFormMessage() {
+        formMessage.textContent = "";
+        formMessage.classList.remove("visible");
+      }
+
+      applyForm.addEventListener("submit", async function(event) {
+        event.preventDefault();
+        clearFormMessage();
+
+        const payload = {
+          mode: "shopApplicationCreate",
+          confirmationField: document.getElementById("confirmationFieldInput").value
+        };
+
+        Object.keys(inputs).forEach(function(fieldName) {
+          payload[fieldName] = inputs[fieldName].value.trim();
+        });
+
+        // 入力漏れはここで先に知らせる(最終的な確認はサーバー側でも行う)。
+        for (const fieldName of Object.keys(requiredLabels)) {
+          if (payload[fieldName] === "") {
+            showFormMessage(requiredLabels[fieldName] + "を入力してください。");
+            inputs[fieldName].focus();
+            return;
+          }
+        }
+
+        submitButton.disabled = true;
+        submitButton.textContent = "送信しています…";
+
+        try {
+          const response = await fetch("/api/moderate-submission", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+          });
+
+          let responseData = null;
+
+          try {
+            responseData = await response.json();
+          } catch (jsonError) {
+            responseData = null;
+          }
+
+          if (!response.ok || !responseData || responseData.success !== true) {
+            showFormMessage(
+              (responseData && responseData.message) ||
+                "送信できませんでした。時間をおいて、もう一度お試しください。"
+            );
+            return;
+          }
+
+          applyIntroCard.style.display = "none";
+          applyFormCard.style.display = "none";
+          completeCard.classList.add("visible");
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        } catch (error) {
+          console.error("お申し込みの送信に失敗しました：", error);
+          showFormMessage("送信できませんでした。通信状況を確認して、もう一度お試しください。");
+        } finally {
+          submitButton.disabled = false;
+          submitButton.textContent = "この内容で申し込む";
+        }
+      });
+    })();
+  </script>
+
+</body>
+</html>

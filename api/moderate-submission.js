@@ -26266,6 +26266,544 @@ async function handleAdminSetColumnArticleStatusRequest(
 }
 
 
+// ==========================================================================
+// 店舗・施設申込み Phase1
+// shop-apply.html(公開フォーム)からの無料投稿の申込みを受け付け、代表が
+// admin-shop-applications.htmlで確認・対応状況を管理する。新しいVercel
+// Functionは追加せず、既存のこのFunctionへmode追加のみで実装する
+// (Functions 12/12を維持)。shopApplicationsはクライアントから直接読み書き
+// させず、常にAdmin SDK経由(このFunction経由)のみでアクセスする。
+// 申込みから店舗登録(storeAccounts)は自動では行わない(代表がadmin-shops.html
+// で確認・登録・専用URL発行を行う既存の流れを維持する)。
+// ==========================================================================
+
+const SHOP_APPLICATIONS_COLLECTION =
+  "shopApplications";
+
+const SHOP_APPLICATION_RATE_LIMITS_COLLECTION =
+  "shopApplicationRateLimits";
+
+// 同じ投稿元からの連続申込みを防ぐ。申込みは頻繁に行うものではないため、
+// 掲示板(60秒)より長い間隔にする。
+const SHOP_APPLICATION_RATE_LIMIT_COOLDOWN_MILLISECONDS =
+  10 * 60 * 1000;
+
+// IPが取得できない/入れ替えての大量送信に備えた、全体での上限(直近1時間)。
+const SHOP_APPLICATION_GLOBAL_HOURLY_LIMIT =
+  20;
+
+const SHOP_APPLICATION_FIELD_MAX_LENGTHS =
+  {
+    shopName: 60,
+    address: 120,
+    contactName: 40,
+    contact: 100,
+    websiteOrSns: 300,
+    note: 1000
+  };
+
+const SHOP_APPLICATION_STATUS_VALUES =
+  [
+    "pending",
+    "contacted",
+    "completed"
+  ];
+
+const SHOP_APPLICATION_LIST_MAX_COUNT =
+  200;
+
+// 制御文字を取り除いてtrimする。allowNewlinesがfalseの項目は改行を空白へ
+// まとめる(1行項目に改行を混ぜない)。長さの切り詰めはせず、上限超過は
+// 呼び出し側でエラーとして扱う(黙って内容を欠けさせない)。
+function normalizeShopApplicationText(
+  rawValue,
+  allowNewlines
+) {
+  if (typeof rawValue !== "string") {
+    return "";
+  }
+
+  const withoutControlCharacters =
+    rawValue
+      .replace(/\r\n?/g, "\n")
+      .replace(/[\u0000-\u0009\u000B-\u001F\u007F]/g, "");
+
+  const normalized =
+    allowNewlines
+      ? withoutControlCharacters.replace(/\n{3,}/g, "\n\n")
+      : withoutControlCharacters.replace(/\s*\n\s*/g, " ");
+
+  return normalized.trim();
+}
+
+// 連絡先はメールアドレスまたは電話番号のどちらかの形であることだけを確認する
+// (実在確認はしない。明らかに連絡できない入力だけを弾く)。
+function isValidShopApplicationContact(
+  contact
+) {
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact)) {
+    return true;
+  }
+
+  const phoneDigits =
+    contact.replace(/[\s\-()（）ー－+＋]/g, "");
+
+  return /^[0-9０-９]{10,15}$/.test(phoneDigits);
+}
+
+function validateShopApplicationInput(
+  requestBody
+) {
+  const fields = {
+    shopName:
+      normalizeShopApplicationText(requestBody.shopName, false),
+    address:
+      normalizeShopApplicationText(requestBody.address, false),
+    contactName:
+      normalizeShopApplicationText(requestBody.contactName, false),
+    contact:
+      normalizeShopApplicationText(requestBody.contact, false),
+    websiteOrSns:
+      normalizeShopApplicationText(requestBody.websiteOrSns, false),
+    note:
+      normalizeShopApplicationText(requestBody.note, true)
+  };
+
+  const requiredLabels = {
+    shopName: "店舗・施設名",
+    address: "所在地",
+    contactName: "担当者名",
+    contact: "連絡先"
+  };
+
+  for (const fieldName of Object.keys(requiredLabels)) {
+    if (fields[fieldName] === "") {
+      return {
+        ok: false,
+        message:
+          requiredLabels[fieldName] + "を入力してください。"
+      };
+    }
+  }
+
+  const fieldLabels =
+    Object.assign(
+      {},
+      requiredLabels,
+      {
+        websiteOrSns: "WebサイトまたはSNS",
+        note: "備考"
+      }
+    );
+
+  for (const fieldName of Object.keys(SHOP_APPLICATION_FIELD_MAX_LENGTHS)) {
+    if (
+      fields[fieldName].length >
+      SHOP_APPLICATION_FIELD_MAX_LENGTHS[fieldName]
+    ) {
+      return {
+        ok: false,
+        message:
+          fieldLabels[fieldName] +
+          "は" +
+          SHOP_APPLICATION_FIELD_MAX_LENGTHS[fieldName] +
+          "文字以内で入力してください。"
+      };
+    }
+  }
+
+  if (!isValidShopApplicationContact(fields.contact)) {
+    return {
+      ok: false,
+      message:
+        "連絡先には、メールアドレスまたは電話番号を入力してください。"
+    };
+  }
+
+  return {
+    ok: true,
+    fields: fields
+  };
+}
+
+// 公開フォームからの申込み作成(認証不要)。
+async function handleShopApplicationCreateRequest(
+  request,
+  response
+) {
+  try {
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    // ハニーポット欄(人間には見えない)。値が入っていればbotとみなし、
+    // 検知したことを教えないよう保存せずに成功したふりの応答だけ返す
+    // (記事コメントと同じ考え方)。
+    const honeypotValue =
+      typeof requestBody.confirmationField === "string"
+        ? requestBody.confirmationField.trim()
+        : "";
+
+    if (honeypotValue !== "") {
+      return response.status(200).json({
+        success: true
+      });
+    }
+
+    const validationResult =
+      validateShopApplicationInput(
+        requestBody
+      );
+
+    if (!validationResult.ok) {
+      return response.status(400).json({
+        success: false,
+        message: validationResult.message
+      });
+    }
+
+    const database =
+      getFirestore(
+        getFirebaseAdminApp()
+      );
+
+    const oneHourAgo =
+      Timestamp.fromMillis(
+        Date.now() - 60 * 60 * 1000
+      );
+
+    const recentCountSnapshot =
+      await database
+        .collection(
+          SHOP_APPLICATIONS_COLLECTION
+        )
+        .where(
+          "createdAt",
+          ">",
+          oneHourAgo
+        )
+        .count()
+        .get();
+
+    if (
+      recentCountSnapshot.data().count >=
+      SHOP_APPLICATION_GLOBAL_HOURLY_LIMIT
+    ) {
+      return response.status(429).json({
+        success: false,
+        message:
+          "ただいまお申し込みが集中しています。時間をおいて、もう一度お試しください。"
+      });
+    }
+
+    const rateLimitOk =
+      await claimRateLimit(
+        database,
+        SHOP_APPLICATION_RATE_LIMITS_COLLECTION,
+        hashClientIpAddress(
+          request
+        ),
+        SHOP_APPLICATION_RATE_LIMIT_COOLDOWN_MILLISECONDS
+      );
+
+    if (!rateLimitOk) {
+      return response.status(429).json({
+        success: false,
+        message:
+          "短時間に続けて送信されています。10分ほど時間をおいて、もう一度お試しください。"
+      });
+    }
+
+    await database
+      .collection(
+        SHOP_APPLICATIONS_COLLECTION
+      )
+      .add(
+        Object.assign(
+          {},
+          validationResult.fields,
+          {
+            status: "pending",
+            createdAt:
+              FieldValue.serverTimestamp(),
+            updatedAt:
+              FieldValue.serverTimestamp()
+          }
+        )
+      );
+
+    return response.status(200).json({
+      success: true
+    });
+  } catch (error) {
+    console.error(
+      "店舗・施設申込み：作成エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message:
+        "送信できませんでした。時間をおいて、もう一度お試しください。"
+    });
+  }
+}
+
+async function countPendingShopApplications(
+  database
+) {
+  const snapshot =
+    await database
+      .collection(
+        SHOP_APPLICATIONS_COLLECTION
+      )
+      .where(
+        "status",
+        "==",
+        "pending"
+      )
+      .count()
+      .get();
+
+  return snapshot.data().count;
+}
+
+// 管理本部(admin.html)の「未対応 ○件」表示用。一覧本体は取得しない。
+async function handleAdminCountPendingShopApplicationsRequest(
+  request,
+  response
+) {
+  try {
+    const authResult =
+      await requireAdmin(
+        request
+      );
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({
+        success: false,
+        message: authResult.message
+      });
+    }
+
+    return response.status(200).json({
+      success: true,
+      pendingCount:
+        await countPendingShopApplications(
+          authResult.database
+        )
+    });
+  } catch (error) {
+    console.error(
+      "店舗・施設申込み：未対応件数取得エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message:
+        "未対応件数を取得できませんでした。"
+    });
+  }
+}
+
+async function handleAdminListShopApplicationsRequest(
+  request,
+  response
+) {
+  try {
+    const authResult =
+      await requireAdmin(
+        request
+      );
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({
+        success: false,
+        message: authResult.message
+      });
+    }
+
+    const database =
+      authResult.database;
+
+    const snapshot =
+      await database
+        .collection(
+          SHOP_APPLICATIONS_COLLECTION
+        )
+        .orderBy(
+          "createdAt",
+          "desc"
+        )
+        .limit(
+          SHOP_APPLICATION_LIST_MAX_COUNT
+        )
+        .get();
+
+    const applications =
+      snapshot.docs.map(
+        function(documentSnapshot) {
+          const data =
+            documentSnapshot.data() ||
+            {};
+
+          const readText = function(fieldName) {
+            return typeof data[fieldName] === "string"
+              ? data[fieldName]
+              : "";
+          };
+
+          const createdAtDate =
+            toDateFromFirestoreValue(
+              data.createdAt
+            );
+
+          const updatedAtDate =
+            toDateFromFirestoreValue(
+              data.updatedAt
+            );
+
+          return {
+            id: documentSnapshot.id,
+            shopName: readText("shopName"),
+            address: readText("address"),
+            contactName: readText("contactName"),
+            contact: readText("contact"),
+            websiteOrSns: readText("websiteOrSns"),
+            note: readText("note"),
+            status:
+              SHOP_APPLICATION_STATUS_VALUES.includes(data.status)
+                ? data.status
+                : "pending",
+            createdAtMillis:
+              createdAtDate
+                ? createdAtDate.getTime()
+                : 0,
+            updatedAtMillis:
+              updatedAtDate
+                ? updatedAtDate.getTime()
+                : 0
+          };
+        }
+      );
+
+    return response.status(200).json({
+      success: true,
+      applications: applications,
+      pendingCount:
+        await countPendingShopApplications(
+          database
+        )
+    });
+  } catch (error) {
+    console.error(
+      "店舗・施設申込み：一覧取得エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message:
+        "申込み一覧を取得できませんでした。"
+    });
+  }
+}
+
+async function handleAdminUpdateShopApplicationStatusRequest(
+  request,
+  response
+) {
+  try {
+    const authResult =
+      await requireAdmin(
+        request
+      );
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({
+        success: false,
+        message: authResult.message
+      });
+    }
+
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    const applicationId =
+      typeof requestBody.applicationId === "string"
+        ? requestBody.applicationId.trim()
+        : "";
+
+    if (!/^[A-Za-z0-9]{1,40}$/.test(applicationId)) {
+      return response.status(400).json({
+        success: false,
+        message: "対象の申込みを指定してください。"
+      });
+    }
+
+    const nextStatus =
+      typeof requestBody.status === "string"
+        ? requestBody.status
+        : "";
+
+    if (!SHOP_APPLICATION_STATUS_VALUES.includes(nextStatus)) {
+      return response.status(400).json({
+        success: false,
+        message: "対応状況の値が正しくありません。"
+      });
+    }
+
+    const applicationRef =
+      authResult.database
+        .collection(
+          SHOP_APPLICATIONS_COLLECTION
+        )
+        .doc(
+          applicationId
+        );
+
+    const existingSnapshot =
+      await applicationRef.get();
+
+    if (!existingSnapshot.exists) {
+      return response.status(404).json({
+        success: false,
+        message: "対象の申込みが見つかりませんでした。"
+      });
+    }
+
+    await applicationRef.update(
+      {
+        status: nextStatus,
+        updatedAt:
+          FieldValue.serverTimestamp()
+      }
+    );
+
+    return response.status(200).json({
+      success: true,
+      applicationId: applicationId,
+      status: nextStatus
+    });
+  } catch (error) {
+    console.error(
+      "店舗・施設申込み：対応状況変更エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message:
+        "対応状況を変更できませんでした。"
+    });
+  }
+}
+
+
 export default async function handler(
   request,
   response
@@ -26434,6 +26972,44 @@ export default async function handler(
     requestBody.mode === "adminListStoreSubmissions"
   ) {
     return handleAdminListStoreSubmissionsRequest(
+      request,
+      response
+    );
+  }
+
+  // 店舗・施設申込み Phase1｜公開フォーム(shop-apply.html)からの申込み作成は
+  // 認証不要。一覧・件数・対応状況変更は代表(Admin)専用(requireAdmin)。
+  if (
+    requestBody.mode === "shopApplicationCreate"
+  ) {
+    return handleShopApplicationCreateRequest(
+      request,
+      response
+    );
+  }
+
+  if (
+    requestBody.mode === "adminCountPendingShopApplications"
+  ) {
+    return handleAdminCountPendingShopApplicationsRequest(
+      request,
+      response
+    );
+  }
+
+  if (
+    requestBody.mode === "adminListShopApplications"
+  ) {
+    return handleAdminListShopApplicationsRequest(
+      request,
+      response
+    );
+  }
+
+  if (
+    requestBody.mode === "adminUpdateShopApplicationStatus"
+  ) {
+    return handleAdminUpdateShopApplicationStatusRequest(
       request,
       response
     );
