@@ -10453,15 +10453,14 @@ document.addEventListener(
 );
 
 
-// マチナウ読み物投稿機能(Phase1)｜既存の静的カード(typhoon-okinawa-travel、
-// index.html内に直接記述、無変更)に追加して、admin-column.html経由で
-// Firestoreへ公開されたマチナウ読み物のカードを動的に追加する。取得に
-// 失敗しても既存の静的カードの表示には一切影響させない(catchのみ)。
+// マチナウ読み物投稿機能(Phase1)｜admin-column.html経由でFirestoreへ
+// 公開されたマチナウ読み物のカードを、TOPの「マチナウ読みもの」へ動的に
+// 表示する(取得に失敗してもcatchのみで他の表示には影響させない)。
 // 新しい読み物を追加するたびにindex.htmlを編集する必要をなくすための対応。
-// Ver1.8 Phase2(地域連動基盤)｜TOPの表示総数(既存の静的カード1件＋動的
-// カード)を3件程度に抑える指示のため、動的カードはこの件数までに切り詰める。
+// Ver1.8 Phase2(地域連動基盤)｜TOPの表示総数を3件程度に抑える指示のため、
+// 動的カードはこの件数までに切り詰める。
 const TOP_DYNAMIC_COLUMN_ENTRY_MAX_COUNT =
-  2;
+  3;
 
 // 多言語化 最終Phase(マチナウ読み物)｜loadDynamicColumnEntries()が
 // 最後に取得した生データ(日本語原文)を覚えておく。言語切替のたびに
@@ -10620,10 +10619,9 @@ function renderDynamicColumnEntries() {
     return;
   }
 
-  // 呼び出しのたびに動的カードだけを作り直す(GPS取得前のfallback表示を
+  // 呼び出しのたびに動的カードを作り直す(GPS取得前のfallback表示を
   // GPS成功後の現在地優先表示へ置き換える、または言語切替時の再描画に
-  // 対応するため)。既存の静的カード(typhoon-okinawa-travel、
-  // data-column-entry-dynamic属性を持たない)は一切削除しない。
+  // 対応するため)。
   columnEntryCardList
     .querySelectorAll(
       "[data-column-entry-dynamic]"

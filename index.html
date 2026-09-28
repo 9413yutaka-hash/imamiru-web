@@ -351,13 +351,6 @@
       color: var(--subtext);
     }
 
-    .column-entry-language-note {
-      display: block;
-      margin-top: 4px;
-      font-size: 11px;
-      color: var(--subtext);
-    }
-
     /* #suggestionCardは✨「あなたへの提案」として独立表示する(STEP1)。
        旧「ゲリラ情報」枠(.flash-banner)は、既存の候補選定・更新ロジック
        (updateFlashBanner())をそのまま動かしつつ、DOMは維持したまま
@@ -1681,9 +1674,8 @@
 
     <!-- Ver1.8 Phase2 STEP4(TOP→コラム入口)｜TOPの主役(今、近くで何が起きているか)
          より下、地図セクションの直前に配置する。既存.region-recommendation-*
-         クラスを再利用し、新しいデザイン体系は作らない。記事1本のみのため
-         一覧UIにはしない。記事タイトル・要約はFirestore由来コンテンツと
-         同様に原文(日本語)を維持し、i18n化しない。 -->
+         クラスを再利用し、新しいデザイン体系は作らない。カードはすべて
+         app.jsのloadDynamicColumnEntries()がFirestore公開記事から描画する。 -->
     <section
       id="columnEntrySection"
       class="region-recommendation-section"
@@ -1697,35 +1689,7 @@
         沖縄の「今」を楽しむためのヒント
       </p>
 
-      <div id="columnEntryCardList">
-
-        <div class="region-recommendation-card">
-          <div class="region-recommendation-card-body">
-
-            <p class="region-recommendation-card-title" data-i18n="column_entry_typhoon_title">
-              台風接近時、沖縄旅行はどう判断する？
-            </p>
-
-            <p class="region-recommendation-card-content" data-i18n="column_entry_typhoon_description">
-              台風が近づいたとき、何を確認してどう判断すればよいか。そのときどきで自分なりに判断するための考え方を整理しました。
-            </p>
-
-            <a
-              class="region-recommendation-card-link"
-              href="column/typhoon-okinawa-travel.html"
-              onclick="if (typeof gtag === 'function' && (location.hostname === 'machinau.jp' || location.hostname === 'imamiru-web.vercel.app')) { gtag('event', 'column_entry_click', { article_slug: 'typhoon-okinawa-travel' }); }"
-              data-i18n="column_entry_read_more"
-            >読む →</a>
-
-            <span
-              class="column-entry-language-note"
-              data-i18n="column_entry_language_note"
-            ></span>
-
-          </div>
-        </div>
-
-      </div>
+      <div id="columnEntryCardList"></div>
 
       <a
         class="column-entry-more-link"

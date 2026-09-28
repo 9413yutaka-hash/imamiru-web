@@ -4654,19 +4654,6 @@ const AI_REGION_PROFILE_RESEARCH_OFFICIAL_URL_PATTERNS =
 const ARTICLE_COMMENTS_COLLECTION =
   "articleComments";
 
-// マチナウ読み物投稿機能(Phase1)導入前から存在する唯一の静的HTML記事
-// (column/typhoon-okinawa-travel.html)専用の互換リスト。この記事は
-// Firestore columnArticlesへ一切登録せず(URLも本文もコメントも壊さない
-// という指示のため、既存の仕組みへ一切手を触れない)、コメント対象判定
-// でだけ「常に許可」として扱う。新しい静的コラムを今後手作業で追加する
-// 予定はないため、このリストへの追記は原則発生しない想定(通常の新規記事は
-// すべてadmin-column.html経由のFirestore記事として作成され、
-// isColumnSlugEligibleForComments()が自動的にコメント対象として扱う)。
-const LEGACY_STATIC_COLUMN_SLUGS =
-  [
-    "typhoon-okinawa-travel"
-  ];
-
 // マチナウ読み物投稿機能(Phase1)｜Firestore columnArticlesのドキュメントID
 // そのものをslug(URLの一部)として使う(別途slugフィールドを持たない、
 // IDとslugが食い違う不整合を構造的に無くすため)。
@@ -4705,6 +4692,14 @@ const COLUMN_CONTENT_MAX_LENGTH =
 // 考える必要はない。
 const COLUMN_CUSTOM_SLUG_PATTERN =
   /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+// 終了した記事のURL識別子。articleCommentsに過去コメントが残っているため、
+// 新しい記事へ再利用すると古いコメントが別記事へ表示されてしまう。
+// 新規作成時の使用禁止にだけ使う(表示・コメント判定には使わない)。
+const RETIRED_COLUMN_SLUGS =
+  [
+    "typhoon-okinawa-travel"
+  ];
 
 const COLUMN_CUSTOM_SLUG_MAX_LENGTH =
   60;
@@ -20525,11 +20520,9 @@ async function claimCommunityBoardRateLimit(
 }
 
 
-// マチナウ読み物投稿機能(Phase1)｜コメント対象記事の判定を、旧来の
-// 静的コラム(LEGACY_STATIC_COLUMN_SLUGS、既存の1記事専用の互換維持)と、
-// Firestore columnArticlesに実在しstatus==="published"の記事、の
-// どちらかであればtrueとする。後者により、admin-column.html経由で新しく
-// 公開された読み物は、コード変更なしに自動でコメント対象になる
+// マチナウ読み物投稿機能(Phase1)｜Firestore columnArticlesに実在し
+// status==="published"の記事だけをコメント対象とする。admin-column.html経由で
+// 新しく公開された読み物は、コード変更なしに自動でコメント対象になる
 // (「記事を追加するたびコード変更をなくす」という指示に対応)。
 async function isColumnSlugEligibleForComments(
   database,
@@ -20539,14 +20532,6 @@ async function isColumnSlugEligibleForComments(
     articleSlug === ""
   ) {
     return false;
-  }
-
-  if (
-    LEGACY_STATIC_COLUMN_SLUGS.includes(
-      articleSlug
-    )
-  ) {
-    return true;
   }
 
   const articleSnapshot =
@@ -21937,8 +21922,6 @@ async function handleAdminHideArticleCommentRequest(
 // 実装する(Functions 12/12を維持)。columnArticlesコレクションはクライアント
 // から直接読み書きさせず、常にAdmin SDK経由(このFunction経由)のみで
 // アクセスするため、Firestore Security Rulesの変更は一切不要。
-// column/typhoon-okinawa-travel.html(既存の唯一の静的記事)には一切触れず、
-// URL・本文・コメント・GA4いずれも無変更のまま独立して残す。
 // ==========================================================================
 
 // 画像UX改善Phase2｜app.js側のbuildOptimizedImageUrl()と同じロジックの
@@ -24208,9 +24191,8 @@ function buildColumnArticleParagraphsHtml(
 }
 
 
-// column/typhoon-okinawa-travel.htmlと同じCSS変数・カード構造・GA4呼び出し
-// 方式・コメントセクション構造を再利用する(見た目を統一するため、既存の
-// 静的HTMLからCSSブロックを複製している。既存ファイル自体は変更しない)。
+// マチナウ読み物の記事ページHTMLを生成する(CSS変数・カード構造・GA4呼び出し
+// 方式・コメントセクション構造を含む)。
 function buildColumnArticleHtml(
   article,
   language
@@ -24731,10 +24713,7 @@ function buildColumnNotFoundHtml() {
 
 
 // 記事本体のHTMLを動的レンダリングする(vercel.jsonのrewriteにより、
-// 実在する静的ファイルが無い/column/*.htmlへのアクセスだけがここへ届く。
-// 既存の/column/typhoon-okinawa-travel.html(実ファイルとして存在)は
-// Vercelの仕様上、静的ファイルの一致がrewriteより優先されるため、この
-// 関数には一切到達しない＝無変更のまま維持される)。
+// /column/*.htmlへのアクセスがここへ届く)。
 async function handleRenderColumnArticleRequest(
   request,
   response
@@ -24747,10 +24726,7 @@ async function handleRenderColumnArticleRequest(
         : "";
 
     if (
-      slug === "" ||
-      LEGACY_STATIC_COLUMN_SLUGS.includes(
-        slug
-      )
+      slug === ""
     ) {
       response.setHeader(
         "Content-Type",
@@ -24964,10 +24940,8 @@ async function handleRenderColumnArticleRequest(
 }
 
 
-// 公開済みマチナウ読み物の一覧(TOPの動的カード表示用)。既存の静的カード
-// (index.html内のtyphoon-okinawa-travel専用マークアップ)はそのまま残し、
-// このAPIはそれに追加するFirestore由来の記事だけを返す(既存カードとの
-// 重複は発生しない設計)。
+// 公開済みマチナウ読み物の一覧(TOPの動的カード・column-list.html・
+// admin.htmlのコメント管理の選択肢で使用)。
 // Ver1.8 Phase2(地域連動基盤)｜記事の地域タグと閲覧者の現在地(country/
 // prefecture/city、いずれも空文字なら未取得)を突き合わせ、地域の関連度を
 // 4段階(3=市区町村完全一致、2=同一都道府県・州等でその記事にcityの指定が
@@ -25257,9 +25231,8 @@ async function handlePublicListPublishedColumnArticlesRequest(
 
 
 // sitemap.xmlを動的生成する(vercel.jsonのrewriteで/sitemap.xml自体を
-// このFunctionへ向ける。静的ファイルsitemap.xmlは今回削除し、既存の
-// TOP・既存コラム記事のURLをこの関数内に固定で含めることで、既存の
-// SEO資産(2件)を維持しつつ、公開済みのFirestore記事を自動で追加する)。
+// このFunctionへ向ける)。TOP・読み物一覧のURLはこの関数内に固定で含め、
+// 公開済みのFirestore記事を自動で追加する。
 async function handleRenderSitemapRequest(
   request,
   response
@@ -25278,10 +25251,6 @@ async function handleRenderSitemapRequest(
         {
           loc: "https://machinau.jp/",
           lastmod: null
-        },
-        {
-          loc: "https://machinau.jp/column/typhoon-okinawa-travel.html",
-          lastmod: "2026-08-27"
         },
         {
           loc: "https://machinau.jp/column-list.html",
@@ -25336,7 +25305,7 @@ async function handleRenderSitemapRequest(
       );
     } catch (articlesError) {
       console.error(
-        "sitemap生成時の読み物一覧取得に失敗しました(TOP・既存コラムのみで生成を継続)：",
+        "sitemap生成時の読み物一覧取得に失敗しました(固定URLのみで生成を継続)：",
         articlesError
       );
     }
@@ -25668,12 +25637,12 @@ async function resolveColumnArticleSlugForCreate(
   }
 
   if (
-    LEGACY_STATIC_COLUMN_SLUGS.includes(
+    RETIRED_COLUMN_SLUGS.includes(
       customSlug
     )
   ) {
     throw new Error(
-      "このURL識別子は既存の記事と重複するため使用できません。"
+      "このURL識別子は過去の記事で使用済みのため使用できません。"
     );
   }
 
@@ -26347,8 +26316,8 @@ export default async function handler(
       );
     }
 
-    // TOPの「マチナウ読みもの」セクションが、既存の静的カードに追加して
-    // Firestore由来の公開済み記事を動的に読み込むための一覧取得。
+    // TOPの「マチナウ読みもの」セクション等が、Firestore由来の公開済み記事を
+    // 動的に読み込むための一覧取得。
     if (
       request.query.mode === "publicListPublishedColumns"
     ) {

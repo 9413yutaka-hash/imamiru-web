@@ -1447,9 +1447,7 @@
 
       <div class="form-field search-field">
         <label for="commentArticleSelect">対象記事</label>
-        <select id="commentArticleSelect">
-          <option value="typhoon-okinawa-travel">台風接近時、沖縄旅行はどう判断する？（typhoon-okinawa-travel）</option>
-        </select>
+        <select id="commentArticleSelect"></select>
       </div>
 
       <div class="toolbar">
@@ -3339,11 +3337,9 @@
       }
     }
 
-    // マチナウ読み物投稿機能(Phase1)｜既存の静的記事(typhoon-okinawa-travel、
-    // <option>としてHTMLに直接記述済み、無変更)に追加して、公開済みの
-    // Firestore読み物を動的に選択肢へ追加する。取得に失敗しても既存の
-    // 静的オプションの表示には影響しない(catchのみ)。新しい読み物を
-    // 公開するたびにこのファイルを編集する必要をなくすための対応。
+    // マチナウ読み物投稿機能(Phase1)｜公開済みのFirestore読み物を、
+    // コメント管理の対象記事の選択肢へ動的に追加する(取得失敗時はcatchのみ)。
+    // 新しい読み物を公開するたびにこのファイルを編集する必要をなくすための対応。
     async function populateCommentArticleOptions() {
       try {
         const response =
