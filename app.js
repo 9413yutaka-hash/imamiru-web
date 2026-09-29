@@ -2690,6 +2690,30 @@ function updateFlashBanner() {
     };
 }
 
+// 「今、近くで楽しめる場所」の対象範囲(現在地からの半径、km)。
+const NEARBY_SHOP_CARD_RADIUS_KM =
+  15;
+
+function isShopWithinNearbyCardRadius(
+  shop
+) {
+  if (
+    userLatitude === null ||
+    userLongitude === null
+  ) {
+    return true;
+  }
+
+  return (
+    typeof shop.distanceKm === "number" &&
+    Number.isFinite(
+      shop.distanceKm
+    ) &&
+    shop.distanceKm <=
+      NEARBY_SHOP_CARD_RADIUS_KM
+  );
+}
+
 function renderShops() {
   const shopsList =
     document.getElementById(
@@ -2725,13 +2749,22 @@ function renderShops() {
   // この配列を絞り込んでもMap・提案・重要情報には一切影響しない。
   // postType==="admin"(AI自動投稿・運営手動投稿・authorTypeなしの旧admin投稿を
   // 含む全て)を店舗一覧から除外する(TOP・見つける全件表示のどちらでも)。
+  // 「今、近くで楽しめる場所」は、現在地が分かっている場合は現在地から
+  // 半径15km以内(境界ちょうどを含む)の店舗・施設だけを対象にする(正式仕様)。
+  // 距離はgetVisibleShops()が計算済みのdistanceKmをそのまま使い、座標が無く
+  // 距離が分からない店舗は15km以内と確認できないため対象外とする。件数の
+  // 上限は設けない(通常6件、「もっと見る」で15km以内を全件)。現在地が
+  // まだ分からない間は従来どおり全店舗を対象にする。
   const adminExcludedShops =
     visibleShops
       .filter(
         function(shop) {
           return (
             shop.postType !==
-            "admin"
+              "admin" &&
+            isShopWithinNearbyCardRadius(
+              shop
+            )
           );
         }
       );
