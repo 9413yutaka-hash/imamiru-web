@@ -42,8 +42,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   hero_sub_copy: {
-    ja: "天気・交通・おでかけ情報で、<br>沖縄の「今」をあなたに。",
-    en: "Weather, transportation, and things to do—<br>Okinawa's “now,” right when you need it."
+    ja: "交通・おでかけ情報で、<br>沖縄の「今」をあなたに。",
+    en: "Transportation and things to do—<br>Okinawa's “now,” right when you need it."
   },
 
   hero_action_today_title: {
@@ -368,8 +368,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   suggestion_placeholder_message: {
-    ja: "現在地を取得すると、今いる場所・天気・周辺の「今」から、あなたに合った行き先を提案します。",
-    en: "Share your location and Machinau will suggest what to do next based on where you are, the weather, and what's happening nearby."
+    ja: "現在地を取得すると、今いる場所・周辺の「今」から、あなたに合った行き先を提案します。",
+    en: "Share your location and Machinau will suggest what to do next based on where you are and what's happening nearby."
   },
 
   suggestion_placeholder_cta: {

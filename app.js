@@ -5214,115 +5214,12 @@ const WEATHER_REGIONAL_POINTS =
     { region: "南部", label: "本島南部側", latitude: 26.2124, longitude: 127.6809 }
   ];
 
-// 地域天気は利用者ごとの現在地キャッシュ(readWeatherCache/writeWeatherCache、
-// 1件しか保持しない設計)とは別物として扱う。固定3地点の座標をそのまま
-// /api/weather.jsへ渡すため、Vercel/CDN側の共有キャッシュ(15分)が
-// 全利用者で自然に共有され、利用者ごとのセッションキャッシュを新たに
-// 作る必要がない(PV増がAPIコール数増に直結しない設計)。
+// 天気機能撤去｜WeatherAPI.com(/api/weather)への問い合わせは行わない。
+// 停止中の旧✨AI提案(attemptAiConciergeSuggestion)からの参照が残るため、
+// 関数名だけ残し、常に「地域比較なし」を返す。現在地の天気取得(fetchWeather)は
+// 呼び出し元ごと撤去した。
 async function fetchRegionalWeatherForAiConcierge() {
-  const results =
-    await Promise.all(
-      WEATHER_REGIONAL_POINTS.map(
-        async function(point) {
-          try {
-            const response =
-              await fetch(
-                "/api/weather?lat=" +
-                encodeURIComponent(point.latitude) +
-                "&lon=" +
-                encodeURIComponent(point.longitude)
-              );
-
-            const responseData =
-              await response.json();
-
-            if (
-              !response.ok ||
-              !responseData ||
-              responseData.success !== true ||
-              !responseData.weather
-            ) {
-              return null;
-            }
-
-            return {
-              region: point.label,
-              conditionText:
-                typeof responseData.weather.conditionText === "string"
-                  ? responseData.weather.conditionText
-                  : "",
-              chanceOfRain: responseData.weather.chanceOfRain,
-              temperatureC: responseData.weather.temperatureC
-            };
-          } catch (error) {
-            // 1地点の取得に失敗しても他の地点・現在地天気・AI提案全体には
-            // 影響させない(段階的劣化、地域比較なしで提案を続行する)。
-            return null;
-          }
-        }
-      )
-    );
-
-  return results.filter(
-    function(regionResult) {
-      return regionResult !== null;
-    }
-  );
-}
-
-
-async function fetchWeather(latitude, longitude) {
-  const cachedWeather =
-    readWeatherCache(
-      latitude,
-      longitude
-    );
-
-  if (cachedWeather) {
-    return cachedWeather;
-  }
-
-  const requestLatitude =
-    roundCoordinateForWeatherRequest(
-      latitude
-    );
-
-  const requestLongitude =
-    roundCoordinateForWeatherRequest(
-      longitude
-    );
-
-  const response =
-    await fetch(
-      "/api/weather?lat=" +
-      encodeURIComponent(requestLatitude) +
-      "&lon=" +
-      encodeURIComponent(requestLongitude)
-    );
-
-  const responseData =
-    await response.json();
-
-  if (
-    !response.ok ||
-    !responseData ||
-    responseData.success !== true ||
-    !responseData.weather
-  ) {
-    throw new Error(
-      responseData && responseData.message
-        ? responseData.message
-        : "天候情報の取得に失敗しました。"
-    );
-  }
-
-  writeWeatherCache(
-    latitude,
-    longitude,
-    responseData.weather
-  );
-
-  return responseData.weather;
+  return [];
 }
 
 
@@ -7117,6 +7014,11 @@ function resolveAiConciergeCandidateRealData(
 // heatIndexC(なければtemperatureC)の35℃基準を再利用して天候を分類する。
 // getWeatherConditionEmoji()・buildWeatherAdviceText()自体は変更しない。
 function resolveSuggestionWeatherCategory(weather) {
+  // 天気機能撤去｜天気データが無い場合は天候によらない一般的な文言にする。
+  if (!weather) {
+    return "OTHER";
+  }
+
   const heatIndexForCategory =
     weather.heatIndexC !== null
       ? weather.heatIndexC
@@ -7321,9 +7223,9 @@ function updateTravelerSuggestionCard() {
     Number.isFinite(userLatitude) &&
     Number.isFinite(userLongitude);
 
+  // 天気機能撤去｜天気の取得を待たず、GPS取得済みなら提案へ進む。
   if (
-    !isGpsAcquiredForSuggestion ||
-    latestWeatherForMachinauSuggestion === null
+    !isGpsAcquiredForSuggestion
   ) {
     // Ver1.8｜GPS未取得時は非表示にせず、マチナウの提案機能そのものを
     // 独立カードとして案内する。GPS取得成功後はこのifを通らなくなり、
@@ -7935,9 +7837,6 @@ async function sendAiConciergeChatMessage(
     null;
 
   try {
-    const regionalWeather =
-      await fetchRegionalWeatherForAiConcierge();
-
     const idToken =
       await getAnonymousIdTokenForLocationCollection();
 
@@ -7961,61 +7860,14 @@ async function sendAiConciergeChatMessage(
                 typeof userAreaName === "string"
                   ? userAreaName
                   : "",
-              weather: {
-                temperatureC:
-                  latestWeatherForMachinauSuggestion.temperatureC,
-                feelsLikeC:
-                  latestWeatherForMachinauSuggestion.feelsLikeC,
-                // マチナウAI旅行相棒化 Phase1｜既存fetchWeather()が既に
-                // 取得済みだが今まで会話AIへ渡していなかった項目
-                // (追加のAPI呼び出しは発生しない)。
-                heatIndexC:
-                  latestWeatherForMachinauSuggestion.heatIndexC,
-                gustKph:
-                  latestWeatherForMachinauSuggestion.gustKph,
-                chanceOfRain:
-                  latestWeatherForMachinauSuggestion.chanceOfRain,
-                windKph:
-                  latestWeatherForMachinauSuggestion.windKph,
-                uvIndex:
-                  latestWeatherForMachinauSuggestion.uvIndex,
-                conditionText:
-                  latestWeatherForMachinauSuggestion.conditionText,
-                sunset:
-                  typeof latestWeatherForMachinauSuggestion.sunset === "string"
-                    ? latestWeatherForMachinauSuggestion.sunset
-                    : "",
-                sunrise:
-                  typeof latestWeatherForMachinauSuggestion.sunrise === "string"
-                    ? latestWeatherForMachinauSuggestion.sunrise
-                    : ""
-              },
-              nextHours:
-                Array.isArray(
-                  latestWeatherForMachinauSuggestion.nextHours
-                )
-                  ? latestWeatherForMachinauSuggestion.nextHours
-                  : [],
-              // マチナウAI旅行相棒化 Phase1.1｜「今日の夜のnextHoursを
-              // 明日の判断に誤用する」事故への根本対応。api/weather.jsが
-              // 既に取得済み(追加fetchなし)のforecastday[1]由来データを
-              // 日付付きのまま別フィールドとして渡す(nextHoursとは混ぜない)。
-              tomorrowHours:
-                Array.isArray(
-                  latestWeatherForMachinauSuggestion.tomorrowHours
-                )
-                  ? latestWeatherForMachinauSuggestion.tomorrowHours
-                  : [],
-              tomorrowSunset:
-                typeof latestWeatherForMachinauSuggestion.tomorrowSunset === "string"
-                  ? latestWeatherForMachinauSuggestion.tomorrowSunset
-                  : "",
-              tomorrowSunrise:
-                typeof latestWeatherForMachinauSuggestion.tomorrowSunrise === "string"
-                  ? latestWeatherForMachinauSuggestion.tomorrowSunrise
-                  : "",
-              regionalWeather:
-                regionalWeather
+              // 天気機能撤去｜天気・時間別予報・地域比較は送らない
+              // (サーバー側は未指定を「天気データなし」として扱う)。
+              weather: null,
+              nextHours: [],
+              tomorrowHours: [],
+              tomorrowSunset: "",
+              tomorrowSunrise: "",
+              regionalWeather: []
             },
             candidates: candidatePool,
             history: historyToSend,
@@ -8594,8 +8446,8 @@ function tryGenerateMachinauSuggestion(gpsSessionId) {
     return;
   }
 
+  // 天気機能撤去｜天気の取得は待たない(地域名の確定と店舗の読み込み完了のみ)。
   if (
-    latestWeatherForMachinauSuggestion === null ||
     !isAreaNameResolvedForMachinauSuggestion ||
     !isShopsLoadedForMachinauSuggestion
   ) {
@@ -9164,23 +9016,7 @@ function getLocation() {
         getCurrentMachinauLanguage()
       );
 
-    fetchWeather(
-      NAHA_FALLBACK_LATITUDE,
-      NAHA_FALLBACK_LONGITUDE
-    )
-      .then(function(weather) {
-        updateWeatherDisplay(
-          weather,
-          getMachinauTranslation(
-            "weather_location_naha",
-            getCurrentMachinauLanguage()
-          )
-        );
-      })
-      .catch(function(error) {
-        // 天候取得の失敗は既存の位置情報エラー表示に影響させない
-      });
-
+    // 天気機能撤去｜位置情報が使えない場合の那覇の天気取得は行わない。
     return;
   }
 
@@ -9264,22 +9100,7 @@ function getLocation() {
             getCurrentMachinauLanguage()
           );
 
-        fetchWeather(
-          NAHA_FALLBACK_LATITUDE,
-          NAHA_FALLBACK_LONGITUDE
-        )
-          .then(function(weather) {
-            updateWeatherDisplay(
-              weather,
-              getMachinauTranslation(
-                "weather_location_naha",
-                getCurrentMachinauLanguage()
-              )
-            );
-          })
-          .catch(function(error) {
-            // 天候取得の失敗は既存の位置情報エラー表示に影響させない
-          });
+        // 天気機能撤去｜位置情報の取得に失敗した場合の那覇の天気取得は行わない。
       },
 
       {
@@ -9447,39 +9268,9 @@ function applyUserLocation(
   isAreaNameResolvedForMachinauSuggestion =
     false;
 
-  fetchWeather(
-    userLatitude,
-    userLongitude
-  )
-    .then(function(weather) {
-      updateWeatherDisplay(
-        weather,
-        getMachinauTranslation(
-          "weather_location_current",
-          getCurrentMachinauLanguage()
-        )
-      );
-
-      if (
-        suggestionGpsSessionId ===
-        machinauSuggestionGpsSessionId
-      ) {
-        latestWeatherForMachinauSuggestion =
-          weather;
-
-        tryGenerateMachinauSuggestion(
-          suggestionGpsSessionId
-        );
-
-        // マチナウAI一本化 Phase1｜天気が確定した時点でも、
-        // OpenAIを呼ばずに第一声を更新する(area未確定ならarea無しの
-        // 文言のまま、area確定済みなら天気を反映した文言へ)。
-        updateAiConciergeChatInitialMessage();
-      }
-    })
-    .catch(function(error) {
-      // 天候取得の失敗はrenderShops()等の既存フローに影響させない
-    });
+  // 天気機能撤去｜現在地の取得・復元後に天気を取得しない
+  // (latestWeatherForMachinauSuggestionはnullのまま。✨・⚡・AIチャットは
+  // 天気なしで動作する)。
 
   // Ver1.8 Phase2(地域連動基盤)｜resolveAreaNameFromCoordinates()
   // (直下)とは別の独立したGeocoder呼び出し。マチナウ読み物の
