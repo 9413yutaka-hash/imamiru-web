@@ -51,10 +51,6 @@ const MACHINAU_TRANSLATIONS = {
     en: "Today in Okinawa"
   },
 
-  hero_action_today_caption: {
-    ja: "天気・災害・運行情報",
-    en: "Weather, alerts & transportation"
-  },
 
   hero_action_nearby_title: {
     ja: "近くを探す",
