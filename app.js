@@ -243,6 +243,10 @@ function switchMachinauLanguage(language) {
   renderRegionRecommendationCards();
   refreshRegionRecommendationHeadingForCurrentLanguage();
 
+  // TOP下部の導線整理｜掲示板表示中は、見出し(📌 ○○の掲示板)と
+  // 投稿リンク(○○について投稿する)を現在の言語で組み立て直す。
+  refreshCommunityBoardTextsForCurrentLanguage();
+
   // 初心回帰後の新トップ体験 Phase1｜「近くの『今』」パネル・街情報ボタンの
   // 一覧内テキストは、data-i18n属性ではなくbuildAwarenessNoticeText()等が
   // 都度組み立てる文字列のため、applyMachinauLanguage()のdata-i18n一括置換
@@ -12193,6 +12197,62 @@ async function fetchCommunityBoardPostsForCurrentArea(
   }
 }
 
+// TOP下部の導線整理｜regionRecommendationSectionに今「街の掲示板」が
+// 表示されている場合の地域名(空文字＝掲示板は表示されていない。旧
+// 「地域のおすすめ」表示に切り替わった場合もshowRegionRecommendationsForArea()
+// が空文字へ戻す)。
+let communityBoardDisplayedAreaName =
+  "";
+
+// 言語切替時に、掲示板の見出し(📌 ○○の掲示板)と投稿リンク(○○について
+// 投稿する)を現在の言語で組み立て直す。見出し要素は静的なdata-i18nを
+// 持つため、applyMachinauLanguage()の一括置換で既定の見出しへ戻って
+// しまうのを、ここで掲示板の見出しへ戻す。Firestore再取得はしない。
+function refreshCommunityBoardTextsForCurrentLanguage() {
+  if (communityBoardDisplayedAreaName === "") {
+    return;
+  }
+
+  const currentLanguage =
+    getCurrentMachinauLanguage();
+
+  const heading =
+    document.getElementById(
+      "regionRecommendationHeading"
+    );
+
+  if (heading) {
+    heading.textContent =
+      getMachinauTranslation(
+        "community_board_heading_dynamic",
+        currentLanguage
+      ).replace(
+        "{AREA}",
+        communityBoardDisplayedAreaName
+      );
+  }
+
+  const postLink =
+    document.getElementById(
+      "communityBoardPostLink"
+    );
+
+  if (
+    postLink &&
+    !postLink.hasAttribute("data-i18n") &&
+    postLink.style.display !== "none"
+  ) {
+    postLink.textContent =
+      getMachinauTranslation(
+        "community_board_post_link_remote",
+        currentLanguage
+      ).replace(
+        "{AREA}",
+        communityBoardDisplayedAreaName
+      );
+  }
+}
+
 // 現在地(GPS)由来の掲示板を、既存regionRecommendationSectionへ描画する。
 // 「ほかの地域を見る」経由の表示(showRegionRecommendationsForArea())とは
 // 完全に独立した別経路で、互いのDOM書き込みは競合しない
@@ -12354,9 +12414,39 @@ function renderCommunityBoardForCurrentArea(
       // リンク自体を出さない(本部指示：投稿先を間違えないUI)。
       postLink.style.display =
         "none";
+    } else if (
+      typeof regionName === "string" &&
+      regionName !== ""
+    ) {
+      // TOP下部の導線整理｜現在地表示でも見出しと同じ地域名を使い、
+      // 「○○について投稿する」と表示する(投稿先は従来どおり現在地の
+      // community-board-post.html)。地域名入りの文言は静的なdata-i18nでは
+      // 表せないため外し、言語切替時は
+      // refreshCommunityBoardTextsForCurrentLanguage()が組み立て直す。
+      postLink.removeAttribute(
+        "data-i18n"
+      );
+
+      postLink.textContent =
+        getMachinauTranslation(
+          "community_board_post_link_remote",
+          currentLanguage
+        ).replace(
+          "{AREA}",
+          regionName
+        );
+
+      postLink.setAttribute(
+        "href",
+        "community-board-post.html"
+      );
+
+      postLink.style.display =
+        "";
     } else {
-      // 現在地表示：既存Phase3の「今いる街について投稿する」に戻す
-      // (data-i18nを再度付け直し、通常の多言語切り替えに追従させる)。
+      // 現在地表示で地域名が無い場合だけ、既存Phase3の「今いる街について
+      // 投稿する」に戻す(data-i18nを再度付け直し、通常の多言語切り替えに
+      // 追従させる)。
       postLink.setAttribute(
         "data-i18n",
         "community_board_post_link"
@@ -12377,6 +12467,13 @@ function renderCommunityBoardForCurrentArea(
         "";
     }
   }
+
+  // 言語切替時に掲示板の見出し・投稿リンクを組み立て直すため、
+  // 表示中の掲示板の地域名を覚えておく。
+  communityBoardDisplayedAreaName =
+    typeof regionName === "string"
+      ? regionName
+      : "";
 
   if (
     !Array.isArray(posts) ||
@@ -12954,6 +13051,12 @@ async function showRegionRecommendationsForArea(
 
   currentRegionRecommendationAreaName =
     areaName;
+
+  // 旧「地域のおすすめ」表示へ切り替わったので、掲示板の言語切替用の
+  // 地域名はクリアする(refreshCommunityBoardTextsForCurrentLanguage()が
+  // 見出しを掲示板の文言で上書きしないようにする)。
+  communityBoardDisplayedAreaName =
+    "";
 
   isRegionRecommendationManualSelection =
     isManualSelection === true;

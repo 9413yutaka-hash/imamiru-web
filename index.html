@@ -1554,48 +1554,34 @@
 
     </section>
 
-    <!-- 投稿玄関Phase1｜旧「👀今ここで見つけた？みんなに知らせる→」
-         (旧位置：カテゴリー直後、shopsListの直前)を廃止し、明確な参加CTAへ
-         置換。配置は店舗一覧(shopsSection)・⚡今知っておきたいこと・
-         🔥今日のマチナウの後、地域おすすめの前とした。理由：✨あなたへの
-         提案・店舗一覧・運営からの重要告知より後ろにすることでマチナウの
-         主要な価値(AI提案・店舗/安全情報)を邪魔せず、かつ地域おすすめ・
-         読み物・フッターより前にすることで「最下部まで行かないと見えない」
-         を避け、初見でも現実的なスクロール量で到達できる。 -->
-    <section class="contribute-cta-section">
+    <!-- 「この街の情報」Phase1｜GPSでuserAreaNameが確定した時点ではボタンを
+         表示するだけで、AIは一切呼ばない(本部指示)。ボタン押下時に初めて
+         /api/moderate-submissionへ問い合わせる。既存の
+         regionRecommendationSectionとは独立したセクションとし、その内部
+         構造・表示条件には一切触れない。外枠は既存
+         .region-recommendation-sectionクラスをそのまま再利用する
+         (新しいデザイン体系を作らない)。 -->
+    <section
+      id="cityInfoSection"
+      class="region-recommendation-section"
+      style="display:none;"
+    >
 
-      <span
-        class="contribute-cta-heading"
-        data-i18n="contribute_cta_heading"
+      <button
+        id="cityInfoButton"
+        class="location-button"
+        type="button"
+        data-i18n="city_info_button"
       >
-        📣 君も、街の「今」を教えて！
-      </span>
+        この街の情報
+      </button>
 
-      <p
-        class="contribute-cta-message"
-        data-i18n="contribute_cta_message"
-      >
-        あなたが見つけた街の今が、
-        今そこにいる誰かの役に立ちます。
-      </p>
+      <p id="cityInfoStatus"></p>
 
-      <a
-        class="contribute-cta-button"
-        href="contribute.html"
-        data-i18n="contribute_cta_button"
-      >
-        街の情報を投稿する →
-      </a>
-
-      <!-- 店舗・施設向けの控えめな第2導線。主役は上の投稿ボタンのまま、
-           参加前の案内ページ(shop.html)へテキストリンクで案内する。 -->
-      <a
-        class="contribute-cta-shop-link"
-        href="shop.html"
-        data-i18n="contribute_cta_shop_link"
-      >
-        お店・施設の方へ｜無料で情報を掲載できます →
-      </a>
+      <div id="cityInfoResult" style="display:none;">
+        <p id="cityInfoTitle"></p>
+        <p id="cityInfoContent"></p>
+      </div>
 
     </section>
 
@@ -1668,34 +1654,51 @@
 
     </section>
 
-    <!-- 「この街の情報」Phase1｜GPSでuserAreaNameが確定した時点ではボタンを
-         表示するだけで、AIは一切呼ばない(本部指示)。ボタン押下時に初めて
-         /api/moderate-submissionへ問い合わせる。既存の
-         regionRecommendationSectionとは独立したセクションとし、その内部
-         構造・表示条件には一切触れない。外枠は既存
-         .region-recommendation-sectionクラスをそのまま再利用する
-         (新しいデザイン体系を作らない)。 -->
-    <section
-      id="cityInfoSection"
-      class="region-recommendation-section"
-      style="display:none;"
-    >
+    <!-- 投稿玄関Phase1｜旧「👀今ここで見つけた？みんなに知らせる→」
+         (旧位置：カテゴリー直後、shopsListの直前)を廃止し、明確な参加CTAへ
+         置換。配置は店舗一覧(shopsSection)・⚡今知っておきたいこと・
+         🔥今日のマチナウの後、地域おすすめの前とした。理由：✨あなたへの
+         提案・店舗一覧・運営からの重要告知より後ろにすることでマチナウの
+         主要な価値(AI提案・店舗/安全情報)を邪魔せず、かつ地域おすすめ・
+         読み物・フッターより前にすることで「最下部まで行かないと見えない」
+         を避け、初見でも現実的なスクロール量で到達できる。
+         TOP下部の導線整理｜「知る(この街の情報)→地域の声を見る(掲示板)→
+         自分も参加する(この枠)→読みものを読む」の順とし、掲示板の後・
+         マチナウ読みものの前へ移した。 -->
+    <section class="contribute-cta-section">
 
-      <button
-        id="cityInfoButton"
-        class="location-button"
-        type="button"
-        data-i18n="city_info_button"
+      <span
+        class="contribute-cta-heading"
+        data-i18n="contribute_cta_heading"
       >
-        この街の情報
-      </button>
+        📣 あなたの発見を教えて！
+      </span>
 
-      <p id="cityInfoStatus"></p>
+      <p
+        class="contribute-cta-message"
+        data-i18n="contribute_cta_message"
+      >
+        あなたが見つけた街の今が、
+        今そこにいる誰かの役に立ちます。
+      </p>
 
-      <div id="cityInfoResult" style="display:none;">
-        <p id="cityInfoTitle"></p>
-        <p id="cityInfoContent"></p>
-      </div>
+      <a
+        class="contribute-cta-button"
+        href="contribute.html"
+        data-i18n="contribute_cta_button"
+      >
+        見つけた「今」を投稿する →
+      </a>
+
+      <!-- 店舗・施設向けの控えめな第2導線。主役は上の投稿ボタンのまま、
+           参加前の案内ページ(shop.html)へテキストリンクで案内する。 -->
+      <a
+        class="contribute-cta-shop-link"
+        href="shop.html"
+        data-i18n="contribute_cta_shop_link"
+      >
+        お店・施設の方へ｜無料で情報を掲載できます →
+      </a>
 
     </section>
 

@@ -140,8 +140,8 @@ const MACHINAU_TRANSLATIONS = {
   // 多言語対応が無く、遷移先が日本語のみのため、玄関ページだけ英語化しても
   // 一貫した体験にならないという確認済みの理由による)。
   contribute_cta_heading: {
-    ja: "📣 君も、街の「今」を教えて！",
-    en: "📣 You can share what's happening now!"
+    ja: "📣 あなたの発見を教えて！",
+    en: "📣 Tell us what you've found!"
   },
 
   contribute_cta_message: {
@@ -150,8 +150,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   contribute_cta_button: {
-    ja: "街の情報を投稿する →",
-    en: "Share what's happening →"
+    ja: "見つけた「今」を投稿する →",
+    en: "Share what you found →"
   },
 
   // TOP参加CTA内の店舗・施設向け第2導線(shop.htmlへ)。footer_shop_linkと同じ
