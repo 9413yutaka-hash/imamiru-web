@@ -797,8 +797,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   column_entry_lead: {
-    ja: "沖縄の「今」を楽しむためのヒント",
-    en: "Tips for enjoying Okinawa's \"now\""
+    ja: "今いる街を楽しむためのヒント",
+    en: "Tips for enjoying the place you're in"
   },
 
   // 多言語化 最終仕上げ｜「マチナウ読み物をもっと見る →」(column-list.htmlへの
