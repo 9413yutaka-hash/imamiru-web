@@ -729,6 +729,13 @@ const MACHINAU_TRANSLATIONS = {
     en: "Show More"
   },
 
+  // TOP店舗一覧の全件表示中に「もっと見る」ボタンが切り替わる文言
+  // (app.jsのrenderShops()がボタンのdata-i18nをmore_button⇔close_buttonで切り替える)。
+  close_button: {
+    ja: "閉じる",
+    en: "Close"
+  },
+
   mypage_heading: {
     ja: "👤 マイページ",
     en: "👤 My Page"

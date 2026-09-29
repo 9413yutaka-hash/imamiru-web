@@ -2769,9 +2769,27 @@ function renderShops() {
       "shopMoreButton"
     );
 
+  // 7件以上ある間は、通常表示では「もっと見る」、全件表示では「閉じる」を出す。
+  // 言語切替(data-i18nの一括置換)でも正しい文言になるよう、文字を直接
+  // 固定せず参照する翻訳キーを状態に合わせて切り替える。
   if (shopMoreButton) {
+    const shopMoreButtonTranslationKey =
+      isShowingAllShopCards
+        ? "close_button"
+        : "more_button";
+
+    shopMoreButton.setAttribute(
+      "data-i18n",
+      shopMoreButtonTranslationKey
+    );
+
+    shopMoreButton.textContent =
+      getMachinauTranslation(
+        shopMoreButtonTranslationKey,
+        getCurrentMachinauLanguage()
+      );
+
     shopMoreButton.style.display =
-      !isShowingAllShopCards &&
       adminExcludedShops.length > 6
         ? ""
         : "none";
@@ -3270,8 +3288,12 @@ function renderShopCardsHtmlIntoList(
   const nextRenderedHtmlById =
     new Map();
 
-  Array.prototype.forEach.call(
-    temporaryContainer.children,
+  // temporaryContainer.childrenはライブなコレクションで、newNodeをfragmentへ
+  // 移すたびに要素が減り、次のカードが飛ばされてしまう(6件中3件しか描画
+  // されない等)。ループ前に配列へコピーして全カードを確実に処理する。
+  Array.from(
+    temporaryContainer.children
+  ).forEach(
     function(newNode) {
       const shopId =
         newNode.getAttribute(
@@ -9823,6 +9845,24 @@ function showAllShopCardsAndScrollToShops() {
   scrollToShops();
 }
 
+// 店舗一覧内の「もっと見る」ボタン専用。全件表示中は「閉じる」として働き、
+// 通常表示(先頭6件)へ戻してから店舗欄の先頭へスクロールする。
+// bottom-navigation「見つける」は従来どおりshowAllShopCardsAndScrollToShops()
+// を直接呼ぶ(トグルにはしない)。
+function toggleShopCardsFromMoreButton() {
+  if (!isShowingAllShopCards) {
+    showAllShopCardsAndScrollToShops();
+    return;
+  }
+
+  isShowingAllShopCards =
+    false;
+
+  renderShops();
+
+  scrollToShops();
+}
+
 const shopMoreButtonElement =
   document.getElementById(
     "shopMoreButton"
@@ -9831,7 +9871,7 @@ const shopMoreButtonElement =
 if (shopMoreButtonElement) {
   shopMoreButtonElement.addEventListener(
     "click",
-    showAllShopCardsAndScrollToShops
+    toggleShopCardsFromMoreButton
   );
 }
 
