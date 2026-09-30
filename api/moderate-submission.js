@@ -27,6 +27,15 @@ import {
 // ネットワーク通信なし。実機検証済み、commit 3a5e1fe参照)。
 import tzlookup from "@photostructure/tz-lookup";
 
+// 街の今スレッド Phase 1B-1｜実処理は別モジュール(api/_lib/。先頭が"_"の
+// ためVercel Functionにならず、api/配下のため静的配信もされない)。
+// 必要な既存関数はbuildTownNowThreadDeps()で参照として渡す。
+import {
+  handleTownNowThreadCreate,
+  handleTownNowThreadGet,
+  handleTownNowThreadsList
+} from "./_lib/town-now-threads.js";
+
 
 function getFirebaseAdminApp() {
   if (getApps().length > 0) {
@@ -26804,6 +26813,37 @@ async function handleAdminUpdateShopApplicationStatusRequest(
 }
 
 
+// 街の今スレッド Phase 1B-1｜api/_lib/town-now-threads.jsへ渡す既存関数の参照。
+// 既存関数そのものは移動・変更しない。
+function buildTownNowThreadDeps() {
+  return {
+    getFirebaseAdminApp: getFirebaseAdminApp,
+    getFirestore: getFirestore,
+    readRequestBody: readRequestBody,
+    readBearerToken: readBearerToken,
+    resolveOrCreateCommunityBoardRegion: resolveOrCreateCommunityBoardRegion,
+    buildCommunityBoardRegionIndexKey: buildCommunityBoardRegionIndexKey,
+    loadTrustedCommunityBoardRegionInfoByIndexKey: loadTrustedCommunityBoardRegionInfoByIndexKey,
+    hashClientIpAddress: hashClientIpAddress,
+    hashText: function(value) {
+      return createHash("sha256")
+        .update(String(value), "utf8")
+        .digest("hex");
+    },
+    claimRateLimit: claimRateLimit,
+    buildModerationInput: buildModerationInput,
+    callOpenAiModeration: callOpenAiModeration,
+    classifyModerationError: classifyModerationError,
+    buildReviewReason: buildReviewReason,
+    matchesSafetyCriticalKeywords: matchesSafetyCriticalKeywords,
+    AI_REVIEW_VERSION: AI_REVIEW_VERSION,
+    textMaxLength: COMMUNITY_BOARD_POST_FIELD_MAX_LENGTHS.text,
+    googlePlaceIdMaxLength: COMMUNITY_BOARD_POST_FIELD_MAX_LENGTHS.googlePlaceId,
+    countryCodeMaxLength: COMMUNITY_BOARD_POST_FIELD_MAX_LENGTHS.countryCode
+  };
+}
+
+
 export default async function handler(
   request,
   response
@@ -26862,6 +26902,27 @@ export default async function handler(
       return handlePublicListPublishedColumnArticlesRequest(
         request,
         response
+      );
+    }
+
+    // 街の今スレッド Phase 1B-1｜今日の地域スレッド一覧・親スレッド詳細。
+    if (
+      request.query.mode === "townNowThreadsList"
+    ) {
+      return handleTownNowThreadsList(
+        request,
+        response,
+        buildTownNowThreadDeps()
+      );
+    }
+
+    if (
+      request.query.mode === "townNowThreadGet"
+    ) {
+      return handleTownNowThreadGet(
+        request,
+        response,
+        buildTownNowThreadDeps()
       );
     }
 
@@ -27025,6 +27086,17 @@ export default async function handler(
     return handleCommunityBoardPostCreateRequest(
       request,
       response
+    );
+  }
+
+  // 街の今スレッド Phase 1B-1｜親スレッド作成(匿名認証IDトークン必須)。
+  if (
+    requestBody.mode === "townNowThreadCreate"
+  ) {
+    return handleTownNowThreadCreate(
+      request,
+      response,
+      buildTownNowThreadDeps()
     );
   }
 
