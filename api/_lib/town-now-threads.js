@@ -1676,3 +1676,421 @@ export async function handleTownNowThreadsNearby(
     });
   }
 }
+
+
+// ------------------------------------------------------------------
+// Phase 1B-3｜街の今スレッドの返信(コメント)。サーバー側のみ(UI未接続)。
+//
+// 保存先はtownNowComments(トップレベル)とtownNowRateLimitsのみ。
+// submissions・communityBoardPostsには書き込まない。親スレッド
+// (townNowThreads)には一切書き込まない(寿命を延長しない。commentCountは
+// 管理画面での承認/非表示と合わせて次工程で扱う)。
+// ------------------------------------------------------------------
+
+export const TOWN_NOW_COMMENTS_COLLECTION =
+  "townNowComments";
+
+// コメントは同じ投稿元から15秒に1件まで。
+export const TOWN_NOW_COMMENT_RATE_LIMIT_COOLDOWN_MILLISECONDS =
+  15 * 1000;
+
+// スレッド作成(60秒)の連投キーと干渉しないよう、コメント用は
+// townNowRateLimits内で別のdocument IDにする。
+const TOWN_NOW_COMMENT_RATE_LIMIT_KEY_PREFIX =
+  "comment_";
+
+// コメント一覧の1回の取得上限。
+export const TOWN_NOW_COMMENTS_LIST_LIMIT =
+  100;
+
+const TOWN_NOW_THREAD_ID_PATTERN =
+  /^[A-Za-z0-9]{1,40}$/;
+
+const TOWN_NOW_THREAD_NOT_OPEN_MESSAGE =
+  "このスレッドは見つからないか、公開が終了しました。";
+
+// 親スレッドが今も公開中か(存在する・visible・expiresAt前・その地域の
+// 「今日」)。townNowThreadGetの公開判定と同じ条件。
+function isTownNowThreadOpen(
+  data,
+  now
+) {
+  return (
+    data !== null &&
+    data.status === "visible" &&
+    Boolean(data.expiresAt) &&
+    typeof data.expiresAt.toMillis === "function" &&
+    data.expiresAt.toMillis() > now.getTime() &&
+    typeof data.timezone === "string" &&
+    data.localDateKey ===
+      computeTownNowLocalDateKey(
+        now,
+        data.timezone
+      )
+  );
+}
+
+function readTownNowThreadId(
+  rawThreadId
+) {
+  const threadId =
+    typeof rawThreadId === "string"
+      ? rawThreadId.trim()
+      : "";
+
+  return TOWN_NOW_THREAD_ID_PATTERN.test(threadId)
+    ? threadId
+    : "";
+}
+
+async function loadTownNowThreadData(
+  database,
+  threadId
+) {
+  const snapshot =
+    await database
+      .collection(
+        TOWN_NOW_THREADS_COLLECTION
+      )
+      .doc(
+        threadId
+      )
+      .get();
+
+  return snapshot.exists
+    ? snapshot.data() || {}
+    : null;
+}
+
+
+// ------------------------------------------------------------------
+// E. コメント投稿(POST mode:"townNowCommentCreate"、匿名Firebase Authの
+// IDトークン必須)。親スレッド確認→連投対策→Moderation→親を再確認
+// しながらコメントを1回だけ保存(transaction)。
+// ------------------------------------------------------------------
+export async function handleTownNowCommentCreate(
+  request,
+  response,
+  deps
+) {
+  try {
+    // 1. 認証
+    const idToken =
+      deps.readBearerToken(
+        request
+      );
+
+    if (idToken === "") {
+      return response.status(401).json({
+        success: false,
+        message: "認証情報がありません。"
+      });
+    }
+
+    const app =
+      deps.getFirebaseAdminApp();
+
+    let decodedToken;
+
+    try {
+      decodedToken =
+        await getAuth(app)
+          .verifyIdToken(
+            idToken
+          );
+    } catch (verifyError) {
+      return response.status(401).json({
+        success: false,
+        message: "認証情報が正しくありません。"
+      });
+    }
+
+    const database =
+      deps.getFirestore(app);
+
+    // 2. 入力値検証
+    const requestBody =
+      deps.readRequestBody(
+        request
+      );
+
+    const threadId =
+      readTownNowThreadId(
+        requestBody.threadId
+      );
+
+    const text =
+      readTownNowText(
+        requestBody.text,
+        deps.textMaxLength
+      );
+
+    if (
+      threadId === "" ||
+      text === ""
+    ) {
+      return response.status(400).json({
+        success: false,
+        message: "入力内容を確認してください。"
+      });
+    }
+
+    // 3. 親スレッド確認(公開中のスレッドにだけコメントできる)
+    const parentData =
+      await loadTownNowThreadData(
+        database,
+        threadId
+      );
+
+    if (
+      !isTownNowThreadOpen(
+        parentData,
+        new Date()
+      )
+    ) {
+      return response.status(404).json({
+        success: false,
+        message: TOWN_NOW_THREAD_NOT_OPEN_MESSAGE
+      });
+    }
+
+    // 4. 連投対策(15秒。既存claimRateLimit・既存のIPハッシュ方式。
+    // IPが取得できない場合は匿名UIDのハッシュで代替する)
+    const ipHash =
+      deps.hashClientIpAddress(
+        request
+      );
+
+    const rateLimitKey =
+      TOWN_NOW_COMMENT_RATE_LIMIT_KEY_PREFIX +
+      (
+        ipHash !== ""
+          ? ipHash
+          : "uid_" + deps.hashText(decodedToken.uid)
+      );
+
+    const rateLimitOk =
+      await deps.claimRateLimit(
+        database,
+        TOWN_NOW_RATE_LIMITS_COLLECTION,
+        rateLimitKey,
+        TOWN_NOW_COMMENT_RATE_LIMIT_COOLDOWN_MILLISECONDS
+      );
+
+    if (!rateLimitOk) {
+      return response.status(429).json({
+        success: false,
+        message: "短時間に続けて投稿されています。少し待ってから、もう一度お試しください。"
+      });
+    }
+
+    // 5. Moderation＋安全重大語 → status(スレッドと同じ既存helper)
+    const review =
+      await reviewTownNowText(
+        text,
+        deps
+      );
+
+    // 6. 親を再確認しながら1回だけ保存。expiresAtは親の値をそのまま
+    // コピーする。親スレッドには書き込まない(寿命を延長しない)。
+    const commentReference =
+      database
+        .collection(
+          TOWN_NOW_COMMENTS_COLLECTION
+        )
+        .doc();
+
+    const threadReference =
+      database
+        .collection(
+          TOWN_NOW_THREADS_COLLECTION
+        )
+        .doc(
+          threadId
+        );
+
+    const savedExpiresAt =
+      await database.runTransaction(
+        async function(transaction) {
+          const freshParentSnapshot =
+            await transaction.get(
+              threadReference
+            );
+
+          const freshParentData =
+            freshParentSnapshot.exists
+              ? freshParentSnapshot.data() || {}
+              : null;
+
+          if (
+            !isTownNowThreadOpen(
+              freshParentData,
+              new Date()
+            )
+          ) {
+            return null;
+          }
+
+          transaction.set(
+            commentReference,
+            {
+              threadId: threadId,
+              text: text,
+              regionId: freshParentData.regionId,
+              expiresAt: freshParentData.expiresAt,
+              status: review.status,
+              aiReviewStatus: review.aiReviewStatus,
+              aiReviewReason: review.aiReviewReason,
+              aiReviewedAt:
+                FieldValue.serverTimestamp(),
+              aiReviewVersion:
+                deps.AI_REVIEW_VERSION,
+              authorUid: decodedToken.uid,
+              createdAt:
+                FieldValue.serverTimestamp()
+            }
+          );
+
+          return freshParentData.expiresAt;
+        }
+      );
+
+    if (savedExpiresAt === null) {
+      return response.status(404).json({
+        success: false,
+        message: TOWN_NOW_THREAD_NOT_OPEN_MESSAGE
+      });
+    }
+
+    // 7. 必要最小限の結果(authorUid・内部判定理由は返さない)
+    return response.status(200).json({
+      success: true,
+      commentId: commentReference.id,
+      status: review.status,
+      expiresAt: toIsoOrNull(savedExpiresAt)
+    });
+  } catch (error) {
+    console.error(
+      "街の今スレッド：コメント投稿エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message: "投稿できませんでした。時間をおいて、もう一度お試しください。"
+    });
+  }
+}
+
+
+// ------------------------------------------------------------------
+// F. コメント一覧(GET mode=townNowCommentsList、認証不要)。
+// 親スレッドが公開中の場合だけ、そのスレッドのvisibleコメントを
+// 古い順に最大100件返す。
+// ------------------------------------------------------------------
+export async function handleTownNowCommentsList(
+  request,
+  response,
+  deps
+) {
+  try {
+    const query =
+      request.query ||
+      {};
+
+    const threadId =
+      readTownNowThreadId(
+        query.threadId
+      );
+
+    if (threadId === "") {
+      return response.status(400).json({
+        success: false,
+        message: "スレッドを指定してください。"
+      });
+    }
+
+    const database =
+      deps.getFirestore(
+        deps.getFirebaseAdminApp()
+      );
+
+    const parentData =
+      await loadTownNowThreadData(
+        database,
+        threadId
+      );
+
+    if (
+      !isTownNowThreadOpen(
+        parentData,
+        new Date()
+      )
+    ) {
+      return response.status(404).json({
+        success: false,
+        message: TOWN_NOW_THREAD_NOT_OPEN_MESSAGE
+      });
+    }
+
+    const snapshot =
+      await database
+        .collection(
+          TOWN_NOW_COMMENTS_COLLECTION
+        )
+        .where(
+          "threadId",
+          "==",
+          threadId
+        )
+        .where(
+          "status",
+          "==",
+          "visible"
+        )
+        .orderBy(
+          "createdAt",
+          "asc"
+        )
+        .limit(
+          TOWN_NOW_COMMENTS_LIST_LIMIT
+        )
+        .get();
+
+    // 公開項目だけに絞る(authorUid・AI審査情報・regionId・expiresAtは返さない)。
+    const comments =
+      snapshot.docs.map(
+        function(documentSnapshot) {
+          const data =
+            documentSnapshot.data() ||
+            {};
+
+          return {
+            commentId: documentSnapshot.id,
+            text: data.text,
+            createdAt: toIsoOrNull(data.createdAt)
+          };
+        }
+      );
+
+    setPublicCache(
+      response
+    );
+
+    return response.status(200).json({
+      success: true,
+      threadId: threadId,
+      comments: comments
+    });
+  } catch (error) {
+    console.error(
+      "街の今スレッド：コメント一覧取得エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message: "コメントを取得できませんでした。"
+    });
+  }
+}

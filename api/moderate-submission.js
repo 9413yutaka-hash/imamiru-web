@@ -34,7 +34,9 @@ import {
   handleTownNowThreadCreate,
   handleTownNowThreadGet,
   handleTownNowThreadsList,
-  handleTownNowThreadsNearby
+  handleTownNowThreadsNearby,
+  handleTownNowCommentCreate,
+  handleTownNowCommentsList
 } from "./_lib/town-now-threads.js";
 
 
@@ -26917,6 +26919,17 @@ export default async function handler(
       );
     }
 
+    // 街の今スレッド Phase 1B-3｜親スレッドのコメント一覧。
+    if (
+      request.query.mode === "townNowCommentsList"
+    ) {
+      return handleTownNowCommentsList(
+        request,
+        response,
+        buildTownNowThreadDeps()
+      );
+    }
+
     // 街の今スレッド Phase 1B-2｜今いる場所で見える今日のスレッド。
     if (
       request.query.mode === "townNowThreadsNearby"
@@ -27106,6 +27119,17 @@ export default async function handler(
     requestBody.mode === "townNowThreadCreate"
   ) {
     return handleTownNowThreadCreate(
+      request,
+      response,
+      buildTownNowThreadDeps()
+    );
+  }
+
+  // 街の今スレッド Phase 1B-3｜コメント投稿(匿名認証IDトークン必須)。
+  if (
+    requestBody.mode === "townNowCommentCreate"
+  ) {
+    return handleTownNowCommentCreate(
       request,
       response,
       buildTownNowThreadDeps()
