@@ -266,6 +266,392 @@ export function computeTownNowNextLocalMidnight(
   return new Date(result);
 }
 
+
+// ------------------------------------------------------------------
+// Phase 1B-2｜「話題の場所 × 閲覧者の現在地」による表示判定。
+// 地点スレッド(current_location)は話題地点から半径5km以内の閲覧者にだけ、
+// 市区町村スレッド(municipality)は同じ市区町村(regionId)にいる閲覧者に
+// だけ返す。遠い人には通常表示しない。既存店舗カードの15kmとは別仕様。
+// ------------------------------------------------------------------
+
+export const TOWN_NOW_NEARBY_RADIUS_KM =
+  5;
+
+// 5.000km以下を表示にするための浮動小数点誤差の吸収分(1マイクロメートル)。
+// 5.001kmなど実質的な超過は非表示のまま。
+const TOWN_NOW_NEARBY_DISTANCE_EPSILON_KM =
+  1e-9;
+
+// geohash範囲1本あたりの最大読み取り件数(1本の範囲queryが無制限に
+// 読まないようにする)。
+export const TOWN_NOW_NEARBY_RANGE_QUERY_LIMIT =
+  50;
+
+// app.jsのcalculateDistance()と同じ球面距離(地球半径6371km)。
+export function computeTownNowDistanceKm(
+  latitude1,
+  longitude1,
+  latitude2,
+  longitude2
+) {
+  const toRadians =
+    function(degrees) {
+      return degrees * Math.PI / 180;
+    };
+
+  const latitudeDifference =
+    toRadians(latitude2 - latitude1);
+
+  const longitudeDifference =
+    toRadians(longitude2 - longitude1);
+
+  const calculation =
+    Math.sin(latitudeDifference / 2) ** 2 +
+    Math.cos(toRadians(latitude1)) *
+    Math.cos(toRadians(latitude2)) *
+    Math.sin(longitudeDifference / 2) ** 2;
+
+  return (
+    6371 *
+    2 *
+    Math.atan2(
+      Math.sqrt(calculation),
+      Math.sqrt(1 - calculation)
+    )
+  );
+}
+
+export function isWithinTownNowNearbyRadius(
+  distanceKm
+) {
+  return (
+    Number.isFinite(distanceKm) &&
+    distanceKm <=
+      TOWN_NOW_NEARBY_RADIUS_KM +
+      TOWN_NOW_NEARBY_DISTANCE_EPSILON_KM
+  );
+}
+
+// geohash(Firebase公式の位置検索手順と同じ方式。geofire-commonの
+// geohashForLocation/geohashQueryBoundsと同じ計算を、依存追加なしで実装)。
+const GEOHASH_BASE32 =
+  "0123456789bcdefghjkmnpqrstuvwxyz";
+
+const GEOHASH_STORED_PRECISION =
+  10;
+
+const GEOHASH_BITS_PER_CHAR =
+  5;
+
+const GEOHASH_MAXIMUM_BITS_PRECISION =
+  22 * GEOHASH_BITS_PER_CHAR;
+
+const EARTH_MERIDIONAL_CIRCUMFERENCE_METERS =
+  40007860;
+
+const METERS_PER_DEGREE_LATITUDE =
+  110574;
+
+const EARTH_EQUATORIAL_RADIUS_METERS =
+  6378137.0;
+
+const EARTH_ECCENTRICITY_SQUARED =
+  0.00669447819799;
+
+export function encodeTownNowGeohash(
+  latitude,
+  longitude,
+  precision
+) {
+  const length =
+    precision ||
+    GEOHASH_STORED_PRECISION;
+
+  const latitudeRange =
+    { min: -90, max: 90 };
+
+  const longitudeRange =
+    { min: -180, max: 180 };
+
+  let hash = "";
+  let hashValue = 0;
+  let bits = 0;
+  let even = true;
+
+  while (hash.length < length) {
+    const value =
+      even
+        ? longitude
+        : latitude;
+
+    const range =
+      even
+        ? longitudeRange
+        : latitudeRange;
+
+    const middle =
+      (range.min + range.max) / 2;
+
+    if (value > middle) {
+      hashValue =
+        (hashValue << 1) + 1;
+
+      range.min =
+        middle;
+    } else {
+      hashValue =
+        (hashValue << 1) + 0;
+
+      range.max =
+        middle;
+    }
+
+    even = !even;
+
+    if (bits < 4) {
+      bits++;
+    } else {
+      bits = 0;
+      hash += GEOHASH_BASE32[hashValue];
+      hashValue = 0;
+    }
+  }
+
+  return hash;
+}
+
+function metersToLongitudeDegrees(
+  distanceMeters,
+  latitude
+) {
+  const radians =
+    latitude * Math.PI / 180;
+
+  const numerator =
+    Math.cos(radians) *
+    EARTH_EQUATORIAL_RADIUS_METERS *
+    Math.PI /
+    180;
+
+  const denominator =
+    1 /
+    Math.sqrt(
+      1 -
+      EARTH_ECCENTRICITY_SQUARED *
+        Math.sin(radians) *
+        Math.sin(radians)
+    );
+
+  const deltaDegrees =
+    numerator * denominator;
+
+  if (deltaDegrees < 1e-12) {
+    return distanceMeters > 0
+      ? 360
+      : 0;
+  }
+
+  return Math.min(
+    360,
+    distanceMeters / deltaDegrees
+  );
+}
+
+function longitudeBitsForResolution(
+  resolutionMeters,
+  latitude
+) {
+  const degrees =
+    metersToLongitudeDegrees(
+      resolutionMeters,
+      latitude
+    );
+
+  return Math.abs(degrees) > 0.000001
+    ? Math.max(1, Math.log2(360 / degrees))
+    : 1;
+}
+
+function latitudeBitsForResolution(
+  resolutionMeters
+) {
+  return Math.min(
+    Math.log2(
+      EARTH_MERIDIONAL_CIRCUMFERENCE_METERS /
+        2 /
+        resolutionMeters
+    ),
+    GEOHASH_MAXIMUM_BITS_PRECISION
+  );
+}
+
+function wrapLongitude(
+  longitude
+) {
+  if (
+    longitude <= 180 &&
+    longitude >= -180
+  ) {
+    return longitude;
+  }
+
+  const adjusted =
+    longitude + 180;
+
+  if (adjusted > 0) {
+    return (adjusted % 360) - 180;
+  }
+
+  return 180 - (-adjusted % 360);
+}
+
+function geohashRangeForBits(
+  geohash,
+  bits
+) {
+  const precision =
+    Math.ceil(bits / GEOHASH_BITS_PER_CHAR);
+
+  if (geohash.length < precision) {
+    return [geohash, geohash + "~"];
+  }
+
+  const truncated =
+    geohash.substring(0, precision);
+
+  const base =
+    truncated.substring(0, truncated.length - 1);
+
+  const lastValue =
+    GEOHASH_BASE32.indexOf(
+      truncated.charAt(truncated.length - 1)
+    );
+
+  const significantBits =
+    bits - base.length * GEOHASH_BITS_PER_CHAR;
+
+  const unusedBits =
+    GEOHASH_BITS_PER_CHAR - significantBits;
+
+  const startValue =
+    (lastValue >> unusedBits) << unusedBits;
+
+  const endValue =
+    startValue + (1 << unusedBits);
+
+  return endValue > 31
+    ? [base + GEOHASH_BASE32[startValue], base + "~"]
+    : [base + GEOHASH_BASE32[startValue], base + GEOHASH_BASE32[endValue]];
+}
+
+// 中心から半径radiusMetersの円を覆うgeohash範囲([start, end))の一覧
+// (重複除去後、最大9本)。範囲には円の外も含むため、取得後に必ず
+// 正確な距離で絞り込む。
+export function computeTownNowGeohashQueryRanges(
+  latitude,
+  longitude,
+  radiusMeters
+) {
+  const latitudeDelta =
+    radiusMeters / METERS_PER_DEGREE_LATITUDE;
+
+  const latitudeNorth =
+    Math.min(90, latitude + latitudeDelta);
+
+  const latitudeSouth =
+    Math.max(-90, latitude - latitudeDelta);
+
+  const queryBits =
+    Math.max(
+      1,
+      Math.min(
+        Math.floor(latitudeBitsForResolution(radiusMeters)) * 2,
+        Math.floor(longitudeBitsForResolution(radiusMeters, latitudeNorth)) * 2 - 1,
+        Math.floor(longitudeBitsForResolution(radiusMeters, latitudeSouth)) * 2 - 1,
+        GEOHASH_MAXIMUM_BITS_PRECISION
+      )
+    );
+
+  const hashPrecision =
+    Math.ceil(queryBits / GEOHASH_BITS_PER_CHAR);
+
+  const longitudeDelta =
+    Math.max(
+      metersToLongitudeDegrees(radiusMeters, latitudeNorth),
+      metersToLongitudeDegrees(radiusMeters, latitudeSouth)
+    );
+
+  const points =
+    [
+      [latitude, longitude],
+      [latitude, wrapLongitude(longitude - longitudeDelta)],
+      [latitude, wrapLongitude(longitude + longitudeDelta)],
+      [latitudeNorth, longitude],
+      [latitudeNorth, wrapLongitude(longitude - longitudeDelta)],
+      [latitudeNorth, wrapLongitude(longitude + longitudeDelta)],
+      [latitudeSouth, longitude],
+      [latitudeSouth, wrapLongitude(longitude - longitudeDelta)],
+      [latitudeSouth, wrapLongitude(longitude + longitudeDelta)]
+    ];
+
+  const ranges =
+    [];
+
+  points.forEach(
+    function(point) {
+      const range =
+        geohashRangeForBits(
+          encodeTownNowGeohash(
+            point[0],
+            point[1],
+            hashPrecision
+          ),
+          queryBits
+        );
+
+      const isDuplicate =
+        ranges.some(
+          function(existing) {
+            return (
+              existing[0] === range[0] &&
+              existing[1] === range[1]
+            );
+          }
+        );
+
+      if (!isDuplicate) {
+        ranges.push(range);
+      }
+    }
+  );
+
+  return ranges;
+}
+
+// 閲覧者座標の読み取り。約100m(小数点以下3桁)に丸めた値だけを受け付け、
+// それより細かい値(生GPSの可能性)は400で拒否する。
+function readTownNowViewerCoordinate(
+  rawValue,
+  min,
+  max
+) {
+  if (
+    typeof rawValue !== "string" ||
+    !/^-?\d{1,3}(\.\d{1,3})?$/.test(rawValue.trim())
+  ) {
+    return null;
+  }
+
+  const value =
+    Number(rawValue.trim());
+
+  return Number.isFinite(value) &&
+    value >= min &&
+    value <= max
+    ? value
+    : null;
+}
+
 function readTownNowText(
   rawText,
   maxLength
@@ -656,6 +1042,14 @@ export async function handleTownNowThreadCreate(
 
       threadData.longitude =
         rounded.longitude;
+
+      // Phase 1B-2｜周辺取得用のgeohash。必ず匿名化(約1km丸め)後の
+      // 座標から作る(生GPSからは作らない)。
+      threadData.topicGeohash =
+        encodeTownNowGeohash(
+          rounded.latitude,
+          rounded.longitude
+        );
     }
 
     const threadReference =
@@ -943,6 +1337,336 @@ export async function handleTownNowThreadGet(
   } catch (error) {
     console.error(
       "街の今スレッド：詳細取得エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message: "スレッドを取得できませんでした。"
+    });
+  }
+}
+
+
+// ------------------------------------------------------------------
+// D. 今いる場所で見える今日のスレッド(GET mode=townNowThreadsNearby、
+// 認証不要)。Phase 1B-2。
+//
+// 入力：latitude/longitude(閲覧者の現在地を約100m=小数点以下3桁に丸めた
+// 値)、googlePlaceId/countryCode(閲覧者の現在地から既存の地域判定で
+// 得た市区町村。任意)。
+//
+// 地点スレッド  ：geohash範囲検索(今日・visible)で候補だけ読み、
+//                 サーバーで正確な距離を計算して5km以内だけ残す。
+// 市区町村スレッド：閲覧者の市区町村と同じregionId・今日・visible・
+//                 placeType=municipalityだけ読む。
+// 全国取得・ブラウザでの距離絞り込みは行わない。返すのは公開項目だけ
+// (座標・距離・authorUid・AI審査情報は返さない)。
+// ------------------------------------------------------------------
+export async function handleTownNowThreadsNearby(
+  request,
+  response,
+  deps
+) {
+  try {
+    const query =
+      request.query ||
+      {};
+
+    const viewerLatitude =
+      readTownNowViewerCoordinate(
+        query.latitude,
+        -90,
+        90
+      );
+
+    const viewerLongitude =
+      readTownNowViewerCoordinate(
+        query.longitude,
+        -180,
+        180
+      );
+
+    if (
+      viewerLatitude === null ||
+      viewerLongitude === null
+    ) {
+      return response.status(400).json({
+        success: false,
+        message: "現在地(小数点以下3桁まで)を指定してください。"
+      });
+    }
+
+    const viewerTimeZone =
+      resolveTimeZoneFromCoordinates(
+        viewerLatitude,
+        viewerLongitude
+      );
+
+    if (!viewerTimeZone) {
+      return response.status(400).json({
+        success: false,
+        message: "現在地を確認できませんでした。"
+      });
+    }
+
+    const database =
+      deps.getFirestore(
+        deps.getFirebaseAdminApp()
+      );
+
+    const now =
+      new Date();
+
+    const nowMillis =
+      now.getTime();
+
+    const threadsCollection =
+      database.collection(
+        TOWN_NOW_THREADS_COLLECTION
+      );
+
+    const isUnexpired =
+      function(data) {
+        return (
+          data.expiresAt &&
+          typeof data.expiresAt.toMillis === "function" &&
+          data.expiresAt.toMillis() > nowMillis
+        );
+      };
+
+    // 地点スレッド(話題地点から5km以内)
+    const viewerTodayKey =
+      computeTownNowLocalDateKey(
+        now,
+        viewerTimeZone
+      );
+
+    const ranges =
+      computeTownNowGeohashQueryRanges(
+        viewerLatitude,
+        viewerLongitude,
+        TOWN_NOW_NEARBY_RADIUS_KM * 1000
+      );
+
+    const rangeSnapshots =
+      await Promise.all(
+        ranges.map(
+          function(range) {
+            return threadsCollection
+              .where(
+                "status",
+                "==",
+                "visible"
+              )
+              .where(
+                "localDateKey",
+                "==",
+                viewerTodayKey
+              )
+              .where(
+                "topicGeohash",
+                ">=",
+                range[0]
+              )
+              .where(
+                "topicGeohash",
+                "<",
+                range[1]
+              )
+              .orderBy(
+                "topicGeohash"
+              )
+              .limit(
+                TOWN_NOW_NEARBY_RANGE_QUERY_LIMIT
+              )
+              .get();
+          }
+        )
+      );
+
+    const threadsById =
+      new Map();
+
+    rangeSnapshots.forEach(
+      function(snapshot) {
+        snapshot.docs.forEach(
+          function(documentSnapshot) {
+            const data =
+              documentSnapshot.data() ||
+              {};
+
+            if (
+              data.placeType !== "current_location" ||
+              typeof data.latitude !== "number" ||
+              typeof data.longitude !== "number" ||
+              !isUnexpired(data)
+            ) {
+              return;
+            }
+
+            const distanceKm =
+              computeTownNowDistanceKm(
+                viewerLatitude,
+                viewerLongitude,
+                data.latitude,
+                data.longitude
+              );
+
+            if (!isWithinTownNowNearbyRadius(distanceKm)) {
+              return;
+            }
+
+            threadsById.set(
+              documentSnapshot.id,
+              data
+            );
+          }
+        );
+      }
+    );
+
+    // 市区町村スレッド(閲覧者と同じ市区町村だけ)。地域台帳は読むだけで
+    // 新規作成しない(Google APIも呼ばない)。
+    const regionCountryCode =
+      typeof query.countryCode === "string"
+        ? query.countryCode.trim()
+        : "";
+
+    const regionGooglePlaceId =
+      typeof query.googlePlaceId === "string"
+        ? query.googlePlaceId.trim()
+        : "";
+
+    const regionIndexKey =
+      regionCountryCode !== "" &&
+      regionGooglePlaceId !== "" &&
+      regionCountryCode.length <= deps.countryCodeMaxLength &&
+      regionGooglePlaceId.length <= deps.googlePlaceIdMaxLength
+        ? deps.buildCommunityBoardRegionIndexKey(
+            regionCountryCode,
+            regionGooglePlaceId
+          )
+        : null;
+
+    const regionInfo =
+      regionIndexKey !== null
+        ? await deps.loadTrustedCommunityBoardRegionInfoByIndexKey(
+            database,
+            regionIndexKey
+          )
+        : null;
+
+    const regionTimeZone =
+      regionInfo
+        ? getTownNowCountryTimeZone(
+            regionInfo.countryCode
+          )
+        : null;
+
+    if (
+      regionInfo &&
+      regionTimeZone
+    ) {
+      const regionSnapshot =
+        await threadsCollection
+          .where(
+            "regionId",
+            "==",
+            regionInfo.regionId
+          )
+          .where(
+            "localDateKey",
+            "==",
+            computeTownNowLocalDateKey(
+              now,
+              regionTimeZone
+            )
+          )
+          .where(
+            "status",
+            "==",
+            "visible"
+          )
+          .where(
+            "placeType",
+            "==",
+            "municipality"
+          )
+          .orderBy(
+            "createdAt",
+            "desc"
+          )
+          .limit(
+            TOWN_NOW_THREADS_LIST_LIMIT
+          )
+          .get();
+
+      regionSnapshot.docs.forEach(
+        function(documentSnapshot) {
+          const data =
+            documentSnapshot.data() ||
+            {};
+
+          if (
+            data.placeType === "municipality" &&
+            data.regionId === regionInfo.regionId &&
+            isUnexpired(data)
+          ) {
+            threadsById.set(
+              documentSnapshot.id,
+              data
+            );
+          }
+        }
+      );
+    }
+
+    const createdAtMillis =
+      function(data) {
+        return data.createdAt &&
+          typeof data.createdAt.toMillis === "function"
+          ? data.createdAt.toMillis()
+          : 0;
+      };
+
+    const threads =
+      Array.from(
+        threadsById.entries()
+      )
+        .sort(
+          function(a, b) {
+            return createdAtMillis(b[1]) - createdAtMillis(a[1]);
+          }
+        )
+        .slice(
+          0,
+          TOWN_NOW_THREADS_LIST_LIMIT
+        )
+        .map(
+          function(entry) {
+            return buildPublicThread(
+              entry[0],
+              entry[1]
+            );
+          }
+        );
+
+    setPublicCache(
+      response
+    );
+
+    return response.status(200).json({
+      success: true,
+      regionName:
+        regionInfo
+          ? regionInfo.regionName
+          : "",
+      threads: threads
+    });
+  } catch (error) {
+    console.error(
+      "街の今スレッド：周辺取得エラー：",
       error
     );
 

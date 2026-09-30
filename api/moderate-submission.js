@@ -33,7 +33,8 @@ import tzlookup from "@photostructure/tz-lookup";
 import {
   handleTownNowThreadCreate,
   handleTownNowThreadGet,
-  handleTownNowThreadsList
+  handleTownNowThreadsList,
+  handleTownNowThreadsNearby
 } from "./_lib/town-now-threads.js";
 
 
@@ -26910,6 +26911,17 @@ export default async function handler(
       request.query.mode === "townNowThreadsList"
     ) {
       return handleTownNowThreadsList(
+        request,
+        response,
+        buildTownNowThreadDeps()
+      );
+    }
+
+    // 街の今スレッド Phase 1B-2｜今いる場所で見える今日のスレッド。
+    if (
+      request.query.mode === "townNowThreadsNearby"
+    ) {
+      return handleTownNowThreadsNearby(
         request,
         response,
         buildTownNowThreadDeps()
