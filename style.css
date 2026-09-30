@@ -201,8 +201,10 @@
       color: var(--white);
     }
 
+    /* サブタイトル撤去後も、タイトルと4カードの間隔を従来(サブタイトル下の
+       18px)と同じに保つ。 */
     .hero-main-copy {
-      margin: 0 0 8px;
+      margin: 0 0 18px;
       font-size: 20px;
       font-weight: 900;
       line-height: 1.5;

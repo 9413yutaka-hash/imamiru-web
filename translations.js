@@ -37,18 +37,13 @@ const MACHINAU_TRANSLATIONS = {
   // メイン/サブコピー・4入口(hero_action_*)。下のhero_heading/hero_kicker
   // (STEP3の旧ヒーロー由来、参照箇所なし)とは別物。
   hero_main_copy: {
-    ja: "沖縄の今を知れば、<br>もっと、いい旅になる。",
-    en: "Know what's happening in Okinawa,<br>and make your trip even better."
-  },
-
-  hero_sub_copy: {
-    ja: "交通・おでかけ情報で、<br>沖縄の「今」をあなたに。",
-    en: "Transportation and things to do—<br>Okinawa's “now,” right when you need it."
+    ja: "街の今を知れば、<br>もっと、いい旅になる。",
+    en: "Know what's happening in town now,<br>and make your trip even better."
   },
 
   hero_action_today_title: {
-    ja: "今日の沖縄",
-    en: "Today in Okinawa"
+    ja: "今の街",
+    en: "Town Now"
   },
 
 
