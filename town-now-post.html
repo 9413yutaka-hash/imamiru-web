@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <meta name="robots" content="noindex, nofollow">
+
+  <title>
+    街の今スレッド｜マチナウ
+  </title>
+
+  <!-- 街の今スレッド Phase 1C-3｜新しいスレッドを立てる専用ページ(代表決定)。
+       street投稿(post.html)・掲示板投稿(community-board-post.html)とは独立。
+       決めるのは「どこの話？」と本文だけ(画像・掲載時間・タイトル・
+       カテゴリはなし)。保存は既存API(townNowThreadCreate)だけを使い、
+       ブラウザからFirestoreへは書き込まない。regionId・timezone・日付・
+       公開期限(その日の0時)・座標の約1km丸めはすべてサーバーが決める。
+       施設名検索・Places Autocomplete等の新しいGoogle APIは使わない。
+       投稿系の既存ページと同じく日本語のみ。 -->
+  <style>
+    :root {
+      --navy: #071a33;
+      --blue: #0788c9;
+      --cyan: #04b7d7;
+      --sky: #dff7ff;
+      --white: #ffffff;
+      --text: #15233a;
+      --subtext: #697386;
+      --border: #e2eaf1;
+      --background: #f4f8fb;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0 0 60px;
+      font-family:
+        "Yu Gothic",
+        "Hiragino Kaku Gothic ProN",
+        "Meiryo",
+        sans-serif;
+      background: var(--background);
+      color: var(--text);
+    }
+
+    header {
+      padding: 28px 18px 40px;
+      background: linear-gradient(135deg, #0687c5, #13c3ce);
+      color: var(--white);
+    }
+
+    header .page-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    header h1 {
+      margin: 16px 0 0;
+      font-size: clamp(20px, 5vw, 26px);
+      line-height: 1.5;
+    }
+
+    header p {
+      margin: 10px 0 0;
+      max-width: 560px;
+      color: rgba(255, 255, 255, 0.92);
+      font-size: 13px;
+      line-height: 1.8;
+    }
+
+    main {
+      width: min(100%, 560px);
+      margin: -22px auto 0;
+      padding: 0 18px;
+    }
+
+    .panel {
+      margin-bottom: 16px;
+      padding: 20px;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: var(--white);
+      box-shadow: 0 14px 40px rgba(20, 52, 82, 0.10);
+    }
+
+    .field {
+      margin-bottom: 16px;
+    }
+
+    .field-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .choice-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .choice-button {
+      padding: 12px 8px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--white);
+      color: var(--navy);
+      font-size: 14px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .choice-button.is-selected {
+      border-color: var(--blue);
+      background: var(--sky);
+    }
+
+    .choice-button:disabled {
+      opacity: 0.55;
+      cursor: default;
+    }
+
+    .area-picker {
+      margin-top: 10px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+
+    .area-picker label {
+      display: block;
+      margin: 0 0 4px;
+      font-size: 12px;
+      color: var(--subtext);
+    }
+
+    .area-picker select {
+      width: 100%;
+      margin-bottom: 10px;
+      padding: 10px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--white);
+      font-size: 15px;
+      font-family: inherit;
+    }
+
+    .region-box {
+      margin-top: 10px;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--sky);
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 110px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 16px;
+      font-family: inherit;
+      resize: vertical;
+    }
+
+    .char-count {
+      margin-top: 4px;
+      font-size: 12px;
+      color: var(--subtext);
+      text-align: right;
+    }
+
+    .primary-button {
+      display: block;
+      width: 100%;
+      padding: 13px;
+      border: none;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      color: var(--white);
+      font-size: 15px;
+      font-weight: 900;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .primary-button:disabled {
+      opacity: 0.55;
+      cursor: default;
+    }
+
+    .secondary-button {
+      display: block;
+      width: 100%;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--white);
+      color: var(--navy);
+      font-size: 14px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .secondary-button:disabled {
+      opacity: 0.55;
+      cursor: default;
+    }
+
+    .hint {
+      margin: 8px 0 0;
+      font-size: 12px;
+      line-height: 1.7;
+      color: var(--subtext);
+    }
+
+    .message-box {
+      margin-top: 10px;
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .message-box:empty {
+      display: none;
+    }
+
+    .message-box.error {
+      color: #b8354a;
+    }
+
+    .completion-box {
+      display: none;
+      padding: 18px;
+      border: 1px solid #cfeefa;
+      border-radius: 14px;
+      background: #effbff;
+      color: #24627e;
+      font-size: 14px;
+      line-height: 1.9;
+    }
+
+    .completion-box .primary-button {
+      margin-top: 14px;
+      text-align: center;
+      text-decoration: none;
+    }
+
+    .top-back-link-row {
+      margin: 4px 0 0;
+      text-align: center;
+    }
+
+    .top-back-link {
+      display: inline-block;
+      padding: 10px 8px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--subtext);
+      text-decoration: none;
+    }
+  </style>
+</head>
+
+<body>
+
+  <header>
+    <div class="page-label">
+      💬 街の今スレッド
+    </div>
+
+    <h1>
+      街の今スレッド
+    </h1>
+
+    <p>
+      その場所について、聞きたいこと・伝えたいことを書いてください。話題の場所の近くにいる人に表示され、その日の0時に公開を終了します。
+    </p>
+  </header>
+
+  <main>
+
+    <div class="panel" id="formPanel">
+
+      <div class="field">
+        <span class="field-label">
+          どこの話？
+        </span>
+
+        <div class="choice-row">
+          <button
+            id="useCurrentLocationButton"
+            type="button"
+            class="choice-button"
+          >
+            📍 現在地を使う
+          </button>
+
+          <button
+            id="choosePlaceButton"
+            type="button"
+            class="choice-button"
+          >
+            🗾 場所を選ぶ
+          </button>
+        </div>
+
+        <div
+          id="areaPicker"
+          class="area-picker"
+          style="display:none;"
+        >
+          <label for="prefectureSelect">都道府県</label>
+          <select id="prefectureSelect">
+            <option value="">選択してください</option>
+          </select>
+
+          <label for="municipalitySelect">市区町村</label>
+          <select id="municipalitySelect" disabled>
+            <option value="">先に都道府県を選んでください</option>
+          </select>
+
+          <button
+            id="confirmPlaceButton"
+            type="button"
+            class="secondary-button"
+            disabled
+          >
+            この場所にする
+          </button>
+
+          <p class="hint">
+            施設の場所が分からない場合は、所在地の市区町村を調べて選んでください。
+          </p>
+        </div>
+
+        <div
+          id="selectedPlaceBox"
+          class="region-box"
+          style="display:none;"
+        ></div>
+
+        <div
+          id="placeMessage"
+          class="message-box"
+        ></div>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="threadTextInput">
+          何を聞く・伝える？
+        </label>
+
+        <textarea
+          id="threadTextInput"
+          maxlength="300"
+          placeholder="例：今から沖縄ワールド行くけど、おすすめある？"
+        ></textarea>
+
+        <div class="char-count">
+          <span id="charCountText">0</span> / 300
+        </div>
+      </div>
+
+      <button
+        id="submitButton"
+        type="button"
+        class="primary-button"
+        disabled
+      >
+        投稿する
+      </button>
+
+      <div
+        id="submitMessage"
+        class="message-box"
+      ></div>
+
+    </div>
+
+    <div
+      id="completionBox"
+      class="completion-box"
+    >
+      <span id="completionText"></span>
+      <a class="primary-button" href="/index.html">マチナウTOPへ戻る</a>
+    </div>
+
+    <p class="top-back-link-row" id="topBackLinkRow">
+      <a class="top-back-link" href="/index.html">← マチナウTOPへ戻る</a>
+    </p>
+
+  </main>
+
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"></script>
+  <script src="firebase.js"></script>
+
+  <!-- 全国の都道府県→市区町村(静的データ、TOPの掲示板と同じファイル) -->
+  <script src="japan-municipalities.js"></script>
+
+  <script>
+    // 既存app.js・community-board-post.htmlと同じ公開鍵・同じ読み込みURL
+    // (新しい鍵・新しいGoogle APIは使わない。使うのは既存のGeocoderのみ)。
+    const GOOGLE_MAPS_SCRIPT_URL =
+      "https://maps.googleapis.com/maps/api/js?key=AIzaSyC7LLuNBYIXKT1YcrIaiuwyFssKQyMMjkU&libraries=places";
+
+    // TOPの30分現在地復元と同じ保存先・同じ有効期限(app.jsの
+    // SAVED_USER_LOCATION_STORAGE_KEY / SAVED_USER_LOCATION_MAX_AGE_MILLISECONDS)。
+    const SAVED_USER_LOCATION_STORAGE_KEY = "machinauTopSavedUserLocation";
+    const SAVED_USER_LOCATION_MAX_AGE_MILLISECONDS = 30 * 60 * 1000;
+
+    // 投稿直後にTOPへ戻った時だけ、近くのスレッド一覧をキャッシュを
+    // 通さず取り直すための目印(app.jsのTOWN_NOW_JUST_POSTED_STORAGE_KEY)。
+    const TOWN_NOW_JUST_POSTED_STORAGE_KEY = "machinauTownNowJustPostedAt";
+
+    const AREA_NAME_RESOLUTION_TIMEOUT_MS = 6000;
+
+    let googleMapsLoadPromise = null;
+
+    function ensureGoogleMapsLoaded() {
+      if (googleMapsLoadPromise) {
+        return googleMapsLoadPromise;
+      }
+
+      if (typeof google !== "undefined" && google.maps && google.maps.Geocoder) {
+        googleMapsLoadPromise = Promise.resolve(true);
+        return googleMapsLoadPromise;
+      }
+
+      googleMapsLoadPromise = new Promise(function (resolve) {
+        const script = document.createElement("script");
+        script.src = GOOGLE_MAPS_SCRIPT_URL;
+        script.async = true;
+        script.defer = true;
+
+        script.onload = function () {
+          resolve(true);
+        };
+
+        script.onerror = function () {
+          googleMapsLoadPromise = null;
+          resolve(false);
+        };
+
+        document.head.appendChild(script);
+      });
+
+      return googleMapsLoadPromise;
+    }
+
+    function findAddressComponent(addressComponents, typeName) {
+      if (!Array.isArray(addressComponents)) {
+        return null;
+      }
+
+      return (
+        addressComponents.find(function (component) {
+          return Array.isArray(component.types) && component.types.includes(typeName);
+        }) || null
+      );
+    }
+
+    function isNonEmptyString(value) {
+      return typeof value === "string" && value.trim() !== "";
+    }
+
+    // 現在地(逆Geocoder)から市区町村を決める。TOPのresolveLocationHierarchy
+    // FromCoordinates()と同じ規則(行政区sublocality_level_1があれば
+    // 「市名＋区名」、無ければlocality)。
+    function resolveRegionFromReverseGeocoderResults(results) {
+      if (!Array.isArray(results)) {
+        return null;
+      }
+
+      let countryCode = "";
+      let ward = null;
+      let locality = null;
+
+      results.forEach(function (result) {
+        const countryComponent = findAddressComponent(result.address_components, "country");
+
+        if (countryCode === "" && countryComponent && isNonEmptyString(countryComponent.short_name)) {
+          countryCode = countryComponent.short_name;
+        }
+
+        if (!Array.isArray(result.types) || !isNonEmptyString(result.place_id)) {
+          return;
+        }
+
+        if (!locality && result.types.includes("locality")) {
+          const localityComponent = findAddressComponent(result.address_components, "locality");
+
+          if (localityComponent && isNonEmptyString(localityComponent.long_name)) {
+            locality = { googlePlaceId: result.place_id, regionName: localityComponent.long_name };
+          }
+        }
+
+        if (!ward && result.types.includes("sublocality_level_1")) {
+          const parentCityComponent = findAddressComponent(result.address_components, "locality");
+          const wardComponent = findAddressComponent(result.address_components, "sublocality_level_1");
+
+          if (
+            parentCityComponent && isNonEmptyString(parentCityComponent.long_name) &&
+            wardComponent && isNonEmptyString(wardComponent.long_name)
+          ) {
+            ward = {
+              googlePlaceId: result.place_id,
+              regionName: parentCityComponent.long_name + wardComponent.long_name
+            };
+          }
+        }
+      });
+
+      const chosen = ward || locality;
+
+      if (!chosen || countryCode === "") {
+        return null;
+      }
+
+      return {
+        googlePlaceId: chosen.googlePlaceId,
+        countryCode: countryCode,
+        regionName: chosen.regionName
+      };
+    }
+
+    // 都道府県＋市区町村名から市区町村を決める。TOPの
+    // resolveGooglePlaceIdForPrefectureAndAreaName()と同じ規則(日本・
+    // 都道府県一致の候補のうちlocality、無ければsublocality_level_1)。
+    function resolveRegionForPrefectureAndAreaName(prefectureName, areaName) {
+      return new Promise(async function (resolve) {
+        const mapsLoaded = await ensureGoogleMapsLoaded();
+
+        if (!mapsLoaded || typeof google === "undefined" || !google.maps || !google.maps.Geocoder) {
+          resolve(null);
+          return;
+        }
+
+        const timeoutId = setTimeout(function () {
+          resolve(null);
+        }, AREA_NAME_RESOLUTION_TIMEOUT_MS);
+
+        try {
+          new google.maps.Geocoder().geocode(
+            { address: prefectureName + areaName + ", 日本" },
+            function (results, status) {
+              clearTimeout(timeoutId);
+
+              if (status !== "OK" || !Array.isArray(results) || results.length === 0) {
+                resolve(null);
+                return;
+              }
+
+              const validCandidates = results.filter(function (result) {
+                const countryComponent = findAddressComponent(result.address_components, "country");
+                const prefectureComponent = findAddressComponent(result.address_components, "administrative_area_level_1");
+
+                return (
+                  countryComponent && countryComponent.short_name === "JP" &&
+                  prefectureComponent && prefectureComponent.long_name === prefectureName
+                );
+              });
+
+              const localityCandidate = validCandidates.find(function (result) {
+                return Array.isArray(result.types) && result.types.includes("locality");
+              });
+
+              const subLocalityLevel1Candidate = validCandidates.find(function (result) {
+                return Array.isArray(result.types) && result.types.includes("sublocality_level_1");
+              });
+
+              const chosenResult = localityCandidate || subLocalityLevel1Candidate;
+
+              if (!chosenResult || !isNonEmptyString(chosenResult.place_id)) {
+                resolve(null);
+                return;
+              }
+
+              let regionName = "";
+
+              if (localityCandidate) {
+                const localityComponent = findAddressComponent(chosenResult.address_components, "locality");
+                regionName = localityComponent && isNonEmptyString(localityComponent.long_name) ? localityComponent.long_name : "";
+              } else {
+                const parentCityComponent = findAddressComponent(chosenResult.address_components, "locality");
+                const wardComponent = findAddressComponent(chosenResult.address_components, "sublocality_level_1");
+
+                if (
+                  parentCityComponent && isNonEmptyString(parentCityComponent.long_name) &&
+                  wardComponent && isNonEmptyString(wardComponent.long_name)
+                ) {
+                  regionName = parentCityComponent.long_name + wardComponent.long_name;
+                }
+              }
+
+              if (regionName === "") {
+                resolve(null);
+                return;
+              }
+
+              resolve({
+                googlePlaceId: chosenResult.place_id,
+                countryCode: "JP",
+                regionName: regionName
+              });
+            }
+          );
+        } catch (error) {
+          clearTimeout(timeoutId);
+          resolve(null);
+        }
+      });
+    }
+
+    // TOPで取得した現在地(同じタブ・30分以内)。無ければnull。
+    function readSavedUserLocation() {
+      try {
+        const saved = JSON.parse(sessionStorage.getItem(SAVED_USER_LOCATION_STORAGE_KEY) || "null");
+
+        if (
+          !saved ||
+          !Number.isFinite(saved.latitude) || Math.abs(saved.latitude) > 90 ||
+          !Number.isFinite(saved.longitude) || Math.abs(saved.longitude) > 180 ||
+          !Number.isFinite(saved.savedAt)
+        ) {
+          return null;
+        }
+
+        const age = Date.now() - saved.savedAt;
+
+        if (age < 0 || age > SAVED_USER_LOCATION_MAX_AGE_MILLISECONDS) {
+          return null;
+        }
+
+        const hierarchy = saved.locationHierarchy;
+
+        if (
+          !hierarchy ||
+          !isNonEmptyString(hierarchy.communityBoardPlaceId) ||
+          !isNonEmptyString(hierarchy.countryCode)
+        ) {
+          return null;
+        }
+
+        return {
+          latitude: saved.latitude,
+          longitude: saved.longitude,
+          googlePlaceId: hierarchy.communityBoardPlaceId,
+          countryCode: hierarchy.countryCode,
+          regionName: isNonEmptyString(hierarchy.communityBoardRegionName) ? hierarchy.communityBoardRegionName : ""
+        };
+      } catch (error) {
+        return null;
+      }
+    }
+
+    const useCurrentLocationButton = document.getElementById("useCurrentLocationButton");
+    const choosePlaceButton = document.getElementById("choosePlaceButton");
+    const areaPicker = document.getElementById("areaPicker");
+    const prefectureSelect = document.getElementById("prefectureSelect");
+    const municipalitySelect = document.getElementById("municipalitySelect");
+    const confirmPlaceButton = document.getElementById("confirmPlaceButton");
+    const selectedPlaceBox = document.getElementById("selectedPlaceBox");
+    const placeMessage = document.getElementById("placeMessage");
+    const threadTextInput = document.getElementById("threadTextInput");
+    const charCountText = document.getElementById("charCountText");
+    const submitButton = document.getElementById("submitButton");
+    const submitMessage = document.getElementById("submitMessage");
+    const formPanel = document.getElementById("formPanel");
+    const completionBox = document.getElementById("completionBox");
+    const completionText = document.getElementById("completionText");
+    const topBackLinkRow = document.getElementById("topBackLinkRow");
+
+    // 投稿先(どこの話？)。座標は現在地を使う場合だけメモリ上に持ち、
+    // 保存しない(サーバーが約1kmに丸めて保存する)。URLには載せない。
+    let selectedPlace = null;
+    let isSubmitting = false;
+
+    function showMessage(element, text, type) {
+      element.textContent = text;
+      element.className = "message-box" + (type ? " " + type : "");
+    }
+
+    function updateSubmitButtonEnabled() {
+      submitButton.disabled = isSubmitting || !(selectedPlace && threadTextInput.value.trim() !== "");
+    }
+
+    function setSelectedPlace(place, label) {
+      selectedPlace = place;
+
+      if (place) {
+        selectedPlaceBox.textContent = "どこの話：" + label;
+        selectedPlaceBox.style.display = "";
+      } else {
+        selectedPlaceBox.textContent = "";
+        selectedPlaceBox.style.display = "none";
+      }
+
+      updateSubmitButtonEnabled();
+    }
+
+    function setChoice(choice) {
+      useCurrentLocationButton.classList.toggle("is-selected", choice === "current");
+      choosePlaceButton.classList.toggle("is-selected", choice === "choose");
+      areaPicker.style.display = choice === "choose" ? "" : "none";
+    }
+
+    // ① 現在地を使う
+    useCurrentLocationButton.addEventListener("click", function () {
+      setChoice("current");
+      setSelectedPlace(null, "");
+      showMessage(placeMessage, "", "");
+
+      const saved = readSavedUserLocation();
+
+      if (saved) {
+        setSelectedPlace(
+          {
+            placeType: "current_location",
+            latitude: saved.latitude,
+            longitude: saved.longitude,
+            googlePlaceId: saved.googlePlaceId,
+            countryCode: saved.countryCode
+          },
+          (saved.regionName || "現在地") + "（現在地）"
+        );
+        return;
+      }
+
+      if (!navigator.geolocation) {
+        showMessage(placeMessage, "この端末では現在地を取得できません。「場所を選ぶ」をお使いください。", "error");
+        return;
+      }
+
+      useCurrentLocationButton.disabled = true;
+      showMessage(placeMessage, "現在地を取得しています…", "");
+
+      navigator.geolocation.getCurrentPosition(
+        async function (position) {
+          try {
+            const mapsLoaded = await ensureGoogleMapsLoaded();
+
+            if (!mapsLoaded) {
+              useCurrentLocationButton.disabled = false;
+              showMessage(placeMessage, "地図情報の読み込みに失敗しました。時間をおいて、もう一度お試しください。", "error");
+              return;
+            }
+
+            new google.maps.Geocoder().geocode(
+              {
+                location: {
+                  lat: position.coords.latitude,
+                  lng: position.coords.longitude
+                }
+              },
+              function (results, status) {
+                useCurrentLocationButton.disabled = false;
+
+                const region = status === "OK" ? resolveRegionFromReverseGeocoderResults(results) : null;
+
+                if (!region) {
+                  showMessage(placeMessage, "現在地の市区町村を特定できませんでした。「場所を選ぶ」をお使いください。", "error");
+                  return;
+                }
+
+                showMessage(placeMessage, "", "");
+
+                setSelectedPlace(
+                  {
+                    placeType: "current_location",
+                    latitude: position.coords.latitude,
+                    longitude: position.coords.longitude,
+                    googlePlaceId: region.googlePlaceId,
+                    countryCode: region.countryCode
+                  },
+                  region.regionName + "（現在地）"
+                );
+              }
+            );
+          } catch (error) {
+            useCurrentLocationButton.disabled = false;
+            showMessage(placeMessage, "現在地の市区町村を特定できませんでした。「場所を選ぶ」をお使いください。", "error");
+          }
+        },
+        function () {
+          useCurrentLocationButton.disabled = false;
+          showMessage(placeMessage, "現在地を取得できませんでした。位置情報の利用を許可するか、「場所を選ぶ」をお使いください。", "error");
+        }
+      );
+    });
+
+    // ② 場所を選ぶ(都道府県→市区町村)
+    choosePlaceButton.addEventListener("click", function () {
+      setChoice("choose");
+      setSelectedPlace(null, "");
+      showMessage(placeMessage, "", "");
+    });
+
+    (function populatePrefectures() {
+      if (typeof JAPAN_MUNICIPALITIES_BY_PREFECTURE === "undefined") {
+        return;
+      }
+
+      Object.keys(JAPAN_MUNICIPALITIES_BY_PREFECTURE).forEach(function (prefectureName) {
+        const option = document.createElement("option");
+        option.value = prefectureName;
+        option.textContent = prefectureName;
+        prefectureSelect.appendChild(option);
+      });
+    })();
+
+    prefectureSelect.addEventListener("change", function () {
+      const municipalities =
+        (typeof JAPAN_MUNICIPALITIES_BY_PREFECTURE !== "undefined" &&
+          JAPAN_MUNICIPALITIES_BY_PREFECTURE[prefectureSelect.value]) || [];
+
+      municipalitySelect.innerHTML = "";
+
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = municipalities.length > 0 ? "選択してください" : "先に都道府県を選んでください";
+      municipalitySelect.appendChild(placeholder);
+
+      municipalities.forEach(function (municipalityName) {
+        const option = document.createElement("option");
+        option.value = municipalityName;
+        option.textContent = municipalityName;
+        municipalitySelect.appendChild(option);
+      });
+
+      municipalitySelect.disabled = municipalities.length === 0;
+      confirmPlaceButton.disabled = true;
+      setSelectedPlace(null, "");
+    });
+
+    municipalitySelect.addEventListener("change", function () {
+      confirmPlaceButton.disabled = municipalitySelect.value === "";
+      setSelectedPlace(null, "");
+    });
+
+    confirmPlaceButton.addEventListener("click", async function () {
+      const prefectureName = prefectureSelect.value;
+      const areaName = municipalitySelect.value;
+
+      if (prefectureName === "" || areaName === "") {
+        return;
+      }
+
+      confirmPlaceButton.disabled = true;
+      showMessage(placeMessage, "場所を確認しています…", "");
+
+      const region = await resolveRegionForPrefectureAndAreaName(prefectureName, areaName);
+
+      confirmPlaceButton.disabled = municipalitySelect.value === "";
+
+      if (!region) {
+        showMessage(placeMessage, "この場所を確認できませんでした。時間をおいて、もう一度お試しください。", "error");
+        return;
+      }
+
+      showMessage(placeMessage, "", "");
+
+      setSelectedPlace(
+        {
+          placeType: "municipality",
+          googlePlaceId: region.googlePlaceId,
+          countryCode: region.countryCode
+        },
+        prefectureName + " " + region.regionName
+      );
+    });
+
+    threadTextInput.addEventListener("input", function () {
+      charCountText.textContent = String(threadTextInput.value.length);
+      updateSubmitButtonEnabled();
+    });
+
+    let anonymousAuthPromise = null;
+
+    function getAnonymousIdToken() {
+      if (typeof firebase === "undefined" || !firebase.auth) {
+        return Promise.reject(new Error("auth unavailable"));
+      }
+
+      const auth = firebase.auth();
+
+      if (auth.currentUser) {
+        return auth.currentUser.getIdToken();
+      }
+
+      if (!anonymousAuthPromise) {
+        anonymousAuthPromise = auth
+          .signInAnonymously()
+          .then(function (credential) {
+            return credential.user;
+          })
+          .catch(function (error) {
+            anonymousAuthPromise = null;
+            throw error;
+          });
+      }
+
+      return anonymousAuthPromise.then(function (user) {
+        return user.getIdToken();
+      });
+    }
+
+    // townNowThreadCreate(既存API)。サーバーの内部メッセージ・審査理由は
+    // 画面に出さず、状態に応じた利用者向けの短い文言だけを表示する。
+    submitButton.addEventListener("click", async function () {
+      const text = threadTextInput.value.trim();
+
+      if (isSubmitting || !selectedPlace || text === "") {
+        return;
+      }
+
+      isSubmitting = true;
+      updateSubmitButtonEnabled();
+      threadTextInput.disabled = true;
+      useCurrentLocationButton.disabled = true;
+      choosePlaceButton.disabled = true;
+      showMessage(submitMessage, "送信しています…", "");
+
+      const requestBody = {
+        mode: "townNowThreadCreate",
+        text: text,
+        placeType: selectedPlace.placeType,
+        googlePlaceId: selectedPlace.googlePlaceId,
+        countryCode: selectedPlace.countryCode
+      };
+
+      if (selectedPlace.placeType === "current_location") {
+        requestBody.latitude = selectedPlace.latitude;
+        requestBody.longitude = selectedPlace.longitude;
+      }
+
+      let status = 0;
+      let data = null;
+
+      try {
+        const idToken = await getAnonymousIdToken();
+
+        const response = await fetch("/api/moderate-submission", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + idToken
+          },
+          body: JSON.stringify(requestBody)
+        });
+
+        status = response.status;
+
+        try {
+          data = await response.json();
+        } catch (jsonError) {
+          data = null;
+        }
+      } catch (error) {
+        status = 0;
+      }
+
+      if (status === 200 && data && data.success === true) {
+        try {
+          sessionStorage.setItem(TOWN_NOW_JUST_POSTED_STORAGE_KEY, String(Date.now()));
+        } catch (storageError) {
+          // 保存できなくても投稿完了表示には影響させない。
+        }
+
+        completionText.textContent =
+          data.status === "visible"
+            ? "投稿しました。話題の場所の近くにいる人に表示されます。"
+            : "投稿を受け付けました。確認後に公開されます。";
+
+        formPanel.style.display = "none";
+        topBackLinkRow.style.display = "none";
+        completionBox.style.display = "block";
+        return;
+      }
+
+      isSubmitting = false;
+      threadTextInput.disabled = false;
+      useCurrentLocationButton.disabled = false;
+      choosePlaceButton.disabled = false;
+      updateSubmitButtonEnabled();
+
+      showMessage(
+        submitMessage,
+        status === 429
+          ? "短時間に続けて投稿されています。少し待ってから、もう一度お試しください。"
+          : status === 400
+            ? "投稿できませんでした。場所と内容を確認して、もう一度お試しください。"
+            : "投稿できませんでした。時間をおいて、もう一度お試しください。",
+        "error"
+      );
+    });
+  </script>
+
+</body>
+</html>

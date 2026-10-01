@@ -373,6 +373,68 @@
       color: var(--text);
     }
 
+    /* 街の今スレッド Phase 1C-3｜返信入力欄。モーダル(.modal-card)の
+       スクロール内で下部に固定し、返信が多くても入力欄まで届くようにする。 */
+    .town-now-reply-form {
+      position: sticky;
+      bottom: -22px;
+      margin: 16px -22px -22px;
+      padding: 12px 22px 16px;
+      border-top: 1px solid var(--border);
+      background: var(--white);
+    }
+
+    .town-now-reply-input {
+      width: 100%;
+      min-height: 64px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: 16px;
+      font-family: inherit;
+      line-height: 1.6;
+      resize: vertical;
+    }
+
+    .town-now-reply-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 8px;
+    }
+
+    .town-now-reply-count {
+      font-size: 12px;
+      color: var(--subtext);
+    }
+
+    .town-now-reply-button {
+      width: auto;
+      min-width: 120px;
+      margin: 0;
+    }
+
+    .town-now-reply-button:disabled {
+      opacity: 0.55;
+      cursor: default;
+    }
+
+    .town-now-reply-message {
+      margin: 6px 0 0;
+      font-size: 13px;
+      line-height: 1.7;
+      color: var(--subtext);
+    }
+
+    .town-now-reply-message:empty {
+      display: none;
+    }
+
+    .town-now-reply-message.is-error {
+      color: #b8354a;
+    }
+
     /* 街の掲示板(仮称) Phase5｜地域代表画像。掲示板の「街の顔」であり
        投稿カードの画像ではないため、既存.region-recommendation-card imgとは
        別に、控えめな比率(高さ150px)のバナー風スタイルにする。 */
@@ -1596,6 +1658,17 @@
         近くにいる人たちの、今日の会話です。
       </p>
       <div id="townNowThreadsList"></div>
+      <!-- 街の今スレッド Phase 1C-3｜新規スレッドは専用投稿ページ(代表決定)。 -->
+      <div class="community-board-post-link-row">
+        <a
+          id="townNowNewThreadLink"
+          class="secondary-link-button"
+          href="town-now-post.html"
+          data-i18n="town_now_new_thread_link"
+        >
+          新しいスレッドを立てる
+        </a>
+      </div>
     </section>
 
     <section

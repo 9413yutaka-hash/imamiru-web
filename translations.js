@@ -1488,6 +1488,47 @@ const MACHINAU_TRANSLATIONS = {
   town_now_replies_empty: {
     ja: "まだ返信はありません。",
     en: "No replies yet."
+  },
+
+  // 街の今スレッド Phase 1C-3｜投稿導線・返信。文言は仮(代表が実機確認後に判断)。
+  town_now_new_thread_link: {
+    ja: "新しいスレッドを立てる",
+    en: "Start a new thread"
+  },
+
+  town_now_reply_placeholder: {
+    ja: "返信を書く",
+    en: "Write a reply"
+  },
+
+  town_now_reply_button: {
+    ja: "返信する",
+    en: "Reply"
+  },
+
+  town_now_reply_sending: {
+    ja: "送信しています…",
+    en: "Sending…"
+  },
+
+  town_now_reply_pending: {
+    ja: "返信を受け付けました。確認後に公開されます。",
+    en: "Reply received. It will appear after review."
+  },
+
+  town_now_reply_error: {
+    ja: "返信できませんでした。時間をおいて、もう一度お試しください。",
+    en: "Couldn't send your reply. Please try again later."
+  },
+
+  town_now_reply_rate_limited: {
+    ja: "短時間に続けて返信されています。少し待ってから、もう一度お試しください。",
+    en: "You're replying too quickly. Please wait a moment and try again."
+  },
+
+  town_now_reply_invalid: {
+    ja: "返信内容を確認してください。",
+    en: "Please check your reply."
   }
 };
 

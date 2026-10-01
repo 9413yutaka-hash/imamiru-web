@@ -12387,6 +12387,54 @@ let townNowThreadsRequestSequence =
 let townNowThreadModalRequestSequence =
   0;
 
+// 街の今スレッド Phase 1C-3｜返信(townNowCommentCreate)。
+// 一覧/返信のGETはCDNで30秒共有キャッシュされるため、自分が投稿した直後
+// だけは問い合わせURLに一意な値を付けてキャッシュを通さず取り直す
+// (Backendは変更しない。距離・公開条件の判定は従来どおりサーバー側)。
+const TOWN_NOW_FRESH_FETCH_WINDOW_MILLISECONDS =
+  2 * 60 * 1000;
+
+// town-now-post.htmlで新しいスレッドを投稿した時刻(同じタブのみ)。
+const TOWN_NOW_JUST_POSTED_STORAGE_KEY =
+  "machinauTownNowJustPostedAt";
+
+// Backendの本文上限(既存の本文系上限300文字)と同じ値。
+const TOWN_NOW_TEXT_MAX_LENGTH =
+  300;
+
+let townNowCurrentModalThreadId =
+  "";
+
+let townNowReplySending =
+  false;
+
+const townNowRecentReplyAtByThreadId =
+  {};
+
+function isTownNowFreshFetchNeeded(
+  postedAtMillis
+) {
+  return (
+    typeof postedAtMillis === "number" &&
+    Number.isFinite(postedAtMillis) &&
+    Date.now() - postedAtMillis >= 0 &&
+    Date.now() - postedAtMillis <
+      TOWN_NOW_FRESH_FETCH_WINDOW_MILLISECONDS
+  );
+}
+
+function readTownNowJustPostedAt() {
+  try {
+    return Number(
+      sessionStorage.getItem(
+        TOWN_NOW_JUST_POSTED_STORAGE_KEY
+      )
+    );
+  } catch (error) {
+    return NaN;
+  }
+}
+
 function roundTownNowViewerCoordinate(
   value
 ) {
@@ -12508,6 +12556,16 @@ async function loadTownNowThreadsForCurrentLocation(
 
     params.countryCode =
       locationHierarchy.countryCode;
+  }
+
+  // 新しいスレッドを投稿した直後(同じタブ・2分以内)だけキャッシュを通さない。
+  if (
+    isTownNowFreshFetchNeeded(
+      readTownNowJustPostedAt()
+    )
+  ) {
+    params.fresh =
+      String(Date.now());
   }
 
   let result;
@@ -12656,7 +12714,7 @@ function renderTownNowThreadModal(
 
   const commentsHtml =
     comments.length === 0
-      ? '<p class="town-now-empty" data-i18n="town_now_replies_empty">' +
+      ? '<p class="town-now-empty" id="townNowRepliesEmpty" data-i18n="town_now_replies_empty">' +
         escapeHtml(
           getTownNowTranslation(
             "town_now_replies_empty"
@@ -12665,22 +12723,7 @@ function renderTownNowThreadModal(
         "</p>"
       : comments
           .map(
-            function(comment) {
-              return (
-                '<div class="community-board-post-item">' +
-                '<p class="town-now-thread-meta">' +
-                escapeHtml(
-                  formatTownNowTime(
-                    comment.createdAt
-                  )
-                ) +
-                "</p>" +
-                '<p class="community-board-post-text">' +
-                escapeHtml(comment.text || "") +
-                "</p>" +
-                "</div>"
-              );
-            }
+            buildTownNowCommentHtml
           )
           .join("");
 
@@ -12707,8 +12750,319 @@ function renderTownNowThreadModal(
       )
     ) +
     "</h3>" +
+    '<div id="townNowCommentsContainer">' +
     commentsHtml +
-    "</div>";
+    "</div>" +
+    "</div>" +
+    buildTownNowReplyFormHtml();
+}
+
+function buildTownNowCommentHtml(
+  comment
+) {
+  return (
+    '<div class="community-board-post-item">' +
+    '<p class="town-now-thread-meta">' +
+    escapeHtml(
+      formatTownNowTime(
+        comment.createdAt
+      )
+    ) +
+    "</p>" +
+    '<p class="community-board-post-text">' +
+    escapeHtml(comment.text || "") +
+    "</p>" +
+    "</div>"
+  );
+}
+
+// 返信入力欄(モーダル下部に固定。長い返信一覧でも入力欄まで届く)。
+// textareaにはdata-i18nを付けない(言語切替でinnerHTMLが書き換わるため)。
+function buildTownNowReplyFormHtml() {
+  return (
+    '<div class="town-now-reply-form">' +
+    '<textarea id="townNowReplyInput" class="town-now-reply-input" maxlength="' +
+    TOWN_NOW_TEXT_MAX_LENGTH +
+    '" rows="2" placeholder="' +
+    escapeHtml(
+      getTownNowTranslation(
+        "town_now_reply_placeholder"
+      )
+    ) +
+    '" data-i18n-placeholder="town_now_reply_placeholder"></textarea>' +
+    '<div class="town-now-reply-actions">' +
+    '<span class="town-now-reply-count"><span id="townNowReplyCount">0</span> / ' +
+    TOWN_NOW_TEXT_MAX_LENGTH +
+    "</span>" +
+    '<button type="button" id="townNowReplyButton" class="location-button town-now-reply-button" data-i18n="town_now_reply_button" disabled>' +
+    escapeHtml(
+      getTownNowTranslation(
+        "town_now_reply_button"
+      )
+    ) +
+    "</button>" +
+    "</div>" +
+    '<p id="townNowReplyMessage" class="town-now-reply-message" role="status" aria-live="polite"></p>' +
+    "</div>"
+  );
+}
+
+function showTownNowReplyMessage(
+  translationKey,
+  isError
+) {
+  const message =
+    document.getElementById(
+      "townNowReplyMessage"
+    );
+
+  if (!message) {
+    return;
+  }
+
+  if (!translationKey) {
+    message.textContent =
+      "";
+    message.removeAttribute(
+      "data-i18n"
+    );
+    return;
+  }
+
+  message.setAttribute(
+    "data-i18n",
+    translationKey
+  );
+
+  message.className =
+    "town-now-reply-message" +
+    (
+      isError
+        ? " is-error"
+        : ""
+    );
+
+  message.textContent =
+    getTownNowTranslation(
+      translationKey
+    );
+}
+
+function updateTownNowReplyButtonState() {
+  const input =
+    document.getElementById(
+      "townNowReplyInput"
+    );
+
+  const button =
+    document.getElementById(
+      "townNowReplyButton"
+    );
+
+  const count =
+    document.getElementById(
+      "townNowReplyCount"
+    );
+
+  if (
+    !input ||
+    !button
+  ) {
+    return;
+  }
+
+  if (count) {
+    count.textContent =
+      String(
+        input.value.length
+      );
+  }
+
+  button.disabled =
+    townNowReplySending ||
+    input.value.trim() === "";
+}
+
+// 返信送信(townNowCommentCreate)。親スレッドの公開状態・期限はBackendが
+// 保存直前に再確認する(フロントでは安全判定を作らない)。expiresAtは
+// Backendが親スレッドからコピーする(フロントでは作らない・送らない)。
+async function submitTownNowReply() {
+  const input =
+    document.getElementById(
+      "townNowReplyInput"
+    );
+
+  const button =
+    document.getElementById(
+      "townNowReplyButton"
+    );
+
+  const threadId =
+    townNowCurrentModalThreadId;
+
+  if (
+    townNowReplySending ||
+    !input ||
+    !button ||
+    threadId === ""
+  ) {
+    return;
+  }
+
+  const text =
+    input.value.trim();
+
+  if (text === "") {
+    return;
+  }
+
+  townNowReplySending =
+    true;
+
+  input.disabled =
+    true;
+
+  updateTownNowReplyButtonState();
+
+  showTownNowReplyMessage(
+    "town_now_reply_sending",
+    false
+  );
+
+  let status =
+    0;
+
+  let data =
+    null;
+
+  try {
+    const idToken =
+      await getAnonymousIdTokenForLocationCollection();
+
+    const response =
+      await fetch(
+        "/api/moderate-submission",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json",
+            "Authorization":
+              "Bearer " + idToken
+          },
+          body:
+            JSON.stringify({
+              mode: "townNowCommentCreate",
+              threadId: threadId,
+              text: text
+            })
+        }
+      );
+
+    status =
+      response.status;
+
+    try {
+      data =
+        await response.json();
+    } catch (jsonError) {
+      data =
+        null;
+    }
+  } catch (error) {
+    status =
+      0;
+  }
+
+  townNowReplySending =
+    false;
+
+  // 送信中にモーダルが閉じられた/別のスレッドが開かれた場合は画面を触らない。
+  if (
+    threadId !==
+      townNowCurrentModalThreadId ||
+    !document.getElementById(
+      "townNowReplyInput"
+    )
+  ) {
+    return;
+  }
+
+  input.disabled =
+    false;
+
+  if (
+    status === 200 &&
+    data &&
+    data.success === true
+  ) {
+    input.value =
+      "";
+
+    townNowRecentReplyAtByThreadId[threadId] =
+      Date.now();
+
+    if (data.status === "visible") {
+      // 公開された返信は、その場で一覧の末尾に表示する(30秒キャッシュで
+      // 消えて見えないよう、再度開いた時もキャッシュを通さず取り直す)。
+      const container =
+        document.getElementById(
+          "townNowCommentsContainer"
+        );
+
+      const empty =
+        document.getElementById(
+          "townNowRepliesEmpty"
+        );
+
+      if (empty) {
+        empty.remove();
+      }
+
+      if (container) {
+        container.insertAdjacentHTML(
+          "beforeend",
+          buildTownNowCommentHtml({
+            text: text,
+            createdAt:
+              new Date().toISOString()
+          })
+        );
+      }
+
+      showTownNowReplyMessage(
+        "",
+        false
+      );
+    } else {
+      showTownNowReplyMessage(
+        "town_now_reply_pending",
+        false
+      );
+    }
+
+    updateTownNowReplyButtonState();
+    return;
+  }
+
+  if (status === 404) {
+    // 親スレッドが期限切れ・非公開。返信させない。
+    setTownNowThreadModalMessage(
+      "town_now_thread_ended"
+    );
+    return;
+  }
+
+  showTownNowReplyMessage(
+    status === 429
+      ? "town_now_reply_rate_limited"
+      : status === 400
+        ? "town_now_reply_invalid"
+        : "town_now_reply_error",
+    true
+  );
+
+  updateTownNowReplyButtonState();
 }
 
 async function openTownNowThreadModal(
@@ -12729,6 +13083,9 @@ async function openTownNowThreadModal(
 
   const requestSequence =
     ++townNowThreadModalRequestSequence;
+
+  townNowCurrentModalThreadId =
+    threadId;
 
   setTownNowThreadModalMessage(
     "town_now_modal_loading"
@@ -12759,12 +13116,25 @@ async function openTownNowThreadModal(
       threadResult.data.success === true &&
       threadResult.data.thread
     ) {
+      const commentsParams =
+        {
+          mode: "townNowCommentsList",
+          threadId: threadId
+        };
+
+      // このスレッドへ自分が返信した直後(2分以内)はキャッシュを通さない。
+      if (
+        isTownNowFreshFetchNeeded(
+          townNowRecentReplyAtByThreadId[threadId]
+        )
+      ) {
+        commentsParams.fresh =
+          String(Date.now());
+      }
+
       commentsResult =
         await fetchTownNowJson(
-          {
-            mode: "townNowCommentsList",
-            threadId: threadId
-          }
+          commentsParams
         );
     }
   } catch (error) {
@@ -12831,6 +13201,9 @@ function closeTownNowThreadModal() {
 
   townNowThreadModalRequestSequence++;
 
+  townNowCurrentModalThreadId =
+    "";
+
   modal.classList.remove(
     "visible"
   );
@@ -12853,13 +13226,29 @@ function closeTownNowThreadModalOutside(
 document.addEventListener(
   "click",
   function(event) {
-    const button =
+    const target =
       event.target &&
       typeof event.target.closest === "function"
-        ? event.target.closest(
-            "[data-town-now-thread-id]"
-          )
+        ? event.target
         : null;
+
+    if (!target) {
+      return;
+    }
+
+    if (
+      target.closest(
+        "#townNowReplyButton"
+      )
+    ) {
+      submitTownNowReply();
+      return;
+    }
+
+    const button =
+      target.closest(
+        "[data-town-now-thread-id]"
+      );
 
     if (!button) {
       return;
@@ -12870,6 +13259,18 @@ document.addEventListener(
         "data-town-now-thread-id"
       )
     );
+  }
+);
+
+document.addEventListener(
+  "input",
+  function(event) {
+    if (
+      event.target &&
+      event.target.id === "townNowReplyInput"
+    ) {
+      updateTownNowReplyButtonState();
+    }
   }
 );
 
