@@ -5469,7 +5469,12 @@ const AREA_NAME_RESOLUTION_TIMEOUT_MS =
   6000;
 
 function resolveAreaNameFromCoordinates(latitude, longitude) {
-  return new Promise(function(resolve) {
+  return new Promise(async function(resolve) {
+    // 現在地がGoogle Maps読み込み完了より先に返った場合でも地域解決できるよう、
+    // resolveGooglePlaceIdForPrefectureAndAreaName()と同じく読み込み完了を待つ
+    // (ensureGoogleMapsLoaded()は失敗時も例外を投げず必ずresolveする)。
+    await ensureGoogleMapsLoaded();
+
     if (
       typeof google === "undefined" ||
       !google.maps ||
@@ -5585,7 +5590,11 @@ function resolveLocationHierarchyFromCoordinates(
   longitude
 ) {
   return new Promise(
-    function(resolve) {
+    async function(resolve) {
+      // 現在地がGoogle Maps読み込み完了より先に返った場合でも地域解決できるよう、
+      // resolveGooglePlaceIdForPrefectureAndAreaName()と同じく読み込み完了を待つ。
+      await ensureGoogleMapsLoaded();
+
       if (
         typeof google === "undefined" ||
         !google.maps ||
