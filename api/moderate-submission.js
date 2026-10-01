@@ -36,7 +36,8 @@ import {
   handleTownNowThreadsList,
   handleTownNowThreadsNearby,
   handleTownNowCommentCreate,
-  handleTownNowCommentsList
+  handleTownNowCommentsList,
+  handleTownNowMyThreads
 } from "./_lib/town-now-threads.js";
 
 
@@ -26913,6 +26914,18 @@ export default async function handler(
       request.query.mode === "townNowThreadsList"
     ) {
       return handleTownNowThreadsList(
+        request,
+        response,
+        buildTownNowThreadDeps()
+      );
+    }
+
+    // 街の今スレッド｜投稿者本人の今日の公開中スレッド(匿名認証必須、
+    // 本人には距離に関係なく表示する。共有キャッシュしない)。
+    if (
+      request.query.mode === "townNowMyThreads"
+    ) {
+      return handleTownNowMyThreads(
         request,
         response,
         buildTownNowThreadDeps()

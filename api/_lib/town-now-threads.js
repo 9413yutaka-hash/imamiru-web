@@ -2094,3 +2094,180 @@ export async function handleTownNowCommentsList(
     });
   }
 }
+
+
+// ------------------------------------------------------------------
+// G. 自分が立てた今日のスレッド(GET mode=townNowMyThreads、匿名Firebase
+// AuthのIDトークン必須)。投稿者本人にだけ、話題の場所からの距離・
+// 市区町村に関係なく自分の公開中スレッドを返す(第三者への5km/市区町村の
+// 表示ルールは変えない)。本人判定はサーバーで検証したuidだけを使い、
+// クライアントの値は信用しない。authorUidは返さない。利用者ごとの結果の
+// ため共有キャッシュしない(handlerの既定Cache-Control: no-storeのまま)。
+// 公開条件(visible・期限内・その地域の今日)は既存の詳細取得と同じ。
+// ------------------------------------------------------------------
+export const TOWN_NOW_MY_THREADS_LIMIT =
+  20;
+
+export async function handleTownNowMyThreads(
+  request,
+  response,
+  deps
+) {
+  try {
+    const idToken =
+      deps.readBearerToken(
+        request
+      );
+
+    if (idToken === "") {
+      return response.status(401).json({
+        success: false,
+        message: "認証情報がありません。"
+      });
+    }
+
+    const app =
+      deps.getFirebaseAdminApp();
+
+    let decodedToken;
+
+    try {
+      decodedToken =
+        await getAuth(app)
+          .verifyIdToken(
+            idToken
+          );
+    } catch (verifyError) {
+      return response.status(401).json({
+        success: false,
+        message: "認証情報が正しくありません。"
+      });
+    }
+
+    const database =
+      deps.getFirestore(app);
+
+    const now =
+      new Date();
+
+    // 対応している国の「今日」(現在はJPのAsia/Tokyoのみ)ごとに、
+    // 等価条件だけで読む(本人・今日・visible)。
+    const todayKeys =
+      Array.from(
+        new Set(
+          Object.keys(TOWN_NOW_COUNTRY_TIME_ZONES).map(
+            function(countryCode) {
+              return computeTownNowLocalDateKey(
+                now,
+                TOWN_NOW_COUNTRY_TIME_ZONES[countryCode]
+              );
+            }
+          )
+        )
+      );
+
+    const snapshots =
+      await Promise.all(
+        todayKeys.map(
+          function(todayKey) {
+            return database
+              .collection(
+                TOWN_NOW_THREADS_COLLECTION
+              )
+              .where(
+                "authorUid",
+                "==",
+                decodedToken.uid
+              )
+              .where(
+                "localDateKey",
+                "==",
+                todayKey
+              )
+              .where(
+                "status",
+                "==",
+                "visible"
+              )
+              .limit(
+                TOWN_NOW_MY_THREADS_LIMIT
+              )
+              .get();
+          }
+        )
+      );
+
+    const threadsById =
+      new Map();
+
+    snapshots.forEach(
+      function(snapshot) {
+        snapshot.docs.forEach(
+          function(documentSnapshot) {
+            const data =
+              documentSnapshot.data() ||
+              {};
+
+            if (
+              data.authorUid === decodedToken.uid &&
+              isTownNowThreadOpen(
+                data,
+                now
+              )
+            ) {
+              threadsById.set(
+                documentSnapshot.id,
+                data
+              );
+            }
+          }
+        );
+      }
+    );
+
+    const createdAtMillis =
+      function(data) {
+        return data.createdAt &&
+          typeof data.createdAt.toMillis === "function"
+          ? data.createdAt.toMillis()
+          : 0;
+      };
+
+    const threads =
+      Array.from(
+        threadsById.entries()
+      )
+        .sort(
+          function(a, b) {
+            return createdAtMillis(b[1]) - createdAtMillis(a[1]);
+          }
+        )
+        .slice(
+          0,
+          TOWN_NOW_MY_THREADS_LIMIT
+        )
+        .map(
+          function(entry) {
+            return buildPublicThread(
+              entry[0],
+              entry[1]
+            );
+          }
+        );
+
+    return response.status(200).json({
+      success: true,
+      threads: threads
+    });
+  } catch (error) {
+    console.error(
+      "街の今スレッド：自分のスレッド取得エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message: "スレッドを取得できませんでした。"
+    });
+  }
+}

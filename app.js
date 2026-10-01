@@ -12579,6 +12579,11 @@ async function loadTownNowThreadsForCurrentLocation(
 
   let result;
 
+  // 近くのスレッド(第三者にも見える通常表示)と、自分が立てた今日の
+  // スレッド(本人だけ。距離に関係なく表示)を並行して読む。
+  const myThreadsPromise =
+    fetchTownNowMyThreads();
+
   try {
     result =
       await fetchTownNowJson(
@@ -12589,6 +12594,9 @@ async function loadTownNowThreadsForCurrentLocation(
       null;
   }
 
+  const myThreads =
+    await myThreadsPromise;
+
   // 現在地が取り直された後に届いた古い応答は捨てる。
   if (
     requestSequence !==
@@ -12597,14 +12605,20 @@ async function loadTownNowThreadsForCurrentLocation(
     return;
   }
 
-  if (
-    !result ||
-    result.status !== 200 ||
-    !result.data ||
-    result.data.success !== true ||
-    !Array.isArray(
+  const nearbyThreads =
+    result &&
+    result.status === 200 &&
+    result.data &&
+    result.data.success === true &&
+    Array.isArray(
       result.data.threads
     )
+      ? result.data.threads
+      : null;
+
+  if (
+    nearbyThreads === null &&
+    myThreads.length === 0
   ) {
     // 取得に失敗した場合は壊れた欄を見せず、セクションごと出さない。
     section.style.display =
@@ -12613,11 +12627,196 @@ async function loadTownNowThreadsForCurrentLocation(
   }
 
   renderTownNowThreads(
-    result.data.threads
+    mergeTownNowThreads(
+      nearbyThreads || [],
+      myThreads
+    )
   );
 
   section.style.display =
     "";
+}
+
+// 近くのスレッドと自分のスレッドを、同じスレッドが2件にならないよう
+// threadIdで統合し、新しい順に並べる。
+function mergeTownNowThreads(
+  nearbyThreads,
+  myThreads
+) {
+  const threadsById =
+    new Map();
+
+  myThreads
+    .concat(
+      nearbyThreads
+    )
+    .forEach(
+      function(thread) {
+        if (
+          thread &&
+          typeof thread.threadId === "string" &&
+          !threadsById.has(
+            thread.threadId
+          )
+        ) {
+          threadsById.set(
+            thread.threadId,
+            thread
+          );
+        }
+      }
+    );
+
+  return Array.from(
+    threadsById.values()
+  ).sort(
+    function(a, b) {
+      return (
+        String(b.createdAt || "").localeCompare(
+          String(a.createdAt || "")
+        )
+      );
+    }
+  );
+}
+
+// 既に匿名ログイン済みの利用者のIDトークンだけを取得する(未ログインの
+// 閲覧者のために新しい匿名ユーザーは作らない)。スレッドを立てた本人は
+// 投稿時に匿名ログイン済みのため、ここで本人として判定できる。
+function getExistingTownNowIdToken() {
+  return new Promise(
+    function(resolve) {
+      if (
+        typeof firebase === "undefined" ||
+        !firebase.auth
+      ) {
+        resolve("");
+        return;
+      }
+
+      const auth =
+        firebase.auth();
+
+      const resolveWithUser =
+        function(user) {
+          if (!user) {
+            resolve("");
+            return;
+          }
+
+          user
+            .getIdToken()
+            .then(
+              resolve,
+              function() {
+                resolve("");
+              }
+            );
+        };
+
+      if (auth.currentUser) {
+        resolveWithUser(
+          auth.currentUser
+        );
+        return;
+      }
+
+      let settled =
+        false;
+
+      let unsubscribe =
+        null;
+
+      const timeoutId =
+        window.setTimeout(
+          function() {
+            if (!settled) {
+              settled =
+                true;
+
+              if (unsubscribe) {
+                unsubscribe();
+              }
+
+              resolve("");
+            }
+          },
+          4000
+        );
+
+      unsubscribe =
+        auth.onAuthStateChanged(
+          function(user) {
+            if (settled) {
+              return;
+            }
+
+            settled =
+              true;
+
+            window.clearTimeout(
+              timeoutId
+            );
+
+            window.setTimeout(
+              function() {
+                if (unsubscribe) {
+                  unsubscribe();
+                }
+              },
+              0
+            );
+
+            resolveWithUser(
+              user
+            );
+          }
+        );
+    }
+  );
+}
+
+// 自分が立てた今日の公開中スレッド(GET mode=townNowMyThreads)。本人判定は
+// サーバーがIDトークンで行う。失敗・未ログイン時は空配列(近くのスレッドの
+// 表示には影響させない)。利用者ごとの結果のためキャッシュしない。
+async function fetchTownNowMyThreads() {
+  try {
+    const idToken =
+      await getExistingTownNowIdToken();
+
+    if (!idToken) {
+      return [];
+    }
+
+    const response =
+      await fetch(
+        "/api/moderate-submission?mode=townNowMyThreads",
+        {
+          headers: {
+            "Authorization":
+              "Bearer " + idToken
+          },
+          cache: "no-store"
+        }
+      );
+
+    if (response.status !== 200) {
+      return [];
+    }
+
+    const data =
+      await response.json();
+
+    return data &&
+      data.success === true &&
+      Array.isArray(
+        data.threads
+      )
+      ? data.threads
+      : [];
+  } catch (error) {
+    return [];
+  }
 }
 
 function renderTownNowThreads(
@@ -16417,40 +16616,168 @@ if (regionRecommendationBackToCurrentButtonElement) {
 // #heroActionArea/#heroActionReads)を、既存の各セクション・既存処理へ
 // 接続する。新しい機能・新しいGPS/地域選択ロジックは一切作らず、
 // 既存の該当要素をsmooth scrollまたはclick代理実行するだけの薄い配線。
-// TOPヒーロー緊急変更｜「今日の沖縄」無反応バグの修正。
-// #regionTodayInfoSectionは、GPS未取得・情報未取得・エラー時は
-// style.display="none"のまま(renderRegionTodayInfo()の既存挙動、無変更)。
-// そのため単純にscrollIntoView()するだけでは、非表示要素には何も
-// スクロールが起きず「無反応」に見えていた(調査で確認した実際の原因)。
-// 修正は「既にregionTodayInfoが表示可能ならそのままscroll、まだなら
-// 既存#locationButtonの処理(GPS取得→triggerRegionTodayInfo())をそのまま
-// 再利用して起動し、セクションが表示された時点で自動的にscrollする」の
-// 2分岐にする。GPS取得ロジック・regionTodayInfo生成ロジックは一切
-// 複製しない(既存要素のclick代理実行のみ)。
-let heroActionTodayPendingObserver =
+// ヒーロー・現在地導線改善｜ボタン名と到着先を一致させる
+// (今いる街の情報→#cityInfoSection、近くで楽しめる場所→#shopsSection、
+// 地域から探す→地域選択、マチナウ読みもの→#columnEntrySection)。
+// 現在地が必要な入口は、未取得ならGPSを勝手に取り直さず現在地ボタンへ
+// 案内し、取得済みなら保存・適用済みの現在地のまま目的地へ移動する。
+// ヒーロー・現在地導線改善｜現在地取得の唯一の入口。現在地ボタン
+// (#locationButton)と画面下部「見つける」([data-location-trigger])の両方が
+// この関数を使う(現在地取得ロジック自体はgetLocation()のまま複製しない)。
+// inline onclickをやめ、app.js側で登録する。app.jsの準備前に押された
+// 場合は、index.html<head>の小さなスクリプトが記録した早押しを、準備完了
+// 直後に1回だけ実行する(ReferenceErrorを出さず、早押しも捨てない)。
+function machinauStartLocation() {
+  ensureGoogleMapsLoaded();
+  getLocation();
+}
+
+document
+  .querySelectorAll(
+    "[data-location-trigger]"
+  )
+  .forEach(
+    function(element) {
+      element.addEventListener(
+        "click",
+        machinauStartLocation
+      );
+    }
+  );
+
+if (window.machinauPendingLocationRequest) {
+  window.machinauPendingLocationRequest =
+    false;
+
+  document
+    .querySelectorAll(
+      "[data-location-trigger][aria-busy]"
+    )
+    .forEach(
+      function(element) {
+        element.removeAttribute(
+          "aria-busy"
+        );
+      }
+    );
+
+  machinauStartLocation();
+}
+
+// 現在地(GPS取得または30分以内の保存位置の復元)が適用済みか。
+function isMachinauLocationAcquired() {
+  return (
+    userLatitude !== null &&
+    userLongitude !== null
+  );
+}
+
+// 現在地が必要な入口を現在地未取得で押した場合は、GPSを裏で勝手に
+// 取り直さず、ヒーローの「現在地を取得する」へ案内する。
+function guideToMachinauLocationButton() {
+  const locationButtonElement =
+    document.getElementById(
+      "locationButton"
+    );
+
+  if (!locationButtonElement) {
+    return;
+  }
+
+  const locationCardElement =
+    locationButtonElement.closest(".location-card") ||
+    locationButtonElement;
+
+  locationCardElement.scrollIntoView(
+    {
+      behavior: "smooth",
+      block: "center"
+    }
+  );
+
+  try {
+    locationButtonElement.focus(
+      {
+        preventScroll: true
+      }
+    );
+  } catch (error) {
+    // フォーカスできない環境でも案内(スクロール・強調)は続ける。
+  }
+
+  locationButtonElement.classList.remove(
+    "location-button-attention"
+  );
+
+  // アニメーションをやり直すため、クラスの付け直しを次の描画へ回す。
+  window.requestAnimationFrame(
+    function() {
+      locationButtonElement.classList.add(
+        "location-button-attention"
+      );
+    }
+  );
+
+  window.setTimeout(
+    function() {
+      locationButtonElement.classList.remove(
+        "location-button-attention"
+      );
+    },
+    2600
+  );
+}
+
+let heroActionPendingSectionObserver =
   null;
 
-// regionTodayInfoSectionのstyle.display変化(renderRegionTodayInfo()が
-// 既に行っている既存の表示切り替え)を監視するだけの薄いオブザーバー。
-// 表示された瞬間に1回だけscrollし、自分自身を切断する。GPS許可待ちが
-// 極端に長引く/情報が結局表示されない場合に備え、一定時間で監視を
-// 打ち切る(タイムアウト時も新しいエラー表示は出さない、既存の
-// 「エラーを大きく表示しない」方針に合わせる)。
-function waitForRegionTodayInfoSectionAndScrollIntoView() {
+// 目的のセクションが表示中ならスクロールする。現在地は取得済みだが
+// 地域の特定がまだ終わっていない等で非表示の場合は、表示された時点で
+// スクロールする(最大20秒)。その間は現在地カード(取得状況の表示)へ
+// 移動しておく。GPSは再取得しない。
+function scrollToHeroActionSection(
+  sectionId
+) {
   const targetSection =
     document.getElementById(
-      "regionTodayInfoSection"
+      sectionId
     );
 
   if (!targetSection) {
     return;
   }
 
-  if (heroActionTodayPendingObserver) {
-    heroActionTodayPendingObserver.disconnect();
-
-    heroActionTodayPendingObserver =
+  if (heroActionPendingSectionObserver) {
+    heroActionPendingSectionObserver.disconnect();
+    heroActionPendingSectionObserver =
       null;
+  }
+
+  if (targetSection.style.display !== "none") {
+    targetSection.scrollIntoView(
+      {
+        behavior: "smooth",
+        block: "start"
+      }
+    );
+    return;
+  }
+
+  const locationButtonElement =
+    document.getElementById(
+      "locationButton"
+    );
+
+  if (locationButtonElement) {
+    (
+      locationButtonElement.closest(".location-card") ||
+      locationButtonElement
+    ).scrollIntoView(
+      {
+        behavior: "smooth",
+        block: "center"
+      }
+    );
   }
 
   const observer =
@@ -16466,8 +16793,8 @@ function waitForRegionTodayInfoSectionAndScrollIntoView() {
 
           observer.disconnect();
 
-          if (heroActionTodayPendingObserver === observer) {
-            heroActionTodayPendingObserver =
+          if (heroActionPendingSectionObserver === observer) {
+            heroActionPendingSectionObserver =
               null;
           }
         }
@@ -16482,22 +16809,22 @@ function waitForRegionTodayInfoSectionAndScrollIntoView() {
     }
   );
 
-  heroActionTodayPendingObserver =
+  heroActionPendingSectionObserver =
     observer;
 
   window.setTimeout(
     function() {
-      if (heroActionTodayPendingObserver === observer) {
+      if (heroActionPendingSectionObserver === observer) {
         observer.disconnect();
-
-        heroActionTodayPendingObserver =
+        heroActionPendingSectionObserver =
           null;
       }
     },
-    45000
+    20000
   );
 }
 
+// 1. 今いる街の情報 → 「この街の情報」(#cityInfoSection)。現在地必須。
 const heroActionTodayElement =
   document.getElementById(
     "heroActionToday"
@@ -16507,64 +16834,18 @@ if (heroActionTodayElement) {
   heroActionTodayElement.addEventListener(
     "click",
     function() {
-      const targetSection =
-        document.getElementById(
-          "regionTodayInfoSection"
-        );
-
-      if (!targetSection) {
+      if (!isMachinauLocationAcquired()) {
+        guideToMachinauLocationButton();
         return;
       }
 
-      if (targetSection.style.display !== "none") {
-        // ①既にregionTodayInfoが表示可能(loading/generating/ready、
-        // renderRegionTodayInfo()の既存状態管理をそのまま利用)。
-        targetSection.scrollIntoView(
-          {
-            behavior: "smooth",
-            block: "start"
-          }
-        );
-
-        return;
-      }
-
-      // ②まだ表示可能になっていない(GPS未取得、または取得済みでも
-      // 情報未取得/エラー)。既存#locationButtonのonclick
-      // (ensureGoogleMapsLoaded(); getLocation())をそのまま起動する
-      // (GPS取得ロジックの複製はしない)。取得中である旨は既存の
-      // locationButton/locationMessageの表示切り替え(getLocation()が
-      // 既に行っている)でユーザーに伝わる。
-      const locationButtonElement =
-        document.getElementById(
-          "locationButton"
-        );
-
-      if (locationButtonElement) {
-        locationButtonElement.scrollIntoView(
-          {
-            behavior: "smooth",
-            block: "center"
-          }
-        );
-
-        locationButtonElement.click();
-      }
-
-      // regionTodayInfoSectionが表示された時点(triggerRegionTodayInfo()の
-      // 既存処理がstatusを更新し、renderRegionTodayInfo()が既存どおり
-      // 表示を切り替えるタイミング)で自動的にそこへ移動する。
-      waitForRegionTodayInfoSectionAndScrollIntoView();
+      scrollToHeroActionSection(
+        "cityInfoSection"
+      );
     }
   );
 }
 
-// 広告実証前 GA4最低限行動計測｜既存#locationButtonのonclick属性
-// (ensureGoogleMapsLoaded(); getLocation())は一切変更せず、addEventListener
-// で計測だけを追加する。#heroActionNearby(「近くを探す」)は既存コードが
-// #locationButton.click()を代理実行する設計のため、ここに1箇所だけ
-// 追加すれば両方の入口を計測できる(GPS取得の成否ではなく、旅行者が
-// 現在地ボタンを押した事実だけを計測する)。
 const locationButtonElementForAnalytics =
   document.getElementById(
     "locationButton"
@@ -16581,6 +16862,8 @@ if (locationButtonElementForAnalytics) {
   );
 }
 
+// 2. 近くで楽しめる場所 → 「今、近くで楽しめる場所」(#shopsSection、
+// 15km以内の店舗・施設)。現在地必須。取得済みならGPSを取り直さない。
 const heroActionNearbyElement =
   document.getElementById(
     "heroActionNearby"
@@ -16590,28 +16873,20 @@ if (heroActionNearbyElement) {
   heroActionNearbyElement.addEventListener(
     "click",
     function() {
-      // 既存locationButtonのonclick(ensureGoogleMapsLoaded()＋
-      // getLocation())をそのまま起動する。GPS取得ロジック自体は
-      // 複製しない。
-      const locationButtonElement =
-        document.getElementById(
-          "locationButton"
-        );
-
-      if (locationButtonElement) {
-        locationButtonElement.scrollIntoView(
-          {
-            behavior: "smooth",
-            block: "center"
-          }
-        );
-
-        locationButtonElement.click();
+      if (!isMachinauLocationAcquired()) {
+        guideToMachinauLocationButton();
+        return;
       }
+
+      scrollToHeroActionSection(
+        "shopsSection"
+      );
     }
   );
 }
 
+// 3. 地域から探す → 既存の都道府県→市区町村の地域選択
+// (#regionRecommendationAreaPicker)。現在地不要。
 const heroActionAreaElement =
   document.getElementById(
     "heroActionArea"
@@ -16621,13 +16896,8 @@ if (heroActionAreaElement) {
   heroActionAreaElement.addEventListener(
     "click",
     function() {
-      // 広告実証前 GA4最低限行動計測｜現行UI上で「街の掲示板を見る」に
-      // 相当する独立した操作は他に存在しない(現在地掲示板はGPS成功時に
-      // 自動表示、遠隔地掲示板は地域検索実行の結果として表示されるため、
-      // それぞれlocation_button_click/region_searchで計測済み)。
-      // この#heroActionArea(「エリアから探す」)は、掲示板を含む
-      // #regionRecommendationSectionを可視化・スクロール表示することだけを
-      // 目的とした、唯一の独立した「見る」操作のため、ここで計測する。
+      // 広告実証前 GA4最低限行動計測｜掲示板(地域選択)を見る操作として
+      // 従来どおり計測する。
       sendMachinauAnalyticsEvent(
         "community_board_view"
       );
@@ -16641,43 +16911,45 @@ if (heroActionAreaElement) {
         return;
       }
 
-      // TOPヒーロー緊急変更｜「エリアから探す」無反応バグの修正。
-      // #regionRecommendationSectionはGPS未取得時style.display="none"の
-      // ままで、その中にある#regionRecommendationOtherAreaButton／
-      // 地域選択ピッカー(#regionRecommendationAreaPicker)も非表示領域内に
-      // 埋もれて画面上どこにも現れず、クリックしても無反応だった
-      // (調査で確認した実際の原因)。
-      // showRegionRecommendationsForArea()自体はGPS(userLatitude等)に
-      // 一切依存せず、areaName文字列とFirestore(window.machinauDb)だけで
-      // 動く。地域選択ピッカーの各ボタンもページ読み込み時に
-      // buildRegionRecommendationAreaPickerHtml()で既に描画済み(GPS非依存)。
-      // 唯一の問題は親sectionが隠れていたことだけなので、GPSを起動せず、
-      // このsection自体をここで可視化するだけにする(選択ロジック自体は
-      // 複製しない)。renderRegionRecommendationCards()は次に実行された
-      // 時点で改めてstyle.displayを実データに応じて設定し直すため、
-      // ここでの一時的な可視化と競合しない。
+      // 地域選択は掲示板セクション内にあり、GPS未取得時はセクションが
+      // 非表示のため、ここで可視化する(GPSは起動しない)。
       if (targetSection.style.display === "none") {
         targetSection.style.display =
           "";
       }
 
-      targetSection.scrollIntoView(
+      const areaPickerElement =
+        document.getElementById(
+          "regionRecommendationAreaPicker"
+        );
+
+      // 「ほかの地域を見る」は開閉の切替のため、閉じている時だけ押して
+      // 開く(2回目に押しても閉じないよう、入口としては常に開いた状態)。
+      if (
+        areaPickerElement &&
+        areaPickerElement.style.display === "none"
+      ) {
+        const otherAreaButtonElement =
+          document.getElementById(
+            "regionRecommendationOtherAreaButton"
+          );
+
+        if (otherAreaButtonElement) {
+          otherAreaButtonElement.click();
+        }
+      }
+
+      (
+        areaPickerElement &&
+        areaPickerElement.style.display !== "none"
+          ? areaPickerElement
+          : targetSection
+      ).scrollIntoView(
         {
           behavior: "smooth",
           block: "start"
         }
       );
-
-      // 既存の「ほかの地域を見る」トグル処理(表示/非表示の切替のみ)を
-      // そのまま起動する。地域選択ロジック自体は複製しない。
-      const otherAreaButtonElement =
-        document.getElementById(
-          "regionRecommendationOtherAreaButton"
-        );
-
-      if (otherAreaButtonElement) {
-        otherAreaButtonElement.click();
-      }
     }
   );
 }

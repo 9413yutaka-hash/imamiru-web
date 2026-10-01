@@ -434,6 +434,33 @@
       margin-top: 0;
     }
 
+    /* ヒーロー・現在地導線改善｜現在地カードをヒーロー内(キャッチコピー直下)へ
+       移動。カード自体の見た目(.location-card)は変えず、ヒーローの中央寄せ・
+       白文字の影響を受けないよう左揃え・通常の文字色に戻し、4入口と同じ
+       最大幅に揃える(旧位置用の負のmargin-topもここで打ち消す)。 */
+    .hero-content .location-card {
+      max-width: 780px;
+      margin: 0 auto 14px;
+      text-align: left;
+      color: var(--text);
+    }
+
+    /* 現在地が必要な入口を未取得で押した時に、現在地ボタンへ案内する強調。 */
+    .location-button-attention {
+      animation: machinauLocationAttention 0.8s ease-in-out 3;
+    }
+
+    @keyframes machinauLocationAttention {
+      0%,
+      100% {
+        box-shadow: 0 0 0 0 rgba(7, 136, 201, 0);
+      }
+
+      50% {
+        box-shadow: 0 0 0 6px rgba(7, 136, 201, 0.35);
+      }
+    }
+
     .location-card-top {
       display: flex;
       align-items: center;

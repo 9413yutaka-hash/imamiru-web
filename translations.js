@@ -42,14 +42,14 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   hero_action_today_title: {
-    ja: "今の街",
-    en: "Town Now"
+    ja: "今いる街の情報",
+    en: "About This Town"
   },
 
 
   hero_action_nearby_title: {
-    ja: "近くを探す",
-    en: "Near Me"
+    ja: "近くで楽しめる場所",
+    en: "Fun Spots Nearby"
   },
 
   hero_action_nearby_caption: {
@@ -58,17 +58,17 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   hero_action_area_title: {
-    ja: "エリアから探す",
+    ja: "地域から探す",
     en: "Explore by Area"
   },
 
   hero_action_area_caption: {
-    ja: "市町村・エリアで",
-    en: "Cities & areas"
+    ja: "都道府県・市区町村で",
+    en: "By prefecture & city"
   },
 
   hero_action_reads_title: {
-    ja: "マチナウ読み物",
+    ja: "マチナウ読みもの",
     en: "Machinau Reads"
   },
 
@@ -95,8 +95,8 @@ const MACHINAU_TRANSLATIONS = {
   // JS側(updateLocationButtonLanguage())が切り替える(userLatitudeの有無で
   // 判定、getLocation()本体・地域判定ロジックには一切触れない)。
   location_heading: {
-    ja: "今いる街を見てみよう",
-    en: "See what's near you"
+    ja: "今いる街を見る",
+    en: "See the town you're in"
   },
 
   // 現在地取得後の見出し。
@@ -106,8 +106,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   location_button_get: {
-    ja: "現在値ボタン",
-    en: "Start with my location"
+    ja: "現在地を取得する",
+    en: "Get my location"
   },
 
   location_button_update: {
