@@ -1441,6 +1441,53 @@ const MACHINAU_TRANSLATIONS = {
   current_location_marker_title: {
     ja: "現在地",
     en: "Current location"
+  },
+
+  // 街の今スレッド Phase 1C-2｜TOP一覧＋詳細モーダル(見るだけ)。
+  // 文言は仮(代表が実機確認後に最終判断)。投稿本文・返信本文は翻訳しない。
+  town_now_heading: {
+    ja: "💬 街の今スレッド",
+    en: "💬 Town Now Threads"
+  },
+
+  town_now_description: {
+    ja: "近くにいる人たちの、今日の会話です。",
+    en: "Today's conversations from people nearby."
+  },
+
+  town_now_empty: {
+    ja: "近くでは、まだ今日の会話がありません。",
+    en: "No conversations nearby yet today."
+  },
+
+  town_now_open_button: {
+    ja: "会話を見る",
+    en: "View conversation"
+  },
+
+  town_now_modal_loading: {
+    ja: "読み込み中…",
+    en: "Loading…"
+  },
+
+  town_now_thread_ended: {
+    ja: "この会話は公開を終了しました。",
+    en: "This conversation is no longer available."
+  },
+
+  town_now_load_error: {
+    ja: "会話を読み込めませんでした。時間をおいて、もう一度お試しください。",
+    en: "Couldn't load this conversation. Please try again later."
+  },
+
+  town_now_replies_heading: {
+    ja: "返信",
+    en: "Replies"
+  },
+
+  town_now_replies_empty: {
+    ja: "まだ返信はありません。",
+    en: "No replies yet."
   }
 };
 

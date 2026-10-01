@@ -9294,6 +9294,13 @@ function applyUserLocation(
   locationHierarchyPromise
     .then(
       function(locationHierarchy) {
+        // 街の今スレッド Phase 1C-2｜現在地取得・30分復元のどちらでも、
+        // 現在地の地域階層が分かった時点で近くのスレッドを読む。地域階層が
+        // 無い場合(null)も、座標だけで地点スレッド(5km)は取得できる。
+        loadTownNowThreadsForCurrentLocation(
+          locationHierarchy
+        );
+
         if (!locationHierarchy) {
           return;
         }
@@ -12364,6 +12371,507 @@ async function loadCommunityBoardForCurrentArea(
     fetchResult.imageUrl
   );
 }
+
+// ---- 街の今スレッド Phase 1C-2｜TOP一覧＋詳細モーダル(見るだけ) ----
+// 通常表示はtownNowThreadsNearbyだけを使う(話題地点から5km以内の地点
+// スレッド＋閲覧者と同じ市区町村のスレッドだけがサーバーから返る。遠い人
+// には出さない。townNowThreadsListは使わない)。位置は既存のuserLatitude/
+// userLongitude・現在地の地域階層(communityBoardPlaceId/countryCode)を
+// 再利用し、新しい位置取得処理は作らない。座標はURLへ載せる前に小数点
+// 以下3桁(約100m)へ丸める(生GPSをURL・ログへ残さない)。返信投稿・新規
+// スレッド投稿はまだ接続しない。Firestoreへは直接読み書きしない。
+
+let townNowThreadsRequestSequence =
+  0;
+
+let townNowThreadModalRequestSequence =
+  0;
+
+function roundTownNowViewerCoordinate(
+  value
+) {
+  return (
+    Math.round(
+      value * 1000
+    ) / 1000
+  ).toFixed(3);
+}
+
+function formatTownNowTime(
+  isoText
+) {
+  const date =
+    new Date(
+      isoText
+    );
+
+  if (
+    typeof isoText !== "string" ||
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return "";
+  }
+
+  return date.toLocaleTimeString(
+    getCurrentMachinauLanguage() === "en"
+      ? "en-US"
+      : "ja-JP",
+    {
+      hour: "2-digit",
+      minute: "2-digit"
+    }
+  );
+}
+
+function getTownNowTranslation(
+  key
+) {
+  return getMachinauTranslation(
+    key,
+    getCurrentMachinauLanguage()
+  );
+}
+
+async function fetchTownNowJson(
+  params
+) {
+  const response =
+    await fetch(
+      "/api/moderate-submission?" +
+        new URLSearchParams(
+          params
+        ).toString()
+    );
+
+  let data =
+    null;
+
+  try {
+    data =
+      await response.json();
+  } catch (error) {
+    data =
+      null;
+  }
+
+  return {
+    status: response.status,
+    data: data
+  };
+}
+
+async function loadTownNowThreadsForCurrentLocation(
+  locationHierarchy
+) {
+  const section =
+    document.getElementById(
+      "townNowThreadsSection"
+    );
+
+  if (
+    !section ||
+    typeof userLatitude !== "number" ||
+    typeof userLongitude !== "number" ||
+    !Number.isFinite(userLatitude) ||
+    !Number.isFinite(userLongitude)
+  ) {
+    return;
+  }
+
+  const requestSequence =
+    ++townNowThreadsRequestSequence;
+
+  const params =
+    {
+      mode: "townNowThreadsNearby",
+      latitude:
+        roundTownNowViewerCoordinate(
+          userLatitude
+        ),
+      longitude:
+        roundTownNowViewerCoordinate(
+          userLongitude
+        )
+    };
+
+  if (
+    locationHierarchy &&
+    typeof locationHierarchy.communityBoardPlaceId === "string" &&
+    locationHierarchy.communityBoardPlaceId !== "" &&
+    typeof locationHierarchy.countryCode === "string" &&
+    locationHierarchy.countryCode !== ""
+  ) {
+    params.googlePlaceId =
+      locationHierarchy.communityBoardPlaceId;
+
+    params.countryCode =
+      locationHierarchy.countryCode;
+  }
+
+  let result;
+
+  try {
+    result =
+      await fetchTownNowJson(
+        params
+      );
+  } catch (error) {
+    result =
+      null;
+  }
+
+  // 現在地が取り直された後に届いた古い応答は捨てる。
+  if (
+    requestSequence !==
+    townNowThreadsRequestSequence
+  ) {
+    return;
+  }
+
+  if (
+    !result ||
+    result.status !== 200 ||
+    !result.data ||
+    result.data.success !== true ||
+    !Array.isArray(
+      result.data.threads
+    )
+  ) {
+    // 取得に失敗した場合は壊れた欄を見せず、セクションごと出さない。
+    section.style.display =
+      "none";
+    return;
+  }
+
+  renderTownNowThreads(
+    result.data.threads
+  );
+
+  section.style.display =
+    "";
+}
+
+function renderTownNowThreads(
+  threads
+) {
+  const list =
+    document.getElementById(
+      "townNowThreadsList"
+    );
+
+  if (!list) {
+    return;
+  }
+
+  if (threads.length === 0) {
+    list.innerHTML =
+      '<p class="town-now-empty" data-i18n="town_now_empty">' +
+      escapeHtml(
+        getTownNowTranslation(
+          "town_now_empty"
+        )
+      ) +
+      "</p>";
+    return;
+  }
+
+  // 表示するのは話題の場所・本文・投稿時刻・「会話を見る」だけ
+  // (返信数・座標・内部情報は表示しない)。
+  list.innerHTML =
+    threads
+      .map(
+        function(thread) {
+          return (
+            '<div class="community-board-post-item town-now-thread-item">' +
+            '<p class="town-now-thread-meta">' +
+            '<span class="town-now-thread-place">' +
+            escapeHtml(thread.placeLabel || "") +
+            "</span>" +
+            " · " +
+            escapeHtml(
+              formatTownNowTime(
+                thread.createdAt
+              )
+            ) +
+            "</p>" +
+            '<p class="community-board-post-text">' +
+            escapeHtml(thread.text || "") +
+            "</p>" +
+            '<div class="town-now-thread-open-row">' +
+            '<button type="button" class="secondary-link-button" data-town-now-thread-id="' +
+            escapeHtml(thread.threadId || "") +
+            '" data-i18n="town_now_open_button">' +
+            escapeHtml(
+              getTownNowTranslation(
+                "town_now_open_button"
+              )
+            ) +
+            "</button>" +
+            "</div>" +
+            "</div>"
+          );
+        }
+      )
+      .join("");
+}
+
+function setTownNowThreadModalMessage(
+  translationKey
+) {
+  const body =
+    document.getElementById(
+      "townNowThreadModalBody"
+    );
+
+  if (!body) {
+    return;
+  }
+
+  body.innerHTML =
+    '<p class="town-now-empty town-now-modal-thread" data-i18n="' +
+    escapeHtml(translationKey) +
+    '">' +
+    escapeHtml(
+      getTownNowTranslation(
+        translationKey
+      )
+    ) +
+    "</p>";
+}
+
+function renderTownNowThreadModal(
+  thread,
+  comments
+) {
+  const body =
+    document.getElementById(
+      "townNowThreadModalBody"
+    );
+
+  if (!body) {
+    return;
+  }
+
+  const commentsHtml =
+    comments.length === 0
+      ? '<p class="town-now-empty" data-i18n="town_now_replies_empty">' +
+        escapeHtml(
+          getTownNowTranslation(
+            "town_now_replies_empty"
+          )
+        ) +
+        "</p>"
+      : comments
+          .map(
+            function(comment) {
+              return (
+                '<div class="community-board-post-item">' +
+                '<p class="town-now-thread-meta">' +
+                escapeHtml(
+                  formatTownNowTime(
+                    comment.createdAt
+                  )
+                ) +
+                "</p>" +
+                '<p class="community-board-post-text">' +
+                escapeHtml(comment.text || "") +
+                "</p>" +
+                "</div>"
+              );
+            }
+          )
+          .join("");
+
+  body.innerHTML =
+    '<div class="town-now-modal-thread">' +
+    '<p class="town-now-thread-meta">' +
+    '<span class="town-now-thread-place">' +
+    escapeHtml(thread.placeLabel || "") +
+    "</span>" +
+    " · " +
+    escapeHtml(
+      formatTownNowTime(
+        thread.createdAt
+      )
+    ) +
+    "</p>" +
+    '<p class="community-board-post-text">' +
+    escapeHtml(thread.text || "") +
+    "</p>" +
+    '<h3 class="town-now-modal-replies-heading" data-i18n="town_now_replies_heading">' +
+    escapeHtml(
+      getTownNowTranslation(
+        "town_now_replies_heading"
+      )
+    ) +
+    "</h3>" +
+    commentsHtml +
+    "</div>";
+}
+
+async function openTownNowThreadModal(
+  threadId
+) {
+  const modal =
+    document.getElementById(
+      "townNowThreadModal"
+    );
+
+  if (
+    !modal ||
+    typeof threadId !== "string" ||
+    threadId === ""
+  ) {
+    return;
+  }
+
+  const requestSequence =
+    ++townNowThreadModalRequestSequence;
+
+  setTownNowThreadModalMessage(
+    "town_now_modal_loading"
+  );
+
+  modal.classList.add(
+    "visible"
+  );
+
+  document.body.style.overflow =
+    "hidden";
+
+  let threadResult;
+  let commentsResult;
+
+  try {
+    threadResult =
+      await fetchTownNowJson(
+        {
+          mode: "townNowThreadGet",
+          threadId: threadId
+        }
+      );
+
+    if (
+      threadResult.status === 200 &&
+      threadResult.data &&
+      threadResult.data.success === true &&
+      threadResult.data.thread
+    ) {
+      commentsResult =
+        await fetchTownNowJson(
+          {
+            mode: "townNowCommentsList",
+            threadId: threadId
+          }
+        );
+    }
+  } catch (error) {
+    threadResult =
+      null;
+  }
+
+  // 閉じられた/別のスレッドが開かれた後に届いた応答は捨てる。
+  if (
+    requestSequence !==
+      townNowThreadModalRequestSequence ||
+    !modal.classList.contains(
+      "visible"
+    )
+  ) {
+    return;
+  }
+
+  // 期限切れ・非公開(404)は公開終了として扱う(別のスレッドへは移動しない)。
+  if (
+    (threadResult && threadResult.status === 404) ||
+    (commentsResult && commentsResult.status === 404)
+  ) {
+    setTownNowThreadModalMessage(
+      "town_now_thread_ended"
+    );
+    return;
+  }
+
+  if (
+    !threadResult ||
+    threadResult.status !== 200 ||
+    !threadResult.data ||
+    !threadResult.data.thread ||
+    !commentsResult ||
+    commentsResult.status !== 200 ||
+    !commentsResult.data ||
+    commentsResult.data.success !== true ||
+    !Array.isArray(
+      commentsResult.data.comments
+    )
+  ) {
+    setTownNowThreadModalMessage(
+      "town_now_load_error"
+    );
+    return;
+  }
+
+  renderTownNowThreadModal(
+    threadResult.data.thread,
+    commentsResult.data.comments
+  );
+}
+
+function closeTownNowThreadModal() {
+  const modal =
+    document.getElementById(
+      "townNowThreadModal"
+    );
+
+  if (!modal) {
+    return;
+  }
+
+  townNowThreadModalRequestSequence++;
+
+  modal.classList.remove(
+    "visible"
+  );
+
+  document.body.style.overflow =
+    "";
+}
+
+function closeTownNowThreadModalOutside(
+  event
+) {
+  if (
+    event.target.id ===
+    "townNowThreadModal"
+  ) {
+    closeTownNowThreadModal();
+  }
+}
+
+document.addEventListener(
+  "click",
+  function(event) {
+    const button =
+      event.target &&
+      typeof event.target.closest === "function"
+        ? event.target.closest(
+            "[data-town-now-thread-id]"
+          )
+        : null;
+
+    if (!button) {
+      return;
+    }
+
+    openTownNowThreadModal(
+      button.getAttribute(
+        "data-town-now-thread-id"
+      )
+    );
+  }
+);
 
 
 // 街の掲示板 Phase4｜「ほかの地域を見る」で選択された市区町村名を、

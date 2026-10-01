@@ -329,6 +329,50 @@
       margin-top: 12px;
     }
 
+    /* 街の今スレッド Phase 1C-2｜一覧の行は既存.community-board-post-item/
+       .community-board-post-textをそのまま併用し、ここでは専用の補助
+       クラスだけを足す(既存掲示板のCSS挙動は変えない)。 */
+    .town-now-description {
+      margin: 0 0 4px;
+      font-size: 13px;
+      line-height: 1.7;
+      color: var(--subtext);
+    }
+
+    .town-now-thread-meta {
+      margin: 0 0 4px;
+      font-size: 12px;
+      color: var(--subtext);
+    }
+
+    .town-now-thread-place {
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .town-now-thread-open-row {
+      margin-top: 8px;
+    }
+
+    .town-now-empty {
+      margin: 8px 0 0;
+      font-size: 14px;
+      line-height: 1.8;
+      color: var(--subtext);
+    }
+
+    .town-now-modal-thread {
+      clear: both;
+      padding-top: 4px;
+    }
+
+    .town-now-modal-replies-heading {
+      margin: 18px 0 4px;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
     /* 街の掲示板(仮称) Phase5｜地域代表画像。掲示板の「街の顔」であり
        投稿カードの画像ではないため、既存.region-recommendation-card imgとは
        別に、控えめな比率(高さ150px)のバナー風スタイルにする。 */
@@ -1535,6 +1579,25 @@
 
     </section>
 
+    <!-- 街の今スレッド Phase 1C-2｜「この街の情報」と掲示板の間(代表決定B)。
+         現在地取得後にだけ表示する(未取得時は非表示、既存の現在地系
+         セクションと同じ)。通常表示はtownNowThreadsNearbyだけを使う
+         (話題地点から5km以内・同じ市区町村のスレッドだけ。遠い人には
+         出さない)。外枠は既存.region-recommendation-sectionを再利用。 -->
+    <section
+      id="townNowThreadsSection"
+      class="region-recommendation-section"
+      style="display:none;"
+    >
+      <h2 data-i18n="town_now_heading">
+        💬 街の今スレッド
+      </h2>
+      <p class="town-now-description" data-i18n="town_now_description">
+        近くにいる人たちの、今日の会話です。
+      </p>
+      <div id="townNowThreadsList"></div>
+    </section>
+
     <section
       id="regionRecommendationSection"
       class="region-recommendation-section"
@@ -1928,6 +1991,30 @@
 
     </div>
 
+  </div>
+
+  <!-- 街の今スレッド Phase 1C-2｜詳細モーダル(見るだけ)。既存の
+       .modal-overlay/.modal-card/.modal-content/.modal-closeを再利用し、
+       店舗モーダル(shopModal・openShopModal)とは独立させる。 -->
+  <div
+    id="townNowThreadModal"
+    class="modal-overlay"
+    onclick="closeTownNowThreadModalOutside(event)"
+  >
+    <div class="modal-card">
+      <div class="modal-content">
+        <button
+          class="modal-close"
+          type="button"
+          aria-label="閉じる"
+          data-i18n-aria-label="modal_close_aria_label"
+          onclick="closeTownNowThreadModal()"
+        >
+          ✕
+        </button>
+        <div id="townNowThreadModalBody"></div>
+      </div>
+    </div>
   </div>
 
   <!-- Firebase本体 -->
