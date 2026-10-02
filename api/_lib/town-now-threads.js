@@ -960,7 +960,7 @@ export async function handleTownNowThreadCreate(
     const rateLimitKey =
       ipHash !== ""
         ? ipHash
-        : "uid_" + deps.hashText(decodedToken.uid);
+        : "uid_" + deps.hashRateLimitUid(decodedToken.uid);
 
     const rateLimitOk =
       await deps.claimRateLimit(
@@ -1866,7 +1866,7 @@ export async function handleTownNowCommentCreate(
       (
         ipHash !== ""
           ? ipHash
-          : "uid_" + deps.hashText(decodedToken.uid)
+          : "uid_" + deps.hashRateLimitUid(decodedToken.uid)
       );
 
     const rateLimitOk =

@@ -17,6 +17,7 @@ import {
 
 import {
   createHash,
+  createHmac,
   randomBytes,
   randomInt,
   timingSafeEqual
@@ -20389,14 +20390,56 @@ function sanitizeCommentNickname(
 }
 
 
+// レート制限の識別子｜生IP・生UIDの単純SHA-256ではなく、サーバー専用の
+// 秘密値(環境変数RATE_LIMIT_HMAC_SECRET)を鍵にしたHMAC-SHA-256を使う。
+// 入力には種別prefix("ip:"/"uid:")を付け、IP由来とUID由来の識別子を
+// 分離する。秘密値が未設定の場合は従来方式へフォールバックせず例外にし、
+// 呼び出し元の既存catchが汎用エラーを返す。例外文言・ログには秘密値も
+// 入力値(IP・UID)も含めない。
+const RATE_LIMIT_HMAC_SECRET_MISSING_MESSAGE =
+  "RATE_LIMIT_HMAC_SECRET is not configured";
+
+function getRateLimitHmacSecret() {
+  const secret =
+    typeof process.env.RATE_LIMIT_HMAC_SECRET === "string"
+      ? process.env.RATE_LIMIT_HMAC_SECRET
+      : "";
+
+  if (secret.trim() === "") {
+    throw new Error(
+      RATE_LIMIT_HMAC_SECRET_MISSING_MESSAGE
+    );
+  }
+
+  return secret;
+}
+
+function computeRateLimitIdentifier(
+  kind,
+  value
+) {
+  return createHmac(
+    "sha256",
+    getRateLimitHmacSecret()
+  )
+    .update(
+      kind + ":" + value,
+      "utf8"
+    )
+    .digest("hex");
+}
+
 // クライアントのIPアドレスは保存しない。スパム対策のクールダウン判定
-// キーとしてのみハッシュ値を使い、生IPはFirestoreへ一切書き込まない。
+// キーとしてのみHMAC値を使い、生IPはFirestoreへ一切書き込まない。
 // x-forwarded-forが取得できない場合は空文字を返し、呼び出し側は
 // レート制限自体をスキップする(安全側はモデレーションが担うため、
-// IP不明を理由に投稿自体を止めることはしない)。
+// IP不明を理由に投稿自体を止めることはしない)。秘密値の未設定は
+// IPの有無に関わらず検知する。
 function hashClientIpAddress(
   request
 ) {
+  getRateLimitHmacSecret();
+
   const forwardedForHeader =
     request.headers &&
     request.headers["x-forwarded-for"];
@@ -20412,12 +20455,10 @@ function hashClientIpAddress(
     return "";
   }
 
-  return createHash("sha256")
-    .update(
-      rawIp,
-      "utf8"
-    )
-    .digest("hex");
+  return computeRateLimitIdentifier(
+    "ip",
+    rawIp
+  );
 }
 
 
@@ -20427,6 +20468,12 @@ function hashClientIpAddress(
 // 成功のたびにlastSubmittedAtを上書きするだけで、新規docが乱立しない
 // 既存設計はそのまま維持)。ipHashが空(IP不明)の場合は判定自体を
 // スキップしtrue(投稿許可)を返す。
+// expireAtはFirestore TTL(5つのRateLimit collectionでexpireAtを対象に
+// 設定済み)による物理削除専用で、送信のたびに24時間後へ更新する。
+// レート制限の判定はexpireAtではなく、これまでどおりlastSubmittedAtで行う。
+const RATE_LIMIT_RECORD_TTL_MILLISECONDS =
+  24 * 60 * 60 * 1000;
+
 async function claimRateLimit(
   database,
   collectionName,
@@ -20481,7 +20528,12 @@ async function claimRateLimit(
         rateLimitRef,
         {
           lastSubmittedAt:
-            FieldValue.serverTimestamp()
+            FieldValue.serverTimestamp(),
+          expireAt:
+            Timestamp.fromMillis(
+              nowMilliseconds +
+              RATE_LIMIT_RECORD_TTL_MILLISECONDS
+            )
         }
       );
 
@@ -27226,10 +27278,11 @@ function buildTownNowThreadDeps() {
     buildCommunityBoardRegionIndexKey: buildCommunityBoardRegionIndexKey,
     loadTrustedCommunityBoardRegionInfoByIndexKey: loadTrustedCommunityBoardRegionInfoByIndexKey,
     hashClientIpAddress: hashClientIpAddress,
-    hashText: function(value) {
-      return createHash("sha256")
-        .update(String(value), "utf8")
-        .digest("hex");
+    hashRateLimitUid: function(uid) {
+      return computeRateLimitIdentifier(
+        "uid",
+        String(uid)
+      );
     },
     claimRateLimit: claimRateLimit,
     buildModerationInput: buildModerationInput,
