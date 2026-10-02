@@ -26284,7 +26284,7 @@ async function handleAdminSetColumnArticleStatusRequest(
 // shop-apply.html(公開フォーム)からの無料投稿の申込みを受け付け、代表が
 // admin-shop-applications.htmlで確認・対応状況を管理する。新しいVercel
 // Functionは追加せず、既存のこのFunctionへmode追加のみで実装する
-// (Functions 12/12を維持)。shopApplicationsはクライアントから直接読み書き
+// (Functions 11/12を維持)。shopApplicationsはクライアントから直接読み書き
 // させず、常にAdmin SDK経由(このFunction経由)のみでアクセスする。
 // 申込みから店舗登録(storeAccounts)は自動では行わない(代表がadmin-shops.html
 // で確認・登録・専用URL発行を行う既存の流れを維持する)。
