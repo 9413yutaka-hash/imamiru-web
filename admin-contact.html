@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <meta name="robots" content="noindex, nofollow">
+
+  <title>
+    お問い合わせ｜マチナウ運営
+  </title>
+
+  <!-- お問い合わせ・ご意見窓口｜contact.htmlから届いたお問い合わせを代表が
+       確認し、対応が終わったものを削除する。認証・画面構成は
+       admin-shop-applications.htmlと同じ(管理者ログイン＋サーバー側の
+       requireAdmin)。お問い合わせ内容はすべてtextContentで表示し、
+       innerHTMLへ入力値を入れない。 -->
+
+  <style>
+    :root {
+      --navy: #071a33;
+      --blue: #0788c9;
+      --sky: #dff7ff;
+      --green: #19a96b;
+      --red: #ef5a67;
+      --orange: #e88932;
+      --white: #ffffff;
+      --text: #15233a;
+      --subtext: #697386;
+      --border: #e2eaf1;
+      --background: #f4f8fb;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Yu Gothic", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+      background: var(--background);
+      color: var(--text);
+    }
+
+    header {
+      background: var(--navy);
+      color: var(--white);
+      padding: 18px 20px;
+    }
+
+    header .page-label {
+      font-size: 12px;
+      opacity: 0.8;
+    }
+
+    header h1 {
+      margin: 4px 0 0;
+      font-size: 20px;
+    }
+
+    header a {
+      display: inline-block;
+      margin-top: 10px;
+      color: var(--sky);
+      font-size: 13px;
+      text-decoration: none;
+    }
+
+    main {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 20px 16px 60px;
+    }
+
+    .panel {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .panel h2 {
+      margin: 0 0 14px;
+      font-size: 16px;
+    }
+
+    .field {
+      margin-bottom: 16px;
+    }
+
+    .field label {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .field input[type="text"],
+    .field input[type="password"] {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    .primary-button {
+      background: linear-gradient(135deg, var(--blue), #04b7d7);
+      color: var(--white);
+      border: none;
+      border-radius: 12px;
+      padding: 11px 18px;
+      font-size: 14px;
+      font-weight: 900;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .primary-button:disabled,
+    .secondary-button:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+    .secondary-button {
+      background: var(--white);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 14px;
+      font-size: 12px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .message-box {
+      font-size: 13px;
+      margin-top: 10px;
+      min-height: 1em;
+    }
+
+    .message-box.error {
+      color: var(--red);
+    }
+
+    .message-box.success {
+      color: var(--green);
+    }
+
+    #adminArea {
+      display: none;
+    }
+
+    #adminArea.visible {
+      display: block;
+    }
+
+    /* 未対応件数(最重要)。 */
+    .pending-summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .pending-summary-count {
+      font-size: 22px;
+      font-weight: 900;
+      color: var(--navy);
+    }
+
+    .pending-summary-count.has-pending {
+      color: #b4541a;
+    }
+
+    .pending-summary-sub {
+      margin-top: 4px;
+      color: var(--subtext);
+      font-size: 12px;
+    }
+
+    .flow-list {
+      margin: 0;
+      padding-left: 20px;
+      font-size: 13px;
+      line-height: 1.9;
+    }
+
+    .shops-link {
+      display: inline-flex;
+      align-items: center;
+      margin-top: 12px;
+      padding: 10px 14px;
+      border-radius: 12px;
+      background: var(--sky);
+      color: var(--navy);
+      font-size: 13px;
+      font-weight: 900;
+      text-decoration: none;
+    }
+
+    .filter-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .filter-button {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--white);
+      color: var(--text);
+      padding: 7px 13px;
+      font-size: 12px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .filter-button.active {
+      border-color: var(--navy);
+      background: var(--navy);
+      color: var(--white);
+    }
+
+    .application-card {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+
+    .application-card.status-pending {
+      border-color: #f2c79c;
+      border-left: 5px solid var(--orange);
+      background: #fffaf4;
+    }
+
+    .application-card-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .application-shop-name {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 900;
+      overflow-wrap: anywhere;
+    }
+
+    .application-date {
+      margin-top: 4px;
+      color: var(--subtext);
+      font-size: 12px;
+    }
+
+    .status-badge {
+      flex-shrink: 0;
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .status-badge.pending {
+      background: #fde7d2;
+      color: #a14a10;
+    }
+
+    .status-badge.contacted {
+      background: #e1f1fb;
+      color: #0a6aa0;
+    }
+
+    .status-badge.completed {
+      background: #e3f7ee;
+      color: #137a4e;
+    }
+
+    .application-details {
+      display: grid;
+      grid-template-columns: 90px minmax(0, 1fr);
+      gap: 6px 10px;
+      margin: 12px 0 0;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .application-details dt {
+      color: var(--subtext);
+      font-weight: 700;
+    }
+
+    .application-details dd {
+      margin: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .application-details dd.note {
+      white-space: pre-wrap;
+    }
+
+    .application-details a {
+      color: var(--blue);
+      font-weight: 700;
+    }
+
+    .application-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .empty-state {
+      color: var(--subtext);
+      font-size: 13px;
+      text-align: center;
+      padding: 16px 0;
+    }
+
+    @media (max-width: 480px) {
+      .application-details {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 2px;
+      }
+
+      .application-details dd {
+        margin-bottom: 6px;
+      }
+    }
+
+    .delete-button {
+      border-color: #f3c7c7;
+      color: #b23b3b;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="page-label">
+      マチナウ運営
+    </div>
+
+    <h1>
+      お問い合わせ
+    </h1>
+
+    <a href="admin.html">
+      ← 管理本部へ戻る
+    </a>
+  </header>
+
+  <main>
+
+    <section id="loginPanel" class="panel">
+      <h2>
+        管理者ログイン
+      </h2>
+
+      <form id="loginForm" novalidate>
+        <div class="field">
+          <label for="adminEmail">
+            メールアドレス
+          </label>
+
+          <input
+            id="adminEmail"
+            type="text"
+            autocomplete="email"
+            required
+          >
+        </div>
+
+        <div class="field">
+          <label for="adminPassword">
+            パスワード
+          </label>
+
+          <input
+            id="adminPassword"
+            type="password"
+            autocomplete="current-password"
+            required
+          >
+        </div>
+
+        <button id="loginButton" class="primary-button" type="submit">
+          管理画面へログイン
+        </button>
+      </form>
+
+      <div id="loginMessage" class="message-box" role="status" aria-live="polite"></div>
+    </section>
+
+    <section id="adminArea">
+
+      <div class="panel">
+        <div class="pending-summary">
+          <div>
+            <div id="inquirySummaryCount" class="pending-summary-count">
+              お問い合わせ -件
+            </div>
+            <div class="pending-summary-sub">
+              対応が終わったお問い合わせは削除してください（元に戻せません）。
+            </div>
+          </div>
+
+          <button id="refreshButton" class="secondary-button" type="button">
+            🔄 一覧を更新
+          </button>
+        </div>
+
+        <div id="listMessage" class="message-box" role="status" aria-live="polite"></div>
+      </div>
+
+      <div class="panel">
+        <h2>
+          お問い合わせ一覧
+        </h2>
+
+        <div id="inquiryList"></div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore-compat.js"></script>
+  <script src="firebase.js"></script>
+
+  <script>
+    const ADMIN_EMAIL =
+      "9413yutaka@gmail.com";
+
+    // 保存値(サーバーの許可リストと同じ)→表示名。
+    const CATEGORY_LABELS = {
+      shop: "お店・施設について",
+      listing_change: "掲載内容・写真の変更",
+      correction: "情報の訂正",
+      bug: "不具合の報告",
+      feedback: "ご意見・ご要望",
+      other: "その他"
+    };
+
+    const MESSAGE_PREVIEW_LENGTH = 60;
+
+    async function getAdminIdToken() {
+      const currentUser = firebase.auth().currentUser;
+
+      if (!currentUser) {
+        throw new Error(
+          "ログイン状態を確認できませんでした。再度ログインしてください。"
+        );
+      }
+
+      return currentUser.getIdToken();
+    }
+
+    // admin-shop-applications.htmlのcallApplicationsApi(mode, payload)と同じ構成。
+    async function callInquiriesApi(mode, payload) {
+      const idToken = await getAdminIdToken();
+
+      const response = await fetch("/api/moderate-submission", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + idToken
+        },
+        body: JSON.stringify(Object.assign({ mode: mode }, payload || {}))
+      });
+
+      let responseData = null;
+
+      try {
+        responseData = await response.json();
+      } catch (jsonError) {
+        throw new Error("応答を読み取れませんでした。");
+      }
+
+      if (!response.ok || !responseData || responseData.success !== true) {
+        throw new Error(
+          (responseData && responseData.message) || "処理に失敗しました。"
+        );
+      }
+
+      return responseData;
+    }
+
+    const loginPanel = document.getElementById("loginPanel");
+    const adminArea = document.getElementById("adminArea");
+    const loginForm = document.getElementById("loginForm");
+    const loginButton = document.getElementById("loginButton");
+    const loginMessage = document.getElementById("loginMessage");
+
+    const inquirySummaryCount = document.getElementById("inquirySummaryCount");
+    const refreshButton = document.getElementById("refreshButton");
+    const listMessage = document.getElementById("listMessage");
+    const inquiryList = document.getElementById("inquiryList");
+
+    let allInquiries = [];
+
+    function showMessage(element, text, type) {
+      element.textContent = text;
+      element.className = "message-box" + (type ? " " + type : "");
+    }
+
+    function formatDateTime(millis) {
+      if (!millis) {
+        return "-";
+      }
+
+      try {
+        return new Date(millis).toLocaleString("ja-JP", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit"
+        });
+      } catch (error) {
+        return "-";
+      }
+    }
+
+    function appendDetailRow(detailsElement, label, valueNode) {
+      const dt = document.createElement("dt");
+      dt.textContent = label;
+
+      const dd = document.createElement("dd");
+      dd.appendChild(valueNode);
+
+      detailsElement.appendChild(dt);
+      detailsElement.appendChild(dd);
+
+      return dd;
+    }
+
+    function textNode(value) {
+      return document.createTextNode(value && value !== "" ? value : "-");
+    }
+
+    // メールアドレスの形ならmailtoリンクにする。
+    function buildEmailNode(email) {
+      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        const link = document.createElement("a");
+        link.href = "mailto:" + email;
+        link.textContent = email;
+        return link;
+      }
+
+      return textNode(email);
+    }
+
+    function buildInquiryCard(inquiry) {
+      const card = document.createElement("article");
+      card.className = "application-card";
+
+      const top = document.createElement("div");
+      top.className = "application-card-top";
+
+      const titleBox = document.createElement("div");
+
+      const name = document.createElement("h3");
+      name.className = "application-shop-name";
+      name.textContent = inquiry.name || "(お名前未記入)";
+
+      const date = document.createElement("div");
+      date.className = "application-date";
+      date.textContent = "受信日時：" + formatDateTime(inquiry.createdAtMillis);
+
+      titleBox.appendChild(name);
+      titleBox.appendChild(date);
+
+      const badge = document.createElement("span");
+      badge.className = "status-badge contacted";
+      badge.textContent = CATEGORY_LABELS[inquiry.category] || "その他";
+
+      top.appendChild(titleBox);
+      top.appendChild(badge);
+      card.appendChild(top);
+
+      const details = document.createElement("dl");
+      details.className = "application-details";
+
+      appendDetailRow(details, "返信先", buildEmailNode(inquiry.email || ""));
+
+      const message = inquiry.message || "";
+      const isLong = message.length > MESSAGE_PREVIEW_LENGTH;
+      const preview = isLong ? message.slice(0, MESSAGE_PREVIEW_LENGTH) + "…" : message;
+
+      const messageCell = appendDetailRow(details, "内容", textNode(preview));
+      messageCell.classList.add("note");
+
+      card.appendChild(details);
+
+      const actions = document.createElement("div");
+      actions.className = "application-actions";
+
+      if (isLong) {
+        const toggleButton = document.createElement("button");
+        toggleButton.type = "button";
+        toggleButton.className = "secondary-button";
+        toggleButton.textContent = "全文を見る";
+
+        let expanded = false;
+
+        toggleButton.addEventListener("click", function() {
+          expanded = !expanded;
+          messageCell.textContent = expanded ? message : preview;
+          toggleButton.textContent = expanded ? "閉じる" : "全文を見る";
+        });
+
+        actions.appendChild(toggleButton);
+      }
+
+      const deleteButton = document.createElement("button");
+      deleteButton.type = "button";
+      deleteButton.className = "secondary-button delete-button";
+      deleteButton.textContent = "削除する";
+
+      deleteButton.addEventListener("click", function() {
+        deleteInquiry(inquiry.id, deleteButton);
+      });
+
+      actions.appendChild(deleteButton);
+      card.appendChild(actions);
+
+      return card;
+    }
+
+    function renderInquiries() {
+      inquirySummaryCount.textContent = "お問い合わせ " + allInquiries.length + "件";
+      inquirySummaryCount.classList.toggle("has-pending", allInquiries.length > 0);
+
+      inquiryList.textContent = "";
+
+      if (allInquiries.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "empty-state";
+        empty.textContent = "お問い合わせはありません。";
+        inquiryList.appendChild(empty);
+        return;
+      }
+
+      allInquiries.forEach(function(inquiry) {
+        inquiryList.appendChild(buildInquiryCard(inquiry));
+      });
+    }
+
+    async function loadInquiries() {
+      showMessage(listMessage, "読み込んでいます…", "");
+      refreshButton.disabled = true;
+
+      try {
+        const responseData = await callInquiriesApi("adminListContactInquiries", {});
+
+        allInquiries = Array.isArray(responseData.inquiries)
+          ? responseData.inquiries
+          : [];
+
+        renderInquiries();
+        showMessage(listMessage, "", "");
+      } catch (error) {
+        console.error("お問い合わせ一覧の取得に失敗しました：", error);
+        showMessage(listMessage, error.message || "お問い合わせ一覧を取得できませんでした。", "error");
+      } finally {
+        refreshButton.disabled = false;
+      }
+    }
+
+    async function deleteInquiry(inquiryId, button) {
+      if (!window.confirm("このお問い合わせを削除しますか？\n削除すると元に戻せません。")) {
+        return;
+      }
+
+      button.disabled = true;
+
+      try {
+        await callInquiriesApi("adminDeleteContactInquiry", {
+          inquiryId: inquiryId
+        });
+
+        await loadInquiries();
+
+        showMessage(listMessage, "お問い合わせを削除しました。", "success");
+      } catch (error) {
+        console.error("お問い合わせの削除に失敗しました：", error);
+        showMessage(listMessage, error.message || "お問い合わせを削除できませんでした。", "error");
+        button.disabled = false;
+      }
+    }
+
+    refreshButton.addEventListener("click", function() {
+      loadInquiries();
+    });
+
+    loginForm.addEventListener("submit", async function(event) {
+      event.preventDefault();
+
+      showMessage(loginMessage, "", "");
+
+      const email = document.getElementById("adminEmail").value.trim().toLowerCase();
+      const password = document.getElementById("adminPassword").value;
+
+      if (email !== ADMIN_EMAIL.toLowerCase()) {
+        showMessage(loginMessage, "このメールアドレスには管理者権限がありません。", "error");
+        return;
+      }
+
+      loginButton.disabled = true;
+      loginButton.textContent = "ログインしています…";
+
+      try {
+        await firebase.auth().signInWithEmailAndPassword(email, password);
+      } catch (error) {
+        console.error("❌ 管理者ログインに失敗しました", error);
+        showMessage(loginMessage, "ログインできませんでした。メールアドレスとパスワードを確認してください。", "error");
+      } finally {
+        loginButton.disabled = false;
+        loginButton.textContent = "管理画面へログイン";
+      }
+    });
+
+    // admin.html・admin-shop-applications.htmlの管理者判定と同一パターン
+    // (最終的な権限確認はサーバー側のrequireAdminで行う)。
+    firebase.auth().onAuthStateChanged(async function(user) {
+      showMessage(loginMessage, "", "");
+
+      if (user && user.email && user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+        loginPanel.style.display = "none";
+        adminArea.classList.add("visible");
+
+        await loadInquiries();
+        return;
+      }
+
+      if (user) {
+        try {
+          await firebase.auth().signOut();
+        } catch (error) {
+          console.error("管理者以外のユーザーをログアウトできませんでした", error);
+        }
+
+        showMessage(loginMessage, "このアカウントには管理者権限がありません。", "error");
+      }
+
+      loginPanel.style.display = "block";
+      adminArea.classList.remove("visible");
+    });
+  </script>
+
+</body>
+</html>

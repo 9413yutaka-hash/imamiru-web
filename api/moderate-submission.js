@@ -26817,6 +26817,403 @@ async function handleAdminUpdateShopApplicationStatusRequest(
 }
 
 
+// ==========================================================================
+// お問い合わせ・ご意見窓口
+// contact.html(公開フォーム)から運営への問い合わせ・意見・要望を受け付け、
+// 代表がadmin-contact.htmlで確認し、対応後に削除する。店舗・施設申込み
+// (shopApplications)と同じ構成で、新しいVercel Functionは追加しない。
+// contactInquiriesはクライアントから直接読み書きさせず、常にAdmin SDK経由
+// (このFunction経由)のみでアクセスする。位置情報は保存しない。画像添付は
+// 行わない(既存のCloudinaryは署名付きアップロードのみで削除手段が無く、
+// 問い合わせ削除時に画像が残り続けるため)。
+// ==========================================================================
+const CONTACT_INQUIRIES_COLLECTION =
+  "contactInquiries";
+
+const CONTACT_INQUIRY_RATE_LIMITS_COLLECTION =
+  "contactInquiryRateLimits";
+
+// 同じ投稿元からの連続送信を防ぐ(普通の問い合わせを続けて送る場合に
+// 長く待たせすぎない間隔。店舗申込みの10分より短く、掲示板の60秒より長い)。
+const CONTACT_INQUIRY_RATE_LIMIT_COOLDOWN_MILLISECONDS =
+  3 * 60 * 1000;
+
+// IPが取得できない/入れ替えての大量送信に備えた、全体での上限(直近1時間)。
+const CONTACT_INQUIRY_GLOBAL_HOURLY_LIMIT =
+  30;
+
+// 問い合わせ種別(保存値)。表示名はcontact.html・admin-contact.html側。
+const CONTACT_INQUIRY_CATEGORIES =
+  [
+    "shop",
+    "listing_change",
+    "correction",
+    "bug",
+    "feedback",
+    "other"
+  ];
+
+// 本文は店舗申込みの備考(既存の最長の自由記述欄)と同じ1000文字。
+const CONTACT_INQUIRY_FIELD_MAX_LENGTHS =
+  {
+    name: 60,
+    email: 254,
+    message: 1000
+  };
+
+const CONTACT_INQUIRY_LIST_MAX_COUNT =
+  200;
+
+function validateContactInquiryInput(
+  requestBody
+) {
+  const category =
+    typeof requestBody.category === "string"
+      ? requestBody.category.trim()
+      : "";
+
+  if (!CONTACT_INQUIRY_CATEGORIES.includes(category)) {
+    return {
+      ok: false,
+      message: "お問い合わせ種別を選んでください。"
+    };
+  }
+
+  // 既存の店舗申込みと同じ正規化(制御文字除去・trim、1行項目の改行除去)。
+  const fields = {
+    category: category,
+    name:
+      normalizeShopApplicationText(requestBody.name, false),
+    email:
+      normalizeShopApplicationText(requestBody.email, false),
+    message:
+      normalizeShopApplicationText(requestBody.message, true)
+  };
+
+  if (fields.message === "") {
+    return {
+      ok: false,
+      message: "お問い合わせ内容を入力してください。"
+    };
+  }
+
+  const fieldLabels = {
+    name: "お名前・店舗名",
+    email: "メールアドレス",
+    message: "お問い合わせ内容"
+  };
+
+  for (const fieldName of Object.keys(CONTACT_INQUIRY_FIELD_MAX_LENGTHS)) {
+    if (
+      fields[fieldName].length >
+      CONTACT_INQUIRY_FIELD_MAX_LENGTHS[fieldName]
+    ) {
+      return {
+        ok: false,
+        message:
+          fieldLabels[fieldName] +
+          "は" +
+          CONTACT_INQUIRY_FIELD_MAX_LENGTHS[fieldName] +
+          "文字以内で入力してください。"
+      };
+    }
+  }
+
+  if (
+    fields.email !== "" &&
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fields.email)
+  ) {
+    return {
+      ok: false,
+      message: "メールアドレスの形式を確認してください。"
+    };
+  }
+
+  return {
+    ok: true,
+    fields: fields
+  };
+}
+
+// 公開フォームからの問い合わせ作成(認証不要)。
+async function handleContactInquiryCreateRequest(
+  request,
+  response
+) {
+  try {
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    // ハニーポット欄(人間には見えない)。値が入っていればbotとみなし、
+    // 保存せずに成功したふりの応答だけ返す(店舗申込みと同じ考え方)。
+    const honeypotValue =
+      typeof requestBody.confirmationField === "string"
+        ? requestBody.confirmationField.trim()
+        : "";
+
+    if (honeypotValue !== "") {
+      return response.status(200).json({
+        success: true
+      });
+    }
+
+    const validationResult =
+      validateContactInquiryInput(
+        requestBody
+      );
+
+    if (!validationResult.ok) {
+      return response.status(400).json({
+        success: false,
+        message: validationResult.message
+      });
+    }
+
+    const database =
+      getFirestore(
+        getFirebaseAdminApp()
+      );
+
+    const oneHourAgo =
+      Timestamp.fromMillis(
+        Date.now() - 60 * 60 * 1000
+      );
+
+    const recentCountSnapshot =
+      await database
+        .collection(
+          CONTACT_INQUIRIES_COLLECTION
+        )
+        .where(
+          "createdAt",
+          ">",
+          oneHourAgo
+        )
+        .count()
+        .get();
+
+    if (
+      recentCountSnapshot.data().count >=
+      CONTACT_INQUIRY_GLOBAL_HOURLY_LIMIT
+    ) {
+      return response.status(429).json({
+        success: false,
+        message:
+          "ただいまお問い合わせが集中しています。時間をおいて、もう一度お試しください。"
+      });
+    }
+
+    const rateLimitOk =
+      await claimRateLimit(
+        database,
+        CONTACT_INQUIRY_RATE_LIMITS_COLLECTION,
+        hashClientIpAddress(
+          request
+        ),
+        CONTACT_INQUIRY_RATE_LIMIT_COOLDOWN_MILLISECONDS
+      );
+
+    if (!rateLimitOk) {
+      return response.status(429).json({
+        success: false,
+        message:
+          "短時間に続けて送信されています。3分ほど時間をおいて、もう一度お試しください。"
+      });
+    }
+
+    await database
+      .collection(
+        CONTACT_INQUIRIES_COLLECTION
+      )
+      .add(
+        Object.assign(
+          {},
+          validationResult.fields,
+          {
+            createdAt:
+              FieldValue.serverTimestamp()
+          }
+        )
+      );
+
+    return response.status(200).json({
+      success: true
+    });
+  } catch (error) {
+    console.error(
+      "お問い合わせ：作成エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message:
+        "送信できませんでした。時間をおいて、もう一度お試しください。"
+    });
+  }
+}
+
+// 管理者のみ：問い合わせ一覧(新しい順)。
+async function handleAdminListContactInquiriesRequest(
+  request,
+  response
+) {
+  try {
+    const authResult =
+      await requireAdmin(
+        request
+      );
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({
+        success: false,
+        message: authResult.message
+      });
+    }
+
+    const snapshot =
+      await authResult.database
+        .collection(
+          CONTACT_INQUIRIES_COLLECTION
+        )
+        .orderBy(
+          "createdAt",
+          "desc"
+        )
+        .limit(
+          CONTACT_INQUIRY_LIST_MAX_COUNT
+        )
+        .get();
+
+    const inquiries =
+      snapshot.docs.map(
+        function(documentSnapshot) {
+          const data =
+            documentSnapshot.data() ||
+            {};
+
+          const readText = function(fieldName) {
+            return typeof data[fieldName] === "string"
+              ? data[fieldName]
+              : "";
+          };
+
+          const createdAtDate =
+            toDateFromFirestoreValue(
+              data.createdAt
+            );
+
+          return {
+            id: documentSnapshot.id,
+            category:
+              CONTACT_INQUIRY_CATEGORIES.includes(data.category)
+                ? data.category
+                : "other",
+            name: readText("name"),
+            email: readText("email"),
+            message: readText("message"),
+            createdAtMillis:
+              createdAtDate
+                ? createdAtDate.getTime()
+                : 0
+          };
+        }
+      );
+
+    return response.status(200).json({
+      success: true,
+      inquiries: inquiries
+    });
+  } catch (error) {
+    console.error(
+      "お問い合わせ：一覧取得エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message:
+        "お問い合わせ一覧を取得できませんでした。"
+    });
+  }
+}
+
+// 管理者のみ：対応が終わった問い合わせを物理削除する。
+async function handleAdminDeleteContactInquiryRequest(
+  request,
+  response
+) {
+  try {
+    const authResult =
+      await requireAdmin(
+        request
+      );
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({
+        success: false,
+        message: authResult.message
+      });
+    }
+
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    const inquiryId =
+      typeof requestBody.inquiryId === "string"
+        ? requestBody.inquiryId.trim()
+        : "";
+
+    if (!/^[A-Za-z0-9]{1,40}$/.test(inquiryId)) {
+      return response.status(400).json({
+        success: false,
+        message: "対象のお問い合わせを指定してください。"
+      });
+    }
+
+    const inquiryRef =
+      authResult.database
+        .collection(
+          CONTACT_INQUIRIES_COLLECTION
+        )
+        .doc(
+          inquiryId
+        );
+
+    const existingSnapshot =
+      await inquiryRef.get();
+
+    if (!existingSnapshot.exists) {
+      return response.status(404).json({
+        success: false,
+        message: "対象のお問い合わせが見つかりませんでした。"
+      });
+    }
+
+    await inquiryRef.delete();
+
+    return response.status(200).json({
+      success: true
+    });
+  } catch (error) {
+    console.error(
+      "お問い合わせ：削除エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message:
+        "お問い合わせを削除できませんでした。"
+    });
+  }
+}
+
+
 // 街の今スレッド Phase 1B-1｜api/_lib/town-now-threads.jsへ渡す既存関数の参照。
 // 既存関数そのものは移動・変更しない。
 function buildTownNowThreadDeps() {
@@ -27109,6 +27506,35 @@ export default async function handler(
     requestBody.mode === "adminUpdateShopApplicationStatus"
   ) {
     return handleAdminUpdateShopApplicationStatusRequest(
+      request,
+      response
+    );
+  }
+
+  // お問い合わせ・ご意見窓口｜公開フォームからの送信(認証不要)と、
+  // 管理者のみの一覧・削除。
+  if (
+    requestBody.mode === "contactInquiryCreate"
+  ) {
+    return handleContactInquiryCreateRequest(
+      request,
+      response
+    );
+  }
+
+  if (
+    requestBody.mode === "adminListContactInquiries"
+  ) {
+    return handleAdminListContactInquiriesRequest(
+      request,
+      response
+    );
+  }
+
+  if (
+    requestBody.mode === "adminDeleteContactInquiry"
+  ) {
+    return handleAdminDeleteContactInquiryRequest(
       request,
       response
     );

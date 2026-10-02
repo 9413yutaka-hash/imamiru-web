@@ -851,8 +851,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   footer_contact_link: {
-    ja: "お問い合わせ",
-    en: "Contact Us"
+    ja: "お問い合わせ・ご意見",
+    en: "Contact & Feedback"
   },
 
   // 投稿玄関Phase1｜旧footer_shop_entry_link/footer_general_post_entry_link
