@@ -239,8 +239,13 @@ function switchMachinauLanguage(language) {
 
   // 地域おすすめはrenderShops()の対象外の独立セクションのため、
   // 別途Firestore再取得なしで再描画する(regionRecommendationArticlesは
-  // 既に取得済みの配列をそのまま使う)。
-  renderRegionRecommendationCards();
+  // 既に取得済みの配列をそのまま使う)。同じセクションに街の掲示板を
+  // 表示中は、旧おすすめ(0件)の描画がセクションごと非表示にしてしまう
+  // ため実行しない(掲示板の文言は下のrefreshCommunityBoardTexts
+  // ForCurrentLanguage()が組み立て直す)。
+  if (communityBoardDisplayedAreaName === "") {
+    renderRegionRecommendationCards();
+  }
   refreshRegionRecommendationHeadingForCurrentLanguage();
 
   // TOP下部の導線整理｜掲示板表示中は、見出し(📌 ○○の掲示板)と
