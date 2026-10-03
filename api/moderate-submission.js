@@ -24709,9 +24709,10 @@ function buildColumnArticleParagraphsHtml(
 const COLUMN_ARTICLE_HEADING_LINE_PATTERN =
   /^\s*##[ \t\u3000]+(\S.*)$/;
 
-// 「**文字**」＝太字(同じ行の中だけ、前後が空白でないもの)。
+// 「**文字**」＝太字(前後が空白でないもの)。開始と終了の間の改行は許可する
+// が、空行(段落の区切り)と見出し行はまたがない。
 const COLUMN_ARTICLE_BOLD_PATTERN =
-  /\*\*(?=\S)([^\n]*?\S)\*\*/g;
+  /\*\*(?=\S)((?:(?!\n\s*\n|\n\s*##[ \t　])[\s\S])*?\S)\*\*/g;
 
 // 太字の区切りで先に分け、太字の中も外も既存のURLリンク化(HTMLエスケープ
 // 込み)を必ず通す。HTMLとして出すのは<strong>だけで、入力中のHTMLタグは
