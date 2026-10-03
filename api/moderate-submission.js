@@ -24603,7 +24603,7 @@ function buildColumnArticleParagraphsHtml(
       function(paragraph) {
         return (
           "<p>" +
-          escapeHtmlForRender(
+          linkifyColumnArticleTextForRender(
             paragraph
           ).replaceAll(
             "\n",
@@ -24616,6 +24616,135 @@ function buildColumnArticleParagraphsHtml(
     .join(
       "\n      "
     );
+}
+
+// 読み物本文中の http:// / https:// のURLだけをリンクにする。HTMLタグの
+// 直接入力は従来どおり一切許可しない(URL以外の部分もURL自体も必ず
+// escapeHtmlForRender()を通す)。URLはASCIIのURL文字だけを対象にするため、
+// 直後の「。」「、」「）」「」」等の全角文字は含まれない。末尾の半角の
+// 句読点(. , ! ? : ; ')と、対応する開き括弧の無い ) ] は除外する。
+// javascript:/data:等の他のschemeは正規表現の対象外のため、文字のまま。
+const COLUMN_ARTICLE_URL_PATTERN =
+  /https?:\/\/[A-Za-z0-9\-._~:/?#[\]@!$&'()*+,;=%]+/g;
+
+function trimColumnArticleUrlTrailingPunctuation(
+  url
+) {
+  let trimmedUrl =
+    url;
+
+  while (trimmedUrl.length > 0) {
+    const lastCharacter =
+      trimmedUrl.charAt(
+        trimmedUrl.length - 1
+      );
+
+    if (".,!?:;'".includes(lastCharacter)) {
+      trimmedUrl =
+        trimmedUrl.slice(0, -1);
+
+      continue;
+    }
+
+    if (
+      (
+        lastCharacter === ")" &&
+        trimmedUrl.split("(").length <
+          trimmedUrl.split(")").length
+      ) ||
+      (
+        lastCharacter === "]" &&
+        trimmedUrl.split("[").length <
+          trimmedUrl.split("]").length
+      )
+    ) {
+      trimmedUrl =
+        trimmedUrl.slice(0, -1);
+
+      continue;
+    }
+
+    break;
+  }
+
+  return trimmedUrl;
+}
+
+function isSafeColumnArticleLinkUrl(
+  url
+) {
+  try {
+    const parsedUrl =
+      new URL(
+        url
+      );
+
+    return (
+      (
+        parsedUrl.protocol === "https:" ||
+        parsedUrl.protocol === "http:"
+      ) &&
+      parsedUrl.hostname !== ""
+    );
+  } catch (urlError) {
+    return false;
+  }
+}
+
+function linkifyColumnArticleTextForRender(
+  text
+) {
+  const source =
+    String(
+      text ?? ""
+    );
+
+  let html =
+    "";
+
+  let lastIndex =
+    0;
+
+  for (const match of source.matchAll(COLUMN_ARTICLE_URL_PATTERN)) {
+    const url =
+      trimColumnArticleUrlTrailingPunctuation(
+        match[0]
+      );
+
+    if (!isSafeColumnArticleLinkUrl(url)) {
+      continue;
+    }
+
+    html +=
+      escapeHtmlForRender(
+        source.slice(
+          lastIndex,
+          match.index
+        )
+      ) +
+      '<a class="article-body-link" href="' +
+      escapeHtmlForRender(
+        url
+      ) +
+      '" target="_blank" rel="noopener noreferrer">' +
+      escapeHtmlForRender(
+        url
+      ) +
+      "</a>";
+
+    lastIndex =
+      match.index +
+      url.length;
+  }
+
+  return (
+    html +
+    escapeHtmlForRender(
+      source.slice(
+        lastIndex
+      )
+    )
+  );
 }
 
 
@@ -24884,6 +25013,7 @@ function buildColumnArticleHtml(
     }
     .lede { margin: 0 0 28px; font-size: 15px; line-height: 2; color: var(--text); }
     p { font-size: 14px; line-height: 2; color: var(--text); }
+    .article-body-link { color: var(--blue); overflow-wrap: anywhere; word-break: break-all; }
     .cta-section {
       margin-top: 36px; padding: 24px 20px; border-radius: 18px;
       background: linear-gradient(135deg, #0788c9, #04b7d7);
