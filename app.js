@@ -1966,6 +1966,13 @@ function convertSubmissionToShop(
         ? data.postType.trim()
         : "shop",
 
+    // 街の発見の分離｜post.html?mode=streetの投稿("street")を店舗カードから
+    // 外し、専用セクション(renderStreetDiscoverySection())へ出すための識別値。
+    submissionType:
+      typeof data.submissionType === "string"
+        ? data.submissionType.trim()
+        : "",
+
     sourceLabel:
       typeof data.sourceLabel === "string"
         ? data.sourceLabel.trim()
@@ -2731,6 +2738,203 @@ function isShopWithinNearbyCardRadius(
   );
 }
 
+// 街の発見の分離｜street投稿(承認済み・期限内のものだけがshopsに入る)を、
+// 「マチナウ読みもの」直前の専用セクションへ出す。現在地が分かるまでは
+// 何も出さず(全国の投稿を無差別に並べない)、分かった後は座標があり
+// 現在地から15km以内(境界を含む)の投稿だけを近い順に並べる。店舗カテゴリ・
+// お気に入り(selectedCategory)には依存しない。店舗と誤解される表示
+// (掲載中・営業状態・お気に入り・店舗詳細モーダル)は付けない。
+function renderStreetDiscoverySection() {
+  const section =
+    document.getElementById(
+      "streetDiscoverySection"
+    );
+
+  const list =
+    document.getElementById(
+      "streetDiscoveryList"
+    );
+
+  if (
+    !section ||
+    !list
+  ) {
+    return;
+  }
+
+  if (
+    userLatitude === null ||
+    userLongitude === null
+  ) {
+    list.innerHTML =
+      "";
+
+    section.style.display =
+      "none";
+
+    return;
+  }
+
+  const nowMilliseconds =
+    Date.now();
+
+  const nearbyStreetItems =
+    shops
+      .filter(
+        function(shop) {
+          return (
+            shop.submissionType === "street" &&
+            getDateValue(
+              shop.expiresAt
+            ) > nowMilliseconds &&
+            Number.isFinite(
+              shop.latitude
+            ) &&
+            Number.isFinite(
+              shop.longitude
+            )
+          );
+        }
+      )
+      .map(
+        function(shop) {
+          return {
+            shop: shop,
+            distanceKm:
+              calculateDistance(
+                userLatitude,
+                userLongitude,
+                shop.latitude,
+                shop.longitude
+              )
+          };
+        }
+      )
+      .filter(
+        function(item) {
+          return (
+            Number.isFinite(
+              item.distanceKm
+            ) &&
+            item.distanceKm <=
+              NEARBY_SHOP_CARD_RADIUS_KM
+          );
+        }
+      )
+      .sort(
+        function(first, second) {
+          return first.distanceKm - second.distanceKm;
+        }
+      );
+
+  if (nearbyStreetItems.length === 0) {
+    list.innerHTML =
+      "";
+
+    section.style.display =
+      "none";
+
+    return;
+  }
+
+  const currentLanguage =
+    getCurrentMachinauLanguage();
+
+  list.innerHTML =
+    nearbyStreetItems
+      .map(
+        function(item) {
+          const shop =
+            item.shop;
+
+          const firstImageUrl =
+            Array.isArray(shop.imageUrls) &&
+            shop.imageUrls.length > 0
+              ? getSafeImageUrl(
+                  shop.imageUrls[0]
+                )
+              : "";
+
+          const imageHtml =
+            firstImageUrl !== ""
+              ? '<img class="street-discovery-image" src="' +
+                escapeHtml(
+                  buildOptimizedImageUrl(
+                    firstImageUrl,
+                    { width: OPTIMIZED_IMAGE_WIDTH_CARD }
+                  )
+                ) +
+                '" alt="" loading="lazy" onerror="handleBrokenImage(this)">'
+              : "";
+
+          const placeParts =
+            [];
+
+          if (
+            typeof shop.address === "string" &&
+            shop.address !== ""
+          ) {
+            placeParts.push(
+              shop.address
+            );
+          }
+
+          placeParts.push(
+            formatDistance(
+              item.distanceKm
+            )
+          );
+
+          return (
+            '<article class="street-discovery-card">' +
+              imageHtml +
+              '<div class="street-discovery-body">' +
+                '<p class="street-discovery-source">' +
+                  escapeHtml(
+                    getMachinauTranslation(
+                      "shop_user_post_badge",
+                      currentLanguage
+                    )
+                  ) +
+                '</p>' +
+                '<h3 class="street-discovery-title">' +
+                  escapeHtml(
+                    shop.title
+                  ) +
+                '</h3>' +
+                (
+                  typeof shop.message === "string" &&
+                  shop.message !== ""
+                    ? '<p class="street-discovery-text">' +
+                      escapeHtml(
+                        shop.message
+                      ) +
+                      '</p>'
+                    : ""
+                ) +
+                '<p class="street-discovery-meta">' +
+                  '📍 ' +
+                  escapeHtml(
+                    placeParts.join(" ・ ")
+                  ) +
+                  '　' +
+                  escapeHtml(
+                    getExpiryDisplayText(
+                      shop
+                    )
+                  ) +
+                '</p>' +
+              '</div>' +
+            '</article>'
+          );
+        }
+      )
+      .join("");
+
+  section.style.display =
+    "";
+}
+
 function renderShops() {
   const shopsList =
     document.getElementById(
@@ -2760,6 +2964,10 @@ function renderShops() {
   // renderShops()経由で再評価する(新しいタイマーは作らない)。
   updateTodayMachinauCard();
 
+  // 街の発見の分離｜street投稿は店舗カードではなく専用セクションへ出す
+  // (地図・提案等、店舗カード以外の既存の扱いは変えない)。
+  renderStreetDiscoverySection();
+
   // 店舗カード描画専用の配列。getVisibleShops()自体・updateShopMarkers()・
   // updateFlashBanner()・updateUnifiedImportantInfo()はすべてvisibleShops
   // (またはgetVisibleShops()の独自呼び出し)を無変更のまま使い続けるため、
@@ -2779,6 +2987,8 @@ function renderShops() {
           return (
             shop.postType !==
               "admin" &&
+            shop.submissionType !==
+              "street" &&
             isShopWithinNearbyCardRadius(
               shop
             )

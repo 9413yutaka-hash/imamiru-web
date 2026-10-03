@@ -329,6 +329,61 @@
       margin-top: 12px;
     }
 
+    /* 街の発見の分離｜street投稿専用のシンプルなカード(写真あり/なし両対応)。 */
+    .street-discovery-card {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      margin-bottom: 12px;
+      background: var(--white);
+    }
+
+    .street-discovery-card:last-child {
+      margin-bottom: 0;
+    }
+
+    .street-discovery-image {
+      display: block;
+      width: 100%;
+      max-height: 220px;
+      object-fit: cover;
+    }
+
+    .street-discovery-body {
+      padding: 12px 14px;
+    }
+
+    .street-discovery-source {
+      margin: 0 0 4px;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--subtext);
+    }
+
+    .street-discovery-title {
+      margin: 0 0 6px;
+      font-size: 15px;
+      font-weight: 900;
+      color: var(--navy);
+      overflow-wrap: anywhere;
+    }
+
+    .street-discovery-text {
+      margin: 0 0 8px;
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--text);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .street-discovery-meta {
+      margin: 0;
+      font-size: 12px;
+      color: var(--subtext);
+      overflow-wrap: anywhere;
+    }
+
     /* 運営固定投稿＋外部動画リンク｜外部動画URLがある投稿だけに出す導線。 */
     .community-board-video-link {
       display: inline-block;
@@ -1826,6 +1881,28 @@
       >
         お店・施設の方へ｜無料で情報を掲載できます →
       </a>
+
+    </section>
+
+    <!-- 街の発見の分離｜post.html?mode=street(街の「今」を投稿する)の投稿を、
+         店舗カード(今、近くで楽しめる場所)から分けてここに出す。現在地から
+         15km以内の投稿が1件も無い間はapp.jsのrenderStreetDiscoverySection()が
+         セクションごと非表示にする。見出しは仮名称(代表が最終決定)。 -->
+    <section
+      id="streetDiscoverySection"
+      class="region-recommendation-section"
+      style="display:none;"
+    >
+
+      <h2 data-i18n="street_discovery_heading">
+        📍 街の発見
+      </h2>
+
+      <p class="column-entry-lead" data-i18n="street_discovery_lead">
+        近くの人が見つけた、今の街の様子です。
+      </p>
+
+      <div id="streetDiscoveryList"></div>
 
     </section>
 

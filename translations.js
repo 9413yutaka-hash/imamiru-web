@@ -1248,6 +1248,16 @@ const MACHINAU_TRANSLATIONS = {
     en: "🎥 Watch video"
   },
 
+  street_discovery_heading: {
+    ja: "📍 街の発見",
+    en: "📍 Spotted Nearby"
+  },
+
+  street_discovery_lead: {
+    ja: "近くの人が見つけた、今の街の様子です。",
+    en: "What people nearby have spotted around town right now."
+  },
+
   community_board_post_link: {
     ja: "今いる街について投稿する",
     en: "Post about the city you're in now"
