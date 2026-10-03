@@ -570,6 +570,7 @@ const CATEGORY_TRANSLATION_KEYS_BY_INTERNAL_CATEGORY = {
   居酒屋: "category_nightlife",
   "美容・リラクゼーション": "category_beauty",
   宿泊: "category_lodging",
+  パワースポット: "category_power_spot",
   お知らせ: "category_notice"
 };
 
@@ -663,6 +664,17 @@ function getCategoryDisplay(
 
       visualClass:
         "visual-stay"
+    },
+
+    パワースポット: {
+      categoryText:
+        "パワースポット",
+
+      emoji:
+        "⛩️",
+
+      visualClass:
+        "visual-sightseeing"
     },
 
     カフェ: {

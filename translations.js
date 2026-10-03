@@ -162,6 +162,11 @@ const MACHINAU_TRANSLATIONS = {
     en: "Favorites"
   },
 
+  category_power_spot: {
+    ja: "パワースポット",
+    en: "Power Spots"
+  },
+
   category_gourmet: {
     ja: "グルメ",
     en: "Food"
