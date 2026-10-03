@@ -11963,9 +11963,33 @@ function escapeHtmlForCommunityBoard(
   );
 }
 
+// 運営固定投稿＋外部動画リンク｜サーバーで検証済みのexternalVideoUrlを、
+// 念のためここでもhttp/httpsだけに限定してから「🎥 動画を見る」導線にする
+// (URLが無い通常投稿には何も足さない)。文言はdata-i18nで言語切替に追従する。
 function buildCommunityBoardPostItemHtml(
   post
 ) {
+  const safeVideoUrl =
+    getSafeWebsiteUrl(
+      post.externalVideoUrl
+    );
+
+  const videoLinkHtml =
+    safeVideoUrl !== ""
+      ? '<a class="community-board-video-link" href="' +
+        escapeHtmlForCommunityBoard(
+          safeVideoUrl
+        ) +
+        '" target="_blank" rel="noopener noreferrer" data-i18n="community_board_watch_video">' +
+        escapeHtmlForCommunityBoard(
+          getMachinauTranslation(
+            "community_board_watch_video",
+            getCurrentMachinauLanguage()
+          )
+        ) +
+        '</a>'
+      : "";
+
   return (
     '<div class="community-board-post-item">' +
       '<p class="community-board-post-text">' +
@@ -11973,6 +11997,7 @@ function buildCommunityBoardPostItemHtml(
         post.text
       ) +
       '</p>' +
+      videoLinkHtml +
     '</div>'
   );
 }

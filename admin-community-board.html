@@ -242,6 +242,29 @@
       flex-wrap: wrap;
     }
 
+    /* 運営固定投稿＋外部動画リンク｜審査待ち・掲載中の投稿にだけ出す運営設定。 */
+    .board-post-feature {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border: 1px dashed var(--border);
+      border-radius: 10px;
+    }
+
+    .status-badge.pinned {
+      background: #e6f3ff;
+      color: #0b6bb5;
+    }
+
+    .board-post-video-input {
+      width: 100%;
+      max-width: 520px;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+
     .empty-state {
       color: var(--subtext);
       font-size: 13px;
@@ -562,6 +585,37 @@
             '　/　googlePlaceId：' + escapeHtmlText(post.googlePlaceId || "-") + '</div>'
           : "";
 
+      // 運営固定投稿＋外部動画リンク｜固定・動画URLはstatusを変えない
+      // (審査待ちのまま固定しても、承認されるまで掲示板には出ない)。
+      let featureHtml = "";
+
+      if (post.status === "pending" || post.status === "approved") {
+        const pinStateHtml = post.isPinned
+          ? '<span class="status-badge pinned">📌 上部固定中</span>' +
+            (post.status === "pending" ? '　承認されるまで掲示板には表示されません。' : '')
+          : '上部固定：なし';
+
+        const currentVideoHtml = post.externalVideoUrl
+          ? '　/　現在の動画URL：<a href="' + escapeHtmlText(post.externalVideoUrl) +
+            '" target="_blank" rel="noopener noreferrer">' + escapeHtmlText(post.externalVideoUrl) + '</a>'
+          : '　/　動画URL：未設定';
+
+        featureHtml =
+          '<div class="board-post-feature">' +
+            '<div class="board-post-meta">' + pinStateHtml + currentVideoHtml + '</div>' +
+            '<div class="board-post-actions">' +
+              (post.isPinned
+                ? '<button type="button" class="secondary-button" data-action="unpin">固定を解除</button>'
+                : '<button type="button" class="secondary-button" data-action="pin">上部に固定</button>') +
+            '</div>' +
+            '<div class="board-post-actions">' +
+              '<input type="url" class="board-post-video-input" placeholder="外部動画URL（https://www.tiktok.com/... など）" value="' +
+                escapeHtmlText(post.externalVideoUrl || "") + '">' +
+              '<button type="button" class="secondary-button" data-action="save-video">動画URLを保存</button>' +
+            '</div>' +
+          '</div>';
+      }
+
       let actionsHtml = "";
 
       if (post.status === "pending") {
@@ -586,6 +640,7 @@
           '</div>' +
           reviewReasonHtml +
           referenceHtml +
+          featureHtml +
           actionsHtml +
         '</div>'
       );
@@ -901,10 +956,44 @@
         const postId = itemElement.getAttribute("data-post-id");
         const action = actionButton.getAttribute("data-action");
 
+        // 運営固定投稿＋外部動画リンク｜動画URLは保存前に画面側でも
+        // http/httpsだけに限定する(最終的な検証はサーバー側で行う)。
+        let payload = { postId: postId };
+        let videoUrlValue = "";
+
+        if (action === "save-video") {
+          const videoInput = itemElement.querySelector(".board-post-video-input");
+          videoUrlValue = videoInput ? videoInput.value.trim() : "";
+
+          if (videoUrlValue !== "") {
+            let parsedVideoUrl = null;
+
+            try {
+              parsedVideoUrl = new URL(videoUrlValue);
+            } catch (urlError) {
+              parsedVideoUrl = null;
+            }
+
+            if (!parsedVideoUrl || (parsedVideoUrl.protocol !== "https:" && parsedVideoUrl.protocol !== "http:")) {
+              showMessage(listMessage, "動画URLは http:// または https:// で始まる正しいURLを入力してください。", "error");
+              return;
+            }
+          }
+
+          payload = { postId: postId, externalVideoUrl: videoUrlValue };
+        } else if (action === "pin" || action === "unpin") {
+          payload = { postId: postId, isPinned: action === "pin" };
+        }
+
         const confirmMessages = {
           approve: "この投稿を承認して掲載しますか？",
           reject: "この投稿を却下しますか？",
-          disable: "この投稿の掲載を終了しますか？"
+          disable: "この投稿の掲載を終了しますか？",
+          pin: "この投稿を、その地域の掲示板の一番上に固定しますか？",
+          unpin: "この投稿の上部固定を解除しますか？",
+          "save-video": videoUrlValue === ""
+            ? "この投稿の動画URLを削除しますか？"
+            : "この動画URLを保存しますか？\n" + videoUrlValue
         };
 
         if (!window.confirm(confirmMessages[action] || "実行しますか？")) {
@@ -914,7 +1003,10 @@
         const modeByAction = {
           approve: "adminApproveCommunityBoardPost",
           reject: "adminRejectCommunityBoardPost",
-          disable: "adminDisableCommunityBoardPost"
+          disable: "adminDisableCommunityBoardPost",
+          pin: "adminSetCommunityBoardPostPinned",
+          unpin: "adminSetCommunityBoardPostPinned",
+          "save-video": "adminSetCommunityBoardPostExternalVideoUrl"
         };
 
         const mode = modeByAction[action];
@@ -929,7 +1021,7 @@
         });
 
         try {
-          await callCommunityBoardApi(mode, { postId: postId });
+          await callCommunityBoardApi(mode, payload);
           await loadCommunityBoardPosts();
         } catch (error) {
           console.error("街の掲示板：操作に失敗しました：", error);

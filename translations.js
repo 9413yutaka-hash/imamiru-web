@@ -1243,6 +1243,11 @@ const MACHINAU_TRANSLATIONS = {
     en: "There are no posts on this community board yet."
   },
 
+  community_board_watch_video: {
+    ja: "🎥 動画を見る",
+    en: "🎥 Watch video"
+  },
+
   community_board_post_link: {
     ja: "今いる街について投稿する",
     en: "Post about the city you're in now"

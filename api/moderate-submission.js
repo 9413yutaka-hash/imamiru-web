@@ -2773,7 +2773,14 @@ function convertCommunityBoardPostSnapshotToAdminListItem(
     createdAtMillis: createdAtMillis,
     approvedAtMillis: approvedAtMillis,
     rejectedAtMillis: rejectedAtMillis,
-    disabledAtMillis: disabledAtMillis
+    disabledAtMillis: disabledAtMillis,
+    // 運営固定投稿＋外部動画リンク｜未設定の既存投稿は固定なし・動画なし。
+    isPinned:
+      data.isPinned === true,
+    externalVideoUrl:
+      sanitizeCommunityBoardExternalVideoUrl(
+        data.externalVideoUrl
+      ) || ""
   };
 }
 
@@ -3520,6 +3527,267 @@ async function handleAdminDisableCommunityBoardPostRequest(
 }
 
 
+// 街の掲示板｜運営固定投稿＋外部動画リンク。運営(Admin)だけが投稿を
+// 地域の掲示板の上部へ固定(isPinned/pinnedAt)し、外部動画URL
+// (externalVideoUrl、TikTok等に限らない)を設定できる。固定・動画URLの
+// 変更はstatusに一切触れない(公開条件は従来どおりstatus==="approved"
+// のみ)。フィールドが存在しない既存投稿は「固定なし・動画なし」として扱う。
+const COMMUNITY_BOARD_EXTERNAL_VIDEO_URL_MAX_LENGTH =
+  500;
+
+// 1地域で上部に出す固定投稿の上限(通常投稿10件とは別枠)。
+const COMMUNITY_BOARD_PINNED_DISPLAY_LIMIT =
+  5;
+
+// 外部動画URLの検証。http/httpsの正しいWeb URLだけを許可し、
+// javascript:等のスキーム・空白/制御文字・認証情報付きURLは拒否する。
+// 戻り値：""＝未設定(解除)、文字列＝正規化済みURL、null＝不正。
+function sanitizeCommunityBoardExternalVideoUrl(
+  value
+) {
+  if (typeof value !== "string") {
+    return value === undefined || value === null
+      ? ""
+      : null;
+  }
+
+  const trimmedValue =
+    value.trim();
+
+  if (trimmedValue === "") {
+    return "";
+  }
+
+  if (
+    trimmedValue.length >
+      COMMUNITY_BOARD_EXTERNAL_VIDEO_URL_MAX_LENGTH ||
+    /[\s\u0000-\u001f\u007f]/.test(trimmedValue)
+  ) {
+    return null;
+  }
+
+  let parsedUrl;
+
+  try {
+    parsedUrl =
+      new URL(
+        trimmedValue
+      );
+  } catch (parseError) {
+    return null;
+  }
+
+  if (
+    (
+      parsedUrl.protocol !== "https:" &&
+      parsedUrl.protocol !== "http:"
+    ) ||
+    parsedUrl.hostname === "" ||
+    parsedUrl.username !== "" ||
+    parsedUrl.password !== ""
+  ) {
+    return null;
+  }
+
+  return parsedUrl.href;
+}
+
+function readCommunityBoardAdminPostId(
+  requestBody
+) {
+  const postId =
+    typeof requestBody.postId === "string"
+      ? requestBody.postId.trim()
+      : "";
+
+  return /^[A-Za-z0-9_-]{1,128}$/.test(postId)
+    ? postId
+    : "";
+}
+
+async function handleAdminSetCommunityBoardPostPinnedRequest(
+  request,
+  response
+) {
+  try {
+    const authResult =
+      await requireAdmin(
+        request
+      );
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({
+        success: false,
+        message: authResult.message
+      });
+    }
+
+    const database =
+      authResult.database;
+
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    const postId =
+      readCommunityBoardAdminPostId(
+        requestBody
+      );
+
+    if (postId === "") {
+      return response.status(400).json({
+        success: false,
+        message: "postIdを指定してください。"
+      });
+    }
+
+    if (typeof requestBody.isPinned !== "boolean") {
+      return response.status(400).json({
+        success: false,
+        message: "固定する／解除するを指定してください。"
+      });
+    }
+
+    const isPinned =
+      requestBody.isPinned;
+
+    const postRef =
+      database
+        .collection("communityBoardPosts")
+        .doc(postId);
+
+    const snapshot =
+      await postRef.get();
+
+    if (!snapshot.exists) {
+      return response.status(404).json({
+        success: false,
+        message: "対象の投稿が見つかりませんでした。"
+      });
+    }
+
+    await postRef.update(
+      {
+        isPinned: isPinned,
+        pinnedAt:
+          isPinned
+            ? FieldValue.serverTimestamp()
+            : null,
+        updatedAt:
+          FieldValue.serverTimestamp()
+      }
+    );
+
+    return response.status(200).json({
+      success: true,
+      postId: postId,
+      isPinned: isPinned
+    });
+  } catch (error) {
+    console.error(
+      "街の掲示板：固定設定エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message: "固定設定の処理中にエラーが発生しました。"
+    });
+  }
+}
+
+async function handleAdminSetCommunityBoardPostExternalVideoUrlRequest(
+  request,
+  response
+) {
+  try {
+    const authResult =
+      await requireAdmin(
+        request
+      );
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({
+        success: false,
+        message: authResult.message
+      });
+    }
+
+    const database =
+      authResult.database;
+
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    const postId =
+      readCommunityBoardAdminPostId(
+        requestBody
+      );
+
+    if (postId === "") {
+      return response.status(400).json({
+        success: false,
+        message: "postIdを指定してください。"
+      });
+    }
+
+    const externalVideoUrl =
+      sanitizeCommunityBoardExternalVideoUrl(
+        requestBody.externalVideoUrl
+      );
+
+    if (externalVideoUrl === null) {
+      return response.status(400).json({
+        success: false,
+        message: "動画URLは http:// または https:// で始まる正しいURLを入力してください。"
+      });
+    }
+
+    const postRef =
+      database
+        .collection("communityBoardPosts")
+        .doc(postId);
+
+    const snapshot =
+      await postRef.get();
+
+    if (!snapshot.exists) {
+      return response.status(404).json({
+        success: false,
+        message: "対象の投稿が見つかりませんでした。"
+      });
+    }
+
+    await postRef.update(
+      {
+        externalVideoUrl: externalVideoUrl,
+        updatedAt:
+          FieldValue.serverTimestamp()
+      }
+    );
+
+    return response.status(200).json({
+      success: true,
+      postId: postId,
+      externalVideoUrl: externalVideoUrl
+    });
+  } catch (error) {
+    console.error(
+      "街の掲示板：動画URL設定エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message: "動画URLの保存中にエラーが発生しました。"
+    });
+  }
+}
+
+
 // 街の掲示板(仮称) Phase5｜地域代表画像の登録・変更・参照解除。
 // 1地域(regions/{regionId})につき1枚の代表画像で、投稿単位の画像ではない。
 // Google place_idではなくMachinau独自regionId(regions.doc()の自動生成ID、
@@ -3803,8 +4071,93 @@ async function handleCommunityBoardPostsListRequest(
         )
         .get();
 
+    // 運営固定投稿｜同じregionId・approvedのうちisPinned===trueの投稿を
+    // 等値条件だけ(orderByなし、新しい複合indexは不要)で別に読み、通常
+    // 一覧より上に新しい順で並べる。取得に失敗しても通常一覧は従来どおり
+    // 返す(固定投稿だけを省く)。
+    let pinnedDocuments =
+      [];
+
+    try {
+      const pinnedSnapshot =
+        await database
+          .collection("communityBoardPosts")
+          .where(
+            "regionId",
+            "==",
+            regionId
+          )
+          .where(
+            "status",
+            "==",
+            "approved"
+          )
+          .where(
+            "isPinned",
+            "==",
+            true
+          )
+          .limit(
+            COMMUNITY_BOARD_PINNED_DISPLAY_LIMIT
+          )
+          .get();
+
+      pinnedDocuments =
+        pinnedSnapshot.docs.slice().sort(
+          function(first, second) {
+            const firstData =
+              first.data() || {};
+
+            const secondData =
+              second.data() || {};
+
+            const firstMillis =
+              firstData.createdAt &&
+              typeof firstData.createdAt.toMillis === "function"
+                ? firstData.createdAt.toMillis()
+                : 0;
+
+            const secondMillis =
+              secondData.createdAt &&
+              typeof secondData.createdAt.toMillis === "function"
+                ? secondData.createdAt.toMillis()
+                : 0;
+
+            return secondMillis - firstMillis;
+          }
+        );
+    } catch (pinnedError) {
+      console.error(
+        "街の掲示板：固定投稿の取得エラー(通常一覧のみ返します)：",
+        pinnedError
+      );
+
+      pinnedDocuments =
+        [];
+    }
+
+    const pinnedPostIds =
+      new Set(
+        pinnedDocuments.map(
+          function(documentSnapshot) {
+            return documentSnapshot.id;
+          }
+        )
+      );
+
+    const orderedDocuments =
+      pinnedDocuments.concat(
+        querySnapshot.docs.filter(
+          function(documentSnapshot) {
+            return !pinnedPostIds.has(
+              documentSnapshot.id
+            );
+          }
+        )
+      );
+
     const posts =
-      querySnapshot.docs.map(
+      orderedDocuments.map(
         function(documentSnapshot) {
           const data =
             documentSnapshot.data() ||
@@ -3817,6 +4170,16 @@ async function handleCommunityBoardPostsListRequest(
               : 0;
 
           return {
+            isPinned:
+              pinnedPostIds.has(
+                documentSnapshot.id
+              ),
+
+            externalVideoUrl:
+              sanitizeCommunityBoardExternalVideoUrl(
+                data.externalVideoUrl
+              ) || "",
+
             postId:
               documentSnapshot.id,
 
@@ -27672,6 +28035,23 @@ export default async function handler(
     requestBody.mode === "adminDisableCommunityBoardPost"
   ) {
     return handleAdminDisableCommunityBoardPostRequest(
+      request,
+      response
+    );
+  }
+  // 街の掲示板｜運営固定投稿＋外部動画リンク(Admin専用、requireAdmin)。
+  if (
+    requestBody.mode === "adminSetCommunityBoardPostPinned"
+  ) {
+    return handleAdminSetCommunityBoardPostPinnedRequest(
+      request,
+      response
+    );
+  }
+  if (
+    requestBody.mode === "adminSetCommunityBoardPostExternalVideoUrl"
+  ) {
+    return handleAdminSetCommunityBoardPostExternalVideoUrlRequest(
       request,
       response
     );
