@@ -2798,6 +2798,20 @@
           ? "内容の安全確認後、トップページの「📍 街の発見」に、近く（15km以内）にいる方向けに掲載されます。反映まで少し時間がかかる場合があります。"
           : "内容の安全確認後、トップページに掲載されます。";
 
+      // 街の発見(street)｜3/6/12/24時間で自動終了するため、投稿者に掲載番号・
+      // 終了番号の保存は求めない(番号の生成・保存・sessionStorageへの一時保持
+      // 等の内部処理はそのまま)。店舗投稿の表示は従来どおり下のテンプレート。
+      if (currentPostMode === "street") {
+        messageBox.innerHTML =
+          "投稿を受け付けました。<br><br>" +
+          escapeHtml(
+            publicationNoticeText +
+            "選択した掲載時間が経過すると、自動的に掲載終了します。"
+          );
+
+        return;
+      }
+
       messageBox.innerHTML = `
         掲載のお申し込みを受け付けました。
         <br><br>
@@ -4893,7 +4907,9 @@ agreementInput.addEventListener(
     newPostButton.addEventListener(
       "click",
       function() {
+        // 街の発見(street)は番号の保存を求めないため確認しない。
         const confirmed =
+          currentPostMode === "street" ||
           window.confirm(
             "掲載番号と終了番号は保存しましたか？"
           );
@@ -4910,7 +4926,8 @@ agreementInput.addEventListener(
       event
     ) {
       if (
-        !hasSubmittedSuccessfully
+        !hasSubmittedSuccessfully ||
+        currentPostMode === "street"
       ) {
         return;
       }
