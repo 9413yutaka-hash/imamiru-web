@@ -139,6 +139,79 @@
       min-height: 260px;
     }
 
+    /* 読み物の見出し・太字｜本文の入力補助ボタンとプレビュー(記事ページの
+       本文と同じ見た目に寄せる)。 */
+    .content-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 0 0 8px;
+    }
+
+    .content-toolbar .secondary-button {
+      padding: 8px 14px;
+    }
+
+    .content-preview {
+      display: none;
+      margin-top: 12px;
+      padding: 18px 16px;
+      border: 1px dashed var(--blue);
+      border-radius: 16px;
+      background: var(--white);
+      overflow-wrap: anywhere;
+    }
+
+    .content-preview.visible {
+      display: block;
+    }
+
+    .content-preview-label {
+      margin: 0 0 10px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--blue);
+    }
+
+    .content-preview-title {
+      margin: 0 0 8px;
+      font-size: 20px;
+      line-height: 1.5;
+      color: var(--navy);
+    }
+
+    .content-preview-lede {
+      margin: 0 0 18px;
+      font-size: 15px;
+      line-height: 2;
+      color: var(--text);
+    }
+
+    .content-preview-body p {
+      font-size: 14px;
+      line-height: 2;
+      color: var(--text);
+    }
+
+    .content-preview-body .article-heading {
+      margin: 30px 0 8px;
+      font-size: 17px;
+      line-height: 1.6;
+      font-weight: 900;
+      color: var(--navy);
+      overflow-wrap: anywhere;
+    }
+
+    .content-preview-body strong {
+      font-weight: 900;
+    }
+
+    .content-preview-body .article-body-link {
+      color: var(--blue);
+      overflow-wrap: anywhere;
+      word-break: break-all;
+    }
+
     .primary-button {
       background: linear-gradient(135deg, var(--blue), #04b7d7);
       color: var(--white);
@@ -406,10 +479,22 @@
             <label for="contentInput">
               本文
             </label>
+            <div class="content-toolbar">
+              <button type="button" id="headingButton" class="secondary-button">見出し</button>
+              <button type="button" id="boldButton" class="secondary-button"><strong>B</strong> 太字</button>
+              <button type="button" id="previewButton" class="secondary-button">プレビュー</button>
+            </div>
             <textarea id="contentInput" maxlength="6000" required></textarea>
             <p class="field-hint">
-              段落を分けたいところで空行（Enterを2回）を入れてください。HTMLタグは使えません（自動的にそのまま文字として表示されます）。
+              段落を分けたいところで空行（Enterを2回）を入れてください。HTMLタグは使えません（自動的にそのまま文字として表示されます）。<br>
+              「## 」で始まる行は小見出し、「**文字**」は太字になります（上のボタンでも入力できます）。
             </p>
+            <div id="contentPreview" class="content-preview">
+              <p class="content-preview-label">プレビュー（保存前の表示確認。記事ページと同じ変換です）</p>
+              <h1 id="contentPreviewTitle" class="content-preview-title"></h1>
+              <p id="contentPreviewLede" class="content-preview-lede"></p>
+              <div id="contentPreviewBody" class="content-preview-body"></div>
+            </div>
           </div>
 
           <div class="field">
@@ -484,6 +569,78 @@
     const removeImageButton = document.getElementById("removeImageButton");
     const descriptionInput = document.getElementById("descriptionInput");
     const contentInput = document.getElementById("contentInput");
+
+    // 読み物の見出し・太字｜本文の入力補助。HTMLではなく「## 」「**」の記号を
+    // 本文へ書き込むだけ(保存形式はプレーンテキストのまま)。
+    function replaceContentRange(start, end, text, selectStart, selectEnd) {
+      contentInput.focus();
+      contentInput.setRangeText(text, start, end, "end");
+      contentInput.setSelectionRange(selectStart, selectEnd);
+      contentInput.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+
+    document.getElementById("headingButton").addEventListener("click", function () {
+      const value = contentInput.value;
+      const lineStart = value.lastIndexOf("\n", contentInput.selectionStart - 1) + 1;
+      const lineEndIndex = value.indexOf("\n", lineStart);
+      const lineEnd = lineEndIndex === -1 ? value.length : lineEndIndex;
+      const line = value.slice(lineStart, lineEnd);
+      const existingHeading = /^##[ \t\u3000]+/.exec(line);
+
+      if (existingHeading) {
+        // すでに見出しの行なら「## 」を外す(押し直しで戻せるようにする)。
+        const plainLine = line.slice(existingHeading[0].length);
+        replaceContentRange(lineStart, lineEnd, plainLine, lineStart, lineStart + plainLine.length);
+        return;
+      }
+
+      const headingLine = "## " + (line.trim() === "" ? "見出し" : line.trim());
+      replaceContentRange(lineStart, lineEnd, headingLine, lineStart + 3, lineStart + headingLine.length);
+    });
+
+    document.getElementById("boldButton").addEventListener("click", function () {
+      const start = contentInput.selectionStart;
+      const end = contentInput.selectionEnd;
+      const selected = contentInput.value.slice(start, end);
+
+      if (selected === "") {
+        // 選択が無い場合は「**太字**」を入れ、「太字」を選択状態にする。
+        replaceContentRange(start, end, "**太字**", start + 2, start + 4);
+        return;
+      }
+
+      replaceContentRange(start, end, "**" + selected + "**", start + 2, start + 2 + selected.length);
+    });
+
+    const contentPreview = document.getElementById("contentPreview");
+    const contentPreviewTitle = document.getElementById("contentPreviewTitle");
+    const contentPreviewLede = document.getElementById("contentPreviewLede");
+    const contentPreviewBody = document.getElementById("contentPreviewBody");
+    const previewButton = document.getElementById("previewButton");
+
+    previewButton.addEventListener("click", async function () {
+      previewButton.disabled = true;
+      previewButton.textContent = "作成中…";
+
+      try {
+        // 本文は記事ページと同じサーバー側の変換(エスケープ・URLリンク・
+        // 見出し・太字)を通したHTMLだけを表示する。タイトル・概要は文字として表示。
+        const responseData = await callColumnApi("adminPreviewColumnArticleContent", {
+          content: contentInput.value
+        });
+
+        contentPreviewTitle.textContent = titleInput.value.trim();
+        contentPreviewLede.textContent = descriptionInput.value.trim();
+        contentPreviewBody.innerHTML = typeof responseData.html === "string" ? responseData.html : "";
+        contentPreview.classList.add("visible");
+        contentPreview.scrollIntoView({ behavior: "smooth", block: "start" });
+      } catch (error) {
+        showFormMessage(error.message || "プレビューを作成できませんでした。", "error");
+      } finally {
+        previewButton.disabled = false;
+        previewButton.textContent = "プレビュー";
+      }
+    });
     const customSlugInput = document.getElementById("customSlugInput");
     const isPublishedInput = document.getElementById("isPublishedInput");
     const formMessage = document.getElementById("formMessage");
@@ -780,12 +937,16 @@
       customSlugInput.value = "";
       customSlugInput.disabled = false;
       isPublishedInput.checked = false;
+      contentPreview.classList.remove("visible");
+      contentPreviewBody.innerHTML = "";
 
       showFormMessage("", "");
     }
 
     async function fillFormForEdit(documentId) {
       showFormMessage("読み込んでいます…", "");
+      contentPreview.classList.remove("visible");
+      contentPreviewBody.innerHTML = "";
 
       try {
         const responseData = await callColumnApi("adminGetColumnArticle", {

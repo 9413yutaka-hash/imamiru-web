@@ -23666,6 +23666,11 @@ function buildColumnArticleContentTranslationPrompt(
     "translation exactly as written (same characters, same number), at " +
     "the corresponding position, and never translate, alter, remove, or " +
     "duplicate them. " +
+    "\n- A line may start with [[MACHINAU_H]] (a section heading): keep " +
+    "[[MACHINAU_H]] at the start of the translated line. Text wrapped as " +
+    "[[MACHINAU_B]]...[[MACHINAU_B_END]] is emphasized: wrap the " +
+    "corresponding translated words with the same two markers. Copy these " +
+    "markers exactly and do not add new ones. " +
     "\n- As much as possible, preserve the author's own voice and tone " +
     "rather than flattening it into generic travel-guide language. " +
     "\n- The output must be plain text only — no HTML tags, no " +
@@ -24249,15 +24254,21 @@ async function resolveColumnArticleContentTranslation(
         content
       );
 
+    // 読み物の見出し・太字｜翻訳指示は「Markdown記号を出さない」ため、
+    // 「## 」「**」も翻訳中だけ目印に置き換え、翻訳後に戻す。
     const translationResult =
       await callOpenAiColumnArticleContentTranslation(
-        protectedSource.text,
+        protectColumnArticleFormattingForTranslation(
+          protectedSource.text
+        ),
         language
       );
 
     const translatedContent =
       restoreColumnArticleUrlsAfterTranslation(
-        translationResult.content,
+        restoreColumnArticleFormattingAfterTranslation(
+          translationResult.content
+        ),
         protectedSource.urls
       );
 
@@ -24621,21 +24632,131 @@ function buildColumnArticleParagraphsHtml(
   return paragraphs
     .map(
       function(paragraph) {
-        return (
-          "<p>" +
-          linkifyColumnArticleTextForRender(
-            paragraph
-          ).replaceAll(
-            "\n",
-            "<br>"
-          ) +
-          "</p>"
+        // 読み物の見出し・太字｜「## 」で始まる行だけを小見出しにし、それ以外の
+        // 連続する行は従来どおり<br>区切りの1つの<p>にする(見出しの無い段落の
+        // 出力は従来と完全に同じ)。
+        const blocks =
+          [];
+
+        let textLines =
+          [];
+
+        const flushTextLines = function() {
+          if (textLines.length === 0) {
+            return;
+          }
+
+          blocks.push(
+            "<p>" +
+            renderColumnArticleInlineForRender(
+              textLines.join("\n")
+            ).replaceAll(
+              "\n",
+              "<br>"
+            ) +
+            "</p>"
+          );
+
+          textLines =
+            [];
+        };
+
+        paragraph
+          .split(
+            "\n"
+          )
+          .forEach(
+            function(line) {
+              const headingMatch =
+                COLUMN_ARTICLE_HEADING_LINE_PATTERN.exec(
+                  line
+                );
+
+              if (!headingMatch) {
+                textLines.push(
+                  line
+                );
+
+                return;
+              }
+
+              flushTextLines();
+
+              blocks.push(
+                '<h2 class="article-heading">' +
+                renderColumnArticleInlineForRender(
+                  headingMatch[1].trim()
+                ) +
+                "</h2>"
+              );
+            }
+          );
+
+        flushTextLines();
+
+        return blocks.join(
+          "\n      "
         );
       }
     )
     .join(
       "\n      "
     );
+}
+
+// 読み物の見出し・太字｜本格的なMarkdownではなく、この2種類だけを扱う。
+// 「## 」(半角#2つ＋空白)で始まる行＝小見出し。
+const COLUMN_ARTICLE_HEADING_LINE_PATTERN =
+  /^\s*##[ \t\u3000]+(\S.*)$/;
+
+// 「**文字**」＝太字(同じ行の中だけ、前後が空白でないもの)。
+const COLUMN_ARTICLE_BOLD_PATTERN =
+  /\*\*(?=\S)([^\n]*?\S)\*\*/g;
+
+// 太字の区切りで先に分け、太字の中も外も既存のURLリンク化(HTMLエスケープ
+// 込み)を必ず通す。HTMLとして出すのは<strong>だけで、入力中のHTMLタグは
+// 従来どおり文字のまま表示される。
+function renderColumnArticleInlineForRender(
+  text
+) {
+  const source =
+    String(
+      text ?? ""
+    );
+
+  let html =
+    "";
+
+  let lastIndex =
+    0;
+
+  for (const match of source.matchAll(COLUMN_ARTICLE_BOLD_PATTERN)) {
+    html +=
+      linkifyColumnArticleTextForRender(
+        source.slice(
+          lastIndex,
+          match.index
+        )
+      ) +
+      "<strong>" +
+      linkifyColumnArticleTextForRender(
+        match[1]
+      ) +
+      "</strong>";
+
+    lastIndex =
+      match.index +
+      match[0].length;
+  }
+
+  return (
+    html +
+    linkifyColumnArticleTextForRender(
+      source.slice(
+        lastIndex
+      )
+    )
+  );
 }
 
 // 読み物本文中の http:// / https:// のURLだけをリンクにする。HTMLタグの
@@ -24659,7 +24780,7 @@ function trimColumnArticleUrlTrailingPunctuation(
         trimmedUrl.length - 1
       );
 
-    if (".,!?:;'".includes(lastCharacter)) {
+    if (".,!?:;'*".includes(lastCharacter)) {
       trimmedUrl =
         trimmedUrl.slice(0, -1);
 
@@ -24764,6 +24885,94 @@ function protectColumnArticleUrlsForTranslation(
       ),
     urls: urls
   };
+}
+
+// 読み物の見出し・太字｜翻訳中だけ「## 」→[[MACHINAU_H]]、「**文字**」→
+// [[MACHINAU_B]]文字[[MACHINAU_B_END]]へ置き換える。
+function protectColumnArticleFormattingForTranslation(
+  text
+) {
+  return String(
+    text ?? ""
+  )
+    .split(
+      "\n"
+    )
+    .map(
+      function(line) {
+        const headingMatch =
+          COLUMN_ARTICLE_HEADING_LINE_PATTERN.exec(
+            line
+          );
+
+        return headingMatch
+          ? "[[MACHINAU_H]] " + headingMatch[1].trim()
+          : line;
+      }
+    )
+    .join(
+      "\n"
+    )
+    .replace(
+      COLUMN_ARTICLE_BOLD_PATTERN,
+      function(boldText, innerText) {
+        return "[[MACHINAU_B]]" + innerText + "[[MACHINAU_B_END]]";
+      }
+    );
+}
+
+// 見出しの目印は行頭のものだけ「## 」に戻し、それ以外は捨てる。太字の目印は
+// 開き・閉じの数が揃っている場合だけ「**」に戻し、揃わなければ太字を諦めて
+// 目印だけ消す(「**」が本文に残らないようにする)。
+function restoreColumnArticleFormattingAfterTranslation(
+  translatedText
+) {
+  let restoredText =
+    String(
+      translatedText ?? ""
+    )
+      .split(
+        "\n"
+      )
+      .map(
+        function(line) {
+          return line.replace(
+            /^(\s*)\[\[\s*MACHINAU_H\s*\]\]\s*/,
+            "$1## "
+          ).replace(
+            /\[\[\s*MACHINAU_H\s*\]\]\s*/g,
+            ""
+          );
+        }
+      )
+      .join(
+        "\n"
+      );
+
+  const openCount =
+    (restoredText.match(/\[\[\s*MACHINAU_B\s*\]\]/g) || []).length;
+
+  const closeCount =
+    (restoredText.match(/\[\[\s*MACHINAU_B_END\s*\]\]/g) || []).length;
+
+  const boldReplacement =
+    openCount === closeCount
+      ? "**"
+      : "";
+
+  // 目印の内側にAIが入れた空白は取り除く(「** 太字 **」では太字にならないため)。
+  restoredText =
+    restoredText
+      .replace(
+        /[ \t　]*\[\[\s*MACHINAU_B_END\s*\]\]/g,
+        boldReplacement
+      )
+      .replace(
+        /\[\[\s*MACHINAU_B\s*\]\][ \t　]*/g,
+        boldReplacement
+      );
+
+  return restoredText;
 }
 
 // 原文に無い番号のプレースホルダーは捨てる。AIが落としたプレースホルダーの
@@ -25159,6 +25368,8 @@ function buildColumnArticleHtml(
     .lede { margin: 0 0 28px; font-size: 15px; line-height: 2; color: var(--text); }
     p { font-size: 14px; line-height: 2; color: var(--text); }
     .article-body-link { color: var(--blue); overflow-wrap: anywhere; word-break: break-all; }
+    .article-heading { margin: 30px 0 8px; font-size: 17px; line-height: 1.6; font-weight: 900; color: var(--navy); overflow-wrap: anywhere; }
+    .card strong { font-weight: 900; }
     .cta-section {
       margin-top: 36px; padding: 24px 20px; border-radius: 18px;
       background: linear-gradient(135deg, #0788c9, #04b7d7);
@@ -26376,6 +26587,69 @@ async function resolveColumnArticleSlugForCreate(
 // 新規作成時のみpublishedAtを設定し(下書き→公開へ変わったタイミングを
 // 明確にするため)、既に一度公開済みの記事を編集してもpublishedAtは
 // 上書きしない(公開日が変わらないようにする)。
+async function handleAdminPreviewColumnArticleContentRequest(
+  request,
+  response
+) {
+  try {
+    const authResult =
+      await requireAdminOrEditor(
+        request
+      );
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({
+        success: false,
+        message:
+          authResult.message
+      });
+    }
+
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    const content =
+      typeof requestBody.content === "string"
+        ? requestBody.content.trim()
+        : "";
+
+    if (content.length > COLUMN_CONTENT_MAX_LENGTH) {
+      return response.status(400).json({
+        success: false,
+        message:
+          "本文が長すぎます（" +
+          COLUMN_CONTENT_MAX_LENGTH +
+          "文字以内）。"
+      });
+    }
+
+    response.setHeader(
+      "Cache-Control",
+      "no-store"
+    );
+
+    return response.status(200).json({
+      success: true,
+      html:
+        buildColumnArticleParagraphsHtml(
+          content
+        )
+    });
+  } catch (error) {
+    console.error(
+      "読み物プレビュー：処理エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message: "プレビューを作成できませんでした。"
+    });
+  }
+}
+
 async function handleAdminSaveColumnArticleRequest(
   request,
   response
@@ -28386,6 +28660,16 @@ export default async function handler(
     );
   }
 
+  // 読み物の見出し・太字｜管理画面のプレビュー。記事ページと同じ
+  // buildColumnArticleParagraphsHtml()で変換した本文HTMLだけを返す(保存しない)。
+  if (
+    requestBody.mode === "adminPreviewColumnArticleContent"
+  ) {
+    return handleAdminPreviewColumnArticleContentRequest(
+      request,
+      response
+    );
+  }
   if (
     requestBody.mode === "adminListColumnArticles"
   ) {
