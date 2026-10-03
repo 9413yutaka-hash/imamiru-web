@@ -610,6 +610,7 @@
             '</div>' +
             '<div class="board-post-actions">' +
               '<input type="url" class="board-post-video-input" placeholder="外部動画URL（https://www.tiktok.com/... など）" value="' +
+                escapeHtmlText(post.externalVideoUrl || "") + '" data-saved-url="' +
                 escapeHtmlText(post.externalVideoUrl || "") + '">' +
               '<button type="button" class="secondary-button" data-action="save-video">動画URLを保存</button>' +
             '</div>' +
@@ -933,7 +934,26 @@
       });
     }
 
+    // 動画URLの入力欄が、保存済みの値(data-saved-url)と異なるものを「未保存」と
+    // する。承認・固定・更新などの操作は一覧全体を再読み込みするため、どの
+    // カードの未保存入力も消えてしまう。自動保存はせず、確認だけを出す。
+    function hasUnsavedVideoUrlInputs() {
+      return Array.prototype.some.call(
+        document.querySelectorAll(".board-post-video-input"),
+        function (input) {
+          return input.value.trim() !== (input.getAttribute("data-saved-url") || "");
+        }
+      );
+    }
+
+    const UNSAVED_VIDEO_URL_WARNING =
+      "⚠️ 未保存の動画URLがあります。\n「動画URLを保存」を押さずにこの操作を続けると、入力中の動画URLは保存されずに消えます。";
+
     refreshButton.addEventListener("click", function () {
+      if (hasUnsavedVideoUrlInputs() && !window.confirm(UNSAVED_VIDEO_URL_WARNING + "\n\n一覧を更新しますか？")) {
+        return;
+      }
+
       loadCommunityBoardPosts();
     });
 
@@ -996,7 +1016,13 @@
             : "この動画URLを保存しますか？\n" + videoUrlValue
         };
 
-        if (!window.confirm(confirmMessages[action] || "実行しますか？")) {
+        let confirmText = confirmMessages[action] || "実行しますか？";
+
+        if (action !== "save-video" && hasUnsavedVideoUrlInputs()) {
+          confirmText = UNSAVED_VIDEO_URL_WARNING + "\n\n" + confirmText;
+        }
+
+        if (!window.confirm(confirmText)) {
           return;
         }
 
@@ -1023,6 +1049,25 @@
         try {
           await callCommunityBoardApi(mode, payload);
           await loadCommunityBoardPosts();
+
+          if (action === "save-video") {
+            const resultText = videoUrlValue === ""
+              ? "動画URLを削除しました。"
+              : "動画URLを保存しました。";
+
+            showMessage(listMessage, resultText, "success");
+
+            const savedItemElement = document.querySelector(
+              '.board-post-item[data-post-id="' + CSS.escape(postId) + '"] .board-post-feature'
+            );
+
+            if (savedItemElement) {
+              const resultElement = document.createElement("div");
+              resultElement.className = "message-box success";
+              resultElement.textContent = resultText;
+              savedItemElement.appendChild(resultElement);
+            }
+          }
         } catch (error) {
           console.error("街の掲示板：操作に失敗しました：", error);
           showMessage(listMessage, error.message || "操作に失敗しました。", "error");
