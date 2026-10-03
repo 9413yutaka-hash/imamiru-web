@@ -23661,6 +23661,11 @@ function buildColumnArticleContentTranslationPrompt(
     "translation. " +
     "\n- Do not invent URLs or web links that are not in the original " +
     "text. " +
+    "\n- The text may contain placeholders of the form [[MACHINAU_URL_1]], " +
+    "[[MACHINAU_URL_2]], and so on. Copy every placeholder into the " +
+    "translation exactly as written (same characters, same number), at " +
+    "the corresponding position, and never translate, alter, remove, or " +
+    "duplicate them. " +
     "\n- As much as possible, preserve the author's own voice and tone " +
     "rather than flattening it into generic travel-guide language. " +
     "\n- The output must be plain text only — no HTML tags, no " +
@@ -24235,10 +24240,25 @@ async function resolveColumnArticleContentTranslation(
   }
 
   try {
+    // 原文中のURL(記事画面でリンクになるものと同じ判定)はプレースホルダーへ
+    // 置き換えてから翻訳し、既存のcitation/URL除去を通した後で原文の文字列
+    // そのままに戻す(AIにURLを1文字も変えさせない・AIが追加したURLは
+    // 従来どおり除去される)。
+    const protectedSource =
+      protectColumnArticleUrlsForTranslation(
+        content
+      );
+
     const translationResult =
       await callOpenAiColumnArticleContentTranslation(
-        content,
+        protectedSource.text,
         language
+      );
+
+    const translatedContent =
+      restoreColumnArticleUrlsAfterTranslation(
+        translationResult.content,
+        protectedSource.urls
       );
 
     await saveColumnArticleContentTranslationReadyResult(
@@ -24246,13 +24266,13 @@ async function resolveColumnArticleContentTranslation(
       slug,
       language,
       sourceHash,
-      translationResult.content,
+      translatedContent,
       translationResult.usage,
       translationResult.estimatedCostUsd
     );
 
     return {
-      content: translationResult.content,
+      content: translatedContent,
       isFallbackToSource: false
     };
   } catch (translationError) {
@@ -24689,6 +24709,131 @@ function isSafeColumnArticleLinkUrl(
   } catch (urlError) {
     return false;
   }
+}
+
+// 読み物本文の翻訳時だけ使う。原文URLを[[MACHINAU_URL_n]]へ退避し、翻訳後に
+// 原文の文字列へ戻す。共通のstripCitationArtifactsFromAiText()は変更しない。
+function protectColumnArticleUrlsForTranslation(
+  text
+) {
+  const source =
+    String(
+      text ?? ""
+    );
+
+  const urls =
+    [];
+
+  let protectedText =
+    "";
+
+  let lastIndex =
+    0;
+
+  for (const match of source.matchAll(COLUMN_ARTICLE_URL_PATTERN)) {
+    const url =
+      trimColumnArticleUrlTrailingPunctuation(
+        match[0]
+      );
+
+    if (!isSafeColumnArticleLinkUrl(url)) {
+      continue;
+    }
+
+    urls.push(
+      url
+    );
+
+    protectedText +=
+      source.slice(
+        lastIndex,
+        match.index
+      ) +
+      "[[MACHINAU_URL_" + urls.length + "]]";
+
+    lastIndex =
+      match.index +
+      url.length;
+  }
+
+  return {
+    text:
+      protectedText +
+      source.slice(
+        lastIndex
+      ),
+    urls: urls
+  };
+}
+
+// 原文に無い番号のプレースホルダーは捨てる。AIが落としたプレースホルダーの
+// URLは、原文URLを失わないよう末尾の段落として補う。
+function restoreColumnArticleUrlsAfterTranslation(
+  translatedText,
+  urls
+) {
+  const restoredIndexes =
+    new Set();
+
+  let restoredText =
+    String(
+      translatedText ?? ""
+    ).replace(
+      // 括弧付き(内側の空白は許容)か、括弧なしの番号トークンだけを対象にし、
+      // 前後の本文(空白を含む)は消費しない。
+      /\[{1,2}\s*MACHINAU_URL_(\d+)\s*\]{1,2}|MACHINAU_URL_(\d+)/g,
+      function(placeholder, bracketedNumberText, bareNumberText, offset, wholeText) {
+        const index =
+          Number(
+            bracketedNumberText !== undefined
+              ? bracketedNumberText
+              : bareNumberText
+          ) - 1;
+
+        if (
+          !Number.isInteger(index) ||
+          index < 0 ||
+          index >= urls.length
+        ) {
+          return "";
+        }
+
+        restoredIndexes.add(
+          index
+        );
+
+        // 復元したURLの直後に英数字が続くと、表示時のリンク判定でURLの一部に
+        // 取り込まれてしまうため、その場合だけ半角空白を1つ挟む。
+        const nextCharacter =
+          wholeText.charAt(
+            offset +
+            placeholder.length
+          );
+
+        return (
+          urls[index] +
+          (/[A-Za-z0-9]/.test(nextCharacter) ? " " : "")
+        );
+      }
+    );
+
+  const missingUrls =
+    urls.filter(
+      function(url, index) {
+        return !restoredIndexes.has(
+          index
+        );
+      }
+    );
+
+  if (missingUrls.length > 0) {
+    restoredText =
+      restoredText.trim() +
+      "\n\n" +
+      missingUrls.join("\n");
+  }
+
+  return restoredText;
 }
 
 function linkifyColumnArticleTextForRender(
