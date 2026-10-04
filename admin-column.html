@@ -212,6 +212,33 @@
       word-break: break-all;
     }
 
+    /* 読み物の文字リンク｜記事ページの.article-text-linkと同じ見た目。 */
+    .content-preview-body .article-text-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      box-sizing: border-box;
+      max-width: 100%;
+      min-height: 44px;
+      margin: 6px 0;
+      padding: 9px 18px;
+      border: 1.5px solid var(--blue);
+      border-radius: 22px;
+      background: #f0f8fc;
+      color: var(--blue);
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.5;
+      text-decoration: none;
+      vertical-align: middle;
+      overflow-wrap: anywhere;
+    }
+
+    .content-preview-body .article-text-link::after {
+      content: "→";
+      flex: none;
+    }
+
     .primary-button {
       background: linear-gradient(135deg, var(--blue), #04b7d7);
       color: var(--white);
@@ -482,12 +509,14 @@
             <div class="content-toolbar">
               <button type="button" id="headingButton" class="secondary-button">見出し</button>
               <button type="button" id="boldButton" class="secondary-button"><strong>B</strong> 太字</button>
+              <button type="button" id="linkButton" class="secondary-button">リンク</button>
               <button type="button" id="previewButton" class="secondary-button">プレビュー</button>
             </div>
             <textarea id="contentInput" maxlength="6000" required></textarea>
             <p class="field-hint">
               段落を分けたいところで空行（Enterを2回）を入れてください。HTMLタグは使えません（自動的にそのまま文字として表示されます）。<br>
-              「## 」で始まる行は小見出し、「**文字**」は太字になります（上のボタンでも入力できます）。
+              「## 」で始まる行は小見出し、「**文字**」は太字になります（上のボタンでも入力できます）。<br>
+              「[表示する文字](https://…)」は、URLを表示せずに文字をボタン風のリンクにします（リンクにしたい文字を選択して「リンク」を押すと入力できます。http:// / https:// のURLのみ）。
             </p>
             <div id="contentPreview" class="content-preview">
               <p class="content-preview-label">プレビュー（保存前の表示確認。記事ページと同じ変換です）</p>
@@ -610,6 +639,69 @@
       }
 
       replaceContentRange(start, end, "**" + selected + "**", start + 2, start + 2 + selected.length);
+    });
+
+    // 読み物の文字リンク｜「[表示する文字](URL)」を本文へ書き込むだけ。URLは
+    // 入力された文字列を変えずにそのまま入れる(使えない文字を含む場合は入れない)。
+    const TEXT_LINK_URL_PATTERN = /^https?:\/\/[A-Za-z0-9\-._~:/?#[\]@!$&'*+,;=%]+$/;
+
+    function isValidTextLinkUrl(url) {
+      if (!TEXT_LINK_URL_PATTERN.test(url)) {
+        return false;
+      }
+
+      try {
+        return new URL(url).hostname !== "";
+      } catch (error) {
+        return false;
+      }
+    }
+
+    document.getElementById("linkButton").addEventListener("click", function () {
+      const start = contentInput.selectionStart;
+      const end = contentInput.selectionEnd;
+      const selected = contentInput.value.slice(start, end);
+      const leadingSpace = /^\s*/.exec(selected)[0];
+      const trailingSpace = selected.trim() === "" ? "" : /\s*$/.exec(selected)[0];
+      let label = selected.trim();
+
+      if (/[\[\]\n]/.test(label)) {
+        window.alert("リンクにする文字には、改行や [ ] を含められません。1行の文字を選択してください。");
+        return;
+      }
+
+      const urlInput = window.prompt("リンク先のURLを入力してください（http:// または https:// で始まるもの）", "https://");
+
+      if (urlInput === null) {
+        return;
+      }
+
+      const url = urlInput.trim();
+
+      if (!isValidTextLinkUrl(url)) {
+        window.alert("このURLは使えません。http:// または https:// で始まり、空白・丸括弧・全角文字を含まないURLを入力してください。");
+        return;
+      }
+
+      if (label === "") {
+        // 選択が無い場合は、表示する文字を続けて入力してもらう。
+        const labelInput = window.prompt("ボタンに表示する文字を入力してください", "詳細を見る");
+
+        if (labelInput === null) {
+          return;
+        }
+
+        label = labelInput.trim();
+
+        if (label === "" || /[\[\]\n]/.test(label)) {
+          window.alert("表示する文字を入力してください（[ ] は使えません）。");
+          return;
+        }
+      }
+
+      const textLink = leadingSpace + "[" + label + "](" + url + ")" + trailingSpace;
+      const labelStart = start + leadingSpace.length + 1;
+      replaceContentRange(start, end, textLink, labelStart, labelStart + label.length);
     });
 
     const contentPreview = document.getElementById("contentPreview");

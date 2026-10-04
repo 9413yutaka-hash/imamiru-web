@@ -23671,6 +23671,10 @@ function buildColumnArticleContentTranslationPrompt(
     "[[MACHINAU_B]]...[[MACHINAU_B_END]] is emphasized: wrap the " +
     "corresponding translated words with the same two markers. Copy these " +
     "markers exactly and do not add new ones. " +
+    "\n- Text wrapped as [[MACHINAU_LINK_1]]...[[MACHINAU_LINK_END]] " +
+    "(any number) is the short label of a link button: translate only " +
+    "the label, keep it on one line, and keep both markers exactly as " +
+    "written (same number) around the translated label. " +
     "\n- As much as possible, preserve the author's own voice and tone " +
     "rather than flattening it into generic travel-guide language. " +
     "\n- The output must be plain text only — no HTML tags, no " +
@@ -24714,17 +24718,97 @@ const COLUMN_ARTICLE_HEADING_LINE_PATTERN =
 const COLUMN_ARTICLE_BOLD_PATTERN =
   /\*\*(?=\S)((?:(?!\n\s*\n|\n\s*##[ \t　])[\s\S])*?\S)\*\*/g;
 
-// 太字の区切りで先に分け、太字の中も外も既存のURLリンク化(HTMLエスケープ
-// 込み)を必ず通す。HTMLとして出すのは<strong>だけで、入力中のHTMLタグは
-// 従来どおり文字のまま表示される。
+// 読み物の文字リンク｜「[表示する文字](http(s)のURL)」だけを扱う(一般的な
+// Markdownは導入しない)。表示文字は1行・[]を含まないもの、URLはASCIIの
+// URL文字だけで丸括弧・空白を含まないもの。URLは書かれた文字列のまま
+// (1文字も変えずにエスケープだけして)hrefに入れる。
+const COLUMN_ARTICLE_TEXT_LINK_PATTERN =
+  /\[([^\[\]\n]+)\]\((https?:\/\/[A-Za-z0-9\-._~:/?#[\]@!$&'*+,;=%]+)\)/g;
+
+// 文字リンクを本文から一時的に退避する目印(私用領域の1文字。本文に元から
+// 含まれていた場合は表示上意味の無い文字なので取り除く)。
+const COLUMN_ARTICLE_TEXT_LINK_SENTINEL =
+  "\uE000";
+
+function buildColumnArticleTextLinkHtml(
+  label,
+  url
+) {
+  return (
+    '<a class="article-text-link" href="' +
+    escapeHtmlForRender(
+      url
+    ) +
+    '" target="_blank" rel="noopener noreferrer">' +
+    escapeHtmlForRender(
+      label
+    ) +
+    "</a>"
+  );
+}
+
+// 文字リンクを先に目印へ退避し、太字の区切りで分け、太字の中も外も既存の
+// URLリンク化(HTMLエスケープ込み)を必ず通してから、目印を文字リンクの
+// <a>へ戻す。HTMLとして出すのは<strong>と自前で組み立てた<a>だけで、入力中の
+// HTMLタグは従来どおり文字のまま表示される。文字リンクが無い本文の出力は
+// 従来と同じ。
 function renderColumnArticleInlineForRender(
   text
 ) {
+  const textLinksHtml =
+    [];
+
   const source =
     String(
       text ?? ""
-    );
+    )
+      .replaceAll(
+        COLUMN_ARTICLE_TEXT_LINK_SENTINEL,
+        ""
+      )
+      .replace(
+        COLUMN_ARTICLE_TEXT_LINK_PATTERN,
+        function(textLink, label, url) {
+          if (
+            label.trim() === "" ||
+            !isSafeColumnArticleLinkUrl(url)
+          ) {
+            return textLink;
+          }
 
+          textLinksHtml.push(
+            buildColumnArticleTextLinkHtml(
+              label.trim(),
+              url
+            )
+          );
+
+          return COLUMN_ARTICLE_TEXT_LINK_SENTINEL;
+        }
+      );
+
+  let textLinkIndex =
+    0;
+
+  return renderColumnArticleBoldAndUrlsForRender(
+    source
+  ).replaceAll(
+    COLUMN_ARTICLE_TEXT_LINK_SENTINEL,
+    function() {
+      const textLinkHtml =
+        textLinksHtml[textLinkIndex] ?? "";
+
+      textLinkIndex +=
+        1;
+
+      return textLinkHtml;
+    }
+  );
+}
+
+function renderColumnArticleBoldAndUrlsForRender(
+  source
+) {
   let html =
     "";
 
@@ -24835,6 +24919,9 @@ function isSafeColumnArticleLinkUrl(
 
 // 読み物本文の翻訳時だけ使う。原文URLを[[MACHINAU_URL_n]]へ退避し、翻訳後に
 // 原文の文字列へ戻す。共通のstripCitationArtifactsFromAiText()は変更しない。
+// 読み物の文字リンク｜「[表示する文字](URL)」は、表示文字だけを翻訳させる
+// ため[[MACHINAU_LINK_n]]表示する文字[[MACHINAU_LINK_END]]へ置き換える
+// (nはURLの番号。URL自体はAIへ渡さない)。それ以外の部分は従来どおり。
 function protectColumnArticleUrlsForTranslation(
   text
 ) {
@@ -24846,6 +24933,67 @@ function protectColumnArticleUrlsForTranslation(
   const urls =
     [];
 
+  let protectedText =
+    "";
+
+  let lastIndex =
+    0;
+
+  for (const match of source.matchAll(COLUMN_ARTICLE_TEXT_LINK_PATTERN)) {
+    const label =
+      match[1].trim();
+
+    const url =
+      match[2];
+
+    if (
+      label === "" ||
+      !isSafeColumnArticleLinkUrl(url)
+    ) {
+      continue;
+    }
+
+    protectedText +=
+      protectColumnArticleBareUrlsForTranslation(
+        source.slice(
+          lastIndex,
+          match.index
+        ),
+        urls
+      );
+
+    urls.push(
+      url
+    );
+
+    protectedText +=
+      "[[MACHINAU_LINK_" + urls.length + "]]" +
+      label +
+      "[[MACHINAU_LINK_END]]";
+
+    lastIndex =
+      match.index +
+      match[0].length;
+  }
+
+  return {
+    text:
+      protectedText +
+      protectColumnArticleBareUrlsForTranslation(
+        source.slice(
+          lastIndex
+        ),
+        urls
+      ),
+    urls: urls
+  };
+}
+
+// 文字リンク以外の部分のURLを[[MACHINAU_URL_n]]へ退避する(urlsへ追加する)。
+function protectColumnArticleBareUrlsForTranslation(
+  source,
+  urls
+) {
   let protectedText =
     "";
 
@@ -24878,14 +25026,12 @@ function protectColumnArticleUrlsForTranslation(
       url.length;
   }
 
-  return {
-    text:
-      protectedText +
-      source.slice(
-        lastIndex
-      ),
-    urls: urls
-  };
+  return (
+    protectedText +
+    source.slice(
+      lastIndex
+    )
+  );
 }
 
 // 読み物の見出し・太字｜翻訳中だけ「## 」→[[MACHINAU_H]]、「**文字**」→
@@ -24976,6 +25122,39 @@ function restoreColumnArticleFormattingAfterTranslation(
   return restoredText;
 }
 
+// 読み物の文字リンク｜[[MACHINAU_LINK_n]]翻訳された表示文字[[MACHINAU_LINK_END]]
+// を「[翻訳された表示文字]([[MACHINAU_URL_n]])」へ戻す(URLは直後の処理で
+// 原文の文字列そのままに戻る)。対になっていない開きの目印は通常URLとして
+// 残し、閉じの目印だけのものは捨てる。表示文字が空になった場合も通常URLにする。
+function restoreColumnArticleTextLinksAfterTranslation(
+  translatedText
+) {
+  return translatedText
+    .replace(
+      /\[\[\s*MACHINAU_LINK_(\d+)\s*\]\]([^\n]*?)\[\[\s*MACHINAU_LINK_END\s*\]\]/g,
+      function(textLink, numberText, label) {
+        // 表示文字に[]が入ると文字リンクとして成立しないため全角へ置き換える。
+        const safeLabel =
+          label
+            .replaceAll("[", "［")
+            .replaceAll("]", "］")
+            .trim();
+
+        return safeLabel === ""
+          ? "[[MACHINAU_URL_" + numberText + "]]"
+          : "[" + safeLabel + "]([[MACHINAU_URL_" + numberText + "]])";
+      }
+    )
+    .replace(
+      /\[\[\s*MACHINAU_LINK_(\d+)\s*\]\]/g,
+      "[[MACHINAU_URL_$1]]"
+    )
+    .replace(
+      /\s*\[\[\s*MACHINAU_LINK_END\s*\]\]/g,
+      ""
+    );
+}
+
 // 原文に無い番号のプレースホルダーは捨てる。AIが落としたプレースホルダーの
 // URLは、原文URLを失わないよう末尾の段落として補う。
 function restoreColumnArticleUrlsAfterTranslation(
@@ -24986,8 +25165,10 @@ function restoreColumnArticleUrlsAfterTranslation(
     new Set();
 
   let restoredText =
-    String(
-      translatedText ?? ""
+    restoreColumnArticleTextLinksAfterTranslation(
+      String(
+        translatedText ?? ""
+      )
     ).replace(
       // 括弧付き(内側の空白は許容)か、括弧なしの番号トークンだけを対象にし、
       // 前後の本文(空白を含む)は消費しない。
@@ -25371,6 +25552,15 @@ function buildColumnArticleHtml(
     .article-body-link { color: var(--blue); overflow-wrap: anywhere; word-break: break-all; }
     .article-heading { margin: 30px 0 8px; font-size: 17px; line-height: 1.6; font-weight: 900; color: var(--navy); overflow-wrap: anywhere; }
     .card strong { font-weight: 900; }
+    .article-text-link {
+      display: inline-flex; align-items: center; gap: 6px; box-sizing: border-box;
+      max-width: 100%; min-height: 44px; margin: 6px 0; padding: 9px 18px;
+      border: 1.5px solid var(--blue); border-radius: 22px; background: #f0f8fc;
+      color: var(--blue); font-size: 14px; font-weight: 700; line-height: 1.5;
+      text-decoration: none; vertical-align: middle; overflow-wrap: anywhere;
+    }
+    .article-text-link::after { content: "→"; flex: none; }
+    .article-text-link:hover { background: #e1f1fa; }
     .cta-section {
       margin-top: 36px; padding: 24px 20px; border-radius: 18px;
       background: linear-gradient(135deg, #0788c9, #04b7d7);
