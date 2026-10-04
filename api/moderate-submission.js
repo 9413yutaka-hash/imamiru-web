@@ -26585,9 +26585,8 @@ async function resolveColumnArticleSlugForCreate(
 
 // マチナウ読み物の新規作成・編集(管理者のみ)。documentIdが指定されていれば
 // 既存記事の更新(slugは不変のまま内容のみ更新)、無ければ新規作成。
-// 新規作成時のみpublishedAtを設定し(下書き→公開へ変わったタイミングを
-// 明確にするため)、既に一度公開済みの記事を編集してもpublishedAtは
-// 上書きしない(公開日が変わらないようにする)。
+// 公開として保存するたびにpublishedAtを保存時刻にする(新規公開・下書き→
+// 公開・公開中記事の再公開)。下書きとして保存した場合は上書きしない。
 async function handleAdminPreviewColumnArticleContentRequest(
   request,
   response
@@ -26720,10 +26719,6 @@ async function handleAdminSaveColumnArticleRequest(
         });
       }
 
-      const existingData =
-        existingSnapshot.data() ||
-        {};
-
       const updateData = {
         title: fields.title,
         category: fields.category,
@@ -26745,10 +26740,11 @@ async function handleAdminSaveColumnArticleRequest(
           FieldValue.serverTimestamp()
       };
 
+      // 公開中の記事を編集して「公開する」のまま保存した場合も、改めて
+      // 公開したものとしてpublishedAtを更新する(一覧・TOPで新しい記事として
+      // 並ぶ)。下書きとして保存した場合はpublishedAtを変えない。
       if (
-        fields.isPublished &&
-        existingData.status !==
-          COLUMN_STATUS_PUBLISHED
+        fields.isPublished
       ) {
         updateData.publishedAt =
           FieldValue.serverTimestamp();
