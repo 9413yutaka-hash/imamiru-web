@@ -17041,7 +17041,35 @@ if (regionRecommendationAreaPickerElement) {
         "none";
 
       // まずその街の店舗・施設を見せる(掲示板はその下に既存どおり表示)。
-      scrollToShops();
+      // 見出し「○○で楽しめる場所」が固定ヘッダー(.top-bar)に隠れない
+      // よう、ヘッダーの高さ分だけ上に余白を取ってスクロールする。
+      const shopsSectionForRegion =
+        document.getElementById(
+          "shopsSection"
+        );
+
+      if (shopsSectionForRegion) {
+        const topBarElement =
+          document.querySelector(
+            ".top-bar"
+          );
+
+        const topBarHeight =
+          topBarElement
+            ? topBarElement.offsetHeight
+            : 0;
+
+        window.scrollTo(
+          {
+            top:
+              shopsSectionForRegion.getBoundingClientRect().top +
+              window.scrollY -
+              topBarHeight -
+              8,
+            behavior: "smooth"
+          }
+        );
+      }
     } else {
       showCommunityBoardAreaSearchError();
     }
