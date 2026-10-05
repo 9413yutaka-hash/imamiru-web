@@ -170,18 +170,35 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   how_to_step4_text: {
-    ja: "「街の今スレッド」は、その場所について<strong>今日</strong>話せる場所です。",
-    en: "A Town Now Thread is a place to talk about a spot — <strong>today</strong>."
+    ja: "<strong>その場所の「今日」を、近くの人に聞ける場所です。</strong>",
+    en: "<strong>A place to ask people near a spot what's happening there today.</strong>"
   },
 
   how_to_step4_examples: {
-    ja: "「今、混んでる？」<br>「今日やってる？」<br>「この辺で何かある？」",
+    ja: "「今、混んでる？」<br>「今日やってる？」<br>「この近くで何かある？」",
     en: "“Is it crowded right now?”<br>“Is it open today?”<br>“Anything going on around here?”"
   },
 
   how_to_step4_text2: {
-    ja: "今いる人、これから行く人、さっきまでいた人が、その場所の“今日”を伝え合えます。",
-    en: "People who are there now, people heading there, and people who just left can share what that place is like today."
+    ja: "今いる場所だけでなく、<strong>これから行く街にもスレッドを立てられます。</strong>",
+    en: "Not just where you are — <strong>you can also start a thread for a town you're heading to.</strong>"
+  },
+
+  // 表示範囲は実装どおり：現在地から立てたスレッド＝その地点から5km以内、
+  // 街(市区町村)を選んで立てたスレッド＝その市区町村にいる人。
+  how_to_step4_reach: {
+    ja: "今いる場所で立てると<strong>5km以内の人へ</strong>、<br>街を選んで立てると<strong>その街にいる人へ</strong>届きます。",
+    en: "Start one from your current location and it reaches <strong>people within 5 km</strong>;<br>pick a town and it reaches <strong>people in that town</strong>."
+  },
+
+  how_to_step4_author: {
+    ja: "立てた人は、離れた場所からでも自分のスレッドを確認できます。",
+    en: "If you started a thread, you can still check it even when you're somewhere else."
+  },
+
+  how_to_step4_closing: {
+    ja: "<strong>今いる人と、これから行く人をつなぐ。</strong><br>それが「街の今スレッド」です。",
+    en: "<strong>Connecting people who are there with people on their way.</strong><br>That's what Town Now Threads are for."
   },
 
   how_to_step4_link: {
@@ -194,19 +211,29 @@ const MACHINAU_TRANSLATIONS = {
     en: "⑤ Share what you discover"
   },
 
+  how_to_step5_lead: {
+    ja: "<strong>街で見つけた「今」を、写真と一緒に近くの人へ届けられます。</strong>",
+    en: "<strong>Share what you find happening around town — with a photo — with people nearby.</strong>"
+  },
+
   how_to_step5_examples: {
-    ja: "「イベントを見つけた。」<br>「景色がきれいだった。」<br>「こんなお店を見つけた。」<br>「街のちょっとした変化に気づいた。」",
-    en: "“I found an event.”<br>“The view was beautiful.”<br>“I found a great little shop.”<br>“I noticed something new in town.”"
+    ja: "「こんなイベントやってる！」<br>「景色がきれい！」<br>「こんなお店を見つけた！」<br>「ここ、今すごく賑わってる！」",
+    en: "“There's an event going on!”<br>“What a view!”<br>“Found a great little shop!”<br>“It's really lively here right now!”"
+  },
+
+  how_to_step5_how: {
+    ja: "写真を撮って、ひとこと添えて投稿するだけ。<br>投稿は<strong>3・6・12・24時間</strong>から掲載時間を選べて、近くの旅行者に届きます。",
+    en: "Just snap a photo and add a few words.<br>Choose to keep it up for <strong>3, 6, 12 or 24 hours</strong>, and it reaches travelers nearby."
   },
 
   how_to_step5_text: {
-    ja: "そんな小さな発見を、近くにいる旅行者へ届けられます。<br><strong>あなたの発見が、次の旅行者の「知っててよかった」になる。</strong>",
-    en: "Small discoveries like these can reach travelers nearby.<br><strong>What you find today could be exactly what the next traveler is glad to know.</strong>"
+    ja: "<strong>あなたの発見が、次の旅行者の「知っててよかった」になる。</strong>",
+    en: "<strong>What you find today could be exactly what the next traveler is glad to know.</strong>"
   },
 
   how_to_step5_link: {
-    ja: "見つけた「今」を投稿する →",
-    en: "Share what you found →"
+    ja: "📷 見つけた「今」を投稿する →",
+    en: "📷 Share what you found →"
   },
 
   how_to_step6_title: {
