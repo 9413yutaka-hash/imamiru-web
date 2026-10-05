@@ -77,6 +77,168 @@ const MACHINAU_TRANSLATIONS = {
     en: "Travel tips & stories"
   },
 
+  // マチナウの楽しみ方｜ヒーロー直下の入口(#howToEntryButton)と説明モーダル
+  // (#howToModal)の文言。旅行者が読む言葉だけで書く(内部用語は出さない)。
+  how_to_entry_label: {
+    ja: "はじめての方へ",
+    en: "New here?"
+  },
+
+  how_to_entry_question: {
+    ja: "マチナウってどう使うの？",
+    en: "Not sure how Machinau works?"
+  },
+
+  how_to_entry_link: {
+    ja: "マチナウの楽しみ方を見る →",
+    en: "See how to enjoy it →"
+  },
+
+  how_to_title: {
+    ja: "マチナウの楽しみ方",
+    en: "How to Enjoy Machinau"
+  },
+
+  how_to_lead: {
+    ja: "<strong>マチナウは「今いる街」を楽しむためのサービスです。</strong><br>街で今起きていることや、近くのお店・施設、街の声や発見などを見ながら、その街をもっと楽しんでみよう。",
+    en: "<strong>Machinau helps you enjoy the town you're in right now.</strong><br>See what's happening around town, nearby shops and spots, and what people have noticed — and get more out of every place you visit."
+  },
+
+  how_to_step1_title: {
+    ja: "① まず現在地を押してみよう",
+    en: "① Start with your location"
+  },
+
+  how_to_step1_text: {
+    ja: "現在地を使うと、あなたの近くにある情報を探せます。お店や街の発見などは、今いる場所から<strong>15km以内</strong>を中心に表示します。",
+    en: "Your location lets Machinau find what's around you. Shops, spots and local discoveries are shown mainly <strong>within 15 km</strong> of where you are."
+  },
+
+  how_to_step1_note: {
+    ja: "位置情報は、近くの情報を探すために使います。",
+    en: "Your location is used to find nearby information."
+  },
+
+  how_to_step1_button: {
+    ja: "📍 現在地から見てみる",
+    en: "📍 See what's near me"
+  },
+
+  how_to_step2_title: {
+    ja: "② これから行く街も見てみよう",
+    en: "② Check out where you're heading"
+  },
+
+  how_to_step2_text: {
+    ja: "今いる場所だけでなく、これから行く街も探せます。少し離れた場所へ行く予定なら「地域から探す」を使ってみよう。",
+    en: "You can look up not just where you are, but also the towns you're heading to. Going somewhere a little farther? Try “Explore by Area.”"
+  },
+
+  how_to_step2_compare_location: {
+    ja: "<strong>📍 現在地</strong>…今いる場所の近くを見る",
+    en: "<strong>📍 My location</strong> — see what's around you now"
+  },
+
+  how_to_step2_compare_area: {
+    ja: "<strong>🗺️ 地域から探す</strong>…これから行く街を見る",
+    en: "<strong>🗺️ Explore by Area</strong> — see the town you're going to"
+  },
+
+  how_to_step2_button: {
+    ja: "🗺️ 行きたい街を探す",
+    en: "🗺️ Find a town to visit"
+  },
+
+  how_to_step3_title: {
+    ja: "③ 街の「今」をのぞいてみよう",
+    en: "③ Peek at what's happening now"
+  },
+
+  how_to_step3_text: {
+    ja: "近くのお店や施設、街で見つかった出来事など、今いる場所で役立つ情報を見てみよう。",
+    en: "Browse nearby shops and spots, things people have spotted around town, and other tips that are handy right where you are."
+  },
+
+  how_to_step3_link: {
+    ja: "近くで楽しめる場所を見る →",
+    en: "See fun spots nearby →"
+  },
+
+  how_to_step4_title: {
+    ja: "④ 「街の今スレッド」って？",
+    en: "④ What are “Town Now Threads”?"
+  },
+
+  how_to_step4_text: {
+    ja: "「街の今スレッド」は、その場所について<strong>今日</strong>話せる場所です。",
+    en: "A Town Now Thread is a place to talk about a spot — <strong>today</strong>."
+  },
+
+  how_to_step4_examples: {
+    ja: "「今、混んでる？」<br>「今日やってる？」<br>「この辺で何かある？」",
+    en: "“Is it crowded right now?”<br>“Is it open today?”<br>“Anything going on around here?”"
+  },
+
+  how_to_step4_text2: {
+    ja: "今いる人、これから行く人、さっきまでいた人が、その場所の“今日”を伝え合えます。",
+    en: "People who are there now, people heading there, and people who just left can share what that place is like today."
+  },
+
+  how_to_step4_link: {
+    ja: "近くのスレッドを見る →",
+    en: "See threads nearby →"
+  },
+
+  how_to_step5_title: {
+    ja: "⑤ あなたの発見も届けられます",
+    en: "⑤ Share what you discover"
+  },
+
+  how_to_step5_examples: {
+    ja: "「イベントを見つけた。」<br>「景色がきれいだった。」<br>「こんなお店を見つけた。」<br>「街のちょっとした変化に気づいた。」",
+    en: "“I found an event.”<br>“The view was beautiful.”<br>“I found a great little shop.”<br>“I noticed something new in town.”"
+  },
+
+  how_to_step5_text: {
+    ja: "そんな小さな発見を、近くにいる旅行者へ届けられます。<br><strong>あなたの発見が、次の旅行者の「知っててよかった」になる。</strong>",
+    en: "Small discoveries like these can reach travelers nearby.<br><strong>What you find today could be exactly what the next traveler is glad to know.</strong>"
+  },
+
+  how_to_step5_link: {
+    ja: "見つけた「今」を投稿する →",
+    en: "Share what you found →"
+  },
+
+  how_to_step6_title: {
+    ja: "⑥ お店・施設の方も参加できます",
+    en: "⑥ Shops & venues can join too"
+  },
+
+  how_to_step6_text: {
+    ja: "登録したお店・施設は、営業情報やイベントなど、今伝えたい情報を自分で発信できます。",
+    en: "Registered shops and venues can post their own updates — opening hours, events, and anything they want travelers to know right now."
+  },
+
+  how_to_step6_link: {
+    ja: "お店・施設の方へ →",
+    en: "For shops & venues →"
+  },
+
+  how_to_final_location: {
+    ja: "📍 現在地からマチナウを使ってみる",
+    en: "📍 Start Machinau from my location"
+  },
+
+  how_to_final_area: {
+    ja: "🗺️ 行きたい街から探す",
+    en: "🗺️ Search a town I want to visit"
+  },
+
+  how_to_close: {
+    ja: "閉じてTOPに戻る",
+    en: "Close and go back"
+  },
+
   // トップ画面再設計 STEP3で旧ヒーローのDOMは削除したが、キーは既存の
   // 「削除せず残す」方針に合わせて残置する(参照箇所は無くなったが、
   // データとして残しても実害が無いため)。

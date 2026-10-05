@@ -918,6 +918,217 @@
     .ai-concierge-chat-send-button:disabled {
       opacity: 0.5;
     }
+
+    /* マチナウの楽しみ方｜ヒーロー4入口直下の控えめな入口。背景写真の上で
+       読めるよう半透明の白地にし、4入口カードより目立たせない。 */
+    .how-to-entry {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      max-width: 780px;
+      margin: 12px auto 0;
+      padding: 10px 14px;
+      border: 1px solid rgba(255, 255, 255, 0.7);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.82);
+      color: var(--navy);
+      text-align: left;
+      cursor: pointer;
+      box-shadow: 0 6px 16px rgba(7, 26, 51, 0.14);
+    }
+
+    .how-to-entry-label {
+      flex-shrink: 0;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: var(--sky);
+      color: var(--blue);
+      font-size: 10.5px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .how-to-entry-text {
+      display: flex;
+      flex-wrap: wrap;
+      column-gap: 6px;
+      min-width: 0;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.5;
+    }
+
+    .how-to-entry-link {
+      color: var(--blue);
+      font-weight: 900;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    @media (min-width: 720px) {
+      .how-to-entry {
+        justify-content: center;
+        width: auto;
+        margin-top: 14px;
+      }
+    }
+
+    /* 楽しみ方モーダル本文。外枠は既存.modal-overlay/.modal-cardを流用。 */
+    .how-to-content {
+      color: var(--text);
+    }
+
+    .how-to-title {
+      margin: 4px 0 0;
+      padding-right: 45px;
+      font-size: 21px;
+      font-weight: 900;
+      color: var(--navy);
+    }
+
+    .how-to-lead {
+      margin: 12px 0 4px;
+      font-size: 13.5px;
+      line-height: 1.75;
+    }
+
+    .how-to-lead strong {
+      color: var(--navy);
+    }
+
+    .how-to-step {
+      margin-top: 14px;
+      padding: 14px 14px 12px;
+      border-radius: 16px;
+      background: var(--background);
+    }
+
+    .how-to-step-title {
+      margin: 0 0 6px;
+      font-size: 15px;
+      font-weight: 900;
+      color: var(--navy);
+      line-height: 1.45;
+    }
+
+    .how-to-step-text {
+      margin: 0 0 6px;
+      font-size: 13px;
+      line-height: 1.75;
+    }
+
+    .how-to-step-text strong {
+      color: var(--blue);
+    }
+
+    .how-to-step-note {
+      margin: 0 0 6px;
+      font-size: 11.5px;
+      color: var(--subtext);
+      line-height: 1.6;
+    }
+
+    .how-to-quotes {
+      margin: 4px 0 8px;
+      padding: 8px 12px;
+      border-left: 3px solid var(--cyan);
+      border-radius: 0 10px 10px 0;
+      background: var(--white);
+      font-size: 12.5px;
+      line-height: 1.8;
+      color: var(--text);
+    }
+
+    .how-to-compare {
+      margin: 4px 0 8px;
+      padding: 0;
+      list-style: none;
+      font-size: 12.5px;
+      line-height: 1.7;
+    }
+
+    .how-to-compare li {
+      padding: 6px 10px;
+      border-radius: 10px;
+      background: var(--white);
+    }
+
+    .how-to-compare li + li {
+      margin-top: 6px;
+    }
+
+    .how-to-step-button {
+      display: block;
+      width: 100%;
+      min-height: 44px;
+      margin-top: 6px;
+      padding: 10px 14px;
+      border: 1px solid rgba(7, 136, 201, 0.35);
+      border-radius: 12px;
+      background: var(--white);
+      color: var(--blue);
+      font-size: 13.5px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .how-to-step-link {
+      display: inline-block;
+      margin-top: 2px;
+      padding: 6px 0;
+      border: none;
+      background: none;
+      color: var(--blue);
+      font-size: 13px;
+      font-weight: 800;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      cursor: pointer;
+    }
+
+    .how-to-final {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .how-to-final-primary,
+    .how-to-final-secondary {
+      width: 100%;
+      min-height: 48px;
+      padding: 10px 14px;
+      border-radius: 13px;
+      font-size: 14.5px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .how-to-final-primary {
+      border: none;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      color: var(--white);
+      box-shadow: 0 8px 20px rgba(5, 144, 194, 0.22);
+    }
+
+    .how-to-final-secondary {
+      border: 1px solid rgba(7, 136, 201, 0.35);
+      background: var(--white);
+      color: var(--blue);
+    }
+
+    .how-to-final-close {
+      align-self: center;
+      padding: 8px 12px;
+      border: none;
+      background: none;
+      color: var(--subtext);
+      font-size: 12.5px;
+      font-weight: 700;
+      text-decoration: underline;
+      cursor: pointer;
+    }
   </style>
   <!-- 現在地取得の早押し対策｜app.js(本体)の準備前に現在地ボタン
        ([data-location-trigger])が押された場合、押したことを記録しておき、
@@ -1283,6 +1494,17 @@
           </button>
 
         </div>
+
+        <!-- マチナウの楽しみ方｜初めての旅行者向けの控えめな入口。現在地カード・
+             4入口の主役を奪わないよう、4入口の直下に1行の半透明ボタンとして置く。
+             押すと#howToModal(既存.modal-overlay流用)を開く。 -->
+        <button type="button" class="how-to-entry" id="howToEntryButton">
+          <span class="how-to-entry-label" data-i18n="how_to_entry_label">はじめての方へ</span>
+          <span class="how-to-entry-text">
+            <span data-i18n="how_to_entry_question">マチナウってどう使うの？</span>
+            <span class="how-to-entry-link" data-i18n="how_to_entry_link">マチナウの楽しみ方を見る →</span>
+          </span>
+        </button>
 
       </div>
 
@@ -2204,6 +2426,129 @@
           ✕
         </button>
         <div id="townNowThreadModalBody"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- マチナウの楽しみ方｜ヒーロー直下の入口(#howToEntryButton)から開く説明。
+       新ページは作らず、既存.modal-overlay/.modal-card/.modal-content/
+       .modal-closeを再利用する。各ボタンは新しい処理を作らず、app.js側で
+       既存の現在地ボタン・ヒーロー4入口・既存ページへつなぐだけ。 -->
+  <div
+    id="howToModal"
+    class="modal-overlay"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="howToModalTitle"
+    onclick="closeHowToModalOutside(event)"
+  >
+    <div class="modal-card">
+      <div class="modal-content how-to-content">
+        <button
+          class="modal-close"
+          type="button"
+          aria-label="閉じる"
+          data-i18n-aria-label="modal_close_aria_label"
+          onclick="closeHowToModal()"
+        >
+          ✕
+        </button>
+
+        <h2 id="howToModalTitle" class="how-to-title" data-i18n="how_to_title">
+          マチナウの楽しみ方
+        </h2>
+
+        <p class="how-to-lead" data-i18n="how_to_lead">
+          <strong>マチナウは「今いる街」を楽しむためのサービスです。</strong><br>街で今起きていることや、近くのお店・施設、街の声や発見などを見ながら、その街をもっと楽しんでみよう。
+        </p>
+
+        <section class="how-to-step">
+          <h3 class="how-to-step-title" data-i18n="how_to_step1_title">① まず現在地を押してみよう</h3>
+          <p class="how-to-step-text" data-i18n="how_to_step1_text">
+            現在地を使うと、あなたの近くにある情報を探せます。お店や街の発見などは、今いる場所から<strong>15km以内</strong>を中心に表示します。
+          </p>
+          <p class="how-to-step-note" data-i18n="how_to_step1_note">
+            位置情報は、近くの情報を探すために使います。
+          </p>
+          <button type="button" class="how-to-step-button" data-how-to-action="location" data-i18n="how_to_step1_button">
+            📍 現在地から見てみる
+          </button>
+        </section>
+
+        <section class="how-to-step">
+          <h3 class="how-to-step-title" data-i18n="how_to_step2_title">② これから行く街も見てみよう</h3>
+          <p class="how-to-step-text" data-i18n="how_to_step2_text">
+            今いる場所だけでなく、これから行く街も探せます。少し離れた場所へ行く予定なら「地域から探す」を使ってみよう。
+          </p>
+          <ul class="how-to-compare">
+            <li data-i18n="how_to_step2_compare_location"><strong>📍 現在地</strong>…今いる場所の近くを見る</li>
+            <li data-i18n="how_to_step2_compare_area"><strong>🗺️ 地域から探す</strong>…これから行く街を見る</li>
+          </ul>
+          <button type="button" class="how-to-step-button" data-how-to-action="area" data-i18n="how_to_step2_button">
+            🗺️ 行きたい街を探す
+          </button>
+        </section>
+
+        <section class="how-to-step">
+          <h3 class="how-to-step-title" data-i18n="how_to_step3_title">③ 街の「今」をのぞいてみよう</h3>
+          <p class="how-to-step-text" data-i18n="how_to_step3_text">
+            近くのお店や施設、街で見つかった出来事など、今いる場所で役立つ情報を見てみよう。
+          </p>
+          <button type="button" class="how-to-step-link" data-how-to-action="nearby" data-i18n="how_to_step3_link">
+            近くで楽しめる場所を見る →
+          </button>
+        </section>
+
+        <section class="how-to-step">
+          <h3 class="how-to-step-title" data-i18n="how_to_step4_title">④ 「街の今スレッド」って？</h3>
+          <p class="how-to-step-text" data-i18n="how_to_step4_text">
+            「街の今スレッド」は、その場所について<strong>今日</strong>話せる場所です。
+          </p>
+          <p class="how-to-quotes" data-i18n="how_to_step4_examples">
+            「今、混んでる？」<br>「今日やってる？」<br>「この辺で何かある？」
+          </p>
+          <p class="how-to-step-text" data-i18n="how_to_step4_text2">
+            今いる人、これから行く人、さっきまでいた人が、その場所の“今日”を伝え合えます。
+          </p>
+          <button type="button" class="how-to-step-link" data-how-to-action="threads" data-i18n="how_to_step4_link">
+            近くのスレッドを見る →
+          </button>
+        </section>
+
+        <section class="how-to-step">
+          <h3 class="how-to-step-title" data-i18n="how_to_step5_title">⑤ あなたの発見も届けられます</h3>
+          <p class="how-to-quotes" data-i18n="how_to_step5_examples">
+            「イベントを見つけた。」<br>「景色がきれいだった。」<br>「こんなお店を見つけた。」<br>「街のちょっとした変化に気づいた。」
+          </p>
+          <p class="how-to-step-text" data-i18n="how_to_step5_text">
+            そんな小さな発見を、近くにいる旅行者へ届けられます。<br><strong>あなたの発見が、次の旅行者の「知っててよかった」になる。</strong>
+          </p>
+          <a class="how-to-step-link" href="post.html?mode=street" data-i18n="how_to_step5_link">
+            見つけた「今」を投稿する →
+          </a>
+        </section>
+
+        <section class="how-to-step">
+          <h3 class="how-to-step-title" data-i18n="how_to_step6_title">⑥ お店・施設の方も参加できます</h3>
+          <p class="how-to-step-text" data-i18n="how_to_step6_text">
+            登録したお店・施設は、営業情報やイベントなど、今伝えたい情報を自分で発信できます。
+          </p>
+          <a class="how-to-step-link" href="shop.html" data-i18n="how_to_step6_link">
+            お店・施設の方へ →
+          </a>
+        </section>
+
+        <div class="how-to-final">
+          <button type="button" class="how-to-final-primary" data-how-to-action="location" data-i18n="how_to_final_location">
+            📍 現在地からマチナウを使ってみる
+          </button>
+          <button type="button" class="how-to-final-secondary" data-how-to-action="area" data-i18n="how_to_final_area">
+            🗺️ 行きたい街から探す
+          </button>
+          <button type="button" class="how-to-final-close" onclick="closeHowToModal()" data-i18n="how_to_close">
+            閉じてTOPに戻る
+          </button>
+        </div>
       </div>
     </div>
   </div>

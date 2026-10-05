@@ -17232,6 +17232,199 @@ if (heroActionReadsElement) {
   );
 }
 
+// マチナウの楽しみ方｜ヒーロー直下の入口(#howToEntryButton)で開く説明
+// モーダル(#howToModal)。各ボタンは新しい処理を持たず、既存の現在地ボタン
+// (#locationButton)・ヒーロー4入口(#heroActionNearby/#heroActionArea)・
+// 既存のセクション移動(scrollToHeroActionSection)へつなぐだけ。
+function openHowToModal() {
+  const modal =
+    document.getElementById(
+      "howToModal"
+    );
+
+  if (!modal) {
+    return;
+  }
+
+  modal.classList.add(
+    "visible"
+  );
+
+  document.body.style.overflow =
+    "hidden";
+
+  const modalCard =
+    modal.querySelector(
+      ".modal-card"
+    );
+
+  if (modalCard) {
+    modalCard.scrollTop =
+      0;
+  }
+
+  sendMachinauAnalyticsEvent(
+    "how_to_open"
+  );
+}
+
+function closeHowToModal() {
+  const modal =
+    document.getElementById(
+      "howToModal"
+    );
+
+  if (!modal) {
+    return;
+  }
+
+  modal.classList.remove(
+    "visible"
+  );
+
+  document.body.style.overflow =
+    "";
+}
+
+function closeHowToModalOutside(
+  event
+) {
+  if (
+    event.target.id ===
+    "howToModal"
+  ) {
+    closeHowToModal();
+  }
+}
+
+function runHowToAction(
+  action
+) {
+  closeHowToModal();
+
+  if (action === "location") {
+    sendMachinauAnalyticsEvent(
+      "how_to_location_click"
+    );
+
+    // 取得済みならGPSを取り直さず、近くの店舗・施設へ移動する
+    // (ヒーロー「近くで楽しめる場所」と同じ扱い)。
+    if (isMachinauLocationAcquired()) {
+      scrollToHeroActionSection(
+        "shopsSection"
+      );
+      return;
+    }
+
+    const locationButtonElement =
+      document.getElementById(
+        "locationButton"
+      );
+
+    if (!locationButtonElement) {
+      return;
+    }
+
+    (
+      locationButtonElement.closest(".location-card") ||
+      locationButtonElement
+    ).scrollIntoView(
+      {
+        behavior: "smooth",
+        block: "center"
+      }
+    );
+
+    if (!locationButtonElement.disabled) {
+      locationButtonElement.click();
+    }
+    return;
+  }
+
+  if (action === "area") {
+    sendMachinauAnalyticsEvent(
+      "how_to_area_click"
+    );
+
+    if (heroActionAreaElement) {
+      heroActionAreaElement.click();
+    }
+    return;
+  }
+
+  if (action === "nearby") {
+    if (heroActionNearbyElement) {
+      heroActionNearbyElement.click();
+    }
+    return;
+  }
+
+  if (action === "threads") {
+    if (!isMachinauLocationAcquired()) {
+      guideToMachinauLocationButton();
+      return;
+    }
+
+    scrollToHeroActionSection(
+      "townNowThreadsSection"
+    );
+  }
+}
+
+const howToEntryButtonElement =
+  document.getElementById(
+    "howToEntryButton"
+  );
+
+if (howToEntryButtonElement) {
+  howToEntryButtonElement.addEventListener(
+    "click",
+    openHowToModal
+  );
+}
+
+document
+  .querySelectorAll(
+    "#howToModal [data-how-to-action]"
+  )
+  .forEach(
+    function(element) {
+      element.addEventListener(
+        "click",
+        function() {
+          runHowToAction(
+            element.getAttribute(
+              "data-how-to-action"
+            )
+          );
+        }
+      );
+    }
+  );
+
+document.addEventListener(
+  "keydown",
+  function(event) {
+    if (event.key !== "Escape") {
+      return;
+    }
+
+    const modal =
+      document.getElementById(
+        "howToModal"
+      );
+
+    if (
+      modal &&
+      modal.classList.contains(
+        "visible"
+      )
+    ) {
+      closeHowToModal();
+    }
+  }
+);
+
 
 // 「⚡ 今、知っておきたいこと」統合表示。
 // updateFlashBanner()・shopMatchesFlashBannerKeywords()・
