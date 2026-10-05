@@ -919,6 +919,31 @@
       opacity: 0.5;
     }
 
+    /* 地域から探す｜店舗セクションの「選んだ街を表示中」バー。 */
+    .shops-region-bar {
+      margin: 0 0 12px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: var(--sky);
+    }
+
+    .shops-region-note {
+      margin: 0 0 6px;
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--text);
+    }
+
+    .shops-region-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 16px;
+    }
+
+    .shops-region-actions .secondary-link-button {
+      padding: 4px 0;
+    }
+
     /* マチナウの楽しみ方｜ヒーロー4入口直下の控えめな入口。背景写真の上で
        読めるよう半透明の白地にし、4入口カードより目立たせない。 */
     .how-to-entry {
@@ -1704,7 +1729,7 @@
 
         <div class="section-title-area">
 
-          <h2 data-i18n="shops_heading">
+          <h2 id="shopsHeading" data-i18n="shops_heading">
             今、近くで楽しめる場所
           </h2>
 
@@ -1714,10 +1739,26 @@
 
         </div>
 
-        <span class="section-link" data-i18n="shops_current_location_order">
+        <span id="shopsOrderLabel" class="section-link" data-i18n="shops_current_location_order">
           現在地順
         </span>
 
+      </div>
+
+      <!-- 地域から探す｜市区町村を選んで「その街で楽しめる場所」を表示中だけ
+           出す(app.jsのupdateShopsSectionRegionUi()が表示を切り替える)。 -->
+      <div id="shopsRegionBar" class="shops-region-bar" style="display:none;">
+        <p class="shops-region-note" data-i18n="shops_region_note">
+          選んだ街に掲載中のお店・施設です（現在地からの距離では絞り込んでいません）。
+        </p>
+        <div class="shops-region-actions">
+          <button type="button" id="shopsRegionBackButton" class="secondary-link-button" data-i18n="shops_region_back_button">
+            📍 現在地の近くに戻る
+          </button>
+          <button type="button" id="shopsRegionOtherButton" class="secondary-link-button" data-i18n="shops_region_other_button">
+            🗺️ ほかの地域を選ぶ
+          </button>
+        </div>
       </div>
 
       <div class="category-scroll">
@@ -2478,11 +2519,11 @@
         <section class="how-to-step">
           <h3 class="how-to-step-title" data-i18n="how_to_step2_title">② これから行く街も見てみよう</h3>
           <p class="how-to-step-text" data-i18n="how_to_step2_text">
-            今いる場所だけでなく、これから行く街も探せます。少し離れた場所へ行く予定なら「地域から探す」を使ってみよう。
+            今いる場所だけでなく、これから行く街も探せます。少し離れた場所へ行く予定なら「地域から探す」で市区町村を選んでみよう。その街のお店・施設が見られます。
           </p>
           <ul class="how-to-compare">
             <li data-i18n="how_to_step2_compare_location"><strong>📍 現在地</strong>…今いる場所の近くを見る</li>
-            <li data-i18n="how_to_step2_compare_area"><strong>🗺️ 地域から探す</strong>…これから行く街を見る</li>
+            <li data-i18n="how_to_step2_compare_area"><strong>🗺️ 地域から探す</strong>…これから行く街のお店・施設を見る</li>
           </ul>
           <button type="button" class="how-to-step-button" data-how-to-action="area" data-i18n="how_to_step2_button">
             🗺️ 行きたい街を探す

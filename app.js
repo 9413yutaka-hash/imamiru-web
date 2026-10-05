@@ -10,6 +10,9 @@ let selectedCategory = "すべて";
 // bottom-navigation「見つける」/「ホーム」からのみ)。
 let isShowingAllShopCards = false;
 
+// 地域から探す｜選択中の市区町村(詳細はisShopInSelectedShopRegion()付近)。
+let selectedShopRegion = null;
+
 // 多言語化 Phase B｜renderShops()が直近に実際へ描画した店舗IDの一覧
 // (見えている店舗だけを翻訳対象にするため)。
 let lastRenderedShopCardIds = [];
@@ -2738,6 +2741,207 @@ function isShopWithinNearbyCardRadius(
   );
 }
 
+// 地域から探す｜「これから行く街」の店舗・施設表示。nullの間は従来どおり
+// 現在地15km(isShopWithinNearbyCardRadius)で絞り、地域検索で市区町村を
+// 選んだ間だけ{prefectureName, municipalityName}を持ち、店舗カードの対象を
+// その市区町村へ切り替える(現在地・15km・距離計算自体には一切触れない)。
+// municipalityNameはjapan-municipalities.jsの正式名(例："港区"
+// "名古屋市港区""大阪市北区""八重瀬町")だけが入る。
+// (変数selectedShopRegionはファイル先頭、isShowingAllShopCardsの隣で宣言)
+
+// 住所(submissions.address)が「都道府県＋市区町村」で始まるかで判定する。
+// 都道府県まで一致させるため、東京都港区と愛知県名古屋市港区のような
+// 同名の区を混同しない(市区町村名だけの部分一致はしない)。住所先頭の
+// 「日本、」「〒123-4567」と空白は無視し、町村の前の郡名
+// (例：沖縄県島尻郡八重瀬町)は読み飛ばす。都道府県を含まない住所は
+// 判定できないため対象外にする(推測しない)。外部APIは呼ばない。
+function isShopInSelectedShopRegion(
+  shop,
+  region
+) {
+  if (
+    !region ||
+    typeof shop.address !== "string"
+  ) {
+    return false;
+  }
+
+  const normalizedAddress =
+    shop.address
+      .replace(/\s+/g, "")
+      .replace(/^日本[、,]?/, "")
+      .replace(/^〒?[0-9０-９]{3}[-－−ー‐]?[0-9０-９]{4}/, "");
+
+  if (
+    !normalizedAddress.startsWith(
+      region.prefectureName
+    )
+  ) {
+    return false;
+  }
+
+  const addressAfterPrefecture =
+    normalizedAddress.slice(
+      region.prefectureName.length
+    );
+
+  if (
+    addressAfterPrefecture.startsWith(
+      region.municipalityName
+    )
+  ) {
+    return true;
+  }
+
+  // 郡は町村にしか付かないため、町・村を選んだ場合だけ郡名を読み飛ばす。
+  if (!/[町村]$/.test(region.municipalityName)) {
+    return false;
+  }
+
+  const countyMatch =
+    addressAfterPrefecture.match(
+      /^[^市区町村郡]+郡/
+    );
+
+  return (
+    countyMatch !== null &&
+    addressAfterPrefecture
+      .slice(countyMatch[0].length)
+      .startsWith(
+        region.municipalityName
+      )
+  );
+}
+
+// 店舗カードの対象(店舗・施設のみ、admin・街の発見を除く)が選択中の
+// 市区町村に何件あるか(カテゴリー絞り込み前)。0件表示の判定に使う。
+function countShopsInSelectedShopRegion() {
+  return shops.filter(
+    function(shop) {
+      return (
+        shop.postType !== "admin" &&
+        shop.submissionType !== "street" &&
+        isShopInSelectedShopRegion(
+          shop,
+          selectedShopRegion
+        )
+      );
+    }
+  ).length;
+}
+
+function setSelectedShopRegion(
+  prefectureName,
+  municipalityName
+) {
+  selectedShopRegion =
+    {
+      prefectureName: prefectureName,
+      municipalityName: municipalityName
+    };
+
+  isShowingAllShopCards =
+    false;
+
+  renderShops();
+}
+
+// 地域検索をやめて現在地(15km)側の表示へ戻す。地域検索中でなければ
+// 何もしない(現在地側の「もっと見る」状態を不要に変えない)。
+function clearSelectedShopRegion() {
+  if (selectedShopRegion === null) {
+    return;
+  }
+
+  selectedShopRegion =
+    null;
+
+  isShowingAllShopCards =
+    false;
+
+  renderShops();
+}
+
+// 店舗セクションの見出し・並び順ラベル・地域検索バーを状態に合わせる。
+// 見出しは地域名を含むため、地域検索中はdata-i18nを外して
+// applyMachinauLanguage()の一括置換で既定文言へ戻らないようにする
+// (言語切替時はrenderShops()がこの関数を通して組み立て直す)。
+function updateShopsSectionRegionUi() {
+  const currentLanguage =
+    getCurrentMachinauLanguage();
+
+  const shopsHeadingElement =
+    document.getElementById(
+      "shopsHeading"
+    );
+
+  const shopsOrderLabelElement =
+    document.getElementById(
+      "shopsOrderLabel"
+    );
+
+  const shopsRegionBarElement =
+    document.getElementById(
+      "shopsRegionBar"
+    );
+
+  if (shopsHeadingElement) {
+    if (selectedShopRegion) {
+      shopsHeadingElement.removeAttribute(
+        "data-i18n"
+      );
+
+      shopsHeadingElement.textContent =
+        getMachinauTranslation(
+          "shops_region_heading",
+          currentLanguage
+        ).replace(
+          "{AREA}",
+          selectedShopRegion.municipalityName
+        );
+    } else if (
+      shopsHeadingElement.getAttribute("data-i18n") !==
+      "shops_heading"
+    ) {
+      shopsHeadingElement.setAttribute(
+        "data-i18n",
+        "shops_heading"
+      );
+
+      shopsHeadingElement.textContent =
+        getMachinauTranslation(
+          "shops_heading",
+          currentLanguage
+        );
+    }
+  }
+
+  if (shopsOrderLabelElement) {
+    const orderLabelKey =
+      selectedShopRegion
+        ? "shops_region_order"
+        : "shops_current_location_order";
+
+    shopsOrderLabelElement.setAttribute(
+      "data-i18n",
+      orderLabelKey
+    );
+
+    shopsOrderLabelElement.textContent =
+      getMachinauTranslation(
+        orderLabelKey,
+        currentLanguage
+      );
+  }
+
+  if (shopsRegionBarElement) {
+    shopsRegionBarElement.style.display =
+      selectedShopRegion
+        ? ""
+        : "none";
+  }
+}
+
 // 街の発見の分離｜street投稿(承認済み・期限内のものだけがshopsに入る)を、
 // 「マチナウ読みもの」直前の専用セクションへ出す。現在地が分かるまでは
 // 何も出さず(全国の投稿を無差別に並べない)、分かった後は座標があり
@@ -2980,6 +3184,8 @@ function renderShops() {
   // 距離が分からない店舗は15km以内と確認できないため対象外とする。件数の
   // 上限は設けない(通常6件、「もっと見る」で15km以内を全件)。現在地が
   // まだ分からない間は従来どおり全店舗を対象にする。
+  // 地域から探す｜市区町村を選んでいる間だけ、15kmの代わりにその市区町村で
+  // 絞り、現在地からの距離ではなく新しい順(createdAt降順)に並べる。
   const adminExcludedShops =
     visibleShops
       .filter(
@@ -2989,12 +3195,36 @@ function renderShops() {
               "admin" &&
             shop.submissionType !==
               "street" &&
-            isShopWithinNearbyCardRadius(
-              shop
+            (
+              selectedShopRegion
+                ? isShopInSelectedShopRegion(
+                    shop,
+                    selectedShopRegion
+                  )
+                : isShopWithinNearbyCardRadius(
+                    shop
+                  )
             )
           );
         }
       );
+
+  if (selectedShopRegion) {
+    adminExcludedShops.sort(
+      function(firstShop, secondShop) {
+        return (
+          getDateValue(
+            secondShop.createdAt
+          ) -
+          getDateValue(
+            firstShop.createdAt
+          )
+        );
+      }
+    );
+  }
+
+  updateShopsSectionRegionUi();
 
   // isShowingAllShopCardsがfalseならTOP用に先頭6件だけ、
   // trueなら見つける全件表示としてadminExcludedShopsをそのまま使う。
@@ -3066,7 +3296,10 @@ function renderShops() {
     shopsList.innerHTML = `
       <div class="sample-notice">
         ${getMachinauTranslation(
-          "shop_empty_category_notice",
+          selectedShopRegion &&
+            countShopsInSelectedShopRegion() === 0
+            ? "shops_region_empty"
+            : "shop_empty_category_notice",
           getCurrentMachinauLanguage()
         )}
       </div>
@@ -3352,6 +3585,12 @@ function renderShops() {
                     }
                   </span>
 
+                  ${
+                    // 地域から探す｜選んだ街の表示中は現在地からの距離で
+                    // 探していないため、距離・徒歩時間は出さない。
+                    selectedShopRegion
+                      ? ""
+                      : `
                   <span class="info-chip info-chip-distance">
                     📍
                     ${formatDistance(
@@ -3365,6 +3604,8 @@ function renderShops() {
                       shop.distanceKm
                     )}
                   </span>
+                      `
+                  }
 
                   ${
                     businessClosingText
@@ -16775,6 +17016,14 @@ if (regionRecommendationAreaPickerElement) {
       }
     );
 
+    // 地域から探す｜選んだ市区町村の店舗・施設を、既存の店舗カード
+    // (#shopsSection)へ出す。読み込み済みのshops配列を絞るだけで、
+    // Google等の外部APIは呼ばない(掲示板側の解決とは独立)。
+    setSelectedShopRegion(
+      selectedPrefectureName,
+      enteredAreaName
+    );
+
     communityBoardAreaSearchButtonElement.disabled =
       true;
 
@@ -16790,6 +17039,9 @@ if (regionRecommendationAreaPickerElement) {
     if (succeeded) {
       regionRecommendationAreaPickerElement.style.display =
         "none";
+
+      // まずその街の店舗・施設を見せる(掲示板はその下に既存どおり表示)。
+      scrollToShops();
     } else {
       showCommunityBoardAreaSearchError();
     }
@@ -16835,6 +17087,8 @@ if (regionRecommendationBackToCurrentButtonElement) {
   regionRecommendationBackToCurrentButtonElement.addEventListener(
     "click",
     function() {
+      clearSelectedShopRegion();
+
       // 街の掲示板 Phase3｜「現在地のおすすめに戻る」は、現在地の主表示が
       // 掲示板へ切り替わったことに合わせて、直近に解決済みのgooglePlaceId等
       // (loadCommunityBoardForCurrentArea()が保持)を使って現在地の掲示板へ
@@ -16880,6 +17134,8 @@ if (regionRecommendationBackToCurrentButtonElement) {
 // 場合は、index.html<head>の小さなスクリプトが記録した早押しを、準備完了
 // 直後に1回だけ実行する(ReferenceErrorを出さず、早押しも捨てない)。
 function machinauStartLocation() {
+  // 地域から探す｜現在地を押したら店舗カードを現在地(15km)側へ戻す。
+  clearSelectedShopRegion();
   ensureGoogleMapsLoaded();
   getLocation();
 }
@@ -17130,9 +17386,79 @@ if (heroActionNearbyElement) {
         return;
       }
 
+      // 「近くで楽しめる場所」は常に現在地側を見せる。
+      clearSelectedShopRegion();
+
       scrollToHeroActionSection(
         "shopsSection"
       );
+    }
+  );
+}
+
+// 地域から探す｜店舗セクションの地域検索バー。「現在地の近くに戻る」は
+// 取得済みならGPSを取り直さず現在地側の表示へ戻し、未取得なら既存の
+// 現在地ボタンを押す(machinauStartLocation()内で地域検索も解除される)。
+// 「ほかの地域を選ぶ」はヒーロー「地域から探す」と同じ地域選択を開く。
+const shopsRegionBackButtonElement =
+  document.getElementById(
+    "shopsRegionBackButton"
+  );
+
+if (shopsRegionBackButtonElement) {
+  shopsRegionBackButtonElement.addEventListener(
+    "click",
+    function() {
+      if (isMachinauLocationAcquired()) {
+        clearSelectedShopRegion();
+        scrollToShops();
+        return;
+      }
+
+      const locationButtonElement =
+        document.getElementById(
+          "locationButton"
+        );
+
+      if (!locationButtonElement) {
+        clearSelectedShopRegion();
+        return;
+      }
+
+      (
+        locationButtonElement.closest(".location-card") ||
+        locationButtonElement
+      ).scrollIntoView(
+        {
+          behavior: "smooth",
+          block: "center"
+        }
+      );
+
+      if (!locationButtonElement.disabled) {
+        locationButtonElement.click();
+      }
+    }
+  );
+}
+
+const shopsRegionOtherButtonElement =
+  document.getElementById(
+    "shopsRegionOtherButton"
+  );
+
+if (shopsRegionOtherButtonElement) {
+  shopsRegionOtherButtonElement.addEventListener(
+    "click",
+    function() {
+      const heroActionAreaButtonElement =
+        document.getElementById(
+          "heroActionArea"
+        );
+
+      if (heroActionAreaButtonElement) {
+        heroActionAreaButtonElement.click();
+      }
     }
   );
 }
@@ -17310,6 +17636,8 @@ function runHowToAction(
     // 取得済みならGPSを取り直さず、近くの店舗・施設へ移動する
     // (ヒーロー「近くで楽しめる場所」と同じ扱い)。
     if (isMachinauLocationAcquired()) {
+      clearSelectedShopRegion();
+
       scrollToHeroActionSection(
         "shopsSection"
       );

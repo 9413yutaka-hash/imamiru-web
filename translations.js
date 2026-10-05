@@ -130,8 +130,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   how_to_step2_text: {
-    ja: "今いる場所だけでなく、これから行く街も探せます。少し離れた場所へ行く予定なら「地域から探す」を使ってみよう。",
-    en: "You can look up not just where you are, but also the towns you're heading to. Going somewhere a little farther? Try “Explore by Area.”"
+    ja: "今いる場所だけでなく、これから行く街も探せます。少し離れた場所へ行く予定なら「地域から探す」で市区町村を選んでみよう。その街のお店・施設が見られます。",
+    en: "You can look up not just where you are, but also the towns you're heading to. Going somewhere a little farther? Pick a city or town in “Explore by Area” to see its shops and spots."
   },
 
   how_to_step2_compare_location: {
@@ -140,8 +140,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   how_to_step2_compare_area: {
-    ja: "<strong>🗺️ 地域から探す</strong>…これから行く街を見る",
-    en: "<strong>🗺️ Explore by Area</strong> — see the town you're going to"
+    ja: "<strong>🗺️ 地域から探す</strong>…これから行く街のお店・施設を見る",
+    en: "<strong>🗺️ Explore by Area</strong> — see shops and spots in the town you're going to"
   },
 
   how_to_step2_button: {
@@ -875,6 +875,38 @@ const MACHINAU_TRANSLATIONS = {
   shops_current_location_order: {
     ja: "現在地順",
     en: "Sorted by Distance"
+  },
+
+  // 地域から探す｜市区町村を選んだ時の店舗セクション。{AREA}は
+  // japan-municipalities.jsの市区町村名(日本語のまま)に置き換える。
+  shops_region_heading: {
+    ja: "{AREA}で楽しめる場所",
+    en: "Places to Enjoy in {AREA}"
+  },
+
+  shops_region_order: {
+    ja: "新しい順",
+    en: "Newest First"
+  },
+
+  shops_region_note: {
+    ja: "選んだ街に掲載中のお店・施設です（現在地からの距離では絞り込んでいません）。",
+    en: "Shops and spots listed in the town you picked (not limited by distance from you)."
+  },
+
+  shops_region_back_button: {
+    ja: "📍 現在地の近くに戻る",
+    en: "📍 Back to places near me"
+  },
+
+  shops_region_other_button: {
+    ja: "🗺️ ほかの地域を選ぶ",
+    en: "🗺️ Pick another area"
+  },
+
+  shops_region_empty: {
+    ja: "現在、この地域に掲載中のお店・施設はありません。",
+    en: "There are no shops or spots listed in this area yet."
   },
 
   shops_loading: {
