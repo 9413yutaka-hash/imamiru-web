@@ -919,6 +919,35 @@
       opacity: 0.5;
     }
 
+    /* 位置情報取得失敗時の離脱防止｜位置情報カード内の「地域から探す」への逃げ道。 */
+    .location-failure-actions {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+    }
+
+    .location-failure-area-note {
+      margin: 8px 0 8px;
+      font-size: 12.5px;
+      font-weight: 700;
+      line-height: 1.6;
+      color: var(--navy);
+    }
+
+    .location-failure-area-button {
+      display: block;
+      width: 100%;
+      min-height: 44px;
+      padding: 10px 14px;
+      border: 1px solid rgba(7, 136, 201, 0.35);
+      border-radius: 13px;
+      background: var(--white);
+      color: var(--blue);
+      font-size: 14px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
     /* 地域から探す｜店舗セクションの「選んだ街を表示中」バー。 */
     .shops-region-bar {
       margin: 0 0 12px;
@@ -1298,7 +1327,7 @@
             style="display:none; margin-top: 8px;"
             data-i18n="location_permission_toggle_show"
           >
-            位置情報を許可する方法を見る
+            📍 位置情報の設定方法を見る
           </button>
 
           <div
@@ -1437,6 +1466,10 @@
                 それでも直らない場合は、Chromeの<strong>︙ → 設定 → サイトの設定 → 位置情報</strong>から確認する方法もあります。
               </p>
 
+              <p class="location-permission-note" data-i18n="location_permission_android_device_note">
+                スマホ本体の位置情報がOFFになっている場合は、端末の設定で位置情報をONにしてください（設定画面の名前は機種によって異なります）。
+              </p>
+
             </div>
 
             <button
@@ -1479,6 +1512,24 @@
               設定を変更したら、この画面に戻って「もう一度試す」を押してください。
             </p>
 
+          </div>
+
+          <!-- 位置情報取得失敗時の離脱防止｜現在地の取得に失敗した時だけ表示する
+               (PERMISSION_DENIED / POSITION_UNAVAILABLE / TIMEOUTのすべて)。
+               設定方法は上の既存ヘルプ(#locationPermissionGuideToggle)、
+               再試行は既存の現在地ボタン、地域から探すは既存のヒーロー入口
+               (#heroActionArea)をそのまま使う。成功時は
+               resetLocationPermissionGuide()が非表示に戻す。 -->
+          <div id="locationFailureActions" class="location-failure-actions" style="display:none;">
+            <p class="location-permission-note" data-i18n="location_failure_inapp_note">
+              LINEやInstagramなどのアプリから開いている場合は、SafariやChromeなどのブラウザで開くと位置情報を利用しやすくなります。
+            </p>
+            <p class="location-failure-area-note" data-i18n="location_failure_area_note">
+              位置情報なしでも「地域から探す」からマチナウを利用できます。
+            </p>
+            <button type="button" id="locationFailureAreaButton" class="location-failure-area-button" data-i18n="location_failure_area_button">
+              🗾 地域から探す
+            </button>
           </div>
 
           <a

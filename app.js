@@ -9550,9 +9550,13 @@ function getLocation() {
       "location_error_permission_denied_guide",
       getCurrentMachinauLanguage()
     );
-
-          showLocationPermissionGuideToggle();
         }
+
+        // 位置情報取得失敗時の離脱防止｜拒否・取得不可・時間切れのどれでも、
+        // 既存の設定方法ヘルプへの入口と「地域から探す」への逃げ道を出す
+        // (再試行は下で「もう一度試す」に変わる既存の現在地ボタン)。
+        showLocationPermissionGuideToggle();
+        showLocationFailureActions();
 
         if (
           error.code === 2
@@ -10003,6 +10007,16 @@ function resetLocationPermissionGuide() {
       "none";
   }
 
+  const locationFailureActions =
+    document.getElementById(
+      "locationFailureActions"
+    );
+
+  if (locationFailureActions) {
+    locationFailureActions.style.display =
+      "none";
+  }
+
   document
     .querySelectorAll(
       ".location-permission-device-panel, .location-permission-os-panel"
@@ -10024,6 +10038,44 @@ function resetLocationPermissionGuide() {
           "▶";
       }
     );
+}
+
+// 位置情報取得失敗時の離脱防止｜#locationFailureActions(アプリ内ブラウザの補足・
+// 「位置情報なしでも地域から探せる」・地域から探すボタン)を出す。成功時・
+// 次の失敗表示の前はresetLocationPermissionGuide()が非表示に戻す。
+function showLocationFailureActions() {
+  const locationFailureActions =
+    document.getElementById(
+      "locationFailureActions"
+    );
+
+  if (locationFailureActions) {
+    locationFailureActions.style.display =
+      "";
+  }
+}
+
+// 失敗時の「🗾 地域から探す」はヒーローの既存入口(#heroActionArea)と同じ処理
+// (地域選択を開いてスクロール)をそのまま実行する。
+const locationFailureAreaButtonElement =
+  document.getElementById(
+    "locationFailureAreaButton"
+  );
+
+if (locationFailureAreaButtonElement) {
+  locationFailureAreaButtonElement.addEventListener(
+    "click",
+    function() {
+      const heroActionAreaButtonElement =
+        document.getElementById(
+          "heroActionArea"
+        );
+
+      if (heroActionAreaButtonElement) {
+        heroActionAreaButtonElement.click();
+      }
+    }
+  );
 }
 
 function showLocationPermissionGuideToggle() {

@@ -660,8 +660,25 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   location_permission_toggle_show: {
-    ja: "位置情報を許可する方法を見る",
-    en: "How to enable location access"
+    ja: "📍 位置情報の設定方法を見る",
+    en: "📍 Location settings help"
+  },
+
+  // 位置情報取得失敗時の離脱防止｜失敗時(拒否・取得不可・時間切れ)に位置情報
+  // カード内へ出す補足と「地域から探す」への逃げ道(#locationFailureActions)。
+  location_failure_inapp_note: {
+    ja: "LINEやInstagramなどのアプリから開いている場合は、SafariやChromeなどのブラウザで開くと位置情報を利用しやすくなります。",
+    en: "If you opened Machinau inside an app like LINE or Instagram, opening it in a browser such as Safari or Chrome usually makes location easier to use."
+  },
+
+  location_failure_area_note: {
+    ja: "位置情報なしでも「地域から探す」からマチナウを利用できます。",
+    en: "You can still use Machinau without location — just search by area."
+  },
+
+  location_failure_area_button: {
+    ja: "🗾 地域から探す",
+    en: "🗾 Search by area"
   },
 
   location_permission_device_pc_label: {
@@ -842,6 +859,11 @@ const MACHINAU_TRANSLATIONS = {
   location_permission_android_note2: {
     ja: "それでも直らない場合は、Chromeの<strong>︙ → 設定 → サイトの設定 → 位置情報</strong>から確認する方法もあります。",
     en: "If that doesn't help, you can also check via Chrome's <strong>︙ → Settings → Site settings → Location</strong>."
+  },
+
+  location_permission_android_device_note: {
+    ja: "スマホ本体の位置情報がOFFになっている場合は、端末の設定で位置情報をONにしてください（設定画面の名前は機種によって異なります）。",
+    en: "If location is turned off on the phone itself, turn it on in your device settings (the menu names differ by model)."
   },
 
   location_permission_pc_step1: {
@@ -1154,8 +1176,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   location_button_retry: {
-    ja: "もう一度試す",
-    en: "Try Again"
+    ja: "🔄 もう一度試す",
+    en: "🔄 Try Again"
   },
 
   weather_advice_heat: {
