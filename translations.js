@@ -1654,6 +1654,12 @@ const MACHINAU_TRANSLATIONS = {
     en: "🔗 View shop page"
   },
 
+  // 運営投稿(sourceLabelあり)のwebsiteUrl＝運営が参照した情報元ページ。
+  modal_source_page_button: {
+    ja: "🔗 情報元ページを見る",
+    en: "🔗 View source page"
+  },
+
   firebase_not_ready_error: {
     ja: "Firebaseの準備が完了しませんでした。",
     en: "Firebase failed to initialize in time."

@@ -4846,7 +4846,8 @@ function handleModalSwipe() {
 }
 
 function getOrCreateModalWebsiteButton(
-  modalMapButtonElement
+  modalMapButtonElement,
+  labelTranslationKey
 ) {
   let modalWebsiteButton =
     document.getElementById(
@@ -4884,7 +4885,8 @@ function getOrCreateModalWebsiteButton(
   if (modalWebsiteButton) {
     modalWebsiteButton.textContent =
       getMachinauTranslation(
-        "modal_website_button",
+        labelTranslationKey ||
+          "modal_website_button",
         getCurrentMachinauLanguage()
       );
   }
@@ -5279,9 +5281,16 @@ function openShopModal(
       "";
   }
 
+  // 同じwebsiteUrlでも、運営投稿では「情報元ページ」(運営が参照した記事等)、
+  // 店舗・一般の投稿では「お店のページ」を意味する。発信元の判定は上の
+  // 発信元表示(「🌺 マチナウ運営より」)と同じくsourceLabelの有無を使う
+  // (sourceLabelは運営投稿の経路だけが保存する)。URL自体は変えない。
   const modalWebsiteButton =
     getOrCreateModalWebsiteButton(
-      modalMapButton
+      modalMapButton,
+      selectedShop.sourceLabel
+        ? "modal_source_page_button"
+        : "modal_website_button"
     );
 
   if (modalWebsiteButton) {
