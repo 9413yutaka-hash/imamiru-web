@@ -26615,6 +26615,29 @@ async function handlePublicListPublishedColumnArticlesRequest(
                   viewer
                 ),
 
+              // 読みもの一覧の「掲載年月」filterと記事カードの公開日用。基準は
+              // publishedAt(初回公開日)で、記事ページ・関連記事カードと同じ
+              // formatDateForDisplay()の日付と一致させる(年月キーも同じ基準)。
+              publishedDate:
+                formatDateForDisplay(
+                  publishedAtDate
+                ),
+
+              publishedMonth:
+                publishedAtDate instanceof Date &&
+                !Number.isNaN(
+                  publishedAtDate.getTime()
+                )
+                  ? publishedAtDate.getFullYear() +
+                    "-" +
+                    String(
+                      publishedAtDate.getMonth() + 1
+                    ).padStart(
+                      2,
+                      "0"
+                    )
+                  : "",
+
               publishedAtMillis:
                 publishedAtDate
                   ? publishedAtDate.getTime()
@@ -26658,7 +26681,9 @@ async function handlePublicListPublishedColumnArticlesRequest(
               regionPrefecture: article.regionPrefecture,
               regionCity: article.regionCity,
               regionArea: article.regionArea,
-              matchLevel: article.matchLevel
+              matchLevel: article.matchLevel,
+              publishedDate: article.publishedDate,
+              publishedMonth: article.publishedMonth
             };
           }
         );
@@ -27306,11 +27331,16 @@ async function handleAdminSaveColumnArticleRequest(
         }
       );
 
-      // 公開中の記事を編集して「公開する」のまま保存した場合も、改めて
-      // 公開したものとしてpublishedAtを更新する(一覧・TOPで新しい記事として
-      // 並ぶ)。下書きとして保存した場合はpublishedAtを変えない。
+      // 2026-10-07 代表決定(A案)｜publishedAt＝初回公開日。公開として保存した時、
+      // まだpublishedAtが無い(下書きからの初回公開)場合だけ設定する。既に
+      // publishedAtがある記事は、通常の編集・再保存・下書き→再公開のいずれでも
+      // 変更しない(更新日はupdatedAtが担う)。TOP・一覧・関連記事は初回公開日順。
+      const existingPublishedAt =
+        (existingSnapshot.data() || {}).publishedAt;
+
       if (
-        fields.isPublished
+        fields.isPublished &&
+        !existingPublishedAt
       ) {
         updateData.publishedAt =
           FieldValue.serverTimestamp();
@@ -27771,10 +27801,13 @@ async function handleAdminSetColumnArticleStatusRequest(
         FieldValue.serverTimestamp()
     };
 
+    // 2026-10-07 代表決定(A案)｜publishedAt＝初回公開日。初めて公開する時
+    // (publishedAt未設定)だけ設定し、下書きへ戻して再公開しても変えない。
     if (
       isPublished &&
       existingData.status !==
-        COLUMN_STATUS_PUBLISHED
+        COLUMN_STATUS_PUBLISHED &&
+      !existingData.publishedAt
     ) {
       updateData.publishedAt =
         FieldValue.serverTimestamp();

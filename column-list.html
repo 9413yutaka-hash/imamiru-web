@@ -15,7 +15,7 @@
 
   <meta
     name="description"
-    content="マチナウ読み物の一覧です。地域とカテゴリーから、街の記憶にまつわる読み物を探せます。"
+    content="マチナウ読み物の一覧です。掲載年月とカテゴリーから、旅や街をもっと楽しむための読み物を探せます。"
   >
 
   <title>
@@ -185,8 +185,8 @@
       padding: 16px 4px 4px;
     }
 
-    .article-card-region {
-      margin: 0 0 4px;
+    .article-card-date {
+      margin: 8px 0 0;
       font-size: 11px;
       color: var(--subtext);
     }
@@ -243,7 +243,7 @@
       <span class="brand-mini-icon">📖</span>
       マチナウ読み物
     </div>
-    <h1>街の記憶を探す</h1>
+    <h1>読みものを探す</h1>
   </div>
 
   <main>
@@ -251,19 +251,14 @@
     <div class="card">
       <form id="filterForm" class="filter-form">
 
+        <!-- 読みもの一覧の整理(2026-10-07 代表決定)｜読みものは地域ではなく
+             「いつの記事か(掲載年月＝publishedAt・初回公開日) × 何についての
+             記事か(カテゴリー)」で探す。年月の選択肢は公開記事から自動生成する。 -->
         <div>
-          <label for="filterCountryInput">国</label>
-          <select id="filterCountryInput"><option value="">すべて</option></select>
-        </div>
-
-        <div>
-          <label for="filterPrefectureInput">都道府県・州等</label>
-          <input id="filterPrefectureInput" type="text" placeholder="例：沖縄県">
-        </div>
-
-        <div>
-          <label for="filterCityInput">市区町村</label>
-          <input id="filterCityInput" type="text" placeholder="例：那覇市">
+          <label for="filterMonthInput">掲載年月</label>
+          <select id="filterMonthInput">
+            <option value="">すべて</option>
+          </select>
         </div>
 
         <div>
@@ -281,8 +276,7 @@
         </div>
 
         <div class="filter-actions">
-          <button type="submit" class="search-button">この条件で探す</button>
-          <button type="button" id="resetButton" class="reset-button">リセット</button>
+          <button type="button" id="resetButton" class="reset-button">条件をリセット</button>
         </div>
 
       </form>
@@ -329,83 +323,45 @@
       return url.slice(0, insertPosition) + transformationParts.join(",") + "/" + url.slice(insertPosition);
     }
 
-    // Ver1.8 Phase2(国識別の世界対応・仕上げ)｜api/moderate-submission.jsの
-    // ISO_3166_1_ALPHA_2_COUNTRY_CODESと同じ一覧。国の絞り込みも自由記述を
-    // やめ、コードで検索する(country単位の一致判定はコード同士でしか
-    // 成立しないため)。日本語ラベルはIntl.DisplayNamesで実行時生成する。
-    const ISO_3166_1_ALPHA_2_COUNTRY_CODES =
-      (
-        "AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ " +
-        "BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ " +
-        "CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ " +
-        "DE DJ DK DM DO DZ " +
-        "EC EE EG EH ER ES ET " +
-        "FI FJ FK FM FO FR " +
-        "GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY " +
-        "HK HM HN HR HT HU " +
-        "ID IE IL IM IN IO IQ IR IS IT " +
-        "JE JM JO JP " +
-        "KE KG KH KI KM KN KP KR KW KY KZ " +
-        "LA LB LC LI LK LR LS LT LU LV LY " +
-        "MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ " +
-        "NA NC NE NF NG NI NL NO NP NR NU NZ " +
-        "OM " +
-        "PA PE PF PG PH PK PL PM PN PR PS PT PW PY " +
-        "QA " +
-        "RE RO RS RU RW " +
-        "SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ " +
-        "TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ " +
-        "UA UG UM US UY UZ " +
-        "VA VC VE VG VI VN VU " +
-        "WF WS " +
-        "YE YT " +
-        "ZA ZM ZW"
-      ).split(" ");
-
-    function getCountryDisplayLabel(code) {
-      try {
-        const displayNames = new Intl.DisplayNames(["ja"], { type: "region" });
-        const label = displayNames.of(code);
-        return typeof label === "string" && label !== "" ? label : code;
-      } catch (error) {
-        return code;
-      }
-    }
-
-    function populateFilterCountrySelect() {
-      const countryOptions = ISO_3166_1_ALPHA_2_COUNTRY_CODES
-        .map(function(code) {
-          return { code: code, label: getCountryDisplayLabel(code) };
-        })
-        .sort(function(a, b) {
-          return a.label.localeCompare(b.label, "ja");
-        });
-
-      filterCountryInput.innerHTML =
-        '<option value="">すべて</option>' +
-        countryOptions
-          .map(function(option) {
-            return '<option value="' + option.code + '">' + option.label + '</option>';
-          })
-          .join("");
-    }
-
     const filterForm = document.getElementById("filterForm");
-    const filterCountryInput = document.getElementById("filterCountryInput");
-    const filterPrefectureInput = document.getElementById("filterPrefectureInput");
-    const filterCityInput = document.getElementById("filterCityInput");
+    const filterMonthInput = document.getElementById("filterMonthInput");
     const filterCategoryInput = document.getElementById("filterCategoryInput");
     const resetButton = document.getElementById("resetButton");
     const articleList = document.getElementById("articleList");
 
-    function buildRegionText(article) {
-      return [article.regionCountry, article.regionPrefecture, article.regionCity, article.regionArea]
-        .filter(function(part) { return typeof part === "string" && part.trim() !== ""; })
-        .join(" / ");
+    // 公開中の読みもの(publishedAtの新しい順)。最初に1回だけ取得し、
+    // 掲載年月・カテゴリーの絞り込みはこの配列に対して行う(条件を変えるたびに
+    // 再取得しない)。
+    let loadedArticles = [];
+
+    // "2026-10" → "2026年10月"。将来このページを多言語化する時はここだけを
+    // 言語別(例："October 2026")にすればよい。
+    function formatMonthLabel(monthKey) {
+      const parts = String(monthKey).split("-");
+      return parts.length === 2 ? Number(parts[0]) + "年" + Number(parts[1]) + "月" : monthKey;
+    }
+
+    // 掲載年月の選択肢は、公開記事に実際に存在する年月だけを新しい順に並べる
+    // (HTMLへ年月を書き足し続けない)。
+    function populateMonthOptions(articles) {
+      const monthKeys = Array.from(
+        new Set(
+          articles
+            .map(function(article) { return typeof article.publishedMonth === "string" ? article.publishedMonth : ""; })
+            .filter(function(monthKey) { return monthKey !== ""; })
+        )
+      ).sort().reverse();
+
+      filterMonthInput.innerHTML =
+        '<option value="">すべて</option>' +
+        monthKeys
+          .map(function(monthKey) {
+            return '<option value="' + escapeHtml(monthKey) + '">' + escapeHtml(formatMonthLabel(monthKey)) + '</option>';
+          })
+          .join("");
     }
 
     function renderArticleCard(article) {
-      const regionText = buildRegionText(article);
       const slug = typeof article.slug === "string" ? article.slug : "";
 
       if (slug === "") {
@@ -416,36 +372,38 @@
         '<a class="card article-card" href="column/' + encodeURIComponent(slug) + '.html">' +
           (article.imageUrl ? '<img class="article-card-image" src="' + escapeHtml(buildOptimizedImageUrl(article.imageUrl, { width: 600 })) + '" alt="" loading="lazy" onerror="this.remove()">' : "") +
           '<div class="article-card-body">' +
-            (regionText !== "" ? '<p class="article-card-region">' + escapeHtml(regionText) + '</p>' : "") +
             (article.category ? '<span class="article-card-category">' + escapeHtml(article.category) + '</span>' : "") +
             '<p class="article-card-title">' + escapeHtml(article.title) + '</p>' +
             '<p class="article-card-description">' + escapeHtml(article.description) + '</p>' +
+            (article.publishedDate ? '<p class="article-card-date">' + escapeHtml(article.publishedDate) + '</p>' : "") +
           '</div>' +
         '</a>'
       );
+    }
+
+    function renderFilteredArticles() {
+      const month = filterMonthInput.value;
+      const category = filterCategoryInput.value;
+
+      const filteredArticles = loadedArticles.filter(function(article) {
+        return (
+          (month === "" || article.publishedMonth === month) &&
+          (category === "" || article.category === category)
+        );
+      });
+
+      if (filteredArticles.length === 0) {
+        articleList.innerHTML = '<div class="empty-state">この条件に一致する読み物はまだありません。</div>';
+        return;
+      }
+
+      articleList.innerHTML = filteredArticles.map(renderArticleCard).join("");
     }
 
     async function loadArticles() {
       articleList.innerHTML = '<div class="empty-state">読み込んでいます…</div>';
 
       const searchParams = new URLSearchParams({ mode: "publicListPublishedColumns" });
-
-      const country = filterCountryInput.value.trim();
-      const prefecture = filterPrefectureInput.value.trim();
-      const city = filterCityInput.value.trim();
-      const category = filterCategoryInput.value;
-
-      if (country !== "") searchParams.set("viewerCountry", country);
-      if (prefecture !== "") searchParams.set("viewerPrefecture", prefecture);
-      if (city !== "") searchParams.set("viewerCity", city);
-      if (category !== "") searchParams.set("category", category);
-
-      // 地域欄のいずれかに入力がある場合だけ、実際に絞り込まれた結果を返す
-      // よう明示的に依頼する(TOPの現在地優先表示とは異なり、この一覧ページの
-      // 検索は「探した手応え」が必要なため)。
-      if (country !== "" || prefecture !== "" || city !== "") {
-        searchParams.set("strictRegion", "1");
-      }
 
       try {
         const response = await fetch("/api/moderate-submission?" + searchParams.toString());
@@ -455,12 +413,9 @@
           throw new Error("読み物一覧を取得できませんでした。");
         }
 
-        if (responseData.articles.length === 0) {
-          articleList.innerHTML = '<div class="empty-state">この条件に一致する読み物はまだありません。</div>';
-          return;
-        }
-
-        articleList.innerHTML = responseData.articles.map(renderArticleCard).join("");
+        loadedArticles = responseData.articles;
+        populateMonthOptions(loadedArticles);
+        renderFilteredArticles();
       } catch (error) {
         console.error("読み物一覧の取得に失敗しました：", error);
         articleList.innerHTML = '<div class="empty-state">読み物を読み込めませんでした。時間をおいて再度お試しください。</div>';
@@ -469,18 +424,18 @@
 
     filterForm.addEventListener("submit", function(event) {
       event.preventDefault();
-      loadArticles();
+      renderFilteredArticles();
     });
+
+    filterMonthInput.addEventListener("change", renderFilteredArticles);
+    filterCategoryInput.addEventListener("change", renderFilteredArticles);
 
     resetButton.addEventListener("click", function() {
-      filterCountryInput.value = "";
-      filterPrefectureInput.value = "";
-      filterCityInput.value = "";
+      filterMonthInput.value = "";
       filterCategoryInput.value = "";
-      loadArticles();
+      renderFilteredArticles();
     });
 
-    populateFilterCountrySelect();
     loadArticles();
   </script>
 
