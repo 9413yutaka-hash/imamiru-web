@@ -22717,6 +22717,17 @@ const COLUMN_ARTICLE_PAGE_UI_TEXT =
       en: "← Back to Machinau"
     },
 
+    // 読みもの回遊導線｜記事の後(コメント欄より前)に出す同カテゴリー記事と一覧への導線。
+    relatedHeading: {
+      ja: "もう少し、読んでみる？",
+      en: "Keep reading"
+    },
+
+    relatedMoreLink: {
+      ja: "マチナウ読みものをもっと見る →",
+      en: "Explore more Machinau stories →"
+    },
+
     languageSwitchLabelJapanese: {
       ja: "日本語",
       en: "日本語"
@@ -25330,6 +25341,118 @@ function linkifyColumnArticleTextForRender(
 
 // マチナウ読み物の記事ページHTMLを生成する(CSS変数・カード構造・GA4呼び出し
 // 方式・コメントセクション構造を含む)。
+// 読みもの回遊導線｜「もう少し、読んでみる？」＋同カテゴリー記事カード＋
+// 一覧(column-list.html)への導線。同カテゴリー記事が0件なら見出し・カード枠は
+// 出さず、一覧への導線だけを出す(空の大きな枠を見せない)。カードのリンクは
+// 現在の言語のURL(buildColumnArticleUrlForLanguage、既存URL構造のまま)。
+function buildColumnArticleRelatedSectionHtml(
+  relatedArticles,
+  language
+) {
+  const articles =
+    Array.isArray(relatedArticles)
+      ? relatedArticles
+      : [];
+
+  const moreLinkHtml =
+    '<a class="related-more-link" href="/column-list.html">' +
+      escapeHtmlForRender(
+        getColumnArticlePageText(
+          "relatedMoreLink",
+          language
+        )
+      ) +
+    "</a>";
+
+  if (articles.length === 0) {
+    return (
+      '<div class="related-section">' +
+        moreLinkHtml +
+      "</div>"
+    );
+  }
+
+  const cardsHtml =
+    articles
+      .map(
+        function(related) {
+          const publishedDisplay =
+            related.publishedAtDate
+              ? formatColumnArticleDateForDisplay(
+                  related.publishedAtDate,
+                  language
+                )
+              : "";
+
+          return (
+            '<a class="related-card" href="' +
+              escapeHtmlForRender(
+                buildColumnArticleUrlForLanguage(
+                  related.slug,
+                  language
+                )
+              ) +
+            '">' +
+              (
+                related.imageUrl !== ""
+                  ? '<img class="related-card-image" src="' +
+                    escapeHtmlForRender(
+                      buildOptimizedImageUrl(
+                        related.imageUrl,
+                        { width: 200 }
+                      )
+                    ) +
+                    '" alt="" loading="lazy" onerror="this.remove()">'
+                  : ""
+              ) +
+              '<div class="related-card-body">' +
+                '<span class="related-card-category">' +
+                  escapeHtmlForRender(
+                    getColumnCategoryDisplayLabel(
+                      related.category,
+                      language
+                    )
+                  ) +
+                "</span>" +
+                '<p class="related-card-title">' +
+                  escapeHtmlForRender(
+                    related.title
+                  ) +
+                "</p>" +
+                (
+                  publishedDisplay !== ""
+                    ? '<p class="related-card-date">' +
+                      escapeHtmlForRender(
+                        publishedDisplay
+                      ) +
+                      "</p>"
+                    : ""
+                ) +
+              "</div>" +
+            "</a>"
+          );
+        }
+      )
+      .join("");
+
+  return (
+    '<section class="related-section">' +
+      "<h2>" +
+        escapeHtmlForRender(
+          getColumnArticlePageText(
+            "relatedHeading",
+            language
+          )
+        ) +
+      "</h2>" +
+      '<div class="related-list">' +
+        cardsHtml +
+      "</div>" +
+      moreLinkHtml +
+    "</section>"
+  );
+}
+
 function buildColumnArticleHtml(
   article,
   language
@@ -25624,6 +25747,32 @@ function buildColumnArticleHtml(
       display: inline-block; margin-top: 24px; font-size: 13px;
       font-weight: 700; color: var(--blue); text-decoration: none;
     }
+    .related-section { margin: 30px 0 0; padding-top: 22px; border-top: 1px solid var(--border); }
+    .related-section h2 { margin: 0 0 12px; font-size: 16px; color: var(--navy); }
+    .related-list { display: grid; gap: 10px; }
+    .related-card {
+      display: flex; gap: 12px; align-items: center; padding: 10px;
+      border: 1px solid var(--border); border-radius: 14px;
+      text-decoration: none; color: inherit; background: var(--white);
+    }
+    .related-card-image {
+      flex: 0 0 72px; width: 72px; height: 72px; object-fit: cover;
+      border-radius: 10px; background: #e9f1f5;
+    }
+    .related-card-body { min-width: 0; }
+    .related-card-category {
+      display: inline-block; padding: 2px 9px; border-radius: 999px;
+      background: #eef7fb; color: var(--blue); font-size: 10px; font-weight: 900;
+    }
+    .related-card-title {
+      margin: 5px 0 3px; font-size: 14px; font-weight: 900; color: var(--navy);
+      line-height: 1.5; overflow-wrap: anywhere;
+    }
+    .related-card-date { margin: 0; font-size: 11px; color: var(--subtext); }
+    .related-more-link {
+      display: inline-block; margin-top: 14px; font-size: 13px;
+      font-weight: 900; color: var(--blue); text-decoration: none;
+    }
     .comment-section { margin: 34px 0 0; padding-top: 22px; border-top: 1px solid var(--border); }
     .comment-section h2 { margin: 0 0 10px; font-size: 16px; color: var(--navy); }
     .comment-form { display: grid; gap: 10px; margin: 14px 0 0; }
@@ -25690,6 +25839,8 @@ function buildColumnArticleHtml(
       </div>
 
       <p class="byline">${escapeHtmlForRender(getColumnArticlePageText("byline", language))}</p>
+
+      ${buildColumnArticleRelatedSectionHtml(article.relatedArticles, language)}
 
       <div class="comment-section">
         <h2>${escapeHtmlForRender(getColumnArticlePageText("commentSectionHeading", language))}</h2>
@@ -25863,6 +26014,155 @@ function buildColumnNotFoundHtml() {
 
 // 記事本体のHTMLを動的レンダリングする(vercel.jsonのrewriteにより、
 // /column/*.htmlへのアクセスがここへ届く)。
+// 読みもの回遊導線｜記事ページ下部の「もう少し、読んでみる？」用に、
+// 現在の記事と同じcategory(旧カテゴリーも値そのまま、変換しない)の公開中記事を
+// publishedAtの新しい順で最大RELATED_COLUMN_ARTICLE_MAX_COUNT件返す。現在の記事・
+// 再利用禁止slugは除外。等価条件2つだけのqueryで複合indexは不要。記事ページ自体は
+// CDN共有キャッシュされるため、このqueryも表示ごとには走らない。翻訳は
+// 保存済みのsummary翻訳(translations[言語].summary、sourceHash一致)だけを読み、
+// 無ければ原文(日本語)のまま表示する(ここでAI翻訳は呼ばない)。失敗しても
+// 記事ページは壊さず、関連記事なしとして扱う。
+const RELATED_COLUMN_ARTICLE_MAX_COUNT =
+  3;
+
+async function loadRelatedColumnArticlesForRender(
+  database,
+  currentSlug,
+  category,
+  language
+) {
+  if (
+    typeof category !== "string" ||
+    category === ""
+  ) {
+    return [];
+  }
+
+  try {
+    const snapshot =
+      await database
+        .collection(
+          COLUMN_ARTICLES_COLLECTION
+        )
+        .where(
+          "status",
+          "==",
+          COLUMN_STATUS_PUBLISHED
+        )
+        .where(
+          "category",
+          "==",
+          category
+        )
+        .limit(
+          COLUMN_LIST_MAX_COUNT
+        )
+        .get();
+
+    return snapshot.docs
+      .filter(
+        function(documentSnapshot) {
+          return (
+            documentSnapshot.id !== currentSlug &&
+            !RETIRED_COLUMN_SLUGS.includes(
+              documentSnapshot.id
+            )
+          );
+        }
+      )
+      .map(
+        function(documentSnapshot) {
+          const data =
+            documentSnapshot.data() ||
+            {};
+
+          const originalTitle =
+            typeof data.title === "string"
+              ? data.title
+              : "";
+
+          let displayTitle =
+            originalTitle;
+
+          if (language !== REGION_TODAY_INFO_SOURCE_LANGUAGE) {
+            const summarySource =
+              getColumnArticleSummaryFromData(
+                data
+              );
+
+            const cachedSummary =
+              data.translations &&
+              typeof data.translations === "object" &&
+              data.translations[language] &&
+              typeof data.translations[language] === "object"
+                ? data.translations[language].summary
+                : null;
+
+            if (
+              summarySource &&
+              cachedSummary &&
+              cachedSummary.status === "ready" &&
+              cachedSummary.sourceHash ===
+                computeColumnArticleSummaryHash(
+                  summarySource.title,
+                  summarySource.description
+                ) &&
+              typeof cachedSummary.title === "string" &&
+              cachedSummary.title !== ""
+            ) {
+              displayTitle =
+                cachedSummary.title;
+            }
+          }
+
+          const publishedAtDate =
+            toDateFromFirestoreValue(
+              data.publishedAt
+            );
+
+          return {
+            slug: documentSnapshot.id,
+            title: displayTitle,
+            category: category,
+            imageUrl:
+              typeof data.imageUrl === "string"
+                ? data.imageUrl
+                : "",
+            publishedAtDate: publishedAtDate,
+            publishedAtMillis:
+              publishedAtDate
+                ? publishedAtDate.getTime()
+                : 0
+          };
+        }
+      )
+      .filter(
+        function(article) {
+          return article.title !== "";
+        }
+      )
+      .sort(
+        function(first, second) {
+          return (
+            second.publishedAtMillis -
+            first.publishedAtMillis
+          );
+        }
+      )
+      .slice(
+        0,
+        RELATED_COLUMN_ARTICLE_MAX_COUNT
+      );
+  } catch (error) {
+    console.error(
+      "読み物の関連記事取得エラー（記事ページは関連記事なしで表示します）：",
+      error
+    );
+
+    return [];
+  }
+}
+
 async function handleRenderColumnArticleRequest(
   request,
   response
@@ -26006,12 +26306,23 @@ async function handleRenderColumnArticleRequest(
       }
     }
 
+    const relatedArticles =
+      await loadRelatedColumnArticlesForRender(
+        database,
+        slug,
+        typeof data.category === "string"
+          ? data.category
+          : "",
+        language
+      );
+
     const html =
       buildColumnArticleHtml(
         {
           slug: slug,
           title: displayTitle,
           category: data.category,
+          relatedArticles: relatedArticles,
           description: displayDescription,
           content: displayContent,
           contentTranslationFallback: contentTranslationFallback,
