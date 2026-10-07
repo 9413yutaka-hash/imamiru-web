@@ -100,25 +100,6 @@
       color: var(--subtext);
     }
 
-    .region-field-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 10px;
-      margin-top: 10px;
-    }
-
-    .region-field-grid label {
-      font-size: 12px;
-      font-weight: 700;
-      margin-bottom: 4px;
-    }
-
-    @media (max-width: 480px) {
-      .region-field-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-
     .field input[type="text"],
     .field select,
     .field textarea {
@@ -446,39 +427,18 @@
             </label>
             <select id="categoryInput" required>
               <option value="">選択してください</option>
-              <option value="文化・背景">文化・背景</option>
-              <option value="楽しみ方">楽しみ方</option>
-              <option value="安全・備え">安全・備え</option>
-              <option value="マチナウの想い">マチナウの想い</option>
+              <option value="街を知る">街を知る</option>
+              <option value="街を歩く">街を歩く</option>
+              <option value="食べる・飲む">食べる・飲む</option>
+              <option value="見る・遊ぶ">見る・遊ぶ</option>
+              <option value="地元のくらし">地元のくらし</option>
+              <option value="旅のヒント">旅のヒント</option>
+              <option value="ちょっと深掘り">ちょっと深掘り</option>
             </select>
-          </div>
-
-          <div class="field">
-            <label>
-              地域（どこの街の記憶か。すべて任意、空欄で問題ありません）
-            </label>
-            <p class="field-hint">
-              市区町村を入力する場合は都道府県・州等も、都道府県・州等を入力する場合は国も入力してください（階層の飛び級はできません）。「沖縄の雨」のように県全体の話なら市区町村は空欄のままにしてください。
-            </p>
-
-            <div class="region-field-grid">
-              <div>
-                <label for="regionCountryInput">国</label>
-                <select id="regionCountryInput"></select>
-              </div>
-              <div>
-                <label for="regionPrefectureInput">都道府県・州等</label>
-                <input id="regionPrefectureInput" type="text" maxlength="40" placeholder="例：沖縄県">
-              </div>
-              <div>
-                <label for="regionCityInput">市区町村</label>
-                <input id="regionCityInput" type="text" maxlength="40" placeholder="例：那覇市">
-              </div>
-              <div>
-                <label for="regionAreaInput">エリア（任意）</label>
-                <input id="regionAreaInput" type="text" maxlength="40" placeholder="例：国際通り周辺">
-              </div>
-            </div>
+            <!-- 旧カテゴリー(文化・背景／楽しみ方／安全・備え／マチナウの想い)の
+                 記事を編集する時だけ表示する。旧値は自動変換せず、代表が新しい
+                 カテゴリーを選んでから保存する。 -->
+            <p id="legacyCategoryNotice" class="field-hint" style="display:none;"></p>
           </div>
 
           <div class="field">
@@ -588,10 +548,6 @@
     const articleForm = document.getElementById("articleForm");
     const titleInput = document.getElementById("titleInput");
     const categoryInput = document.getElementById("categoryInput");
-    const regionCountryInput = document.getElementById("regionCountryInput");
-    const regionPrefectureInput = document.getElementById("regionPrefectureInput");
-    const regionCityInput = document.getElementById("regionCityInput");
-    const regionAreaInput = document.getElementById("regionAreaInput");
     const imageInput = document.getElementById("imageInput");
     const imagePreviewWrapper = document.getElementById("imagePreviewWrapper");
     const imagePreview = document.getElementById("imagePreview");
@@ -740,70 +696,36 @@
     const cancelEditButton = document.getElementById("cancelEditButton");
     const articleList = document.getElementById("articleList");
 
-    // Ver1.8 Phase2(国識別の世界対応・仕上げ)｜api/moderate-submission.jsの
-    // ISO_3166_1_ALPHA_2_COUNTRY_CODESと同じ一覧(ISO 3166-1で現在割り当て
-    // られているコードのみ、めったに変わらない国際標準)。日本語ラベルは
-    // 手書きせず、ブラウザ標準搭載のIntl.DisplayNames(新しい依存ライブラリ
-    // 不要)で実行時に生成する。これにより<select>の値は常にコード
-    // (例:"JP")、代表が国コードを直接入力する必要はない。
-    const ISO_3166_1_ALPHA_2_COUNTRY_CODES =
-      (
-        "AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ " +
-        "BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ " +
-        "CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ " +
-        "DE DJ DK DM DO DZ " +
-        "EC EE EG EH ER ES ET " +
-        "FI FJ FK FM FO FR " +
-        "GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY " +
-        "HK HM HN HR HT HU " +
-        "ID IE IL IM IN IO IQ IR IS IT " +
-        "JE JM JO JP " +
-        "KE KG KH KI KM KN KP KR KW KY KZ " +
-        "LA LB LC LI LK LR LS LT LU LV LY " +
-        "MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ " +
-        "NA NC NE NF NG NI NL NO NP NR NU NZ " +
-        "OM " +
-        "PA PE PF PG PH PK PL PM PN PR PS PT PW PY " +
-        "QA " +
-        "RE RO RS RU RW " +
-        "SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ " +
-        "TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ " +
-        "UA UG UM US UY UZ " +
-        "VA VC VE VG VI VN VU " +
-        "WF WS " +
-        "YE YT " +
-        "ZA ZM ZW"
-      ).split(" ");
+    // 読みもの管理画面改善｜読みものは地域投稿機能ではなく運営の編集
+    // コンテンツのため、地域(国・都道府県・市区町村・エリア)の選択欄は
+    // 撤去した。既存記事に保存済みの地域データはサーバー側でそのまま残す
+    // (この画面は地域を送らず、更新時もサーバーが既存値を上書きしない)。
+    // カテゴリーはapi/moderate-submission.jsのALLOWED_COLUMN_CATEGORIESと
+    // 同じ7種類。旧カテゴリーの記事を編集する時は自動変換せず、案内だけ出す。
+    const ALLOWED_COLUMN_CATEGORIES = [
+      "街を知る",
+      "街を歩く",
+      "食べる・飲む",
+      "見る・遊ぶ",
+      "地元のくらし",
+      "旅のヒント",
+      "ちょっと深掘り"
+    ];
 
-    function getCountryDisplayLabel(code) {
-      try {
-        const displayNames = new Intl.DisplayNames(["ja"], { type: "region" });
-        const label = displayNames.of(code);
-        return typeof label === "string" && label !== "" ? label : code;
-      } catch (error) {
-        return code;
+    const legacyCategoryNotice = document.getElementById("legacyCategoryNotice");
+
+    function showLegacyCategoryNotice(category) {
+      if (category === "" || ALLOWED_COLUMN_CATEGORIES.includes(category)) {
+        legacyCategoryNotice.textContent = "";
+        legacyCategoryNotice.style.display = "none";
+        return;
       }
+
+      legacyCategoryNotice.textContent =
+        "この記事には旧カテゴリー「" + category + "」が設定されています。" +
+        "保存する前に、新しいカテゴリーを選んでください（自動では変更されません）。";
+      legacyCategoryNotice.style.display = "";
     }
-
-    function populateRegionCountrySelect() {
-      const countryOptions = ISO_3166_1_ALPHA_2_COUNTRY_CODES
-        .map(function(code) {
-          return { code: code, label: getCountryDisplayLabel(code) };
-        })
-        .sort(function(a, b) {
-          return a.label.localeCompare(b.label, "ja");
-        });
-
-      regionCountryInput.innerHTML =
-        '<option value="">未設定</option>' +
-        countryOptions
-          .map(function(option) {
-            return '<option value="' + option.code + '">' + option.label + '</option>';
-          })
-          .join("");
-    }
-
-    populateRegionCountrySelect();
 
     // post.html・admin-region-picks.htmlと同じCloudinary設定(signed upload)。
     // 新しい画像サービスは追加せず、既存のCloudinary(署名発行先は
@@ -1018,10 +940,7 @@
 
       titleInput.value = "";
       categoryInput.value = "";
-      regionCountryInput.value = "JP";
-      regionPrefectureInput.value = "";
-      regionCityInput.value = "";
-      regionAreaInput.value = "";
+      showLegacyCategoryNotice("");
       currentImage = null;
       renderImagePreview();
       descriptionInput.value = "";
@@ -1053,11 +972,12 @@
         cancelEditButton.style.display = "inline-block";
 
         titleInput.value = article.title || "";
-        categoryInput.value = article.category || "";
-        regionCountryInput.value = article.regionCountry || "";
-        regionPrefectureInput.value = article.regionPrefecture || "";
-        regionCityInput.value = article.regionCity || "";
-        regionAreaInput.value = article.regionArea || "";
+        // 旧カテゴリーは選択肢に無いため未選択になる(自動変換しない)。
+        categoryInput.value =
+          ALLOWED_COLUMN_CATEGORIES.includes(article.category)
+            ? article.category
+            : "";
+        showLegacyCategoryNotice(article.category || "");
 
         currentImage = article.imageUrl
           ? { url: article.imageUrl, publicId: article.imagePublicId || "", isPendingUpload: false, file: null }
@@ -1101,18 +1021,19 @@
             ? new Date(article.updatedAt).toLocaleString("ja-JP")
             : "-";
 
-        const regionText =
-          [article.regionCountry, article.regionPrefecture, article.regionCity]
-            .filter(function(part) { return typeof part === "string" && part.trim() !== ""; })
-            .join(" / ") || "(未設定)";
+        const categoryText =
+          !article.category
+            ? "(未設定)"
+            : ALLOWED_COLUMN_CATEGORIES.includes(article.category)
+              ? article.category
+              : article.category + "（旧カテゴリー）";
 
         card.innerHTML =
           '<div class="article-card-top">' +
             '<div>' +
               '<div class="article-title"></div>' +
               '<div class="article-meta">' +
-                '地域: ' + escapeHtmlText(regionText) +
-                '<br>カテゴリー: ' + escapeHtmlText(article.category || "(未設定)") +
+                'カテゴリー: ' + escapeHtmlText(categoryText) +
                 '<br>URL: /column/' + escapeHtmlText(article.id) + '.html' +
                 '<br>更新日時: ' + escapeHtmlText(updatedAtText) +
               '</div>' +
@@ -1185,10 +1106,6 @@
 
       const title = titleInput.value.trim();
       const category = categoryInput.value;
-      const regionCountry = regionCountryInput.value.trim();
-      const regionPrefecture = regionPrefectureInput.value.trim();
-      const regionCity = regionCityInput.value.trim();
-      const regionArea = regionAreaInput.value.trim();
       const description = descriptionInput.value.trim();
       const content = contentInput.value.trim();
       const customSlug = customSlugInput.value.trim();
@@ -1201,21 +1118,6 @@
 
       if (category === "") {
         showFormMessage("カテゴリーを選択してください。", "error");
-        return;
-      }
-
-      if (regionArea !== "" && regionCity === "") {
-        showFormMessage("エリアを指定する場合は市区町村も入力してください。", "error");
-        return;
-      }
-
-      if (regionCity !== "" && regionPrefecture === "") {
-        showFormMessage("市区町村を指定する場合は都道府県・州等も入力してください。", "error");
-        return;
-      }
-
-      if (regionPrefecture !== "" && regionCountry === "") {
-        showFormMessage("都道府県・州等を指定する場合は国も入力してください。", "error");
         return;
       }
 
@@ -1253,10 +1155,6 @@
         const payload = {
           title: title,
           category: category,
-          regionCountry: regionCountry,
-          regionPrefecture: regionPrefecture,
-          regionCity: regionCity,
-          regionArea: regionArea,
           imageUrl: currentImage ? currentImage.url : "",
           imagePublicId: currentImage ? currentImage.publicId : "",
           description: description,

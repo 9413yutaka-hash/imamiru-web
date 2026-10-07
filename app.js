@@ -10900,36 +10900,12 @@ async function loadDynamicColumnEntries(
         }
       );
 
-    if (
-      viewerLocation &&
-      viewerLocation.country
-    ) {
-      searchParams.set(
-        "viewerCountry",
-        viewerLocation.country
-      );
-    }
-
-    if (
-      viewerLocation &&
-      viewerLocation.prefecture
-    ) {
-      searchParams.set(
-        "viewerPrefecture",
-        viewerLocation.prefecture
-      );
-    }
-
-    if (
-      viewerLocation &&
-      viewerLocation.city
-    ) {
-      searchParams.set(
-        "viewerCity",
-        viewerLocation.city
-      );
-    }
-
+    // 読みもの管理画面改善(2026-10-07)｜読みものは地域を持たない編集
+    // コンテンツになったため、TOPでは閲覧者の現在地(viewerLocation)による
+    // 地域優先の並べ替えを依頼せず、公開日時(publishedAt)の新しい順だけで
+    // 表示する。地域を指定しない新しい記事が、地域付きの既存記事より常に
+    // 下に回ってTOPに出なくなるのを防ぐため。viewerLocationは呼び出し元
+    // との互換のため引数として受け取るだけで使わない。
     const response =
       await fetch(
         "/api/moderate-submission?" +

@@ -5047,12 +5047,19 @@ const COLUMN_STATUS_PUBLISHED =
 // 作らない指示のため)。将来増やす場合はこの配列に追記するだけでよく、
 // admin-column.html側の同名配列と両方を更新する(既存のOKINAWA_MUNICIPALITY_
 // TO_REGION_NAME等と同じ、複製管理の方針を踏襲)。
+// 2026-10-07 代表決定｜カテゴリーを新しい7種類へ変更。旧4種類
+// (文化・背景／楽しみ方／安全・備え／マチナウの想い)は新規保存では
+// 受け付けないが、既存記事のデータは自動変換せずそのまま残す
+// (表示ラベルはCOLUMN_CATEGORY_DISPLAY_LABELSに旧4種類も残している)。
 const ALLOWED_COLUMN_CATEGORIES =
   [
-    "文化・背景",
-    "楽しみ方",
-    "安全・備え",
-    "マチナウの想い"
+    "街を知る",
+    "街を歩く",
+    "食べる・飲む",
+    "見る・遊ぶ",
+    "地元のくらし",
+    "旅のヒント",
+    "ちょっと深掘り"
   ];
 
 const COLUMN_TITLE_MAX_LENGTH =
@@ -22584,6 +22591,43 @@ const COLUMN_ARTICLE_TRANSLATED_CONTENT_MAX_LENGTH =
 // 場合は、この対応表に言語コードを1行追加するだけでよい。
 const COLUMN_CATEGORY_DISPLAY_LABELS =
   {
+    "街を知る": {
+      ja: "街を知る",
+      en: "Know the Town"
+    },
+
+    "街を歩く": {
+      ja: "街を歩く",
+      en: "Walk the Town"
+    },
+
+    "食べる・飲む": {
+      ja: "食べる・飲む",
+      en: "Eat & Drink"
+    },
+
+    "見る・遊ぶ": {
+      ja: "見る・遊ぶ",
+      en: "See & Do"
+    },
+
+    "地元のくらし": {
+      ja: "地元のくらし",
+      en: "Local Life"
+    },
+
+    "旅のヒント": {
+      ja: "旅のヒント",
+      en: "Travel Tips"
+    },
+
+    "ちょっと深掘り": {
+      ja: "ちょっと深掘り",
+      en: "A Little Deeper"
+    },
+
+    // 以下は旧カテゴリー。新規保存はできないが、まだ旧カテゴリーのままの
+    // 既存記事の表示のために残す。
     "文化・背景": {
       ja: "文化・背景",
       en: "Culture & Background"
@@ -26929,6 +26973,27 @@ async function handleAdminSaveColumnArticleRequest(
         updatedAt:
           FieldValue.serverTimestamp()
       };
+
+      // 読みもの管理画面改善｜管理画面は地域欄を撤去し地域を送らない。
+      // 送られてこなかった地域フィールドは更新対象から外し、既存記事に
+      // 保存済みの地域データを""で上書きしない。
+      [
+        "regionCountry",
+        "regionPrefecture",
+        "regionCity",
+        "regionArea"
+      ].forEach(
+        function(regionFieldName) {
+          if (
+            !Object.prototype.hasOwnProperty.call(
+              requestBody,
+              regionFieldName
+            )
+          ) {
+            delete updateData[regionFieldName];
+          }
+        }
+      );
 
       // 公開中の記事を編集して「公開する」のまま保存した場合も、改めて
       // 公開したものとしてpublishedAtを更新する(一覧・TOPで新しい記事として
