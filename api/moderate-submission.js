@@ -22466,7 +22466,16 @@ function toDateFromFirestoreValue(
 }
 
 
-function formatDateForDisplay(
+// 2026-10-07 代表決定｜マチナウ読みものの日付(公開日・更新日・掲載年月)は
+// Asia/Tokyo(日本時間)で解釈する。保存済みTimestamp(絶対時刻)は変えず、
+// 人間向けの年月日への変換だけをここに集約する(サーバーはUTCで動くため、
+// getFullYear()等をそのまま使うと日本時間0:00〜8:59の記事が前日扱いになる)。
+// formatDateForDisplay()・formatDateForAttribute()・publishedMonthはすべて
+// この関数を通す。
+const COLUMN_ARTICLE_DATE_TIME_ZONE =
+  "Asia/Tokyo";
+
+function getColumnArticleDateParts(
   date
 ) {
   if (
@@ -22475,15 +22484,89 @@ function formatDateForDisplay(
       date.getTime()
     )
   ) {
+    return null;
+  }
+
+  const parts =
+    {};
+
+  new Intl.DateTimeFormat(
+    "en-US",
+    {
+      timeZone: COLUMN_ARTICLE_DATE_TIME_ZONE,
+      year: "numeric",
+      month: "numeric",
+      day: "numeric"
+    }
+  )
+    .formatToParts(
+      date
+    )
+    .forEach(
+      function(part) {
+        if (
+          part.type === "year" ||
+          part.type === "month" ||
+          part.type === "day"
+        ) {
+          parts[part.type] =
+            Number(
+              part.value
+            );
+        }
+      }
+    );
+
+  return {
+    year: parts.year,
+    month: parts.month,
+    day: parts.day
+  };
+}
+
+// 掲載年月filter用のキー("2026-11")。公開日表示と同じ日本時間基準。
+function formatColumnArticleMonthKey(
+  date
+) {
+  const parts =
+    getColumnArticleDateParts(
+      date
+    );
+
+  if (!parts) {
     return "";
   }
 
   return (
-    date.getFullYear() +
+    parts.year +
+    "-" +
+    String(
+      parts.month
+    ).padStart(
+      2,
+      "0"
+    )
+  );
+}
+
+function formatDateForDisplay(
+  date
+) {
+  const parts =
+    getColumnArticleDateParts(
+      date
+    );
+
+  if (!parts) {
+    return "";
+  }
+
+  return (
+    parts.year +
     "年" +
-    (date.getMonth() + 1) +
+    parts.month +
     "月" +
-    date.getDate() +
+    parts.day +
     "日"
   );
 }
@@ -22492,12 +22575,12 @@ function formatDateForDisplay(
 function formatDateForAttribute(
   date
 ) {
-  if (
-    !(date instanceof Date) ||
-    Number.isNaN(
-      date.getTime()
-    )
-  ) {
+  const parts =
+    getColumnArticleDateParts(
+      date
+    );
+
+  if (!parts) {
     return "";
   }
 
@@ -22512,14 +22595,14 @@ function formatDateForAttribute(
     };
 
   return (
-    date.getFullYear() +
+    parts.year +
     "-" +
     twoDigits(
-      date.getMonth() + 1
+      parts.month
     ) +
     "-" +
     twoDigits(
-      date.getDate()
+      parts.day
     )
   );
 }
@@ -22868,6 +22951,7 @@ function formatColumnArticleDateForDisplay(
     return new Intl.DateTimeFormat(
       locale,
       {
+        timeZone: COLUMN_ARTICLE_DATE_TIME_ZONE,
         year: "numeric",
         month: "long",
         day: "numeric"
@@ -26624,19 +26708,9 @@ async function handlePublicListPublishedColumnArticlesRequest(
                 ),
 
               publishedMonth:
-                publishedAtDate instanceof Date &&
-                !Number.isNaN(
-                  publishedAtDate.getTime()
-                )
-                  ? publishedAtDate.getFullYear() +
-                    "-" +
-                    String(
-                      publishedAtDate.getMonth() + 1
-                    ).padStart(
-                      2,
-                      "0"
-                    )
-                  : "",
+                formatColumnArticleMonthKey(
+                  publishedAtDate
+                ),
 
               publishedAtMillis:
                 publishedAtDate
