@@ -2433,7 +2433,7 @@ function updateHeroPhoto() {
 
   heroPhotoButton.onclick =
     function() {
-      openShopModal(candidate.firestoreId);
+      openShopModal(candidate.firestoreId, "hero_photo");
     };
 
   heroPhotoWrapper.style.display = "";
@@ -2712,7 +2712,8 @@ function updateFlashBanner() {
   flashBannerDetailButton.onclick =
     function() {
       openShopModal(
-        featuredShop.firestoreId
+        featuredShop.firestoreId,
+        "important"
       );
     };
 }
@@ -3420,7 +3421,8 @@ function renderShops() {
                 openShopModal(
                   '${escapeHtml(
                     shop.firestoreId
-                  )}'
+                  )}',
+                  '${isShowingAllShopCards ? "full_list" : "card"}'
                 )
               "
             >
@@ -3700,7 +3702,8 @@ function renderShops() {
                       openShopModal(
                         '${escapeHtml(
                           shop.firestoreId
-                        )}'
+                        )}',
+                        '${isShowingAllShopCards ? "full_list" : "card"}'
                       )
                     "
                   >
@@ -3942,7 +3945,8 @@ function renderFavoriteList() {
                 type="button"
                 onclick="
                   openShopModal(
-                    '${escapeHtml(shop.firestoreId)}'
+                    '${escapeHtml(shop.firestoreId)}',
+                    'favorite'
                   )
                 "
               >
@@ -4894,8 +4898,84 @@ function getOrCreateModalWebsiteButton(
   return modalWebsiteButton;
 }
 
+// shop_view営業分析強化｜GA4 shop_viewのlisting_type。読み込み済みのshop
+// (convertSubmissionToShop()の結果)だけで判定し、Firestoreは追加で読まない。
+// サーバーだけが設定する値で確実に分類できる種類だけを返し、それ以外・
+// 境界が曖昧なもの(旧データ等)はすべて"other"にする(誤分類しない)。
+//   free_listing ：運営無料店舗掲載(isPermanentAd===true かつ authorType==="shopAd")
+//   operator_news：運営投稿(postType==="admin" かつ authorType==="admin")
+//   ai_news      ：AI由来の運営投稿(postType==="admin" かつ authorType==="ai")
+//   shop_post    ：店舗専用URLからの投稿(publisherType==="verified_shop"、サーバー設定)
+//   user_post    ：post.htmlからの一般投稿(authorType/publisherType無し・
+//                  submissionTypeが"street"または"shop")
+function getShopListingTypeForAnalytics(
+  shop
+) {
+  if (
+    shop.isPermanentAd === true &&
+    shop.authorType === "shopAd"
+  ) {
+    return "free_listing";
+  }
+
+  if (
+    shop.isPermanentAd !== true &&
+    shop.postType === "admin"
+  ) {
+    if (shop.authorType === "admin") {
+      return "operator_news";
+    }
+
+    if (shop.authorType === "ai") {
+      return "ai_news";
+    }
+
+    return "other";
+  }
+
+  if (
+    shop.isPermanentAd !== true &&
+    shop.postType !== "admin" &&
+    shop.publisherType === "verified_shop"
+  ) {
+    return "shop_post";
+  }
+
+  if (
+    shop.isPermanentAd !== true &&
+    shop.postType !== "admin" &&
+    shop.authorType === "" &&
+    shop.publisherType === "" &&
+    (
+      shop.submissionType === "street" ||
+      shop.submissionType === "shop"
+    )
+  ) {
+    return "user_post";
+  }
+
+  return "other";
+}
+
+// shop_view営業分析強化｜GA4 shop_viewのentry_point(どこから開いたか)。
+// 呼び出し元が固定コードを渡す。未指定・想定外の値は"other"。
+const SHOP_VIEW_ENTRY_POINTS = [
+  "card",
+  "full_list",
+  "favorite",
+  "map",
+  "hero_photo",
+  "important",
+  "today",
+  "suggestion",
+  "ai_concierge",
+  "awareness",
+  "area_info"
+];
+
 function openShopModal(
-  firestoreId
+  firestoreId,
+  entryPoint
 ) {
   const selectedShop =
     shops.find(
@@ -4916,10 +4996,23 @@ function openShopModal(
   // ここ1箇所に追加するだけで「旅行者が店舗情報を見るために操作した」を
   // 網羅的に計測できる(呼び出し元ごとに個別追加しない)。実在する店舗の
   // Firestore文書ID(個人情報ではない)だけをパラメータとして送る。
+  // shop_idの意味(submissionsのdocument ID)は変えない。listing_type・
+  // entry_pointは固定の英語コードだけを追加で送る(店名・住所・URL・本文・
+  // 位置情報は送らない)。
   sendMachinauAnalyticsEvent(
     "shop_view",
     {
-      shop_id: firestoreId
+      shop_id: firestoreId,
+      listing_type:
+        getShopListingTypeForAnalytics(
+          selectedShop
+        ),
+      entry_point:
+        SHOP_VIEW_ENTRY_POINTS.includes(
+          entryPoint
+        )
+          ? entryPoint
+          : "other"
     }
   );
 
@@ -7454,7 +7547,8 @@ function resolveAiConciergeCandidateRealData(
 
       openDetail: function() {
         openShopModal(
-          matchedShop.firestoreId
+          matchedShop.firestoreId,
+          "ai_concierge"
         );
       }
     };
@@ -7638,7 +7732,8 @@ function updateSuggestionCard(weather) {
   suggestionDetailButton.onclick =
     function() {
       openShopModal(
-        candidate.shop.firestoreId
+        candidate.shop.firestoreId,
+        "suggestion"
       );
     };
 
@@ -11478,7 +11573,7 @@ function showShopInfoWindow(
       </p>
       <button
         type="button"
-        onclick="openShopModal('${escapeHtml(shop.firestoreId)}')"
+        onclick="openShopModal('${escapeHtml(shop.firestoreId)}', 'map')"
         style="
           width:100%;
           padding:6px 10px;
@@ -15112,7 +15207,8 @@ function initializeAwarenessNoticesInteractions() {
 
         if (firestoreId) {
           openShopModal(
-            firestoreId
+            firestoreId,
+            "awareness"
           );
         }
       }
@@ -16685,7 +16781,8 @@ function initializeAreaInfoInteractions() {
 
         if (firestoreId) {
           openShopModal(
-            firestoreId
+            firestoreId,
+            "area_info"
           );
         }
       }
@@ -18271,7 +18368,8 @@ function updateUnifiedImportantInfo() {
   detailButton.onclick =
     function() {
       openShopModal(
-        candidateShop.firestoreId
+        candidateShop.firestoreId,
+        "important"
       );
     };
 
@@ -18387,7 +18485,8 @@ function updateTodayMachinauCard() {
   detailButton.onclick =
     function() {
       openShopModal(
-        selectedShop.firestoreId
+        selectedShop.firestoreId,
+        "today"
       );
     };
 
