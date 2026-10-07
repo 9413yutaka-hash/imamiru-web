@@ -41,6 +41,15 @@ import {
   handleTownNowMyThreads
 } from "./_lib/town-now-threads.js";
 
+// 今だけ投稿 STEP 3｜サーバー側データ基盤。実処理はapi/_lib/imadake.js。
+// 既存の店舗token検証・Moderation・安全重大語判定・連投制限を
+// buildImadakeDeps()で参照として渡す(既存関数自体は変更しない)。
+import {
+  handleImadakePostCreate,
+  handleImadakePostEnd,
+  handleImadakePostGet
+} from "./_lib/imadake.js";
+
 
 function getFirebaseAdminApp() {
   if (getApps().length > 0) {
@@ -28880,6 +28889,30 @@ function buildTownNowThreadDeps() {
 }
 
 
+// 今だけ投稿 STEP 3｜api/_lib/imadake.jsへ渡す既存関数(参照のみ、変更なし)。
+function buildImadakeDeps() {
+  return {
+    getFirebaseAdminApp: getFirebaseAdminApp,
+    getFirestore: getFirestore,
+    readRequestBody: readRequestBody,
+    validateStoreToken: validateStoreToken,
+    claimRateLimit: claimRateLimit,
+    hashRateLimitStore: function(storeId) {
+      return computeRateLimitIdentifier(
+        "imadakeStore",
+        String(storeId)
+      );
+    },
+    hashClientIpAddress: hashClientIpAddress,
+    buildModerationInput: buildModerationInput,
+    callOpenAiModeration: callOpenAiModeration,
+    classifyModerationError: classifyModerationError,
+    buildReviewReason: buildReviewReason,
+    matchesSafetyCriticalKeywords: matchesSafetyCriticalKeywords,
+    AI_REVIEW_VERSION: AI_REVIEW_VERSION
+  };
+}
+
 export default async function handler(
   request,
   response
@@ -28993,6 +29026,19 @@ export default async function handler(
         request,
         response,
         buildTownNowThreadDeps()
+      );
+    }
+
+    // 今だけ投稿 STEP 3｜公開中の1件取得(認証不要。公開中以外は404)。
+    // 未知のGET modeは下の公開submissions一覧へ流れるため、その前で分岐する。
+    if (
+      request.query &&
+      request.query.mode === "imadakePostGet"
+    ) {
+      return handleImadakePostGet(
+        request,
+        response,
+        buildImadakeDeps()
       );
     }
 
@@ -29185,6 +29231,27 @@ export default async function handler(
     return handleCommunityBoardPostCreateRequest(
       request,
       response
+    );
+  }
+
+  // 今だけ投稿 STEP 3｜作成・早期終了(店舗専用URLのtoken必須)。
+  if (
+    requestBody.mode === "imadakePostCreate"
+  ) {
+    return handleImadakePostCreate(
+      request,
+      response,
+      buildImadakeDeps()
+    );
+  }
+
+  if (
+    requestBody.mode === "imadakePostEnd"
+  ) {
+    return handleImadakePostEnd(
+      request,
+      response,
+      buildImadakeDeps()
     );
   }
 
