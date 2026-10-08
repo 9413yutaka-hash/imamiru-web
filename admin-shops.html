@@ -715,10 +715,17 @@
                 '<span class="store-name">' + escapeHtmlText(storeAccount.storeName) + '</span>' +
                 '<span class="status-badge ' + statusClass + '">' + statusLabel + '</span>' +
               '</div>' +
+              // 今だけ投稿 STEP 4A｜運営が登録した正式所在地(今だけ投稿の15km・都道府県全体に使う)。
+              '<div class="store-location-line" style="margin:6px 0 0; font-size:12.5px; color:var(--subtext);">' +
+                '所在地：' + (storeAccount.location
+                  ? escapeHtmlText([storeAccount.location.prefecture, storeAccount.location.city].filter(Boolean).join(' ') + '（' + storeAccount.location.address + '）')
+                  : '<strong style="color:#a93d3d;">未登録（今だけ投稿は使えません）</strong>') +
+              '</div>' +
               '<div class="store-row-actions">' +
                 '<button type="button" class="secondary-button" data-action="rotate">token再発行</button>' +
                 '<button type="button" class="secondary-button" data-action="rename">店舗名を編集</button>' +
                 '<button type="button" class="secondary-button" data-action="history">投稿履歴を見る</button>' +
+                '<button type="button" class="secondary-button" data-action="location">所在地を登録・変更</button>' +
                 '<button type="button" class="' + (storeAccount.enabled ? "danger-button" : "secondary-button") + '" data-action="toggle">' + toggleLabel + '</button>' +
               '</div>' +
               '<div class="issued-url-box store-rename-box" style="display:none;">' +
@@ -731,6 +738,19 @@
                   '<button type="button" class="secondary-button" data-action="rename-cancel">キャンセル</button>' +
                 '</div>' +
                 '<p style="margin:8px 0 0; font-size:12px; color:var(--subtext);">店舗名の変更は今後の新規投稿に反映されます。過去の投稿名は変更されません。</p>' +
+              '</div>' +
+              '<div class="issued-url-box store-location-box" style="display:none;">' +
+                '<div class="field" style="margin-bottom:0;">' +
+                  '<label>店舗の住所（今だけ投稿の掲載場所になります）</label>' +
+                  '<input type="text" class="store-location-input" maxlength="120" placeholder="例：沖縄県那覇市久米2丁目29-19" value="' + escapeHtmlText(storeAccount.location ? storeAccount.location.address : '') + '">' +
+                '</div>' +
+                '<div class="store-row-actions" style="margin-top:8px;">' +
+                  '<button type="button" class="secondary-button" data-action="location-preview">位置を確認</button>' +
+                  '<button type="button" class="primary-button" data-action="location-save" style="display:none;">この所在地で登録</button>' +
+                  '<button type="button" class="secondary-button" data-action="location-cancel">閉じる</button>' +
+                '</div>' +
+                '<div class="store-location-preview" style="margin-top:8px; font-size:13px; line-height:1.7;"></div>' +
+                '<p style="margin:8px 0 0; font-size:12px; color:var(--subtext);">「位置を確認」で地図上の場所を確かめてから登録してください。登録後の新しい今だけ投稿から反映されます（過去の投稿は変わりません）。</p>' +
               '</div>' +
               '<div class="issued-url-box store-issued-url" style="display:none;">' +
                 '<strong>この専用URLは今だけ表示されます。必ずコピーして店舗へお渡しください。</strong>' +
@@ -863,6 +883,61 @@
           } else {
             historyBox.style.display = "none";
             actionButton.textContent = "投稿履歴を見る";
+          }
+        } else if (action === "location") {
+          const locationBox = storeRow.querySelector(".store-location-box");
+
+          if (locationBox) {
+            locationBox.style.display = locationBox.style.display === "none" ? "" : "none";
+          }
+        } else if (action === "location-cancel") {
+          const locationBox = storeRow.querySelector(".store-location-box");
+
+          if (locationBox) {
+            locationBox.style.display = "none";
+          }
+        } else if (action === "location-preview" || action === "location-save") {
+          // 今だけ投稿 STEP 4A｜住所をサーバーでGoogle Geocodingし、確認してから保存する。
+          const locationInput = storeRow.querySelector(".store-location-input");
+          const preview = storeRow.querySelector(".store-location-preview");
+          const saveButton = storeRow.querySelector('button[data-action="location-save"]');
+          const address = locationInput ? locationInput.value.trim() : "";
+
+          if (address === "") {
+            showMessage(storeListMessage, "住所を入力してください。", "error");
+            return;
+          }
+
+          const isSave = action === "location-save";
+
+          const responseData = await callShopsApi("imadakeAdminStoreLocation", {
+            storeId: storeId,
+            address: address,
+            confirm: isSave
+          });
+
+          const location = responseData.location || {};
+
+          if (preview) {
+            const mapUrl =
+              "https://www.google.com/maps/search/?api=1&query=" +
+              encodeURIComponent(location.latitude + "," + location.longitude);
+
+            preview.innerHTML =
+              "<div>確認結果：" + escapeHtmlText(location.formattedAddress || "") + "</div>" +
+              "<div>都道府県・市区町村：" + escapeHtmlText([location.prefecture, location.city].filter(Boolean).join(" ")) +
+                "（地域キー：" + escapeHtmlText(location.regionKey || "なし") + "）</div>" +
+              (location.partialMatch
+                ? "<div style='color:#a93d3d;'>※住所の一部だけが一致しました。地図で場所を必ず確認してください。</div>"
+                : "") +
+              "<div><a href='" + escapeHtmlText(mapUrl) + "' target='_blank' rel='noopener noreferrer'>🗺️ 地図で場所を確認する</a></div>";
+          }
+
+          if (isSave) {
+            await loadStoreAccounts();
+            showMessage(storeListMessage, "所在地を登録しました。", "success");
+          } else if (saveButton) {
+            saveButton.style.display = "";
           }
         } else if (action === "rename-save") {
           const renameInput = storeRow.querySelector(".store-rename-input");

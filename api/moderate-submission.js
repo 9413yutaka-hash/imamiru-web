@@ -49,7 +49,10 @@ import {
   handleImadakePostEnd,
   handleImadakePostGet,
   handleImadakeAdminPendingList,
-  handleImadakeAdminReview
+  handleImadakeAdminReview,
+  handleImadakeAdminStoreLocation,
+  handleImadakeStoreStatus,
+  readStoreOfficialLocationFromData
 } from "./_lib/imadake.js";
 
 
@@ -1161,7 +1164,31 @@ async function handleAdminListStoreAccountsRequest(
                 : "",
 
             enabled:
-              data.enabled === true
+              data.enabled === true,
+
+            // 今だけ投稿 STEP 4A｜運営が登録した正式所在地(未登録ならnull)。
+            location:
+              (function() {
+                const officialLocation =
+                  readStoreOfficialLocationFromData(
+                    data
+                  );
+
+                return officialLocation
+                  ? {
+                      address: officialLocation.address,
+                      prefecture: officialLocation.prefecture,
+                      city: officialLocation.city,
+                      regionKey: officialLocation.regionKey,
+                      latitude: officialLocation.latitude,
+                      longitude: officialLocation.longitude,
+                      formattedAddress:
+                        typeof data.locationFormattedAddress === "string"
+                          ? data.locationFormattedAddress
+                          : ""
+                    }
+                  : null;
+              })()
           };
         }
       );
@@ -28913,7 +28940,10 @@ function buildImadakeDeps() {
     matchesSafetyCriticalKeywords: matchesSafetyCriticalKeywords,
     AI_REVIEW_VERSION: AI_REVIEW_VERSION,
     // STEP 3.5｜審査(一覧・承認・却下)は代表(admin)だけ。Editor・店舗tokenは不可。
-    requireAdmin: requireAdmin
+    requireAdmin: requireAdmin,
+    // STEP 4A｜店舗所在地のGeocoding結果から国・都道府県・市区町村を取り出す
+    // (街の掲示板の地域確認と同じ既存関数)。
+    findAddressComponentByType: findAddressComponentByType
   };
 }
 
@@ -29253,6 +29283,28 @@ export default async function handler(
     requestBody.mode === "imadakePostEnd"
   ) {
     return handleImadakePostEnd(
+      request,
+      response,
+      buildImadakeDeps()
+    );
+  }
+
+  // 今だけ投稿 STEP 4A｜店舗の今だけ投稿画面(店舗token)と、店舗所在地の
+  // 登録(admin専用、Geocodingは登録・変更時だけ)。
+  if (
+    requestBody.mode === "imadakeStoreStatus"
+  ) {
+    return handleImadakeStoreStatus(
+      request,
+      response,
+      buildImadakeDeps()
+    );
+  }
+
+  if (
+    requestBody.mode === "imadakeAdminStoreLocation"
+  ) {
+    return handleImadakeAdminStoreLocation(
       request,
       response,
       buildImadakeDeps()

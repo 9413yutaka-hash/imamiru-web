@@ -1244,6 +1244,27 @@
         </button>
       </div>
 
+      <!-- 今だけ投稿 STEP 4A｜店舗専用URLのtokenを確認できた時だけ表示する、
+           通常の店舗投稿とは別の「今だけ投稿」(24時間限定)への入口。
+           tokenはHTMLに書かず、押した時にメモリの値からURLを作る。 -->
+      <div
+        id="imadakeShopEntry"
+        class="notice-box"
+        style="display:none;"
+      >
+        <strong>⏰ 今だけ投稿（24時間限定）</strong><br>
+        「今夜まだ空席あります」「あと6個」など、今だから役立つ情報を24時間だけ届けられます。
+        <div style="margin-top:10px;">
+          <button
+            id="imadakeShopEntryButton"
+            type="button"
+            class="post-mode-reselect-button"
+          >
+            今だけ投稿の画面へ →
+          </button>
+        </div>
+      </div>
+
       <div
         id="photoNoticeBox"
         class="notice-box"
@@ -2342,6 +2363,41 @@
 
             shopNameInput.readOnly =
               true;
+          }
+
+          // 今だけ投稿 STEP 4A｜通常の店舗投稿はそのまま、別画面の今だけ投稿への
+          // 入口を出す(tokenは押した時にだけURLへ入れ、移動先でアドレスバーから消す)。
+          const imadakeShopEntry =
+            document.getElementById(
+              "imadakeShopEntry"
+            );
+
+          const imadakeShopEntryButton =
+            document.getElementById(
+              "imadakeShopEntryButton"
+            );
+
+          if (
+            imadakeShopEntry &&
+            imadakeShopEntryButton
+          ) {
+            imadakeShopEntry.style.display =
+              "";
+
+            imadakeShopEntryButton.addEventListener(
+              "click",
+              function() {
+                window.location.href =
+                  "imadake-post.html?store=" +
+                  encodeURIComponent(
+                    verifiedStoreId
+                  ) +
+                  "&token=" +
+                  encodeURIComponent(
+                    verifiedStoreToken
+                  );
+              }
+            );
           }
         } else {
           showShopUrlInvalidNotice();

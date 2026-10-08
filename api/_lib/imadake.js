@@ -617,43 +617,9 @@ export function validateImadakePostInput(
     return fail("body");
   }
 
-  const latitude =
-    readCoordinate(body.latitude, -90, 90);
-
-  const longitude =
-    readCoordinate(body.longitude, -180, 180);
-
-  if (
-    latitude === null ||
-    longitude === null ||
-    (latitude === 0 && longitude === 0)
-  ) {
-    return fail("location");
-  }
-
-  const countryCode =
-    readTrimmedString(body.countryCode).toUpperCase();
-
-  if (!/^[A-Z]{2}$/.test(countryCode)) {
-    return fail("countryCode");
-  }
-
-  const prefecture =
-    readShortText(body.prefecture, IMADAKE_PLACE_NAME_MAX_LENGTH);
-
-  const city =
-    readShortText(body.city, IMADAKE_PLACE_NAME_MAX_LENGTH);
-
-  if (prefecture === null || city === null) {
-    return fail("place");
-  }
-
-  const address =
-    readShortText(body.address, 120);
-
-  if (address === null) {
-    return fail("address");
-  }
+  // STEP 4A(Option A)｜所在地(緯度経度・国・都道府県・市区町村・住所)は
+  // ブラウザから受け取らない。送られてきても無視し、作成時にサーバーが
+  // storeAccounts/{storeId}の正式所在地(運営が登録)を使う。
 
   const rawTargets =
     body.actionTargets === undefined || body.actionTargets === null
@@ -751,12 +717,6 @@ export function validateImadakePostInput(
       categoryCode: categoryCode,
       headline: headline,
       body: bodyText,
-      latitude: latitude,
-      longitude: longitude,
-      countryCode: countryCode,
-      prefecture: prefecture,
-      city: city,
-      address: address,
       actionTargets: actionTargets,
       categoryFields: categoryFields,
       liveState: liveStateResult.value,
@@ -1056,6 +1016,22 @@ export async function handleImadakePostCreate(
     const storeName =
       storeValidation.storeName;
 
+    // STEP 4A(Option A)｜所在地は運営が登録したstoreAccountsの正式所在地だけを
+    // 使う(サーバー側で読む。ブラウザの値は使わない)。未登録の店舗は投稿不可。
+    const officialLocation =
+      await readStoreOfficialLocation(
+        database,
+        storeId
+      );
+
+    if (!officialLocation) {
+      return response.status(409).json({
+        success: false,
+        reason: "location_not_registered",
+        message: "店舗の掲載場所がまだ登録されていません。運営へお問い合わせください。"
+      });
+    }
+
     // 連打対策(店舗ごとに一定間隔)。
     const rateLimitOk =
       await deps.claimRateLimit(
@@ -1136,14 +1112,14 @@ export async function handleImadakePostCreate(
 
     const geohash =
       encodeTownNowGeohash(
-        fields.latitude,
-        fields.longitude
+        officialLocation.latitude,
+        officialLocation.longitude
       );
 
     const regionKey =
       buildImadakeRegionKey(
-        fields.countryCode,
-        fields.prefecture
+        officialLocation.countryCode,
+        officialLocation.prefecture
       );
 
     const result =
@@ -1210,12 +1186,15 @@ export async function handleImadakePostCreate(
             publishedAt: publishedAt,
             expiresAt: expiresAt,
             endedAt: null,
-            latitude: fields.latitude,
-            longitude: fields.longitude,
-            countryCode: fields.countryCode,
-            prefecture: fields.prefecture,
-            city: fields.city,
-            address: fields.address,
+            // storeAccountsの正式所在地を投稿時点のsnapshotとして保存する
+            // (後で店舗の所在地が変わっても、この投稿の値は変えない)。
+            latitude: officialLocation.latitude,
+            longitude: officialLocation.longitude,
+            countryCode: officialLocation.countryCode,
+            prefecture: officialLocation.prefecture,
+            city: officialLocation.city,
+            address: officialLocation.address,
+            locationSource: "storeAccount",
             regionKey: regionKey,
             geohash: geohash,
             actionTargets: fields.actionTargets,
@@ -1265,9 +1244,9 @@ export async function handleImadakePostCreate(
                 expiresAt: expiresAt,
                 regionKey: regionKey,
                 geohash: geohash,
-                latitude: fields.latitude,
-                longitude: fields.longitude,
-                countryCode: fields.countryCode
+                latitude: officialLocation.latitude,
+                longitude: officialLocation.longitude,
+                countryCode: officialLocation.countryCode
               })
             );
           } else if (state.activeIsStaleExpired) {
@@ -1989,6 +1968,443 @@ export async function handleImadakeAdminReview(
     return response.status(500).json({
       success: false,
       message: "審査を完了できませんでした。"
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// STEP 4A(Option A)｜店舗の正式所在地(運営が登録)
+// ---------------------------------------------------------------------------
+// storeAccounts/{storeId}に、運営が登録・確認した所在地を保存する。
+//   address / latitude / longitude / countryCode / prefecture / city /
+//   regionKey / locationFormattedAddress / locationUpdatedAt / locationUpdatedByUid
+// 15km判定は緯度経度、「範囲を広げる」はregionKeyを正とする。
+// Google Geocodingは登録・変更の時だけ呼び、今だけ投稿の作成時には呼ばない。
+
+export const IMADAKE_STORE_ADDRESS_MAX_LENGTH = 120;
+
+const IMADAKE_GEOCODING_TIMEOUT_MS = 8000;
+
+// storeAccountsのデータから正式所在地を取り出す。緯度経度・国コードが
+// そろっていない場合は「未登録」(null)として扱う。
+export function readStoreOfficialLocationFromData(
+  data
+) {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  const latitude =
+    readCoordinate(data.latitude, -90, 90);
+
+  const longitude =
+    readCoordinate(data.longitude, -180, 180);
+
+  const countryCode =
+    typeof data.countryCode === "string" ? data.countryCode : "";
+
+  if (
+    latitude === null ||
+    longitude === null ||
+    (latitude === 0 && longitude === 0) ||
+    !/^[A-Z]{2}$/.test(countryCode)
+  ) {
+    return null;
+  }
+
+  const prefecture =
+    typeof data.prefecture === "string" ? data.prefecture : "";
+
+  return {
+    address: typeof data.address === "string" ? data.address : "",
+    latitude: latitude,
+    longitude: longitude,
+    countryCode: countryCode,
+    prefecture: prefecture,
+    city: typeof data.city === "string" ? data.city : "",
+    regionKey:
+      typeof data.regionKey === "string" && data.regionKey !== ""
+        ? data.regionKey
+        : buildImadakeRegionKey(countryCode, prefecture)
+  };
+}
+
+async function readStoreOfficialLocation(
+  database,
+  storeId
+) {
+  const snapshot =
+    await database
+      .collection("storeAccounts")
+      .doc(storeId)
+      .get();
+
+  return snapshot.exists
+    ? readStoreOfficialLocationFromData(snapshot.data() || {})
+    : null;
+}
+
+// 住所 → 緯度経度・国・都道府県・市区町村(サーバー側Google Geocoding)。
+// 既存のapi/edit-ad.js geocodeAddress()・街の掲示板の地域確認と同じ
+// エンドポイント・同じサーバー用APIキー(GOOGLE_MAPS_API_KEY)・日本語指定。
+// 失敗時は例外を投げず{ ok:false }を返す(呼び出し元は保存しない)。
+export async function geocodeStoreAddress(
+  address,
+  deps
+) {
+  const apiKey =
+    process.env.GOOGLE_MAPS_API_KEY;
+
+  if (!apiKey) {
+    return { ok: false, reason: "geocoding_unavailable" };
+  }
+
+  const requestUrl =
+    new URL("https://maps.googleapis.com/maps/api/geocode/json");
+
+  requestUrl.searchParams.set("address", address);
+  requestUrl.searchParams.set("region", "JP");
+  requestUrl.searchParams.set("language", "ja");
+  requestUrl.searchParams.set("key", apiKey);
+
+  const abortController =
+    new AbortController();
+
+  const timeoutId =
+    setTimeout(
+      function() {
+        abortController.abort();
+      },
+      IMADAKE_GEOCODING_TIMEOUT_MS
+    );
+
+  let responseData;
+
+  try {
+    const response =
+      await fetch(requestUrl, { signal: abortController.signal });
+
+    responseData =
+      await response.json();
+  } catch (error) {
+    return { ok: false, reason: "geocoding_failed" };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  if (
+    !responseData ||
+    responseData.status !== "OK" ||
+    !Array.isArray(responseData.results) ||
+    responseData.results.length === 0
+  ) {
+    return { ok: false, reason: "address_not_found" };
+  }
+
+  const result =
+    responseData.results[0];
+
+  const components =
+    result.address_components;
+
+  const country =
+    deps.findAddressComponentByType(components, "country");
+
+  const adminArea1 =
+    deps.findAddressComponentByType(components, "administrative_area_level_1");
+
+  const locality =
+    deps.findAddressComponentByType(components, "locality");
+
+  const sublocality1 =
+    deps.findAddressComponentByType(components, "sublocality_level_1");
+
+  const location =
+    result.geometry && result.geometry.location
+      ? result.geometry.location
+      : null;
+
+  const latitude =
+    location ? readCoordinate(location.lat, -90, 90) : null;
+
+  const longitude =
+    location ? readCoordinate(location.lng, -180, 180) : null;
+
+  const countryCode =
+    country && typeof country.short_name === "string"
+      ? country.short_name.toUpperCase()
+      : "";
+
+  if (
+    latitude === null ||
+    longitude === null ||
+    !/^[A-Z]{2}$/.test(countryCode)
+  ) {
+    return { ok: false, reason: "address_not_found" };
+  }
+
+  const prefecture =
+    adminArea1 && typeof adminArea1.long_name === "string"
+      ? adminArea1.long_name
+      : "";
+
+  // 政令指定都市の区(例：大阪市＋北区)は、既存の市区町村データ
+  // (japan-municipalities.js)と同じ「大阪市北区」の形にまとめる。
+  let city =
+    locality && typeof locality.long_name === "string"
+      ? locality.long_name
+      : "";
+
+  if (
+    city.endsWith("市") &&
+    sublocality1 &&
+    typeof sublocality1.long_name === "string" &&
+    sublocality1.long_name.endsWith("区")
+  ) {
+    city = city + sublocality1.long_name;
+  }
+
+  if (city === "" && sublocality1 && typeof sublocality1.long_name === "string") {
+    city = sublocality1.long_name;
+  }
+
+  return {
+    ok: true,
+    latitude: latitude,
+    longitude: longitude,
+    countryCode: countryCode,
+    prefecture: prefecture,
+    city: city,
+    regionKey: buildImadakeRegionKey(countryCode, prefecture),
+    formattedAddress:
+      typeof result.formatted_address === "string"
+        ? result.formatted_address
+        : "",
+    partialMatch: result.partial_match === true
+  };
+}
+
+// mode: imadakeAdminStoreLocation (POST、admin専用)
+// { storeId, address, confirm }。confirm:false(既定)は確認用の結果を返すだけで
+// 保存しない。confirm:trueで同じ住所を改めてGeocodingし、storeAccountsへ保存する。
+// Geocodingに失敗した場合は保存しない(既存の所在地もそのまま)。
+export async function handleImadakeAdminStoreLocation(
+  request,
+  response,
+  deps
+) {
+  try {
+    const authResult =
+      await requireImadakeAdmin(request, response, deps);
+
+    if (!authResult) {
+      return;
+    }
+
+    const requestBody =
+      deps.readRequestBody(request);
+
+    const storeId =
+      readTrimmedString(requestBody.storeId);
+
+    const address =
+      readShortText(requestBody.address, IMADAKE_STORE_ADDRESS_MAX_LENGTH);
+
+    if (
+      storeId === "" ||
+      storeId.length > 100 ||
+      storeId.includes("/") ||
+      address === null ||
+      address === ""
+    ) {
+      return response.status(400).json({
+        success: false,
+        message: "住所を入力してください。"
+      });
+    }
+
+    const database =
+      deps.getFirestore(deps.getFirebaseAdminApp());
+
+    const storeRef =
+      database.collection("storeAccounts").doc(storeId);
+
+    const storeSnapshot =
+      await storeRef.get();
+
+    if (!storeSnapshot.exists) {
+      return response.status(404).json({
+        success: false,
+        message: "対象の店舗が見つかりません。"
+      });
+    }
+
+    const geocoded =
+      await geocodeStoreAddress(address, deps);
+
+    if (!geocoded.ok) {
+      return response.status(400).json({
+        success: false,
+        reason: geocoded.reason,
+        message:
+          geocoded.reason === "geocoding_unavailable"
+            ? "住所の確認機能が利用できません。"
+            : "この住所の場所を確認できませんでした。住所を詳しく入力してください。"
+      });
+    }
+
+    const location = {
+      address: address,
+      latitude: geocoded.latitude,
+      longitude: geocoded.longitude,
+      countryCode: geocoded.countryCode,
+      prefecture: geocoded.prefecture,
+      city: geocoded.city,
+      regionKey: geocoded.regionKey,
+      formattedAddress: geocoded.formattedAddress,
+      partialMatch: geocoded.partialMatch
+    };
+
+    if (requestBody.confirm !== true) {
+      return response.status(200).json({
+        success: true,
+        saved: false,
+        location: location
+      });
+    }
+
+    await storeRef.update({
+      address: location.address,
+      latitude: location.latitude,
+      longitude: location.longitude,
+      countryCode: location.countryCode,
+      prefecture: location.prefecture,
+      city: location.city,
+      regionKey: location.regionKey,
+      locationFormattedAddress: location.formattedAddress,
+      locationUpdatedAt: FieldValue.serverTimestamp(),
+      locationUpdatedByUid:
+        authResult.actor && typeof authResult.actor.uid === "string"
+          ? authResult.actor.uid
+          : "",
+      updatedAt: FieldValue.serverTimestamp()
+    });
+
+    return response.status(200).json({
+      success: true,
+      saved: true,
+      location: location
+    });
+  } catch (error) {
+    console.error("店舗所在地の登録に失敗しました：", error);
+
+    return response.status(500).json({
+      success: false,
+      message: "店舗所在地を登録できませんでした。"
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// mode: imadakeStoreStatus (POST、店舗token)
+// 店舗の今だけ投稿画面用。店名・掲載場所(表示用)・今の投稿1件(公開中または
+// 確認中)だけを返す。過去の履歴一覧は返さない。
+// ---------------------------------------------------------------------------
+function buildImadakeStoreCurrentPost(
+  postId,
+  post
+) {
+  return {
+    postId: postId,
+    status: post.status,
+    headline: post.headline,
+    categoryCode: post.categoryCode,
+    publishedAt: toIsoOrNull(post.publishedAt),
+    expiresAt: toIsoOrNull(post.expiresAt)
+  };
+}
+
+export async function handleImadakeStoreStatus(
+  request,
+  response,
+  deps
+) {
+  try {
+    const requestBody =
+      deps.readRequestBody(request);
+
+    const app =
+      deps.getFirebaseAdminApp();
+
+    const database =
+      deps.getFirestore(app);
+
+    const storeValidation =
+      await deps.validateStoreToken(
+        database,
+        requestBody.storeId,
+        requestBody.token
+      );
+
+    if (!storeValidation.valid) {
+      return response.status(403).json({
+        success: false,
+        message: "この店舗投稿URLは無効です。"
+      });
+    }
+
+    const storeId =
+      storeValidation.storeId;
+
+    const officialLocation =
+      await readStoreOfficialLocation(database, storeId);
+
+    const state =
+      await database.runTransaction(
+        async function(transaction) {
+          return readStoreSlotState(
+            transaction,
+            database,
+            storeId,
+            Date.now()
+          );
+        }
+      );
+
+    let currentPost = null;
+
+    if (state.hasActive && state.activePostRef) {
+      currentPost =
+        buildImadakeStoreCurrentPost(state.activePostRef.id, state.activePost);
+    } else if (state.hasPending && state.pendingPostRef) {
+      const pendingSnapshot =
+        await state.pendingPostRef.get();
+
+      if (pendingSnapshot.exists) {
+        currentPost =
+          buildImadakeStoreCurrentPost(pendingSnapshot.id, pendingSnapshot.data() || {});
+      }
+    }
+
+    return response.status(200).json({
+      success: true,
+      storeName: storeValidation.storeName,
+      location:
+        officialLocation
+          ? {
+              prefecture: officialLocation.prefecture,
+              city: officialLocation.city,
+              address: officialLocation.address
+            }
+          : null,
+      currentPost: currentPost
+    });
+  } catch (error) {
+    console.error("今だけ投稿：店舗の状態取得に失敗しました：", error);
+
+    return response.status(500).json({
+      success: false,
+      message: "今だけ投稿の状態を確認できませんでした。"
     });
   }
 }
