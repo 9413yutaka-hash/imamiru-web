@@ -47,7 +47,9 @@ import {
 import {
   handleImadakePostCreate,
   handleImadakePostEnd,
-  handleImadakePostGet
+  handleImadakePostGet,
+  handleImadakeAdminPendingList,
+  handleImadakeAdminReview
 } from "./_lib/imadake.js";
 
 
@@ -28909,7 +28911,9 @@ function buildImadakeDeps() {
     classifyModerationError: classifyModerationError,
     buildReviewReason: buildReviewReason,
     matchesSafetyCriticalKeywords: matchesSafetyCriticalKeywords,
-    AI_REVIEW_VERSION: AI_REVIEW_VERSION
+    AI_REVIEW_VERSION: AI_REVIEW_VERSION,
+    // STEP 3.5｜審査(一覧・承認・却下)は代表(admin)だけ。Editor・店舗tokenは不可。
+    requireAdmin: requireAdmin
   };
 }
 
@@ -29249,6 +29253,27 @@ export default async function handler(
     requestBody.mode === "imadakePostEnd"
   ) {
     return handleImadakePostEnd(
+      request,
+      response,
+      buildImadakeDeps()
+    );
+  }
+
+  // 今だけ投稿 STEP 3.5｜審査待ち一覧・承認/却下(admin専用)。
+  if (
+    requestBody.mode === "imadakeAdminPendingList"
+  ) {
+    return handleImadakeAdminPendingList(
+      request,
+      response,
+      buildImadakeDeps()
+    );
+  }
+
+  if (
+    requestBody.mode === "imadakeAdminReview"
+  ) {
+    return handleImadakeAdminReview(
       request,
       response,
       buildImadakeDeps()

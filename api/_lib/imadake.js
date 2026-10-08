@@ -25,8 +25,49 @@ import {
 } from "firebase-admin/firestore";
 
 import {
-  encodeTownNowGeohash
+  encodeTownNowGeohash,
+  computeTownNowDistanceKm
 } from "./town-now-threads.js";
+
+// 2026-10-08 代表決定｜今だけ投稿の「近く」＝現在地から半径15km以内
+// (15.000kmちょうどを含む)。既存の無料店舗カードの15km(app.js)や街の今
+// スレッドの5kmとは別の、今だけ投稿専用の値として固定する。「範囲を広げる」
+// はこの次に、現在地を含む都道府県・州等の全体(regionKey、例：JP-47)へ
+// 直接広げる(市区町村の選択は挟まない)。
+export const IMADAKE_NEARBY_RADIUS_KM =
+  15;
+
+// 浮動小数点誤差の吸収分(1マイクロメートル)。15.001km等の実質的な超過は対象外。
+const IMADAKE_NEARBY_DISTANCE_EPSILON_KM =
+  1e-9;
+
+// 閲覧者の現在地から投稿までの距離(km)。街の今スレッドと同じ球面距離
+// (地球半径6371km)の計算をそのまま使う(既存関数は変更しない)。
+export function computeImadakeDistanceKm(
+  viewerLatitude,
+  viewerLongitude,
+  postLatitude,
+  postLongitude
+) {
+  return computeTownNowDistanceKm(
+    viewerLatitude,
+    viewerLongitude,
+    postLatitude,
+    postLongitude
+  );
+}
+
+export function isWithinImadakeNearbyRadius(
+  distanceKm
+) {
+  return (
+    typeof distanceKm === "number" &&
+    Number.isFinite(distanceKm) &&
+    distanceKm <=
+      IMADAKE_NEARBY_RADIUS_KM +
+      IMADAKE_NEARBY_DISTANCE_EPSILON_KM
+  );
+}
 
 export const IMADAKE_POSTS_COLLECTION =
   "imadakePosts";
@@ -1589,6 +1630,365 @@ export async function handleImadakePostGet(
     return response.status(500).json({
       success: false,
       message: "今だけ投稿を取得できませんでした。"
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// STEP 3.5｜運営による審査(admin専用)
+// ---------------------------------------------------------------------------
+// 安全重大語等でpendingになった今だけ投稿を、代表(admin)が承認または却下する。
+// 認証は既存のrequireAdmin()(Firebase AuthのIDトークン＋ADMIN_EMAIL一致)だけ。
+// 店舗token・Editor権限では一覧も審査もできない。
+
+export const IMADAKE_ADMIN_PENDING_LIST_LIMIT = 50;
+export const IMADAKE_REVIEW_REASON_MAX_LENGTH = 200;
+
+// 審査に必要な項目だけを返す(IPハッシュ・認証方法等の内部情報は返さない)。
+function buildImadakeAdminPendingItem(
+  postId,
+  post
+) {
+  return {
+    postId: postId,
+    storeId: post.storeId,
+    storeName: post.storeNameSnapshot,
+    categoryCode: post.categoryCode,
+    headline: post.headline,
+    body: post.body,
+    imageUrls: Array.isArray(post.imageUrls) ? post.imageUrls : [],
+    createdAt: toIsoOrNull(post.createdAt),
+    moderationStatus: post.moderationStatus,
+    moderationReason: post.moderationReason,
+    latitude: post.latitude,
+    longitude: post.longitude,
+    prefecture: post.prefecture,
+    city: post.city,
+    address: post.address,
+    actionTargets: post.actionTargets || {},
+    categoryFields: post.categoryFields || {},
+    liveState:
+      post.liveState
+        ? {
+            type: post.liveState.type,
+            status: post.liveState.status,
+            quantity:
+              typeof post.liveState.quantity === "number"
+                ? post.liveState.quantity
+                : null
+          }
+        : null,
+    availableUntil: post.availableUntil,
+    priceText: post.priceText
+  };
+}
+
+async function requireImadakeAdmin(
+  request,
+  response,
+  deps
+) {
+  const authResult =
+    await deps.requireAdmin(request);
+
+  if (!authResult || !authResult.ok) {
+    response.status((authResult && authResult.status) || 403).json({
+      success: false,
+      message: (authResult && authResult.message) || "管理者権限が必要です。"
+    });
+
+    return null;
+  }
+
+  return authResult;
+}
+
+// mode: imadakeAdminPendingList (POST、admin専用)
+export async function handleImadakeAdminPendingList(
+  request,
+  response,
+  deps
+) {
+  try {
+    const authResult =
+      await requireImadakeAdmin(request, response, deps);
+
+    if (!authResult) {
+      return;
+    }
+
+    const database =
+      deps.getFirestore(deps.getFirebaseAdminApp());
+
+    // 等価条件1つだけのquery(複合index不要)。並べ替えはここで行う。
+    const snapshot =
+      await database
+        .collection(IMADAKE_POSTS_COLLECTION)
+        .where("status", "==", "pending")
+        .limit(IMADAKE_ADMIN_PENDING_LIST_LIMIT)
+        .get();
+
+    const items =
+      snapshot.docs
+        .map(
+          function(documentSnapshot) {
+            return buildImadakeAdminPendingItem(
+              documentSnapshot.id,
+              documentSnapshot.data() || {}
+            );
+          }
+        )
+        .sort(
+          function(first, second) {
+            return String(first.createdAt || "").localeCompare(
+              String(second.createdAt || "")
+            );
+          }
+        );
+
+    return response.status(200).json({
+      success: true,
+      posts: items
+    });
+  } catch (error) {
+    console.error("今だけ投稿：審査待ち一覧の取得に失敗しました：", error);
+
+    return response.status(500).json({
+      success: false,
+      message: "審査待ちの今だけ投稿を取得できませんでした。"
+    });
+  }
+}
+
+// mode: imadakeAdminReview (POST、admin専用)
+// decision: "approve" | "reject"。対象はstatus=="pending"の投稿だけ。
+// 承認：その瞬間をpublishedAt、expiresAt＝publishedAt＋24h。同じ店舗に
+//       公開中の今だけ投稿が既にある場合は承認しない(既存投稿を勝手に
+//       終了させず、pendingのまま理由を返す)。店舗が無効化されていても承認しない。
+// 却下：status＝rejected。
+// どちらも1つのトランザクションで投稿と店舗の枠を同時に更新するため、
+// 並行した承認でも同じ店舗の公開中は1件を超えない。
+export async function handleImadakeAdminReview(
+  request,
+  response,
+  deps
+) {
+  try {
+    const authResult =
+      await requireImadakeAdmin(request, response, deps);
+
+    if (!authResult) {
+      return;
+    }
+
+    const requestBody =
+      deps.readRequestBody(request);
+
+    const postId =
+      readTrimmedString(requestBody.postId);
+
+    const decision =
+      readTrimmedString(requestBody.decision);
+
+    const reviewReason =
+      readShortText(
+        requestBody.reason,
+        IMADAKE_REVIEW_REASON_MAX_LENGTH
+      );
+
+    if (
+      postId === "" ||
+      postId.length > 100 ||
+      postId.includes("/") ||
+      (decision !== "approve" && decision !== "reject") ||
+      reviewReason === null
+    ) {
+      return response.status(400).json({
+        success: false,
+        message: "入力内容を確認してください。"
+      });
+    }
+
+    const reviewerUid =
+      authResult.actor && typeof authResult.actor.uid === "string"
+        ? authResult.actor.uid
+        : "";
+
+    const database =
+      deps.getFirestore(deps.getFirebaseAdminApp());
+
+    const result =
+      await database.runTransaction(
+        async function(transaction) {
+          const nowMillis =
+            Date.now();
+
+          const postRef =
+            database
+              .collection(IMADAKE_POSTS_COLLECTION)
+              .doc(postId);
+
+          const postSnapshot =
+            await transaction.get(postRef);
+
+          if (!postSnapshot.exists) {
+            return { error: 404 };
+          }
+
+          const post =
+            postSnapshot.data() || {};
+
+          // pending以外(withdrawn・rejected・published・ended等)は審査できない。
+          if (post.status !== "pending") {
+            return { error: 409, reason: "not_pending" };
+          }
+
+          const storeId =
+            typeof post.storeId === "string" ? post.storeId : "";
+
+          const state =
+            await readStoreSlotState(
+              transaction,
+              database,
+              storeId,
+              nowMillis
+            );
+
+          const storeSnapshot =
+            await transaction.get(
+              database.collection("storeAccounts").doc(storeId)
+            );
+
+          const reviewFields = {
+            reviewedAt: Timestamp.fromMillis(nowMillis),
+            reviewedByUid: reviewerUid,
+            reviewDecision: decision,
+            reviewReason: reviewReason,
+            statusChangedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp()
+          };
+
+          const slotUpdate = {
+            storeId: storeId,
+            updatedAt: FieldValue.serverTimestamp()
+          };
+
+          if (state.slot.pendingPostId === postId) {
+            slotUpdate.pendingPostId = "";
+          }
+
+          if (decision === "reject") {
+            transaction.update(postRef, {
+              status: "rejected",
+              ...reviewFields
+            });
+
+            transaction.set(state.slotRef, slotUpdate, { merge: true });
+
+            return { status: "rejected" };
+          }
+
+          if (
+            !storeSnapshot.exists ||
+            (storeSnapshot.data() || {}).enabled !== true
+          ) {
+            return { error: 409, reason: "store_disabled" };
+          }
+
+          if (state.hasActive) {
+            return { error: 409, reason: "active_post_exists" };
+          }
+
+          const publishedAt =
+            Timestamp.fromMillis(nowMillis);
+
+          const expiresAt =
+            Timestamp.fromMillis(
+              nowMillis + IMADAKE_PUBLISH_DURATION_MILLISECONDS
+            );
+
+          transaction.update(postRef, {
+            status: "published",
+            publishedAt: publishedAt,
+            expiresAt: expiresAt,
+            ...reviewFields
+          });
+
+          if (state.activeIsStaleExpired && state.activePostRef) {
+            transaction.update(state.activePostRef, {
+              status: "expired",
+              statusChangedAt: FieldValue.serverTimestamp(),
+              updatedAt: FieldValue.serverTimestamp()
+            });
+          }
+
+          Object.assign(
+            slotUpdate,
+            { activePostId: postId },
+            buildSlotLocationFields({
+              expiresAt: expiresAt,
+              regionKey: post.regionKey,
+              geohash: post.geohash,
+              latitude: post.latitude,
+              longitude: post.longitude,
+              countryCode: post.countryCode
+            })
+          );
+
+          transaction.set(state.slotRef, slotUpdate, { merge: true });
+
+          return {
+            status: "published",
+            publishedAtMillis: nowMillis,
+            expiresAtMillis: nowMillis + IMADAKE_PUBLISH_DURATION_MILLISECONDS
+          };
+        }
+      );
+
+    if (result.error === 404) {
+      return response.status(404).json({
+        success: false,
+        message: "対象の今だけ投稿が見つかりません。"
+      });
+    }
+
+    if (result.error === 409) {
+      const messageByReason = {
+        not_pending: "この今だけ投稿は審査待ちではありません（すでに処理済み、または店舗が取り下げています）。",
+        active_post_exists: "この店舗には公開中の今だけ投稿があるため、今は承認できません。公開中の投稿が終わってから承認してください。",
+        store_disabled: "この店舗は現在無効になっているため承認できません。"
+      };
+
+      return response.status(409).json({
+        success: false,
+        reason: result.reason,
+        message: messageByReason[result.reason] || "この操作はできません。"
+      });
+    }
+
+    return response.status(200).json({
+      success: true,
+      postId: postId,
+      status: result.status,
+      publishedAt:
+        result.publishedAtMillis
+          ? new Date(result.publishedAtMillis).toISOString()
+          : null,
+      expiresAt:
+        result.expiresAtMillis
+          ? new Date(result.expiresAtMillis).toISOString()
+          : null,
+      message:
+        result.status === "published"
+          ? "承認して公開しました。24時間後に自動で終了します。"
+          : "却下しました。"
+    });
+  } catch (error) {
+    console.error("今だけ投稿：審査に失敗しました：", error);
+
+    return response.status(500).json({
+      success: false,
+      message: "審査を完了できませんでした。"
     });
   }
 }

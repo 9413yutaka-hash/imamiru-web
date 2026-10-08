@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <meta name="robots" content="noindex, nofollow">
+
+  <title>
+    今だけ投稿 審査待ち｜マチナウ運営
+  </title>
+
+  <!-- 今だけ投稿 STEP 3.5｜安全重大語等でpendingになった今だけ投稿を代表が
+       承認(承認時点から24時間公開)または却下する。投稿内容はすべて
+       textContentで表示し、innerHTMLへ入力値を入れない。 -->
+
+  <style>
+    :root {
+      --navy: #071a33;
+      --blue: #0788c9;
+      --sky: #dff7ff;
+      --green: #19a96b;
+      --red: #ef5a67;
+      --orange: #e88932;
+      --white: #ffffff;
+      --text: #15233a;
+      --subtext: #697386;
+      --border: #e2eaf1;
+      --background: #f4f8fb;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Yu Gothic", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+      background: var(--background);
+      color: var(--text);
+    }
+
+    header {
+      background: var(--navy);
+      color: var(--white);
+      padding: 18px 20px;
+    }
+
+    header .page-label {
+      font-size: 12px;
+      opacity: 0.8;
+    }
+
+    header h1 {
+      margin: 4px 0 0;
+      font-size: 20px;
+    }
+
+    header a {
+      display: inline-block;
+      margin-top: 10px;
+      color: var(--sky);
+      font-size: 13px;
+      text-decoration: none;
+    }
+
+    main {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 20px 16px 60px;
+    }
+
+    .panel {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .panel h2 {
+      margin: 0 0 14px;
+      font-size: 16px;
+    }
+
+    .field {
+      margin-bottom: 16px;
+    }
+
+    .field label {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .field input[type="text"],
+    .field input[type="password"] {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    .primary-button {
+      background: linear-gradient(135deg, var(--blue), #04b7d7);
+      color: var(--white);
+      border: none;
+      border-radius: 12px;
+      padding: 11px 18px;
+      font-size: 14px;
+      font-weight: 900;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .primary-button:disabled,
+    .secondary-button:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+    .secondary-button {
+      background: var(--white);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 14px;
+      font-size: 12px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .message-box {
+      font-size: 13px;
+      margin-top: 10px;
+      min-height: 1em;
+    }
+
+    .message-box.error {
+      color: var(--red);
+    }
+
+    .message-box.success {
+      color: var(--green);
+    }
+
+    #adminArea {
+      display: none;
+    }
+
+    #adminArea.visible {
+      display: block;
+    }
+
+    /* 未対応件数(最重要)。 */
+    .pending-summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .pending-summary-count {
+      font-size: 22px;
+      font-weight: 900;
+      color: var(--navy);
+    }
+
+    .pending-summary-count.has-pending {
+      color: #b4541a;
+    }
+
+    .pending-summary-sub {
+      margin-top: 4px;
+      color: var(--subtext);
+      font-size: 12px;
+    }
+
+    .flow-list {
+      margin: 0;
+      padding-left: 20px;
+      font-size: 13px;
+      line-height: 1.9;
+    }
+
+    .shops-link {
+      display: inline-flex;
+      align-items: center;
+      margin-top: 12px;
+      padding: 10px 14px;
+      border-radius: 12px;
+      background: var(--sky);
+      color: var(--navy);
+      font-size: 13px;
+      font-weight: 900;
+      text-decoration: none;
+    }
+
+    .filter-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .filter-button {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--white);
+      color: var(--text);
+      padding: 7px 13px;
+      font-size: 12px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .filter-button.active {
+      border-color: var(--navy);
+      background: var(--navy);
+      color: var(--white);
+    }
+
+    .application-card {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+
+    .application-card.status-pending {
+      border-color: #f2c79c;
+      border-left: 5px solid var(--orange);
+      background: #fffaf4;
+    }
+
+    .application-card-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .application-shop-name {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 900;
+      overflow-wrap: anywhere;
+    }
+
+    .application-date {
+      margin-top: 4px;
+      color: var(--subtext);
+      font-size: 12px;
+    }
+
+    .status-badge {
+      flex-shrink: 0;
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .status-badge.pending {
+      background: #fde7d2;
+      color: #a14a10;
+    }
+
+    .status-badge.contacted {
+      background: #e1f1fb;
+      color: #0a6aa0;
+    }
+
+    .status-badge.completed {
+      background: #e3f7ee;
+      color: #137a4e;
+    }
+
+    .application-details {
+      display: grid;
+      grid-template-columns: 90px minmax(0, 1fr);
+      gap: 6px 10px;
+      margin: 12px 0 0;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .application-details dt {
+      color: var(--subtext);
+      font-weight: 700;
+    }
+
+    .application-details dd {
+      margin: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .application-details dd.note {
+      white-space: pre-wrap;
+    }
+
+    .application-details a {
+      color: var(--blue);
+      font-weight: 700;
+    }
+
+    .application-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .empty-state {
+      color: var(--subtext);
+      font-size: 13px;
+      text-align: center;
+      padding: 16px 0;
+    }
+
+    @media (max-width: 480px) {
+      .application-details {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 2px;
+      }
+
+      .application-details dd {
+        margin-bottom: 6px;
+      }
+    }
+    .imadake-card {
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--white);
+      margin-top: 12px;
+    }
+
+    .imadake-headline {
+      margin: 6px 0 4px;
+      font-size: 17px;
+      font-weight: 900;
+      color: var(--navy);
+      line-height: 1.5;
+      word-break: break-word;
+    }
+
+    .imadake-body {
+      margin: 8px 0;
+      font-size: 13px;
+      line-height: 1.8;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .imadake-reason {
+      margin: 8px 0;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: #fff4e5;
+      color: #8a4b00;
+      font-size: 12.5px;
+      line-height: 1.6;
+    }
+
+    .imadake-images {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 8px 0;
+    }
+
+    .imadake-images img {
+      width: 88px;
+      height: 88px;
+      object-fit: cover;
+      border-radius: 10px;
+      background: #e9f1f5;
+    }
+
+    .imadake-meta {
+      margin: 6px 0;
+      font-size: 12px;
+      color: var(--subtext);
+      line-height: 1.7;
+      word-break: break-word;
+    }
+
+    .imadake-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .imadake-actions input {
+      flex: 1 1 200px;
+      min-height: 40px;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 13px;
+    }
+
+    .approve-button {
+      min-height: 40px;
+      padding: 0 16px;
+      border: none;
+      border-radius: 10px;
+      background: var(--green);
+      color: var(--white);
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .reject-button {
+      min-height: 40px;
+      padding: 0 16px;
+      border: 1px solid var(--red);
+      border-radius: 10px;
+      background: var(--white);
+      color: var(--red);
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .approve-button:disabled,
+    .reject-button:disabled {
+      opacity: 0.5;
+      cursor: wait;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="page-label">
+      マチナウ運営
+    </div>
+
+    <h1>
+      今だけ投稿 審査待ち
+    </h1>
+
+    <a href="admin.html">
+      ← 管理本部へ戻る
+    </a>
+  </header>
+
+  <main>
+
+    <section id="loginPanel" class="panel">
+      <h2>
+        管理者ログイン
+      </h2>
+
+      <form id="loginForm" novalidate>
+        <div class="field">
+          <label for="adminEmail">
+            メールアドレス
+          </label>
+
+          <input
+            id="adminEmail"
+            type="text"
+            autocomplete="email"
+            required
+          >
+        </div>
+
+        <div class="field">
+          <label for="adminPassword">
+            パスワード
+          </label>
+
+          <input
+            id="adminPassword"
+            type="password"
+            autocomplete="current-password"
+            required
+          >
+        </div>
+
+        <button id="loginButton" class="primary-button" type="submit">
+          管理画面へログイン
+        </button>
+      </form>
+
+      <div id="loginMessage" class="message-box" role="status" aria-live="polite"></div>
+    </section>
+
+    <section id="adminArea">
+
+      <div class="panel">
+        <div class="pending-summary">
+          <div>
+            <div id="pendingSummaryCount" class="pending-summary-count">
+              審査待ち -件
+            </div>
+            <div class="pending-summary-sub">
+              安全・災害・交通に関する言葉を含むため、自動で公開しなかった今だけ投稿です。
+            </div>
+          </div>
+
+          <button id="refreshButton" class="secondary-button" type="button">
+            🔄 一覧を更新
+          </button>
+        </div>
+
+        <div id="listMessage" class="message-box" role="status" aria-live="polite"></div>
+      </div>
+
+      <div class="panel">
+        <h2>
+          審査の流れ
+        </h2>
+
+        <ol class="flow-list">
+          <li>内容が事実に基づき、旅行者に誤解や危険を与えないか確認する</li>
+          <li>問題なければ「承認して公開」：承認した時点から24時間掲載されます</li>
+          <li>掲載できない内容なら「却下」：必要なら理由を残せます（店舗には表示されません）</li>
+        </ol>
+      </div>
+
+      <div class="panel">
+        <h2>
+          審査待ちの今だけ投稿
+        </h2>
+
+        <div id="pendingList"></div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore-compat.js"></script>
+  <script src="firebase.js"></script>
+
+  <script>
+    // 今だけ投稿 STEP 3.5｜pending(安全重大語等で自動公開しなかった)今だけ投稿を
+    // 代表が承認または却下する。サーバー側(api/_lib/imadake.js)でも
+    // requireAdmin()により代表本人だけに制限している(この画面のメール判定は
+    // 画面の出し分けのため)。投稿内容はすべてtextContentで表示し、
+    // innerHTMLへ入力値を入れない。
+    const ADMIN_EMAIL =
+      "9413yutaka@gmail.com";
+
+    const CATEGORY_LABELS = {
+      restaurant: "飲食店",
+      food_shop: "ケーキ・食品",
+      retail: "ハンドメイド・物販",
+      event: "イベント",
+      other: "その他"
+    };
+
+    const LIVE_STATE_LABELS = {
+      stock: { available: "在庫あり", few: "残りわずか", sold_out: "売り切れ" },
+      seats: { available: "空席あり", few: "残りわずか", full: "満席" },
+      tickets: { available: "当日券あり", few: "残りわずか", sold_out: "完売" }
+    };
+
+    async function getAdminIdToken() {
+      const currentUser = firebase.auth().currentUser;
+
+      if (!currentUser) {
+        throw new Error(
+          "ログイン状態を確認できませんでした。再度ログインしてください。"
+        );
+      }
+
+      return currentUser.getIdToken();
+    }
+
+    // admin-shop-applications.htmlのcallApplicationsApi(mode, payload)と同じ構成。
+    async function callImadakeAdminApi(mode, payload) {
+      const idToken = await getAdminIdToken();
+
+      const response = await fetch("/api/moderate-submission", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + idToken
+        },
+        body: JSON.stringify(Object.assign({ mode: mode }, payload || {}))
+      });
+
+      let responseData = null;
+
+      try {
+        responseData = await response.json();
+      } catch (jsonError) {
+        throw new Error("応答を読み取れませんでした。");
+      }
+
+      if (!response.ok || !responseData || responseData.success !== true) {
+        throw new Error(
+          (responseData && responseData.message) || "処理に失敗しました。"
+        );
+      }
+
+      return responseData;
+    }
+
+    const loginPanel = document.getElementById("loginPanel");
+    const adminArea = document.getElementById("adminArea");
+    const loginForm = document.getElementById("loginForm");
+    const loginButton = document.getElementById("loginButton");
+    const loginMessage = document.getElementById("loginMessage");
+    const listMessage = document.getElementById("listMessage");
+    const pendingList = document.getElementById("pendingList");
+    const pendingSummaryCount = document.getElementById("pendingSummaryCount");
+    const refreshButton = document.getElementById("refreshButton");
+
+    function showMessage(element, text, type) {
+      element.textContent = text;
+      element.className = "message-box" + (type ? " " + type : "");
+    }
+
+    function formatDateTime(isoText) {
+      if (!isoText) {
+        return "-";
+      }
+
+      try {
+        return new Date(isoText).toLocaleString("ja-JP", {
+          timeZone: "Asia/Tokyo",
+          year: "numeric",
+          month: "numeric",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit"
+        });
+      } catch (error) {
+        return "-";
+      }
+    }
+
+    function createTextElement(tagName, className, text) {
+      const element = document.createElement(tagName);
+
+      if (className) {
+        element.className = className;
+      }
+
+      element.textContent = text;
+      return element;
+    }
+
+    function describeLiveState(liveState) {
+      if (!liveState) {
+        return "";
+      }
+
+      const labels = LIVE_STATE_LABELS[liveState.type] || {};
+      const label = labels[liveState.status] || liveState.status;
+
+      return typeof liveState.quantity === "number"
+        ? label + "（残り" + liveState.quantity + "）"
+        : label;
+    }
+
+    function renderPendingCard(post) {
+      const card = document.createElement("article");
+      card.className = "imadake-card";
+
+      card.appendChild(
+        createTextElement(
+          "div",
+          "imadake-meta",
+          (post.storeName || "(店名なし)") +
+            "｜" +
+            (CATEGORY_LABELS[post.categoryCode] || post.categoryCode) +
+            "｜投稿 " +
+            formatDateTime(post.createdAt)
+        )
+      );
+
+      card.appendChild(createTextElement("p", "imadake-headline", post.headline || ""));
+
+      if (post.moderationReason) {
+        card.appendChild(
+          createTextElement("div", "imadake-reason", "確認理由：" + post.moderationReason)
+        );
+      }
+
+      if (post.body) {
+        card.appendChild(createTextElement("p", "imadake-body", post.body));
+      }
+
+      if (Array.isArray(post.imageUrls) && post.imageUrls.length > 0) {
+        const images = document.createElement("div");
+        images.className = "imadake-images";
+
+        post.imageUrls.forEach(function(url) {
+          const link = document.createElement("a");
+          link.href = url;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+
+          const image = document.createElement("img");
+          image.src = url;
+          image.alt = "";
+          image.loading = "lazy";
+
+          link.appendChild(image);
+          images.appendChild(link);
+        });
+
+        card.appendChild(images);
+      }
+
+      const details = [];
+
+      const place = [post.prefecture, post.city, post.address]
+        .filter(function(part) { return typeof part === "string" && part !== ""; })
+        .join(" ");
+
+      if (place) {
+        details.push("場所：" + place);
+      }
+
+      const liveStateText = describeLiveState(post.liveState);
+
+      if (liveStateText) {
+        details.push("今の状態：" + liveStateText);
+      }
+
+      if (post.availableUntil) {
+        details.push("いつまで：" + post.availableUntil);
+      }
+
+      if (post.priceText) {
+        details.push("価格：" + post.priceText);
+      }
+
+      const targets = post.actionTargets || {};
+
+      Object.keys(targets).forEach(function(key) {
+        details.push(key + "：" + targets[key]);
+      });
+
+      details.forEach(function(text) {
+        card.appendChild(createTextElement("div", "imadake-meta", text));
+      });
+
+      const actions = document.createElement("div");
+      actions.className = "imadake-actions";
+
+      const reasonInput = document.createElement("input");
+      reasonInput.type = "text";
+      reasonInput.maxLength = 200;
+      reasonInput.placeholder = "却下理由（任意・運営用メモ）";
+
+      const approveButton = createTextElement("button", "approve-button", "承認して公開");
+      approveButton.type = "button";
+
+      const rejectButton = createTextElement("button", "reject-button", "却下");
+      rejectButton.type = "button";
+
+      const cardMessage = document.createElement("div");
+      cardMessage.className = "message-box";
+      cardMessage.setAttribute("role", "status");
+
+      async function review(decision) {
+        if (
+          decision === "approve" &&
+          !window.confirm("承認すると、この時点から24時間公開されます。公開しますか？")
+        ) {
+          return;
+        }
+
+        if (
+          decision === "reject" &&
+          !window.confirm("この今だけ投稿を却下しますか？")
+        ) {
+          return;
+        }
+
+        approveButton.disabled = true;
+        rejectButton.disabled = true;
+        showMessage(cardMessage, "処理しています…", "");
+
+        try {
+          const result = await callImadakeAdminApi("imadakeAdminReview", {
+            postId: post.postId,
+            decision: decision,
+            reason: decision === "reject" ? reasonInput.value.trim() : ""
+          });
+
+          showMessage(cardMessage, result.message || "完了しました。", "success");
+          await loadPendingPosts();
+        } catch (error) {
+          showMessage(cardMessage, error.message || "処理できませんでした。", "error");
+          approveButton.disabled = false;
+          rejectButton.disabled = false;
+        }
+      }
+
+      approveButton.addEventListener("click", function() { review("approve"); });
+      rejectButton.addEventListener("click", function() { review("reject"); });
+
+      actions.appendChild(reasonInput);
+      actions.appendChild(approveButton);
+      actions.appendChild(rejectButton);
+      card.appendChild(actions);
+      card.appendChild(cardMessage);
+
+      return card;
+    }
+
+    async function loadPendingPosts() {
+      showMessage(listMessage, "読み込んでいます…", "");
+      refreshButton.disabled = true;
+
+      try {
+        const result = await callImadakeAdminApi("imadakeAdminPendingList");
+        const posts = Array.isArray(result.posts) ? result.posts : [];
+
+        pendingSummaryCount.textContent = "審査待ち " + posts.length + "件";
+        pendingList.innerHTML = "";
+
+        if (posts.length === 0) {
+          pendingList.appendChild(
+            createTextElement("div", "empty-state", "審査待ちの今だけ投稿はありません。")
+          );
+        } else {
+          posts.forEach(function(post) {
+            pendingList.appendChild(renderPendingCard(post));
+          });
+        }
+
+        showMessage(listMessage, "", "");
+      } catch (error) {
+        showMessage(listMessage, error.message || "読み込めませんでした。", "error");
+      } finally {
+        refreshButton.disabled = false;
+      }
+    }
+
+    refreshButton.addEventListener("click", loadPendingPosts);
+
+    loginForm.addEventListener("submit", async function(event) {
+      event.preventDefault();
+      showMessage(loginMessage, "", "");
+
+      const email = document.getElementById("adminEmail").value.trim().toLowerCase();
+      const password = document.getElementById("adminPassword").value;
+
+      if (email !== ADMIN_EMAIL.toLowerCase()) {
+        showMessage(loginMessage, "このメールアドレスには管理者権限がありません。", "error");
+        return;
+      }
+
+      loginButton.disabled = true;
+      loginButton.textContent = "ログインしています…";
+
+      try {
+        await firebase.auth().signInWithEmailAndPassword(email, password);
+      } catch (error) {
+        console.error("❌ 管理者ログインに失敗しました", error);
+        showMessage(loginMessage, "ログインできませんでした。メールアドレスとパスワードを確認してください。", "error");
+      } finally {
+        loginButton.disabled = false;
+        loginButton.textContent = "管理画面へログイン";
+      }
+    });
+
+    // admin-shop-applications.htmlの管理者判定と同一パターン。
+    firebase.auth().onAuthStateChanged(async function(user) {
+      showMessage(loginMessage, "", "");
+
+      if (user && user.email && user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+        loginPanel.style.display = "none";
+        adminArea.classList.add("visible");
+
+        await loadPendingPosts();
+        return;
+      }
+
+      if (user) {
+        try {
+          await firebase.auth().signOut();
+        } catch (error) {
+          console.error("管理者以外のユーザーをログアウトできませんでした", error);
+        }
+
+        showMessage(loginMessage, "このアカウントには管理者権限がありません。", "error");
+      }
+
+      loginPanel.style.display = "block";
+      adminArea.classList.remove("visible");
+    });
+  </script>
+
+</body>
+</html>
