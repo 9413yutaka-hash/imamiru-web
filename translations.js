@@ -1798,6 +1798,329 @@ const MACHINAU_TRANSLATIONS = {
   town_now_reply_invalid: {
     ja: "返信内容を確認してください。",
     en: "Please check your reply."
+  },
+
+  // 正式店舗参加基盤 Phase 1｜店舗・施設アカウント画面(store-account.html)の固定UI文言。
+  // 認証エラー等はFirebaseのエラーcodeから画面側でこのキーへ対応付ける(内部データには保存しない)。
+
+  store_account_doc_title: {
+    ja: "店舗・施設アカウント｜マチナウ",
+    en: "Business Account | Machinau"
+  },
+
+  store_account_page_label: {
+    ja: "マチナウ 店舗・施設アカウント",
+    en: "Machinau Business Account"
+  },
+
+  store_account_intro: {
+    ja: "お店・施設・イベント主催者の方のためのアカウントです。",
+    en: "An account for shops, facilities and event organizers."
+  },
+
+  store_account_phase_note: {
+    ja: "現在ご利用いただけるのは、アカウントの作成とログインだけです。店舗との紐付けや投稿などの店舗機能は、準備ができ次第このアカウントからご利用いただけるようになります。",
+    en: "For now, you can only create an account and log in. Shop features such as linking your shop and posting will become available from this account once they are ready."
+  },
+
+  store_account_title_login: {
+    ja: "ログイン",
+    en: "Log in"
+  },
+
+  store_account_title_signup: {
+    ja: "新規アカウント登録",
+    en: "Create an account"
+  },
+
+  store_account_title_reset: {
+    ja: "パスワード再設定",
+    en: "Reset your password"
+  },
+
+  store_account_title_account: {
+    ja: "アカウント",
+    en: "Your account"
+  },
+
+  store_account_email_label: {
+    ja: "メールアドレス",
+    en: "Email address"
+  },
+
+  store_account_password_label: {
+    ja: "パスワード",
+    en: "Password"
+  },
+
+  store_account_password_confirm_label: {
+    ja: "パスワード（確認）",
+    en: "Confirm password"
+  },
+
+  store_account_password_hint: {
+    ja: "8文字以上で入力してください。",
+    en: "Use at least 8 characters."
+  },
+
+  store_account_show_password: {
+    ja: "パスワードを表示する",
+    en: "Show password"
+  },
+
+  store_account_agree_prefix: {
+    ja: "",
+    en: "I agree to the "
+  },
+
+  store_account_agree_terms_link: {
+    ja: "利用規約",
+    en: "Terms of Use"
+  },
+
+  store_account_agree_and: {
+    ja: "と",
+    en: " and the "
+  },
+
+  store_account_agree_privacy_link: {
+    ja: "プライバシーポリシー",
+    en: "Privacy Policy"
+  },
+
+  store_account_agree_suffix: {
+    ja: "に同意します",
+    en: ""
+  },
+
+  store_account_legal_ja_only: {
+    ja: "",
+    en: "(The Terms of Use and Privacy Policy are available in Japanese only.)"
+  },
+
+  store_account_signup_button: {
+    ja: "アカウントを作成する",
+    en: "Create account"
+  },
+
+  store_account_login_button: {
+    ja: "ログインする",
+    en: "Log in"
+  },
+
+  store_account_reset_button: {
+    ja: "再設定メールを送る",
+    en: "Send reset email"
+  },
+
+  store_account_reset_intro: {
+    ja: "登録したメールアドレスを入力してください。パスワードを再設定するためのメールをお送りします。",
+    en: "Enter the email address you registered with. We will send you an email to reset your password."
+  },
+
+  store_account_to_signup: {
+    ja: "はじめての方：新規アカウント登録",
+    en: "New here? Create an account"
+  },
+
+  store_account_to_login: {
+    ja: "登録済みの方：ログイン",
+    en: "Already have an account? Log in"
+  },
+
+  store_account_forgot: {
+    ja: "パスワードを忘れた方",
+    en: "Forgot your password?"
+  },
+
+  store_account_back_to_login: {
+    ja: "ログイン画面へ戻る",
+    en: "Back to log in"
+  },
+
+  store_account_logout_button: {
+    ja: "ログアウトする",
+    en: "Log out"
+  },
+
+  store_account_status_logged_in: {
+    ja: "ログインしています",
+    en: "You are logged in"
+  },
+
+  store_account_status_email_label: {
+    ja: "メールアドレス",
+    en: "Email address"
+  },
+
+  store_account_status_verify_label: {
+    ja: "メール確認",
+    en: "Email verification"
+  },
+
+  store_account_status_verified: {
+    ja: "確認済み",
+    en: "Verified"
+  },
+
+  store_account_status_unverified: {
+    ja: "未確認",
+    en: "Not verified"
+  },
+
+  store_account_status_store_link_label: {
+    ja: "店舗との紐付け",
+    en: "Linked shop"
+  },
+
+  store_account_status_store_link_none: {
+    ja: "まだありません",
+    en: "None yet"
+  },
+
+  store_account_verify_sent: {
+    ja: "確認メールを送りました。メール内のリンクを開いて、メールアドレスを確認してください。",
+    en: "We have sent you a verification email. Open the link in the email to verify your email address."
+  },
+
+  store_account_verify_needed: {
+    ja: "メールアドレスの確認がまだ完了していません。確認が済むまで、店舗機能はご利用いただけません。",
+    en: "Your email address has not been verified yet. Shop features will not be available until it is."
+  },
+
+  store_account_verify_spam_hint: {
+    ja: "メールが見つからない場合は、迷惑メールフォルダもご確認ください。",
+    en: "If you can't find the email, please check your spam folder."
+  },
+
+  store_account_resend_button: {
+    ja: "確認メールを再送する",
+    en: "Resend verification email"
+  },
+
+  store_account_resend_wait: {
+    ja: "再送は少し時間をおいてからお試しください。",
+    en: "Please wait a little before resending."
+  },
+
+  store_account_refresh_button: {
+    ja: "確認が済んだら：状態を更新する",
+    en: "Verified? Refresh status"
+  },
+
+  store_account_still_unverified: {
+    ja: "まだ確認が完了していません。メール内のリンクを開いてから、もう一度お試しください。",
+    en: "Not verified yet. Open the link in the email, then try again."
+  },
+
+  store_account_verified_now: {
+    ja: "メールアドレスの確認が完了しました。",
+    en: "Your email address has been verified."
+  },
+
+  store_account_reset_sent: {
+    ja: "このメールアドレスが登録されている場合は、パスワード再設定のメールを送りました。メール内のリンクから新しいパスワードを設定してください。",
+    en: "If this email address is registered, we have sent a password reset email. Use the link in the email to set a new password."
+  },
+
+  store_account_logged_out: {
+    ja: "ログアウトしました。",
+    en: "You have logged out."
+  },
+
+  store_account_processing: {
+    ja: "処理中…",
+    en: "Processing…"
+  },
+
+  store_account_back_to_top: {
+    ja: "← マチナウTOPへ",
+    en: "← Back to Machinau"
+  },
+
+  store_account_err_email_required: {
+    ja: "メールアドレスを入力してください。",
+    en: "Please enter your email address."
+  },
+
+  store_account_err_email_invalid: {
+    ja: "メールアドレスの形式が正しくありません。",
+    en: "Please enter a valid email address."
+  },
+
+  store_account_err_password_required: {
+    ja: "パスワードを入力してください。",
+    en: "Please enter your password."
+  },
+
+  store_account_err_password_short: {
+    ja: "パスワードは8文字以上にしてください。",
+    en: "Your password must be at least 8 characters."
+  },
+
+  store_account_err_password_long: {
+    ja: "パスワードは128文字以内にしてください。",
+    en: "Your password must be 128 characters or fewer."
+  },
+
+  store_account_err_password_same_email: {
+    ja: "メールアドレスと同じパスワードは使えません。",
+    en: "Your password can't be the same as your email address."
+  },
+
+  store_account_err_password_mismatch: {
+    ja: "確認用のパスワードが一致しません。",
+    en: "The passwords don't match."
+  },
+
+  store_account_err_agree_required: {
+    ja: "利用規約とプライバシーポリシーへの同意が必要です。",
+    en: "Please agree to the Terms of Use and Privacy Policy."
+  },
+
+  store_account_err_email_in_use: {
+    ja: "このメールアドレスはすでに登録されています。ログインするか、パスワード再設定をご利用ください。",
+    en: "This email address is already registered. Please log in or reset your password."
+  },
+
+  store_account_err_weak_password: {
+    ja: "このパスワードは安全性が低いため使えません。別のパスワードにしてください。",
+    en: "This password is too weak. Please choose a different one."
+  },
+
+  store_account_err_login_failed: {
+    ja: "メールアドレスまたはパスワードが正しくありません。",
+    en: "The email address or password is incorrect."
+  },
+
+  store_account_err_user_disabled: {
+    ja: "このアカウントは現在ご利用いただけません。",
+    en: "This account is currently unavailable."
+  },
+
+  store_account_err_too_many: {
+    ja: "操作が続いたため、一時的に制限されています。しばらくしてからお試しください。",
+    en: "Too many attempts. Please wait a while and try again."
+  },
+
+  store_account_err_network: {
+    ja: "通信できませんでした。電波の良い場所でもう一度お試しください。",
+    en: "Couldn't connect. Please check your connection and try again."
+  },
+
+  store_account_err_not_allowed: {
+    ja: "現在、この操作を受け付けていません。時間をおいてお試しください。",
+    en: "This action is not available right now. Please try again later."
+  },
+
+  store_account_err_generic: {
+    ja: "エラーが発生しました。時間をおいてもう一度お試しください。",
+    en: "Something went wrong. Please try again later."
+  },
+
+  store_account_err_unavailable: {
+    ja: "ただいまアカウント機能を利用できません。ページを再読み込みしてください。",
+    en: "The account service is unavailable right now. Please reload the page."
   }
 };
 

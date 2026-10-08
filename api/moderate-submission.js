@@ -21610,6 +21610,131 @@ export async function requireAdminOrEditor(
 }
 
 
+// ==========================================================================
+// 正式店舗参加基盤 Phase 1｜店舗アカウント(人のアカウント)の判定。
+// Admin(ADMIN_EMAIL)・Editor(operators/{uid})とは完全に別の権限レイヤーで、
+// resolveRequestActor()/requireAdmin()/requireAdminOrEditor()には一切触れない。
+// ・IDトークンは必ずサーバーでverifyIdToken()する(クライアント申告を信用しない)
+// ・識別子はuid。メール文字列では判定しない(レスポンスにも返さない)
+// ・メール＋パスワードでログインしたユーザーだけを対象にし、匿名ユーザーは拒否
+// ・email_verifiedがtrueのユーザーだけを、将来の店舗actor「候補」として扱う
+// Phase 1では店舗との関係(storeMembers等)をまだ持たないため、この判定を
+// 通っても店舗権限・Admin権限・Editor権限は何も付与しない。Firestoreも読まない。
+const STORE_USER_SIGN_IN_PROVIDERS =
+  [
+    "password"
+  ];
+
+async function resolveStoreUserActor(
+  request
+) {
+  const idToken =
+    readBearerToken(
+      request
+    );
+
+  if (idToken === "") {
+    return {
+      ok: false,
+      status: 401,
+      message:
+        "ログインが必要です。"
+    };
+  }
+
+  let decodedToken;
+
+  try {
+    decodedToken =
+      await getAuth(
+        getFirebaseAdminApp()
+      )
+        .verifyIdToken(
+          idToken
+        );
+  } catch (verifyError) {
+    return {
+      ok: false,
+      status: 401,
+      message:
+        "ログイン情報を確認できませんでした。もう一度ログインしてください。"
+    };
+  }
+
+  const signInProvider =
+    decodedToken.firebase &&
+    typeof decodedToken.firebase.sign_in_provider === "string"
+      ? decodedToken.firebase.sign_in_provider
+      : "";
+
+  if (
+    !STORE_USER_SIGN_IN_PROVIDERS.includes(
+      signInProvider
+    )
+  ) {
+    return {
+      ok: false,
+      status: 403,
+      message:
+        "店舗アカウントでログインしてください。"
+    };
+  }
+
+  return {
+    ok: true,
+    actor: {
+      type: "storeUser",
+      uid: decodedToken.uid,
+      emailVerified:
+        decodedToken.email_verified === true
+    }
+  };
+}
+
+
+// store-account.html(店舗アカウント画面)が、ログイン中のアカウントの状態を
+// サーバー側の判定で確認するためだけに呼ぶ読み取り専用モード。Firestoreへは
+// 読み書きしない。Phase 1では店舗との紐付けが存在しないため、storeLinkedは
+// 常にfalse(店舗機能を使えるように見せない)。uid・メールアドレスは返さない。
+async function handleStoreUserStatusRequest(
+  request,
+  response
+) {
+  try {
+    const result =
+      await resolveStoreUserActor(
+        request
+      );
+
+    if (!result.ok) {
+      return response.status(result.status).json({
+        success: false,
+        message: result.message
+      });
+    }
+
+    return response.status(200).json({
+      success: true,
+      accountType: "storeUser",
+      emailVerified:
+        result.actor.emailVerified,
+      storeLinked: false
+    });
+  } catch (error) {
+    console.error(
+      "店舗アカウント状態確認：処理エラー：",
+      error && error.message
+    );
+
+    return response.status(500).json({
+      success: false,
+      message:
+        "アカウントの状態を確認できませんでした。"
+    });
+  }
+}
+
+
 // admin-post.html・admin-column.html・editor.htmlが、ログイン直後に
 // 「この人はAdminかEditorか、それとも権限が無いか」を知るためだけに呼ぶ。
 // requireAdmin()/requireAdminOrEditor()と異なり、権限が無くても403にせず
@@ -29127,6 +29252,17 @@ export default async function handler(
     requestBody.mode === "shopSubmissionCreate"
   ) {
     return handleShopSubmissionCreateRequest(
+      request,
+      response
+    );
+  }
+
+  // 正式店舗参加基盤 Phase 1｜店舗アカウントの状態確認(読み取り専用)。
+  // Admin/Editor判定・店舗token判定とは別レイヤーで、権限は何も付与しない。
+  if (
+    requestBody.mode === "storeUserStatus"
+  ) {
+    return handleStoreUserStatusRequest(
       request,
       response
     );

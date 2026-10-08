@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#071a33">
+  <title>店舗・施設アカウント｜マチナウ</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+
+  <!-- 正式店舗参加基盤 Phase 1｜店舗・施設・主催者の「人のアカウント」の画面。
+       新規登録・メール確認・ログイン・ログアウト・パスワード再設定だけを行う。
+       ・パスワードはFirebase Authenticationへブラウザから直接渡すだけ(Firestore・
+         独自API・ログへは一切送らない)
+       ・旅行者側の匿名認証(既定のFirebase app)と状態を混ぜないため、この画面は
+         名前付きの別Firebase app("machinauStoreAccount")のAuthだけを使う。
+         既定appのfirebase.auth()はこの画面から一度も呼ばない
+       ・ログインできても店舗権限・Admin権限・Editor権限は何も付与しない
+         (店舗との紐付けはPhase 2のstoreMembers)。店舗tokenも発行しない
+       ・固定文言はtranslations.jsのstore_account_*キー(JA/EN) -->
+
+  <style>
+    :root {
+      --navy: #071a33;
+      --blue: #0788c9;
+      --cyan: #04b7d7;
+      --sky: #dff7ff;
+      --green: #19a96b;
+      --red: #e0525e;
+      --white: #ffffff;
+      --text: #15233a;
+      --subtext: #697386;
+      --border: #e2eaf1;
+      --background: #f4f8fb;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Yu Gothic", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+      background: var(--background);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    header {
+      background: linear-gradient(135deg, var(--navy), #0d294a);
+      color: var(--white);
+      padding: 14px 16px 18px;
+    }
+
+    .header-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    header .page-label { font-size: 12px; opacity: 0.85; }
+    header h1 { margin: 6px 0 2px; font-size: 22px; }
+    header p { margin: 0; font-size: 13px; opacity: 0.9; }
+
+    .language-switch { display: flex; gap: 4px; flex-shrink: 0; }
+
+    .language-switch button {
+      min-height: 32px;
+      padding: 4px 10px;
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      border-radius: 999px;
+      background: transparent;
+      color: var(--white);
+      font-size: 12px;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .language-switch button[aria-pressed="true"] {
+      background: var(--white);
+      color: var(--navy);
+      font-weight: 800;
+    }
+
+    main {
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 14px 16px 60px;
+    }
+
+    .panel {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+      margin-bottom: 14px;
+    }
+
+    .panel h2 { margin: 0 0 12px; font-size: 17px; color: var(--navy); }
+
+    .note { margin: 0; font-size: 12.5px; color: var(--subtext); line-height: 1.7; }
+
+    .field { margin-bottom: 14px; }
+
+    .field label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 13.5px;
+      font-weight: 800;
+      color: var(--navy);
+    }
+
+    input[type="email"], input[type="password"], input[type="text"] {
+      width: 100%;
+      min-height: 46px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: 16px;
+      font-family: inherit;
+      background: var(--white);
+      color: var(--text);
+    }
+
+    .hint { margin: 6px 0 0; font-size: 12px; color: var(--subtext); }
+
+    .check-line {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-size: 13px;
+      margin-bottom: 14px;
+    }
+
+    .check-line input { margin-top: 4px; width: 18px; height: 18px; flex-shrink: 0; }
+    .check-line a { color: var(--blue); }
+
+    .primary-button, .secondary-button {
+      display: block;
+      width: 100%;
+      min-height: 48px;
+      padding: 12px;
+      border-radius: 999px;
+      font-size: 15px;
+      font-weight: 800;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .primary-button {
+      border: none;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      color: var(--white);
+    }
+
+    .secondary-button {
+      border: 1px solid var(--border);
+      background: var(--white);
+      color: var(--navy);
+      margin-top: 10px;
+    }
+
+    .primary-button:disabled, .secondary-button:disabled { opacity: 0.55; cursor: default; }
+
+    .link-list { margin-top: 14px; display: grid; gap: 8px; font-size: 13.5px; }
+
+    .link-button {
+      border: none;
+      background: none;
+      padding: 4px 0;
+      color: var(--blue);
+      font-size: 13.5px;
+      font-family: inherit;
+      text-align: left;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    .message {
+      display: none;
+      margin: 0 0 14px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .message.show { display: block; }
+    .message.error { background: #fdecee; color: #a3212d; }
+    .message.success { background: #e5f7ef; color: #0f6b44; }
+    .message.info { background: var(--sky); color: var(--navy); }
+
+    .status-list { margin: 0 0 14px; display: grid; gap: 8px; font-size: 13.5px; }
+
+    .status-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .status-row .status-label { color: var(--subtext); flex-shrink: 0; }
+    .status-row .status-value { font-weight: 800; text-align: right; overflow-wrap: anywhere; }
+    .status-value.ok { color: var(--green); }
+    .status-value.pending { color: var(--red); }
+
+    .back-link {
+      display: inline-block;
+      margin-top: 6px;
+      color: var(--blue);
+      font-size: 13px;
+    }
+
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-top">
+      <div class="page-label" data-i18n="store_account_page_label">マチナウ 店舗・施設アカウント</div>
+      <div class="language-switch" role="group" aria-label="Language">
+        <button type="button" data-language="ja" aria-pressed="true">日本語</button>
+        <button type="button" data-language="en" aria-pressed="false">English</button>
+      </div>
+    </div>
+    <h1 id="pageHeading" data-i18n="store_account_title_login">ログイン</h1>
+    <p data-i18n="store_account_intro">お店・施設・イベント主催者の方のためのアカウントです。</p>
+  </header>
+
+  <main>
+    <div class="panel">
+      <p class="note" data-i18n="store_account_phase_note"></p>
+    </div>
+
+    <div id="globalMessage" class="message" role="status" aria-live="polite"></div>
+
+    <!-- ログイン -->
+    <section class="panel" id="loginView" hidden>
+      <h2 data-i18n="store_account_title_login">ログイン</h2>
+      <form id="loginForm" novalidate>
+        <div class="field">
+          <label for="loginEmail" data-i18n="store_account_email_label">メールアドレス</label>
+          <input type="email" id="loginEmail" autocomplete="username" inputmode="email" maxlength="254" required>
+        </div>
+        <div class="field">
+          <label for="loginPassword" data-i18n="store_account_password_label">パスワード</label>
+          <input type="password" id="loginPassword" autocomplete="current-password" maxlength="128" required>
+        </div>
+        <label class="check-line">
+          <input type="checkbox" data-show-password="loginPassword">
+          <span data-i18n="store_account_show_password">パスワードを表示する</span>
+        </label>
+        <button type="submit" class="primary-button" data-i18n="store_account_login_button">ログインする</button>
+      </form>
+      <div class="link-list">
+        <button type="button" class="link-button" data-go-view="reset" data-i18n="store_account_forgot">パスワードを忘れた方</button>
+        <button type="button" class="link-button" data-go-view="signup" data-i18n="store_account_to_signup">はじめての方：新規アカウント登録</button>
+      </div>
+    </section>
+
+    <!-- 新規登録 -->
+    <section class="panel" id="signupView" hidden>
+      <h2 data-i18n="store_account_title_signup">新規アカウント登録</h2>
+      <form id="signupForm" novalidate>
+        <div class="field">
+          <label for="signupEmail" data-i18n="store_account_email_label">メールアドレス</label>
+          <input type="email" id="signupEmail" autocomplete="username" inputmode="email" maxlength="254" required>
+        </div>
+        <div class="field">
+          <label for="signupPassword" data-i18n="store_account_password_label">パスワード</label>
+          <input type="password" id="signupPassword" autocomplete="new-password" maxlength="128" required>
+          <p class="hint" data-i18n="store_account_password_hint">8文字以上で入力してください。</p>
+        </div>
+        <div class="field">
+          <label for="signupPasswordConfirm" data-i18n="store_account_password_confirm_label">パスワード（確認）</label>
+          <input type="password" id="signupPasswordConfirm" autocomplete="new-password" maxlength="128" required>
+        </div>
+        <label class="check-line">
+          <input type="checkbox" data-show-password="signupPassword signupPasswordConfirm">
+          <span data-i18n="store_account_show_password">パスワードを表示する</span>
+        </label>
+        <label class="check-line">
+          <input type="checkbox" id="signupAgree">
+          <span>
+            <span data-i18n="store_account_agree_prefix"></span><a href="terms.html" target="_blank" rel="noopener" data-i18n="store_account_agree_terms_link">利用規約</a><span data-i18n="store_account_agree_and">と</span><a href="privacy.html" target="_blank" rel="noopener" data-i18n="store_account_agree_privacy_link">プライバシーポリシー</a><span data-i18n="store_account_agree_suffix">に同意します</span>
+            <span class="hint" data-i18n="store_account_legal_ja_only"></span>
+          </span>
+        </label>
+        <button type="submit" class="primary-button" data-i18n="store_account_signup_button">アカウントを作成する</button>
+      </form>
+      <div class="link-list">
+        <button type="button" class="link-button" data-go-view="login" data-i18n="store_account_to_login">登録済みの方：ログイン</button>
+      </div>
+    </section>
+
+    <!-- パスワード再設定 -->
+    <section class="panel" id="resetView" hidden>
+      <h2 data-i18n="store_account_title_reset">パスワード再設定</h2>
+      <p class="note" style="margin-bottom: 12px;" data-i18n="store_account_reset_intro"></p>
+      <form id="resetForm" novalidate>
+        <div class="field">
+          <label for="resetEmail" data-i18n="store_account_email_label">メールアドレス</label>
+          <input type="email" id="resetEmail" autocomplete="username" inputmode="email" maxlength="254" required>
+        </div>
+        <button type="submit" class="primary-button" data-i18n="store_account_reset_button">再設定メールを送る</button>
+      </form>
+      <div class="link-list">
+        <button type="button" class="link-button" data-go-view="login" data-i18n="store_account_back_to_login">ログイン画面へ戻る</button>
+      </div>
+    </section>
+
+    <!-- ログイン後 -->
+    <section class="panel" id="accountView" hidden>
+      <h2 data-i18n="store_account_status_logged_in">ログインしています</h2>
+      <div class="status-list">
+        <div class="status-row">
+          <span class="status-label" data-i18n="store_account_status_email_label">メールアドレス</span>
+          <span class="status-value" id="accountEmail"></span>
+        </div>
+        <div class="status-row">
+          <span class="status-label" data-i18n="store_account_status_verify_label">メール確認</span>
+          <span class="status-value" id="accountVerified"></span>
+        </div>
+        <div class="status-row">
+          <span class="status-label" data-i18n="store_account_status_store_link_label">店舗との紐付け</span>
+          <span class="status-value" data-i18n="store_account_status_store_link_none">まだありません</span>
+        </div>
+      </div>
+
+      <div id="unverifiedBox" hidden>
+        <p class="message info show" data-i18n="store_account_verify_needed"></p>
+        <p class="note" style="margin-bottom: 10px;" data-i18n="store_account_verify_spam_hint"></p>
+        <button type="button" class="primary-button" id="refreshButton" data-i18n="store_account_refresh_button">確認が済んだら：状態を更新する</button>
+        <button type="button" class="secondary-button" id="resendButton" data-i18n="store_account_resend_button">確認メールを再送する</button>
+      </div>
+
+      <button type="button" class="secondary-button" id="logoutButton" data-i18n="store_account_logout_button">ログアウトする</button>
+    </section>
+
+    <a class="back-link" href="index.html" data-i18n="store_account_back_to_top">← マチナウTOPへ</a>
+  </main>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+  <script src="firebase.js"></script>
+  <script src="translations.js"></script>
+
+  <script>
+    (function () {
+      "use strict";
+
+      // TOP(app.js)と同じlocalStorageキーで言語を共有する。
+      const LANGUAGE_STORAGE_KEY = "machinauLanguage";
+      const STORE_AUTH_APP_NAME = "machinauStoreAccount";
+      const PASSWORD_MIN_LENGTH = 8;
+      const PASSWORD_MAX_LENGTH = 128;
+      const RESEND_COOLDOWN_MILLISECONDS = 60 * 1000;
+      const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+      const VIEW_HEADINGS = {
+        login: "store_account_title_login",
+        signup: "store_account_title_signup",
+        reset: "store_account_title_reset",
+        account: "store_account_title_account"
+      };
+
+      // Firebase Authのエラーcode → 画面文言キー。存在するアカウントかどうか等の
+      // 内部情報が分からないよう、ログイン失敗系はすべて同じ文言にまとめる。
+      const AUTH_ERROR_MESSAGE_KEYS = {
+        "auth/email-already-in-use": "store_account_err_email_in_use",
+        "auth/invalid-email": "store_account_err_email_invalid",
+        "auth/missing-email": "store_account_err_email_required",
+        "auth/weak-password": "store_account_err_weak_password",
+        "auth/password-does-not-meet-requirements": "store_account_err_weak_password",
+        "auth/missing-password": "store_account_err_password_required",
+        "auth/user-not-found": "store_account_err_login_failed",
+        "auth/wrong-password": "store_account_err_login_failed",
+        "auth/invalid-credential": "store_account_err_login_failed",
+        "auth/invalid-login-credentials": "store_account_err_login_failed",
+        "auth/user-disabled": "store_account_err_user_disabled",
+        "auth/too-many-requests": "store_account_err_too_many",
+        "auth/network-request-failed": "store_account_err_network",
+        "auth/operation-not-allowed": "store_account_err_not_allowed",
+        "auth/admin-restricted-operation": "store_account_err_not_allowed"
+      };
+
+      let currentLanguage = readLanguage();
+      let currentView = "login";
+      let storeAuth = null;
+      let busy = false;
+      let lastVerificationSentAt = 0;
+      let lastMessage = null;
+
+      function readLanguage() {
+        let stored = null;
+        try {
+          stored = localStorage.getItem(LANGUAGE_STORAGE_KEY);
+        } catch (error) {
+          stored = null;
+        }
+        return typeof stored === "string" && MACHINAU_SUPPORTED_LANGUAGES.includes(stored)
+          ? stored
+          : MACHINAU_DEFAULT_LANGUAGE;
+      }
+
+      function t(key) {
+        return getMachinauTranslation(key, currentLanguage);
+      }
+
+      function applyLanguage() {
+        document.documentElement.lang = currentLanguage;
+        document.title = t("store_account_doc_title");
+        document.querySelectorAll("[data-i18n]").forEach(function (element) {
+          element.textContent = t(element.getAttribute("data-i18n"));
+        });
+        document.getElementById("pageHeading").textContent = t(VIEW_HEADINGS[currentView]);
+        document.querySelectorAll("[data-language]").forEach(function (button) {
+          button.setAttribute("aria-pressed", button.getAttribute("data-language") === currentLanguage ? "true" : "false");
+        });
+        if (storeAuth) {
+          storeAuth.languageCode = currentLanguage;
+        }
+        renderAccount();
+        if (lastMessage) {
+          showMessage(lastMessage.key, lastMessage.type);
+        }
+      }
+
+      function showMessage(key, type) {
+        const box = document.getElementById("globalMessage");
+        lastMessage = { key: key, type: type };
+        box.textContent = t(key);
+        box.className = "message show " + type;
+      }
+
+      function clearMessage() {
+        const box = document.getElementById("globalMessage");
+        lastMessage = null;
+        box.textContent = "";
+        box.className = "message";
+      }
+
+      function showAuthError(error) {
+        const code = error && typeof error.code === "string" ? error.code : "";
+        showMessage(AUTH_ERROR_MESSAGE_KEYS[code] || "store_account_err_generic", "error");
+      }
+
+      function showView(view) {
+        currentView = view;
+        ["login", "signup", "reset", "account"].forEach(function (name) {
+          document.getElementById(name + "View").hidden = name !== view;
+        });
+        document.getElementById("pageHeading").textContent = t(VIEW_HEADINGS[view]);
+      }
+
+      function setBusy(form, isBusy) {
+        busy = isBusy;
+        const scope = form || document;
+        scope.querySelectorAll("button").forEach(function (button) {
+          button.disabled = isBusy;
+        });
+      }
+
+      function readEmail(inputId) {
+        return document.getElementById(inputId).value.trim();
+      }
+
+      function validateEmail(email) {
+        if (email === "") {
+          return "store_account_err_email_required";
+        }
+        if (email.length > 254 || !EMAIL_PATTERN.test(email)) {
+          return "store_account_err_email_invalid";
+        }
+        return "";
+      }
+
+      function renderAccount() {
+        const user = storeAuth ? storeAuth.currentUser : null;
+        if (!user) {
+          return;
+        }
+        document.getElementById("accountEmail").textContent = user.email || "";
+        const verifiedElement = document.getElementById("accountVerified");
+        verifiedElement.textContent = t(user.emailVerified ? "store_account_status_verified" : "store_account_status_unverified");
+        verifiedElement.className = "status-value " + (user.emailVerified ? "ok" : "pending");
+        document.getElementById("unverifiedBox").hidden = user.emailVerified === true;
+      }
+
+      // 確認メールのリンクからこの画面へ戻れるよう、戻り先URLを付けて送る。
+      // 戻り先のドメインがFirebase側で許可されていない場合は、戻り先なしの
+      // 標準の確認メールで送り直す(Firebase Consoleの設定変更を前提にしない)。
+      function sendVerificationEmail(user) {
+        const continueUrl = window.location.origin + window.location.pathname;
+        const settings = /^https?:$/.test(window.location.protocol) ? { url: continueUrl } : null;
+        const send = settings ? user.sendEmailVerification(settings) : user.sendEmailVerification();
+        return send.catch(function (error) {
+          const code = error && error.code;
+          if (settings && (code === "auth/unauthorized-continue-uri" || code === "auth/invalid-continue-uri" || code === "auth/missing-continue-uri")) {
+            return user.sendEmailVerification();
+          }
+          throw error;
+        }).then(function () {
+          lastVerificationSentAt = Date.now();
+        });
+      }
+
+      function handleSignup(event) {
+        event.preventDefault();
+        if (busy) {
+          return;
+        }
+        clearMessage();
+        const form = event.currentTarget;
+        const email = readEmail("signupEmail");
+        const password = document.getElementById("signupPassword").value;
+        const passwordConfirm = document.getElementById("signupPasswordConfirm").value;
+
+        const emailError = validateEmail(email);
+        if (emailError) {
+          return showMessage(emailError, "error");
+        }
+        if (password === "") {
+          return showMessage("store_account_err_password_required", "error");
+        }
+        if (password.length < PASSWORD_MIN_LENGTH) {
+          return showMessage("store_account_err_password_short", "error");
+        }
+        if (password.length > PASSWORD_MAX_LENGTH) {
+          return showMessage("store_account_err_password_long", "error");
+        }
+        if (password.toLowerCase() === email.toLowerCase()) {
+          return showMessage("store_account_err_password_same_email", "error");
+        }
+        if (password !== passwordConfirm) {
+          return showMessage("store_account_err_password_mismatch", "error");
+        }
+        if (!document.getElementById("signupAgree").checked) {
+          return showMessage("store_account_err_agree_required", "error");
+        }
+
+        setBusy(form, true);
+        storeAuth.createUserWithEmailAndPassword(email, password)
+          .then(function (credential) {
+            form.reset();
+            return sendVerificationEmail(credential.user)
+              .then(function () {
+                showView("account");
+                renderAccount();
+                showMessage("store_account_verify_sent", "success");
+              })
+              .catch(function (error) {
+                // アカウントは作成済み。確認メールだけ失敗した場合は再送ボタンで送り直せる。
+                showView("account");
+                renderAccount();
+                showAuthError(error);
+              });
+          })
+          .catch(showAuthError)
+          .finally(function () {
+            setBusy(form, false);
+          });
+      }
+
+      function handleLogin(event) {
+        event.preventDefault();
+        if (busy) {
+          return;
+        }
+        clearMessage();
+        const form = event.currentTarget;
+        const email = readEmail("loginEmail");
+        const password = document.getElementById("loginPassword").value;
+        const emailError = validateEmail(email);
+        if (emailError) {
+          return showMessage(emailError, "error");
+        }
+        if (password === "") {
+          return showMessage("store_account_err_password_required", "error");
+        }
+        setBusy(form, true);
+        storeAuth.signInWithEmailAndPassword(email, password)
+          .then(function () {
+            form.reset();
+            showView("account");
+            renderAccount();
+            confirmStatusWithServer();
+          })
+          .catch(showAuthError)
+          .finally(function () {
+            setBusy(form, false);
+          });
+      }
+
+      function handleReset(event) {
+        event.preventDefault();
+        if (busy) {
+          return;
+        }
+        clearMessage();
+        const form = event.currentTarget;
+        const email = readEmail("resetEmail");
+        const emailError = validateEmail(email);
+        if (emailError) {
+          return showMessage(emailError, "error");
+        }
+        setBusy(form, true);
+        storeAuth.sendPasswordResetEmail(email)
+          .then(function () {
+            showMessage("store_account_reset_sent", "success");
+          })
+          .catch(function (error) {
+            const code = error && error.code;
+            // 未登録メールでも「登録されている場合は送りました」と同じ表示にする
+            // (登録有無を画面から判別できないようにする)。
+            if (code === "auth/user-not-found") {
+              return showMessage("store_account_reset_sent", "success");
+            }
+            showAuthError(error);
+          })
+          .finally(function () {
+            setBusy(form, false);
+          });
+      }
+
+      function handleResend() {
+        const user = storeAuth.currentUser;
+        if (busy || !user) {
+          return;
+        }
+        clearMessage();
+        if (Date.now() - lastVerificationSentAt < RESEND_COOLDOWN_MILLISECONDS) {
+          return showMessage("store_account_resend_wait", "info");
+        }
+        const box = document.getElementById("accountView");
+        setBusy(box, true);
+        sendVerificationEmail(user)
+          .then(function () {
+            showMessage("store_account_verify_sent", "success");
+          })
+          .catch(showAuthError)
+          .finally(function () {
+            setBusy(box, false);
+          });
+      }
+
+      // メール内のリンクで確認した後、最新の状態をFirebaseから取り直す。
+      // IDトークンも更新し、サーバーがemail_verifiedを正しく判定できるようにする。
+      function handleRefresh() {
+        const user = storeAuth.currentUser;
+        if (busy || !user) {
+          return;
+        }
+        clearMessage();
+        const box = document.getElementById("accountView");
+        setBusy(box, true);
+        user.reload()
+          .then(function () {
+            return storeAuth.currentUser.getIdToken(true);
+          })
+          .then(function () {
+            renderAccount();
+            showMessage(storeAuth.currentUser.emailVerified ? "store_account_verified_now" : "store_account_still_unverified", storeAuth.currentUser.emailVerified ? "success" : "info");
+            return confirmStatusWithServer();
+          })
+          .catch(showAuthError)
+          .finally(function () {
+            setBusy(box, false);
+          });
+      }
+
+      function handleLogout() {
+        if (busy) {
+          return;
+        }
+        const box = document.getElementById("accountView");
+        setBusy(box, true);
+        storeAuth.signOut()
+          .then(function () {
+            showView("login");
+            showMessage("store_account_logged_out", "success");
+          })
+          .catch(showAuthError)
+          .finally(function () {
+            setBusy(box, false);
+          });
+      }
+
+      // サーバー側(IDトークンをverifyIdToken)でもメール確認状態を確認する。
+      // サーバーの判定がtrueの時だけ「確認済み」と表示を揃える(表示上の確認のみで、
+      // 権限は何も付与されない)。失敗しても画面の利用は続けられる。
+      function confirmStatusWithServer() {
+        const user = storeAuth.currentUser;
+        if (!user) {
+          return Promise.resolve();
+        }
+        return user.getIdToken()
+          .then(function (idToken) {
+            return fetch("/api/moderate-submission", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: "Bearer " + idToken
+              },
+              body: JSON.stringify({ mode: "storeUserStatus" })
+            });
+          })
+          .then(function (response) {
+            return response.ok ? response.json() : null;
+          })
+          .then(function (result) {
+            if (result && result.success === true && result.emailVerified !== true && storeAuth.currentUser) {
+              const verifiedElement = document.getElementById("accountVerified");
+              verifiedElement.textContent = t("store_account_status_unverified");
+              verifiedElement.className = "status-value pending";
+              document.getElementById("unverifiedBox").hidden = false;
+            }
+          })
+          .catch(function () {
+            // 表示確認のための呼び出しのため、失敗時は何もしない。
+          });
+      }
+
+      function initialViewFromUrl() {
+        const params = new URLSearchParams(window.location.search);
+        const view = params.get("view");
+        return view === "signup" || view === "reset" ? view : "login";
+      }
+
+      function bindEvents() {
+        document.getElementById("loginForm").addEventListener("submit", handleLogin);
+        document.getElementById("signupForm").addEventListener("submit", handleSignup);
+        document.getElementById("resetForm").addEventListener("submit", handleReset);
+        document.getElementById("resendButton").addEventListener("click", handleResend);
+        document.getElementById("refreshButton").addEventListener("click", handleRefresh);
+        document.getElementById("logoutButton").addEventListener("click", handleLogout);
+
+        document.querySelectorAll("[data-go-view]").forEach(function (button) {
+          button.addEventListener("click", function () {
+            clearMessage();
+            showView(button.getAttribute("data-go-view"));
+          });
+        });
+
+        document.querySelectorAll("[data-show-password]").forEach(function (checkbox) {
+          checkbox.addEventListener("change", function () {
+            checkbox.getAttribute("data-show-password").split(" ").forEach(function (id) {
+              document.getElementById(id).type = checkbox.checked ? "text" : "password";
+            });
+          });
+        });
+
+        document.querySelectorAll("[data-language]").forEach(function (button) {
+          button.addEventListener("click", function () {
+            currentLanguage = button.getAttribute("data-language");
+            try {
+              localStorage.setItem(LANGUAGE_STORAGE_KEY, currentLanguage);
+            } catch (error) {
+              // localStorageが使えなくても表示切替は続ける。
+            }
+            applyLanguage();
+          });
+        });
+      }
+
+      function init() {
+        bindEvents();
+        applyLanguage();
+
+        try {
+          const defaultApp = window.machinauFirebaseApp || firebase.app();
+          const storeApp = firebase.apps.find(function (app) {
+            return app.name === STORE_AUTH_APP_NAME;
+          }) || firebase.initializeApp(defaultApp.options, STORE_AUTH_APP_NAME);
+          storeAuth = storeApp.auth();
+          storeAuth.languageCode = currentLanguage;
+        } catch (error) {
+          showView("login");
+          showMessage("store_account_err_unavailable", "error");
+          document.querySelectorAll("form button").forEach(function (button) {
+            button.disabled = true;
+          });
+          return;
+        }
+
+        let firstState = true;
+        storeAuth.onAuthStateChanged(function (user) {
+          if (user && user.isAnonymous) {
+            // このapp(店舗アカウント専用)で匿名ユーザーは使わない。
+            storeAuth.signOut();
+            return;
+          }
+          if (user) {
+            if (currentView !== "account") {
+              showView("account");
+            }
+            renderAccount();
+            if (firstState) {
+              confirmStatusWithServer();
+            }
+          } else if (currentView === "account" || firstState) {
+            showView(firstState ? initialViewFromUrl() : "login");
+          }
+          firstState = false;
+        });
+      }
+
+      init();
+    })();
+  </script>
+</body>
+</html>
