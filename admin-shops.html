@@ -693,6 +693,19 @@
       }
     }
 
+    // 正式店舗参加基盤 Phase 2A｜セルフ登録店舗の状態・運営確認理由の表示名。
+    const SELF_REGISTRATION_STATUS_LABELS = {
+      active: "利用可能",
+      pending_review: "運営確認待ち",
+      rejected: "却下済み",
+      suspended: "停止中"
+    };
+
+    const SELF_REGISTRATION_FLAG_LABELS = {
+      possible_duplicate: "既存店舗と同じ名前・100m以内",
+      rapid_registrations: "24時間以内の連続登録"
+    };
+
     function renderStoreAccounts(storeAccounts, hasAnyStores) {
       if (!Array.isArray(storeAccounts) || storeAccounts.length === 0) {
         storeList.innerHTML = hasAnyStores
@@ -706,6 +719,11 @@
           const statusClass = storeAccount.enabled ? "enabled" : "disabled";
           const statusLabel = storeAccount.enabled ? "有効" : "無効";
           const toggleLabel = storeAccount.enabled ? "無効化する" : "有効化する";
+          // 正式店舗参加基盤 Phase 2A｜店舗自身がアカウントから登録した店舗。
+          // tokenは発行しない(専用URL再発行なし)。所在地は店舗が選んだ国で確定済みのため
+          // 日本固定の運営用所在地登録も出さない。運営確認待ちだけ承認・却下を出す。
+          const isSelfRegistered = storeAccount.createdByType === "storeUser";
+          const registrationStatus = storeAccount.registrationStatus || "active";
 
           return (
             '<div class="store-row" data-store-id="' +
@@ -721,11 +739,26 @@
                   ? escapeHtmlText([storeAccount.location.prefecture, storeAccount.location.city].filter(Boolean).join(' ') + '（' + storeAccount.location.address + '）')
                   : '<strong style="color:#a93d3d;">未登録（今だけ投稿は使えません）</strong>') +
               '</div>' +
+              (isSelfRegistered
+                ? '<div class="store-self-line" style="margin:4px 0 0; font-size:12.5px; color:var(--subtext);">' +
+                    '<strong>店舗が自分で登録</strong>（専用URLなし）｜状態：' +
+                    escapeHtmlText(SELF_REGISTRATION_STATUS_LABELS[registrationStatus] || registrationStatus) +
+                    ((storeAccount.reviewFlags || []).length > 0
+                      ? '｜確認理由：' + escapeHtmlText(storeAccount.reviewFlags.map(function(flag) {
+                          return SELF_REGISTRATION_FLAG_LABELS[flag] || flag;
+                        }).join('、'))
+                      : '') +
+                  '</div>'
+                : '') +
               '<div class="store-row-actions">' +
-                '<button type="button" class="secondary-button" data-action="rotate">token再発行</button>' +
+                (isSelfRegistered && registrationStatus === "pending_review"
+                  ? '<button type="button" class="primary-button" data-action="review-approve">確認OK（利用可能にする）</button>' +
+                    '<button type="button" class="danger-button" data-action="review-reject">登録を却下する</button>'
+                  : '') +
+                (isSelfRegistered ? '' : '<button type="button" class="secondary-button" data-action="rotate">token再発行</button>') +
                 '<button type="button" class="secondary-button" data-action="rename">店舗名を編集</button>' +
                 '<button type="button" class="secondary-button" data-action="history">投稿履歴を見る</button>' +
-                '<button type="button" class="secondary-button" data-action="location">所在地を登録・変更</button>' +
+                (isSelfRegistered ? '' : '<button type="button" class="secondary-button" data-action="location">所在地を登録・変更</button>') +
                 '<button type="button" class="' + (storeAccount.enabled ? "danger-button" : "secondary-button") + '" data-action="toggle">' + toggleLabel + '</button>' +
               '</div>' +
               '<div class="issued-url-box store-rename-box" style="display:none;">' +
@@ -819,7 +852,22 @@
       actionButton.disabled = true;
 
       try {
-        if (action === "rotate") {
+        if (action === "review-approve" || action === "review-reject") {
+          const approve = action === "review-approve";
+
+          if (!window.confirm(approve
+            ? "この店舗の登録を確認OKにして、利用可能にしますか？"
+            : "この店舗の登録を却下しますか？（店舗は利用できなくなります）")) {
+            return;
+          }
+
+          await callShopsApi("adminStoreRegistrationReview", {
+            storeId: storeId,
+            decision: approve ? "approve" : "reject"
+          });
+
+          await loadStoreAccounts();
+        } else if (action === "rotate") {
           const responseData = await callShopsApi("adminRotateStoreToken", {
             storeId: storeId
           });

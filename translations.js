@@ -1819,8 +1819,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_account_phase_note: {
-    ja: "現在ご利用いただけるのは、アカウントの作成とログインだけです。店舗との紐付けや投稿などの店舗機能は、準備ができ次第このアカウントからご利用いただけるようになります。",
-    en: "For now, you can only create an account and log in. Shop features such as linking your shop and posting will become available from this account once they are ready."
+    ja: "現在ご利用いただけるのは、アカウントの作成・ログインと、店舗・施設の登録です。常設店舗情報の編集や投稿などの機能は、準備ができ次第このアカウントからご利用いただけるようになります。",
+    en: "For now, you can create an account, log in and register your shop or facility. Features such as editing your permanent shop information and posting will become available from this account once they are ready."
   },
 
   store_account_title_login: {
@@ -2151,6 +2151,251 @@ const MACHINAU_TRANSLATIONS = {
   store_account_err_verify_too_many: {
     ja: "確認メールの送信が一時的に制限されています。時間を十分に空けてから、再度お試しください。続けて操作しても送信されません。",
     en: "Sending verification emails is temporarily restricted. Please wait a good while before trying again. Repeated attempts will not send an email."
+  },
+
+  store_account_status_store_count: {
+    ja: "{n}件",
+    en: "{n} registered"
+  },
+
+  store_account_store_verify_required: {
+    ja: "店舗・施設の登録には、メールアドレスの確認が必要です。確認が済んだら「状態を更新する」を押してください。",
+    en: "You need to verify your email address before registering a shop or facility. After verifying, press \"Refresh status\"."
+  },
+
+  store_account_stores_heading: {
+    ja: "あなたの店舗・施設",
+    en: "Your shops & facilities"
+  },
+
+  store_account_stores_empty: {
+    ja: "まだ登録されていません。",
+    en: "Nothing registered yet."
+  },
+
+  store_account_store_open_form: {
+    ja: "店舗・施設を登録する",
+    en: "Register a shop or facility"
+  },
+
+  store_account_store_form_heading: {
+    ja: "店舗・施設の登録",
+    en: "Register a shop or facility"
+  },
+
+  store_account_store_name_label: {
+    ja: "店舗・施設名",
+    en: "Shop / facility name"
+  },
+
+  store_account_store_category_label: {
+    ja: "カテゴリ",
+    en: "Category"
+  },
+
+  store_account_store_category_placeholder: {
+    ja: "選んでください",
+    en: "Please choose"
+  },
+
+  store_account_store_country_label: {
+    ja: "国・地域",
+    en: "Country / region"
+  },
+
+  store_account_store_address_label: {
+    ja: "住所",
+    en: "Address"
+  },
+
+  store_account_store_address_hint: {
+    ja: "番地・建物名まで入力してください。旅行者に表示する場所の基準になります。",
+    en: "Enter the full street address, including the building number. This is used as your location for travelers."
+  },
+
+  store_account_store_preview_button: {
+    ja: "所在地を確認する",
+    en: "Check location"
+  },
+
+  store_account_store_preview_title: {
+    ja: "見つかった所在地",
+    en: "Location found"
+  },
+
+  store_account_store_preview_partial: {
+    ja: "住所の一部だけが一致しました。地図で場所が正しいか必ず確認し、違う場合は住所を詳しく入力し直してください。",
+    en: "Only part of the address matched. Please check the map, and if the place is wrong, enter a more detailed address."
+  },
+
+  store_account_store_preview_map: {
+    ja: "地図で場所を確認する",
+    en: "Check on the map"
+  },
+
+  store_account_store_preview_confirm_hint: {
+    ja: "場所が正しければ「この内容で登録する」を押してください。",
+    en: "If the location is correct, press \"Register\"."
+  },
+
+  store_account_store_register_button: {
+    ja: "この内容で登録する",
+    en: "Register"
+  },
+
+  store_account_store_cancel_button: {
+    ja: "やめる",
+    en: "Cancel"
+  },
+
+  store_account_category_gourmet: {
+    ja: "グルメ",
+    en: "Food & dining"
+  },
+
+  store_account_category_cafe_sweets: {
+    ja: "カフェ・スイーツ",
+    en: "Cafés & sweets"
+  },
+
+  store_account_category_shopping: {
+    ja: "ショッピング",
+    en: "Shopping"
+  },
+
+  store_account_category_sightseeing_experience: {
+    ja: "観光・体験",
+    en: "Sightseeing & experiences"
+  },
+
+  store_account_category_nightlife: {
+    ja: "ナイトスポット",
+    en: "Nightlife"
+  },
+
+  store_account_category_beauty_relaxation: {
+    ja: "美容・リラクゼーション",
+    en: "Beauty & relaxation"
+  },
+
+  store_account_category_lodging: {
+    ja: "宿泊",
+    en: "Lodging"
+  },
+
+  store_account_category_other: {
+    ja: "その他",
+    en: "Other"
+  },
+
+  store_account_store_status_active: {
+    ja: "登録済み",
+    en: "Registered"
+  },
+
+  store_account_store_status_pending_review: {
+    ja: "運営確認中",
+    en: "Under review"
+  },
+
+  store_account_store_status_rejected: {
+    ja: "登録できませんでした",
+    en: "Not accepted"
+  },
+
+  store_account_store_status_suspended: {
+    ja: "停止中",
+    en: "Suspended"
+  },
+
+  store_account_store_note_active: {
+    ja: "常設店舗情報の編集は準備中です。まだ旅行者には表示されません。",
+    en: "Editing your permanent shop information is coming soon. It is not shown to travelers yet."
+  },
+
+  store_account_store_note_pending_review: {
+    ja: "既存の店舗情報との重複がないか等を運営が確認しています。確認が終わるまでお待ちください。",
+    en: "Our team is checking this registration (for example, for duplicates of existing listings). Please wait until the check is complete."
+  },
+
+  store_account_store_note_rejected: {
+    ja: "この登録はご利用いただけません。ご不明な点はマチナウ運営へお問い合わせください。",
+    en: "This registration cannot be used. If you have questions, please contact Machinau."
+  },
+
+  store_account_store_note_suspended: {
+    ja: "この店舗・施設は現在停止しています。マチナウ運営へお問い合わせください。",
+    en: "This shop or facility is currently suspended. Please contact Machinau."
+  },
+
+  store_account_store_registered_active: {
+    ja: "店舗・施設を登録しました。",
+    en: "Your shop or facility has been registered."
+  },
+
+  store_account_store_registered_pending: {
+    ja: "登録を受け付けました。運営の確認が終わるまでお待ちください。",
+    en: "Your registration was received. Please wait until our team has checked it."
+  },
+
+  store_account_store_err_verify: {
+    ja: "メールアドレスの確認が済んでいません。確認後に「状態を更新する」を押してください。",
+    en: "Your email address is not verified yet. After verifying, press \"Refresh status\"."
+  },
+
+  store_account_store_err_login: {
+    ja: "ログインし直してから、もう一度お試しください。",
+    en: "Please log in again and try once more."
+  },
+
+  store_account_store_err_address_not_found: {
+    ja: "住所が見つかりませんでした。選んだ国・地域と住所を確認してください。",
+    en: "The address could not be found. Please check the country/region and address."
+  },
+
+  store_account_store_err_too_coarse: {
+    ja: "場所を特定できませんでした。番地・建物名まで入力してください。",
+    en: "The location could not be pinpointed. Please enter the full street address."
+  },
+
+  store_account_store_err_country_mismatch: {
+    ja: "選んだ国・地域の中で住所が見つかりませんでした。国・地域の選択を確認してください。",
+    en: "The address was not found in the selected country/region. Please check your selection."
+  },
+
+  store_account_store_err_geocoding: {
+    ja: "ただいま所在地を確認できません。時間をおいてお試しください。",
+    en: "We can't check locations right now. Please try again later."
+  },
+
+  store_account_store_err_already_registered: {
+    ja: "この店舗・施設は、すでにこのアカウントで登録されています。",
+    en: "This shop or facility is already registered with this account."
+  },
+
+  store_account_store_err_rate_limited: {
+    ja: "続けて操作されたため、少し時間をおいてからお試しください。",
+    en: "Please wait a moment before trying again."
+  },
+
+  store_account_store_err_name: {
+    ja: "店舗・施設名を60文字以内で入力してください。",
+    en: "Please enter a shop/facility name (up to 60 characters)."
+  },
+
+  store_account_store_err_category: {
+    ja: "カテゴリを選んでください。",
+    en: "Please choose a category."
+  },
+
+  store_account_store_err_country: {
+    ja: "国・地域を選んでください。",
+    en: "Please choose a country/region."
+  },
+
+  store_account_store_err_address: {
+    ja: "住所を200文字以内で入力してください。",
+    en: "Please enter an address (up to 200 characters)."
   }
 };
 

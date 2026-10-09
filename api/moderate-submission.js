@@ -55,6 +55,14 @@ import {
   readStoreOfficialLocationFromData
 } from "./_lib/imadake.js";
 
+// 正式店舗参加基盤 Phase 2A｜セルフ店舗登録。実処理はapi/_lib/store-self-service.js。
+import {
+  handleStoreRegistrationPreview,
+  handleStoreSelfRegister,
+  handleStoreMyStores,
+  handleAdminStoreRegistrationReview
+} from "./_lib/store-self-service.js";
+
 
 function getFirebaseAdminApp() {
   if (getApps().length > 0) {
@@ -1166,6 +1174,22 @@ async function handleAdminListStoreAccountsRequest(
             enabled:
               data.enabled === true,
 
+            // Phase 2A｜セルフ登録店舗の区別と登録状態(運営登録店舗は"operator"/"active")。
+            createdByType:
+              data.createdByType === "storeUser"
+                ? "storeUser"
+                : "operator",
+
+            registrationStatus:
+              typeof data.registrationStatus === "string"
+                ? data.registrationStatus
+                : "active",
+
+            reviewFlags:
+              Array.isArray(data.reviewFlags)
+                ? data.reviewFlags
+                : [],
+
             // 今だけ投稿 STEP 4A｜運営が登録した正式所在地(未登録ならnull)。
             location:
               (function() {
@@ -1259,6 +1283,17 @@ async function handleAdminRotateStoreTokenRequest(
       return response.status(404).json({
         success: false,
         message: "対象の店舗が見つかりませんでした。"
+      });
+    }
+
+    // Phase 2A｜セルフ登録店舗にはtokenを発行しない(旧店舗URL方式は運営登録店舗だけ)。
+    if (
+      (storeAccountSnapshot.data() || {}).createdByType === "storeUser"
+    ) {
+      return response.status(409).json({
+        success: false,
+        reason: "self_registered_store",
+        message: "セルフ登録の店舗には店舗専用URLを発行しません。"
       });
     }
 
@@ -29044,6 +29079,20 @@ function buildTownNowThreadDeps() {
 
 
 // 今だけ投稿 STEP 3｜api/_lib/imadake.jsへ渡す既存関数(参照のみ、変更なし)。
+// Phase 2A｜セルフ店舗登録へ渡す既存関数の参照(既存関数自体は変更しない)。
+function buildStoreSelfServiceDeps() {
+  return {
+    getFirebaseAdminApp: getFirebaseAdminApp,
+    getFirestore: getFirestore,
+    readRequestBody: readRequestBody,
+    resolveStoreUserActor: resolveStoreUserActor,
+    requireAdmin: requireAdmin,
+    claimRateLimit: claimRateLimit,
+    computeRateLimitIdentifier: computeRateLimitIdentifier,
+    findAddressComponentByType: findAddressComponentByType
+  };
+}
+
 function buildImadakeDeps() {
   return {
     getFirebaseAdminApp: getFirebaseAdminApp,
@@ -29265,6 +29314,48 @@ export default async function handler(
     return handleStoreUserStatusRequest(
       request,
       response
+    );
+  }
+
+  // 正式店舗参加基盤 Phase 2A｜セルフ店舗登録(メール確認済み店舗アカウント)と、
+  // 運営確認待ちのセルフ登録店舗の承認・却下(admin専用)。
+  if (
+    requestBody.mode === "storeRegistrationPreview"
+  ) {
+    return handleStoreRegistrationPreview(
+      request,
+      response,
+      buildStoreSelfServiceDeps()
+    );
+  }
+
+  if (
+    requestBody.mode === "storeSelfRegister"
+  ) {
+    return handleStoreSelfRegister(
+      request,
+      response,
+      buildStoreSelfServiceDeps()
+    );
+  }
+
+  if (
+    requestBody.mode === "storeMyStores"
+  ) {
+    return handleStoreMyStores(
+      request,
+      response,
+      buildStoreSelfServiceDeps()
+    );
+  }
+
+  if (
+    requestBody.mode === "adminStoreRegistrationReview"
+  ) {
+    return handleAdminStoreRegistrationReview(
+      request,
+      response,
+      buildStoreSelfServiceDeps()
     );
   }
 

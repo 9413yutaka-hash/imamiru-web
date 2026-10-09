@@ -2239,6 +2239,16 @@ export async function handleImadakeAdminStoreLocation(
       });
     }
 
+    // 正式店舗参加基盤 Phase 2A｜セルフ登録店舗の所在地は、店舗が選んだ国で
+    // 確定済み。日本固定のこの運営用Geocodingでは上書きしない。
+    if ((storeSnapshot.data() || {}).createdByType === "storeUser") {
+      return response.status(409).json({
+        success: false,
+        reason: "self_registered_store",
+        message: "セルフ登録の店舗の所在地は、この画面からは変更できません。"
+      });
+    }
+
     const geocoded =
       await geocodeStoreAddress(address, deps);
 

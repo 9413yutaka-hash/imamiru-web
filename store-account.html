@@ -190,6 +190,70 @@
     .message.info { background: var(--sky); color: var(--navy); }
     .message .error-code { display: block; margin-top: 4px; font-size: 11px; opacity: 0.75; }
 
+    select {
+      width: 100%;
+      min-height: 46px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: 16px;
+      font-family: inherit;
+      background: var(--white);
+      color: var(--text);
+    }
+
+    .store-section, .store-verify-required {
+      margin: 6px 0 14px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+    }
+
+    .store-section h3, .store-form h3 { margin: 0 0 10px; font-size: 15px; color: var(--navy); }
+    .store-form { margin-top: 14px; }
+
+    .store-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 10px; }
+
+    .store-card {
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: 13px;
+      overflow-wrap: anywhere;
+    }
+
+    .store-card-name { font-size: 15px; font-weight: 800; color: var(--navy); }
+    .store-card-meta { margin-top: 2px; color: var(--subtext); }
+    .store-card-note { margin-top: 6px; font-size: 12px; color: var(--subtext); }
+
+    .store-status {
+      display: inline-block;
+      margin-top: 6px;
+      padding: 2px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+      background: var(--sky);
+      color: var(--navy);
+    }
+
+    .store-status.active { background: #e5f7ef; color: #0f6b44; }
+    .store-status.pending_review { background: #fff4e5; color: #8a4b00; }
+    .store-status.rejected, .store-status.suspended { background: #fdecee; color: #a3212d; }
+
+    .store-preview {
+      margin: 12px 0;
+      padding: 12px;
+      border-radius: 12px;
+      background: var(--background);
+      font-size: 13px;
+    }
+
+    .store-preview p { margin: 0 0 4px; }
+    .store-preview-title { font-weight: 800; color: var(--navy); }
+    .store-preview-address { overflow-wrap: anywhere; }
+    .store-preview-warning { color: #8a4b00; }
+    .store-preview a { color: var(--blue); font-size: 13px; }
+
     .status-list { margin: 0 0 14px; display: grid; gap: 8px; font-size: 13.5px; }
 
     .status-row {
@@ -324,8 +388,54 @@
         </div>
         <div class="status-row">
           <span class="status-label" data-i18n="store_account_status_store_link_label">店舗との紐付け</span>
-          <span class="status-value" data-i18n="store_account_status_store_link_none">まだありません</span>
+          <span class="status-value" id="accountStoreLink"></span>
         </div>
+      </div>
+
+      <!-- Phase 2A｜セルフ店舗登録。メール確認済みのアカウントだけに表示する。
+           店舗の作成・所在地の確定・token非発行はすべてサーバー側で行う。 -->
+      <p class="note store-verify-required" id="storeVerifyRequired" hidden data-i18n="store_account_store_verify_required"></p>
+
+      <div class="store-section" id="storeSection" hidden>
+        <h3 data-i18n="store_account_stores_heading">あなたの店舗・施設</h3>
+        <p class="note" id="storeListEmpty" hidden data-i18n="store_account_stores_empty"></p>
+        <ul class="store-list" id="storeList"></ul>
+        <div id="storeMessage" class="message" role="status" aria-live="polite"></div>
+        <button type="button" class="primary-button" id="openStoreFormButton" data-i18n="store_account_store_open_form">店舗・施設を登録する</button>
+
+        <form id="storeForm" class="store-form" hidden novalidate>
+          <h3 data-i18n="store_account_store_form_heading">店舗・施設の登録</h3>
+          <div class="field">
+            <label for="storeNameInput" data-i18n="store_account_store_name_label">店舗・施設名</label>
+            <input type="text" id="storeNameInput" maxlength="60" autocomplete="organization" required>
+          </div>
+          <div class="field">
+            <label for="storeCategorySelect" data-i18n="store_account_store_category_label">カテゴリ</label>
+            <select id="storeCategorySelect" required></select>
+          </div>
+          <div class="field">
+            <label for="storeCountrySelect" data-i18n="store_account_store_country_label">国・地域</label>
+            <select id="storeCountrySelect" required></select>
+          </div>
+          <div class="field">
+            <label for="storeAddressInput" data-i18n="store_account_store_address_label">住所</label>
+            <input type="text" id="storeAddressInput" maxlength="200" autocomplete="street-address" required>
+            <p class="hint" data-i18n="store_account_store_address_hint"></p>
+          </div>
+          <button type="button" class="secondary-button" id="storePreviewButton" data-i18n="store_account_store_preview_button">所在地を確認する</button>
+
+          <div class="store-preview" id="storePreviewBox" hidden>
+            <p class="store-preview-title" data-i18n="store_account_store_preview_title">見つかった所在地</p>
+            <p class="store-preview-address" id="storePreviewAddress"></p>
+            <p class="store-preview-region" id="storePreviewRegion"></p>
+            <p class="hint store-preview-warning" id="storePreviewPartial" hidden data-i18n="store_account_store_preview_partial"></p>
+            <a id="storePreviewMapLink" href="#" target="_blank" rel="noopener" data-i18n="store_account_store_preview_map">地図で場所を確認する</a>
+            <p class="hint" data-i18n="store_account_store_preview_confirm_hint"></p>
+          </div>
+
+          <button type="submit" class="primary-button" id="storeRegisterButton" disabled data-i18n="store_account_store_register_button">この内容で登録する</button>
+          <button type="button" class="secondary-button" id="storeFormCancelButton" data-i18n="store_account_store_cancel_button">やめる</button>
+        </form>
       </div>
 
       <div id="unverifiedBox" hidden>
@@ -430,10 +540,15 @@
         if (storeAuth) {
           storeAuth.languageCode = currentLanguage;
         }
+        buildStoreSelectOptions();
         renderAccount();
         updateResendButton();
+        renderStorePreview();
         if (lastMessage) {
           showMessage(lastMessage.key, lastMessage.type, lastMessage.code);
+        }
+        if (lastStoreMessage) {
+          showStoreMessage(lastStoreMessage.key, lastStoreMessage.type, lastStoreMessage.code);
         }
       }
 
@@ -479,8 +594,9 @@
           button.disabled = isBusy;
         });
         if (!isBusy) {
-          // 一括で有効化した再送ボタンを、待機状態に合わせて戻す。
+          // 一括で有効化した再送ボタン・店舗登録ボタンを、それぞれの状態に合わせて戻す。
           updateResendButton();
+          updateStoreRegisterButton();
         }
       }
 
@@ -509,6 +625,417 @@
         verifiedElement.className = "status-value " + (user.emailVerified ? "ok" : "pending");
         document.getElementById("unverifiedBox").hidden = user.emailVerified === true;
         updateResendButton();
+        renderStoreSection();
+      }
+
+      // ===== Phase 2A｜セルフ店舗登録 =====
+      // 店舗の作成・所在地の確定・運営確認への振り分け・token非発行はすべてサーバーが
+      // 行う。この画面は入力と結果表示だけで、Firestoreへ直接アクセスしない。
+
+      // サーバーのカテゴリcodeと同じ並び(api/_lib/store-self-service.js)。
+      const STORE_CATEGORY_CODES = [
+        "gourmet",
+        "cafe_sweets",
+        "shopping",
+        "sightseeing_experience",
+        "nightlife",
+        "beauty_relaxation",
+        "lodging",
+        "other"
+      ];
+
+      // ISO 3166-1 alpha-2。国名は言語ごとにブラウザ標準のIntl.DisplayNamesで表示する
+      // (国名の翻訳表を持たない)。日本を初期値にする。
+      const STORE_COUNTRY_CODES = (
+        "AD AE AF AG AI AL AM AO AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BW BY BZ " +
+        "CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR " +
+        "GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GT GU GW GY HK HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP " +
+        "KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ " +
+        "NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW " +
+        "SA SB SC SD SE SG SH SI SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TG TH TJ TK TL TM TN TO TR TT TV TW TZ " +
+        "UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW"
+      ).split(" ");
+      const STORE_DEFAULT_COUNTRY = "JP";
+
+      // サーバーの理由code → 画面文言キー。
+      const STORE_ERROR_MESSAGE_KEYS = {
+        email_not_verified: "store_account_store_err_verify",
+        login_required: "store_account_store_err_login",
+        store_account_required: "store_account_store_err_login",
+        address_not_found: "store_account_store_err_address_not_found",
+        location_too_coarse: "store_account_store_err_too_coarse",
+        country_mismatch: "store_account_store_err_country_mismatch",
+        geocoding_unavailable: "store_account_store_err_geocoding",
+        already_registered: "store_account_store_err_already_registered",
+        rate_limited: "store_account_store_err_rate_limited"
+      };
+      const STORE_FIELD_ERROR_KEYS = {
+        storeName: "store_account_store_err_name",
+        categoryCode: "store_account_store_err_category",
+        countryCode: "store_account_store_err_country",
+        address: "store_account_store_err_address"
+      };
+
+      let myStores = [];
+      let storesLoadedForUid = "";
+      let storesLoading = false;
+      let storeRequestPending = false;
+      let storePreviewKey = "";
+      let storePreviewLocation = null;
+      let lastStoreMessage = null;
+
+      function getCountryDisplayName(code) {
+        try {
+          const names = new Intl.DisplayNames([currentLanguage], { type: "region" });
+          return names.of(code) || code;
+        } catch (error) {
+          return code;
+        }
+      }
+
+      function buildStoreSelectOptions() {
+        const categorySelect = document.getElementById("storeCategorySelect");
+        const countrySelect = document.getElementById("storeCountrySelect");
+        const selectedCategory = categorySelect.value;
+        const selectedCountry = countrySelect.value || STORE_DEFAULT_COUNTRY;
+
+        categorySelect.textContent = "";
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = t("store_account_store_category_placeholder");
+        categorySelect.appendChild(placeholder);
+        STORE_CATEGORY_CODES.forEach(function (code) {
+          const option = document.createElement("option");
+          option.value = code;
+          option.textContent = t("store_account_category_" + code);
+          categorySelect.appendChild(option);
+        });
+        categorySelect.value = selectedCategory;
+
+        const countries = STORE_COUNTRY_CODES
+          .map(function (code) {
+            return { code: code, name: getCountryDisplayName(code) };
+          })
+          .sort(function (first, second) {
+            if (first.code === STORE_DEFAULT_COUNTRY) return -1;
+            if (second.code === STORE_DEFAULT_COUNTRY) return 1;
+            return first.name.localeCompare(second.name, currentLanguage);
+          });
+        countrySelect.textContent = "";
+        countries.forEach(function (country) {
+          const option = document.createElement("option");
+          option.value = country.code;
+          option.textContent = country.name;
+          countrySelect.appendChild(option);
+        });
+        countrySelect.value = selectedCountry;
+      }
+
+      function showStoreMessage(key, type, code) {
+        const box = document.getElementById("storeMessage");
+        lastStoreMessage = { key: key, type: type, code: code || "" };
+        box.textContent = t(key);
+        if (code) {
+          const codeElement = document.createElement("span");
+          codeElement.className = "error-code";
+          codeElement.textContent = "(" + code + ")";
+          box.appendChild(codeElement);
+        }
+        box.className = "message show " + type;
+      }
+
+      function clearStoreMessage() {
+        const box = document.getElementById("storeMessage");
+        lastStoreMessage = null;
+        box.textContent = "";
+        box.className = "message";
+      }
+
+      function showStoreError(status, result) {
+        const reason = result && typeof result.reason === "string" ? result.reason : "";
+        if (reason === "invalid_input" && result.field && STORE_FIELD_ERROR_KEYS[result.field]) {
+          return showStoreMessage(STORE_FIELD_ERROR_KEYS[result.field], "error");
+        }
+        showStoreMessage(STORE_ERROR_MESSAGE_KEYS[reason] || "store_account_err_generic", "error", reason || (status ? "http_" + status : ""));
+      }
+
+      function callStoreApi(body) {
+        const user = storeAuth && storeAuth.currentUser;
+        if (!user) {
+          return Promise.resolve({ status: 401, result: { reason: "login_required" } });
+        }
+        return user.getIdToken()
+          .then(function (idToken) {
+            return fetch("/api/moderate-submission", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: "Bearer " + idToken
+              },
+              body: JSON.stringify(body)
+            });
+          })
+          .then(function (response) {
+            return response.json()
+              .catch(function () {
+                return null;
+              })
+              .then(function (result) {
+                return { status: response.status, result: result };
+              });
+          });
+      }
+
+      function renderStoreLinkStatus() {
+        const element = document.getElementById("accountStoreLink");
+        element.textContent = myStores.length > 0
+          ? t("store_account_status_store_count").replace("{n}", myStores.length)
+          : t("store_account_status_store_link_none");
+      }
+
+      function renderStoreList() {
+        const list = document.getElementById("storeList");
+        list.textContent = "";
+        myStores.forEach(function (store) {
+          const item = document.createElement("li");
+          item.className = "store-card";
+
+          const name = document.createElement("div");
+          name.className = "store-card-name";
+          name.textContent = store.storeName;
+          item.appendChild(name);
+
+          const meta = document.createElement("div");
+          meta.className = "store-card-meta";
+          meta.textContent = [
+            store.categoryCode ? t("store_account_category_" + store.categoryCode) : "",
+            [getCountryDisplayName(store.countryCode), store.prefecture, store.city]
+              .filter(Boolean)
+              .join(" ")
+          ].filter(Boolean).join("｜");
+          item.appendChild(meta);
+
+          const status = document.createElement("span");
+          const statusCode = ["active", "pending_review", "rejected", "suspended"].includes(store.registrationStatus)
+            ? store.registrationStatus
+            : "active";
+          status.className = "store-status " + statusCode;
+          status.textContent = t("store_account_store_status_" + statusCode);
+          item.appendChild(status);
+
+          const note = document.createElement("div");
+          note.className = "store-card-note";
+          note.textContent = t("store_account_store_note_" + statusCode);
+          item.appendChild(note);
+
+          list.appendChild(item);
+        });
+        document.getElementById("storeListEmpty").hidden = myStores.length > 0 || storesLoading;
+        renderStoreLinkStatus();
+      }
+
+      function renderStoreSection() {
+        const user = storeAuth ? storeAuth.currentUser : null;
+        const verified = !!(user && user.emailVerified);
+        document.getElementById("storeSection").hidden = !verified;
+        document.getElementById("storeVerifyRequired").hidden = !user || verified;
+        renderStoreList();
+        if (verified && storesLoadedForUid !== user.uid && !storesLoading) {
+          loadMyStores();
+        }
+      }
+
+      function loadMyStores() {
+        const user = storeAuth && storeAuth.currentUser;
+        if (!user) {
+          return Promise.resolve();
+        }
+        const uid = user.uid;
+        storesLoading = true;
+        return callStoreApi({ mode: "storeMyStores" })
+          .then(function (response) {
+            if (!storeAuth.currentUser || storeAuth.currentUser.uid !== uid) {
+              return;
+            }
+            if (response.status === 200 && response.result && Array.isArray(response.result.stores)) {
+              myStores = response.result.stores;
+              storesLoadedForUid = uid;
+            } else {
+              showStoreError(response.status, response.result);
+            }
+          })
+          .catch(function () {
+            showStoreMessage("store_account_err_network", "error");
+          })
+          .finally(function () {
+            storesLoading = false;
+            renderStoreList();
+          });
+      }
+
+      function resetStoreState() {
+        myStores = [];
+        storesLoadedForUid = "";
+        closeStoreForm();
+        clearStoreMessage();
+        renderStoreLinkStatus();
+      }
+
+      function readStoreForm() {
+        return {
+          storeName: document.getElementById("storeNameInput").value.trim(),
+          categoryCode: document.getElementById("storeCategorySelect").value,
+          countryCode: document.getElementById("storeCountrySelect").value,
+          address: document.getElementById("storeAddressInput").value.trim()
+        };
+      }
+
+      function validateStoreForm(values) {
+        if (values.storeName === "") return "store_account_store_err_name";
+        if (values.categoryCode === "") return "store_account_store_err_category";
+        if (values.countryCode === "") return "store_account_store_err_country";
+        if (values.address === "") return "store_account_store_err_address";
+        return "";
+      }
+
+      // 所在地を確認した後に国・住所を変えたら、確認をやり直すまで登録できない。
+      function invalidateStorePreview() {
+        const values = readStoreForm();
+        if (storePreviewKey !== values.countryCode + "|" + values.address) {
+          storePreviewKey = "";
+          storePreviewLocation = null;
+          document.getElementById("storePreviewBox").hidden = true;
+        }
+        updateStoreRegisterButton();
+      }
+
+      function updateStoreRegisterButton() {
+        const values = readStoreForm();
+        document.getElementById("storeRegisterButton").disabled =
+          storeRequestPending ||
+          storePreviewKey === "" ||
+          storePreviewKey !== values.countryCode + "|" + values.address;
+        document.getElementById("storePreviewButton").disabled = storeRequestPending;
+      }
+
+      function renderStorePreview() {
+        if (!storePreviewLocation) {
+          return;
+        }
+        const location = storePreviewLocation;
+        document.getElementById("storePreviewAddress").textContent = location.formattedAddress;
+        document.getElementById("storePreviewRegion").textContent = [
+          getCountryDisplayName(location.countryCode),
+          location.prefecture,
+          location.city
+        ].filter(Boolean).join(" ");
+        document.getElementById("storePreviewPartial").hidden = location.partialMatch !== true;
+        document.getElementById("storePreviewMapLink").href =
+          "https://www.google.com/maps/search/?api=1&query=" +
+          encodeURIComponent(location.latitude + "," + location.longitude);
+        document.getElementById("storePreviewBox").hidden = false;
+      }
+
+      function openStoreForm() {
+        clearStoreMessage();
+        document.getElementById("storeForm").hidden = false;
+        document.getElementById("openStoreFormButton").hidden = true;
+        document.getElementById("storeNameInput").focus();
+      }
+
+      function closeStoreForm() {
+        const form = document.getElementById("storeForm");
+        form.reset();
+        document.getElementById("storeCountrySelect").value = STORE_DEFAULT_COUNTRY;
+        form.hidden = true;
+        document.getElementById("openStoreFormButton").hidden = false;
+        storePreviewKey = "";
+        storePreviewLocation = null;
+        document.getElementById("storePreviewBox").hidden = true;
+        updateStoreRegisterButton();
+      }
+
+      function handleStorePreview() {
+        if (storeRequestPending) {
+          return;
+        }
+        clearStoreMessage();
+        const values = readStoreForm();
+        const invalidKey = validateStoreForm(values);
+        if (invalidKey) {
+          return showStoreMessage(invalidKey, "error");
+        }
+        storeRequestPending = true;
+        updateStoreRegisterButton();
+        callStoreApi({
+          mode: "storeRegistrationPreview",
+          countryCode: values.countryCode,
+          address: values.address
+        })
+          .then(function (response) {
+            if (response.status === 200 && response.result && response.result.location) {
+              storePreviewKey = values.countryCode + "|" + values.address;
+              storePreviewLocation = response.result.location;
+              renderStorePreview();
+            } else {
+              showStoreError(response.status, response.result);
+            }
+          })
+          .catch(function () {
+            showStoreMessage("store_account_err_network", "error");
+          })
+          .finally(function () {
+            storeRequestPending = false;
+            updateStoreRegisterButton();
+          });
+      }
+
+      function handleStoreRegister(event) {
+        event.preventDefault();
+        const values = readStoreForm();
+        if (storeRequestPending) {
+          return;
+        }
+        if (storePreviewKey !== values.countryCode + "|" + values.address) {
+          // 所在地の確認前(Enterキー等)は、登録せず確認だけを行う。
+          return handleStorePreview();
+        }
+        clearStoreMessage();
+        const invalidKey = validateStoreForm(values);
+        if (invalidKey) {
+          return showStoreMessage(invalidKey, "error");
+        }
+        storeRequestPending = true;
+        updateStoreRegisterButton();
+        callStoreApi({
+          mode: "storeSelfRegister",
+          storeName: values.storeName,
+          categoryCode: values.categoryCode,
+          countryCode: values.countryCode,
+          address: values.address,
+          sourceLanguage: currentLanguage
+        })
+          .then(function (response) {
+            if (response.status === 200 && response.result && response.result.success) {
+              closeStoreForm();
+              showStoreMessage(
+                response.result.registrationStatus === "pending_review"
+                  ? "store_account_store_registered_pending"
+                  : "store_account_store_registered_active",
+                response.result.registrationStatus === "pending_review" ? "info" : "success"
+              );
+              storesLoadedForUid = "";
+              return loadMyStores();
+            }
+            showStoreError(response.status, response.result);
+          })
+          .catch(function () {
+            showStoreMessage("store_account_err_network", "error");
+          })
+          .finally(function () {
+            storeRequestPending = false;
+            updateStoreRegisterButton();
+          });
       }
 
       // 次に確認メールを送ってよい時刻(ミリ秒)だけをlocalStorageへ保存する。
@@ -805,6 +1332,7 @@
           return;
         }
         cancelScheduledVerification();
+        resetStoreState();
         const box = document.getElementById("accountView");
         setBusy(box, true);
         storeAuth.signOut()
@@ -866,6 +1394,28 @@
         document.getElementById("resendButton").addEventListener("click", handleResend);
         document.getElementById("refreshButton").addEventListener("click", handleRefresh);
         document.getElementById("logoutButton").addEventListener("click", handleLogout);
+        document.getElementById("openStoreFormButton").addEventListener("click", openStoreForm);
+        document.getElementById("storeFormCancelButton").addEventListener("click", function () {
+          clearStoreMessage();
+          closeStoreForm();
+        });
+        document.getElementById("storePreviewButton").addEventListener("click", handleStorePreview);
+        document.getElementById("storeForm").addEventListener("submit", handleStoreRegister);
+        // 住所欄でEnterを押したら、登録ではなく所在地の確認を行う
+        // (登録ボタンは確認前は無効のため、ブラウザ標準の送信は起きない)。
+        document.getElementById("storeAddressInput").addEventListener("keydown", function (event) {
+          if (event.key === "Enter" && !event.isComposing) {
+            event.preventDefault();
+            const values = readStoreForm();
+            if (storePreviewKey !== values.countryCode + "|" + values.address) {
+              handleStorePreview();
+            }
+          }
+        });
+        ["storeCountrySelect", "storeAddressInput"].forEach(function (id) {
+          document.getElementById(id).addEventListener("input", invalidateStorePreview);
+          document.getElementById(id).addEventListener("change", invalidateStorePreview);
+        });
 
         document.querySelectorAll("[data-go-view]").forEach(function (button) {
           button.addEventListener("click", function () {
@@ -932,6 +1482,7 @@
             }
           } else if (currentView === "account" || firstState) {
             cancelScheduledVerification();
+            resetStoreState();
             showView(firstState ? initialViewFromUrl() : "login");
           }
           firstState = false;
