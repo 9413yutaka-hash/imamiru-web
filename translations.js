@@ -2121,6 +2121,36 @@ const MACHINAU_TRANSLATIONS = {
   store_account_err_unavailable: {
     ja: "ただいまアカウント機能を利用できません。ページを再読み込みしてください。",
     en: "The account service is unavailable right now. Please reload the page."
+  },
+
+  store_account_verify_preparing: {
+    ja: "確認メールを準備しています。数秒後に1回だけ送信します。",
+    en: "Preparing your verification email. It will be sent once in a few seconds."
+  },
+
+  store_account_verify_preparing_button: {
+    ja: "確認メールを送信しています…",
+    en: "Sending verification email…"
+  },
+
+  store_account_verify_cooldown_active: {
+    ja: "このブラウザでは直前に確認メールの送信を行ったため、今は送信していません。再送できるようになったら「確認メールを再送する」を押してください。",
+    en: "A verification email was requested from this browser recently, so none was sent now. When resending becomes available, press \"Resend verification email\"."
+  },
+
+  store_account_resend_available_in: {
+    ja: "再送できるまで あと {time}",
+    en: "You can resend in {time}"
+  },
+
+  store_account_duration_hours_minutes: {
+    ja: "{h}時間{m}分",
+    en: "{h}h {m}m"
+  },
+
+  store_account_err_verify_too_many: {
+    ja: "確認メールの送信が一時的に制限されています。時間を十分に空けてから、再度お試しください。続けて操作しても送信されません。",
+    en: "Sending verification emails is temporarily restricted. Please wait a good while before trying again. Repeated attempts will not send an email."
   }
 };
 

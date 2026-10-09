@@ -188,6 +188,7 @@
     .message.error { background: #fdecee; color: #a3212d; }
     .message.success { background: #e5f7ef; color: #0f6b44; }
     .message.info { background: var(--sky); color: var(--navy); }
+    .message .error-code { display: block; margin-top: 4px; font-size: 11px; opacity: 0.75; }
 
     .status-list { margin: 0 0 14px; display: grid; gap: 8px; font-size: 13.5px; }
 
@@ -355,7 +356,11 @@
       const STORE_AUTH_APP_NAME = "machinauStoreAccount";
       const PASSWORD_MIN_LENGTH = 8;
       const PASSWORD_MAX_LENGTH = 128;
-      const RESEND_COOLDOWN_MILLISECONDS = 60 * 1000;
+      // 確認メール送信の待機時間(マチナウ側の安全策。Firebase側の解除時間ではない)。
+      const VERIFY_NEXT_ALLOWED_AT_STORAGE_KEY = "machinauStoreVerifyNextAllowedAt";
+      const VERIFY_COOLDOWN_MILLISECONDS = 2 * 60 * 1000;
+      const VERIFY_COOLDOWN_TOO_MANY_MILLISECONDS = 24 * 60 * 60 * 1000;
+      const VERIFY_SEND_DELAY_AFTER_SIGNUP_MILLISECONDS = 5 * 1000;
       const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
       const VIEW_HEADINGS = {
@@ -389,8 +394,12 @@
       let currentView = "login";
       let storeAuth = null;
       let busy = false;
-      let lastVerificationSentAt = 0;
       let lastMessage = null;
+      let verificationSendPending = false;
+      let verificationSending = false;
+      let verificationSendTimerId = 0;
+      let verificationCooldownFallbackUntil = 0;
+      let resendTimerId = 0;
 
       function readLanguage() {
         let stored = null;
@@ -422,15 +431,24 @@
           storeAuth.languageCode = currentLanguage;
         }
         renderAccount();
+        updateResendButton();
         if (lastMessage) {
-          showMessage(lastMessage.key, lastMessage.type);
+          showMessage(lastMessage.key, lastMessage.type, lastMessage.code);
         }
       }
 
-      function showMessage(key, type) {
+      // codeはFirebaseのエラーcode(例：auth/too-many-requests)。調査しやすいよう
+      // 文言の後ろに小さく添える(個人情報・内部情報は含まない固定の識別子のみ)。
+      function showMessage(key, type, code) {
         const box = document.getElementById("globalMessage");
-        lastMessage = { key: key, type: type };
+        lastMessage = { key: key, type: type, code: code || "" };
         box.textContent = t(key);
+        if (code) {
+          const codeElement = document.createElement("span");
+          codeElement.className = "error-code";
+          codeElement.textContent = "(" + code + ")";
+          box.appendChild(codeElement);
+        }
         box.className = "message show " + type;
       }
 
@@ -460,6 +478,10 @@
         scope.querySelectorAll("button").forEach(function (button) {
           button.disabled = isBusy;
         });
+        if (!isBusy) {
+          // 一括で有効化した再送ボタンを、待機状態に合わせて戻す。
+          updateResendButton();
+        }
       }
 
       function readEmail(inputId) {
@@ -486,24 +508,142 @@
         verifiedElement.textContent = t(user.emailVerified ? "store_account_status_verified" : "store_account_status_unverified");
         verifiedElement.className = "status-value " + (user.emailVerified ? "ok" : "pending");
         document.getElementById("unverifiedBox").hidden = user.emailVerified === true;
+        updateResendButton();
       }
 
-      // 確認メールのリンクからこの画面へ戻れるよう、戻り先URLを付けて送る。
-      // 戻り先のドメインがFirebase側で許可されていない場合は、戻り先なしの
-      // 標準の確認メールで送り直す(Firebase Consoleの設定変更を前提にしない)。
+      // 次に確認メールを送ってよい時刻(ミリ秒)だけをlocalStorageへ保存する。
+      // メール・uid・token等は保存しない。ブラウザ単位で効く(同じ端末で別の
+      // アカウントへ切り替えても待機は続く＝不要な送信要求を増やさない側に倒す)。
+      function readNextVerificationAllowedAt() {
+        let stored = null;
+        try {
+          stored = localStorage.getItem(VERIFY_NEXT_ALLOWED_AT_STORAGE_KEY);
+        } catch (error) {
+          stored = null;
+        }
+        const value = Number(stored);
+        if (!Number.isFinite(value) || value <= 0) {
+          return 0;
+        }
+        // 端末時計の変更等で極端に先の時刻になっていても、最長の待機時間を超えない。
+        return Math.min(value, Date.now() + VERIFY_COOLDOWN_TOO_MANY_MILLISECONDS);
+      }
+
+      function startVerificationCooldown(milliseconds) {
+        try {
+          localStorage.setItem(VERIFY_NEXT_ALLOWED_AT_STORAGE_KEY, String(Date.now() + milliseconds));
+        } catch (error) {
+          // 保存できない環境でも、このページを開いている間の待機は下の再描画で効く。
+        }
+        verificationCooldownFallbackUntil = Date.now() + milliseconds;
+        updateResendButton();
+      }
+
+      function getVerificationCooldownRemaining() {
+        const nextAllowedAt = Math.max(readNextVerificationAllowedAt(), verificationCooldownFallbackUntil);
+        return Math.max(0, nextAllowedAt - Date.now());
+      }
+
+      function formatRemaining(milliseconds) {
+        const totalSeconds = Math.ceil(milliseconds / 1000);
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+        if (hours > 0) {
+          return t("store_account_duration_hours_minutes").replace("{h}", hours).replace("{m}", minutes);
+        }
+        return minutes + ":" + String(seconds).padStart(2, "0");
+      }
+
+      // 再送ボタンは、自動送信の待機中・送信中・待機時間中は押せない。
+      // 「状態を更新する」ボタンはメールを送らないため、ここでは触らない。
+      function updateResendButton() {
+        const button = document.getElementById("resendButton");
+        const remaining = getVerificationCooldownRemaining();
+        if (verificationSendPending || verificationSending) {
+          button.disabled = true;
+          button.textContent = t("store_account_verify_preparing_button");
+        } else if (remaining > 0) {
+          button.disabled = true;
+          button.textContent = t("store_account_resend_available_in").replace("{time}", formatRemaining(remaining));
+        } else {
+          button.disabled = false;
+          button.textContent = t("store_account_resend_button");
+        }
+        if (remaining > 0 && !resendTimerId) {
+          resendTimerId = window.setInterval(function () {
+            updateResendButton();
+          }, 1000);
+        } else if (remaining <= 0 && resendTimerId) {
+          window.clearInterval(resendTimerId);
+          resendTimerId = 0;
+        }
+      }
+
+      // 1回の操作につき送信要求は最大1回。Firebase標準の確認メールを、戻り先URL
+      // (actionCodeSettings)なしで1回だけ送る。失敗しても同じ操作内で送り直さない。
+      // 結果に応じて次に送ってよい時刻を設定する(成功・その他の失敗は2分、
+      // auth/too-many-requestsは24時間。Firebase側の解除時間を意味するものではなく、
+      // マチナウ側で不要な再送要求を出さないための安全策)。
       function sendVerificationEmail(user) {
-        const continueUrl = window.location.origin + window.location.pathname;
-        const settings = /^https?:$/.test(window.location.protocol) ? { url: continueUrl } : null;
-        const send = settings ? user.sendEmailVerification(settings) : user.sendEmailVerification();
-        return send.catch(function (error) {
-          const code = error && error.code;
-          if (settings && (code === "auth/unauthorized-continue-uri" || code === "auth/invalid-continue-uri" || code === "auth/missing-continue-uri")) {
-            return user.sendEmailVerification();
+        verificationSending = true;
+        updateResendButton();
+        return user.sendEmailVerification()
+          .then(function () {
+            startVerificationCooldown(VERIFY_COOLDOWN_MILLISECONDS);
+          }, function (error) {
+            const code = error && error.code;
+            startVerificationCooldown(code === "auth/too-many-requests" ? VERIFY_COOLDOWN_TOO_MANY_MILLISECONDS : VERIFY_COOLDOWN_MILLISECONDS);
+            throw error;
+          })
+          .finally(function () {
+            verificationSending = false;
+            updateResendButton();
+          });
+      }
+
+      function showVerificationSendError(error) {
+        const code = error && typeof error.code === "string" ? error.code : "";
+        if (code === "auth/too-many-requests") {
+          return showMessage("store_account_err_verify_too_many", "error", code);
+        }
+        showMessage(AUTH_ERROR_MESSAGE_KEYS[code] || "store_account_err_generic", "error", code);
+      }
+
+      // 新規登録の直後にすぐ送ると拒否されやすいため、約5秒待ってから1回だけ送る。
+      // 待機中にログアウト・別アカウントへの切替・確認済み化が起きたら送らない。
+      // 待機時間中(このブラウザで直前に送信/制限があった)なら送らずに案内だけ出す。
+      function scheduleVerificationAfterSignup(user) {
+        const uid = user.uid;
+        if (getVerificationCooldownRemaining() > 0) {
+          showMessage("store_account_verify_cooldown_active", "info");
+          updateResendButton();
+          return;
+        }
+        verificationSendPending = true;
+        updateResendButton();
+        showMessage("store_account_verify_preparing", "info");
+        window.clearTimeout(verificationSendTimerId);
+        verificationSendTimerId = window.setTimeout(function () {
+          verificationSendPending = false;
+          const current = storeAuth.currentUser;
+          if (!current || current.uid !== uid || current.emailVerified) {
+            updateResendButton();
+            return;
           }
-          throw error;
-        }).then(function () {
-          lastVerificationSentAt = Date.now();
-        });
+          sendVerificationEmail(current)
+            .then(function () {
+              showMessage("store_account_verify_sent", "success");
+            })
+            .catch(showVerificationSendError);
+        }, VERIFY_SEND_DELAY_AFTER_SIGNUP_MILLISECONDS);
+      }
+
+      function cancelScheduledVerification() {
+        window.clearTimeout(verificationSendTimerId);
+        verificationSendTimerId = 0;
+        verificationSendPending = false;
+        updateResendButton();
       }
 
       function handleSignup(event) {
@@ -543,19 +683,12 @@
         setBusy(form, true);
         storeAuth.createUserWithEmailAndPassword(email, password)
           .then(function (credential) {
+            // アカウント作成はここで完了。確認メールの送信は別処理(約5秒後に1回)で、
+            // 送信に失敗してもアカウント作成の結果には影響しない。
             form.reset();
-            return sendVerificationEmail(credential.user)
-              .then(function () {
-                showView("account");
-                renderAccount();
-                showMessage("store_account_verify_sent", "success");
-              })
-              .catch(function (error) {
-                // アカウントは作成済み。確認メールだけ失敗した場合は再送ボタンで送り直せる。
-                showView("account");
-                renderAccount();
-                showAuthError(error);
-              });
+            showView("account");
+            renderAccount();
+            scheduleVerificationAfterSignup(credential.user);
           })
           .catch(showAuthError)
           .finally(function () {
@@ -626,23 +759,20 @@
 
       function handleResend() {
         const user = storeAuth.currentUser;
-        if (busy || !user) {
+        if (!user || user.emailVerified || verificationSendPending || verificationSending) {
           return;
         }
-        clearMessage();
-        if (Date.now() - lastVerificationSentAt < RESEND_COOLDOWN_MILLISECONDS) {
+        if (getVerificationCooldownRemaining() > 0) {
+          // ボタンは無効化済み。念のため、送信要求は出さずに案内だけ出す。
+          updateResendButton();
           return showMessage("store_account_resend_wait", "info");
         }
-        const box = document.getElementById("accountView");
-        setBusy(box, true);
+        clearMessage();
         sendVerificationEmail(user)
           .then(function () {
             showMessage("store_account_verify_sent", "success");
           })
-          .catch(showAuthError)
-          .finally(function () {
-            setBusy(box, false);
-          });
+          .catch(showVerificationSendError);
       }
 
       // メール内のリンクで確認した後、最新の状態をFirebaseから取り直す。
@@ -674,6 +804,7 @@
         if (busy) {
           return;
         }
+        cancelScheduledVerification();
         const box = document.getElementById("accountView");
         setBusy(box, true);
         storeAuth.signOut()
@@ -800,6 +931,7 @@
               confirmStatusWithServer();
             }
           } else if (currentView === "account" || firstState) {
+            cancelScheduledVerification();
             showView(firstState ? initialViewFromUrl() : "login");
           }
           firstState = false;
