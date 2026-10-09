@@ -1,0 +1,581 @@
+// ==========================================================================
+// 正式店舗参加基盤 Phase 2B｜店舗自身による常設店舗情報の作成・編集(サーバー側)
+// ==========================================================================
+// セルフ登録した店舗(Phase 2A)の owner が、storeProfiles/{storeId} の基本項目を
+// 自分で入力・保存する。保存しても status は "draft" のままで、旅行者へは
+// 一切公開しない(公開は2D)。店名・所在地は表示のみで、ここでは変更しない。
+//
+// 編集できるのは次をすべて満たす場合だけ(すべてサーバー側で判定する)：
+//   ・ログイン済み・メール確認済みの店舗アカウント
+//   ・storeMembers/{storeId}_{uid} が role:"owner" かつ status:"active"
+//   ・storeAccounts/{storeId} が registrationStatus:"active" かつ enabled:true
+// storeAccounts・submissions・TOPの公開一覧には一切書き込まない。
+// Firestore Rulesの変更は不要(storeProfilesはPhase 2Aで直接read/write拒否済み)。
+// このファイルはVercel Functionではない(api/moderate-submission.jsから呼ばれる)。
+
+import {
+  FieldValue
+} from "firebase-admin/firestore";
+
+import {
+  validateImadakeUrl,
+  validateImadakePhone
+} from "./imadake.js";
+
+import {
+  STORE_CATEGORY_CODES,
+  requireVerifiedStoreUser
+} from "./store-self-service.js";
+
+const STORE_ACCOUNTS_COLLECTION = "storeAccounts";
+const STORE_MEMBERS_COLLECTION = "storeMembers";
+const STORE_PROFILES_COLLECTION = "storeProfiles";
+// Phase 2Aと同じ連打防止用collectionを使う(新しいRulesを増やさない)。
+const STORE_RATE_LIMITS_COLLECTION = "storeRegistrationRateLimits";
+
+export const STORE_DESCRIPTION_MAX_LENGTH = 1000;
+export const STORE_HOURS_NOTE_MAX_LENGTH = 100;
+export const STORE_SOCIAL_LINKS_MAX = 3;
+export const STORE_HOURS_RANGES_PER_DAY_MAX = 2;
+
+// 曜日は英語code。保存形式は businessHours.weekly.{mon..sun} = [{open, close}]。
+export const STORE_WEEKDAY_CODES = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+
+// SNSの種類は英語code。URLから種類を自動推測しない(店舗が選んだ値をそのまま保存)。
+export const STORE_SOCIAL_TYPES = [
+  "instagram",
+  "x",
+  "facebook",
+  "tiktok",
+  "youtube",
+  "threads",
+  "line",
+  "other"
+];
+
+// 既存の店舗カード(submissions.paymentMethods)と同じ3値。2Dでそのまま使える。
+export const STORE_PAYMENT_METHOD_CODES = ["cash", "card", "qr"];
+
+const STORE_PROFILE_UPDATE_COOLDOWN_MS = 3 * 1000;
+
+
+function sendError(response, status, reason, extra) {
+  return response.status(status).json(
+    Object.assign({ success: false, reason: reason }, extra || {})
+  );
+}
+
+function readTrimmedString(value) {
+  return typeof value === "string" ? value.replace(/\r\n?/g, "\n").trim() : "";
+}
+
+function countCharacters(text) {
+  return Array.from(text).length;
+}
+
+// 改行(複数行)を許す文章。上限超過・改行とタブ以外の制御文字はnull(=不正)。
+function readMultilineText(value, maxLength) {
+  if (value !== undefined && value !== null && typeof value !== "string") {
+    return null;
+  }
+
+  const text = readTrimmedString(value);
+
+  if (
+    countCharacters(text) > maxLength ||
+    /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(text)
+  ) {
+    return null;
+  }
+
+  return text;
+}
+
+function readSingleLineText(value, maxLength) {
+  const text = readMultilineText(value, maxLength);
+
+  return text === null || text.includes("\n") ? null : text;
+}
+
+// "HH:MM" → 分。closeだけ "24:00"(=その日の終わり)を許す。
+function readTimeMinutes(value, allowEndOfDay) {
+  if (typeof value !== "string" || !/^\d{2}:\d{2}$/.test(value)) {
+    return null;
+  }
+
+  const hours = Number(value.slice(0, 2));
+  const minutes = Number(value.slice(3));
+
+  if (minutes > 59) {
+    return null;
+  }
+
+  if (hours === 24 && minutes === 0 && allowEndOfDay) {
+    return 1440;
+  }
+
+  return hours <= 23 ? hours * 60 + minutes : null;
+}
+
+// 営業時間。null(=未設定)または { weekly: {mon..sun: [{open, close}]}, note }。
+// 1日の区間は最大2つ。空配列はその曜日が定休日。close < open は日跨ぎ(翌日のclose
+// まで)。同じ日の2区間は時刻順・重ならないこと、日跨ぎできるのはその日の最後の区間だけ。
+function readBusinessHours(value) {
+  if (value === null || value === undefined) {
+    return { ok: true, businessHours: null };
+  }
+
+  if (typeof value !== "object" || Array.isArray(value) || !value.weekly || typeof value.weekly !== "object") {
+    return { ok: false, field: "businessHours" };
+  }
+
+  const weekly = {};
+
+  for (const day of STORE_WEEKDAY_CODES) {
+    const ranges = value.weekly[day];
+
+    if (!Array.isArray(ranges) || ranges.length > STORE_HOURS_RANGES_PER_DAY_MAX) {
+      return { ok: false, field: "businessHours." + day };
+    }
+
+    const normalized = [];
+    let previousEnd = -1;
+
+    for (let index = 0; index < ranges.length; index += 1) {
+      const range = ranges[index] || {};
+      const open = readTimeMinutes(range.open, false);
+      const close = readTimeMinutes(range.close, true);
+
+      if (open === null || close === null || open === close) {
+        return { ok: false, field: "businessHours." + day };
+      }
+
+      const overnight = close < open;
+
+      if (open < previousEnd || (overnight && index !== ranges.length - 1)) {
+        return { ok: false, field: "businessHours." + day };
+      }
+
+      previousEnd = overnight ? close + 1440 : close;
+      normalized.push({ open: range.open, close: range.close });
+    }
+
+    weekly[day] = normalized;
+  }
+
+  const note = readSingleLineText(value.note, STORE_HOURS_NOTE_MAX_LENGTH);
+
+  if (note === null) {
+    return { ok: false, field: "businessHours.note" };
+  }
+
+  return { ok: true, businessHours: { weekly: weekly, note: note } };
+}
+
+function readSocialLinks(value) {
+  if (value === undefined || value === null) {
+    return { ok: true, socialLinks: [] };
+  }
+
+  if (!Array.isArray(value) || value.length > STORE_SOCIAL_LINKS_MAX) {
+    return { ok: false, field: "socialLinks" };
+  }
+
+  const socialLinks = [];
+
+  for (const item of value) {
+    const type = item && typeof item.type === "string" ? item.type : "";
+    const url = validateImadakeUrl(item && item.url);
+
+    if (!STORE_SOCIAL_TYPES.includes(type) || url === null || url === "") {
+      return { ok: false, field: "socialLinks" };
+    }
+
+    socialLinks.push({ type: type, url: url });
+  }
+
+  return { ok: true, socialLinks: socialLinks };
+}
+
+function readPaymentMethodCodes(value) {
+  if (value === undefined || value === null) {
+    return [];
+  }
+
+  if (
+    !Array.isArray(value) ||
+    value.some(function(code) { return !STORE_PAYMENT_METHOD_CODES.includes(code); })
+  ) {
+    return null;
+  }
+
+  // 重複を除き、定義順に並べる。
+  return STORE_PAYMENT_METHOD_CODES.filter(function(code) {
+    return value.includes(code);
+  });
+}
+
+// クライアントから受け取ってよい項目だけを読む。status・storeName・所在地・
+// revision等の値は、送られてきても使わない。
+export function validateStoreProfileInput(body) {
+  const categoryCode = typeof body.categoryCode === "string" ? body.categoryCode : "";
+
+  if (!STORE_CATEGORY_CODES.includes(categoryCode)) {
+    return { ok: false, field: "categoryCode" };
+  }
+
+  const description = readMultilineText(body.description, STORE_DESCRIPTION_MAX_LENGTH);
+
+  if (description === null) {
+    return { ok: false, field: "description" };
+  }
+
+  const hours = readBusinessHours(body.businessHours);
+
+  if (!hours.ok) {
+    return hours;
+  }
+
+  const phone = validateImadakePhone(body.phone);
+
+  if (phone === null) {
+    return { ok: false, field: "phone" };
+  }
+
+  const websiteUrl = validateImadakeUrl(body.websiteUrl);
+
+  if (websiteUrl === null) {
+    return { ok: false, field: "websiteUrl" };
+  }
+
+  const reservationUrl = validateImadakeUrl(body.reservationUrl);
+
+  if (reservationUrl === null) {
+    return { ok: false, field: "reservationUrl" };
+  }
+
+  const social = readSocialLinks(body.socialLinks);
+
+  if (!social.ok) {
+    return social;
+  }
+
+  const paymentMethodCodes = readPaymentMethodCodes(body.paymentMethodCodes);
+
+  if (paymentMethodCodes === null) {
+    return { ok: false, field: "paymentMethodCodes" };
+  }
+
+  return {
+    ok: true,
+    fields: {
+      categoryCode: categoryCode,
+      description: description,
+      businessHours: hours.businessHours,
+      phone: phone,
+      websiteUrl: websiteUrl,
+      reservationUrl: reservationUrl,
+      socialLinks: social.socialLinks,
+      paymentMethodCodes: paymentMethodCodes
+    }
+  };
+}
+
+function readStoreId(body) {
+  const storeId = typeof body.storeId === "string" ? body.storeId.trim() : "";
+
+  return storeId !== "" && storeId.length <= 100 && /^[A-Za-z0-9_-]+$/.test(storeId)
+    ? storeId
+    : "";
+}
+
+function isActiveOwner(memberData, uid, storeId) {
+  return (
+    !!memberData &&
+    memberData.uid === uid &&
+    memberData.storeId === storeId &&
+    memberData.role === "owner" &&
+    memberData.status === "active"
+  );
+}
+
+function isEditableStore(accountData) {
+  return (
+    !!accountData &&
+    accountData.registrationStatus === "active" &&
+    accountData.enabled === true
+  );
+}
+
+function readRegistrationStatusForDisplay(accountData) {
+  if (accountData.enabled !== true && accountData.registrationStatus === "active") {
+    return "suspended";
+  }
+
+  return typeof accountData.registrationStatus === "string" ? accountData.registrationStatus : "active";
+}
+
+function readRevision(profileData) {
+  return profileData && Number.isInteger(profileData.revision) ? profileData.revision : 0;
+}
+
+function buildProfileResponse(profileData) {
+  const data = profileData || {};
+
+  return {
+    status: typeof data.status === "string" ? data.status : "draft",
+    revision: readRevision(data),
+    categoryCode: typeof data.categoryCode === "string" ? data.categoryCode : "",
+    sourceLanguage: typeof data.sourceLanguage === "string" ? data.sourceLanguage : "ja",
+    description: typeof data.description === "string" ? data.description : "",
+    businessHours: data.businessHours && typeof data.businessHours === "object" ? data.businessHours : null,
+    phone: typeof data.phone === "string" ? data.phone : "",
+    websiteUrl: typeof data.websiteUrl === "string" ? data.websiteUrl : "",
+    reservationUrl: typeof data.reservationUrl === "string" ? data.reservationUrl : "",
+    socialLinks: Array.isArray(data.socialLinks) ? data.socialLinks : [],
+    paymentMethodCodes: Array.isArray(data.paymentMethodCodes) ? data.paymentMethodCodes : [],
+    updatedAtMillis:
+      data.updatedAt && typeof data.updatedAt.toMillis === "function" ? data.updatedAt.toMillis() : 0
+  };
+}
+
+// 紹介文・営業時間の補足をModerationにかける。flagged → 保存しない、
+// Moderationが使えない → 例外(呼び出し元は保存せず503)。
+async function moderateProfileText(storeName, fields, deps) {
+  const text = [fields.description, fields.businessHours ? fields.businessHours.note : ""]
+    .filter(Boolean)
+    .join("\n");
+
+  if (text === "") {
+    return { flagged: false, text: "" };
+  }
+
+  const results = await deps.callOpenAiModeration(
+    deps.buildModerationInput({ shopName: storeName, title: "", content: text })
+  );
+
+  if (!Array.isArray(results) || results.length === 0) {
+    throw new Error("moderation response was empty");
+  }
+
+  return {
+    flagged: !results.every(function(result) { return result && result.flagged === false; }),
+    text: text
+  };
+}
+
+
+// mode: storeProfileGet (POST、メール確認済み店舗アカウントの owner)
+// 編集画面用に、常設店舗情報(draft)と表示専用の店名・所在地・登録状態を返す。
+// 編集不可の店舗(運営確認中・却下・停止中)も、owner なら閲覧はできる(editable:false)。
+export async function handleStoreProfileGet(request, response, deps) {
+  try {
+    const actor = await requireVerifiedStoreUser(request, response, deps);
+
+    if (!actor) {
+      return;
+    }
+
+    const storeId = readStoreId(deps.readRequestBody(request));
+
+    if (storeId === "") {
+      return sendError(response, 400, "invalid_input", { field: "storeId" });
+    }
+
+    const database = deps.getFirestore(deps.getFirebaseAdminApp());
+    const snapshots = await Promise.all([
+      database.collection(STORE_MEMBERS_COLLECTION).doc(storeId + "_" + actor.uid).get(),
+      database.collection(STORE_ACCOUNTS_COLLECTION).doc(storeId).get(),
+      database.collection(STORE_PROFILES_COLLECTION).doc(storeId).get()
+    ]);
+
+    // 他人の店舗・存在しない店舗は区別せず同じ応答にする(存在有無を漏らさない)。
+    if (!snapshots[0].exists || !isActiveOwner(snapshots[0].data(), actor.uid, storeId) || !snapshots[1].exists) {
+      return sendError(response, 404, "store_not_found");
+    }
+
+    const account = snapshots[1].data() || {};
+
+    return response.status(200).json({
+      success: true,
+      storeId: storeId,
+      storeName: typeof account.storeName === "string" ? account.storeName : "",
+      registrationStatus: readRegistrationStatusForDisplay(account),
+      editable: isEditableStore(account),
+      location: {
+        countryCode: account.countryCode || "",
+        prefecture: account.prefecture || "",
+        city: account.city || "",
+        formattedAddress: account.locationFormattedAddress || account.address || ""
+      },
+      profile: buildProfileResponse(snapshots[2].exists ? snapshots[2].data() : null)
+    });
+  } catch (error) {
+    console.error("常設店舗情報：取得エラー：", error && error.message);
+    return sendError(response, 500, "server_error");
+  }
+}
+
+
+// mode: storeProfileUpdate (POST、メール確認済み店舗アカウントの owner、編集可能な店舗のみ)
+// { storeId, expectedRevision, categoryCode, description, businessHours, phone,
+//   websiteUrl, reservationUrl, socialLinks, paymentMethodCodes }
+// expectedRevisionが保存済みのrevisionと違う場合は上書きせず409(revision_conflict)。
+export async function handleStoreProfileUpdate(request, response, deps) {
+  try {
+    const actor = await requireVerifiedStoreUser(request, response, deps);
+
+    if (!actor) {
+      return;
+    }
+
+    const body = deps.readRequestBody(request);
+    const storeId = readStoreId(body);
+
+    if (storeId === "") {
+      return sendError(response, 400, "invalid_input", { field: "storeId" });
+    }
+
+    if (!Number.isInteger(body.expectedRevision) || body.expectedRevision < 0) {
+      return sendError(response, 400, "invalid_input", { field: "expectedRevision" });
+    }
+
+    const input = validateStoreProfileInput(body);
+
+    if (!input.ok) {
+      return sendError(response, 400, "invalid_input", { field: input.field });
+    }
+
+    const database = deps.getFirestore(deps.getFirebaseAdminApp());
+    const memberRef = database.collection(STORE_MEMBERS_COLLECTION).doc(storeId + "_" + actor.uid);
+    const accountRef = database.collection(STORE_ACCOUNTS_COLLECTION).doc(storeId);
+    const profileRef = database.collection(STORE_PROFILES_COLLECTION).doc(storeId);
+
+    // Moderation(外部API)の前に、権限と編集可否を確認しておく(無駄な呼び出しを防ぐ)。
+    const preSnapshots = await Promise.all([memberRef.get(), accountRef.get(), profileRef.get()]);
+
+    if (!preSnapshots[0].exists || !isActiveOwner(preSnapshots[0].data(), actor.uid, storeId) || !preSnapshots[1].exists) {
+      return sendError(response, 404, "store_not_found");
+    }
+
+    const accountBefore = preSnapshots[1].data() || {};
+
+    if (!isEditableStore(accountBefore)) {
+      return sendError(response, 403, "store_not_editable", {
+        registrationStatus: readRegistrationStatusForDisplay(accountBefore)
+      });
+    }
+
+    const profileBefore = preSnapshots[2].exists ? preSnapshots[2].data() || {} : {};
+
+    if (readRevision(profileBefore) !== body.expectedRevision) {
+      return sendError(response, 409, "revision_conflict", { currentRevision: readRevision(profileBefore) });
+    }
+
+    const allowed = await deps.claimRateLimit(
+      database,
+      STORE_RATE_LIMITS_COLLECTION,
+      deps.computeRateLimitIdentifier("storeProfileUpdate", actor.uid),
+      STORE_PROFILE_UPDATE_COOLDOWN_MS
+    );
+
+    if (!allowed) {
+      return sendError(response, 429, "rate_limited");
+    }
+
+    // 文章が前回の確認済みの内容から変わった時だけModerationを呼ぶ。
+    const moderationTextBefore =
+      typeof profileBefore.moderatedText === "string" ? profileBefore.moderatedText : null;
+    const nextText = [input.fields.description, input.fields.businessHours ? input.fields.businessHours.note : ""]
+      .filter(Boolean)
+      .join("\n");
+    let moderationUpdate = {};
+
+    if (nextText !== moderationTextBefore) {
+      let moderation;
+
+      try {
+        moderation = await moderateProfileText(accountBefore.storeName || "", input.fields, deps);
+      } catch (moderationError) {
+        console.error(
+          "常設店舗情報：Moderationエラー：",
+          deps.classifyModerationError(moderationError)
+        );
+        return sendError(response, 503, "safety_check_unavailable");
+      }
+
+      if (moderation.flagged) {
+        return sendError(response, 400, "content_not_allowed");
+      }
+
+      moderationUpdate = {
+        moderationStatus: "passed",
+        moderatedText: moderation.text,
+        moderationCheckedAt: FieldValue.serverTimestamp()
+      };
+    }
+
+    let outcome = null;
+
+    await database.runTransaction(async function(transaction) {
+      const snapshots = await Promise.all([
+        transaction.get(memberRef),
+        transaction.get(accountRef),
+        transaction.get(profileRef)
+      ]);
+
+      if (!snapshots[0].exists || !isActiveOwner(snapshots[0].data(), actor.uid, storeId) || !snapshots[1].exists) {
+        outcome = { status: 404, reason: "store_not_found" };
+        return;
+      }
+
+      if (!isEditableStore(snapshots[1].data())) {
+        outcome = { status: 403, reason: "store_not_editable" };
+        return;
+      }
+
+      const profileData = snapshots[2].exists ? snapshots[2].data() || {} : {};
+      const currentRevision = readRevision(profileData);
+
+      if (currentRevision !== body.expectedRevision) {
+        outcome = { status: 409, reason: "revision_conflict", currentRevision: currentRevision };
+        return;
+      }
+
+      const nextRevision = currentRevision + 1;
+
+      // statusは "draft" のまま(公開は2D)。storeId・店名・所在地は書き換えない。
+      transaction.set(
+        profileRef,
+        Object.assign(
+          {
+            storeId: storeId,
+            status: typeof profileData.status === "string" ? profileData.status : "draft",
+            revision: nextRevision,
+            updatedByUid: actor.uid,
+            updatedAt: FieldValue.serverTimestamp()
+          },
+          input.fields,
+          moderationUpdate
+        ),
+        { merge: true }
+      );
+
+      outcome = { status: 200, revision: nextRevision };
+    });
+
+    if (outcome.status !== 200) {
+      return sendError(response, outcome.status, outcome.reason,
+        outcome.currentRevision !== undefined ? { currentRevision: outcome.currentRevision } : undefined);
+    }
+
+    return response.status(200).json({
+      success: true,
+      revision: outcome.revision,
+      status: "draft"
+    });
+  } catch (error) {
+    console.error("常設店舗情報：保存エラー：", error && error.message);
+    return sendError(response, 500, "server_error");
+  }
+}

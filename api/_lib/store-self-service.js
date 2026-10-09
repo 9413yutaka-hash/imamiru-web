@@ -343,7 +343,7 @@ function sendError(response, status, reason, extra) {
 }
 
 // ログイン済み・メール確認済みの店舗アカウントだけを通す。権限判定はuidだけで行う。
-async function requireVerifiedStoreUser(request, response, deps) {
+export async function requireVerifiedStoreUser(request, response, deps) {
   const result = await deps.resolveStoreUserActor(request);
 
   if (!result.ok) {

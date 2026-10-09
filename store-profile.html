@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#071a33">
+  <title>常設店舗情報｜マチナウ</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+
+  <!-- 正式店舗参加基盤 Phase 2B｜店舗自身による常設店舗情報の作成・編集。
+       ・店舗アカウント(store-account.htmlと同じ名前付きFirebase app "machinauStoreAccount")
+         でログインしている owner だけが、自分の店舗の常設情報を下書き(draft)保存できる
+       ・編集できるか(owner・登録状態active・有効)はすべてサーバーが判定する
+       ・保存しても旅行者には表示されない(公開は2D)。店名・所在地は表示のみ
+       ・Firestoreへは直接アクセスせず、api/moderate-submission.jsのみを呼ぶ
+       ・固定文言はtranslations.jsのstore_profile_*キー(JA/EN) -->
+
+  <style>
+    :root {
+      --navy: #071a33;
+      --blue: #0788c9;
+      --cyan: #04b7d7;
+      --sky: #dff7ff;
+      --green: #19a96b;
+      --red: #e0525e;
+      --white: #ffffff;
+      --text: #15233a;
+      --subtext: #697386;
+      --border: #e2eaf1;
+      --background: #f4f8fb;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Yu Gothic", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+      background: var(--background);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    header {
+      background: linear-gradient(135deg, var(--navy), #0d294a);
+      color: var(--white);
+      padding: 14px 16px 18px;
+    }
+
+    .header-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    header .page-label { font-size: 12px; opacity: 0.85; }
+    header h1 { margin: 6px 0 2px; font-size: 22px; }
+
+    .language-switch { display: flex; gap: 4px; flex-shrink: 0; }
+
+    .language-switch button {
+      min-height: 32px;
+      padding: 4px 10px;
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      border-radius: 999px;
+      background: transparent;
+      color: var(--white);
+      font-size: 12px;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .language-switch button[aria-pressed="true"] { background: var(--white); color: var(--navy); font-weight: 800; }
+
+    main { max-width: 560px; margin: 0 auto; padding: 14px 16px 60px; }
+
+    .panel {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+      margin-bottom: 14px;
+    }
+
+    .panel h2 { margin: 0 0 12px; font-size: 16px; color: var(--navy); }
+
+    .draft-banner {
+      margin-bottom: 14px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: #fff4e5;
+      color: #8a4b00;
+      font-size: 13.5px;
+      font-weight: 800;
+    }
+
+    .note { margin: 0; font-size: 12.5px; color: var(--subtext); line-height: 1.7; }
+    .hint { margin: 6px 0 0; font-size: 12px; color: var(--subtext); }
+
+    .field { margin-bottom: 16px; }
+
+    .field > label, .field-label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 13.5px;
+      font-weight: 800;
+      color: var(--navy);
+    }
+
+    input[type="text"], input[type="tel"], input[type="url"], input[type="time"], select, textarea {
+      width: 100%;
+      min-height: 46px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: 16px;
+      font-family: inherit;
+      background: var(--white);
+      color: var(--text);
+    }
+
+    textarea { min-height: 160px; resize: vertical; }
+
+    .counter { text-align: right; font-size: 12px; color: var(--subtext); margin-top: 4px; }
+    .counter.over { color: var(--red); font-weight: 800; }
+
+    .readonly-row { padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13.5px; }
+    .readonly-row:last-of-type { border-bottom: none; }
+    .readonly-label { display: block; font-size: 12px; color: var(--subtext); }
+    .readonly-value { font-weight: 800; overflow-wrap: anywhere; }
+
+    .check-line { display: flex; align-items: center; gap: 8px; font-size: 13.5px; margin: 4px 0; }
+    .check-line input { width: 18px; height: 18px; flex-shrink: 0; }
+    .check-group { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+
+    .day-row { padding: 10px 0; border-bottom: 1px solid var(--border); }
+    .day-row:last-child { border-bottom: none; }
+    .day-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+    .day-name { font-weight: 800; color: var(--navy); min-width: 3em; }
+    .day-options { display: flex; gap: 12px; flex-wrap: wrap; }
+    .range-line { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+    .range-line input[type="time"] { min-height: 42px; padding: 6px 8px; }
+    .range-line span { flex-shrink: 0; color: var(--subtext); }
+
+    .social-row { display: grid; grid-template-columns: 9em 1fr auto; gap: 6px; margin-bottom: 8px; }
+    .social-row select, .social-row input { min-height: 42px; }
+
+    .small-button {
+      min-height: 40px;
+      padding: 6px 12px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--white);
+      color: var(--navy);
+      font-size: 13px;
+      font-weight: 800;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .small-button:disabled { opacity: 0.5; cursor: default; }
+
+    .primary-button, .secondary-button {
+      display: block;
+      width: 100%;
+      min-height: 48px;
+      padding: 12px;
+      border-radius: 999px;
+      font-size: 15px;
+      font-weight: 800;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .primary-button { border: none; background: linear-gradient(135deg, var(--blue), var(--cyan)); color: var(--white); }
+    .secondary-button { border: 1px solid var(--border); background: var(--white); color: var(--navy); margin-top: 10px; }
+    .primary-button:disabled, .secondary-button:disabled { opacity: 0.55; cursor: default; }
+
+    .message { display: none; margin: 0 0 14px; padding: 10px 12px; border-radius: 12px; font-size: 13px; line-height: 1.7; }
+    .message.show { display: block; }
+    .message.error { background: #fdecee; color: #a3212d; }
+    .message.success { background: #e5f7ef; color: #0f6b44; }
+    .message.info { background: var(--sky); color: var(--navy); }
+    .message .error-code { display: block; margin-top: 4px; font-size: 11px; opacity: 0.75; }
+
+    .back-link { display: inline-block; margin-top: 6px; color: var(--blue); font-size: 13px; }
+
+    [hidden] { display: none !important; }
+
+    @media (max-width: 380px) {
+      .social-row { grid-template-columns: 1fr auto; }
+      .social-row select { grid-column: 1 / -1; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-top">
+      <div class="page-label" data-i18n="store_account_page_label">マチナウ 店舗・施設アカウント</div>
+      <div class="language-switch" role="group" aria-label="Language">
+        <button type="button" data-language="ja" aria-pressed="true">日本語</button>
+        <button type="button" data-language="en" aria-pressed="false">English</button>
+      </div>
+    </div>
+    <h1 data-i18n="store_profile_heading">常設店舗情報</h1>
+  </header>
+
+  <main>
+    <p class="draft-banner" data-i18n="store_profile_not_public_banner">この情報はまだ旅行者に表示されません。</p>
+
+    <div id="pageMessage" class="message" role="status" aria-live="polite"></div>
+
+    <div class="panel" id="loadingPanel">
+      <p class="note" data-i18n="store_profile_loading">読み込んでいます…</p>
+    </div>
+
+    <div class="panel" id="loginRequiredPanel" hidden>
+      <p class="note" data-i18n="store_profile_login_required"></p>
+    </div>
+
+    <div class="panel" id="notFoundPanel" hidden>
+      <p class="note" data-i18n="store_profile_not_found"></p>
+    </div>
+
+    <div id="editorArea" hidden>
+      <section class="panel">
+        <h2 data-i18n="store_profile_basic_heading">店舗・施設</h2>
+        <div class="readonly-row">
+          <span class="readonly-label" data-i18n="store_account_store_name_label">店舗・施設名</span>
+          <span class="readonly-value" id="storeNameText"></span>
+        </div>
+        <div class="readonly-row">
+          <span class="readonly-label" data-i18n="store_profile_location_label">所在地</span>
+          <span class="readonly-value" id="storeLocationText"></span>
+        </div>
+        <p class="hint" data-i18n="store_profile_name_location_note"></p>
+      </section>
+
+      <p class="message info show" id="notEditableNote" hidden></p>
+
+      <form id="profileForm" novalidate>
+        <section class="panel">
+          <div class="field">
+            <label for="categorySelect" data-i18n="store_account_store_category_label">カテゴリ</label>
+            <select id="categorySelect"></select>
+          </div>
+
+          <div class="field">
+            <label for="descriptionInput" data-i18n="store_profile_description_label">紹介文</label>
+            <textarea id="descriptionInput" maxlength="1000"></textarea>
+            <div class="counter" id="descriptionCounter">0 / 1000</div>
+            <p class="hint" data-i18n="store_profile_description_hint"></p>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2 data-i18n="store_profile_hours_heading">営業時間</h2>
+          <label class="check-line">
+            <input type="checkbox" id="hoursEnabledCheckbox">
+            <span data-i18n="store_profile_hours_enable">営業時間を設定する</span>
+          </label>
+          <div id="hoursEditor" hidden>
+            <p class="hint" data-i18n="store_profile_hours_hint"></p>
+            <div id="dayRows"></div>
+            <div class="field" style="margin-top: 12px;">
+              <label for="hoursNoteInput" data-i18n="store_profile_hours_note_label">営業時間の補足</label>
+              <input type="text" id="hoursNoteInput" maxlength="100">
+              <p class="hint" data-i18n="store_profile_hours_note_hint"></p>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2 data-i18n="store_profile_contact_heading">連絡先・リンク</h2>
+          <div class="field">
+            <label for="phoneInput" data-i18n="store_profile_phone_label">電話番号</label>
+            <input type="tel" id="phoneInput" maxlength="20" autocomplete="tel">
+          </div>
+          <div class="field">
+            <label for="websiteInput" data-i18n="store_profile_website_label">Webサイト</label>
+            <input type="url" id="websiteInput" maxlength="500" placeholder="https://">
+          </div>
+          <div class="field">
+            <label for="reservationInput" data-i18n="store_profile_reservation_label">予約ページ</label>
+            <input type="url" id="reservationInput" maxlength="500" placeholder="https://">
+          </div>
+          <div class="field">
+            <span class="field-label" data-i18n="store_profile_social_label">SNS（最大3件）</span>
+            <div id="socialRows"></div>
+            <button type="button" class="small-button" id="addSocialButton" data-i18n="store_profile_social_add">＋ SNSを追加</button>
+            <p class="hint" data-i18n="store_profile_social_hint"></p>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2 data-i18n="store_profile_payment_heading">支払い方法</h2>
+          <div class="check-group" id="paymentGroup"></div>
+        </section>
+
+        <div id="formMessage" class="message" role="status" aria-live="polite"></div>
+        <button type="submit" class="primary-button" id="saveButton" data-i18n="store_profile_save_button">下書きを保存する</button>
+        <button type="button" class="secondary-button" id="reloadButton" hidden data-i18n="store_profile_reload_button">最新の内容を読み込む</button>
+      </form>
+    </div>
+
+    <a class="back-link" href="store-account.html" data-i18n="store_profile_back_to_account">← 店舗・施設アカウントへ戻る</a>
+  </main>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+  <script src="firebase.js"></script>
+  <script src="translations.js"></script>
+
+  <script>
+    (function () {
+      "use strict";
+
+      const LANGUAGE_STORAGE_KEY = "machinauLanguage";
+      const STORE_AUTH_APP_NAME = "machinauStoreAccount";
+      const DESCRIPTION_MAX_LENGTH = 1000;
+      const SOCIAL_LINKS_MAX = 3;
+
+      // サーバー(api/_lib/store-profile.js・store-self-service.js)と同じcode。
+      const CATEGORY_CODES = ["gourmet", "cafe_sweets", "shopping", "sightseeing_experience", "nightlife", "beauty_relaxation", "lodging", "other"];
+      const WEEKDAY_CODES = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+      const SOCIAL_TYPES = ["instagram", "x", "facebook", "tiktok", "youtube", "threads", "line", "other"];
+      const PAYMENT_CODES = ["cash", "card", "qr"];
+
+      // サーバーの理由code / 項目 → 画面文言キー。
+      const ERROR_MESSAGE_KEYS = {
+        email_not_verified: "store_account_store_err_verify",
+        login_required: "store_account_store_err_login",
+        store_account_required: "store_account_store_err_login",
+        store_not_found: "store_profile_not_found",
+        store_not_editable: "store_profile_err_not_editable",
+        revision_conflict: "store_profile_err_conflict",
+        content_not_allowed: "store_profile_err_content",
+        safety_check_unavailable: "store_profile_err_safety_unavailable",
+        rate_limited: "store_account_store_err_rate_limited"
+      };
+      const FIELD_ERROR_KEYS = {
+        categoryCode: "store_account_store_err_category",
+        description: "store_profile_err_description",
+        phone: "store_profile_err_phone",
+        websiteUrl: "store_profile_err_website",
+        reservationUrl: "store_profile_err_reservation",
+        socialLinks: "store_profile_err_social",
+        paymentMethodCodes: "store_account_err_generic",
+        "businessHours.note": "store_profile_err_hours_note"
+      };
+
+      let currentLanguage = readLanguage();
+      let storeAuth = null;
+      let storeId = "";
+      let loaded = null;       // storeProfileGet の結果
+      let revision = 0;
+      let editable = false;
+      let saving = false;
+      let dirty = false;
+      let lastPageMessage = null;
+      let lastFormMessage = null;
+
+      function readLanguage() {
+        let stored = null;
+        try {
+          stored = localStorage.getItem(LANGUAGE_STORAGE_KEY);
+        } catch (error) {
+          stored = null;
+        }
+        return typeof stored === "string" && MACHINAU_SUPPORTED_LANGUAGES.includes(stored) ? stored : MACHINAU_DEFAULT_LANGUAGE;
+      }
+
+      function t(key) {
+        return getMachinauTranslation(key, currentLanguage);
+      }
+
+      function setMessage(elementId, key, type, code) {
+        const box = document.getElementById(elementId);
+        box.textContent = t(key);
+        if (code) {
+          const codeElement = document.createElement("span");
+          codeElement.className = "error-code";
+          codeElement.textContent = "(" + code + ")";
+          box.appendChild(codeElement);
+        }
+        box.className = "message show " + type;
+        return { key: key, type: type, code: code || "" };
+      }
+
+      function showPageMessage(key, type, code) {
+        lastPageMessage = setMessage("pageMessage", key, type, code);
+      }
+
+      function showFormMessage(key, type, code) {
+        lastFormMessage = setMessage("formMessage", key, type, code);
+      }
+
+      function clearFormMessage() {
+        lastFormMessage = null;
+        const box = document.getElementById("formMessage");
+        box.textContent = "";
+        box.className = "message";
+      }
+
+      function showPanel(name) {
+        ["loadingPanel", "loginRequiredPanel", "notFoundPanel"].forEach(function (id) {
+          document.getElementById(id).hidden = id !== name;
+        });
+        document.getElementById("editorArea").hidden = name !== "editorArea";
+      }
+
+      function getCountryDisplayName(code) {
+        try {
+          return new Intl.DisplayNames([currentLanguage], { type: "region" }).of(code) || code;
+        } catch (error) {
+          return code;
+        }
+      }
+
+      // ===== 入力欄の組み立て =====
+
+      function buildCategoryOptions() {
+        const select = document.getElementById("categorySelect");
+        const selected = select.value;
+        select.textContent = "";
+        CATEGORY_CODES.forEach(function (code) {
+          const option = document.createElement("option");
+          option.value = code;
+          option.textContent = t("store_account_category_" + code);
+          select.appendChild(option);
+        });
+        if (selected) {
+          select.value = selected;
+        }
+      }
+
+      function buildPaymentChecks() {
+        const group = document.getElementById("paymentGroup");
+        const checked = readPaymentCodes();
+        group.textContent = "";
+        PAYMENT_CODES.forEach(function (code) {
+          const label = document.createElement("label");
+          label.className = "check-line";
+          const input = document.createElement("input");
+          input.type = "checkbox";
+          input.value = code;
+          input.checked = checked.includes(code);
+          input.setAttribute("data-payment", code);
+          const text = document.createElement("span");
+          text.textContent = t("store_profile_payment_" + code);
+          label.appendChild(input);
+          label.appendChild(text);
+          group.appendChild(label);
+        });
+      }
+
+      function readPaymentCodes() {
+        return Array.from(document.querySelectorAll("[data-payment]"))
+          .filter(function (input) { return input.checked; })
+          .map(function (input) { return input.value; });
+      }
+
+      function createRangeLine(range) {
+        const line = document.createElement("div");
+        line.className = "range-line";
+        const open = document.createElement("input");
+        open.type = "time";
+        open.className = "range-open";
+        open.value = range ? range.open : "";
+        const separator = document.createElement("span");
+        separator.textContent = "〜";
+        const close = document.createElement("input");
+        close.type = "time";
+        close.className = "range-close";
+        close.value = range && range.close !== "24:00" ? range.close : "";
+        line.appendChild(open);
+        line.appendChild(separator);
+        line.appendChild(close);
+        return line;
+      }
+
+      // 1曜日分の行。状態は「時間帯(最大2)」「24時間」「定休日」。
+      function createDayRow(day, ranges) {
+        const row = document.createElement("div");
+        row.className = "day-row";
+        row.setAttribute("data-day", day);
+
+        const isClosed = Array.isArray(ranges) && ranges.length === 0;
+        const isAllDay = Array.isArray(ranges) && ranges.length === 1 && ranges[0].open === "00:00" && ranges[0].close === "24:00";
+
+        const head = document.createElement("div");
+        head.className = "day-head";
+        const name = document.createElement("span");
+        name.className = "day-name";
+        name.setAttribute("data-day-label", day);
+        name.textContent = t("store_profile_day_" + day);
+        const options = document.createElement("div");
+        options.className = "day-options";
+        [["closed", isClosed], ["allday", isAllDay]].forEach(function (pair) {
+          const label = document.createElement("label");
+          label.className = "check-line";
+          const input = document.createElement("input");
+          input.type = "checkbox";
+          input.className = "day-" + pair[0];
+          input.checked = pair[1];
+          const text = document.createElement("span");
+          text.setAttribute("data-day-option", pair[0]);
+          text.textContent = t(pair[0] === "closed" ? "store_profile_day_closed" : "store_profile_day_allday");
+          label.appendChild(input);
+          label.appendChild(text);
+          options.appendChild(label);
+        });
+        head.appendChild(name);
+        head.appendChild(options);
+        row.appendChild(head);
+
+        const rangesBox = document.createElement("div");
+        rangesBox.className = "day-ranges";
+        const initialRanges = !isClosed && !isAllDay && Array.isArray(ranges) && ranges.length > 0 ? ranges : [null];
+        initialRanges.forEach(function (range) {
+          rangesBox.appendChild(createRangeLine(range));
+        });
+        row.appendChild(rangesBox);
+
+        const addButton = document.createElement("button");
+        addButton.type = "button";
+        addButton.className = "small-button day-add-range";
+        addButton.style.marginTop = "8px";
+        addButton.setAttribute("data-i18n", "store_profile_add_range");
+        addButton.textContent = t("store_profile_add_range");
+        row.appendChild(addButton);
+
+        updateDayRow(row);
+        return row;
+      }
+
+      function updateDayRow(row) {
+        const closed = row.querySelector(".day-closed").checked;
+        const allDay = row.querySelector(".day-allday").checked;
+        const rangesBox = row.querySelector(".day-ranges");
+        const addButton = row.querySelector(".day-add-range");
+        rangesBox.hidden = closed || allDay;
+        addButton.hidden = closed || allDay || rangesBox.children.length >= 2;
+      }
+
+      function renderHours(businessHours) {
+        const enabled = !!businessHours;
+        document.getElementById("hoursEnabledCheckbox").checked = enabled;
+        document.getElementById("hoursEditor").hidden = !enabled;
+        const container = document.getElementById("dayRows");
+        container.textContent = "";
+        WEEKDAY_CODES.forEach(function (day) {
+          container.appendChild(createDayRow(day, enabled && businessHours.weekly ? businessHours.weekly[day] : null));
+        });
+        document.getElementById("hoursNoteInput").value = enabled && businessHours.note ? businessHours.note : "";
+      }
+
+      // 入力欄 → 保存形式。時刻の片方だけが入っている等は null(=入力エラー)を返す。
+      function readHours() {
+        if (!document.getElementById("hoursEnabledCheckbox").checked) {
+          return { ok: true, value: null };
+        }
+        const weekly = {};
+        for (const day of WEEKDAY_CODES) {
+          const row = document.querySelector('.day-row[data-day="' + day + '"]');
+          if (row.querySelector(".day-closed").checked) {
+            weekly[day] = [];
+            continue;
+          }
+          if (row.querySelector(".day-allday").checked) {
+            weekly[day] = [{ open: "00:00", close: "24:00" }];
+            continue;
+          }
+          const ranges = [];
+          for (const line of row.querySelectorAll(".range-line")) {
+            const open = line.querySelector(".range-open").value;
+            const close = line.querySelector(".range-close").value;
+            if (open === "" && close === "") {
+              continue;
+            }
+            if (open === "" || close === "" || open === close) {
+              return { ok: false, day: day };
+            }
+            ranges.push({ open: open, close: close });
+          }
+          if (ranges.length === 0) {
+            return { ok: false, day: day };
+          }
+          weekly[day] = ranges;
+        }
+        return { ok: true, value: { weekly: weekly, note: document.getElementById("hoursNoteInput").value.trim() } };
+      }
+
+      function createSocialRow(link) {
+        const row = document.createElement("div");
+        row.className = "social-row";
+        const select = document.createElement("select");
+        select.className = "social-type";
+        select.setAttribute("aria-label", "SNS");
+        SOCIAL_TYPES.forEach(function (type) {
+          const option = document.createElement("option");
+          option.value = type;
+          option.textContent = t("store_profile_social_" + type);
+          select.appendChild(option);
+        });
+        select.value = link ? link.type : "instagram";
+        const input = document.createElement("input");
+        input.type = "url";
+        input.className = "social-url";
+        input.maxLength = 500;
+        input.placeholder = "https://";
+        input.value = link ? link.url : "";
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "small-button social-remove";
+        remove.textContent = t("store_profile_social_remove");
+        row.appendChild(select);
+        row.appendChild(input);
+        row.appendChild(remove);
+        return row;
+      }
+
+      function renderSocialRows(links) {
+        const container = document.getElementById("socialRows");
+        container.textContent = "";
+        (links || []).forEach(function (link) {
+          container.appendChild(createSocialRow(link));
+        });
+        updateSocialAddButton();
+      }
+
+      function updateSocialAddButton() {
+        document.getElementById("addSocialButton").disabled =
+          !editable || document.querySelectorAll(".social-row").length >= SOCIAL_LINKS_MAX;
+      }
+
+      // SNSの種類は店舗が選んだ値をそのまま送る(URLから推測しない)。URLが空の行は送らない。
+      function readSocialLinks() {
+        return Array.from(document.querySelectorAll(".social-row"))
+          .map(function (row) {
+            return { type: row.querySelector(".social-type").value, url: row.querySelector(".social-url").value.trim() };
+          })
+          .filter(function (link) { return link.url !== ""; });
+      }
+
+      function updateDescriptionCounter() {
+        const length = Array.from(document.getElementById("descriptionInput").value).length;
+        const counter = document.getElementById("descriptionCounter");
+        counter.textContent = length + " / " + DESCRIPTION_MAX_LENGTH;
+        counter.classList.toggle("over", length > DESCRIPTION_MAX_LENGTH);
+      }
+
+      function setFormEnabled(enabled) {
+        document.querySelectorAll("#profileForm input, #profileForm select, #profileForm textarea, #profileForm button").forEach(function (element) {
+          if (element.id === "reloadButton") {
+            return;
+          }
+          element.disabled = !enabled;
+        });
+        if (enabled) {
+          document.querySelectorAll(".day-row").forEach(updateDayRow);
+          updateSocialAddButton();
+        }
+      }
+
+      // ===== 読み込み・表示 =====
+
+      function applyLoaded(result) {
+        loaded = result;
+        revision = result.profile.revision;
+        editable = result.editable === true;
+        dirty = false;
+        document.getElementById("storeNameText").textContent = result.storeName;
+        renderLocation();
+        const profile = result.profile;
+        buildCategoryOptions();
+        document.getElementById("categorySelect").value = CATEGORY_CODES.includes(profile.categoryCode) ? profile.categoryCode : "other";
+        document.getElementById("descriptionInput").value = profile.description || "";
+        updateDescriptionCounter();
+        renderHours(profile.businessHours);
+        document.getElementById("phoneInput").value = profile.phone || "";
+        document.getElementById("websiteInput").value = profile.websiteUrl || "";
+        document.getElementById("reservationInput").value = profile.reservationUrl || "";
+        renderSocialRows(profile.socialLinks);
+        document.querySelectorAll("[data-payment]").forEach(function (input) {
+          input.checked = (profile.paymentMethodCodes || []).includes(input.value);
+        });
+        const notEditable = document.getElementById("notEditableNote");
+        notEditable.hidden = editable;
+        notEditable.textContent = editable ? "" : t("store_profile_not_editable_" + statusKey(result.registrationStatus));
+        document.getElementById("reloadButton").hidden = true;
+        setFormEnabled(editable);
+        showPanel("editorArea");
+      }
+
+      function statusKey(status) {
+        return ["pending_review", "rejected", "suspended"].includes(status) ? status : "other";
+      }
+
+      function renderLocation() {
+        if (!loaded) {
+          return;
+        }
+        const location = loaded.location || {};
+        document.getElementById("storeLocationText").textContent =
+          [getCountryDisplayName(location.countryCode), location.prefecture, location.city].filter(Boolean).join(" ") +
+          (location.formattedAddress ? "（" + location.formattedAddress + "）" : "");
+      }
+
+      function callApi(body) {
+        const user = storeAuth && storeAuth.currentUser;
+        if (!user) {
+          return Promise.resolve({ status: 401, result: { reason: "login_required" } });
+        }
+        return user.getIdToken()
+          .then(function (idToken) {
+            return fetch("/api/moderate-submission", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: "Bearer " + idToken },
+              body: JSON.stringify(body)
+            });
+          })
+          .then(function (response) {
+            return response.json()
+              .catch(function () { return null; })
+              .then(function (result) { return { status: response.status, result: result }; });
+          });
+      }
+
+      function loadProfile() {
+        showPanel("loadingPanel");
+        return callApi({ mode: "storeProfileGet", storeId: storeId })
+          .then(function (response) {
+            if (response.status === 200 && response.result && response.result.success) {
+              return applyLoaded(response.result);
+            }
+            const reason = response.result && response.result.reason;
+            if (reason === "store_not_found" || response.status === 400) {
+              return showPanel("notFoundPanel");
+            }
+            if (response.status === 401 || reason === "store_account_required") {
+              return showPanel("loginRequiredPanel");
+            }
+            showPanel("notFoundPanel");
+            showPageMessage(ERROR_MESSAGE_KEYS[reason] || "store_account_err_generic", "error", reason || "http_" + response.status);
+          })
+          .catch(function () {
+            showPanel("notFoundPanel");
+            showPageMessage("store_account_err_network", "error");
+          });
+      }
+
+      // ===== 保存 =====
+
+      function handleSave(event) {
+        event.preventDefault();
+        if (saving || !editable) {
+          return;
+        }
+        clearFormMessage();
+        const description = document.getElementById("descriptionInput").value;
+        if (Array.from(description.trim()).length > DESCRIPTION_MAX_LENGTH) {
+          return showFormMessage("store_profile_err_description", "error");
+        }
+        const hours = readHours();
+        if (!hours.ok) {
+          return showFormMessage("store_profile_err_hours", "error", t("store_profile_day_" + hours.day));
+        }
+        saving = true;
+        const saveButton = document.getElementById("saveButton");
+        saveButton.disabled = true;
+        saveButton.textContent = t("store_account_processing");
+        callApi({
+          mode: "storeProfileUpdate",
+          storeId: storeId,
+          expectedRevision: revision,
+          categoryCode: document.getElementById("categorySelect").value,
+          description: description,
+          businessHours: hours.value,
+          phone: document.getElementById("phoneInput").value.trim(),
+          websiteUrl: document.getElementById("websiteInput").value.trim(),
+          reservationUrl: document.getElementById("reservationInput").value.trim(),
+          socialLinks: readSocialLinks(),
+          paymentMethodCodes: readPaymentCodes()
+        })
+          .then(function (response) {
+            const result = response.result || {};
+            if (response.status === 200 && result.success) {
+              revision = result.revision;
+              dirty = false;
+              return showFormMessage("store_profile_saved", "success");
+            }
+            if (result.reason === "revision_conflict") {
+              document.getElementById("reloadButton").hidden = false;
+            }
+            if (result.reason === "invalid_input" && result.field) {
+              const field = String(result.field);
+              if (field.indexOf("businessHours.") === 0 && field !== "businessHours.note") {
+                return showFormMessage("store_profile_err_hours", "error", t("store_profile_day_" + field.slice(14)));
+              }
+              return showFormMessage(FIELD_ERROR_KEYS[field] || "store_account_err_generic", "error", field);
+            }
+            showFormMessage(ERROR_MESSAGE_KEYS[result.reason] || "store_account_err_generic", "error", result.reason || "http_" + response.status);
+          })
+          .catch(function () {
+            showFormMessage("store_account_err_network", "error");
+          })
+          .finally(function () {
+            saving = false;
+            saveButton.disabled = !editable;
+            saveButton.textContent = t("store_profile_save_button");
+          });
+      }
+
+      // ===== 言語 =====
+
+      function applyLanguage() {
+        document.documentElement.lang = currentLanguage;
+        document.title = t("store_profile_doc_title");
+        document.querySelectorAll("[data-i18n]").forEach(function (element) {
+          element.textContent = t(element.getAttribute("data-i18n"));
+        });
+        document.querySelectorAll("[data-language]").forEach(function (button) {
+          button.setAttribute("aria-pressed", button.getAttribute("data-language") === currentLanguage ? "true" : "false");
+        });
+        document.querySelectorAll("[data-day-label]").forEach(function (element) {
+          element.textContent = t("store_profile_day_" + element.getAttribute("data-day-label"));
+        });
+        document.querySelectorAll("[data-day-option]").forEach(function (element) {
+          element.textContent = t(element.getAttribute("data-day-option") === "closed" ? "store_profile_day_closed" : "store_profile_day_allday");
+        });
+        document.querySelectorAll(".social-type").forEach(function (select) {
+          Array.from(select.options).forEach(function (option) {
+            option.textContent = t("store_profile_social_" + option.value);
+          });
+        });
+        document.querySelectorAll(".social-remove").forEach(function (button) {
+          button.textContent = t("store_profile_social_remove");
+        });
+        buildCategoryOptions();
+        buildPaymentChecks();
+        if (loaded) {
+          renderLocation();
+          setFormEnabled(editable);
+          const notEditable = document.getElementById("notEditableNote");
+          if (!editable) {
+            notEditable.textContent = t("store_profile_not_editable_" + statusKey(loaded.registrationStatus));
+          }
+        }
+        updateDescriptionCounter();
+        if (lastPageMessage) {
+          showPageMessage(lastPageMessage.key, lastPageMessage.type, lastPageMessage.code);
+        }
+        if (lastFormMessage) {
+          showFormMessage(lastFormMessage.key, lastFormMessage.type, lastFormMessage.code);
+        }
+      }
+
+      function bindEvents() {
+        document.querySelectorAll("[data-language]").forEach(function (button) {
+          button.addEventListener("click", function () {
+            currentLanguage = button.getAttribute("data-language");
+            try {
+              localStorage.setItem(LANGUAGE_STORAGE_KEY, currentLanguage);
+            } catch (error) {
+              // localStorageが使えなくても表示切替は続ける。
+            }
+            applyLanguage();
+          });
+        });
+
+        const form = document.getElementById("profileForm");
+        form.addEventListener("submit", handleSave);
+        form.addEventListener("input", function () {
+          dirty = true;
+        });
+        form.addEventListener("change", function (event) {
+          dirty = true;
+          const row = event.target.closest(".day-row");
+          if (row) {
+            // 「定休日」と「24時間」は同時に選べない。
+            if (event.target.classList.contains("day-closed") && event.target.checked) {
+              row.querySelector(".day-allday").checked = false;
+            }
+            if (event.target.classList.contains("day-allday") && event.target.checked) {
+              row.querySelector(".day-closed").checked = false;
+            }
+            updateDayRow(row);
+          }
+          if (event.target.id === "hoursEnabledCheckbox") {
+            document.getElementById("hoursEditor").hidden = !event.target.checked;
+          }
+        });
+        form.addEventListener("click", function (event) {
+          const addRange = event.target.closest(".day-add-range");
+          if (addRange) {
+            const row = addRange.closest(".day-row");
+            const box = row.querySelector(".day-ranges");
+            if (box.children.length < 2) {
+              box.appendChild(createRangeLine(null));
+              dirty = true;
+            }
+            updateDayRow(row);
+          }
+          const remove = event.target.closest(".social-remove");
+          if (remove) {
+            remove.closest(".social-row").remove();
+            dirty = true;
+            updateSocialAddButton();
+          }
+        });
+        document.getElementById("addSocialButton").addEventListener("click", function () {
+          if (document.querySelectorAll(".social-row").length < SOCIAL_LINKS_MAX) {
+            document.getElementById("socialRows").appendChild(createSocialRow(null));
+            dirty = true;
+          }
+          updateSocialAddButton();
+        });
+        document.getElementById("descriptionInput").addEventListener("input", updateDescriptionCounter);
+        document.getElementById("reloadButton").addEventListener("click", function () {
+          clearFormMessage();
+          loadProfile();
+        });
+        window.addEventListener("beforeunload", function (event) {
+          if (dirty && editable) {
+            event.preventDefault();
+            event.returnValue = "";
+          }
+        });
+      }
+
+      function init() {
+        bindEvents();
+        applyLanguage();
+
+        const requested = new URLSearchParams(window.location.search).get("store") || "";
+        storeId = /^[A-Za-z0-9_-]{1,100}$/.test(requested) ? requested : "";
+        if (storeId === "") {
+          return showPanel("notFoundPanel");
+        }
+
+        try {
+          const defaultApp = window.machinauFirebaseApp || firebase.app();
+          const storeApp = firebase.apps.find(function (app) {
+            return app.name === STORE_AUTH_APP_NAME;
+          }) || firebase.initializeApp(defaultApp.options, STORE_AUTH_APP_NAME);
+          storeAuth = storeApp.auth();
+        } catch (error) {
+          showPanel("notFoundPanel");
+          return showPageMessage("store_account_err_unavailable", "error");
+        }
+
+        let handled = false;
+        storeAuth.onAuthStateChanged(function (user) {
+          if (handled) {
+            return;
+          }
+          handled = true;
+          if (!user || user.isAnonymous) {
+            return showPanel("loginRequiredPanel");
+          }
+          loadProfile();
+        });
+      }
+
+      init();
+    })();
+  </script>
+</body>
+</html>

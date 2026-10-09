@@ -2309,8 +2309,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_account_store_note_active: {
-    ja: "常設店舗情報の編集は準備中です。まだ旅行者には表示されません。",
-    en: "Editing your permanent shop information is coming soon. It is not shown to travelers yet."
+    ja: "常設店舗情報を編集できます。まだ旅行者には表示されません。",
+    en: "You can edit your shop profile. It is not shown to travelers yet."
   },
 
   store_account_store_note_pending_review: {
@@ -2396,6 +2396,336 @@ const MACHINAU_TRANSLATIONS = {
   store_account_store_err_address: {
     ja: "住所を200文字以内で入力してください。",
     en: "Please enter an address (up to 200 characters)."
+  },
+
+  store_profile_doc_title: {
+    ja: "常設店舗情報｜マチナウ",
+    en: "Shop Profile | Machinau"
+  },
+
+  store_profile_heading: {
+    ja: "常設店舗情報",
+    en: "Shop profile"
+  },
+
+  store_profile_not_public_banner: {
+    ja: "この情報はまだ旅行者に表示されません。下書きとして保存されます。",
+    en: "This information is not shown to travelers yet. It is saved as a draft."
+  },
+
+  store_profile_loading: {
+    ja: "読み込んでいます…",
+    en: "Loading…"
+  },
+
+  store_profile_login_required: {
+    ja: "店舗・施設アカウントでログインしてから開いてください。",
+    en: "Please log in with your business account first."
+  },
+
+  store_profile_not_found: {
+    ja: "この店舗・施設の情報を開けませんでした。店舗・施設アカウントの画面から開き直してください。",
+    en: "This shop or facility could not be opened. Please open it again from your business account page."
+  },
+
+  store_profile_basic_heading: {
+    ja: "店舗・施設",
+    en: "Shop / facility"
+  },
+
+  store_profile_location_label: {
+    ja: "所在地",
+    en: "Location"
+  },
+
+  store_profile_name_location_note: {
+    ja: "店舗・施設名と所在地は、ここでは変更できません（変更方法は準備中です）。",
+    en: "The name and location can't be changed here (a change process is being prepared)."
+  },
+
+  store_profile_description_label: {
+    ja: "紹介文",
+    en: "Description"
+  },
+
+  store_profile_description_hint: {
+    ja: "お店・施設の特徴や、旅行者に知ってほしいことを書いてください（1,000文字まで）。",
+    en: "Describe your shop or facility and what travelers should know (up to 1,000 characters)."
+  },
+
+  store_profile_hours_heading: {
+    ja: "営業時間",
+    en: "Opening hours"
+  },
+
+  store_profile_hours_enable: {
+    ja: "営業時間を設定する",
+    en: "Set opening hours"
+  },
+
+  store_profile_hours_hint: {
+    ja: "曜日ごとに最大2つの時間帯を設定できます。閉店が翌日になる場合は、そのまま翌日の時刻を入れてください（例：18:00〜02:00）。",
+    en: "You can set up to two time ranges per day. If you close after midnight, enter the next-day time as is (e.g. 18:00–02:00)."
+  },
+
+  store_profile_hours_note_label: {
+    ja: "営業時間の補足",
+    en: "Note on opening hours"
+  },
+
+  store_profile_hours_note_hint: {
+    ja: "例：祝日は不定休、ラストオーダー21:30（100文字まで）",
+    en: "e.g. Irregular holidays, last order 21:30 (up to 100 characters)"
+  },
+
+  store_profile_day_mon: {
+    ja: "月曜日",
+    en: "Monday"
+  },
+
+  store_profile_day_tue: {
+    ja: "火曜日",
+    en: "Tuesday"
+  },
+
+  store_profile_day_wed: {
+    ja: "水曜日",
+    en: "Wednesday"
+  },
+
+  store_profile_day_thu: {
+    ja: "木曜日",
+    en: "Thursday"
+  },
+
+  store_profile_day_fri: {
+    ja: "金曜日",
+    en: "Friday"
+  },
+
+  store_profile_day_sat: {
+    ja: "土曜日",
+    en: "Saturday"
+  },
+
+  store_profile_day_sun: {
+    ja: "日曜日",
+    en: "Sunday"
+  },
+
+  store_profile_day_closed: {
+    ja: "定休日",
+    en: "Closed"
+  },
+
+  store_profile_day_allday: {
+    ja: "24時間",
+    en: "Open 24 hours"
+  },
+
+  store_profile_add_range: {
+    ja: "＋ 時間帯を追加",
+    en: "+ Add time range"
+  },
+
+  store_profile_contact_heading: {
+    ja: "連絡先・リンク",
+    en: "Contact & links"
+  },
+
+  store_profile_phone_label: {
+    ja: "電話番号",
+    en: "Phone number"
+  },
+
+  store_profile_website_label: {
+    ja: "Webサイト",
+    en: "Website"
+  },
+
+  store_profile_reservation_label: {
+    ja: "予約ページ",
+    en: "Reservation page"
+  },
+
+  store_profile_social_label: {
+    ja: "SNS（最大3件）",
+    en: "Social media (up to 3)"
+  },
+
+  store_profile_social_add: {
+    ja: "＋ SNSを追加",
+    en: "+ Add social media"
+  },
+
+  store_profile_social_hint: {
+    ja: "SNSの種類を選んで、ページのURLを入れてください。",
+    en: "Choose the type and enter the page URL."
+  },
+
+  store_profile_social_remove: {
+    ja: "削除",
+    en: "Remove"
+  },
+
+  store_profile_social_instagram: {
+    ja: "Instagram",
+    en: "Instagram"
+  },
+
+  store_profile_social_x: {
+    ja: "X",
+    en: "X"
+  },
+
+  store_profile_social_facebook: {
+    ja: "Facebook",
+    en: "Facebook"
+  },
+
+  store_profile_social_tiktok: {
+    ja: "TikTok",
+    en: "TikTok"
+  },
+
+  store_profile_social_youtube: {
+    ja: "YouTube",
+    en: "YouTube"
+  },
+
+  store_profile_social_threads: {
+    ja: "Threads",
+    en: "Threads"
+  },
+
+  store_profile_social_line: {
+    ja: "LINE",
+    en: "LINE"
+  },
+
+  store_profile_social_other: {
+    ja: "その他",
+    en: "Other"
+  },
+
+  store_profile_payment_heading: {
+    ja: "支払い方法",
+    en: "Payment methods"
+  },
+
+  store_profile_payment_cash: {
+    ja: "現金",
+    en: "Cash"
+  },
+
+  store_profile_payment_card: {
+    ja: "クレジットカード",
+    en: "Credit card"
+  },
+
+  store_profile_payment_qr: {
+    ja: "QRコード決済",
+    en: "QR code payment"
+  },
+
+  store_profile_save_button: {
+    ja: "下書きを保存する",
+    en: "Save draft"
+  },
+
+  store_profile_reload_button: {
+    ja: "最新の内容を読み込む",
+    en: "Load the latest version"
+  },
+
+  store_profile_back_to_account: {
+    ja: "← 店舗・施設アカウントへ戻る",
+    en: "← Back to your business account"
+  },
+
+  store_profile_saved: {
+    ja: "下書きを保存しました。まだ旅行者には表示されません。",
+    en: "Draft saved. It is not shown to travelers yet."
+  },
+
+  store_profile_not_editable_pending_review: {
+    ja: "この店舗・施設は運営が確認中のため、まだ編集できません。",
+    en: "This shop or facility is under review, so it can't be edited yet."
+  },
+
+  store_profile_not_editable_rejected: {
+    ja: "この店舗・施設の登録はご利用いただけないため、編集できません。",
+    en: "This registration can't be used, so it can't be edited."
+  },
+
+  store_profile_not_editable_suspended: {
+    ja: "この店舗・施設は停止中のため、編集できません。",
+    en: "This shop or facility is suspended, so it can't be edited."
+  },
+
+  store_profile_not_editable_other: {
+    ja: "この店舗・施設は現在編集できません。",
+    en: "This shop or facility can't be edited right now."
+  },
+
+  store_profile_err_not_editable: {
+    ja: "この店舗・施設は現在編集できません。",
+    en: "This shop or facility can't be edited right now."
+  },
+
+  store_profile_err_conflict: {
+    ja: "別の画面で先に保存されています。最新の内容を読み込んでから、もう一度保存してください。",
+    en: "This was saved from another screen first. Please load the latest version, then save again."
+  },
+
+  store_profile_err_content: {
+    ja: "掲載できない表現が含まれている可能性があります。紹介文・営業時間の補足を見直してください。",
+    en: "The text may contain content that can't be published. Please review the description and the opening-hours note."
+  },
+
+  store_profile_err_safety_unavailable: {
+    ja: "ただいま内容を確認できないため、保存できませんでした。時間をおいてお試しください。",
+    en: "We can't check the content right now, so it was not saved. Please try again later."
+  },
+
+  store_profile_err_description: {
+    ja: "紹介文は1,000文字以内で入力してください。",
+    en: "Please keep the description within 1,000 characters."
+  },
+
+  store_profile_err_phone: {
+    ja: "電話番号の形式を確認してください。",
+    en: "Please check the phone number format."
+  },
+
+  store_profile_err_website: {
+    ja: "WebサイトのURLを確認してください（https:// から始まるURL）。",
+    en: "Please check the website URL (starting with https://)."
+  },
+
+  store_profile_err_reservation: {
+    ja: "予約ページのURLを確認してください（https:// から始まるURL）。",
+    en: "Please check the reservation page URL (starting with https://)."
+  },
+
+  store_profile_err_social: {
+    ja: "SNSのURLを確認してください（https:// から始まるURL、最大3件）。",
+    en: "Please check the social media URLs (starting with https://, up to 3)."
+  },
+
+  store_profile_err_hours_note: {
+    ja: "営業時間の補足は1行・100文字以内で入力してください。",
+    en: "Please keep the opening-hours note to one line and 100 characters."
+  },
+
+  store_profile_err_hours: {
+    ja: "営業時間を確認してください。開始と終了の両方を入れ、時間帯が重ならないようにしてください。定休日は「定休日」を選んでください。",
+    en: "Please check the opening hours. Enter both start and end, without overlapping ranges. For days off, choose \"Closed\"."
+  },
+
+  store_profile_edit_link: {
+    ja: "常設店舗情報を編集する",
+    en: "Edit shop profile"
   }
 };
 

@@ -63,6 +63,12 @@ import {
   handleAdminStoreRegistrationReview
 } from "./_lib/store-self-service.js";
 
+// 正式店舗参加基盤 Phase 2B｜店舗自身による常設店舗情報の編集。実処理はapi/_lib/store-profile.js。
+import {
+  handleStoreProfileGet,
+  handleStoreProfileUpdate
+} from "./_lib/store-profile.js";
+
 
 function getFirebaseAdminApp() {
   if (getApps().length > 0) {
@@ -29089,7 +29095,11 @@ function buildStoreSelfServiceDeps() {
     requireAdmin: requireAdmin,
     claimRateLimit: claimRateLimit,
     computeRateLimitIdentifier: computeRateLimitIdentifier,
-    findAddressComponentByType: findAddressComponentByType
+    findAddressComponentByType: findAddressComponentByType,
+    // Phase 2B｜常設店舗情報の文章チェック(既存のOpenAI Moderationをそのまま使う)。
+    buildModerationInput: buildModerationInput,
+    callOpenAiModeration: callOpenAiModeration,
+    classifyModerationError: classifyModerationError
   };
 }
 
@@ -29343,6 +29353,27 @@ export default async function handler(
     requestBody.mode === "storeMyStores"
   ) {
     return handleStoreMyStores(
+      request,
+      response,
+      buildStoreSelfServiceDeps()
+    );
+  }
+
+  // 正式店舗参加基盤 Phase 2B｜常設店舗情報(draft)の取得・保存(owner本人のみ)。
+  if (
+    requestBody.mode === "storeProfileGet"
+  ) {
+    return handleStoreProfileGet(
+      request,
+      response,
+      buildStoreSelfServiceDeps()
+    );
+  }
+
+  if (
+    requestBody.mode === "storeProfileUpdate"
+  ) {
+    return handleStoreProfileUpdate(
       request,
       response,
       buildStoreSelfServiceDeps()

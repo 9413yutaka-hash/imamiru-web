@@ -225,6 +225,18 @@
     .store-card-meta { margin-top: 2px; color: var(--subtext); }
     .store-card-note { margin-top: 6px; font-size: 12px; color: var(--subtext); }
 
+    .store-card-link {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: var(--sky);
+      color: var(--navy);
+      font-size: 13px;
+      font-weight: 800;
+      text-decoration: none;
+    }
+
     .store-status {
       display: inline-block;
       margin-top: 6px;
@@ -827,6 +839,16 @@
           note.className = "store-card-note";
           note.textContent = t("store_account_store_note_" + statusCode);
           item.appendChild(note);
+
+          // Phase 2B｜常設店舗情報の編集画面へ。編集できる(登録済み)店舗だけに出す
+          // (編集できるかの最終判定はサーバー)。
+          if (statusCode === "active") {
+            const editLink = document.createElement("a");
+            editLink.className = "store-card-link";
+            editLink.href = "store-profile.html?store=" + encodeURIComponent(store.storeId);
+            editLink.textContent = t("store_profile_edit_link");
+            item.appendChild(editLink);
+          }
 
           list.appendChild(item);
         });
