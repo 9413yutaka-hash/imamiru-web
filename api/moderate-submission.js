@@ -66,7 +66,10 @@ import {
 // 正式店舗参加基盤 Phase 2B｜店舗自身による常設店舗情報の編集。実処理はapi/_lib/store-profile.js。
 import {
   handleStoreProfileGet,
-  handleStoreProfileUpdate
+  handleStoreProfileUpdate,
+  checkStoreProfileEditor,
+  buildStorePhotoFolder,
+  isStorePhotoPublicId
 } from "./_lib/store-profile.js";
 
 
@@ -20475,10 +20478,291 @@ function buildCloudinaryUploadSignature(
 // 上で、短命なCloudinary signed upload用の署名を発行する。Cloudinary
 // API secretはここでのみ使用し、レスポンスへは一切含めない。
 // エラーはこの関数の中で完結させ、呼び出し元のtry/catchには伝播させない。
+// ==========================================================================
+// 正式店舗参加基盤 Phase 2C｜常設店舗写真
+// ==========================================================================
+// 店舗写真はCloudinaryの店舗専用フォルダー machinau_store_profiles/{storeId} にだけ置く。
+// 署名に含めるfolderはサーバーが決め、ブラウザからのfolder指定は一切受け取らない
+// (folderは署名対象のため、ブラウザ側で変えると署名が一致せずアップロードは拒否される)。
+// 既存の運営・投稿・今だけ投稿の署名(machinau_submissions)は一切変えない。
+const CLOUDINARY_CLOUD_NAME =
+  "cdhyctnp";
+
+const CLOUDINARY_DESTROY_TIMEOUT_MS =
+  8000;
+
+// mode: cloudinarySignature ＋ purpose:"storeProfilePhoto"
+// Phase 2Bの編集条件(ログイン・メール確認済み・owner・active・enabled)を満たす
+// 店舗だけに、その店舗専用フォルダーの署名を出す。
+async function handleStoreProfilePhotoSignatureRequest(
+  request,
+  response
+) {
+  try {
+    const actorResult =
+      await resolveStoreUserActor(
+        request
+      );
+
+    if (!actorResult.ok) {
+      return response.status(actorResult.status).json({
+        success: false,
+        reason:
+          actorResult.status === 401
+            ? "login_required"
+            : "store_account_required"
+      });
+    }
+
+    if (actorResult.actor.emailVerified !== true) {
+      return response.status(403).json({
+        success: false,
+        reason: "email_not_verified"
+      });
+    }
+
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    const storeId =
+      typeof requestBody.storeId === "string" &&
+      /^[A-Za-z0-9_-]{1,100}$/.test(requestBody.storeId)
+        ? requestBody.storeId
+        : "";
+
+    if (storeId === "") {
+      return response.status(400).json({
+        success: false,
+        reason: "invalid_input"
+      });
+    }
+
+    const editorCheck =
+      await checkStoreProfileEditor(
+        getFirestore(
+          getFirebaseAdminApp()
+        ),
+        storeId,
+        actorResult.actor.uid
+      );
+
+    if (!editorCheck.ok) {
+      return response.status(editorCheck.status).json({
+        success: false,
+        reason: editorCheck.reason
+      });
+    }
+
+    const cloudinaryApiKey =
+      process.env.CLOUDINARY_API_KEY;
+
+    const cloudinaryApiSecret =
+      process.env.CLOUDINARY_API_SECRET;
+
+    if (
+      !cloudinaryApiKey ||
+      !cloudinaryApiSecret
+    ) {
+      console.error(
+        "店舗写真：CLOUDINARY_API_KEY または CLOUDINARY_API_SECRET が設定されていません。"
+      );
+
+      return response.status(500).json({
+        success: false,
+        reason: "upload_unavailable"
+      });
+    }
+
+    const timestampSeconds =
+      Math.floor(
+        Date.now() / 1000
+      );
+
+    const folder =
+      buildStorePhotoFolder(
+        storeId
+      );
+
+    const signature =
+      buildCloudinaryUploadSignature(
+        {
+          folder: folder,
+          timestamp: timestampSeconds,
+          upload_preset: CLOUDINARY_UPLOAD_PRESET
+        },
+        cloudinaryApiSecret
+      );
+
+    return response.status(200).json({
+      success: true,
+      signature: signature,
+      timestamp: timestampSeconds,
+      apiKey: cloudinaryApiKey,
+      cloudName: CLOUDINARY_CLOUD_NAME,
+      uploadPreset: CLOUDINARY_UPLOAD_PRESET,
+      folder: folder
+    });
+  } catch (error) {
+    console.error(
+      "店舗写真：署名発行エラー：",
+      error && error.message
+    );
+
+    return response.status(500).json({
+      success: false,
+      reason: "server_error"
+    });
+  }
+}
+
+
+// Cloudinary上の店舗写真の実体削除(Upload APIのdestroy)。店舗写真フォルダー
+// (machinau_store_profiles/{storeId}/…)の画像以外は、呼び出し元の判定に関係なく
+// ここでも必ず削除しない(二重の防御)。結果は1枚ずつ返し、例外にはしない。
+async function destroyStorePhotoImages(
+  publicIds
+) {
+  const cloudinaryApiKey =
+    process.env.CLOUDINARY_API_KEY;
+
+  const cloudinaryApiSecret =
+    process.env.CLOUDINARY_API_SECRET;
+
+  return Promise.all(
+    publicIds.map(
+      async function(publicId) {
+        const storeIdInPath =
+          typeof publicId === "string"
+            ? publicId.split("/")[1] || ""
+            : "";
+
+        if (
+          !isStorePhotoPublicId(
+            publicId,
+            storeIdInPath
+          )
+        ) {
+          return { publicId: publicId, ok: false, detail: "not_a_store_photo" };
+        }
+
+        if (
+          !cloudinaryApiKey ||
+          !cloudinaryApiSecret
+        ) {
+          return { publicId: publicId, ok: false, detail: "credentials_missing" };
+        }
+
+        const timestampSeconds =
+          Math.floor(
+            Date.now() / 1000
+          );
+
+        const paramsToSign =
+          {
+            invalidate: "true",
+            public_id: publicId,
+            timestamp: timestampSeconds
+          };
+
+        const formBody =
+          new URLSearchParams({
+            ...Object.fromEntries(
+              Object.entries(paramsToSign).map(
+                function(entry) {
+                  return [entry[0], String(entry[1])];
+                }
+              )
+            ),
+            api_key: cloudinaryApiKey,
+            signature:
+              buildCloudinaryUploadSignature(
+                paramsToSign,
+                cloudinaryApiSecret
+              )
+          });
+
+        const abortController =
+          new AbortController();
+
+        const timeoutId =
+          setTimeout(
+            function() {
+              abortController.abort();
+            },
+            CLOUDINARY_DESTROY_TIMEOUT_MS
+          );
+
+        try {
+          const destroyResponse =
+            await fetch(
+              "https://api.cloudinary.com/v1_1/" +
+                CLOUDINARY_CLOUD_NAME +
+                "/image/destroy",
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/x-www-form-urlencoded"
+                },
+                body: formBody.toString(),
+                signal: abortController.signal
+              }
+            );
+
+          const data =
+            await destroyResponse.json().catch(
+              function() {
+                return null;
+              }
+            );
+
+          // "not found" は既に実体が無い状態のため成功扱いにする。
+          const result =
+            data && typeof data.result === "string"
+              ? data.result
+              : "";
+
+          return {
+            publicId: publicId,
+            ok:
+              destroyResponse.ok &&
+              (result === "ok" || result === "not found"),
+            detail:
+              "http_" + destroyResponse.status + ":" + (result || "no_result")
+          };
+        } catch (error) {
+          return {
+            publicId: publicId,
+            ok: false,
+            detail:
+              error && error.name === "AbortError"
+                ? "timeout"
+                : "network_error"
+          };
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      }
+    )
+  );
+}
+
+
 async function handleCloudinarySignatureRequest(
   request,
   response
 ) {
+  // Phase 2C｜店舗写真用の署名だけ別処理へ分ける(これ以外の呼び出しは従来どおり)。
+  if (
+    readRequestBody(request).purpose === "storeProfilePhoto"
+  ) {
+    return handleStoreProfilePhotoSignatureRequest(
+      request,
+      response
+    );
+  }
+
   try {
     const idToken =
       readBearerToken(
@@ -29099,7 +29383,9 @@ function buildStoreSelfServiceDeps() {
     // Phase 2B｜常設店舗情報の文章チェック(既存のOpenAI Moderationをそのまま使う)。
     buildModerationInput: buildModerationInput,
     callOpenAiModeration: callOpenAiModeration,
-    classifyModerationError: classifyModerationError
+    classifyModerationError: classifyModerationError,
+    // Phase 2C｜店舗写真の実体削除(店舗写真フォルダーの画像だけ)。
+    destroyStorePhotoImages: destroyStorePhotoImages
   };
 }
 

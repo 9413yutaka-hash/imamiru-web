@@ -79,6 +79,155 @@ export const STORE_LANGUAGE_CODES = ["ja", "en", "zh-Hans", "zh-Hant", "ko", "th
 
 const STORE_PROFILE_UPDATE_COOLDOWN_MS = 3 * 1000;
 
+// Phase 2C｜常設店舗の写真。最大10枚、配列の順＝表示順、photos[0]がメイン写真。
+// 店舗写真はCloudinaryの店舗専用フォルダー machinau_store_profiles/{storeId} にだけ
+// 置く(署名発行時にサーバーがowner確認後に指定する)。保存時は、自店舗フォルダーの
+// 画像以外を受け付けない(運営無料掲載・今だけ投稿・他店舗・外部URLの画像は不可)。
+export const STORE_PHOTOS_MAX = 10;
+export const STORE_PHOTO_FOLDER_ROOT = "machinau_store_profiles";
+const STORE_PHOTO_CLOUDINARY_PREFIX = "https://res.cloudinary.com/cdhyctnp/image/upload/";
+const STORE_PHOTO_MODERATION_BATCH_SIZE = 5;
+
+export function buildStorePhotoFolder(storeId) {
+  return STORE_PHOTO_FOLDER_ROOT + "/" + storeId;
+}
+
+// 削除してよい画像か(店舗写真フォルダーの画像だけ)。削除処理側でも同じ確認を重ねる。
+export function isStorePhotoPublicId(publicId, storeId) {
+  return (
+    typeof publicId === "string" &&
+    typeof storeId === "string" &&
+    /^[A-Za-z0-9_-]{1,100}$/.test(storeId) &&
+    new RegExp("^" + STORE_PHOTO_FOLDER_ROOT + "/" + storeId + "/[A-Za-z0-9_-]{1,100}$").test(publicId)
+  );
+}
+
+// photos: undefined/null は「送られてこなかった」(=保存済みの写真を変えない)。
+// それ以外は [{url, publicId}] で最大10枚。URLはpublicIdから決まる形
+// (https://res.cloudinary.com/cdhyctnp/image/upload/v{版}/{publicId}.{webp|jpg|jpeg|png})と
+// 完全一致しなければ受け付けない(URLとpublicIdを別々の画像にすり替えられないように)。
+function readStorePhotos(value, storeId) {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (!Array.isArray(value) || value.length > STORE_PHOTOS_MAX) {
+    return null;
+  }
+
+  const photos = [];
+  const seen = new Set();
+
+  for (const item of value) {
+    const publicId = item && typeof item.publicId === "string" ? item.publicId : "";
+    const url = item && typeof item.url === "string" ? item.url : "";
+
+    if (!isStorePhotoPublicId(publicId, storeId) || seen.has(publicId)) {
+      return null;
+    }
+
+    const expected = new RegExp(
+      "^" + STORE_PHOTO_CLOUDINARY_PREFIX.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&") +
+      "v\\d{1,12}/" + publicId + "\\.(webp|jpg|jpeg|png)$"
+    );
+
+    if (!expected.test(url)) {
+      return null;
+    }
+
+    seen.add(publicId);
+    photos.push({ url: url, publicId: publicId });
+  }
+
+  return photos;
+}
+
+// 店舗写真の署名発行と保存で共通に使う、編集できる店舗かの確認(Phase 2Bと同じ条件)。
+// 他人の店舗・存在しない店舗は区別せず store_not_found を返す。
+export async function checkStoreProfileEditor(database, storeId, uid) {
+  const snapshots = await Promise.all([
+    database.collection(STORE_MEMBERS_COLLECTION).doc(storeId + "_" + uid).get(),
+    database.collection(STORE_ACCOUNTS_COLLECTION).doc(storeId).get()
+  ]);
+
+  if (!snapshots[0].exists || !isActiveOwner(snapshots[0].data(), uid, storeId) || !snapshots[1].exists) {
+    return { ok: false, status: 404, reason: "store_not_found" };
+  }
+
+  if (!isEditableStore(snapshots[1].data())) {
+    return { ok: false, status: 403, reason: "store_not_editable" };
+  }
+
+  return { ok: true };
+}
+
+// 新しく追加された写真だけをModerationにかける(最大5枚ずつ、並列)。
+async function moderateNewPhotos(photos, deps) {
+  const batches = [];
+
+  for (let index = 0; index < photos.length; index += STORE_PHOTO_MODERATION_BATCH_SIZE) {
+    batches.push(photos.slice(index, index + STORE_PHOTO_MODERATION_BATCH_SIZE));
+  }
+
+  const resultsPerBatch = await Promise.all(batches.map(function(batch) {
+    return deps.callOpenAiModeration(
+      deps.buildModerationInput({
+        imageUrls: batch.map(function(photo) { return photo.url; })
+      })
+    );
+  }));
+
+  for (const results of resultsPerBatch) {
+    if (!Array.isArray(results) || results.length === 0) {
+      throw new Error("moderation response was empty");
+    }
+  }
+
+  return resultsPerBatch.some(function(results) {
+    return !results.every(function(result) { return result && result.flagged === false; });
+  });
+}
+
+function readStoredPhotos(profileData) {
+  return profileData && Array.isArray(profileData.photos) ? profileData.photos : [];
+}
+
+// Cloudinary上の実体削除。保存の成否には影響させず、失敗はサーバーログへ残す。
+// 削除対象は呼び出し元で「この店舗フォルダーの画像」に限定済み。ここでも再確認する。
+async function deleteStorePhotos(storeId, publicIds, deps, context) {
+  const targets = publicIds.filter(function(publicId) {
+    return isStorePhotoPublicId(publicId, storeId);
+  });
+
+  if (targets.length === 0) {
+    return { requested: 0, failed: 0 };
+  }
+
+  let failed = 0;
+
+  try {
+    const results = await deps.destroyStorePhotoImages(targets);
+
+    results.forEach(function(result) {
+      if (!result.ok) {
+        failed += 1;
+        console.error(
+          "店舗写真：Cloudinary削除失敗：",
+          JSON.stringify({ storeId: storeId, publicId: result.publicId, context: context, detail: result.detail })
+        );
+      }
+    });
+  } catch (error) {
+    failed = targets.length;
+    console.error(
+      "店舗写真：Cloudinary削除エラー：",
+      JSON.stringify({ storeId: storeId, publicIds: targets, context: context, detail: error && error.message })
+    );
+  }
+
+  return { requested: targets.length, failed: failed };
+}
+
 
 function sendError(response, status, reason, extra) {
   return response.status(status).json(
@@ -400,6 +549,9 @@ function buildProfileResponse(profileData) {
     paymentMethodCodes: Array.isArray(data.paymentMethodCodes) ? data.paymentMethodCodes : [],
     featureCodes: Array.isArray(data.featureCodes) ? data.featureCodes : [],
     supportedLanguageCodes: Array.isArray(data.supportedLanguageCodes) ? data.supportedLanguageCodes : [],
+    photos: readStoredPhotos(data).map(function(photo) {
+      return { url: photo.url, publicId: photo.publicId };
+    }),
     updatedAtMillis:
       data.updatedAt && typeof data.updatedAt.toMillis === "function" ? data.updatedAt.toMillis() : 0
   };
@@ -478,7 +630,8 @@ export async function handleStoreProfileGet(request, response, deps) {
       // 編集画面はこの一覧から選択肢を作る(許可codeをサーバーと一致させる)。
       options: {
         featureCodes: STORE_FEATURE_CODES,
-        supportedLanguageCodes: STORE_LANGUAGE_CODES
+        supportedLanguageCodes: STORE_LANGUAGE_CODES,
+        photosMax: STORE_PHOTOS_MAX
       }
     });
   } catch (error) {
@@ -515,6 +668,13 @@ export async function handleStoreProfileUpdate(request, response, deps) {
 
     if (!input.ok) {
       return sendError(response, 400, "invalid_input", { field: input.field });
+    }
+
+    // Phase 2C｜写真。送られてこなければ保存済みの写真を変えない(undefined)。
+    const photosInput = readStorePhotos(body.photos, storeId);
+
+    if (photosInput === null) {
+      return sendError(response, 400, "invalid_input", { field: "photos" });
     }
 
     const database = deps.getFirestore(deps.getFirebaseAdminApp());
@@ -586,7 +746,57 @@ export async function handleStoreProfileUpdate(request, response, deps) {
       };
     }
 
+    // Phase 2C｜新しく追加された写真だけをModerationにかける(確認済みの写真は、
+    // 並べ替え・削除だけの保存では再確認しない)。
+    let photosUpdate = {};
+
+    if (photosInput !== undefined) {
+      const storedPhotos = readStoredPhotos(profileBefore);
+      const storedById = new Map(storedPhotos.map(function(photo) { return [photo.publicId, photo]; }));
+      const newPhotos = photosInput.filter(function(photo) { return !storedById.has(photo.publicId); });
+
+      if (newPhotos.length > 0) {
+        let flagged;
+
+        try {
+          flagged = await moderateNewPhotos(newPhotos, deps);
+        } catch (moderationError) {
+          console.error(
+            "店舗写真：Moderationエラー：",
+            deps.classifyModerationError(moderationError)
+          );
+          // 写真は店舗専用フォルダーに残る(再保存時にアップロードし直さずに使えるよう削除しない)。
+          return sendError(response, 503, "safety_check_unavailable");
+        }
+
+        if (flagged) {
+          // 掲載できない可能性がある写真は保存せず、今回新しく上げた写真の実体を削除する
+          // (どれもこの店舗の専用フォルダーの、まだ保存されていない写真)。
+          await deleteStorePhotos(
+            storeId,
+            newPhotos.map(function(photo) { return photo.publicId; }),
+            deps,
+            "moderation_rejected"
+          );
+          return sendError(response, 400, "photo_not_allowed");
+        }
+      }
+
+      photosUpdate = {
+        photos: photosInput.map(function(photo) {
+          const stored = storedById.get(photo.publicId);
+
+          return {
+            url: photo.url,
+            publicId: photo.publicId,
+            moderationStatus: stored && stored.moderationStatus ? stored.moderationStatus : "passed"
+          };
+        })
+      };
+    }
+
     let outcome = null;
+    let previousPhotos = [];
 
     await database.runTransaction(async function(transaction) {
       const snapshots = await Promise.all([
@@ -614,6 +824,7 @@ export async function handleStoreProfileUpdate(request, response, deps) {
       }
 
       const nextRevision = currentRevision + 1;
+      previousPhotos = readStoredPhotos(profileData);
 
       // statusは "draft" のまま(公開は2D)。storeId・店名・所在地は書き換えない。
       transaction.set(
@@ -627,7 +838,8 @@ export async function handleStoreProfileUpdate(request, response, deps) {
             updatedAt: FieldValue.serverTimestamp()
           },
           input.fields,
-          moderationUpdate
+          moderationUpdate,
+          photosUpdate
         ),
         { merge: true }
       );
@@ -640,9 +852,27 @@ export async function handleStoreProfileUpdate(request, response, deps) {
         outcome.currentRevision !== undefined ? { currentRevision: outcome.currentRevision } : undefined);
     }
 
+    // Phase 2C｜保存が成功した後に、外した写真の実体をCloudinaryから削除する。
+    // 対象は「保存前にこの店舗の写真として登録されていて、今回外された、
+    // この店舗の専用フォルダーの画像」だけ。失敗しても保存は巻き戻さない(ログに残す)。
+    let photoCleanup = { requested: 0, failed: 0 };
+
+    if (photosUpdate.photos) {
+      const keptIds = new Set(photosUpdate.photos.map(function(photo) { return photo.publicId; }));
+      const removedIds = previousPhotos
+        .map(function(photo) { return photo.publicId; })
+        .filter(function(publicId) { return !keptIds.has(publicId); });
+
+      photoCleanup = await deleteStorePhotos(storeId, removedIds, deps, "removed_from_profile");
+    }
+
     return response.status(200).json({
       success: true,
       revision: outcome.revision,
+      photos: photosUpdate.photos
+        ? photosUpdate.photos.map(function(photo) { return { url: photo.url, publicId: photo.publicId }; })
+        : undefined,
+      photoCleanup: photoCleanup,
       status: "draft"
     });
   } catch (error) {

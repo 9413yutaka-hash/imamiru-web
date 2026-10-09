@@ -180,6 +180,19 @@
 
     .back-link { display: inline-block; margin-top: 6px; color: var(--blue); font-size: 13px; }
 
+    .photo-count { margin: 0 0 8px; font-size: 13px; font-weight: 800; color: var(--navy); }
+    .photo-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
+    .photo-card { position: relative; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--background); }
+    .photo-card img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
+    .photo-main-badge, .photo-preparing {
+      position: absolute; top: 6px; left: 6px; padding: 2px 8px; border-radius: 999px;
+      font-size: 11.5px; font-weight: 800; color: var(--white); background: var(--navy);
+    }
+    .photo-preparing { left: auto; right: 6px; background: rgba(7, 26, 51, 0.7); }
+    .photo-actions { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px; }
+    .photo-actions .small-button { min-height: 36px; padding: 4px 10px; font-size: 12px; }
+    .save-progress { margin: 0 0 10px; padding: 10px 12px; border-radius: 12px; background: var(--sky); color: var(--navy); font-size: 13px; font-weight: 800; }
+
     .feature-more { margin-top: 12px; }
     .feature-more summary { cursor: pointer; font-size: 13.5px; font-weight: 800; color: var(--blue); }
     .feature-more .check-group { margin-top: 8px; }
@@ -238,6 +251,16 @@
       <p class="message info show" id="notEditableNote" hidden></p>
 
       <form id="profileForm" novalidate>
+        <!-- Phase 2C｜店舗写真(最大10枚・1枚目がメイン)。保存時にまとめてアップロードする。 -->
+        <section class="panel" id="photoSection">
+          <h2 data-i18n="store_profile_photos_heading">写真</h2>
+          <p class="hint" style="margin: 0 0 8px;" data-i18n="store_profile_photos_hint"></p>
+          <p class="photo-count" id="photoCount"></p>
+          <div class="photo-grid" id="photoGrid"></div>
+          <input type="file" id="photoInput" accept="image/jpeg,image/png,image/webp" multiple hidden>
+          <button type="button" class="small-button" id="photoAddButton" data-i18n="store_profile_photos_add">＋ 写真を追加</button>
+        </section>
+
         <section class="panel">
           <div class="field">
             <label for="categorySelect" data-i18n="store_account_store_category_label">カテゴリ</label>
@@ -316,6 +339,7 @@
         </section>
 
         <div id="formMessage" class="message" role="status" aria-live="polite"></div>
+        <p class="save-progress" id="saveProgress" role="status" aria-live="polite" hidden></p>
         <button type="submit" class="primary-button" id="saveButton" data-i18n="store_profile_save_button">下書きを保存する</button>
         <button type="button" class="secondary-button" id="reloadButton" hidden data-i18n="store_profile_reload_button">最新の内容を読み込む</button>
       </form>
@@ -355,7 +379,9 @@
         revision_conflict: "store_profile_err_conflict",
         content_not_allowed: "store_profile_err_content",
         safety_check_unavailable: "store_profile_err_safety_unavailable",
-        rate_limited: "store_account_store_err_rate_limited"
+        rate_limited: "store_account_store_err_rate_limited",
+        photo_upload_failed: "store_profile_photos_err_upload",
+        upload_unavailable: "store_profile_photos_err_upload"
       };
       const FIELD_ERROR_KEYS = {
         categoryCode: "store_account_store_err_category",
@@ -365,7 +391,8 @@
         reservationUrl: "store_profile_err_reservation",
         socialLinks: "store_profile_err_social",
         paymentMethodCodes: "store_account_err_generic",
-        "businessHours.note": "store_profile_err_hours_note"
+        "businessHours.note": "store_profile_err_hours_note",
+        photos: "store_profile_photos_err_upload"
       };
 
       let currentLanguage = readLanguage();
@@ -813,11 +840,13 @@
           input.checked = (profile.paymentMethodCodes || []).includes(input.value);
         });
         renderFeatureAndLanguageChecks(profile, result.options || {});
+        setPhotosFromServer(profile.photos);
         const notEditable = document.getElementById("notEditableNote");
         notEditable.hidden = editable;
         notEditable.textContent = editable ? "" : t("store_profile_not_editable_" + statusKey(result.registrationStatus));
         document.getElementById("reloadButton").hidden = true;
         setFormEnabled(editable);
+        renderPhotos();
         showPanel("editorArea");
       }
 
@@ -880,7 +909,254 @@
 
       // ===== 保存 =====
 
-      function handleSave(event) {
+      // ===== Phase 2C｜写真 =====
+      // ・写真を選んだ時点では、端末の中で軽量化(長辺1600px・WebP・画質0.82)だけ行う
+      // ・Cloudinaryへのアップロードは「下書きを保存する」を押した時にまとめて行う
+      //   (署名は1回だけ取得し、同時3枚まで並列でアップロードする)
+      // ・保存先フォルダーはサーバーが決める(ここでは指定しない)
+      // ・photos[0]がメイン写真。並べ替え・削除はボタン操作(ドラッグ不要)
+      const PHOTO_ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
+      const PHOTO_MAX_FILE_BYTES = 10 * 1024 * 1024;
+      const PHOTO_MAX_LONG_SIDE = 1600;
+      const PHOTO_WEBP_QUALITY = 0.82;
+      const PHOTO_UPLOAD_CONCURRENCY = 3;
+
+      // { kind: "saved", url, publicId } または
+      // { kind: "local", previewUrl, blob, preparing, uploaded: {url, publicId} | null }
+      let photoItems = [];
+
+      function getPhotosMax() {
+        return loaded && loaded.options && Number.isInteger(loaded.options.photosMax) ? loaded.options.photosMax : 10;
+      }
+
+      function setPhotosFromServer(photos) {
+        photoItems.forEach(function (item) {
+          if (item.kind === "local" && item.previewUrl) {
+            URL.revokeObjectURL(item.previewUrl);
+          }
+        });
+        photoItems = (photos || []).map(function (photo) {
+          return { kind: "saved", url: photo.url, publicId: photo.publicId };
+        });
+        renderPhotos();
+      }
+
+      function photoButton(action, index, labelKey, disabled) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "small-button photo-action";
+        button.setAttribute("data-photo-action", action);
+        button.setAttribute("data-photo-index", String(index));
+        button.textContent = t(labelKey);
+        button.disabled = disabled;
+        return button;
+      }
+
+      function renderPhotos() {
+        const grid = document.getElementById("photoGrid");
+        grid.textContent = "";
+        const locked = !editable || saving;
+        photoItems.forEach(function (item, index) {
+          const card = document.createElement("div");
+          card.className = "photo-card";
+          const image = document.createElement("img");
+          image.alt = "";
+          image.loading = "lazy";
+          image.src = item.kind === "saved" ? item.url : item.previewUrl;
+          card.appendChild(image);
+          if (index === 0) {
+            const badge = document.createElement("span");
+            badge.className = "photo-main-badge";
+            badge.textContent = t("store_profile_photos_main_badge");
+            card.appendChild(badge);
+          }
+          if (item.kind === "local" && item.preparing) {
+            const preparing = document.createElement("span");
+            preparing.className = "photo-preparing";
+            preparing.textContent = t("store_profile_photos_preparing");
+            card.appendChild(preparing);
+          }
+          const actions = document.createElement("div");
+          actions.className = "photo-actions";
+          actions.appendChild(photoButton("left", index, "store_profile_photos_move_left", locked || index === 0));
+          actions.appendChild(photoButton("right", index, "store_profile_photos_move_right", locked || index === photoItems.length - 1));
+          if (index !== 0) {
+            actions.appendChild(photoButton("main", index, "store_profile_photos_make_main", locked));
+          }
+          actions.appendChild(photoButton("remove", index, "store_profile_photos_remove", locked));
+          card.appendChild(actions);
+          grid.appendChild(card);
+        });
+        document.getElementById("photoCount").textContent = t("store_profile_photos_count")
+          .replace("{n}", photoItems.length)
+          .replace("{max}", getPhotosMax());
+        document.getElementById("photoAddButton").disabled = locked || photoItems.length >= getPhotosMax();
+      }
+
+      function compressPhoto(file) {
+        return createImageBitmap(file).then(function (bitmap) {
+          const longSide = Math.max(bitmap.width, bitmap.height);
+          const ratio = longSide > PHOTO_MAX_LONG_SIDE ? PHOTO_MAX_LONG_SIDE / longSide : 1;
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.max(1, Math.round(bitmap.width * ratio));
+          canvas.height = Math.max(1, Math.round(bitmap.height * ratio));
+          const context = canvas.getContext("2d");
+          if (!context) {
+            bitmap.close();
+            throw new Error("canvas unavailable");
+          }
+          context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+          bitmap.close();
+          return new Promise(function (resolve, reject) {
+            canvas.toBlob(function (blob) {
+              blob ? resolve(blob) : reject(new Error("toBlob failed"));
+            }, "image/webp", PHOTO_WEBP_QUALITY);
+          });
+        });
+      }
+
+      // 写真を選んだ時：形式・容量・枚数を確認し、端末の中で1枚ずつ軽量化しておく
+      // (保存時の待ち時間を減らすため。この時点ではどこにも送信しない)。
+      let photoPreparation = Promise.resolve();
+
+      function handlePhotoFiles(files) {
+        let skippedType = false;
+        let skippedMax = false;
+        files.forEach(function (file) {
+          if (!PHOTO_ALLOWED_TYPES.includes(file.type) || file.size > PHOTO_MAX_FILE_BYTES) {
+            skippedType = true;
+            return;
+          }
+          if (photoItems.length >= getPhotosMax()) {
+            skippedMax = true;
+            return;
+          }
+          const item = { kind: "local", previewUrl: URL.createObjectURL(file), blob: null, preparing: true, uploaded: null };
+          photoItems.push(item);
+          dirty = true;
+          photoPreparation = photoPreparation.then(function () {
+            return compressPhoto(file)
+              .then(function (blob) {
+                URL.revokeObjectURL(item.previewUrl);
+                item.blob = blob;
+                item.previewUrl = URL.createObjectURL(blob);
+                item.preparing = false;
+              })
+              .catch(function () {
+                URL.revokeObjectURL(item.previewUrl);
+                photoItems = photoItems.filter(function (candidate) { return candidate !== item; });
+                showFormMessage("store_profile_photos_err_prepare", "error");
+              })
+              .finally(renderPhotos);
+          });
+        });
+        renderPhotos();
+        if (skippedType) {
+          showFormMessage("store_profile_photos_err_type", "error");
+        } else if (skippedMax) {
+          showFormMessage("store_profile_photos_err_max", "error");
+        }
+      }
+
+      function handlePhotoAction(action, index) {
+        if (!editable || saving || index < 0 || index >= photoItems.length) {
+          return;
+        }
+        const item = photoItems[index];
+        if (action === "left" && index > 0) {
+          photoItems.splice(index, 1);
+          photoItems.splice(index - 1, 0, item);
+        } else if (action === "right" && index < photoItems.length - 1) {
+          photoItems.splice(index, 1);
+          photoItems.splice(index + 1, 0, item);
+        } else if (action === "main" && index > 0) {
+          photoItems.splice(index, 1);
+          photoItems.unshift(item);
+        } else if (action === "remove") {
+          photoItems.splice(index, 1);
+          if (item.kind === "local" && item.previewUrl) {
+            URL.revokeObjectURL(item.previewUrl);
+          }
+        } else {
+          return;
+        }
+        dirty = true;
+        renderPhotos();
+      }
+
+      function showSaveProgress(key, done, total) {
+        const element = document.getElementById("saveProgress");
+        let text = t(key);
+        if (total !== undefined) {
+          text = text.replace("{done}", done).replace("{total}", total);
+        }
+        element.textContent = text;
+        element.hidden = false;
+      }
+
+      function hideSaveProgress() {
+        document.getElementById("saveProgress").hidden = true;
+      }
+
+      // 署名を1回だけ取得し、まだアップロードしていない写真を同時3枚までで送る。
+      // 一度アップロードできた写真は、保存が失敗してもやり直し時に再送しない。
+      async function uploadPendingPhotos() {
+        const pending = photoItems.filter(function (item) { return item.kind === "local" && !item.uploaded; });
+        if (pending.length === 0) {
+          return;
+        }
+        const signatureResponse = await callApi({ mode: "cloudinarySignature", purpose: "storeProfilePhoto", storeId: storeId });
+        const signature = signatureResponse.result;
+        if (signatureResponse.status !== 200 || !signature || signature.success !== true) {
+          const error = new Error("signature");
+          error.reason = signature && signature.reason ? signature.reason : "upload_unavailable";
+          throw error;
+        }
+        let done = 0;
+        showSaveProgress("store_profile_photos_progress_upload", done, pending.length);
+        let nextIndex = 0;
+        async function worker() {
+          while (nextIndex < pending.length) {
+            const item = pending[nextIndex];
+            nextIndex += 1;
+            const formData = new FormData();
+            formData.append("file", new File([item.blob], "photo.webp", { type: "image/webp" }));
+            formData.append("api_key", signature.apiKey);
+            formData.append("timestamp", signature.timestamp);
+            formData.append("signature", signature.signature);
+            formData.append("upload_preset", signature.uploadPreset);
+            formData.append("folder", signature.folder);
+            const response = await fetch("https://api.cloudinary.com/v1_1/" + signature.cloudName + "/image/upload", { method: "POST", body: formData });
+            const data = await response.json().catch(function () { return null; });
+            if (!response.ok || !data || !data.secure_url || !data.public_id) {
+              const error = new Error("upload");
+              error.reason = "photo_upload_failed";
+              throw error;
+            }
+            item.uploaded = { url: data.secure_url, publicId: data.public_id };
+            done += 1;
+            showSaveProgress("store_profile_photos_progress_upload", done, pending.length);
+          }
+        }
+        const workers = [];
+        for (let index = 0; index < Math.min(PHOTO_UPLOAD_CONCURRENCY, pending.length); index += 1) {
+          workers.push(worker());
+        }
+        // 1枚失敗しても、他の送信が終わるまで待ってから失敗を返す(途中で画面を戻さない)。
+        const settled = await Promise.allSettled(workers);
+        const failed = settled.find(function (outcome) { return outcome.status === "rejected"; });
+        if (failed) {
+          throw failed.reason;
+        }
+      }
+
+      function readPhotosForSave() {
+        return photoItems.map(function (item) {
+          return item.kind === "saved" ? { url: item.url, publicId: item.publicId } : item.uploaded;
+        });
+      }
+
+      async function handleSave(event) {
         event.preventDefault();
         if (saving || !editable) {
           return;
@@ -895,51 +1171,78 @@
           return showFormMessage("store_profile_err_hours", "error", t("store_profile_day_" + hours.day));
         }
         saving = true;
+        renderPhotos();
         const saveButton = document.getElementById("saveButton");
         saveButton.disabled = true;
-        saveButton.textContent = t("store_account_processing");
-        callApi({
-          mode: "storeProfileUpdate",
-          storeId: storeId,
-          expectedRevision: revision,
-          categoryCode: document.getElementById("categorySelect").value,
-          description: description,
-          businessHours: hours.value,
-          phone: document.getElementById("phoneInput").value.trim(),
-          websiteUrl: document.getElementById("websiteInput").value.trim(),
-          reservationUrl: document.getElementById("reservationInput").value.trim(),
-          socialLinks: readSocialLinks(),
-          paymentMethodCodes: readPaymentCodes(),
-          featureCodes: readCheckedCodes("data-feature", loaded.options && loaded.options.featureCodes),
-          supportedLanguageCodes: readCheckedCodes("data-language-code", loaded.options && loaded.options.supportedLanguageCodes)
-        })
-          .then(function (response) {
-            const result = response.result || {};
-            if (response.status === 200 && result.success) {
-              revision = result.revision;
-              dirty = false;
-              return showFormMessage("store_profile_saved", "success");
-            }
-            if (result.reason === "revision_conflict") {
-              document.getElementById("reloadButton").hidden = false;
-            }
-            if (result.reason === "invalid_input" && result.field) {
-              const field = String(result.field);
-              if (field.indexOf("businessHours.") === 0 && field !== "businessHours.note") {
-                return showFormMessage("store_profile_err_hours", "error", t("store_profile_day_" + field.slice(14)));
-              }
-              return showFormMessage(FIELD_ERROR_KEYS[field] || "store_account_err_generic", "error", field);
-            }
-            showFormMessage(ERROR_MESSAGE_KEYS[result.reason] || "store_account_err_generic", "error", result.reason || "http_" + response.status);
-          })
-          .catch(function () {
-            showFormMessage("store_account_err_network", "error");
-          })
-          .finally(function () {
-            saving = false;
-            saveButton.disabled = !editable;
-            saveButton.textContent = t("store_profile_save_button");
+        saveButton.textContent = t("store_profile_saving_button");
+        try {
+          const hasNewPhotos = photoItems.some(function (item) { return item.kind === "local"; });
+          if (photoItems.some(function (item) { return item.kind === "local" && item.preparing; })) {
+            showSaveProgress("store_profile_photos_progress_prepare");
+            await photoPreparation;
+          }
+          try {
+            await uploadPendingPhotos();
+          } catch (uploadError) {
+            const reason = uploadError.reason || "photo_upload_failed";
+            return showFormMessage(ERROR_MESSAGE_KEYS[reason] || "store_profile_photos_err_upload", "error", reason);
+          }
+          showSaveProgress(hasNewPhotos ? "store_profile_photos_progress_saving" : "store_profile_progress_saving");
+          const response = await callApi({
+            mode: "storeProfileUpdate",
+            storeId: storeId,
+            expectedRevision: revision,
+            categoryCode: document.getElementById("categorySelect").value,
+            description: description,
+            businessHours: hours.value,
+            phone: document.getElementById("phoneInput").value.trim(),
+            websiteUrl: document.getElementById("websiteInput").value.trim(),
+            reservationUrl: document.getElementById("reservationInput").value.trim(),
+            socialLinks: readSocialLinks(),
+            paymentMethodCodes: readPaymentCodes(),
+            featureCodes: readCheckedCodes("data-feature", loaded.options && loaded.options.featureCodes),
+            supportedLanguageCodes: readCheckedCodes("data-language-code", loaded.options && loaded.options.supportedLanguageCodes),
+            photos: readPhotosForSave()
           });
+          const result = response.result || {};
+          if (response.status === 200 && result.success) {
+            revision = result.revision;
+            dirty = false;
+            if (Array.isArray(result.photos)) {
+              setPhotosFromServer(result.photos);
+            }
+            return showFormMessage("store_profile_saved", "success");
+          }
+          if (result.reason === "photo_not_allowed") {
+            // 新しく追加した写真はサーバー側で削除済み。端末内の写真は残るので、
+            // 見直して保存し直すと、もう一度アップロードされる。
+            photoItems.forEach(function (item) {
+              if (item.kind === "local") {
+                item.uploaded = null;
+              }
+            });
+            return showFormMessage("store_profile_photos_err_content", "error", result.reason);
+          }
+          if (result.reason === "revision_conflict") {
+            document.getElementById("reloadButton").hidden = false;
+          }
+          if (result.reason === "invalid_input" && result.field) {
+            const field = String(result.field);
+            if (field.indexOf("businessHours.") === 0 && field !== "businessHours.note") {
+              return showFormMessage("store_profile_err_hours", "error", t("store_profile_day_" + field.slice(14)));
+            }
+            return showFormMessage(FIELD_ERROR_KEYS[field] || "store_account_err_generic", "error", field);
+          }
+          showFormMessage(ERROR_MESSAGE_KEYS[result.reason] || "store_account_err_generic", "error", result.reason || "http_" + response.status);
+        } catch (error) {
+          showFormMessage("store_account_err_network", "error");
+        } finally {
+          saving = false;
+          hideSaveProgress();
+          saveButton.disabled = !editable;
+          saveButton.textContent = t("store_profile_save_button");
+          renderPhotos();
+        }
       }
 
       // ===== 言語 =====
@@ -973,6 +1276,7 @@
         if (loaded) {
           renderLocation();
           setFormEnabled(editable);
+          renderPhotos();
           const notEditable = document.getElementById("notEditableNote");
           if (!editable) {
             notEditable.textContent = t("store_profile_not_editable_" + statusKey(loaded.registrationStatus));
@@ -1052,6 +1356,19 @@
           updateSocialAddButton();
         });
         document.getElementById("descriptionInput").addEventListener("input", updateDescriptionCounter);
+        document.getElementById("photoAddButton").addEventListener("click", function () {
+          document.getElementById("photoInput").click();
+        });
+        document.getElementById("photoInput").addEventListener("change", function () {
+          handlePhotoFiles(Array.from(this.files || []));
+          this.value = "";
+        });
+        document.getElementById("photoGrid").addEventListener("click", function (event) {
+          const button = event.target.closest("[data-photo-action]");
+          if (button) {
+            handlePhotoAction(button.getAttribute("data-photo-action"), Number(button.getAttribute("data-photo-index")));
+          }
+        });
         document.getElementById("reloadButton").addEventListener("click", function () {
           clearFormMessage();
           loadProfile();

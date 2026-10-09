@@ -2811,6 +2811,106 @@ const MACHINAU_TRANSLATIONS = {
   store_profile_languages_hint: {
     ja: "お店・施設で対応できる言語を選んでください。",
     en: "Choose the languages your staff can speak with customers."
+  },
+
+  store_profile_photos_heading: {
+    ja: "写真",
+    en: "Photos"
+  },
+
+  store_profile_photos_hint: {
+    ja: "1枚目がメイン写真になります。JPEG・PNG・WebPで1枚10MBまで、最大10枚まで登録できます。写真は「下書きを保存する」を押した時にアップロードされます。",
+    en: "The first photo is the main photo. JPEG, PNG or WebP, up to 10 MB each, up to 10 photos. Photos are uploaded when you press \"Save draft\"."
+  },
+
+  store_profile_photos_count: {
+    ja: "{n} / {max}枚",
+    en: "{n} / {max} photos"
+  },
+
+  store_profile_photos_add: {
+    ja: "＋ 写真を追加",
+    en: "+ Add photos"
+  },
+
+  store_profile_photos_main_badge: {
+    ja: "メイン",
+    en: "Main"
+  },
+
+  store_profile_photos_make_main: {
+    ja: "メインにする",
+    en: "Make main"
+  },
+
+  store_profile_photos_move_left: {
+    ja: "◀ 前へ",
+    en: "◀ Earlier"
+  },
+
+  store_profile_photos_move_right: {
+    ja: "後へ ▶",
+    en: "Later ▶"
+  },
+
+  store_profile_photos_remove: {
+    ja: "削除",
+    en: "Remove"
+  },
+
+  store_profile_photos_preparing: {
+    ja: "準備中…",
+    en: "Preparing…"
+  },
+
+  store_profile_photos_progress_prepare: {
+    ja: "写真を準備しています…",
+    en: "Preparing photos…"
+  },
+
+  store_profile_photos_progress_upload: {
+    ja: "写真をアップロードしています（{done}/{total}枚）…",
+    en: "Uploading photos ({done}/{total})…"
+  },
+
+  store_profile_photos_progress_saving: {
+    ja: "写真の安全確認と保存をしています…",
+    en: "Checking the photos and saving…"
+  },
+
+  store_profile_progress_saving: {
+    ja: "保存しています…",
+    en: "Saving…"
+  },
+
+  store_profile_saving_button: {
+    ja: "保存中…（そのままお待ちください）",
+    en: "Saving… (please wait)"
+  },
+
+  store_profile_photos_err_type: {
+    ja: "写真はJPEG・PNG・WebPで、1枚10MBまでのものを選んでください。",
+    en: "Please choose JPEG, PNG or WebP photos up to 10 MB each."
+  },
+
+  store_profile_photos_err_max: {
+    ja: "写真は最大10枚までです。",
+    en: "You can add up to 10 photos."
+  },
+
+  store_profile_photos_err_prepare: {
+    ja: "写真を読み込めませんでした。別の写真をお試しください。",
+    en: "This photo could not be read. Please try another photo."
+  },
+
+  store_profile_photos_err_upload: {
+    ja: "写真をアップロードできませんでした。通信状況を確認して、もう一度保存してください。",
+    en: "The photos could not be uploaded. Please check your connection and save again."
+  },
+
+  store_profile_photos_err_content: {
+    ja: "掲載できない可能性がある写真が含まれていたため、保存しませんでした。新しく追加した写真を見直してから、もう一度保存してください。",
+    en: "Some photos may not be suitable for publishing, so nothing was saved. Please review the newly added photos and save again."
   }
 };
 
