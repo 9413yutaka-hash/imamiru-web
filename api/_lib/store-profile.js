@@ -56,6 +56,27 @@ export const STORE_SOCIAL_TYPES = [
 // 既存の店舗カード(submissions.paymentMethods)と同じ3値。2Dでそのまま使える。
 export const STORE_PAYMENT_METHOD_CODES = ["cash", "card", "qr"];
 
+// 2B追加｜設備・サービス(英語code)。「ある」ものだけを保存する(codeなし＝未登録・不明。
+// 「なし」とは解釈しない)。カテゴリによって保存できる項目を制限しない。
+// 一度使ったcodeは改名・意味変更しない(追加のみ)。画面はstoreProfileGetの応答に
+// 含まれるこの一覧から選択肢を作る(サーバーと画面の許可codeを一致させるため)。
+export const STORE_FEATURE_CODES = [
+  "parking",
+  "free_wifi",
+  "power_outlets",
+  "wheelchair_accessible",
+  "kid_friendly",
+  "pet_friendly",
+  "dine_in",
+  "takeout",
+  "delivery",
+  "store_pickup",
+  "tax_free"
+];
+
+// 2B追加｜対応言語(BCP 47)。設備・サービスとは別項目。将来は一覧へ追加するだけで増やせる。
+export const STORE_LANGUAGE_CODES = ["ja", "en", "zh-Hans", "zh-Hant", "ko", "th", "vi", "fr", "es", "de"];
+
 const STORE_PROFILE_UPDATE_COOLDOWN_MS = 3 * 1000;
 
 
@@ -215,6 +236,26 @@ function readPaymentMethodCodes(value) {
   });
 }
 
+// 許可された一覧のcodeだけを受け付け、重複を除いて一覧の順に並べる。
+// undefined/null は「送られてこなかった」(=保存済みの値を変えない)としてundefinedを返す。
+// 新項目を知らない古い画面から保存されても、既存の値を消さないため。
+function readOptionalCodeList(value, allowedCodes) {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (
+    !Array.isArray(value) ||
+    value.some(function(code) { return !allowedCodes.includes(code); })
+  ) {
+    return null;
+  }
+
+  return allowedCodes.filter(function(code) {
+    return value.includes(code);
+  });
+}
+
 // クライアントから受け取ってよい項目だけを読む。status・storeName・所在地・
 // revision等の値は、送られてきても使わない。
 export function validateStoreProfileInput(body) {
@@ -266,9 +307,32 @@ export function validateStoreProfileInput(body) {
     return { ok: false, field: "paymentMethodCodes" };
   }
 
+  const featureCodes = readOptionalCodeList(body.featureCodes, STORE_FEATURE_CODES);
+
+  if (featureCodes === null) {
+    return { ok: false, field: "featureCodes" };
+  }
+
+  const supportedLanguageCodes = readOptionalCodeList(body.supportedLanguageCodes, STORE_LANGUAGE_CODES);
+
+  if (supportedLanguageCodes === null) {
+    return { ok: false, field: "supportedLanguageCodes" };
+  }
+
+  // 送られてこなかった項目は保存対象に含めない(保存はmergeのため既存値が残る)。
+  const optionalFields = {};
+
+  if (featureCodes !== undefined) {
+    optionalFields.featureCodes = featureCodes;
+  }
+
+  if (supportedLanguageCodes !== undefined) {
+    optionalFields.supportedLanguageCodes = supportedLanguageCodes;
+  }
+
   return {
     ok: true,
-    fields: {
+    fields: Object.assign({
       categoryCode: categoryCode,
       description: description,
       businessHours: hours.businessHours,
@@ -277,7 +341,7 @@ export function validateStoreProfileInput(body) {
       reservationUrl: reservationUrl,
       socialLinks: social.socialLinks,
       paymentMethodCodes: paymentMethodCodes
-    }
+    }, optionalFields)
   };
 }
 
@@ -334,6 +398,8 @@ function buildProfileResponse(profileData) {
     reservationUrl: typeof data.reservationUrl === "string" ? data.reservationUrl : "",
     socialLinks: Array.isArray(data.socialLinks) ? data.socialLinks : [],
     paymentMethodCodes: Array.isArray(data.paymentMethodCodes) ? data.paymentMethodCodes : [],
+    featureCodes: Array.isArray(data.featureCodes) ? data.featureCodes : [],
+    supportedLanguageCodes: Array.isArray(data.supportedLanguageCodes) ? data.supportedLanguageCodes : [],
     updatedAtMillis:
       data.updatedAt && typeof data.updatedAt.toMillis === "function" ? data.updatedAt.toMillis() : 0
   };
@@ -408,7 +474,12 @@ export async function handleStoreProfileGet(request, response, deps) {
         city: account.city || "",
         formattedAddress: account.locationFormattedAddress || account.address || ""
       },
-      profile: buildProfileResponse(snapshots[2].exists ? snapshots[2].data() : null)
+      profile: buildProfileResponse(snapshots[2].exists ? snapshots[2].data() : null),
+      // 編集画面はこの一覧から選択肢を作る(許可codeをサーバーと一致させる)。
+      options: {
+        featureCodes: STORE_FEATURE_CODES,
+        supportedLanguageCodes: STORE_LANGUAGE_CODES
+      }
     });
   } catch (error) {
     console.error("常設店舗情報：取得エラー：", error && error.message);

@@ -2726,6 +2726,91 @@ const MACHINAU_TRANSLATIONS = {
   store_profile_edit_link: {
     ja: "常設店舗情報を編集する",
     en: "Edit shop profile"
+  },
+
+  store_feature_parking: {
+    ja: "駐車場あり",
+    en: "Parking"
+  },
+
+  store_feature_free_wifi: {
+    ja: "無料Wi-Fi",
+    en: "Free Wi-Fi"
+  },
+
+  store_feature_power_outlets: {
+    ja: "電源あり",
+    en: "Power outlets"
+  },
+
+  store_feature_wheelchair_accessible: {
+    ja: "車いす対応",
+    en: "Wheelchair accessible"
+  },
+
+  store_feature_kid_friendly: {
+    ja: "子ども連れ歓迎",
+    en: "Kid-friendly"
+  },
+
+  store_feature_pet_friendly: {
+    ja: "ペット同伴可",
+    en: "Pet-friendly"
+  },
+
+  store_feature_dine_in: {
+    ja: "店内飲食",
+    en: "Dine-in"
+  },
+
+  store_feature_takeout: {
+    ja: "テイクアウト",
+    en: "Takeout"
+  },
+
+  store_feature_delivery: {
+    ja: "配送・デリバリー",
+    en: "Delivery"
+  },
+
+  store_feature_store_pickup: {
+    ja: "店頭受取",
+    en: "In-store pickup"
+  },
+
+  store_feature_tax_free: {
+    ja: "免税対応",
+    en: "Tax-free shopping"
+  },
+
+  store_profile_features_heading: {
+    ja: "設備・サービス",
+    en: "Facilities & services"
+  },
+
+  store_profile_features_hint: {
+    ja: "あるものだけチェックしてください。チェックしない項目は「未登録」として扱われ、旅行者に「なし」とは表示されません。",
+    en: "Check only what you offer. Unchecked items are treated as \"not provided\" and will never be shown to travelers as \"not available\"."
+  },
+
+  store_profile_features_primary: {
+    ja: "よく使われる項目",
+    en: "Common for your category"
+  },
+
+  store_profile_features_more: {
+    ja: "その他の項目",
+    en: "More items"
+  },
+
+  store_profile_languages_heading: {
+    ja: "対応言語",
+    en: "Languages spoken"
+  },
+
+  store_profile_languages_hint: {
+    ja: "お店・施設で対応できる言語を選んでください。",
+    en: "Choose the languages your staff can speak with customers."
   }
 };
 

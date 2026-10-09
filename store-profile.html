@@ -180,6 +180,10 @@
 
     .back-link { display: inline-block; margin-top: 6px; color: var(--blue); font-size: 13px; }
 
+    .feature-more { margin-top: 12px; }
+    .feature-more summary { cursor: pointer; font-size: 13.5px; font-weight: 800; color: var(--blue); }
+    .feature-more .check-group { margin-top: 8px; }
+
     [hidden] { display: none !important; }
 
     @media (max-width: 380px) {
@@ -290,6 +294,25 @@
         <section class="panel">
           <h2 data-i18n="store_profile_payment_heading">支払い方法</h2>
           <div class="check-group" id="paymentGroup"></div>
+        </section>
+
+        <!-- 2B追加｜設備・サービスと対応言語。選択肢はstoreProfileGetの応答(options)から作る。
+             「ある」ものだけを保存し、チェックしない項目は未登録・不明として扱う。 -->
+        <section class="panel">
+          <h2 data-i18n="store_profile_features_heading">設備・サービス</h2>
+          <p class="hint" style="margin: 0 0 10px;" data-i18n="store_profile_features_hint"></p>
+          <span class="field-label" data-i18n="store_profile_features_primary">よく使われる項目</span>
+          <div class="check-group" id="featurePrimaryGroup"></div>
+          <details class="feature-more" id="featureMoreDetails">
+            <summary data-i18n="store_profile_features_more">その他の項目</summary>
+            <div class="check-group" id="featureOtherGroup"></div>
+          </details>
+        </section>
+
+        <section class="panel">
+          <h2 data-i18n="store_profile_languages_heading">対応言語</h2>
+          <p class="hint" style="margin: 0 0 10px;" data-i18n="store_profile_languages_hint"></p>
+          <div class="check-group" id="languageGroup"></div>
         </section>
 
         <div id="formMessage" class="message" role="status" aria-live="polite"></div>
@@ -447,6 +470,114 @@
           label.appendChild(input);
           label.appendChild(text);
           group.appendChild(label);
+        });
+      }
+
+      // ===== 2B追加｜設備・サービス・対応言語 =====
+      // 選択肢(許可code)はサーバーの応答(loaded.options)だけから作る。ここで持つのは
+      // 「カテゴリごとに先に見せる項目」という表示の並びだけ(保存できる項目は制限しない)。
+      const FEATURE_PRIMARY_BY_CATEGORY = {
+        gourmet: ["dine_in", "takeout", "delivery", "parking", "kid_friendly", "wheelchair_accessible"],
+        cafe_sweets: ["dine_in", "takeout", "free_wifi", "power_outlets", "parking", "kid_friendly"],
+        nightlife: ["dine_in", "takeout", "parking", "free_wifi"],
+        shopping: ["tax_free", "delivery", "store_pickup", "parking", "wheelchair_accessible", "kid_friendly"],
+        sightseeing_experience: ["parking", "wheelchair_accessible", "kid_friendly", "pet_friendly", "free_wifi"],
+        beauty_relaxation: ["parking", "free_wifi", "kid_friendly", "wheelchair_accessible"],
+        lodging: ["parking", "free_wifi", "power_outlets", "wheelchair_accessible", "kid_friendly", "pet_friendly"],
+        other: ["parking", "free_wifi", "wheelchair_accessible", "kid_friendly"]
+      };
+
+      function getFeatureLabel(code) {
+        return t("store_feature_" + code) || code;
+      }
+
+      function getLanguageDisplayName(code) {
+        try {
+          const name = new Intl.DisplayNames([currentLanguage], { type: "language" }).of(code);
+          return name && name !== code ? name : code;
+        } catch (error) {
+          return code;
+        }
+      }
+
+      function createCodeCheckbox(attribute, code, label, checked) {
+        const wrapper = document.createElement("label");
+        wrapper.className = "check-line";
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.value = code;
+        input.checked = checked;
+        input.setAttribute(attribute, code);
+        const text = document.createElement("span");
+        text.className = "code-label";
+        text.textContent = label;
+        wrapper.appendChild(input);
+        wrapper.appendChild(text);
+        return wrapper;
+      }
+
+      // 選択肢を作る(読み込み時)。チェック状態は保存済みの値から。
+      function renderFeatureAndLanguageChecks(profile, options) {
+        const featureCodes = Array.isArray(profile.featureCodes) ? profile.featureCodes : [];
+        const languageCodes = Array.isArray(profile.supportedLanguageCodes) ? profile.supportedLanguageCodes : [];
+        document.getElementById("featurePrimaryGroup").textContent = "";
+        const otherGroup = document.getElementById("featureOtherGroup");
+        otherGroup.textContent = "";
+        (options.featureCodes || []).forEach(function (code) {
+          otherGroup.appendChild(createCodeCheckbox("data-feature", code, getFeatureLabel(code), featureCodes.includes(code)));
+        });
+        const languageGroup = document.getElementById("languageGroup");
+        languageGroup.textContent = "";
+        (options.supportedLanguageCodes || []).forEach(function (code) {
+          languageGroup.appendChild(createCodeCheckbox("data-language-code", code, getLanguageDisplayName(code), languageCodes.includes(code)));
+        });
+        arrangeFeaturesForCategory();
+      }
+
+      // カテゴリに合わせて「よく使われる項目」「その他の項目」へ並べ替える。
+      // 要素を移動するだけなので、チェック済みの値は消えない。
+      function arrangeFeaturesForCategory() {
+        const category = document.getElementById("categorySelect").value;
+        const primaryCodes = FEATURE_PRIMARY_BY_CATEGORY[category] || FEATURE_PRIMARY_BY_CATEGORY.other;
+        const primaryGroup = document.getElementById("featurePrimaryGroup");
+        const otherGroup = document.getElementById("featureOtherGroup");
+        const items = Array.from(document.querySelectorAll("[data-feature]")).map(function (input) {
+          return input.closest("label");
+        });
+        const codeOf = function (item) {
+          return item.querySelector("[data-feature]").value;
+        };
+        primaryCodes.forEach(function (code) {
+          const item = items.find(function (candidate) { return codeOf(candidate) === code; });
+          if (item) {
+            primaryGroup.appendChild(item);
+          }
+        });
+        items.forEach(function (item) {
+          if (!primaryCodes.includes(codeOf(item))) {
+            otherGroup.appendChild(item);
+          }
+        });
+        // 「その他」にチェック済みの項目があれば、見えるように開いておく。
+        if (otherGroup.querySelector("input:checked")) {
+          document.getElementById("featureMoreDetails").open = true;
+        }
+      }
+
+      // サーバーが許可した一覧の順で、チェックされたcodeだけを返す。
+      function readCheckedCodes(attribute, allowedCodes) {
+        const checked = Array.from(document.querySelectorAll("[" + attribute + "]"))
+          .filter(function (input) { return input.checked; })
+          .map(function (input) { return input.value; });
+        return (allowedCodes || []).filter(function (code) { return checked.includes(code); });
+      }
+
+      function relabelFeatureAndLanguageChecks() {
+        document.querySelectorAll("[data-feature]").forEach(function (input) {
+          input.parentNode.querySelector(".code-label").textContent = getFeatureLabel(input.value);
+        });
+        document.querySelectorAll("[data-language-code]").forEach(function (input) {
+          input.parentNode.querySelector(".code-label").textContent = getLanguageDisplayName(input.value);
         });
       }
 
@@ -681,6 +812,7 @@
         document.querySelectorAll("[data-payment]").forEach(function (input) {
           input.checked = (profile.paymentMethodCodes || []).includes(input.value);
         });
+        renderFeatureAndLanguageChecks(profile, result.options || {});
         const notEditable = document.getElementById("notEditableNote");
         notEditable.hidden = editable;
         notEditable.textContent = editable ? "" : t("store_profile_not_editable_" + statusKey(result.registrationStatus));
@@ -777,7 +909,9 @@
           websiteUrl: document.getElementById("websiteInput").value.trim(),
           reservationUrl: document.getElementById("reservationInput").value.trim(),
           socialLinks: readSocialLinks(),
-          paymentMethodCodes: readPaymentCodes()
+          paymentMethodCodes: readPaymentCodes(),
+          featureCodes: readCheckedCodes("data-feature", loaded.options && loaded.options.featureCodes),
+          supportedLanguageCodes: readCheckedCodes("data-language-code", loaded.options && loaded.options.supportedLanguageCodes)
         })
           .then(function (response) {
             const result = response.result || {};
@@ -835,6 +969,7 @@
         });
         buildCategoryOptions();
         buildPaymentChecks();
+        relabelFeatureAndLanguageChecks();
         if (loaded) {
           renderLocation();
           setFormEnabled(editable);
@@ -885,6 +1020,10 @@
           }
           if (event.target.id === "hoursEnabledCheckbox") {
             document.getElementById("hoursEditor").hidden = !event.target.checked;
+          }
+          if (event.target.id === "categorySelect") {
+            // 並びだけを変える。選択済みの設備・サービスは消さない。
+            arrangeFeaturesForCategory();
           }
         });
         form.addEventListener("click", function (event) {
