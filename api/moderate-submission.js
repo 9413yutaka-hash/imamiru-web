@@ -20980,9 +20980,62 @@ function convertFirestoreValueForPublicResponse(
 
 // クライアントのconvertSubmissionToShop(documentSnapshot, index)が
 // documentSnapshot.data()・documentSnapshot.idのみを参照する作りであるため、
-// 同じ形(id / data相当のfields)で返せるよう、生ドキュメントの全フィールドを
-// 変換するだけに留める。カテゴリ・地域等によるサーバー側の絞り込みは行わない
+// 同じ形(id / data相当のfields)で返す。fieldsは上の許可リストにある項目だけを
+// 変換して入れる。カテゴリ・地域等によるサーバー側の絞り込みは行わない
 // (CDNで全訪問者に共有されるレスポンスのため、特定ユーザー向けの加工はしない)。
+// 公開API 内部情報露出修正｜旅行者向けに返してよい項目だけの許可リスト(allowlist)。
+// TOP(app.js)の loadApprovedSubmissions()・convertSubmissionToShop()・
+// getSubmissionImageUrls() が実際に読む項目だけを列挙している(2026-10-10 実コード確認)。
+// 運営者情報(operatorEmail/operatorUid/operatorRole)・終了番号のハッシュ・
+// AI審査/Moderationの内部情報・翻訳キャッシュ等、ここに無い項目は一切返さない。
+// TOP側で新しい項目を使う時は、必ずこの一覧へ明示的に追加する(既定は非公開)。
+const PUBLIC_SUBMISSION_FIELD_ALLOWLIST =
+  [
+    "adTitle",
+    "address",
+    "area",
+    "authorType",
+    "businessEndTime",
+    "businessName",
+    "businessStartTime",
+    "category",
+    "content",
+    "createdAt",
+    "description",
+    "details",
+    "eventTime",
+    "expiresAt",
+    "genre",
+    "headline",
+    "images",
+    "imageUrls",
+    "isOpen",
+    "isPermanentAd",
+    "latitude",
+    "location",
+    "longitude",
+    "message",
+    "name",
+    "openingHours",
+    "paymentMethods",
+    "period",
+    "postType",
+    "publisherType",
+    "shopAddress",
+    "shopName",
+    "sourceLabel",
+    "sourceTrust",
+    "sourceType",
+    "storeName",
+    "submissionType",
+    "submittedAt",
+    "takeout",
+    "timeMessage",
+    "title",
+    "updatedAt",
+    "websiteUrl"
+  ];
+
 function serializeSubmissionForPublicList(
   documentSnapshot
 ) {
@@ -20993,14 +21046,19 @@ function serializeSubmissionForPublicList(
   const sanitizedFields =
     {};
 
-  Object.keys(
-    rawData
-  ).forEach(
+  PUBLIC_SUBMISSION_FIELD_ALLOWLIST.forEach(
     function(key) {
-      sanitizedFields[key] =
-        convertFirestoreValueForPublicResponse(
-          rawData[key]
-        );
+      if (
+        Object.prototype.hasOwnProperty.call(
+          rawData,
+          key
+        )
+      ) {
+        sanitizedFields[key] =
+          convertFirestoreValueForPublicResponse(
+            rawData[key]
+          );
+      }
     }
   );
 
