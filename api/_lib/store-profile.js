@@ -1321,3 +1321,179 @@ export async function handleStoreProfileUnpublish(request, response, deps) {
     return sendError(response, 500, "server_error");
   }
 }
+
+
+// ===== Phase 2D STEP 3｜旅行者向けの正式店舗プロフィール一覧(読み取り専用) =====
+// GET /api/moderate-submission?mode=publicStoreProfiles (認証不要、CDN共有キャッシュ対象)
+// 既存の公開submissions一覧とは別のmodeで、互いに影響しない(こちらが失敗しても、
+// 無料掲載の一覧はこれまでどおり返る)。submissionsは読まず、書き込みも一切しない。
+//
+// 返すのは、status:"published" で、返す直前の確認でも公開条件をすべて満たす店舗だけ
+// (公開中のままでも、条件を満たさなくなった店舗は返さない)。owner条件は公開操作をする
+// 本人の確認のため、ここでは対象外(運営による停止は store_active で反映される)。
+//
+// suppressedListingIds：有効な紐付け(storeListingLinks)があり、紐付け先の正式店舗を
+// 今回返している場合だけ、その運営無料掲載の submission ID を入れる。画面側で同じ店舗が
+// 2枚並ばないようにするための情報(STEP 3では画面からはまだ使わない)。
+
+export const PUBLIC_STORE_ID_PREFIX = "sp_";
+export const PUBLIC_STORE_LISTING_TYPE = "store_profile";
+
+function readPublicText(value) {
+  return typeof value === "string" ? value : "";
+}
+
+function readPublicCodes(value, allowedCodes) {
+  return Array.isArray(value)
+    ? allowedCodes.filter(function(code) { return value.includes(code); })
+    : [];
+}
+
+function readPublicBusinessHours(value) {
+  if (!value || typeof value !== "object" || !value.weekly || typeof value.weekly !== "object") {
+    return null;
+  }
+
+  const weekly = {};
+
+  STORE_WEEKDAY_CODES.forEach(function(day) {
+    const ranges = Array.isArray(value.weekly[day]) ? value.weekly[day] : [];
+
+    weekly[day] = ranges
+      .filter(function(range) {
+        return range && typeof range.open === "string" && typeof range.close === "string";
+      })
+      .map(function(range) {
+        return { open: range.open, close: range.close };
+      });
+  });
+
+  return { weekly: weekly, note: readPublicText(value.note) };
+}
+
+// 旅行者に返す項目の許可リスト(allowlist)。ここに書いた項目以外は一切返さない。
+// 返さないもの：uid・メール・メンバー/権限・duplicateCandidates・Moderationの記録・
+// 写真のpublicId・公開/非公開の監査記録・revision・登録経緯(createdBy*/source*)・
+// 店舗が入力した住所文字列(address)・geohash等の管理用項目。
+// 電話・予約・SNS・対応言語は、詳細表示を広げる時に改めて追加を判断する。
+function buildPublicStoreProfile(storeId, account, profile) {
+  return {
+    id: PUBLIC_STORE_ID_PREFIX + storeId,
+    listingType: PUBLIC_STORE_LISTING_TYPE,
+    storeName: readPublicText(account.storeName),
+    categoryCode: STORE_CATEGORY_CODES.includes(profile.categoryCode) ? profile.categoryCode : "other",
+    description: readPublicText(profile.description).trim(),
+    sourceLanguage: readPublicText(profile.sourceLanguage),
+    photos: readStoredPhotos(profile)
+      .filter(function(photo) {
+        return (
+          !!photo &&
+          photo.moderationStatus === "passed" &&
+          typeof photo.url === "string" &&
+          photo.url.indexOf(STORE_PHOTO_CLOUDINARY_PREFIX) === 0
+        );
+      })
+      .map(function(photo) {
+        return { url: photo.url };
+      }),
+    location: {
+      countryCode: readPublicText(account.countryCode),
+      prefecture: readPublicText(account.prefecture),
+      city: readPublicText(account.city),
+      formattedAddress: readPublicText(account.locationFormattedAddress),
+      latitude: account.latitude,
+      longitude: account.longitude
+    },
+    businessHours: readPublicBusinessHours(profile.businessHours),
+    websiteUrl: readPublicText(profile.websiteUrl),
+    paymentMethodCodes: readPublicCodes(profile.paymentMethodCodes, STORE_PAYMENT_METHOD_CODES),
+    featureCodes: readPublicCodes(profile.featureCodes, STORE_FEATURE_CODES)
+  };
+}
+
+export async function handlePublicStoreProfilesList(request, response, deps) {
+  try {
+    const database = deps.getFirestore(deps.getFirebaseAdminApp());
+    const snapshots = await Promise.all([
+      database.collection(STORE_PROFILES_COLLECTION).where("status", "==", "published").get(),
+      database.collection(STORE_LISTING_LINKS_COLLECTION).where("status", "==", "active").get()
+    ]);
+    const profileDocs = snapshots[0].docs;
+
+    // storeId → 有効に紐付いている運営無料掲載のsubmission ID(文書ID)
+    const linkedListingIdsByStore = new Map();
+
+    snapshots[1].docs.forEach(function(documentSnapshot) {
+      const link = documentSnapshot.data() || {};
+
+      if (link.status !== "active" || typeof link.storeId !== "string" || link.storeId === "") {
+        return;
+      }
+
+      if (!linkedListingIdsByStore.has(link.storeId)) {
+        linkedListingIdsByStore.set(link.storeId, []);
+      }
+
+      linkedListingIdsByStore.get(link.storeId).push(documentSnapshot.id);
+    });
+
+    const accountSnapshots = await Promise.all(profileDocs.map(function(documentSnapshot) {
+      return database.collection(STORE_ACCOUNTS_COLLECTION).doc(documentSnapshot.id).get();
+    }));
+
+    const stores = [];
+    const suppressedListingIds = new Set();
+
+    profileDocs.forEach(function(documentSnapshot, index) {
+      const storeId = documentSnapshot.id;
+
+      // 1店舗のデータが壊れていても、他の店舗の表示は止めない(その店舗だけ返さない)。
+      try {
+        const profile = documentSnapshot.data() || {};
+        const accountSnapshot = accountSnapshots[index];
+
+        if (profile.status !== "published" || !accountSnapshot.exists) {
+          return;
+        }
+
+        const account = accountSnapshot.data() || {};
+        const linkedListingIds = linkedListingIdsByStore.get(storeId) || [];
+        const missing = evaluateStorePublishConditions({
+          account: account,
+          profile: profile,
+          ownerActive: true,
+          resolvedListingIds: new Set(linkedListingIds)
+        });
+
+        if (missing.length > 0) {
+          return;
+        }
+
+        stores.push(buildPublicStoreProfile(storeId, account, profile));
+        linkedListingIds.forEach(function(listingId) {
+          suppressedListingIds.add(listingId);
+        });
+      } catch (storeError) {
+        console.error("旅行者向け店舗一覧：店舗の読み取りを飛ばしました：", storeId, storeError && storeError.message);
+      }
+    });
+
+    stores.sort(function(a, b) { return a.id < b.id ? -1 : a.id > b.id ? 1 : 0; });
+
+    // 成功時だけ、既存の公開submissions一覧と同じCDN共有キャッシュにする
+    // (失敗時は呼び出し元で設定済みの no-store のまま)。
+    response.setHeader("Cache-Control", deps.publicListCacheControl);
+
+    return response.status(200).json({
+      success: true,
+      stores: stores,
+      suppressedListingIds: Array.from(suppressedListingIds).sort()
+    });
+  } catch (error) {
+    console.error("旅行者向け店舗一覧：取得エラー：", error && error.message);
+    return response.status(500).json({
+      success: false,
+      message: "店舗情報を取得できませんでした。時間をおいて、もう一度お試しください。"
+    });
+  }
+}

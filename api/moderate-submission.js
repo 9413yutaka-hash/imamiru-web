@@ -69,6 +69,7 @@ import {
   handleStoreProfileUpdate,
   handleStoreProfilePublish,
   handleStoreProfileUnpublish,
+  handlePublicStoreProfilesList,
   checkStoreProfileEditor,
   buildStorePhotoFolder,
   isStorePhotoPublicId
@@ -29660,6 +29661,26 @@ export default async function handler(
         request,
         response,
         buildImadakeDeps()
+      );
+    }
+
+    // 正式店舗参加基盤 Phase 2D STEP 3｜旅行者向けの正式店舗プロフィール一覧(読み取り専用)。
+    // 既存の公開submissions一覧(query無し)とは別のmodeで分岐し、互いに影響しない。
+    // キャッシュは成功時だけ公開submissions一覧と同じ設定、失敗時は上のno-storeのまま。
+    if (
+      request.query &&
+      request.query.mode === "publicStoreProfiles"
+    ) {
+      return handlePublicStoreProfilesList(
+        request,
+        response,
+        Object.assign(buildStoreSelfServiceDeps(), {
+          publicListCacheControl:
+            "public, max-age=0, s-maxage=" +
+            SUBMISSIONS_PUBLIC_LIST_SHARED_CACHE_MAX_AGE_SECONDS +
+            ", stale-while-revalidate=" +
+            SUBMISSIONS_PUBLIC_LIST_STALE_WHILE_REVALIDATE_SECONDS
+        })
       );
     }
 
