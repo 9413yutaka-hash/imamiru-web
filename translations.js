@@ -1325,6 +1325,12 @@ const MACHINAU_TRANSLATIONS = {
     en: "Shop advertisement"
   },
 
+  // Phase 2D STEP 4A｜店主が管理する正式店舗のカードのバッジ。
+  shop_store_managed_badge: {
+    ja: "店舗が管理",
+    en: "Managed by the business"
+  },
+
   report_toggle_button: {
     ja: "🚩 気になる情報を報告",
     en: "🚩 Report this info"

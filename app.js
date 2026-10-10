@@ -17,6 +17,14 @@ let selectedShopRegion = null;
 // (見えている店舗だけを翻訳対象にするため)。
 let lastRenderedShopCardIds = [];
 
+// Phase 2D STEP 4A｜一覧カード専用の正式店舗(詳細はrenderShops()直前の説明)。
+// APIから取得できた正式店舗(生データ)と、一覧から外す無料掲載ID。失敗時は必ず空。
+let storeProfileListStores = [];
+let storeProfileSuppressedListingIds = new Set();
+let storeProfileListFetchSequence = 0;
+// 無料掲載が一度でも一覧に表示されたか(読み込み中の表示を正式店舗の到着で上書きしないため)。
+let hasAppliedSubmissionsForStoreProfiles = false;
+
 // ---- Ver1.7｜多言語化の器(固定UI文言専用) ----
 // ここで扱うのは画面の固定UI文言(見出し・ボタン・カテゴリー表示ラベル等)だけ。
 // category / area / sourceType / postType / authorType / selectedCategory と
@@ -3140,6 +3148,338 @@ function renderStreetDiscoverySection() {
     "";
 }
 
+// ==========================================================================
+// Phase 2D STEP 4A｜店主が管理する正式店舗を「今、近くで楽しめる場所」の一覧カードへ統合
+// ==========================================================================
+// ・正式店舗は GET ?mode=publicStoreProfiles から取り、shops(無料掲載等)には混ぜない。
+//   一覧カードの対象を作る renderShops() の中だけで合流させる(地図・詳細・お気に入り・
+//   ヒーロー・AI系・GA4 は対象外。getVisibleShops() も変えない)。
+// ・suppressedListingIds(オーナー化で正式店舗に引き継がれた無料掲載)は、正式店舗APIの
+//   取得に成功した時だけ一覧から外す。APIが失敗・異常・時間切れなら、正式店舗0件・抑制0件
+//   (=今までの無料掲載の表示そのまま)。
+// ・「お気に入り」表示中は、正式店舗を足さず、無料掲載も抑制しない(既存体験を変えない)。
+
+const STORE_PROFILE_LIST_LISTING_TYPE = "store_profile";
+const STORE_PROFILE_LIST_FETCH_TIMEOUT_MS = 8000;
+
+// 正式店舗のcategoryCode → TOPの内部カテゴリー(カテゴリー絞り込み・表示ラベルを既存と共通にする)。
+// "other" はTOPのカテゴリーに無いため、どのカテゴリーにも一致させない(「すべて」でだけ表示)。
+const STORE_PROFILE_CATEGORY_TO_INTERNAL = {
+  gourmet: "グルメ",
+  cafe_sweets: "カフェ・スイーツ",
+  shopping: "ショッピング",
+  sightseeing_experience: "観光・体験",
+  nightlife: "ナイトスポット",
+  beauty_relaxation: "美容・リラクゼーション",
+  lodging: "宿泊"
+};
+
+// 状態(storeProfileListStores等)はファイル先頭の変数宣言の並びにある。
+
+function resetStoreProfileListState() {
+  storeProfileListStores = [];
+  storeProfileSuppressedListingIds = new Set();
+}
+
+async function loadStoreProfilesForShopList() {
+  const sequence =
+    ++storeProfileListFetchSequence;
+  const controller =
+    typeof AbortController === "function"
+      ? new AbortController()
+      : null;
+  const timeoutId =
+    controller
+      ? window.setTimeout(function() {
+          controller.abort();
+        }, STORE_PROFILE_LIST_FETCH_TIMEOUT_MS)
+      : null;
+
+  let nextStores = [];
+  let nextSuppressedIds = [];
+
+  try {
+    const response =
+      await fetch(
+        "/api/moderate-submission?mode=publicStoreProfiles",
+        controller ? { method: "GET", signal: controller.signal } : { method: "GET" }
+      );
+    const data =
+      await response.json();
+
+    if (
+      response.ok &&
+      data &&
+      data.success === true &&
+      Array.isArray(data.stores) &&
+      Array.isArray(data.suppressedListingIds)
+    ) {
+      nextStores = data.stores;
+      nextSuppressedIds = data.suppressedListingIds.filter(function(id) {
+        return typeof id === "string" && id !== "";
+      });
+    }
+  } catch (error) {
+    console.warn("正式店舗の一覧を取得できませんでした(無料掲載はそのまま表示します)：", error && error.name);
+  } finally {
+    if (timeoutId !== null) {
+      window.clearTimeout(timeoutId);
+    }
+  }
+
+  // 後から始まった取得があれば、古い結果は使わない。
+  if (sequence !== storeProfileListFetchSequence) {
+    return;
+  }
+
+  storeProfileListStores = nextStores;
+  storeProfileSuppressedListingIds = new Set(nextSuppressedIds);
+
+  if (hasAppliedSubmissionsForStoreProfiles) {
+    renderShops();
+  }
+}
+
+// 住所表示用：Googleの住所の先頭の「日本、」と郵便番号を除く(地域検索の正規化と同じ考え方)。
+function formatStoreProfileListAddress(formattedAddress) {
+  return String(formattedAddress || "")
+    .trim()
+    .replace(/^日本[、,]\s*/, "")
+    .replace(/^〒?[0-9０-９]{3}[-－−ー‐]?[0-9０-９]{4}\s*/, "");
+}
+
+// APIの正式店舗1件を、一覧カード用の形にする(submissionの形には寄せない)。
+// 表示に必要な値が欠けている店舗は null(その1件だけ表示しない)。
+function buildStoreProfileListShop(store) {
+  if (
+    !store ||
+    typeof store.id !== "string" ||
+    store.id.indexOf("sp_") !== 0 ||
+    typeof store.storeName !== "string" ||
+    store.storeName.trim() === "" ||
+    !store.location ||
+    !Number.isFinite(store.location.latitude) ||
+    !Number.isFinite(store.location.longitude)
+  ) {
+    return null;
+  }
+
+  const internalCategory =
+    STORE_PROFILE_CATEGORY_TO_INTERNAL[store.categoryCode] || "";
+  const categoryDisplay =
+    internalCategory !== ""
+      ? getCategoryDisplay(internalCategory)
+      : {
+          categoryText: getMachinauTranslation(
+            "store_account_category_other",
+            getCurrentMachinauLanguage()
+          ),
+          emoji: "🏪",
+          visualClass: "visual-event"
+        };
+  const featureCodes =
+    Array.isArray(store.featureCodes) ? store.featureCodes : [];
+
+  return {
+    listingType: STORE_PROFILE_LIST_LISTING_TYPE,
+    firestoreId: store.id,
+    name: store.storeName,
+    category: internalCategory,
+    categoryText: categoryDisplay.categoryText,
+    emoji: categoryDisplay.emoji,
+    visualClass: categoryDisplay.visualClass,
+    message: typeof store.description === "string" ? store.description : "",
+    imageUrls: Array.isArray(store.photos)
+      ? store.photos
+          .map(function(photo) { return photo && typeof photo.url === "string" ? photo.url : ""; })
+          .filter(function(url) { return url !== ""; })
+      : [],
+    latitude: store.location.latitude,
+    longitude: store.location.longitude,
+    address: formatStoreProfileListAddress(store.location.formattedAddress),
+    locationPrefecture: typeof store.location.prefecture === "string" ? store.location.prefecture : "",
+    locationCity: typeof store.location.city === "string" ? store.location.city : "",
+    paymentMethods: Array.isArray(store.paymentMethodCodes)
+      ? store.paymentMethodCodes.filter(function(value) {
+          return ALLOWED_PAYMENT_METHOD_VALUES.includes(value);
+        })
+      : [],
+    takeout: featureCodes.includes("takeout"),
+    // 並び順(新しい順)だけに使う。カードには表示しない。無い・壊れている場合は0扱い(最後)。
+    createdAt: typeof store.publishedAt === "string" ? store.publishedAt : null,
+    distanceKm: null
+  };
+}
+
+// 地域検索：正式店舗は住所の文字列ではなく、整理済みの都道府県・市区町村で完全一致させる
+// (cityは地域検索の市区町村名と同じ形：政令市は「名古屋市港区」、町村は郡名なし)。
+function isStoreProfileListShopInSelectedRegion(shop, region) {
+  return (
+    !!region &&
+    shop.locationPrefecture !== "" &&
+    shop.locationPrefecture === region.prefectureName &&
+    shop.locationCity === region.municipalityName
+  );
+}
+
+// 今の表示条件(カテゴリー・地域検索/現在地15km)に合う正式店舗(距離つき)。
+function getStoreProfileListShopsForCurrentView() {
+  if (selectedCategory === "お気に入り") {
+    return [];
+  }
+
+  return storeProfileListStores
+    .map(buildStoreProfileListShop)
+    .filter(function(shop) {
+      return shop !== null;
+    })
+    .map(function(shop) {
+      if (userLatitude !== null && userLongitude !== null) {
+        shop.distanceKm = calculateDistance(
+          userLatitude,
+          userLongitude,
+          shop.latitude,
+          shop.longitude
+        );
+      }
+      return shop;
+    })
+    .filter(function(shop) {
+      return (
+        (selectedCategory === "すべて" ||
+          shopMatchesSelectedCategory(shop, selectedCategory)) &&
+        (selectedShopRegion
+          ? isStoreProfileListShopInSelectedRegion(shop, selectedShopRegion)
+          : isShopWithinNearbyCardRadius(shop))
+      );
+    });
+}
+
+// 一覧カードの対象(無料掲載等)に正式店舗を合流させる。正式店舗APIの結果が無い時・
+// 「お気に入り」表示中は、受け取った一覧をそのまま返す(今までと完全に同じ)。
+function mergeStoreProfilesIntoShopCardList(cardShops) {
+  if (selectedCategory === "お気に入り") {
+    return cardShops;
+  }
+
+  const storeProfileShops =
+    getStoreProfileListShopsForCurrentView();
+
+  if (
+    storeProfileShops.length === 0 &&
+    storeProfileSuppressedListingIds.size === 0
+  ) {
+    return cardShops;
+  }
+
+  const merged =
+    cardShops
+      .filter(function(shop) {
+        return !storeProfileSuppressedListingIds.has(shop.firestoreId);
+      })
+      .concat(storeProfileShops);
+
+  if (userLatitude !== null && userLongitude !== null) {
+    // 距離順(getVisibleShops()と同じ考え方。安定ソートなので、距離が同じ・距離なし同士は
+    // 既存の並びを保つ)。地域検索中はこの後、既存処理で新しい順に並べ直される。
+    merged.sort(function(firstShop, secondShop) {
+      const firstHasDistance = typeof firstShop.distanceKm === "number" && Number.isFinite(firstShop.distanceKm);
+      const secondHasDistance = typeof secondShop.distanceKm === "number" && Number.isFinite(secondShop.distanceKm);
+
+      if (!firstHasDistance && !secondHasDistance) {
+        return 0;
+      }
+      if (!firstHasDistance) {
+        return 1;
+      }
+      if (!secondHasDistance) {
+        return -1;
+      }
+      return firstShop.distanceKm - secondShop.distanceKm;
+    });
+  } else if (!selectedShopRegion) {
+    // 現在地なし：既存どおり新しい順(無料掲載同士の並びは安定ソートで変わらない)。
+    merged.sort(function(firstShop, secondShop) {
+      return getDateValue(secondShop.createdAt) - getDateValue(firstShop.createdAt);
+    });
+  }
+
+  return merged;
+}
+
+// 選択中の市区町村にある正式店舗の数(カテゴリー絞り込み前)。「この地域には…」の0件判定用。
+function countStoreProfileListShopsInSelectedRegion() {
+  if (!selectedShopRegion || selectedCategory === "お気に入り") {
+    return 0;
+  }
+
+  return storeProfileListStores
+    .map(buildStoreProfileListShop)
+    .filter(function(shop) {
+      return shop !== null && isStoreProfileListShopInSelectedRegion(shop, selectedShopRegion);
+    }).length;
+}
+
+// 正式店舗カード(STEP 4A)。本部決定：「店舗が管理」＋写真・店名・カテゴリー・紹介文・
+// 距離/徒歩(既存条件)・テイクアウト/支払い・住所・Googleマップ(外部リンク)だけ。
+// ⚡見出し・🆕新着・営業中/閉店まで・時間文言・詳細・お気に入り・カード本体クリックは出さない
+// (詳細・お気に入り・地図への統合は後のSTEP)。本文は店舗が保存した原文のまま。
+function buildStoreProfileShopCardHtml(shop, shopCardIndex) {
+  const language =
+    getCurrentMachinauLanguage();
+
+  return `
+    <article
+      class="shop-card store-profile-card"
+      data-shop-id="${escapeHtml(shop.firestoreId)}"
+      data-listing-type="${STORE_PROFILE_LIST_LISTING_TYPE}"
+      style="cursor: default;"
+    >
+      <div class="shop-visual ${escapeHtml(shop.visualClass)}">
+        ${getCardVisualHtml(shop, shopCardIndex < 2)}
+      </div>
+      <div class="shop-body">
+        <h3 class="shop-name">${escapeHtml(shop.name)}</h3>
+        <div class="shop-category">
+          <span>${escapeHtml(shop.categoryText)}</span>
+        </div>
+        <div class="user-post-badge-row">
+          <span class="user-post-badge store-managed-badge">${escapeHtml(getMachinauTranslation("shop_store_managed_badge", language))}</span>
+        </div>
+        <p class="shop-description">${escapeHtml(shop.message)}</p>
+        <div class="shop-info-row">
+          ${
+            selectedShopRegion
+              ? ""
+              : `
+                <span class="info-chip info-chip-distance">📍 ${formatDistance(shop.distanceKm)}</span>
+                <span class="info-chip">🚶 ${estimateWalkingTime(shop.distanceKm)}</span>
+              `
+          }
+          ${
+            shop.takeout === true
+              ? `<span class="info-chip">${getMachinauTranslation("shop_takeout_ok", language)}</span>`
+              : ""
+          }
+          ${getPaymentBadgeTexts(shop)
+            .map(function(paymentBadgeText) {
+              return `<span class="info-chip">${paymentBadgeText}</span>`;
+            })
+            .join("")}
+        </div>
+        ${
+          shop.address
+            ? `<div class="time-limit">📍 ${escapeHtml(shop.address)}</div>`
+            : ""
+        }
+        <div class="shop-actions">
+          ${getMapButtonHtml(shop)}
+        </div>
+      </div>
+    </article>
+  `;
+}
+
 function renderShops() {
   const shopsList =
     document.getElementById(
@@ -3187,7 +3527,9 @@ function renderShops() {
   // まだ分からない間は従来どおり全店舗を対象にする。
   // 地域から探す｜市区町村を選んでいる間だけ、15kmの代わりにその市区町村で
   // 絞り、現在地からの距離ではなく新しい順(createdAt降順)に並べる。
-  const adminExcludedShops =
+  // Phase 2D STEP 4A｜一覧カードの対象にだけ正式店舗を合流させ、正式店舗APIの取得に
+  // 成功した時だけ、正式店舗へ引き継がれた無料掲載を外す(mergeStoreProfilesIntoShopCardList)。
+  const adminExcludedShops = mergeStoreProfilesIntoShopCardList(
     visibleShops
       .filter(
         function(shop) {
@@ -3208,7 +3550,8 @@ function renderShops() {
             )
           );
         }
-      );
+      )
+  );
 
   if (selectedShopRegion) {
     adminExcludedShops.sort(
@@ -3298,7 +3641,8 @@ function renderShops() {
       <div class="sample-notice">
         ${getMachinauTranslation(
           selectedShopRegion &&
-            countShopsInSelectedShopRegion() === 0
+            countShopsInSelectedShopRegion() +
+              countStoreProfileListShopsInSelectedRegion() === 0
             ? "shops_region_empty"
             : "shop_empty_category_notice",
           getCurrentMachinauLanguage()
@@ -3313,6 +3657,11 @@ function renderShops() {
     topShopCardCandidates
       .map(
         function(shop, shopCardIndex) {
+          // Phase 2D STEP 4A｜正式店舗は専用カード(無料掲載のカードは下で従来どおり)。
+          if (shop.listingType === STORE_PROFILE_LIST_LISTING_TYPE) {
+            return buildStoreProfileShopCardHtml(shop, shopCardIndex);
+          }
+
           const isFavorite =
             favoriteShopIds.has(
               shop.firestoreId
@@ -10635,6 +10984,9 @@ function applyLoadedSubmissions(
   shops =
     loadedShops;
 
+  // Phase 2D STEP 4A｜正式店舗が後から届いた時に一覧を描き直してよい合図。
+  hasAppliedSubmissionsForStoreProfiles = true;
+
   updateTopCounts(
     shops.length
   );
@@ -10685,6 +11037,10 @@ function applyLoadedSubmissions(
 
 async function loadApprovedSubmissions() {
   renderLoading();
+
+  // Phase 2D STEP 4A｜正式店舗の一覧を並列で取得する(無料掲載の取得・キャッシュは待たせず、
+  // 失敗しても無料掲載の表示には一切影響しない)。
+  loadStoreProfilesForShopList();
 
   if (window.machinauExpiryTimer) {
     window.clearTimeout(

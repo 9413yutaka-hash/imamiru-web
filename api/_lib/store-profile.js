@@ -1349,6 +1349,18 @@ function readPublicCodes(value, allowedCodes) {
     : [];
 }
 
+// 旅行者向けの公開日時(一覧の並び順に使う。Phase 2D STEP 4A 本部決定で公開項目に追加)。
+// 値が無い・壊れている場合は null(その店舗だけ並び順の手がかりが無い扱い。一覧全体は止めない)。
+function readPublicIsoDate(value) {
+  try {
+    const millis = value && typeof value.toMillis === "function" ? value.toMillis() : NaN;
+
+    return Number.isFinite(millis) && millis > 0 ? new Date(millis).toISOString() : null;
+  } catch (error) {
+    return null;
+  }
+}
+
 function readPublicBusinessHours(value) {
   if (!value || typeof value !== "object" || !value.weekly || typeof value.weekly !== "object") {
     return null;
@@ -1373,7 +1385,8 @@ function readPublicBusinessHours(value) {
 
 // 旅行者に返す項目の許可リスト(allowlist)。ここに書いた項目以外は一切返さない。
 // 返さないもの：uid・メール・メンバー/権限・duplicateCandidates・Moderationの記録・
-// 写真のpublicId・公開/非公開の監査記録・revision・登録経緯(createdBy*/source*)・
+// 写真のpublicId・公開/非公開の監査記録(publishedAt以外。publishedByUid・unpublished*等)・
+// revision・登録経緯(createdBy*/source*)・
 // 店舗が入力した住所文字列(address)・geohash等の管理用項目。
 // 電話・予約・SNS・対応言語は、詳細表示を広げる時に改めて追加を判断する。
 function buildPublicStoreProfile(storeId, account, profile) {
@@ -1407,7 +1420,8 @@ function buildPublicStoreProfile(storeId, account, profile) {
     businessHours: readPublicBusinessHours(profile.businessHours),
     websiteUrl: readPublicText(profile.websiteUrl),
     paymentMethodCodes: readPublicCodes(profile.paymentMethodCodes, STORE_PAYMENT_METHOD_CODES),
-    featureCodes: readPublicCodes(profile.featureCodes, STORE_FEATURE_CODES)
+    featureCodes: readPublicCodes(profile.featureCodes, STORE_FEATURE_CODES),
+    publishedAt: readPublicIsoDate(profile.publishedAt)
   };
 }
 
