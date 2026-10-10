@@ -188,6 +188,24 @@ async function moderateNewPhotos(photos, deps) {
   });
 }
 
+// 原因調査用(Phase 2C Preview)｜Moderation失敗のログ用の要約。
+// 数値のHTTP status、OpenAIのerror.type/error.code(呼び出し側で英数字の短い
+// 識別子に限定済み)、エラーの区分、確認しようとした画像の枚数だけを含める。
+function describeModerationErrorForLog(error, imageCount) {
+  return JSON.stringify({
+    kind:
+      error && error.name === "AbortError" ? "timeout"
+        : error && error.isHttpError ? "http_error"
+          : error && error.isJsonError ? "invalid_response"
+            : error && error.isMissingApiKey ? "missing_api_key"
+              : "other",
+    httpStatus: error && Number.isInteger(error.httpStatus) ? error.httpStatus : null,
+    openAiErrorType: error && typeof error.openAiErrorType === "string" ? error.openAiErrorType : "",
+    openAiErrorCode: error && typeof error.openAiErrorCode === "string" ? error.openAiErrorCode : "",
+    imageCount: imageCount
+  });
+}
+
 function readStoredPhotos(profileData) {
   return profileData && Array.isArray(profileData.photos) ? profileData.photos : [];
 }
@@ -764,6 +782,12 @@ export async function handleStoreProfileUpdate(request, response, deps) {
           console.error(
             "店舗写真：Moderationエラー：",
             deps.classifyModerationError(moderationError)
+          );
+          // 原因調査用(Phase 2C Preview)｜HTTP statusと安全な識別子だけを残す
+          // (画像URL・エラー本文・秘密値・個人情報は出さない)。
+          console.error(
+            "店舗写真：Moderationエラー詳細：",
+            describeModerationErrorForLog(moderationError, newPhotos.length)
           );
           // 写真は店舗専用フォルダーに残る(再保存時にアップロードし直さずに使えるよう削除しない)。
           return sendError(response, 503, "safety_check_unavailable");

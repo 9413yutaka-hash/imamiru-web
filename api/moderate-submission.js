@@ -5578,6 +5578,49 @@ export async function callOpenAiModeration(
     httpError.isHttpError =
       true;
 
+    // 原因調査用(Phase 2C Preview)｜HTTP statusと、OpenAIのエラー応答に含まれる
+    // error.type / error.code(英数字の短い識別子)だけを例外に付ける。
+    // エラー本文(message)は画像URL等を含み得るため保存・ログ出力しない。
+    // 判定や処理の流れは変えない(従来どおり例外を投げる)。
+    httpError.httpStatus =
+      response.status;
+
+    try {
+      const errorBody =
+        await response.json();
+
+      const errorInfo =
+        errorBody &&
+        errorBody.error &&
+        typeof errorBody.error === "object"
+          ? errorBody.error
+          : {};
+
+      const readSafeIdentifier =
+        function(value) {
+          return typeof value === "string" &&
+            /^[A-Za-z0-9_.-]{1,64}$/.test(value)
+            ? value
+            : "";
+        };
+
+      httpError.openAiErrorType =
+        readSafeIdentifier(
+          errorInfo.type
+        );
+
+      httpError.openAiErrorCode =
+        readSafeIdentifier(
+          errorInfo.code
+        );
+    } catch (bodyError) {
+      httpError.openAiErrorType =
+        "";
+
+      httpError.openAiErrorCode =
+        "";
+    }
+
     throw httpError;
   }
 
