@@ -2,8 +2,9 @@
 // 正式店舗参加基盤 Phase 2B｜店舗自身による常設店舗情報の作成・編集(サーバー側)
 // ==========================================================================
 // セルフ登録した店舗(Phase 2A)の owner が、storeProfiles/{storeId} の基本項目を
-// 自分で入力・保存する。保存しても status は "draft" のままで、旅行者へは
-// 一切公開しない(公開は2D)。店名・所在地は表示のみで、ここでは変更しない。
+// 自分で入力・保存する。保存では status を変えない(公開・非公開は Phase 2D の
+// storeProfilePublish / storeProfileUnpublish だけが変える)。店名・所在地は表示のみで、
+// ここでは変更しない。
 //
 // 編集できるのは次をすべて満たす場合だけ(すべてサーバー側で判定する)：
 //   ・ログイン済み・メール確認済みの店舗アカウント
@@ -30,6 +31,8 @@ import {
 const STORE_ACCOUNTS_COLLECTION = "storeAccounts";
 const STORE_MEMBERS_COLLECTION = "storeMembers";
 const STORE_PROFILES_COLLECTION = "storeProfiles";
+// Phase 2D｜公開条件の重複候補の判定でだけ読む(オーナー化 MVP-1 の紐付け)。
+const STORE_LISTING_LINKS_COLLECTION = "storeListingLinks";
 // Phase 2Aと同じ連打防止用collectionを使う(新しいRulesを増やさない)。
 const STORE_RATE_LIMITS_COLLECTION = "storeRegistrationRateLimits";
 
@@ -598,17 +601,15 @@ function buildProfileResponse(profileData) {
   };
 }
 
-// 紹介文・営業時間の補足をModerationにかける。flagged → 保存しない、
-// Moderationが使えない → 例外(呼び出し元は保存せず503)。
-async function moderateProfileText(storeName, fields, deps) {
-  const text = [fields.description, fields.businessHours ? fields.businessHours.note : ""]
+// 保存時のModeration対象の文章(紹介文＋営業時間の補足)。保存済みの moderatedText と
+// 同じ組み立て方で比べるため、保存処理と公開条件の確認の両方でこの関数を使う。
+function buildProfileModerationText(description, businessHours) {
+  return [description, businessHours && typeof businessHours === "object" ? businessHours.note : ""]
     .filter(Boolean)
     .join("\n");
+}
 
-  if (text === "") {
-    return { flagged: false, text: "" };
-  }
-
+async function callTextModeration(storeName, text, deps) {
   const results = await deps.callOpenAiModeration(
     deps.buildModerationInput({ shopName: storeName, title: "", content: text })
   );
@@ -617,10 +618,143 @@ async function moderateProfileText(storeName, fields, deps) {
     throw new Error("moderation response was empty");
   }
 
+  return !results.every(function(result) { return result && result.flagged === false; });
+}
+
+// 紹介文・営業時間の補足をModerationにかける。flagged → 保存しない、
+// Moderationが使えない → 例外(呼び出し元は保存せず503)。
+async function moderateProfileText(storeName, fields, deps) {
+  const text = buildProfileModerationText(fields.description, fields.businessHours);
+
+  if (text === "") {
+    return { flagged: false, text: "" };
+  }
+
   return {
-    flagged: !results.every(function(result) { return result && result.flagged === false; }),
+    flagged: await callTextModeration(storeName, text, deps),
     text: text
   };
+}
+
+
+// ===== Phase 2D｜旅行者への公開・非公開 =====
+// storeProfiles.status は "draft"(非公開) と "published"(公開) の2つだけ。
+// 公開中でも、下の公開条件を1つでも満たさなくなった店舗は旅行者に表示しない
+// (表示側でも同じ関数で毎回確認する。条件を直せば、操作なしで表示に戻る)。
+
+// 初回リリースで旅行者に公開できる国。タイムゾーン・海外住所・地域検索を整えたら、
+// ここに国codeを足すだけで広げられる(国ごとの分岐はここ以外に作らない)。
+export const STORE_PUBLISH_COUNTRY_CODES = ["JP"];
+
+// 公開条件(画面の確認リストもこの順で表示する)。
+export const STORE_PUBLISH_CONDITION_CODES = [
+  "photo",
+  "description",
+  "moderation",
+  "owner",
+  "store_active",
+  "location",
+  "country",
+  "duplicates"
+];
+
+// 公開条件の判定に使う紐付け(storeListingLinks)。重複候補のうち運営無料掲載
+// (source:"submissions")は、その無料掲載がこの店舗へ有効に紐付いていれば解決済みとする。
+// それ以外(他の店舗アカウントとの重複など)は今のデータでは解決済みと判定できないため、
+// 安全側で未解決のままにする。
+async function readResolvedDuplicateListingIds(database, storeId, account, transaction) {
+  const candidates = Array.isArray(account && account.duplicateCandidates) ? account.duplicateCandidates : [];
+  const listingIds = candidates
+    .filter(function(candidate) {
+      return candidate && candidate.source === "submissions" && typeof candidate.id === "string" && candidate.id !== "";
+    })
+    .map(function(candidate) { return candidate.id; });
+
+  const resolved = new Set();
+
+  for (const listingId of listingIds) {
+    const linkRef = database.collection(STORE_LISTING_LINKS_COLLECTION).doc(listingId);
+    const snapshot = transaction ? await transaction.get(linkRef) : await linkRef.get();
+    const link = snapshot.exists ? snapshot.data() || {} : null;
+
+    if (link && link.status === "active" && link.storeId === storeId) {
+      resolved.add(listingId);
+    }
+  }
+
+  return resolved;
+}
+
+function hasValidCoordinates(account) {
+  return (
+    typeof account.latitude === "number" &&
+    typeof account.longitude === "number" &&
+    Number.isFinite(account.latitude) &&
+    Number.isFinite(account.longitude) &&
+    Math.abs(account.latitude) <= 90 &&
+    Math.abs(account.longitude) <= 180
+  );
+}
+
+// 公開条件をすべて確認し、満たしていない条件codeの一覧を返す(空なら公開できる)。
+// ownerActive：操作する本人が有効なownerか(公開・非公開の操作時に確認する)。
+export function evaluateStorePublishConditions(input) {
+  const account = input.account || {};
+  const profile = input.profile || {};
+  const resolvedListingIds = input.resolvedListingIds || new Set();
+  const description = typeof profile.description === "string" ? profile.description.trim() : "";
+  // 写真は公開時に再確認しない。Phase 2Cの保存時Moderationを通過した写真だけを数える。
+  const passedPhotos = readStoredPhotos(profile).filter(function(photo) {
+    return !!photo && typeof photo.url === "string" && photo.url !== "" && photo.moderationStatus === "passed";
+  });
+  const candidates = Array.isArray(account.duplicateCandidates) ? account.duplicateCandidates : [];
+
+  const met = {
+    photo: passedPhotos.length > 0,
+    description: description !== "",
+    moderation:
+      profile.moderationStatus === "passed" &&
+      typeof profile.moderatedText === "string" &&
+      profile.moderatedText === buildProfileModerationText(profile.description, profile.businessHours),
+    owner: input.ownerActive === true,
+    store_active: isEditableStore(account),
+    location: hasValidCoordinates(account),
+    country: STORE_PUBLISH_COUNTRY_CODES.includes(account.countryCode),
+    duplicates: candidates.every(function(candidate) {
+      return !!candidate && candidate.source === "submissions" && resolvedListingIds.has(candidate.id);
+    })
+  };
+
+  return STORE_PUBLISH_CONDITION_CODES.filter(function(code) {
+    return met[code] !== true;
+  });
+}
+
+function millisOf(value) {
+  return value && typeof value.toMillis === "function" ? value.toMillis() : 0;
+}
+
+// 画面用の公開状態。status は保存されている値、missing は今満たしていない条件。
+function buildPublicationResponse(profile, missing) {
+  const data = profile || {};
+
+  return {
+    status: data.status === "published" ? "published" : "draft",
+    missing: missing,
+    conditionCodes: STORE_PUBLISH_CONDITION_CODES,
+    publishedAtMillis: millisOf(data.publishedAt)
+  };
+}
+
+async function readPublicationForOwner(database, storeId, account, profile) {
+  const resolvedListingIds = await readResolvedDuplicateListingIds(database, storeId, account, null);
+
+  return buildPublicationResponse(profile, evaluateStorePublishConditions({
+    account: account,
+    profile: profile,
+    ownerActive: true,
+    resolvedListingIds: resolvedListingIds
+  }));
 }
 
 
@@ -654,6 +788,8 @@ export async function handleStoreProfileGet(request, response, deps) {
     }
 
     const account = snapshots[1].data() || {};
+    const profileData = snapshots[2].exists ? snapshots[2].data() || {} : {};
+    const publication = await readPublicationForOwner(database, storeId, account, profileData);
 
     return response.status(200).json({
       success: true,
@@ -668,6 +804,8 @@ export async function handleStoreProfileGet(request, response, deps) {
         formattedAddress: account.locationFormattedAddress || account.address || ""
       },
       profile: buildProfileResponse(snapshots[2].exists ? snapshots[2].data() : null),
+      // Phase 2D｜旅行者への公開状態と、満たしていない公開条件。
+      publication: publication,
       // 編集画面はこの一覧から選択肢を作る(許可codeをサーバーと一致させる)。
       options: {
         featureCodes: STORE_FEATURE_CODES,
@@ -758,9 +896,7 @@ export async function handleStoreProfileUpdate(request, response, deps) {
     // 文章が前回の確認済みの内容から変わった時だけModerationを呼ぶ。
     const moderationTextBefore =
       typeof profileBefore.moderatedText === "string" ? profileBefore.moderatedText : null;
-    const nextText = [input.fields.description, input.fields.businessHours ? input.fields.businessHours.note : ""]
-      .filter(Boolean)
-      .join("\n");
+    const nextText = buildProfileModerationText(input.fields.description, input.fields.businessHours);
     let moderationUpdate = {};
 
     if (nextText !== moderationTextBefore) {
@@ -844,6 +980,8 @@ export async function handleStoreProfileUpdate(request, response, deps) {
 
     let outcome = null;
     let previousPhotos = [];
+    let savedAccount = null;
+    let savedProfile = null;
 
     await database.runTransaction(async function(transaction) {
       const snapshots = await Promise.all([
@@ -873,7 +1011,11 @@ export async function handleStoreProfileUpdate(request, response, deps) {
       const nextRevision = currentRevision + 1;
       previousPhotos = readStoredPhotos(profileData);
 
-      // statusは "draft" のまま(公開は2D)。storeId・店名・所在地は書き換えない。
+      // statusは保存済みの値をそのまま引き継ぐ(公開中の店舗は公開中のまま、内容だけ更新する。
+      // 公開・非公開は storeProfilePublish / storeProfileUnpublish だけが変える)。
+      // storeId・店名・所在地は書き換えない。
+      savedAccount = snapshots[1].data() || {};
+      savedProfile = Object.assign({}, profileData, input.fields, moderationUpdate, photosUpdate);
       transaction.set(
         profileRef,
         Object.assign(
@@ -913,6 +1055,9 @@ export async function handleStoreProfileUpdate(request, response, deps) {
       photoCleanup = await deleteStorePhotos(storeId, removedIds, deps, "removed_from_profile");
     }
 
+    // 保存後の公開状態(公開中の店舗が条件を満たさなくなった場合も、画面で分かるようにする)。
+    const publication = await readPublicationForOwner(database, storeId, savedAccount, savedProfile);
+
     return response.status(200).json({
       success: true,
       revision: outcome.revision,
@@ -920,10 +1065,259 @@ export async function handleStoreProfileUpdate(request, response, deps) {
         ? photosUpdate.photos.map(function(photo) { return { url: photo.url, publicId: photo.publicId }; })
         : undefined,
       photoCleanup: photoCleanup,
-      status: "draft"
+      status: publication.status,
+      publication: publication
     });
   } catch (error) {
     console.error("常設店舗情報：保存エラー：", error && error.message);
+    return sendError(response, 500, "server_error");
+  }
+}
+
+
+// mode: storeProfilePublish (POST、メール確認済み店舗アカウントの owner)
+// { storeId, expectedRevision }
+// 画面の判定は信用せず、サーバーで公開条件をすべて確認し直す。条件を満たしていれば、
+// 店名＋紹介文をModerationにかけ(写真は保存時の確認結果を使い、再確認しない)、
+// 通過した場合だけ status を "published" にする。内容(revision)は変えない。
+export async function handleStoreProfilePublish(request, response, deps) {
+  try {
+    const actor = await requireVerifiedStoreUser(request, response, deps);
+
+    if (!actor) {
+      return;
+    }
+
+    const body = deps.readRequestBody(request);
+    const storeId = readStoreId(body);
+
+    if (storeId === "") {
+      return sendError(response, 400, "invalid_input", { field: "storeId" });
+    }
+
+    if (!Number.isInteger(body.expectedRevision) || body.expectedRevision < 0) {
+      return sendError(response, 400, "invalid_input", { field: "expectedRevision" });
+    }
+
+    const database = deps.getFirestore(deps.getFirebaseAdminApp());
+    const memberRef = database.collection(STORE_MEMBERS_COLLECTION).doc(storeId + "_" + actor.uid);
+    const accountRef = database.collection(STORE_ACCOUNTS_COLLECTION).doc(storeId);
+    const profileRef = database.collection(STORE_PROFILES_COLLECTION).doc(storeId);
+
+    const preSnapshots = await Promise.all([memberRef.get(), accountRef.get(), profileRef.get()]);
+
+    // 他人の店舗・存在しない店舗は区別せず同じ応答にする(保存・取得と同じ)。
+    if (!preSnapshots[0].exists || !isActiveOwner(preSnapshots[0].data(), actor.uid, storeId) || !preSnapshots[1].exists) {
+      return sendError(response, 404, "store_not_found");
+    }
+
+    const accountBefore = preSnapshots[1].data() || {};
+    const profileBefore = preSnapshots[2].exists ? preSnapshots[2].data() || {} : {};
+
+    // 画面に表示していた内容(revision)と保存済みの内容が違えば公開しない。
+    if (readRevision(profileBefore) !== body.expectedRevision) {
+      return sendError(response, 409, "revision_conflict", { currentRevision: readRevision(profileBefore) });
+    }
+
+    const missingBefore = evaluateStorePublishConditions({
+      account: accountBefore,
+      profile: profileBefore,
+      ownerActive: true,
+      resolvedListingIds: await readResolvedDuplicateListingIds(database, storeId, accountBefore, null)
+    });
+
+    if (missingBefore.length > 0) {
+      return sendError(response, 409, "publish_conditions_not_met", { missing: missingBefore });
+    }
+
+    const allowed = await deps.claimRateLimit(
+      database,
+      STORE_RATE_LIMITS_COLLECTION,
+      deps.computeRateLimitIdentifier("storeProfilePublish", actor.uid),
+      STORE_PROFILE_UPDATE_COOLDOWN_MS
+    );
+
+    if (!allowed) {
+      return sendError(response, 429, "rate_limited");
+    }
+
+    // 公開時の確認：旅行者に見せる店名と紹介文。セルフ登録時の店名はまだ確認していないため、
+    // 保存時の確認(moderatedTextとの一致)とは別に、ここで1回だけ確認する(文章のみ・画像なし)。
+    let flagged;
+
+    try {
+      flagged = await callTextModeration(
+        typeof accountBefore.storeName === "string" ? accountBefore.storeName : "",
+        typeof profileBefore.description === "string" ? profileBefore.description : "",
+        deps
+      );
+    } catch (moderationError) {
+      console.error(
+        "常設店舗の公開：Moderationエラー：",
+        deps.classifyModerationError(moderationError)
+      );
+      return sendError(response, 503, "safety_check_unavailable");
+    }
+
+    if (flagged) {
+      return sendError(response, 400, "content_not_allowed");
+    }
+
+    let outcome = null;
+
+    await database.runTransaction(async function(transaction) {
+      const snapshots = await Promise.all([
+        transaction.get(memberRef),
+        transaction.get(accountRef),
+        transaction.get(profileRef)
+      ]);
+
+      if (!snapshots[0].exists || !snapshots[1].exists) {
+        outcome = { status: 404, reason: "store_not_found" };
+        return;
+      }
+
+      const account = snapshots[1].data() || {};
+      const profile = snapshots[2].exists ? snapshots[2].data() || {} : {};
+
+      // Moderation中に内容が保存し直された場合は、確認した内容と違うので公開しない。
+      if (readRevision(profile) !== body.expectedRevision) {
+        outcome = { status: 409, reason: "revision_conflict", currentRevision: readRevision(profile) };
+        return;
+      }
+
+      // 店名が確認中に変わった場合も、確認した店名と違うので公開しない。
+      if (account.storeName !== accountBefore.storeName) {
+        outcome = { status: 409, reason: "revision_conflict", currentRevision: readRevision(profile) };
+        return;
+      }
+
+      const missing = evaluateStorePublishConditions({
+        account: account,
+        profile: profile,
+        ownerActive: isActiveOwner(snapshots[0].data(), actor.uid, storeId),
+        resolvedListingIds: await readResolvedDuplicateListingIds(database, storeId, account, transaction)
+      });
+
+      if (missing.length > 0) {
+        outcome = { status: 409, reason: "publish_conditions_not_met", missing: missing };
+        return;
+      }
+
+      if (profile.status !== "published") {
+        transaction.update(profileRef, {
+          status: "published",
+          publishedAt: FieldValue.serverTimestamp(),
+          publishedByUid: actor.uid
+        });
+      }
+
+      outcome = { status: 200 };
+    });
+
+    if (outcome.status !== 200) {
+      const extra = {};
+
+      if (outcome.currentRevision !== undefined) {
+        extra.currentRevision = outcome.currentRevision;
+      }
+
+      if (outcome.missing) {
+        extra.missing = outcome.missing;
+      }
+
+      return sendError(response, outcome.status, outcome.reason, extra);
+    }
+
+    const profileAfter = await profileRef.get();
+
+    return response.status(200).json({
+      success: true,
+      status: "published",
+      publication: await readPublicationForOwner(
+        database,
+        storeId,
+        accountBefore,
+        profileAfter.exists ? profileAfter.data() || {} : {}
+      )
+    });
+  } catch (error) {
+    console.error("常設店舗の公開：エラー：", error && error.message);
+    return sendError(response, 500, "server_error");
+  }
+}
+
+
+// mode: storeProfileUnpublish (POST、メール確認済み店舗アカウントの owner)
+// { storeId }
+// status を "draft" に戻す。店舗が運営確認中・停止中でも、owner本人なら非公開にはできる。
+// 内容(revision)は変えない。
+export async function handleStoreProfileUnpublish(request, response, deps) {
+  try {
+    const actor = await requireVerifiedStoreUser(request, response, deps);
+
+    if (!actor) {
+      return;
+    }
+
+    const storeId = readStoreId(deps.readRequestBody(request));
+
+    if (storeId === "") {
+      return sendError(response, 400, "invalid_input", { field: "storeId" });
+    }
+
+    const database = deps.getFirestore(deps.getFirebaseAdminApp());
+    const memberRef = database.collection(STORE_MEMBERS_COLLECTION).doc(storeId + "_" + actor.uid);
+    const accountRef = database.collection(STORE_ACCOUNTS_COLLECTION).doc(storeId);
+    const profileRef = database.collection(STORE_PROFILES_COLLECTION).doc(storeId);
+
+    let outcome = null;
+    let account = {};
+
+    await database.runTransaction(async function(transaction) {
+      const snapshots = await Promise.all([
+        transaction.get(memberRef),
+        transaction.get(accountRef),
+        transaction.get(profileRef)
+      ]);
+
+      if (!snapshots[0].exists || !isActiveOwner(snapshots[0].data(), actor.uid, storeId) || !snapshots[1].exists) {
+        outcome = { status: 404, reason: "store_not_found" };
+        return;
+      }
+
+      account = snapshots[1].data() || {};
+      const profile = snapshots[2].exists ? snapshots[2].data() || {} : null;
+
+      if (profile && profile.status === "published") {
+        transaction.update(profileRef, {
+          status: "draft",
+          unpublishedAt: FieldValue.serverTimestamp(),
+          unpublishedByUid: actor.uid
+        });
+      }
+
+      outcome = { status: 200 };
+    });
+
+    if (outcome.status !== 200) {
+      return sendError(response, outcome.status, outcome.reason);
+    }
+
+    const profileAfter = await profileRef.get();
+
+    return response.status(200).json({
+      success: true,
+      status: "draft",
+      publication: await readPublicationForOwner(
+        database,
+        storeId,
+        account,
+        profileAfter.exists ? profileAfter.data() || {} : {}
+      )
+    });
+  } catch (error) {
+    console.error("常設店舗の非公開：エラー：", error && error.message);
     return sendError(response, 500, "server_error");
   }
 }

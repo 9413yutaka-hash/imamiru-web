@@ -2819,8 +2819,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_profile_photos_hint: {
-    ja: "1枚目がメイン写真になります。JPEG・PNG・WebPで1枚10MBまで、最大10枚まで登録できます。写真は「下書きを保存する」を押した時にアップロードされます。",
-    en: "The first photo is the main photo. JPEG, PNG or WebP, up to 10 MB each, up to 10 photos. Photos are uploaded when you press \"Save draft\"."
+    ja: "1枚目がメイン写真になります。JPEG・PNG・WebPで1枚10MBまで、最大10枚まで登録できます。写真は、店舗情報を保存した時にアップロードされます。",
+    en: "The first photo is the main photo. JPEG, PNG or WebP, up to 10 MB each, up to 10 photos. Photos are uploaded when you save your shop information."
   },
 
   store_profile_photos_count: {
@@ -2911,6 +2911,186 @@ const MACHINAU_TRANSLATIONS = {
   store_profile_photos_err_content: {
     ja: "掲載できない可能性がある写真が含まれていたため、保存しませんでした。新しく追加した写真を見直してから、もう一度保存してください。",
     en: "Some photos may not be suitable for publishing, so nothing was saved. Please review the newly added photos and save again."
+  },
+
+  store_profile_publish_heading: {
+    ja: "旅行者への公開",
+    en: "Showing to travelers"
+  },
+
+  store_profile_publish_state_draft: {
+    ja: "非公開（下書き）",
+    en: "Not public (draft)"
+  },
+
+  store_profile_publish_state_published: {
+    ja: "公開中",
+    en: "Public"
+  },
+
+  store_profile_publish_state_blocked: {
+    ja: "公開条件を満たしていないため表示されていません",
+    en: "Not shown because the publishing conditions are not met"
+  },
+
+  store_profile_publish_note_draft: {
+    ja: "公開するまで、この情報は旅行者に表示されません。",
+    en: "Travelers won't see this information until you publish it."
+  },
+
+  store_profile_publish_note_published: {
+    ja: "公開の設定が完了しています。旅行者向け画面への表示は準備中です。",
+    en: "Publishing is turned on. Display on the traveler pages is being prepared."
+  },
+
+  store_profile_publish_note_blocked: {
+    ja: "下の条件をすべて満たすと、操作しなくても表示に戻ります。",
+    en: "Once all the conditions below are met, it will be shown again automatically."
+  },
+
+  store_profile_publish_checklist_heading: {
+    ja: "公開の条件（保存済みの内容で確認します）",
+    en: "Conditions for publishing (checked against the saved content)"
+  },
+
+  store_profile_publish_cond_photo: {
+    ja: "写真が1枚以上ある",
+    en: "At least one photo"
+  },
+
+  store_profile_publish_cond_description: {
+    ja: "紹介文がある",
+    en: "A description"
+  },
+
+  store_profile_publish_cond_moderation: {
+    ja: "保存した内容の確認が済んでいる",
+    en: "The saved content has been checked"
+  },
+
+  store_profile_publish_cond_owner: {
+    ja: "あなたがこの店舗・施設の管理者（オーナー）として有効",
+    en: "You are an active owner of this business"
+  },
+
+  store_profile_publish_cond_store_active: {
+    ja: "店舗・施設の状態が有効",
+    en: "The business is active"
+  },
+
+  store_profile_publish_cond_location: {
+    ja: "所在地の位置情報が有効",
+    en: "The location is valid"
+  },
+
+  store_profile_publish_cond_country: {
+    ja: "公開できる地域にある（現在は日本国内の店舗・施設のみ）",
+    en: "In a supported area (currently businesses in Japan only)"
+  },
+
+  store_profile_publish_cond_duplicates: {
+    ja: "同じ店舗・施設の可能性がある掲載が解決している",
+    en: "Possible duplicate listings are resolved"
+  },
+
+  store_profile_publish_fix_photo: {
+    ja: "「写真」に1枚以上追加して保存してください。",
+    en: "Add at least one photo and save."
+  },
+
+  store_profile_publish_fix_description: {
+    ja: "「紹介文」を入力して保存してください。",
+    en: "Enter a description and save."
+  },
+
+  store_profile_publish_fix_moderation: {
+    ja: "内容をもう一度保存してください。",
+    en: "Please save the content again."
+  },
+
+  store_profile_publish_fix_owner: {
+    ja: "運営へお問い合わせください。",
+    en: "Please contact the Machinau team."
+  },
+
+  store_profile_publish_fix_store_active: {
+    ja: "運営の確認が終わるまでお待ちください。停止中の場合は運営へお問い合わせください。",
+    en: "Please wait until the Machinau team finishes its review. If the business is suspended, please contact the Machinau team."
+  },
+
+  store_profile_publish_fix_location: {
+    ja: "運営へお問い合わせください。",
+    en: "Please contact the Machinau team."
+  },
+
+  store_profile_publish_fix_country: {
+    ja: "現在は日本国内の店舗・施設だけを公開できます。",
+    en: "Currently only businesses in Japan can be published."
+  },
+
+  store_profile_publish_fix_duplicates: {
+    ja: "マチナウに掲載中の同じ店舗・施設がある可能性があります。運営へお問い合わせください。",
+    en: "The same business may already be listed on Machinau. Please contact the Machinau team."
+  },
+
+  store_profile_publish_save_first: {
+    ja: "保存していない変更があります。先に保存してから公開してください。",
+    en: "You have unsaved changes. Please save them before publishing."
+  },
+
+  store_profile_publish_button: {
+    ja: "旅行者に公開する",
+    en: "Publish to travelers"
+  },
+
+  store_profile_unpublish_button: {
+    ja: "非公開に戻す",
+    en: "Make private"
+  },
+
+  store_profile_publish_confirm: {
+    ja: "保存済みの内容を旅行者に公開します。よろしいですか？",
+    en: "Publish the saved content to travelers?"
+  },
+
+  store_profile_unpublish_confirm: {
+    ja: "旅行者への公開をやめて、非公開（下書き）に戻します。よろしいですか？",
+    en: "Stop showing this to travelers and make it private (draft)?"
+  },
+
+  store_profile_publishing_button: {
+    ja: "確認しています…",
+    en: "Checking…"
+  },
+
+  store_profile_published_message: {
+    ja: "公開しました。",
+    en: "Published."
+  },
+
+  store_profile_unpublished_message: {
+    ja: "非公開に戻しました。",
+    en: "It is now private."
+  },
+
+  store_profile_publish_err_conditions: {
+    ja: "公開の条件を満たしていません。条件の一覧を確認してください。",
+    en: "The publishing conditions are not met. Please check the list of conditions."
+  },
+
+  store_profile_publish_err_content: {
+    ja: "店名または紹介文に、掲載できない可能性がある表現が含まれています。紹介文を見直して保存してください。店名については運営へお問い合わせください。",
+    en: "The business name or description may contain content that can't be published. Please review the description and save. For the business name, please contact the Machinau team."
+  },
+
+  store_profile_save_button_published: {
+    ja: "変更を保存する",
+    en: "Save changes"
+  },
+
+  store_profile_saved_published: {
+    ja: "変更を保存しました。",
+    en: "Changes saved."
   },
 
   store_claim_heading: {

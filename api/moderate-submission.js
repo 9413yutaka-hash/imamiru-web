@@ -67,6 +67,8 @@ import {
 import {
   handleStoreProfileGet,
   handleStoreProfileUpdate,
+  handleStoreProfilePublish,
+  handleStoreProfileUnpublish,
   checkStoreProfileEditor,
   buildStorePhotoFolder,
   isStorePhotoPublicId
@@ -29775,6 +29777,27 @@ export default async function handler(
     requestBody.mode === "storeProfileUpdate"
   ) {
     return handleStoreProfileUpdate(
+      request,
+      response,
+      buildStoreSelfServiceDeps()
+    );
+  }
+
+  // 正式店舗参加基盤 Phase 2D｜旅行者への公開・非公開(owner本人のみ、条件はサーバーで再確認)。
+  if (
+    requestBody.mode === "storeProfilePublish"
+  ) {
+    return handleStoreProfilePublish(
+      request,
+      response,
+      buildStoreSelfServiceDeps()
+    );
+  }
+
+  if (
+    requestBody.mode === "storeProfileUnpublish"
+  ) {
+    return handleStoreProfileUnpublish(
       request,
       response,
       buildStoreSelfServiceDeps()

@@ -180,6 +180,19 @@
 
     .back-link { display: inline-block; margin-top: 6px; color: var(--blue); font-size: 13px; }
 
+    /* Phase 2D｜旅行者への公開 */
+    .publish-state { display: inline-block; margin: 0 0 6px; padding: 4px 12px; border-radius: 999px; font-size: 13px; font-weight: 800; }
+    .publish-state.draft { background: var(--background); color: var(--navy); border: 1px solid var(--border); }
+    .publish-state.published { background: #e5f7ef; color: #0f6b44; }
+    .publish-state.blocked { background: #fff4e5; color: #8a4b00; }
+    .publish-checklist { list-style: none; margin: 8px 0 12px; padding: 0; display: grid; gap: 6px; }
+    .publish-checklist li { display: grid; grid-template-columns: 22px 1fr; gap: 4px; font-size: 13px; overflow-wrap: anywhere; }
+    .publish-mark { font-weight: 800; }
+    .publish-checklist li.met .publish-mark { color: #0f6b44; }
+    .publish-checklist li.missing .publish-mark { color: #a3212d; }
+    .publish-fix { display: block; font-size: 12px; color: var(--subtext); }
+    .publish-checklist-heading { margin: 10px 0 0; font-size: 13px; font-weight: 800; color: var(--navy); }
+
     .photo-count { margin: 0 0 8px; font-size: 13px; font-weight: 800; color: var(--navy); }
     .photo-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
     .photo-card { position: relative; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--background); }
@@ -246,6 +259,19 @@
           <span class="readonly-value" id="storeLocationText"></span>
         </div>
         <p class="hint" data-i18n="store_profile_name_location_note"></p>
+      </section>
+
+      <!-- Phase 2D｜旅行者への公開。条件は保存済みの内容でサーバーが判定する(公開時にも再確認)。 -->
+      <section class="panel" id="publishSection">
+        <h2 data-i18n="store_profile_publish_heading">旅行者への公開</h2>
+        <span class="publish-state draft" id="publishStateText"></span>
+        <p class="hint" id="publishStateNote"></p>
+        <p class="publish-checklist-heading" data-i18n="store_profile_publish_checklist_heading">公開の条件</p>
+        <ul class="publish-checklist" id="publishChecklist"></ul>
+        <p class="message info" id="publishSaveFirstNote" data-i18n="store_profile_publish_save_first"></p>
+        <div id="publishMessage" class="message" role="status" aria-live="polite"></div>
+        <button type="button" class="primary-button" id="publishButton" data-i18n="store_profile_publish_button">旅行者に公開する</button>
+        <button type="button" class="secondary-button" id="unpublishButton" hidden data-i18n="store_profile_unpublish_button">非公開に戻す</button>
       </section>
 
       <p class="message info show" id="notEditableNote" hidden></p>
@@ -381,7 +407,8 @@
         safety_check_unavailable: "store_profile_err_safety_unavailable",
         rate_limited: "store_account_store_err_rate_limited",
         photo_upload_failed: "store_profile_photos_err_upload",
-        upload_unavailable: "store_profile_photos_err_upload"
+        upload_unavailable: "store_profile_photos_err_upload",
+        publish_conditions_not_met: "store_profile_publish_err_conditions"
       };
       const FIELD_ERROR_KEYS = {
         categoryCode: "store_account_store_err_category",
@@ -405,6 +432,10 @@
       let dirty = false;
       let lastPageMessage = null;
       let lastFormMessage = null;
+      let lastPublishMessage = null;
+      let publishing = false;
+      // Phase 2D｜サーバーが返した公開状態 { status, missing, conditionCodes }。
+      let publication = null;
 
       function readLanguage() {
         let stored = null;
@@ -439,6 +470,17 @@
 
       function showFormMessage(key, type, code) {
         lastFormMessage = setMessage("formMessage", key, type, code);
+      }
+
+      function showPublishMessage(key, type, code) {
+        lastPublishMessage = setMessage("publishMessage", key, type, code);
+      }
+
+      function clearPublishMessage() {
+        lastPublishMessage = null;
+        const box = document.getElementById("publishMessage");
+        box.textContent = "";
+        box.className = "message";
       }
 
       function clearFormMessage() {
@@ -821,6 +863,7 @@
 
       function applyLoaded(result) {
         loaded = result;
+        publication = result.publication || null;
         revision = result.profile.revision;
         editable = result.editable === true;
         dirty = false;
@@ -847,7 +890,135 @@
         document.getElementById("reloadButton").hidden = true;
         setFormEnabled(editable);
         renderPhotos();
+        renderPublication();
         showPanel("editorArea");
+      }
+
+      // ===== Phase 2D｜旅行者への公開 =====
+
+      function isPublished() {
+        return !!publication && publication.status === "published";
+      }
+
+      // draft：非公開 / published：公開中 / blocked：公開中だが条件を満たさず表示されていない
+      function publicationView() {
+        if (!isPublished()) {
+          return "draft";
+        }
+        return (publication.missing || []).length > 0 ? "blocked" : "published";
+      }
+
+      function renderPublication() {
+        const view = publicationView();
+        const stateText = document.getElementById("publishStateText");
+        stateText.className = "publish-state " + view;
+        stateText.textContent = t("store_profile_publish_state_" + view);
+        document.getElementById("publishStateNote").textContent = t("store_profile_publish_note_" + view);
+        // 「まだ旅行者に表示されません」の帯と保存ボタン名は、公開中かどうかで変える
+        // (公開中の保存は、公開している内容の更新になる)。
+        document.querySelector(".draft-banner").hidden = isPublished();
+        const saveButton = document.getElementById("saveButton");
+        if (!saving) {
+          saveButton.textContent = t(isPublished() ? "store_profile_save_button_published" : "store_profile_save_button");
+        }
+
+        const missing = publication ? publication.missing || [] : [];
+        const codes = publication ? publication.conditionCodes || [] : [];
+        const list = document.getElementById("publishChecklist");
+        list.textContent = "";
+        codes.forEach(function (code) {
+          const ok = !missing.includes(code);
+          const item = document.createElement("li");
+          item.className = ok ? "met" : "missing";
+          item.setAttribute("data-condition", code);
+          const mark = document.createElement("span");
+          mark.className = "publish-mark";
+          mark.textContent = ok ? "✓" : "✕";
+          const body = document.createElement("span");
+          body.textContent = t("store_profile_publish_cond_" + code);
+          if (!ok) {
+            const fix = document.createElement("span");
+            fix.className = "publish-fix";
+            fix.textContent = t("store_profile_publish_fix_" + code);
+            body.appendChild(fix);
+          }
+          item.appendChild(mark);
+          item.appendChild(body);
+          list.appendChild(item);
+        });
+
+        document.getElementById("publishSaveFirstNote").classList.toggle("show", dirty && editable && !isPublished());
+        const publishButton = document.getElementById("publishButton");
+        publishButton.hidden = isPublished();
+        publishButton.disabled = publishing || saving || dirty || !publication || missing.length > 0;
+        publishButton.textContent = t(publishing ? "store_profile_publishing_button" : "store_profile_publish_button");
+        const unpublishButton = document.getElementById("unpublishButton");
+        unpublishButton.hidden = !isPublished();
+        unpublishButton.disabled = publishing || saving;
+      }
+
+      async function handlePublish() {
+        if (publishing || saving || dirty || isPublished()) {
+          return;
+        }
+        if (!window.confirm(t("store_profile_publish_confirm"))) {
+          return;
+        }
+        clearPublishMessage();
+        publishing = true;
+        renderPublication();
+        try {
+          const response = await callApi({ mode: "storeProfilePublish", storeId: storeId, expectedRevision: revision });
+          const result = response.result || {};
+          if (response.status === 200 && result.success) {
+            publication = result.publication || publication;
+            // 公開前の「下書きを保存しました（まだ表示されません）」は状態と合わなくなるため消す。
+            clearFormMessage();
+            return showPublishMessage("store_profile_published_message", "success");
+          }
+          if (result.reason === "publish_conditions_not_met" && Array.isArray(result.missing) && publication) {
+            publication = Object.assign({}, publication, { missing: result.missing });
+          }
+          if (result.reason === "revision_conflict") {
+            document.getElementById("reloadButton").hidden = false;
+          }
+          if (result.reason === "content_not_allowed") {
+            return showPublishMessage("store_profile_publish_err_content", "error", result.reason);
+          }
+          showPublishMessage(ERROR_MESSAGE_KEYS[result.reason] || "store_account_err_generic", "error", result.reason || "http_" + response.status);
+        } catch (error) {
+          showPublishMessage("store_account_err_network", "error");
+        } finally {
+          publishing = false;
+          renderPublication();
+        }
+      }
+
+      async function handleUnpublish() {
+        if (publishing || saving || !isPublished()) {
+          return;
+        }
+        if (!window.confirm(t("store_profile_unpublish_confirm"))) {
+          return;
+        }
+        clearPublishMessage();
+        publishing = true;
+        renderPublication();
+        try {
+          const response = await callApi({ mode: "storeProfileUnpublish", storeId: storeId });
+          const result = response.result || {};
+          if (response.status === 200 && result.success) {
+            publication = result.publication || publication;
+            clearFormMessage();
+            return showPublishMessage("store_profile_unpublished_message", "success");
+          }
+          showPublishMessage(ERROR_MESSAGE_KEYS[result.reason] || "store_account_err_generic", "error", result.reason || "http_" + response.status);
+        } catch (error) {
+          showPublishMessage("store_account_err_network", "error");
+        } finally {
+          publishing = false;
+          renderPublication();
+        }
       }
 
       function statusKey(status) {
@@ -991,6 +1162,8 @@
           .replace("{n}", photoItems.length)
           .replace("{max}", getPhotosMax());
         document.getElementById("photoAddButton").disabled = locked || photoItems.length >= getPhotosMax();
+        // 写真の追加・削除・並べ替えも未保存の変更になるため、公開欄の表示を合わせる。
+        renderPublication();
       }
 
       function compressPhoto(file) {
@@ -1172,6 +1345,7 @@
         }
         saving = true;
         renderPhotos();
+        renderPublication();
         const saveButton = document.getElementById("saveButton");
         saveButton.disabled = true;
         saveButton.textContent = t("store_profile_saving_button");
@@ -1211,7 +1385,10 @@
             if (Array.isArray(result.photos)) {
               setPhotosFromServer(result.photos);
             }
-            return showFormMessage("store_profile_saved", "success");
+            if (result.publication) {
+              publication = result.publication;
+            }
+            return showFormMessage(isPublished() ? "store_profile_saved_published" : "store_profile_saved", "success");
           }
           if (result.reason === "photo_not_allowed") {
             // 新しく追加した写真はサーバー側で削除済み。端末内の写真は残るので、
@@ -1240,8 +1417,8 @@
           saving = false;
           hideSaveProgress();
           saveButton.disabled = !editable;
-          saveButton.textContent = t("store_profile_save_button");
           renderPhotos();
+          renderPublication();
         }
       }
 
@@ -1289,6 +1466,12 @@
         if (lastFormMessage) {
           showFormMessage(lastFormMessage.key, lastFormMessage.type, lastFormMessage.code);
         }
+        if (lastPublishMessage) {
+          showPublishMessage(lastPublishMessage.key, lastPublishMessage.type, lastPublishMessage.code);
+        }
+        if (loaded) {
+          renderPublication();
+        }
       }
 
       function bindEvents() {
@@ -1308,9 +1491,11 @@
         form.addEventListener("submit", handleSave);
         form.addEventListener("input", function () {
           dirty = true;
+          renderPublication();
         });
         form.addEventListener("change", function (event) {
           dirty = true;
+          renderPublication();
           const row = event.target.closest(".day-row");
           if (row) {
             // 「定休日」と「24時間」は同時に選べない。
@@ -1371,8 +1556,11 @@
         });
         document.getElementById("reloadButton").addEventListener("click", function () {
           clearFormMessage();
+          clearPublishMessage();
           loadProfile();
         });
+        document.getElementById("publishButton").addEventListener("click", handlePublish);
+        document.getElementById("unpublishButton").addEventListener("click", handleUnpublish);
         window.addEventListener("beforeunload", function (event) {
           if (dirty && editable) {
             event.preventDefault();
