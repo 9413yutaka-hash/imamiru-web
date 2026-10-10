@@ -213,7 +213,7 @@
 
     .store-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 10px; }
 
-    .store-card {
+    .store-card, .claim-card {
       padding: 12px;
       border: 1px solid var(--border);
       border-radius: 12px;
@@ -221,9 +221,15 @@
       overflow-wrap: anywhere;
     }
 
-    .store-card-name { font-size: 15px; font-weight: 800; color: var(--navy); }
-    .store-card-meta { margin-top: 2px; color: var(--subtext); }
-    .store-card-note { margin-top: 6px; font-size: 12px; color: var(--subtext); }
+    .store-card-name, .claim-card-name { font-size: 15px; font-weight: 800; color: var(--navy); }
+    .store-card-meta, .claim-card-meta { margin-top: 2px; color: var(--subtext); }
+    .store-card-note, .claim-card-note { margin-top: 6px; font-size: 12px; color: var(--subtext); }
+
+    .claim-listing { margin-bottom: 10px; }
+    .claim-listing-image { width: 100%; max-height: 180px; object-fit: cover; border-radius: 10px; margin-bottom: 8px; }
+    .claim-code { margin: 4px 0; font-size: 24px; font-weight: 800; letter-spacing: 4px; font-family: monospace; color: var(--navy); }
+    .field-label { display: block; margin-bottom: 6px; font-size: 13.5px; font-weight: 800; color: var(--navy); }
+    .claim-withdraw { margin-top: 8px; }
 
     .store-card-link {
       display: inline-block;
@@ -237,7 +243,7 @@
       text-decoration: none;
     }
 
-    .store-status {
+    .store-status, .claim-status {
       display: inline-block;
       margin-top: 6px;
       padding: 2px 10px;
@@ -248,9 +254,9 @@
       color: var(--navy);
     }
 
-    .store-status.active { background: #e5f7ef; color: #0f6b44; }
-    .store-status.pending_review { background: #fff4e5; color: #8a4b00; }
-    .store-status.rejected, .store-status.suspended { background: #fdecee; color: #a3212d; }
+    .store-status.active, .claim-status.active { background: #e5f7ef; color: #0f6b44; }
+    .store-status.pending_review, .claim-status.pending_review { background: #fff4e5; color: #8a4b00; }
+    .store-status.rejected, .store-status.suspended, .claim-status.rejected { background: #fdecee; color: #a3212d; }
 
     .store-preview {
       margin: 12px 0;
@@ -450,6 +456,62 @@
         </form>
       </div>
 
+      <!-- 運営無料掲載 → 店舗オーナー化 MVP-1｜マチナウ運営が掲載したお店を、本当のお店が
+           自分の店舗として引き継ぐ申請。?claim={掲載ID} で開く(TOPからの入口はまだ無い)。
+           本人確認は、マチナウ運営がお店の公式連絡先へ連絡して行う。申請者の電話番号・
+           メールアドレス等の連絡先は受け取らない。申請の作成・判断はすべてサーバー側。 -->
+      <div class="store-section" id="claimSection" hidden>
+        <h3 data-i18n="store_claim_heading">オーナー申請（マチナウに掲載中のお店の引き継ぎ）</h3>
+        <div id="claimMessage" class="message" role="status" aria-live="polite"></div>
+
+        <div id="claimFormArea" hidden>
+          <div class="claim-card claim-listing">
+            <img id="claimListingImage" class="claim-listing-image" alt="" hidden>
+            <div class="claim-card-name" id="claimListingName"></div>
+            <div class="claim-card-meta" id="claimListingAddress"></div>
+          </div>
+          <p class="message info show" id="claimLinkedNotice" hidden data-i18n="store_claim_linked_notice"></p>
+          <p class="note" style="margin: 10px 0;" data-i18n="store_claim_process_note"></p>
+
+          <form id="claimForm" novalidate>
+            <div class="field">
+              <span class="field-label" data-i18n="store_claim_target_label">どのように引き継ぎますか</span>
+              <label class="check-line"><input type="radio" name="claimTarget" value="new_store" checked> <span data-i18n="store_claim_target_new">新しい店舗として引き継ぐ</span></label>
+              <label class="check-line" id="claimTargetExistingLine"><input type="radio" name="claimTarget" value="existing_store"> <span data-i18n="store_claim_target_existing">登録済みの自分の店舗につなぐ</span></label>
+              <select id="claimTargetStoreSelect" hidden></select>
+            </div>
+            <div class="field">
+              <label for="claimRoleSelect" data-i18n="store_claim_role_label">お店でのお立場</label>
+              <select id="claimRoleSelect">
+                <option value="owner" data-i18n="store_claim_role_owner">オーナー</option>
+                <option value="manager" data-i18n="store_claim_role_manager">店長・責任者</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="claimUrlInput" data-i18n="store_claim_url_label">お店の公式サイト・公式SNS（任意）</label>
+              <input type="url" id="claimUrlInput" maxlength="500" placeholder="https://">
+              <p class="hint" data-i18n="store_claim_url_hint"></p>
+            </div>
+            <div class="field">
+              <label for="claimNoteInput" data-i18n="store_claim_note_label">ひとこと（任意・200文字まで）</label>
+              <input type="text" id="claimNoteInput" maxlength="200">
+              <p class="hint" data-i18n="store_claim_note_hint"></p>
+            </div>
+            <button type="submit" class="primary-button" id="claimSubmitButton" data-i18n="store_claim_submit">オーナー申請を送る</button>
+          </form>
+        </div>
+
+        <div id="claimCodeBox" class="store-preview" hidden>
+          <p class="store-preview-title" data-i18n="store_claim_code_title">申請コード</p>
+          <p class="claim-code" id="claimCodeText"></p>
+          <p class="hint" data-i18n="store_claim_code_hint"></p>
+        </div>
+
+        <h3 data-i18n="store_claim_mine_heading">あなたのオーナー申請</h3>
+        <p class="note" id="claimMineEmpty" data-i18n="store_claim_mine_empty"></p>
+        <ul class="store-list" id="claimMineList"></ul>
+      </div>
+
       <div id="unverifiedBox" hidden>
         <p class="message info show" data-i18n="store_account_verify_needed"></p>
         <p class="note" style="margin-bottom: 10px;" data-i18n="store_account_verify_spam_hint"></p>
@@ -561,6 +623,10 @@
         }
         if (lastStoreMessage) {
           showStoreMessage(lastStoreMessage.key, lastStoreMessage.type, lastStoreMessage.code);
+        }
+        renderMyClaims();
+        if (lastClaimMessage) {
+          showClaimMessage(lastClaimMessage.key, lastClaimMessage.type, lastClaimMessage.code);
         }
       }
 
@@ -865,6 +931,7 @@
         if (verified && storesLoadedForUid !== user.uid && !storesLoading) {
           loadMyStores();
         }
+        renderClaimSection();
       }
 
       function loadMyStores() {
@@ -901,6 +968,274 @@
         closeStoreForm();
         clearStoreMessage();
         renderStoreLinkStatus();
+        resetClaimState();
+      }
+
+      // ===== 運営無料掲載 → 店舗オーナー化 MVP-1｜オーナー申請 =====
+      // ?claim={掲載ID} で開いた時だけ申請フォームを出す。申請・判断はサーバーが行い、
+      // 申請者の連絡先(電話・メール等)は送らない。
+      const CLAIM_SUBMISSION_ID = (function () {
+        const value = new URLSearchParams(window.location.search).get("claim") || "";
+        return /^[A-Za-z0-9_-]{1,100}$/.test(value) ? value : "";
+      })();
+      const CLAIM_ERROR_KEYS = {
+        listing_not_found: "store_claim_err_listing_not_found",
+        pending_claim_exists: "store_claim_err_pending_exists",
+        already_linked_to_this_store: "store_claim_err_already_yours",
+        target_store_not_allowed: "store_claim_err_target",
+        too_many_pending_claims: "store_claim_err_too_many",
+        rate_limited: "store_account_store_err_rate_limited",
+        email_not_verified: "store_account_store_err_verify",
+        login_required: "store_account_store_err_login",
+        store_account_required: "store_account_store_err_login"
+      };
+      let claimPreview = null;
+      let claimPreviewLoadedForUid = "";
+      let myClaims = [];
+      let claimsLoadedForUid = "";
+      let claimBusy = false;
+      let lastClaimMessage = null;
+
+      function showClaimMessage(key, type, code) {
+        const box = document.getElementById("claimMessage");
+        lastClaimMessage = { key: key, type: type, code: code || "" };
+        box.textContent = t(key);
+        if (code) {
+          const codeElement = document.createElement("span");
+          codeElement.className = "error-code";
+          codeElement.textContent = "(" + code + ")";
+          box.appendChild(codeElement);
+        }
+        box.className = "message show " + type;
+      }
+
+      function clearClaimMessage() {
+        lastClaimMessage = null;
+        const box = document.getElementById("claimMessage");
+        box.textContent = "";
+        box.className = "message";
+      }
+
+      function resetClaimState() {
+        claimPreview = null;
+        claimPreviewLoadedForUid = "";
+        myClaims = [];
+        claimsLoadedForUid = "";
+        clearClaimMessage();
+        document.getElementById("claimSection").hidden = true;
+        document.getElementById("claimFormArea").hidden = true;
+        document.getElementById("claimCodeBox").hidden = true;
+      }
+
+      function showClaimCode(code) {
+        document.getElementById("claimCodeText").textContent = code;
+        document.getElementById("claimCodeBox").hidden = false;
+        document.getElementById("claimFormArea").hidden = true;
+      }
+
+      function renderClaimPreview() {
+        if (!claimPreview) {
+          return;
+        }
+        const listing = claimPreview.listing || {};
+        const image = document.getElementById("claimListingImage");
+        image.hidden = !listing.imageUrl;
+        if (listing.imageUrl) {
+          image.src = listing.imageUrl;
+        }
+        document.getElementById("claimListingName").textContent = listing.shopName || "";
+        document.getElementById("claimListingAddress").textContent = listing.address || "";
+        document.getElementById("claimLinkedNotice").hidden = claimPreview.linkState !== "linked";
+        const select = document.getElementById("claimTargetStoreSelect");
+        const selected = select.value;
+        select.textContent = "";
+        (claimPreview.eligibleStores || []).forEach(function (store) {
+          const option = document.createElement("option");
+          option.value = store.storeId;
+          option.textContent = store.storeName + (store.city ? "（" + [store.prefecture, store.city].filter(Boolean).join(" ") + "）" : "");
+          select.appendChild(option);
+        });
+        if (selected) {
+          select.value = selected;
+        }
+        const hasStores = (claimPreview.eligibleStores || []).length > 0;
+        document.getElementById("claimTargetExistingLine").hidden = !hasStores;
+        updateClaimTargetSelect();
+        if (claimPreview.linkState === "linked_to_you") {
+          document.getElementById("claimFormArea").hidden = true;
+          showClaimMessage("store_claim_err_already_yours", "info");
+        } else if (claimPreview.pendingClaim) {
+          showClaimCode(claimPreview.pendingClaim.claimCode);
+          showClaimMessage("store_claim_pending_exists_info", "info");
+        } else {
+          document.getElementById("claimFormArea").hidden = false;
+        }
+      }
+
+      function updateClaimTargetSelect() {
+        const checked = document.querySelector('input[name="claimTarget"]:checked');
+        document.getElementById("claimTargetStoreSelect").hidden = !checked || checked.value !== "existing_store";
+      }
+
+      function renderMyClaims() {
+        const list = document.getElementById("claimMineList");
+        list.textContent = "";
+        myClaims.forEach(function (claim) {
+          const item = document.createElement("li");
+          item.className = "claim-card";
+          const name = document.createElement("div");
+          name.className = "claim-card-name";
+          name.textContent = (claim.listing && claim.listing.shopName) || claim.submissionId;
+          item.appendChild(name);
+          const status = document.createElement("span");
+          const statusCode = ["pending", "approved", "rejected", "withdrawn"].includes(claim.status) ? claim.status : "pending";
+          status.className = "claim-status " + (statusCode === "approved" ? "active" : statusCode === "pending" ? "pending_review" : "rejected");
+          status.textContent = t("store_claim_status_" + statusCode);
+          item.appendChild(status);
+          if (claim.claimCode) {
+            const code = document.createElement("div");
+            code.className = "claim-card-note";
+            code.textContent = t("store_claim_code_title") + "：" + claim.claimCode;
+            item.appendChild(code);
+          }
+          const note = document.createElement("div");
+          note.className = "claim-card-note";
+          note.textContent = t("store_claim_status_note_" + statusCode);
+          item.appendChild(note);
+          if (statusCode === "pending") {
+            const withdraw = document.createElement("button");
+            withdraw.type = "button";
+            withdraw.className = "secondary-button claim-withdraw";
+            withdraw.setAttribute("data-claim-withdraw", claim.claimId);
+            withdraw.textContent = t("store_claim_withdraw");
+            item.appendChild(withdraw);
+          }
+          list.appendChild(item);
+        });
+        document.getElementById("claimMineEmpty").hidden = myClaims.length > 0;
+      }
+
+      function renderClaimSection() {
+        const user = storeAuth ? storeAuth.currentUser : null;
+        const verified = !!(user && user.emailVerified);
+        const show = verified && (CLAIM_SUBMISSION_ID !== "" || myClaims.length > 0);
+        document.getElementById("claimSection").hidden = !show;
+        if (!verified) {
+          return;
+        }
+        if (claimsLoadedForUid !== user.uid) {
+          claimsLoadedForUid = user.uid;
+          loadMyClaims();
+        }
+        if (CLAIM_SUBMISSION_ID !== "" && claimPreviewLoadedForUid !== user.uid) {
+          claimPreviewLoadedForUid = user.uid;
+          loadClaimPreview();
+        }
+      }
+
+      function loadClaimPreview() {
+        return callStoreApi({ mode: "storeListingClaimPreview", submissionId: CLAIM_SUBMISSION_ID })
+          .then(function (response) {
+            const result = response.result || {};
+            if (response.status === 200 && result.success) {
+              claimPreview = result;
+              return renderClaimPreview();
+            }
+            document.getElementById("claimFormArea").hidden = true;
+            showClaimMessage(CLAIM_ERROR_KEYS[result.reason] || "store_account_err_generic", "error", result.reason || "http_" + response.status);
+          })
+          .catch(function () {
+            showClaimMessage("store_account_err_network", "error");
+          });
+      }
+
+      function loadMyClaims() {
+        return callStoreApi({ mode: "storeListingClaimMine" })
+          .then(function (response) {
+            if (response.status === 200 && response.result && Array.isArray(response.result.claims)) {
+              myClaims = response.result.claims;
+              renderMyClaims();
+              renderClaimSection();
+            }
+          })
+          .catch(function () {
+            // 一覧の取得失敗は申請フォームの利用を妨げない。
+          });
+      }
+
+      function handleClaimSubmit(event) {
+        event.preventDefault();
+        if (claimBusy || !claimPreview) {
+          return;
+        }
+        clearClaimMessage();
+        const target = document.querySelector('input[name="claimTarget"]:checked').value;
+        const payload = {
+          mode: "storeListingClaimCreate",
+          submissionId: CLAIM_SUBMISSION_ID,
+          targetType: target,
+          role: document.getElementById("claimRoleSelect").value,
+          publicReferenceUrl: document.getElementById("claimUrlInput").value.trim(),
+          note: document.getElementById("claimNoteInput").value.trim()
+        };
+        if (target === "existing_store") {
+          payload.targetStoreId = document.getElementById("claimTargetStoreSelect").value;
+          if (!payload.targetStoreId) {
+            return showClaimMessage("store_claim_err_target", "error");
+          }
+        }
+        claimBusy = true;
+        const button = document.getElementById("claimSubmitButton");
+        button.disabled = true;
+        callStoreApi(payload)
+          .then(function (response) {
+            const result = response.result || {};
+            if (response.status === 200 && result.success) {
+              showClaimCode(result.claimCode);
+              showClaimMessage("store_claim_sent", "success");
+              return loadMyClaims();
+            }
+            if (result.reason === "invalid_input" && result.field === "publicReferenceUrl") {
+              return showClaimMessage("store_claim_err_url", "error", result.field);
+            }
+            if (result.reason === "invalid_input" && result.field === "note") {
+              return showClaimMessage("store_claim_err_note", "error", result.field);
+            }
+            showClaimMessage(CLAIM_ERROR_KEYS[result.reason] || "store_account_err_generic", "error", result.reason || "http_" + response.status);
+          })
+          .catch(function () {
+            showClaimMessage("store_account_err_network", "error");
+          })
+          .finally(function () {
+            claimBusy = false;
+            button.disabled = false;
+          });
+      }
+
+      function handleClaimWithdraw(claimId) {
+        if (claimBusy || !window.confirm(t("store_claim_withdraw_confirm"))) {
+          return;
+        }
+        claimBusy = true;
+        callStoreApi({ mode: "storeListingClaimWithdraw", claimId: claimId })
+          .then(function (response) {
+            if (response.status === 200 && response.result && response.result.success) {
+              showClaimMessage("store_claim_withdrawn", "success");
+              if (claimPreview && claimPreview.pendingClaim && claimPreview.pendingClaim.claimId === claimId) {
+                claimPreview.pendingClaim = null;
+                document.getElementById("claimCodeBox").hidden = true;
+                document.getElementById("claimFormArea").hidden = false;
+              }
+              return loadMyClaims();
+            }
+            showClaimMessage("store_account_err_generic", "error", (response.result && response.result.reason) || "http_" + response.status);
+          })
+          .catch(function () {
+            showClaimMessage("store_account_err_network", "error");
+          })
+          .finally(function () {
+            claimBusy = false;
+          });
       }
 
       function readStoreForm() {
@@ -1416,6 +1751,16 @@
         document.getElementById("resendButton").addEventListener("click", handleResend);
         document.getElementById("refreshButton").addEventListener("click", handleRefresh);
         document.getElementById("logoutButton").addEventListener("click", handleLogout);
+        document.getElementById("claimForm").addEventListener("submit", handleClaimSubmit);
+        document.querySelectorAll('input[name="claimTarget"]').forEach(function (radio) {
+          radio.addEventListener("change", updateClaimTargetSelect);
+        });
+        document.getElementById("claimMineList").addEventListener("click", function (event) {
+          const button = event.target.closest("[data-claim-withdraw]");
+          if (button) {
+            handleClaimWithdraw(button.getAttribute("data-claim-withdraw"));
+          }
+        });
         document.getElementById("openStoreFormButton").addEventListener("click", openStoreForm);
         document.getElementById("storeFormCancelButton").addEventListener("click", function () {
           clearStoreMessage();

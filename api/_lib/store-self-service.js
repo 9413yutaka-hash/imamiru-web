@@ -336,6 +336,112 @@ export async function geocodeStoreAddressInCountry(
   };
 }
 
+// オーナー化 MVP-1｜座標 → 国・第1行政区分・市区町村・regionKey(逆ジオコーディング)。
+// 運営無料掲載を「新しい店舗」として引き継ぐ時に、運営が置いた座標から
+// 世界共通の構造化所在地を作るために使う(座標そのものは変えない)。
+// 失敗時は例外を投げず{ ok:false, reason }を返す。
+export async function reverseGeocodeStoreLocation(latitude, longitude, deps) {
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+
+  if (!apiKey) {
+    return { ok: false, reason: "geocoding_unavailable" };
+  }
+
+  const lat = readCoordinate(latitude, -90, 90);
+  const lng = readCoordinate(longitude, -180, 180);
+
+  if (lat === null || lng === null) {
+    return { ok: false, reason: "location_missing" };
+  }
+
+  const request = async function(language) {
+    const requestUrl = new URL("https://maps.googleapis.com/maps/api/geocode/json");
+    requestUrl.searchParams.set("latlng", lat + "," + lng);
+    requestUrl.searchParams.set("language", language);
+    requestUrl.searchParams.set("key", apiKey);
+
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(function() {
+      abortController.abort();
+    }, STORE_GEOCODING_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(requestUrl, { signal: abortController.signal });
+      return await response.json();
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  };
+
+  let responseData;
+
+  try {
+    // まず英語で国を判定し、日本なら運営登録店舗と同じ日本語の地名で取り直す。
+    responseData = await request("en");
+    const firstCountry =
+      responseData && Array.isArray(responseData.results) && responseData.results[0]
+        ? deps.findAddressComponentByType(responseData.results[0].address_components, "country")
+        : null;
+
+    if (firstCountry && firstCountry.short_name === "JP") {
+      responseData = await request("ja");
+    }
+  } catch (error) {
+    return { ok: false, reason: "geocoding_unavailable" };
+  }
+
+  if (
+    !responseData ||
+    responseData.status !== "OK" ||
+    !Array.isArray(responseData.results) ||
+    responseData.results.length === 0
+  ) {
+    return { ok: false, reason: responseData && responseData.status === "ZERO_RESULTS" ? "address_not_found" : "geocoding_unavailable" };
+  }
+
+  const components = responseData.results[0].address_components;
+  const country = deps.findAddressComponentByType(components, "country");
+  const countryCode =
+    country && typeof country.short_name === "string" ? country.short_name.toUpperCase() : "";
+
+  if (!/^[A-Z]{2}$/.test(countryCode)) {
+    return { ok: false, reason: "address_not_found" };
+  }
+
+  const longName = function(component) {
+    return component && typeof component.long_name === "string" ? component.long_name : "";
+  };
+  const adminArea1 = deps.findAddressComponentByType(components, "administrative_area_level_1");
+  const locality = deps.findAddressComponentByType(components, "locality");
+  const postalTown = deps.findAddressComponentByType(components, "postal_town");
+  const adminArea2 = deps.findAddressComponentByType(components, "administrative_area_level_2");
+  const sublocality1 = deps.findAddressComponentByType(components, "sublocality_level_1");
+
+  let city = longName(locality) || longName(postalTown);
+
+  if (countryCode === "JP" && city.endsWith("市") && longName(sublocality1).endsWith("区")) {
+    city = city + longName(sublocality1);
+  }
+
+  if (city === "") {
+    city = longName(adminArea2) || longName(sublocality1);
+  }
+
+  return {
+    ok: true,
+    latitude: lat,
+    longitude: lng,
+    countryCode: countryCode,
+    prefecture: longName(adminArea1),
+    city: city,
+    regionKey: buildRegionKeyForCountry(countryCode, adminArea1),
+    formattedAddress:
+      typeof responseData.results[0].formatted_address === "string"
+        ? responseData.results[0].formatted_address
+        : ""
+  };
+}
+
 function sendError(response, status, reason, extra) {
   return response.status(status).json(
     Object.assign({ success: false, reason: reason }, extra || {})

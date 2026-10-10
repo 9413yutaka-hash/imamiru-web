@@ -72,6 +72,18 @@ import {
   isStorePhotoPublicId
 } from "./_lib/store-profile.js";
 
+// 運営無料掲載 → 店舗オーナー化 MVP-1。実処理はapi/_lib/store-listing-claims.js。
+import {
+  handleStoreListingClaimPreview,
+  handleStoreListingClaimCreate,
+  handleStoreListingClaimMine,
+  handleStoreListingClaimWithdraw,
+  handleAdminCountPendingStoreListingClaims,
+  handleAdminStoreListingClaimList,
+  handleAdminStoreListingClaimReview,
+  handleAdminStoreListingLinkRevoke
+} from "./_lib/store-listing-claims.js";
+
 
 function getFirebaseAdminApp() {
   if (getApps().length > 0) {
@@ -29486,7 +29498,9 @@ function buildStoreSelfServiceDeps() {
     callOpenAiModeration: callOpenAiModeration,
     classifyModerationError: classifyModerationError,
     // Phase 2C｜店舗写真の実体削除(店舗写真フォルダーの画像だけ)。
-    destroyStorePhotoImages: destroyStorePhotoImages
+    destroyStorePhotoImages: destroyStorePhotoImages,
+    // オーナー化 MVP-1｜申請コードの生成(暗号学的乱数)。
+    randomInt: randomInt
   };
 }
 
@@ -29761,6 +29775,34 @@ export default async function handler(
     requestBody.mode === "storeProfileUpdate"
   ) {
     return handleStoreProfileUpdate(
+      request,
+      response,
+      buildStoreSelfServiceDeps()
+    );
+  }
+
+  // 運営無料掲載 → 店舗オーナー化 MVP-1｜店舗側(メール確認済み店舗アカウント)の申請と、
+  // 運営(Admin)の確認・承認・却下・紐付け解除。submissionsは書き換えない。
+  const storeListingClaimHandlers =
+    {
+      storeListingClaimPreview: handleStoreListingClaimPreview,
+      storeListingClaimCreate: handleStoreListingClaimCreate,
+      storeListingClaimMine: handleStoreListingClaimMine,
+      storeListingClaimWithdraw: handleStoreListingClaimWithdraw,
+      adminCountPendingStoreListingClaims: handleAdminCountPendingStoreListingClaims,
+      adminStoreListingClaimList: handleAdminStoreListingClaimList,
+      adminStoreListingClaimReview: handleAdminStoreListingClaimReview,
+      adminStoreListingLinkRevoke: handleAdminStoreListingLinkRevoke
+    };
+
+  if (
+    typeof requestBody.mode === "string" &&
+    Object.prototype.hasOwnProperty.call(
+      storeListingClaimHandlers,
+      requestBody.mode
+    )
+  ) {
+    return storeListingClaimHandlers[requestBody.mode](
       request,
       response,
       buildStoreSelfServiceDeps()

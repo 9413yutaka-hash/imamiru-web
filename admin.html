@@ -1241,6 +1241,22 @@
             <span class="admin-menu-link-note">新しい申込みの確認・対応状況の管理</span>
           </a>
 
+          <!-- 運営無料掲載 → 店舗オーナー化 MVP-1｜店舗からのオーナー申請の確認・承認・却下・紐付け解除。
+          未対応件数はログイン後にloadStoreListingClaimPendingCount()が表示する。 -->
+          <a
+            class="admin-menu-link"
+            href="admin-store-claims.html"
+          >
+            <span class="admin-menu-link-title">
+              オーナー申請（無料掲載の引き継ぎ）
+              <span
+                id="storeListingClaimPendingBadge"
+                class="admin-count-badge"
+              >未対応 -件</span>
+            </span>
+            <span class="admin-menu-link-note">店舗の本人確認（公式連絡先で確認）と承認・却下・紐付け解除</span>
+          </a>
+
           <!-- 今だけ投稿 STEP 3.5｜安全重大語等で自動公開しなかった今だけ投稿の審査。 -->
           <a
             class="admin-menu-link"
@@ -3355,6 +3371,60 @@
       }
     }
 
+    // 運営無料掲載 → 店舗オーナー化 MVP-1｜管理メニューの「オーナー申請 未対応 ○件」
+    // (mode:"adminCountPendingStoreListingClaims"、代表(Admin)専用)。
+    // 取得に失敗しても他の管理機能には影響させない。
+    async function loadStoreListingClaimPendingCount() {
+      const pendingBadge =
+        document.getElementById("storeListingClaimPendingBadge");
+      try {
+        const currentUser =
+          firebase.auth().currentUser;
+        if (!currentUser || !pendingBadge) {
+          return;
+        }
+        const idToken =
+          await currentUser.getIdToken();
+        const response =
+          await fetch(
+            "/api/moderate-submission",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + idToken
+              },
+              body: JSON.stringify({
+                mode: "adminCountPendingStoreListingClaims"
+              })
+            }
+          );
+        const responseData =
+          await response.json();
+        if (
+          !response.ok ||
+          !responseData ||
+          responseData.success !== true ||
+          typeof responseData.pendingCount !== "number"
+        ) {
+          throw new Error("未対応件数を取得できませんでした。");
+        }
+        pendingBadge.textContent =
+          "未対応 " + responseData.pendingCount + "件";
+        pendingBadge.classList.toggle(
+          "has-pending",
+          responseData.pendingCount > 0
+        );
+      } catch (error) {
+        console.error(
+          "オーナー申請の未対応件数を取得できませんでした",
+          error
+        );
+        pendingBadge.textContent =
+          "未対応 件数取得エラー";
+      }
+    }
+
     // 店舗・施設申込み Phase1｜管理メニューの「未対応 ○件」と、未対応がある
     // ときだけ出す上部のお知らせを更新する(mode:"adminCountPendingShopApplications"、
     // 代表(Admin)専用)。取得に失敗しても他の管理機能には影響させない。
@@ -3895,6 +3965,7 @@
               " でログインしています。";
 
             loadShopApplicationPendingCount();
+            loadStoreListingClaimPendingCount();
 
             await loadSubmissions();
 

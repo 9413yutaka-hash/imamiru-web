@@ -2911,6 +2911,196 @@ const MACHINAU_TRANSLATIONS = {
   store_profile_photos_err_content: {
     ja: "掲載できない可能性がある写真が含まれていたため、保存しませんでした。新しく追加した写真を見直してから、もう一度保存してください。",
     en: "Some photos may not be suitable for publishing, so nothing was saved. Please review the newly added photos and save again."
+  },
+
+  store_claim_heading: {
+    ja: "オーナー申請（マチナウに掲載中のお店の引き継ぎ）",
+    en: "Owner request (take over a shop already listed on Machinau)"
+  },
+
+  store_claim_linked_notice: {
+    ja: "このお店は、すでに別の店舗アカウントに引き継がれています。申請はできますが、マチナウ運営が慎重に確認します。",
+    en: "This shop has already been taken over by another business account. You can still send a request, and Machinau will review it carefully."
+  },
+
+  store_claim_process_note: {
+    ja: "申請後、マチナウ運営が、お店の公式サイト・公式SNS・地図サービスなどに公開されている連絡先へ連絡して確認します。その際に下の「申請コード」をお伝えしますので、お店として申請したことをお答えください。",
+    en: "After you send the request, Machinau will contact the shop through contact details published on its official website, official social media or map listings. We will mention your request code, so please confirm that the shop sent the request."
+  },
+
+  store_claim_target_label: {
+    ja: "どのように引き継ぎますか",
+    en: "How do you want to take it over?"
+  },
+
+  store_claim_target_new: {
+    ja: "新しい店舗として引き継ぐ",
+    en: "As a new shop"
+  },
+
+  store_claim_target_existing: {
+    ja: "登録済みの自分の店舗につなぐ",
+    en: "Connect it to a shop I already registered"
+  },
+
+  store_claim_role_label: {
+    ja: "お店でのお立場",
+    en: "Your role at the shop"
+  },
+
+  store_claim_role_owner: {
+    ja: "オーナー",
+    en: "Owner"
+  },
+
+  store_claim_role_manager: {
+    ja: "店長・責任者",
+    en: "Manager"
+  },
+
+  store_claim_url_label: {
+    ja: "お店の公式サイト・公式SNS（任意）",
+    en: "Official website or social media (optional)"
+  },
+
+  store_claim_url_hint: {
+    ja: "運営が公式の連絡先を探す手がかりにします。本人確認は、運営が自分で見つけた公式の連絡先で行います。",
+    en: "This helps us find the official contact details. We verify using official contact details we find ourselves."
+  },
+
+  store_claim_note_label: {
+    ja: "ひとこと（任意・200文字まで）",
+    en: "Note (optional, up to 200 characters)"
+  },
+
+  store_claim_note_hint: {
+    ja: "電話番号やメールアドレスなどの連絡先は書かないでください。",
+    en: "Please do not include phone numbers, email addresses or other contact details."
+  },
+
+  store_claim_submit: {
+    ja: "オーナー申請を送る",
+    en: "Send owner request"
+  },
+
+  store_claim_code_title: {
+    ja: "申請コード",
+    en: "Request code"
+  },
+
+  store_claim_code_hint: {
+    ja: "マチナウ運営からお店の公式連絡先へ確認の連絡が届いた時に、このコードの申請であることを確かめてください。このコードを他の人に教えないでください。",
+    en: "When Machinau contacts the shop through its official contact details, please check that it refers to this code. Do not share this code with others."
+  },
+
+  store_claim_mine_heading: {
+    ja: "あなたのオーナー申請",
+    en: "Your owner requests"
+  },
+
+  store_claim_mine_empty: {
+    ja: "オーナー申請はまだありません。",
+    en: "No owner requests yet."
+  },
+
+  store_claim_status_pending: {
+    ja: "運営確認中",
+    en: "Under review"
+  },
+
+  store_claim_status_approved: {
+    ja: "引き継ぎ完了",
+    en: "Completed"
+  },
+
+  store_claim_status_rejected: {
+    ja: "承認されませんでした",
+    en: "Not approved"
+  },
+
+  store_claim_status_withdrawn: {
+    ja: "取り下げ済み",
+    en: "Withdrawn"
+  },
+
+  store_claim_status_note_pending: {
+    ja: "マチナウ運営が、お店の公式連絡先で確認しています。",
+    en: "Machinau is checking with the shop's official contact details."
+  },
+
+  store_claim_status_note_approved: {
+    ja: "このお店の正式な管理者になりました。お店の情報は「あなたの店舗・施設」から管理できます。旅行者への表示はまだ変わりません。",
+    en: "You are now the official manager of this shop. Manage it from \"Your shops & facilities\". What travelers see has not changed yet."
+  },
+
+  store_claim_status_note_rejected: {
+    ja: "お店の公式連絡先で確認できなかったため、承認されませんでした。ご不明な点はマチナウ運営へお問い合わせください。",
+    en: "We could not confirm this through the shop's official contact details. Please contact Machinau if you have questions."
+  },
+
+  store_claim_status_note_withdrawn: {
+    ja: "この申請は取り下げられました。",
+    en: "This request was withdrawn."
+  },
+
+  store_claim_withdraw: {
+    ja: "申請を取り下げる",
+    en: "Withdraw request"
+  },
+
+  store_claim_withdraw_confirm: {
+    ja: "この申請を取り下げますか？",
+    en: "Withdraw this request?"
+  },
+
+  store_claim_withdrawn: {
+    ja: "申請を取り下げました。",
+    en: "The request was withdrawn."
+  },
+
+  store_claim_sent: {
+    ja: "オーナー申請を送りました。マチナウ運営の確認をお待ちください。",
+    en: "Your owner request was sent. Please wait for Machinau to review it."
+  },
+
+  store_claim_pending_exists_info: {
+    ja: "このお店へのオーナー申請は、すでに運営確認中です。",
+    en: "Your owner request for this shop is already under review."
+  },
+
+  store_claim_err_listing_not_found: {
+    ja: "このお店の掲載は見つかりませんでした。掲載が終了している可能性があります。",
+    en: "This listing could not be found. It may no longer be listed."
+  },
+
+  store_claim_err_pending_exists: {
+    ja: "このお店へのオーナー申請は、すでに運営確認中です。",
+    en: "Your owner request for this shop is already under review."
+  },
+
+  store_claim_err_already_yours: {
+    ja: "このお店は、すでにあなたの店舗に引き継がれています。",
+    en: "This shop has already been taken over by your shop."
+  },
+
+  store_claim_err_target: {
+    ja: "つなぐ店舗を選んでください（オーナーとして登録済みで、利用中の店舗だけ選べます）。",
+    en: "Please choose a shop to connect (only active shops you own can be chosen)."
+  },
+
+  store_claim_err_too_many: {
+    ja: "確認中の申請が多いため、これ以上申請できません。結果をお待ちください。",
+    en: "You have too many requests under review. Please wait for the results."
+  },
+
+  store_claim_err_url: {
+    ja: "公式サイト・SNSのURLを確認してください（https:// から始まるURL）。",
+    en: "Please check the website or social media URL (starting with https://)."
+  },
+
+  store_claim_err_note: {
+    ja: "ひとことは1行・200文字以内で入力してください。",
+    en: "Please keep the note to one line and 200 characters."
   }
 };
 

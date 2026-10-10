@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <meta name="robots" content="noindex, nofollow">
+
+  <title>
+    オーナー申請｜マチナウ運営
+  </title>
+
+  <style>
+    :root {
+      --navy: #071a33;
+      --blue: #0788c9;
+      --sky: #dff7ff;
+      --green: #19a96b;
+      --red: #ef5a67;
+      --white: #ffffff;
+      --text: #15233a;
+      --subtext: #697386;
+      --border: #e2eaf1;
+      --background: #f4f8fb;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Yu Gothic", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+      background: var(--background);
+      color: var(--text);
+    }
+
+    header {
+      background: var(--navy);
+      color: var(--white);
+      padding: 18px 20px;
+    }
+
+    header .page-label {
+      font-size: 12px;
+      opacity: 0.8;
+    }
+
+    header h1 {
+      margin: 4px 0 0;
+      font-size: 20px;
+    }
+
+    header a {
+      display: inline-block;
+      margin-top: 10px;
+      color: var(--sky);
+      font-size: 13px;
+      text-decoration: none;
+    }
+
+    main {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 20px 16px 60px;
+    }
+
+    .panel {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 24px;
+    }
+
+    .panel h2 {
+      margin: 0 0 14px;
+      font-size: 16px;
+    }
+
+    .field {
+      margin-bottom: 16px;
+    }
+
+    .field label {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .field input[type="text"],
+    .field input[type="password"] {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    .primary-button {
+      background: linear-gradient(135deg, var(--blue), #04b7d7);
+      color: var(--white);
+      border: none;
+      border-radius: 12px;
+      padding: 11px 18px;
+      font-size: 14px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .primary-button:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+    .secondary-button {
+      background: var(--white);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 8px 14px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .danger-button {
+      background: var(--white);
+      color: var(--red);
+      border: 1px solid var(--red);
+      border-radius: 10px;
+      padding: 8px 14px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .message-box {
+      font-size: 13px;
+      margin-top: 10px;
+      min-height: 1em;
+    }
+
+    .message-box.error {
+      color: var(--red);
+    }
+
+    .message-box.success {
+      color: var(--green);
+    }
+
+    #adminArea {
+      display: none;
+    }
+
+    #adminArea.visible {
+      display: block;
+    }
+
+    .store-row {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      margin-bottom: 10px;
+    }
+
+    .store-row-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .store-name {
+      font-weight: 900;
+      font-size: 14px;
+    }
+
+    .status-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 999px;
+    }
+
+    .status-badge.enabled {
+      background: #e3f7ee;
+      color: var(--green);
+    }
+
+    .status-badge.disabled {
+      background: #f1f2f5;
+      color: var(--subtext);
+    }
+
+    .store-row-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .issued-url-box {
+      margin-top: 10px;
+      padding: 10px 12px;
+      background: var(--sky);
+      border-radius: 10px;
+      font-size: 12px;
+      word-break: break-all;
+    }
+
+    .issued-url-box strong {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--navy);
+      font-size: 12px;
+    }
+
+    .empty-state {
+      color: var(--subtext);
+      font-size: 13px;
+      text-align: center;
+      padding: 16px 0;
+    }
+  </style>
+  <style>
+    .claim-card { border: 1px solid var(--border, #e2eaf1); border-radius: 12px; padding: 14px; margin-bottom: 12px; background: #fff; }
+    .claim-card h3 { margin: 0 0 6px; font-size: 16px; }
+    .claim-meta { font-size: 13px; color: #555; line-height: 1.8; }
+    .claim-meta strong { color: #111; }
+    .claim-code { font-family: monospace; font-size: 18px; font-weight: 800; letter-spacing: 2px; }
+    .claim-warning { margin: 8px 0; padding: 8px 10px; border-radius: 8px; background: #fff4e5; color: #8a4b00; font-size: 13px; }
+    .claim-checklist { margin: 8px 0; padding: 10px 12px; border-radius: 8px; background: #eef6ff; font-size: 13px; line-height: 1.8; }
+    .claim-actions { display: grid; gap: 8px; margin-top: 10px; }
+    .claim-actions select, .claim-actions input { width: 100%; min-height: 40px; padding: 6px 10px; border: 1px solid #ccd; border-radius: 8px; font-size: 14px; }
+    .claim-actions .row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .claim-url { word-break: break-all; font-family: monospace; font-size: 12px; background: #f5f5f5; padding: 2px 6px; border-radius: 4px; }
+    .claim-thumb { width: 96px; height: 72px; object-fit: cover; border-radius: 8px; float: right; margin-left: 8px; }
+    .status-pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 800; background: #eee; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="page-label">
+      マチナウ運営
+    </div>
+
+    <h1>
+      オーナー申請（運営無料掲載の引き継ぎ）
+    </h1>
+
+    <a href="admin.html">
+      ← 管理トップへ戻る
+    </a>
+  </header>
+
+  <main>
+
+    <section id="loginPanel" class="panel">
+      <h2>
+        管理者ログイン
+      </h2>
+
+      <form id="loginForm" novalidate>
+        <div class="field">
+          <label for="adminEmail">
+            メールアドレス
+          </label>
+
+          <input
+            id="adminEmail"
+            type="text"
+            autocomplete="email"
+            required
+          >
+        </div>
+
+        <div class="field">
+          <label for="adminPassword">
+            パスワード
+          </label>
+
+          <input
+            id="adminPassword"
+            type="password"
+            autocomplete="current-password"
+            required
+          >
+        </div>
+
+        <button id="loginButton" class="primary-button" type="submit">
+          管理画面へログイン
+        </button>
+      </form>
+
+      <div id="loginMessage" class="message-box" role="status" aria-live="polite"></div>
+    </section>
+
+    <section id="adminArea">
+
+      <!-- 運営無料掲載 → 店舗オーナー化 MVP-1｜店舗からのオーナー申請を、運営が
+           申請者とは独立した店舗の公式連絡先で確認して、承認・却下する。
+           承認すると storeListingLinks/{submissionId} が作られ、店舗がその掲載の正式な owner になる。
+           旅行者向けの表示は変わらない(運営無料掲載はそのまま)。 -->
+      <div class="panel">
+        <h2>確認待ちのオーナー申請</h2>
+        <div class="claim-checklist">
+          <strong>本人確認の手順（必ずこの順で）</strong><br>
+          ① 申請者が書いた連絡先や URL を、本人確認の根拠にしない。<br>
+          ② お店の公式サイト・公式SNS・地図サービスの店舗情報など、申請者とは別の公開情報から、運営が自分で連絡先を見つける。<br>
+          ③ その連絡先へ運営から連絡し、「マチナウでオーナー申請（申請コード）がありましたが、お店として承認しますか」と確認する。<br>
+          ④ お店の公式連絡先の管理者から承認の回答を得た場合だけ「確認OK」にする。申請コードは照合用の番号で、それ自体は本人の証明ではない。
+        </div>
+        <div id="pendingMessage" class="message-box" role="status" aria-live="polite"></div>
+        <div id="pendingList"></div>
+      </div>
+
+      <div class="panel">
+        <h2>有効な紐付け</h2>
+        <p style="font-size: 13px; color: #555; margin: 0 0 8px;">誤って紐付けた場合は、理由を入力して解除できます。解除しても店舗アカウントと履歴は残ります。</p>
+        <div id="linkMessage" class="message-box" role="status" aria-live="polite"></div>
+        <div id="linkList"></div>
+      </div>
+
+      <div class="panel">
+        <h2>最近の判断（承認・却下・取り下げ）</h2>
+        <div id="decidedList"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore-compat.js"></script>
+  <script src="firebase.js"></script>
+
+  <script>
+    const ADMIN_EMAIL =
+      "9413yutaka@gmail.com";
+
+    const VERIFICATION_CHANNEL_LABELS = {
+      official_website: "公式サイトに載っている連絡先",
+      official_sns: "公式SNS",
+      map_listing: "地図サービス等の店舗情報に載っている連絡先",
+      other_public_source: "その他の公開情報（メモに記入）"
+    };
+    const STATUS_LABELS = { pending: "確認待ち", approved: "承認", rejected: "却下", withdrawn: "取り下げ" };
+    const ROLE_LABELS = { owner: "オーナー", manager: "店長・責任者" };
+
+    function escapeHtmlText(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function formatDate(millis) {
+      if (!millis) return "";
+      return new Date(millis).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
+    }
+
+    async function callClaimsApi(mode, payload) {
+      const currentUser = firebase.auth().currentUser;
+
+      if (!currentUser) {
+        throw new Error("ログイン状態を確認できませんでした。再度ログインしてください。");
+      }
+
+      const idToken = await currentUser.getIdToken();
+      const response = await fetch("/api/moderate-submission", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + idToken },
+        body: JSON.stringify(Object.assign({ mode: mode }, payload || {}))
+      });
+      let responseData = null;
+
+      try {
+        responseData = await response.json();
+      } catch (jsonError) {
+        throw new Error("応答を読み取れませんでした。");
+      }
+
+      if (!response.ok || !responseData || responseData.success !== true) {
+        const error = new Error((responseData && (responseData.message || responseData.reason)) || "処理に失敗しました。");
+        error.reason = responseData && responseData.reason;
+        throw error;
+      }
+
+      return responseData;
+    }
+
+    const REASON_MESSAGES = {
+      listing_already_linked: "この掲載にはすでに有効な紐付けがあります。先に「有効な紐付け」で解除してから承認してください。",
+      listing_not_claimable: "この掲載は現在、引き継ぎの対象ではありません（掲載終了など）。",
+      target_store_not_allowed: "申請先の店舗が、申請者の利用できる店舗ではなくなっています。",
+      claim_not_pending: "この申請はすでに判断済みです。画面を更新してください。",
+      geocoding_unavailable: "所在地の確認が一時的にできません。時間をおいて再度お試しください。",
+      address_not_found: "掲載の座標から所在地を確認できませんでした。"
+    };
+
+    const loginPanel = document.getElementById("loginPanel");
+    const adminArea = document.getElementById("adminArea");
+    const loginForm = document.getElementById("loginForm");
+    const loginButton = document.getElementById("loginButton");
+    const loginMessage = document.getElementById("loginMessage");
+
+    function showMessage(element, text, type) {
+      element.textContent = text;
+      element.className = "message-box" + (type ? " " + type : "");
+    }
+
+    function renderClaimCard(claim, decided) {
+      const target = claim.targetType === "existing_store"
+        ? "登録済みの店舗「" + escapeHtmlText(claim.targetStoreName || claim.targetStoreId) + "」につなぐ"
+        : "新しい店舗として引き継ぐ";
+      const warnings = [];
+
+      if (!decided && claim.currentLink) {
+        warnings.push("この掲載は、すでに店舗「" + escapeHtmlText(claim.currentLink.storeName) + "」に紐付いています。承認するには先に解除が必要です（他の店舗に奪われないよう、慎重に確認してください）。");
+      }
+
+      if (!decided && claim.otherPendingClaimsForListing > 0) {
+        warnings.push("同じ掲載に、他にも確認待ちの申請が " + claim.otherPendingClaimsForListing + " 件あります。");
+      }
+
+      if (!decided && !claim.listingStillClaimable) {
+        warnings.push("この掲載は現在、引き継ぎの対象ではありません（掲載終了など）。");
+      }
+
+      const listing = claim.listing || {};
+      let html =
+        '<div class="claim-card" data-claim-id="' + escapeHtmlText(claim.claimId) + '">' +
+          (listing.imageUrl ? '<img class="claim-thumb" alt="" src="' + escapeHtmlText(listing.imageUrl) + '">' : "") +
+          "<h3>" + escapeHtmlText(listing.shopName) + "</h3>" +
+          '<div class="claim-meta">' +
+            "住所：" + escapeHtmlText(listing.address) + "<br>" +
+            "掲載ID：" + escapeHtmlText(claim.submissionId) + "<br>" +
+            "申請コード：<span class=\"claim-code\">" + escapeHtmlText(claim.claimCode) + "</span><br>" +
+            "申請日時：" + escapeHtmlText(formatDate(claim.createdAtMillis)) + "<br>" +
+            "申請内容：" + target + "<br>" +
+            "立場：" + escapeHtmlText(ROLE_LABELS[claim.role] || claim.role) + "<br>" +
+            "申請者が示した公開ページ（本人確認の根拠にはしない）：" + (claim.publicReferenceUrl ? '<span class="claim-url">' + escapeHtmlText(claim.publicReferenceUrl) + "</span>" : "なし") + "<br>" +
+            "ひとこと：" + (claim.note ? escapeHtmlText(claim.note) : "なし") +
+            (decided
+              ? "<br>状態：<span class=\"status-pill\">" + escapeHtmlText(STATUS_LABELS[claim.status] || claim.status) + "</span>" +
+                (claim.decidedAtMillis ? "（" + escapeHtmlText(formatDate(claim.decidedAtMillis)) + "）" : "") +
+                (claim.verificationChannel ? "<br>確認に使った連絡先：" + escapeHtmlText(VERIFICATION_CHANNEL_LABELS[claim.verificationChannel] || claim.verificationChannel) : "") +
+                (claim.decisionReason ? "<br>理由：" + escapeHtmlText(claim.decisionReason) : "")
+              : "") +
+          "</div>" +
+          warnings.map(function(text) { return '<div class="claim-warning">' + text + "</div>"; }).join("");
+
+      if (!decided) {
+        html +=
+          '<div class="claim-actions">' +
+            '<label>確認に使った、申請者とは独立した公開連絡先（承認時は必須）' +
+              '<select class="claim-channel"><option value="">選んでください</option>' +
+                Object.keys(VERIFICATION_CHANNEL_LABELS).map(function(key) {
+                  return '<option value="' + key + '">' + VERIFICATION_CHANNEL_LABELS[key] + "</option>";
+                }).join("") +
+              "</select></label>" +
+            '<label>確認の記録（どの連絡先に、いつ連絡したか等。300文字まで）<input type="text" class="claim-verification-note" maxlength="300"></label>' +
+            '<label>判断の理由（却下時は必須。300文字まで）<input type="text" class="claim-reason" maxlength="300"></label>' +
+            '<div class="row">' +
+              '<button type="button" class="primary-button" data-action="approve">確認OK（承認して紐付ける）</button>' +
+              '<button type="button" class="danger-button" data-action="reject">却下する</button>' +
+            "</div>" +
+          "</div>";
+      }
+
+      return html + "</div>";
+    }
+
+    async function loadClaims() {
+      showMessage(document.getElementById("pendingMessage"), "読み込んでいます…", "");
+
+      try {
+        const data = await callClaimsApi("adminStoreListingClaimList", {});
+        document.getElementById("pendingList").innerHTML = data.pending.length
+          ? data.pending.map(function(claim) { return renderClaimCard(claim, false); }).join("")
+          : '<p class="empty-state">確認待ちのオーナー申請はありません。</p>';
+        document.getElementById("decidedList").innerHTML = data.decided.length
+          ? data.decided.map(function(claim) { return renderClaimCard(claim, true); }).join("")
+          : '<p class="empty-state">まだありません。</p>';
+        document.getElementById("linkList").innerHTML = data.links.length
+          ? data.links.map(function(link) {
+              return '<div class="claim-card" data-submission-id="' + escapeHtmlText(link.submissionId) + '">' +
+                "<h3>" + escapeHtmlText((link.listing || {}).shopName) + "</h3>" +
+                '<div class="claim-meta">掲載ID：' + escapeHtmlText(link.submissionId) +
+                  "<br>紐付け先の店舗：" + escapeHtmlText(link.storeName) + "（" + escapeHtmlText(link.storeId) + "）" +
+                  "<br>紐付け日時：" + escapeHtmlText(formatDate(link.linkedAtMillis)) + "</div>" +
+                '<div class="claim-actions"><label>解除の理由（必須）<input type="text" class="link-revoke-reason" maxlength="300"></label>' +
+                '<div class="row"><button type="button" class="danger-button" data-action="revoke">紐付けを解除する</button></div></div>' +
+              "</div>";
+            }).join("")
+          : '<p class="empty-state">有効な紐付けはありません。</p>';
+        showMessage(document.getElementById("pendingMessage"), "", "");
+      } catch (error) {
+        showMessage(document.getElementById("pendingMessage"), error.message || "読み込めませんでした。", "error");
+      }
+    }
+
+    document.getElementById("pendingList").addEventListener("click", async function(event) {
+      const button = event.target.closest("button[data-action]");
+      if (!button) return;
+      const card = button.closest(".claim-card");
+      const action = button.getAttribute("data-action");
+      const channel = card.querySelector(".claim-channel").value;
+      const verificationNote = card.querySelector(".claim-verification-note").value.trim();
+      const reason = card.querySelector(".claim-reason").value.trim();
+      const message = document.getElementById("pendingMessage");
+
+      if (action === "approve" && !channel) {
+        return showMessage(message, "承認するには、確認に使った公開連絡先の種類を選んでください。", "error");
+      }
+
+      if (action === "reject" && !reason) {
+        return showMessage(message, "却下するには理由を入力してください。", "error");
+      }
+
+      if (!window.confirm(action === "approve"
+        ? "お店の公式連絡先の管理者から、この申請の承認の回答を得ましたか？\n承認すると、この掲載がこの店舗に紐付きます。"
+        : "この申請を却下しますか？")) {
+        return;
+      }
+
+      button.disabled = true;
+
+      try {
+        await callClaimsApi("adminStoreListingClaimReview", {
+          claimId: card.getAttribute("data-claim-id"),
+          decision: action,
+          verificationChannel: channel,
+          verificationNote: verificationNote,
+          reason: reason
+        });
+        showMessage(message, action === "approve" ? "承認して紐付けました。" : "却下しました。", "success");
+        await loadClaims();
+      } catch (error) {
+        showMessage(message, REASON_MESSAGES[error.reason] || error.message || "処理に失敗しました。", "error");
+        button.disabled = false;
+      }
+    });
+
+    document.getElementById("linkList").addEventListener("click", async function(event) {
+      const button = event.target.closest("button[data-action=revoke]");
+      if (!button) return;
+      const card = button.closest(".claim-card");
+      const reason = card.querySelector(".link-revoke-reason").value.trim();
+      const message = document.getElementById("linkMessage");
+
+      if (!reason) {
+        return showMessage(message, "解除の理由を入力してください。", "error");
+      }
+
+      if (!window.confirm("この紐付けを解除しますか？（店舗アカウントと履歴は残ります）")) {
+        return;
+      }
+
+      button.disabled = true;
+
+      try {
+        await callClaimsApi("adminStoreListingLinkRevoke", { submissionId: card.getAttribute("data-submission-id"), reason: reason });
+        showMessage(message, "紐付けを解除しました。", "success");
+        await loadClaims();
+      } catch (error) {
+        showMessage(message, error.message || "解除できませんでした。", "error");
+        button.disabled = false;
+      }
+    });
+
+    loginForm.addEventListener("submit", async function(event) {
+      event.preventDefault();
+      showMessage(loginMessage, "", "");
+      const email = document.getElementById("adminEmail").value.trim().toLowerCase();
+      const password = document.getElementById("adminPassword").value;
+
+      if (email !== ADMIN_EMAIL.toLowerCase()) {
+        showMessage(loginMessage, "このメールアドレスには管理者権限がありません。", "error");
+        return;
+      }
+
+      loginButton.disabled = true;
+      loginButton.textContent = "ログインしています…";
+
+      try {
+        await firebase.auth().signInWithEmailAndPassword(email, password);
+      } catch (error) {
+        showMessage(loginMessage, "ログインできませんでした。メールアドレスとパスワードを確認してください。", "error");
+      } finally {
+        loginButton.disabled = false;
+        loginButton.textContent = "管理画面へログイン";
+      }
+    });
+
+    firebase.auth().onAuthStateChanged(async function(user) {
+      showMessage(loginMessage, "", "");
+
+      if (user && user.email && user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+        loginPanel.style.display = "none";
+        adminArea.classList.add("visible");
+        await loadClaims();
+        return;
+      }
+
+      if (user) {
+        try {
+          await firebase.auth().signOut();
+        } catch (error) {
+          // 管理者以外のログイン状態は残さない。
+        }
+        showMessage(loginMessage, "このアカウントには管理者権限がありません。", "error");
+      }
+
+      loginPanel.style.display = "block";
+      adminArea.classList.remove("visible");
+    });
+  </script>
+
+</body>
+</html>
