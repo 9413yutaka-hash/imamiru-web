@@ -86,7 +86,8 @@ const STORE_PROFILE_UPDATE_COOLDOWN_MS = 3 * 1000;
 export const STORE_PHOTOS_MAX = 10;
 export const STORE_PHOTO_FOLDER_ROOT = "machinau_store_profiles";
 const STORE_PHOTO_CLOUDINARY_PREFIX = "https://res.cloudinary.com/cdhyctnp/image/upload/";
-const STORE_PHOTO_MODERATION_BATCH_SIZE = 5;
+// 写真のModerationは1枚1リクエスト(複数画像は too_many_images になる)。同時実行数だけ制限する。
+const STORE_PHOTO_MODERATION_CONCURRENCY = 3;
 
 export function buildStorePhotoFolder(storeId) {
   return STORE_PHOTO_FOLDER_ROOT + "/" + storeId;
@@ -161,31 +162,53 @@ export async function checkStoreProfileEditor(database, storeId, uid) {
   return { ok: true };
 }
 
-// 新しく追加された写真だけをModerationにかける(最大5枚ずつ、並列)。
+// 新しく追加された写真だけをModerationにかける。OpenAI Moderationは1回のリクエストに
+// 画像を複数入れると 400 invalid_request_error / too_many_images を返すため
+// (2026-10-10 Preview実測)、写真は必ず1枚ずつ別のリクエストで確認する。
+// 同時に送るのは最大3件。1枚でもflaggedなら true、1件でもエラーなら例外(fail closed)。
 async function moderateNewPhotos(photos, deps) {
-  const batches = [];
+  let nextIndex = 0;
+  let flagged = false;
+  let firstError = null;
 
-  for (let index = 0; index < photos.length; index += STORE_PHOTO_MODERATION_BATCH_SIZE) {
-    batches.push(photos.slice(index, index + STORE_PHOTO_MODERATION_BATCH_SIZE));
-  }
+  async function worker() {
+    while (nextIndex < photos.length && !firstError) {
+      const photo = photos[nextIndex];
+      nextIndex += 1;
 
-  const resultsPerBatch = await Promise.all(batches.map(function(batch) {
-    return deps.callOpenAiModeration(
-      deps.buildModerationInput({
-        imageUrls: batch.map(function(photo) { return photo.url; })
-      })
-    );
-  }));
+      try {
+        const results = await deps.callOpenAiModeration(
+          deps.buildModerationInput({ imageUrls: [photo.url] })
+        );
 
-  for (const results of resultsPerBatch) {
-    if (!Array.isArray(results) || results.length === 0) {
-      throw new Error("moderation response was empty");
+        if (!Array.isArray(results) || results.length === 0) {
+          throw new Error("moderation response was empty");
+        }
+
+        if (!results.every(function(result) { return result && result.flagged === false; })) {
+          flagged = true;
+        }
+      } catch (error) {
+        if (!firstError) {
+          firstError = error;
+        }
+      }
     }
   }
 
-  return resultsPerBatch.some(function(results) {
-    return !results.every(function(result) { return result && result.flagged === false; });
-  });
+  const workers = [];
+
+  for (let index = 0; index < Math.min(STORE_PHOTO_MODERATION_CONCURRENCY, photos.length); index += 1) {
+    workers.push(worker());
+  }
+
+  await Promise.all(workers);
+
+  if (firstError) {
+    throw firstError;
+  }
+
+  return flagged;
 }
 
 // 原因調査用(Phase 2C Preview)｜Moderation失敗のログ用の要約。
