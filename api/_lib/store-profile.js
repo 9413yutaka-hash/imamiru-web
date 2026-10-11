@@ -1389,7 +1389,9 @@ function readPublicBusinessHours(value) {
 // revision・登録経緯(createdBy*/source*)・
 // 店舗が入力した住所文字列(address)・geohash等の管理用項目。
 // 電話・予約・SNS・対応言語は、詳細表示を広げる時に改めて追加を判断する。
-function buildPublicStoreProfile(storeId, account, profile) {
+// linkedListingIds(有効な紐付けの無料掲載ID)は STEP 4C-2 で追加(お気に入りの別名用)。
+// 紐付けのclaimId・運営者・申請者などの情報は返さない。
+function buildPublicStoreProfile(storeId, account, profile, linkedListingIds) {
   return {
     id: PUBLIC_STORE_ID_PREFIX + storeId,
     listingType: PUBLIC_STORE_LISTING_TYPE,
@@ -1421,7 +1423,11 @@ function buildPublicStoreProfile(storeId, account, profile) {
     websiteUrl: readPublicText(profile.websiteUrl),
     paymentMethodCodes: readPublicCodes(profile.paymentMethodCodes, STORE_PAYMENT_METHOD_CODES),
     featureCodes: readPublicCodes(profile.featureCodes, STORE_FEATURE_CODES),
-    publishedAt: readPublicIsoDate(profile.publishedAt)
+    publishedAt: readPublicIsoDate(profile.publishedAt),
+    // Phase 2D STEP 4C-2｜この正式店舗に有効(active)に紐付いている運営無料掲載のsubmission ID。
+    // suppressedListingIdsと同じ判定から作る(この店舗を返す時だけ、その店舗の分だけ)。
+    // 無料掲載時代のお気に入りを正式店舗へ引き継ぐための別名(alias)にだけ使う。
+    linkedListingIds: (linkedListingIds || []).slice().sort()
   };
 }
 
@@ -1483,7 +1489,7 @@ export async function handlePublicStoreProfilesList(request, response, deps) {
           return;
         }
 
-        stores.push(buildPublicStoreProfile(storeId, account, profile));
+        stores.push(buildPublicStoreProfile(storeId, account, profile, linkedListingIds));
         linkedListingIds.forEach(function(listingId) {
           suppressedListingIds.add(listingId);
         });

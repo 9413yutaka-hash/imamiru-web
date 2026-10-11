@@ -3152,12 +3152,14 @@ function renderStreetDiscoverySection() {
 // Phase 2D STEP 4A｜店主が管理する正式店舗を「今、近くで楽しめる場所」の一覧カードへ統合
 // ==========================================================================
 // ・正式店舗は GET ?mode=publicStoreProfiles から取り、shops(無料掲載等)には混ぜない。
-//   一覧カードの対象を作る renderShops() の中だけで合流させる(地図・詳細・お気に入り・
-//   ヒーロー・AI系・GA4 は対象外。getVisibleShops() も変えない)。
+//   一覧カードの対象を作る renderShops() の中で合流させる(getVisibleShops() は変えない。
+//   詳細は STEP 4B、地図は STEP 4C-1、お気に入りは STEP 4C-2 で対応。ヒーロー・AI系は対象外)。
 // ・suppressedListingIds(オーナー化で正式店舗に引き継がれた無料掲載)は、正式店舗APIの
 //   取得に成功した時だけ一覧から外す。APIが失敗・異常・時間切れなら、正式店舗0件・抑制0件
 //   (=今までの無料掲載の表示そのまま)。
-// ・「お気に入り」表示中は、正式店舗を足さず、無料掲載も抑制しない(既存体験を変えない)。
+// ・STEP 4C-2｜「お気に入り」表示中も正式店舗を合流させる。お気に入り判定は sp_{storeId} か
+//   linkedListingIds(引き継がれた旧無料掲載のID)。無料掲載を外すのは、表示できる正式店舗へ
+//   引き継がれていることが確認できる時だけ(getStoreProfileSuppressedIdsForCurrentView)。
 
 const STORE_PROFILE_LIST_LISTING_TYPE = "store_profile";
 const STORE_PROFILE_LIST_FETCH_TIMEOUT_MS = 8000;
@@ -3237,6 +3239,8 @@ async function loadStoreProfilesForShopList() {
 
   if (hasAppliedSubmissionsForStoreProfiles) {
     renderShops();
+    // Phase 2D STEP 4C-2｜マイページのお気に入り一覧も、正式店舗の到着に合わせて描き直す。
+    renderFavoriteList();
   }
 }
 
@@ -3353,6 +3357,12 @@ function buildStoreProfileListShop(store) {
         })
       : [],
     takeout: featureCodes.includes("takeout"),
+    // Phase 2D STEP 4C-2｜有効に紐付いた無料掲載のsubmission ID(お気に入りの別名)。
+    linkedListingIds: Array.isArray(store.linkedListingIds)
+      ? store.linkedListingIds.filter(function(id) {
+          return typeof id === "string" && id !== "";
+        })
+      : [],
     // Phase 2D STEP 4B｜詳細用。Webサイトはhttp/httpsだけ(getSafeWebsiteUrl)、設備は許可codeだけ。
     websiteUrl: getSafeWebsiteUrl(store.websiteUrl),
     featureCodes: STORE_PROFILE_FEATURE_CODES.filter(function(code) {
@@ -3376,11 +3386,53 @@ function isStoreProfileListShopInSelectedRegion(shop, region) {
 }
 
 // 今の表示条件(カテゴリー・地域検索/現在地15km)に合う正式店舗(距離つき)。
-function getStoreProfileListShopsForCurrentView() {
-  if (selectedCategory === "お気に入り") {
-    return [];
+// Phase 2D STEP 4C-2｜正式店舗のお気に入り判定。sp_{storeId} か、その店舗に有効に紐付いた
+// 旧無料掲載のsubmission ID(linkedListingIds)のどれかが保存されていればお気に入り。
+// (無料掲載時代にハートを付けた人は、正式店舗になってもハートONのまま見える。)
+function isStoreProfileShopFavorite(shop) {
+  return (
+    favoriteShopIds.has(shop.firestoreId) ||
+    (shop.linkedListingIds || []).some(function(id) {
+      return favoriteShopIds.has(id);
+    })
+  );
+}
+
+// 今の表示で外す無料掲載のID。通常は suppressedListingIds のとおり。「お気に入り」表示中だけは、
+// 返ってきた正式店舗のうち表示できるもの(buildStoreProfileListShopがnullでない)の
+// linkedListingIds(別名)で引き継がれていることが確認できるIDに限る
+// (引き継ぎ先が確認できない時に、お気に入りの無料掲載を消さないため)。
+function getStoreProfileSuppressedIdsForCurrentView() {
+  if (selectedCategory !== "お気に入り") {
+    return storeProfileSuppressedListingIds;
   }
 
+  const aliased = new Set();
+
+  storeProfileListStores.map(buildStoreProfileListShop).forEach(function(shop) {
+    (shop ? shop.linkedListingIds : []).forEach(function(id) {
+      if (storeProfileSuppressedListingIds.has(id)) {
+        aliased.add(id);
+      }
+    });
+  });
+
+  return aliased;
+}
+
+// 正式店舗のカテゴリー判定(一覧・地図・お気に入り一覧で共通)。「お気に入り」は上の判定。
+function storeProfileShopMatchesSelectedCategory(shop) {
+  if (selectedCategory === "お気に入り") {
+    return isStoreProfileShopFavorite(shop);
+  }
+
+  return (
+    selectedCategory === "すべて" ||
+    shopMatchesSelectedCategory(shop, selectedCategory)
+  );
+}
+
+function getStoreProfileListShopsForCurrentView() {
   return storeProfileListStores
     .map(buildStoreProfileListShop)
     .filter(function(shop) {
@@ -3399,8 +3451,7 @@ function getStoreProfileListShopsForCurrentView() {
     })
     .filter(function(shop) {
       return (
-        (selectedCategory === "すべて" ||
-          shopMatchesSelectedCategory(shop, selectedCategory)) &&
+        storeProfileShopMatchesSelectedCategory(shop) &&
         (selectedShopRegion
           ? isStoreProfileListShopInSelectedRegion(shop, selectedShopRegion)
           : isShopWithinNearbyCardRadius(shop))
@@ -3408,19 +3459,18 @@ function getStoreProfileListShopsForCurrentView() {
     });
 }
 
-// 一覧カードの対象(無料掲載等)に正式店舗を合流させる。正式店舗APIの結果が無い時・
-// 「お気に入り」表示中は、受け取った一覧をそのまま返す(今までと完全に同じ)。
+// 一覧カードの対象(無料掲載等)に正式店舗を合流させる。正式店舗APIの結果が無い時は、
+// 受け取った一覧をそのまま返す(今までと完全に同じ)。「お気に入り」表示中も STEP 4C-2 から
+// 同じ考え方で合流させる(お気に入りの正式店舗を出し、引き継がれた無料掲載は重ねて出さない)。
 function mergeStoreProfilesIntoShopCardList(cardShops) {
-  if (selectedCategory === "お気に入り") {
-    return cardShops;
-  }
-
   const storeProfileShops =
     getStoreProfileListShopsForCurrentView();
+  const suppressedIds =
+    getStoreProfileSuppressedIdsForCurrentView();
 
   if (
     storeProfileShops.length === 0 &&
-    storeProfileSuppressedListingIds.size === 0
+    suppressedIds.size === 0
   ) {
     return cardShops;
   }
@@ -3428,7 +3478,7 @@ function mergeStoreProfilesIntoShopCardList(cardShops) {
   const merged =
     cardShops
       .filter(function(shop) {
-        return !storeProfileSuppressedListingIds.has(shop.firestoreId);
+        return !suppressedIds.has(shop.firestoreId);
       })
       .concat(storeProfileShops);
 
@@ -3464,41 +3514,39 @@ function mergeStoreProfilesIntoShopCardList(cardShops) {
 // 地図は既存どおり「カテゴリーで絞った店舗のうち座標があるもの」で、15km・地域検索の
 // 制限は無料掲載にも正式店舗にもかけない(正式店舗だけ別ルールにしない)。
 // 正式店舗APIの取得に成功した時だけ suppressedListingIds の無料掲載ピンを外し、
-// 返ってきた正式店舗のピンを出す。失敗・異常・時間切れの時、「お気に入り」表示中(4C-2で対応)は、
-// 受け取った一覧をそのまま返す(今までの地図と同じ)。
+// 返ってきた正式店舗のピンを出す。失敗・異常・時間切れの時は、受け取った一覧をそのまま返す
+// (今までの地図と同じ)。「お気に入り」表示中も STEP 4C-2 から同じ考え方で合流させる。
 function mergeStoreProfilesIntoMapShops(mapShops) {
-  if (selectedCategory === "お気に入り") {
-    return mapShops;
-  }
-
   const storeProfileShops =
     storeProfileListStores
       .map(buildStoreProfileListShop)
       .filter(function(shop) {
         return (
           shop !== null &&
-          (selectedCategory === "すべて" ||
-            shopMatchesSelectedCategory(shop, selectedCategory))
+          storeProfileShopMatchesSelectedCategory(shop)
         );
       });
 
+  const suppressedIds =
+    getStoreProfileSuppressedIdsForCurrentView();
+
   if (
     storeProfileShops.length === 0 &&
-    storeProfileSuppressedListingIds.size === 0
+    suppressedIds.size === 0
   ) {
     return mapShops;
   }
 
   return mapShops
     .filter(function(shop) {
-      return !storeProfileSuppressedListingIds.has(shop.firestoreId);
+      return !suppressedIds.has(shop.firestoreId);
     })
     .concat(storeProfileShops);
 }
 
 // 選択中の市区町村にある正式店舗の数(カテゴリー絞り込み前)。「この地域には…」の0件判定用。
 function countStoreProfileListShopsInSelectedRegion() {
-  if (!selectedShopRegion || selectedCategory === "お気に入り") {
+  if (!selectedShopRegion) {
     return 0;
   }
 
@@ -3539,6 +3587,17 @@ function buildStoreProfileShopCardHtml(shop, shopCardIndex) {
       "
     >
       <div class="shop-visual ${escapeHtml(shop.visualClass)}">
+        <div class="shop-badges">
+          <span></span>
+          <button
+            class="favorite-button ${isStoreProfileShopFavorite(shop) ? "active" : ""}"
+            type="button"
+            aria-label="${getMachinauTranslation("shop_favorite_aria_label", language)}"
+            onclick="event.stopPropagation(); toggleFavorite('${escapeHtml(shop.firestoreId)}');"
+          >
+            ${isStoreProfileShopFavorite(shop) ? "♥" : "♡"}
+          </button>
+        </div>
         ${getCardVisualHtml(shop, shopCardIndex < 2)}
       </div>
       <div class="shop-body">
@@ -4323,13 +4382,51 @@ function renderFavoriteList() {
     return;
   }
 
-  const favoriteShops = shops.filter(
-    function (shop) {
-      return favoriteShopIds.has(
-        shop.firestoreId
-      );
+  // Phase 2D STEP 4C-2｜お気に入りの正式店舗(sp_ または linkedListingIds で判定)を合流させる。
+  // 正式店舗APIの取得に成功し、その無料掲載が正式店舗へ引き継がれている(suppressedListingIds)時は、
+  // 無料掲載の位置に正式店舗を出し、無料掲載は重ねて出さない。APIが失敗・正式店舗が返らない時は
+  // 今までどおり無料掲載だけ(保存済みの旧submission IDで戻る)。
+  const favoriteStoreProfileShops =
+    storeProfileListStores
+      .map(buildStoreProfileListShop)
+      .filter(function (shop) {
+        return shop !== null && isStoreProfileShopFavorite(shop);
+      });
+  const placedStoreProfileIds = new Set();
+  const favoriteShops = [];
+
+  shops.forEach(function (shop) {
+    if (!favoriteShopIds.has(shop.firestoreId)) {
+      return;
     }
-  );
+
+    if (!storeProfileSuppressedListingIds.has(shop.firestoreId)) {
+      favoriteShops.push(shop);
+      return;
+    }
+
+    const replacement = favoriteStoreProfileShops.find(function (storeProfileShop) {
+      return (storeProfileShop.linkedListingIds || []).includes(shop.firestoreId);
+    });
+
+    if (!replacement) {
+      // 引き継ぎ先の正式店舗が確認できない時は、お気に入りの無料掲載を消さずに出す。
+      favoriteShops.push(shop);
+      return;
+    }
+
+    if (!placedStoreProfileIds.has(replacement.firestoreId)) {
+      placedStoreProfileIds.add(replacement.firestoreId);
+      favoriteShops.push(replacement);
+    }
+  });
+
+  favoriteStoreProfileShops.forEach(function (storeProfileShop) {
+    if (!placedStoreProfileIds.has(storeProfileShop.firestoreId)) {
+      placedStoreProfileIds.add(storeProfileShop.firestoreId);
+      favoriteShops.push(storeProfileShop);
+    }
+  });
 
   if (favoriteShops.length === 0) {
     favoriteList.innerHTML =
@@ -4397,7 +4494,12 @@ function renderFavoriteList() {
               ${visualHtml}
             </div>
             <strong>${escapeHtml(shop.name)}</strong>
-            <p>${escapeHtml(shop.title)}</p>
+            <p>${escapeHtml(
+              // Phase 2D STEP 4C-2｜正式店舗には無料掲載の見出し(title)が無いため「店舗が管理」。
+              shop.listingType === STORE_PROFILE_LIST_LISTING_TYPE
+                ? getMachinauTranslation("shop_store_managed_badge", getCurrentMachinauLanguage())
+                : shop.title
+            )}</p>
             <div class="shop-actions">
               <button
                 class="shop-button detail-button"
@@ -4457,6 +4559,46 @@ function selectCategory(
 function toggleFavorite(
   firestoreId
 ) {
+  // Phase 2D STEP 4C-2｜正式店舗のハートは、sp_{storeId}と、その店舗に有効に紐付いた旧無料掲載の
+  // submission ID(linkedListingIds)をまとめて保存/削除する(正式店舗が後で非公開になっても、
+  // 旧無料掲載のお気に入りとして戻れるように)。保存内容を変えるのは利用者が押した時だけ。
+  const storeProfileShop =
+    findStoreProfileListShopForModal(
+      firestoreId
+    );
+
+  if (storeProfileShop) {
+    const ids =
+      [storeProfileShop.firestoreId].concat(
+        storeProfileShop.linkedListingIds || []
+      );
+    const turnOff =
+      isStoreProfileShopFavorite(
+        storeProfileShop
+      );
+
+    ids.forEach(function(id) {
+      if (turnOff) {
+        favoriteShopIds.delete(id);
+      } else {
+        favoriteShopIds.add(id);
+      }
+    });
+
+    localStorage.setItem(
+      "machinauFavoriteShopIds",
+      JSON.stringify(
+        Array.from(
+          favoriteShopIds
+        )
+      )
+    );
+
+    renderShops();
+    renderFavoriteList();
+    return;
+  }
+
   if (
     favoriteShopIds.has(
       firestoreId
