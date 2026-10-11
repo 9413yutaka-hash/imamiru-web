@@ -1828,3 +1828,11 @@
   display: none;
   margin-top: 16px;
 }
+
+/* マイページのお気に入り一覧｜スマホ(700px以下)でTOPカード用に .shop-actions を隠す
+   ルールの影響を受けて「今の情報を見る」が消えていたため、この一覧の中だけ表示する。 */
+@media (max-width: 700px) {
+  #favoriteList .shop-actions {
+    display: grid;
+  }
+}
