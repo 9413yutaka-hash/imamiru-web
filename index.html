@@ -2237,6 +2237,9 @@
         今いる街を楽しむためのヒント
       </p>
 
+      <!-- 旅の保存箱 Phase 1b｜♡で保存できなかった時・上限の時の案内(通常は非表示)。 -->
+      <p id="columnSaveNotice" class="saved-items-notice" role="status" aria-live="polite" hidden></p>
+
       <div id="columnEntryCardList"></div>
 
       <a
@@ -2309,16 +2312,21 @@
 
   <div id="myPageContent">
     <section class="travel-box-group" aria-labelledby="travelBoxShopsHeading">
-      <h3 id="travelBoxShopsHeading" class="travel-box-group-heading" data-i18n="travel_box_shops_heading">❤️ お店・施設</h3>
+      <h3 id="travelBoxShopsHeading" class="travel-box-group-heading" data-i18n="travel_box_shops_heading">❤️ お気に入り</h3>
       <div id="favoriteList">
   <p data-i18n="mypage_favorite_empty">まだ保存したお店・施設はありません。カードの♡を押すと、ここに保存されます。</p>
 </div>
     </section>
 
-    <!-- 旅の保存箱 Phase 1b(記事の保存)で表示する枠。今は非表示で、何も読み書きしない。 -->
-    <section id="travelBoxArticlesGroup" class="travel-box-group" aria-labelledby="travelBoxArticlesHeading" hidden>
-      <h3 id="travelBoxArticlesHeading" class="travel-box-group-heading" data-i18n="travel_box_articles_heading">📖 読みもの</h3>
-      <div id="savedArticleList"></div>
+    <!-- 旅の保存箱 Phase 1b｜保存したマチナウ読みもの。中身はapp.jsのrenderSavedArticleList()が
+         端末内の保存(machinauSavedItems)と取得済みの記事一覧から描く(通信なし)。
+         街の掲示板の保存枠は未実装のため置かない(空の「準備中」も出さない)。 -->
+    <section id="travelBoxArticlesGroup" class="travel-box-group" aria-labelledby="travelBoxArticlesHeading">
+      <h3 id="travelBoxArticlesHeading" class="travel-box-group-heading" data-i18n="travel_box_articles_heading">📖 お気に入り読み物</h3>
+      <p id="savedArticleNotice" class="saved-items-notice" role="status" aria-live="polite" hidden></p>
+      <div id="savedArticleList">
+        <p data-i18n="travel_box_articles_empty">まだ保存した読みものはありません。「マチナウ読みもの」の♡を押すと、ここに保存されます。</p>
+      </div>
     </section>
 
     <p class="travel-box-note" data-i18n="travel_box_storage_note">保存した内容は、この端末のブラウザに保存されます。別の端末やブラウザには表示されず、閲覧履歴を消すと消えることがあります。</p>

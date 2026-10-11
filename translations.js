@@ -991,14 +991,56 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   // 旅の保存箱 Phase 1a｜保存の種類ごとの見出しと、保存先の説明。
+  // Phase 1b｜代表確定仕様の見出し(❤️ お気に入り／📖 お気に入り読み物)へ変更。
   travel_box_shops_heading: {
-    ja: "❤️ お店・施設",
-    en: "❤️ Places"
+    ja: "❤️ お気に入り",
+    en: "❤️ Favorites"
   },
 
   travel_box_articles_heading: {
-    ja: "📖 読みもの",
-    en: "📖 Articles"
+    ja: "📖 お気に入り読み物",
+    en: "📖 Saved Reads"
+  },
+
+  // 旅の保存箱 Phase 1b｜読みもの保存の案内・ボタン文言。
+  travel_box_articles_empty: {
+    ja: "まだ保存した読みものはありません。「マチナウ読みもの」の♡を押すと、ここに保存されます。",
+    en: "No reads saved yet. Tap ♡ on a Machinau Reads card to save it here."
+  },
+
+  travel_box_articles_loading: {
+    ja: "保存した読みものを読み込んでいます…",
+    en: "Loading your saved reads…"
+  },
+
+  travel_box_articles_load_failed: {
+    ja: "読みものを読み込めませんでした。時間をおいて、もう一度開いてください。",
+    en: "Couldn't load reads right now. Please try again later."
+  },
+
+  column_save_aria_label: {
+    ja: "この読みものを旅の保存箱に保存",
+    en: "Save this read to your Travel Box"
+  },
+
+  column_unsave_aria_label: {
+    ja: "この読みものの保存を解除",
+    en: "Remove this read from your Travel Box"
+  },
+
+  saved_article_remove_button: {
+    ja: "保存を解除",
+    en: "Remove"
+  },
+
+  saved_items_limit_reached: {
+    ja: "保存できる読みものは{MAX}件までです。旅の保存箱で保存を解除してから、もう一度お試しください。",
+    en: "You can save up to {MAX} reads. Remove some in your Travel Box, then try again."
+  },
+
+  saved_items_save_failed: {
+    ja: "保存を変更できませんでした。このブラウザでは保存が使えない可能性があります（プライベートブラウズ等）。",
+    en: "Couldn't update your saved reads. Saving may be unavailable in this browser (e.g. private browsing)."
   },
 
   travel_box_storage_note: {

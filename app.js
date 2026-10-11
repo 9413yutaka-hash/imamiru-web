@@ -11070,6 +11070,9 @@ const mapSection =
 
   renderFavoriteList();
 
+  // 旅の保存箱 Phase 1b｜保存した読みもの(取得済みの記事一覧から、通信なし)。
+  renderSavedArticleList();
+
   myPageSection.scrollIntoView({
     behavior: "smooth"
   });
@@ -11108,6 +11111,9 @@ myPageSection.style.display = "block";
   }
 
   renderFavoriteList();
+
+  // 旅の保存箱 Phase 1b｜保存した読みもの(取得済みの記事一覧から、通信なし)。
+  renderSavedArticleList();
 
   myPageSection.scrollIntoView({
     behavior: "smooth",
@@ -11663,6 +11669,11 @@ const TOP_DYNAMIC_COLUMN_ENTRY_MAX_COUNT =
 let lastLoadedDynamicColumnArticles =
   [];
 
+// 旅の保存箱 Phase 1b｜読みもの一覧の取得状態("loading"/"loaded"/"failed")。
+// 保存箱の「お気に入り読み物」が、一覧の到着前・取得失敗時の案内を出し分けるために使う。
+let dynamicColumnArticlesLoadState =
+  "loading";
+
 // 多言語化 最終Phase｜columnArticles由来のsummary(title+description)
 // 翻訳キャッシュ。{ [slug]: { [language]: {title, description} } }の形。
 let columnArticleSummaryTranslationsCache =
@@ -11756,6 +11767,9 @@ async function loadDynamicColumnEntries(
         responseData.articles
       )
     ) {
+      markDynamicColumnArticlesLoadFailed(
+        requestId
+      );
       return;
     }
 
@@ -11766,13 +11780,39 @@ async function loadDynamicColumnEntries(
     lastLoadedDynamicColumnArticles =
       responseData.articles;
 
+    dynamicColumnArticlesLoadState =
+      "loaded";
+
+    // 保存箱の「お気に入り読み物」もrenderDynamicColumnEntries()の末尾で描き直す。
     renderDynamicColumnEntries();
   } catch (error) {
     console.error(
       "マチナウ読み物の動的一覧取得に失敗しました(既存の表示には影響しません)：",
       error
     );
+
+    markDynamicColumnArticlesLoadFailed(
+      requestId
+    );
   }
+}
+
+// 旅の保存箱 Phase 1b｜最新の取得が失敗し、まだ一度も一覧を受け取っていない時だけ
+// 「取得失敗」にする(先に取得済みの一覧があれば、それを使い続ける)。
+function markDynamicColumnArticlesLoadFailed(
+  requestId
+) {
+  if (
+    requestId !== latestDynamicColumnEntriesRequestId ||
+    dynamicColumnArticlesLoadState === "loaded"
+  ) {
+    return;
+  }
+
+  dynamicColumnArticlesLoadState =
+    "failed";
+
+  renderSavedArticleList();
 }
 
 // 多言語化 最終Phase｜lastLoadedDynamicColumnArticles(取得済みの日本語
@@ -11867,13 +11907,21 @@ function renderDynamicColumnEntries() {
           "true"
         );
 
+        // 旅の保存箱 Phase 1b｜♡はタイトルの横の独立したボタン(記事へのリンクの外)に置き、
+        // 押しても記事へ移動せず、GA4のcolumn_entry_clickも送らない。
         cardElement.innerHTML = `
           <div class="region-recommendation-card-body">
-            <p class="region-recommendation-card-title">
-              ${escapeHtml(
-                displayTitle
+            <div class="column-entry-card-header">
+              <p class="region-recommendation-card-title">
+                ${escapeHtml(
+                  displayTitle
+                )}
+              </p>
+              ${buildColumnSaveButtonHtml(
+                slug,
+                currentLanguage
               )}
-            </p>
+            </div>
             <p class="region-recommendation-card-content">
               ${escapeHtml(
                 displayDescription
@@ -11903,12 +11951,623 @@ function renderDynamicColumnEntries() {
       }
     );
 
+  // 旅の保存箱 Phase 1b｜一覧の到着・言語切替・TOPカードの翻訳到着のたびに、
+  // 保存箱の「お気に入り読み物」も取得済みデータだけで描き直す(通信なし)。
+  renderSavedArticleList();
+
   // 多言語化 最終Phase｜日本語以外が選択されている場合だけ、今回描画した
   // カードのうち未翻訳のものをまとめて取得する(既に翻訳済み・取得中の
   // ものは内部でスキップされ、重複実行しない)。
   refreshColumnEntryTranslationsIfNeeded(
     visibleSlugs
   );
+}
+
+// ============================================================
+// 旅の保存箱 Phase 1b｜マチナウ読みものの記事保存
+// ============================================================
+// 保存は端末のブラウザ内(localStorage "machinauSavedItems")だけで行い、新しいAPI・
+// Firestore読み書き・AI翻訳は呼ばない。表示はloadDynamicColumnEntries()が取得済みの
+// 公開記事一覧(lastLoadedDynamicColumnArticles)と照らし合わせるだけで、非公開になった
+// 記事は一覧に無いため表示しない(保存IDは残し、再公開されれば元に戻る)。
+// 店舗のお気に入り(machinauFavoriteShopIds)とは別のキーで、互いに読み書きしない。
+//
+// 保存形式：{ version: 1, items: [{ type, id, savedAt, title }] }
+//   type    "column"(読みもの)。将来の保存対象(掲示板等)は別のtypeで同じ配列に足す
+//   id      読みものはslug
+//   savedAt 保存した日時(ミリ秒)
+//   title   保存時の記事タイトル(表示は取得済み一覧の最新タイトルを使う。控えとして残すだけ)
+// 同じtype＋idは1件だけ保存する。
+const MACHINAU_SAVED_ITEMS_STORAGE_KEY =
+  "machinauSavedItems";
+
+// 読めない保存データを上書きする前に、元の文字列をそのまま退避するキー。
+const MACHINAU_SAVED_ITEMS_BACKUP_STORAGE_KEY =
+  "machinauSavedItemsBackup";
+
+const MACHINAU_SAVED_ITEMS_VERSION =
+  1;
+
+const MACHINAU_SAVED_ITEM_TYPE_COLUMN =
+  "column";
+
+const MACHINAU_SAVED_ITEMS_MAX_PER_TYPE =
+  100;
+
+const MACHINAU_SAVED_ITEM_TITLE_MAX_LENGTH =
+  120;
+
+function isValidMachinauSavedItem(
+  item
+) {
+  return (
+    item !== null &&
+    typeof item === "object" &&
+    typeof item.type === "string" &&
+    item.type !== "" &&
+    typeof item.id === "string" &&
+    item.id !== ""
+  );
+}
+
+// 戻り値のstatus：
+//   "ok"          読めた(まだ何も保存していない場合も含む)
+//   "unavailable" localStorageが使えない
+//   "corrupt"     JSONが壊れている・形が違う(元の文字列はrawに残す)
+//   "newer"       この版より新しいversionの保存データ(この版では書き込まない)
+// needsBackupは、書き込むと元データの一部(読めない要素)が失われる時にtrue。
+function readMachinauSavedItems() {
+  let raw = null;
+
+  try {
+    raw =
+      localStorage.getItem(
+        MACHINAU_SAVED_ITEMS_STORAGE_KEY
+      );
+  } catch (error) {
+    return {
+      status: "unavailable",
+      items: [],
+      raw: null,
+      needsBackup: false
+    };
+  }
+
+  if (raw === null || raw === "") {
+    return {
+      status: "ok",
+      items: [],
+      raw: raw,
+      needsBackup: false
+    };
+  }
+
+  let parsed = null;
+
+  try {
+    parsed =
+      JSON.parse(raw);
+  } catch (error) {
+    parsed = null;
+  }
+
+  if (
+    !parsed ||
+    typeof parsed !== "object" ||
+    typeof parsed.version !== "number" ||
+    !Array.isArray(parsed.items)
+  ) {
+    return {
+      status: "corrupt",
+      items: [],
+      raw: raw,
+      needsBackup: true
+    };
+  }
+
+  // 1件ずつ形を確かめ、壊れた要素だけを読み飛ばす。同じtype＋idは先の1件だけ使う
+  // (重複をまとめても失われる内容は無いため、退避の対象は壊れた要素だけ)。
+  const seenKeys =
+    new Set();
+
+  let invalidItemCount =
+    0;
+
+  const items =
+    parsed.items.filter(function(item) {
+      if (!isValidMachinauSavedItem(item)) {
+        invalidItemCount += 1;
+        return false;
+      }
+
+      const key =
+        item.type + "\n" + item.id;
+
+      if (seenKeys.has(key)) {
+        return false;
+      }
+
+      seenKeys.add(key);
+      return true;
+    });
+
+  return {
+    status:
+      parsed.version > MACHINAU_SAVED_ITEMS_VERSION
+        ? "newer"
+        : "ok",
+    items: items,
+    raw: raw,
+    needsBackup:
+      invalidItemCount > 0
+  };
+}
+
+// 読めない保存データの元の文字列を退避する。前に退避したものは上書きせず、後ろに足す
+// (同じ内容が既に退避済みなら何もしない)。退避できなかった時はfalse(呼び出し側は保存しない)。
+function backupMachinauSavedItemsRaw(
+  raw
+) {
+  try {
+    const existingBackup =
+      localStorage.getItem(
+        MACHINAU_SAVED_ITEMS_BACKUP_STORAGE_KEY
+      );
+
+    if (
+      typeof existingBackup === "string" &&
+      existingBackup !== ""
+    ) {
+      if (existingBackup.includes(raw)) {
+        return true;
+      }
+
+      localStorage.setItem(
+        MACHINAU_SAVED_ITEMS_BACKUP_STORAGE_KEY,
+        existingBackup + "\n" + raw
+      );
+      return true;
+    }
+
+    localStorage.setItem(
+      MACHINAU_SAVED_ITEMS_BACKUP_STORAGE_KEY,
+      raw
+    );
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+function writeMachinauSavedItems(
+  items
+) {
+  try {
+    localStorage.setItem(
+      MACHINAU_SAVED_ITEMS_STORAGE_KEY,
+      JSON.stringify({
+        version: MACHINAU_SAVED_ITEMS_VERSION,
+        items: items
+      })
+    );
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+function getSavedColumnArticleItems() {
+  return readMachinauSavedItems()
+    .items
+    .filter(function(item) {
+      return item.type === MACHINAU_SAVED_ITEM_TYPE_COLUMN;
+    });
+}
+
+function getSavedColumnArticleSlugSet() {
+  return new Set(
+    getSavedColumnArticleItems().map(function(item) {
+      return item.id;
+    })
+  );
+}
+
+function findLoadedColumnArticleBySlug(
+  slug
+) {
+  return (
+    lastLoadedDynamicColumnArticles.find(function(article) {
+      return article && article.slug === slug;
+    }) || null
+  );
+}
+
+// 翻訳キャッシュ(TOPカード用に取得済みのもの)があれば使い、無ければ原文を返す。
+// 保存箱の表示のためだけに翻訳を取得することはしない。
+function getColumnArticleDisplayTitle(
+  article,
+  language
+) {
+  const cachedTranslationsForArticle =
+    columnArticleSummaryTranslationsCache[article.slug];
+
+  const cachedTranslation =
+    cachedTranslationsForArticle &&
+    cachedTranslationsForArticle[language];
+
+  if (
+    language !== MACHINAU_DEFAULT_LANGUAGE &&
+    cachedTranslation &&
+    typeof cachedTranslation.title === "string" &&
+    cachedTranslation.title !== ""
+  ) {
+    return cachedTranslation.title;
+  }
+
+  return typeof article.title === "string"
+    ? article.title
+    : "";
+}
+
+function buildColumnSaveButtonHtml(
+  slug,
+  language
+) {
+  const isSaved =
+    getSavedColumnArticleSlugSet().has(slug);
+
+  return `
+    <button
+      class="column-save-button${isSaved ? " active" : ""}"
+      type="button"
+      data-column-save-slug="${escapeHtml(slug)}"
+      aria-pressed="${isSaved ? "true" : "false"}"
+      aria-label="${escapeHtml(
+        getMachinauTranslation(
+          isSaved
+            ? "column_unsave_aria_label"
+            : "column_save_aria_label",
+          language
+        )
+      )}"
+      onclick="toggleSavedColumnArticleFromButton(this)"
+    >${isSaved ? "♥" : "♡"}</button>
+  `;
+}
+
+// TOPカードの♡の見た目だけを今の保存状態へ合わせる(カードは作り直さない)。
+function updateColumnSaveButtons() {
+  const savedSlugs =
+    getSavedColumnArticleSlugSet();
+
+  const language =
+    getCurrentMachinauLanguage();
+
+  document
+    .querySelectorAll(
+      "[data-column-save-slug]"
+    )
+    .forEach(function(button) {
+      const isSaved =
+        savedSlugs.has(
+          button.getAttribute(
+            "data-column-save-slug"
+          )
+        );
+
+      button.classList.toggle(
+        "active",
+        isSaved
+      );
+      button.setAttribute(
+        "aria-pressed",
+        isSaved ? "true" : "false"
+      );
+      button.setAttribute(
+        "aria-label",
+        getMachinauTranslation(
+          isSaved
+            ? "column_unsave_aria_label"
+            : "column_save_aria_label",
+          language
+        )
+      );
+      button.textContent =
+        isSaved ? "♥" : "♡";
+    });
+}
+
+let savedItemsNoticeTimer =
+  null;
+
+// 保存できなかった時・上限の時だけ、押した場所の近く(TOPの読みもの／保存箱)に案内を出す。
+function showSavedItemsNotice(
+  translationKey
+) {
+  const message =
+    getMachinauTranslation(
+      translationKey,
+      getCurrentMachinauLanguage()
+    ).replace(
+      "{MAX}",
+      String(MACHINAU_SAVED_ITEMS_MAX_PER_TYPE)
+    );
+
+  ["columnSaveNotice", "savedArticleNotice"].forEach(function(elementId) {
+    const noticeElement =
+      document.getElementById(elementId);
+
+    if (noticeElement) {
+      noticeElement.textContent = message;
+      noticeElement.hidden = false;
+    }
+  });
+
+  if (savedItemsNoticeTimer) {
+    clearTimeout(savedItemsNoticeTimer);
+  }
+
+  savedItemsNoticeTimer =
+    setTimeout(function() {
+      ["columnSaveNotice", "savedArticleNotice"].forEach(function(elementId) {
+        const noticeElement =
+          document.getElementById(elementId);
+
+        if (noticeElement) {
+          noticeElement.hidden = true;
+          noticeElement.textContent = "";
+        }
+      });
+    }, 6000);
+}
+
+function toggleSavedColumnArticleFromButton(
+  button
+) {
+  const slug =
+    button &&
+    button.getAttribute(
+      "data-column-save-slug"
+    ) ||
+    button &&
+    button.getAttribute(
+      "data-saved-article-slug"
+    ) ||
+    "";
+
+  if (slug !== "") {
+    toggleSavedColumnArticle(slug);
+  }
+}
+
+// 保存していなければ保存、保存済みなら解除する。保存に失敗した時は表示を変えずに案内する。
+function toggleSavedColumnArticle(
+  slug
+) {
+  const readResult =
+    readMachinauSavedItems();
+
+  if (
+    readResult.status === "unavailable" ||
+    readResult.status === "newer"
+  ) {
+    showSavedItemsNotice(
+      "saved_items_save_failed"
+    );
+    return false;
+  }
+
+  // 読めない保存データは消さず、上書きの前に元の文字列を退避する(退避できなければ保存しない)。
+  if (
+    readResult.needsBackup &&
+    !backupMachinauSavedItemsRaw(readResult.raw)
+  ) {
+    showSavedItemsNotice(
+      "saved_items_save_failed"
+    );
+    return false;
+  }
+
+  const items =
+    readResult.items;
+
+  const isSaved =
+    items.some(function(item) {
+      return (
+        item.type === MACHINAU_SAVED_ITEM_TYPE_COLUMN &&
+        item.id === slug
+      );
+    });
+
+  let nextItems;
+
+  if (isSaved) {
+    nextItems =
+      items.filter(function(item) {
+        return !(
+          item.type === MACHINAU_SAVED_ITEM_TYPE_COLUMN &&
+          item.id === slug
+        );
+      });
+  } else {
+    const savedColumnCount =
+      items.filter(function(item) {
+        return item.type === MACHINAU_SAVED_ITEM_TYPE_COLUMN;
+      }).length;
+
+    if (savedColumnCount >= MACHINAU_SAVED_ITEMS_MAX_PER_TYPE) {
+      showSavedItemsNotice(
+        "saved_items_limit_reached"
+      );
+      return false;
+    }
+
+    const article =
+      findLoadedColumnArticleBySlug(slug);
+
+    nextItems =
+      [
+        {
+          type: MACHINAU_SAVED_ITEM_TYPE_COLUMN,
+          id: slug,
+          savedAt: Date.now(),
+          title:
+            article && typeof article.title === "string"
+              ? article.title.slice(0, MACHINAU_SAVED_ITEM_TITLE_MAX_LENGTH)
+              : ""
+        }
+      ].concat(items);
+  }
+
+  if (!writeMachinauSavedItems(nextItems)) {
+    showSavedItemsNotice(
+      "saved_items_save_failed"
+    );
+    return false;
+  }
+
+  updateColumnSaveButtons();
+  renderSavedArticleList();
+  return true;
+}
+
+// 保存箱の「お気に入り読み物」。保存の新しい順に、今公開中の記事だけを表示する。
+function renderSavedArticleList() {
+  const savedArticleList =
+    document.getElementById(
+      "savedArticleList"
+    );
+
+  if (!savedArticleList) {
+    return;
+  }
+
+  const language =
+    getCurrentMachinauLanguage();
+
+  const savedItems =
+    getSavedColumnArticleItems()
+      .slice()
+      .sort(function(firstItem, secondItem) {
+        return (
+          (Number(secondItem.savedAt) || 0) -
+          (Number(firstItem.savedAt) || 0)
+        );
+      });
+
+  const buildMessageHtml =
+    function(translationKey) {
+      return (
+        "<p>" +
+        escapeHtml(
+          getMachinauTranslation(
+            translationKey,
+            language
+          )
+        ) +
+        "</p>"
+      );
+    };
+
+  if (savedItems.length === 0) {
+    savedArticleList.innerHTML =
+      buildMessageHtml("travel_box_articles_empty");
+    return;
+  }
+
+  if (dynamicColumnArticlesLoadState === "loading") {
+    savedArticleList.innerHTML =
+      buildMessageHtml("travel_box_articles_loading");
+    return;
+  }
+
+  if (dynamicColumnArticlesLoadState === "failed") {
+    savedArticleList.innerHTML =
+      buildMessageHtml("travel_box_articles_load_failed");
+    return;
+  }
+
+  const visibleArticles =
+    savedItems
+      .map(function(item) {
+        return findLoadedColumnArticleBySlug(item.id);
+      })
+      .filter(function(article) {
+        return article !== null;
+      });
+
+  if (visibleArticles.length === 0) {
+    savedArticleList.innerHTML =
+      buildMessageHtml("travel_box_articles_empty");
+    return;
+  }
+
+  savedArticleList.innerHTML =
+    visibleArticles
+      .map(function(article) {
+        const articleUrl =
+          buildColumnArticleUrlForLanguage(
+            article.slug,
+            language
+          );
+
+        const displayTitle =
+          getColumnArticleDisplayTitle(
+            article,
+            language
+          );
+
+        const visualHtml =
+          typeof article.imageUrl === "string" &&
+          article.imageUrl !== ""
+            ? `<img
+                src="${escapeHtml(
+                  buildOptimizedImageUrl(
+                    article.imageUrl,
+                    { width: OPTIMIZED_IMAGE_WIDTH_FAVORITE_LIST }
+                  )
+                )}"
+                alt=""
+                loading="lazy"
+                onerror="handleBrokenImage(this)"
+              >`
+            : `<span class="shop-emoji">📖</span>`;
+
+        return `
+          <div class="favorite-list-item saved-article-item">
+            <a
+              class="saved-article-visual"
+              href="${escapeHtml(articleUrl)}"
+              tabindex="-1"
+              aria-hidden="true"
+            >${visualHtml}</a>
+            <strong>${escapeHtml(displayTitle)}</strong>
+            <div class="shop-actions">
+              <a
+                class="shop-button detail-button saved-article-read-link"
+                href="${escapeHtml(articleUrl)}"
+              >${escapeHtml(
+                getMachinauTranslation(
+                  "column_entry_read_more_link",
+                  language
+                )
+              )}</a>
+              <button
+                class="shop-button map-button"
+                type="button"
+                data-saved-article-slug="${escapeHtml(article.slug)}"
+                onclick="toggleSavedColumnArticleFromButton(this)"
+              >${escapeHtml(
+                getMachinauTranslation(
+                  "saved_article_remove_button",
+                  language
+                )
+              )}</button>
+            </div>
+          </div>
+        `;
+      })
+      .join("");
 }
 
 // 多言語化 最終Phase｜表示中の読み物カードの未翻訳summaryだけをまとめて
