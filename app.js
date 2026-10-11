@@ -11322,6 +11322,9 @@ function applyLoadedSubmissions(
 
   renderShops();
 
+  // 旅の保存箱｜保存箱を先に開いていても、届いた無料掲載で保存済み一覧を描き直す(通信なし)。
+  renderFavoriteList();
+
   markShopsLoadedForMachinauSuggestion();
 
   // TOP復帰時の現在地自動復元 Phase1｜店舗データが揃ってから、保存済みの
