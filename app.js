@@ -3460,6 +3460,42 @@ function mergeStoreProfilesIntoShopCardList(cardShops) {
   return merged;
 }
 
+// Phase 2D STEP 4C-1｜地図のピンの対象に正式店舗を合流させる(updateShopMarkers専用)。
+// 地図は既存どおり「カテゴリーで絞った店舗のうち座標があるもの」で、15km・地域検索の
+// 制限は無料掲載にも正式店舗にもかけない(正式店舗だけ別ルールにしない)。
+// 正式店舗APIの取得に成功した時だけ suppressedListingIds の無料掲載ピンを外し、
+// 返ってきた正式店舗のピンを出す。失敗・異常・時間切れの時、「お気に入り」表示中(4C-2で対応)は、
+// 受け取った一覧をそのまま返す(今までの地図と同じ)。
+function mergeStoreProfilesIntoMapShops(mapShops) {
+  if (selectedCategory === "お気に入り") {
+    return mapShops;
+  }
+
+  const storeProfileShops =
+    storeProfileListStores
+      .map(buildStoreProfileListShop)
+      .filter(function(shop) {
+        return (
+          shop !== null &&
+          (selectedCategory === "すべて" ||
+            shopMatchesSelectedCategory(shop, selectedCategory))
+        );
+      });
+
+  if (
+    storeProfileShops.length === 0 &&
+    storeProfileSuppressedListingIds.size === 0
+  ) {
+    return mapShops;
+  }
+
+  return mapShops
+    .filter(function(shop) {
+      return !storeProfileSuppressedListingIds.has(shop.firestoreId);
+    })
+    .concat(storeProfileShops);
+}
+
 // 選択中の市区町村にある正式店舗の数(カテゴリー絞り込み前)。「この地域には…」の0件判定用。
 function countStoreProfileListShopsInSelectedRegion() {
   if (!selectedShopRegion || selectedCategory === "お気に入り") {
@@ -12057,7 +12093,12 @@ function showShopInfoWindow(
         ${escapeHtml(shop.name)}
       </strong>
       <p style="margin:0 0 8px; font-size:13px; color:#444;">
-        ${escapeHtml(shop.title)}
+        ${escapeHtml(
+          // Phase 2D STEP 4C-1｜正式店舗には無料掲載の見出し(title)が無いため「店舗が管理」を出す。
+          shop.listingType === STORE_PROFILE_LIST_LISTING_TYPE
+            ? getMachinauTranslation("shop_store_managed_badge", getCurrentMachinauLanguage())
+            : shop.title
+        )}
       </p>
       <button
         type="button"
@@ -12098,8 +12139,12 @@ function updateShopMarkers() {
       return;
     }
 
+    // Phase 2D STEP 4C-1｜getVisibleShops()の意味は変えず、地図のピンを作るここでだけ
+    // 正式店舗を合流させ、正式店舗へ引き継がれた無料掲載のピンを外す。
     const visibleShops =
-      getVisibleShops();
+      mergeStoreProfilesIntoMapShops(
+        getVisibleShops()
+      );
 
     clearShopMarkers();
 
