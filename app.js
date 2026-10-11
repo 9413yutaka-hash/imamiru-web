@@ -11971,205 +11971,31 @@ function renderDynamicColumnEntries() {
 // 公開記事一覧(lastLoadedDynamicColumnArticles)と照らし合わせるだけで、非公開になった
 // 記事は一覧に無いため表示しない(保存IDは残し、再公開されれば元に戻る)。
 // 店舗のお気に入り(machinauFavoriteShopIds)とは別のキーで、互いに読み書きしない。
-//
-// 保存形式：{ version: 1, items: [{ type, id, savedAt, title }] }
-//   type    "column"(読みもの)。将来の保存対象(掲示板等)は別のtypeで同じ配列に足す
-//   id      読みものはslug
-//   savedAt 保存した日時(ミリ秒)
-//   title   保存時の記事タイトル(表示は取得済み一覧の最新タイトルを使う。控えとして残すだけ)
-// 同じtype＋idは1件だけ保存する。
-const MACHINAU_SAVED_ITEMS_STORAGE_KEY =
-  "machinauSavedItems";
+// 保存形式・読み書き・退避・保存/解除の切り替えは、読みもの全文ページと共通の
+// saved-items.js(MachinauSavedItems)が持つ。ここは画面の描き方だけを持つ。
 
-// 読めない保存データを上書きする前に、元の文字列をそのまま退避するキー。
-const MACHINAU_SAVED_ITEMS_BACKUP_STORAGE_KEY =
-  "machinauSavedItemsBackup";
-
-const MACHINAU_SAVED_ITEMS_VERSION =
-  1;
-
-const MACHINAU_SAVED_ITEM_TYPE_COLUMN =
-  "column";
-
-const MACHINAU_SAVED_ITEMS_MAX_PER_TYPE =
-  100;
-
-const MACHINAU_SAVED_ITEM_TITLE_MAX_LENGTH =
-  120;
-
-function isValidMachinauSavedItem(
-  item
-) {
-  return (
-    item !== null &&
-    typeof item === "object" &&
-    typeof item.type === "string" &&
-    item.type !== "" &&
-    typeof item.id === "string" &&
-    item.id !== ""
-  );
-}
-
-// 戻り値のstatus：
-//   "ok"          読めた(まだ何も保存していない場合も含む)
-//   "unavailable" localStorageが使えない
-//   "corrupt"     JSONが壊れている・形が違う(元の文字列はrawに残す)
-//   "newer"       この版より新しいversionの保存データ(この版では書き込まない)
-// needsBackupは、書き込むと元データの一部(読めない要素)が失われる時にtrue。
-function readMachinauSavedItems() {
-  let raw = null;
-
-  try {
-    raw =
-      localStorage.getItem(
-        MACHINAU_SAVED_ITEMS_STORAGE_KEY
-      );
-  } catch (error) {
-    return {
-      status: "unavailable",
-      items: [],
-      raw: null,
-      needsBackup: false
-    };
-  }
-
-  if (raw === null || raw === "") {
-    return {
-      status: "ok",
-      items: [],
-      raw: raw,
-      needsBackup: false
-    };
-  }
-
-  let parsed = null;
-
-  try {
-    parsed =
-      JSON.parse(raw);
-  } catch (error) {
-    parsed = null;
-  }
-
-  if (
-    !parsed ||
-    typeof parsed !== "object" ||
-    typeof parsed.version !== "number" ||
-    !Array.isArray(parsed.items)
-  ) {
-    return {
-      status: "corrupt",
-      items: [],
-      raw: raw,
-      needsBackup: true
-    };
-  }
-
-  // 1件ずつ形を確かめ、壊れた要素だけを読み飛ばす。同じtype＋idは先の1件だけ使う
-  // (重複をまとめても失われる内容は無いため、退避の対象は壊れた要素だけ)。
-  const seenKeys =
-    new Set();
-
-  let invalidItemCount =
-    0;
-
-  const items =
-    parsed.items.filter(function(item) {
-      if (!isValidMachinauSavedItem(item)) {
-        invalidItemCount += 1;
-        return false;
-      }
-
-      const key =
-        item.type + "\n" + item.id;
-
-      if (seenKeys.has(key)) {
-        return false;
-      }
-
-      seenKeys.add(key);
-      return true;
-    });
-
-  return {
-    status:
-      parsed.version > MACHINAU_SAVED_ITEMS_VERSION
-        ? "newer"
-        : "ok",
-    items: items,
-    raw: raw,
-    needsBackup:
-      invalidItemCount > 0
-  };
-}
-
-// 読めない保存データの元の文字列を退避する。前に退避したものは上書きせず、後ろに足す
-// (同じ内容が既に退避済みなら何もしない)。退避できなかった時はfalse(呼び出し側は保存しない)。
-function backupMachinauSavedItemsRaw(
-  raw
-) {
-  try {
-    const existingBackup =
-      localStorage.getItem(
-        MACHINAU_SAVED_ITEMS_BACKUP_STORAGE_KEY
-      );
-
-    if (
-      typeof existingBackup === "string" &&
-      existingBackup !== ""
-    ) {
-      if (existingBackup.includes(raw)) {
-        return true;
-      }
-
-      localStorage.setItem(
-        MACHINAU_SAVED_ITEMS_BACKUP_STORAGE_KEY,
-        existingBackup + "\n" + raw
-      );
-      return true;
-    }
-
-    localStorage.setItem(
-      MACHINAU_SAVED_ITEMS_BACKUP_STORAGE_KEY,
-      raw
-    );
-    return true;
-  } catch (error) {
-    return false;
-  }
-}
-
-function writeMachinauSavedItems(
-  items
-) {
-  try {
-    localStorage.setItem(
-      MACHINAU_SAVED_ITEMS_STORAGE_KEY,
-      JSON.stringify({
-        version: MACHINAU_SAVED_ITEMS_VERSION,
-        items: items
-      })
-    );
-    return true;
-  } catch (error) {
-    return false;
-  }
+// saved-items.js(index.htmlでapp.jsより先に読み込む)。読み込めなかった時はnullで、
+// 保存箱の読みものは空・♡は「保存を変更できませんでした」の案内になる(他の機能には影響させない)。
+function getMachinauSavedItemsStore() {
+  return window.MachinauSavedItems || null;
 }
 
 function getSavedColumnArticleItems() {
-  return readMachinauSavedItems()
-    .items
-    .filter(function(item) {
-      return item.type === MACHINAU_SAVED_ITEM_TYPE_COLUMN;
-    });
+  const store =
+    getMachinauSavedItemsStore();
+
+  return store
+    ? store.getItemsOfType(store.TYPE_COLUMN)
+    : [];
 }
 
 function getSavedColumnArticleSlugSet() {
-  return new Set(
-    getSavedColumnArticleItems().map(function(item) {
-      return item.id;
-    })
-  );
+  const store =
+    getMachinauSavedItemsStore();
+
+  return store
+    ? store.getIdSetOfType(store.TYPE_COLUMN)
+    : new Set();
 }
 
 function findLoadedColumnArticleBySlug(
@@ -12290,7 +12116,11 @@ function showSavedItemsNotice(
       getCurrentMachinauLanguage()
     ).replace(
       "{MAX}",
-      String(MACHINAU_SAVED_ITEMS_MAX_PER_TYPE)
+      String(
+        getMachinauSavedItemsStore()
+          ? getMachinauSavedItemsStore().MAX_PER_TYPE
+          : ""
+      )
     );
 
   ["columnSaveNotice", "savedArticleNotice"].forEach(function(elementId) {
@@ -12344,84 +12174,28 @@ function toggleSavedColumnArticleFromButton(
 function toggleSavedColumnArticle(
   slug
 ) {
-  const readResult =
-    readMachinauSavedItems();
+  const store =
+    getMachinauSavedItemsStore();
 
-  if (
-    readResult.status === "unavailable" ||
-    readResult.status === "newer"
-  ) {
+  const article =
+    findLoadedColumnArticleBySlug(slug);
+
+  const result =
+    store
+      ? store.toggle(
+          store.TYPE_COLUMN,
+          slug,
+          article && typeof article.title === "string"
+            ? article.title
+            : ""
+        )
+      : { ok: false, reason: "failed" };
+
+  if (!result.ok) {
     showSavedItemsNotice(
-      "saved_items_save_failed"
-    );
-    return false;
-  }
-
-  // 読めない保存データは消さず、上書きの前に元の文字列を退避する(退避できなければ保存しない)。
-  if (
-    readResult.needsBackup &&
-    !backupMachinauSavedItemsRaw(readResult.raw)
-  ) {
-    showSavedItemsNotice(
-      "saved_items_save_failed"
-    );
-    return false;
-  }
-
-  const items =
-    readResult.items;
-
-  const isSaved =
-    items.some(function(item) {
-      return (
-        item.type === MACHINAU_SAVED_ITEM_TYPE_COLUMN &&
-        item.id === slug
-      );
-    });
-
-  let nextItems;
-
-  if (isSaved) {
-    nextItems =
-      items.filter(function(item) {
-        return !(
-          item.type === MACHINAU_SAVED_ITEM_TYPE_COLUMN &&
-          item.id === slug
-        );
-      });
-  } else {
-    const savedColumnCount =
-      items.filter(function(item) {
-        return item.type === MACHINAU_SAVED_ITEM_TYPE_COLUMN;
-      }).length;
-
-    if (savedColumnCount >= MACHINAU_SAVED_ITEMS_MAX_PER_TYPE) {
-      showSavedItemsNotice(
-        "saved_items_limit_reached"
-      );
-      return false;
-    }
-
-    const article =
-      findLoadedColumnArticleBySlug(slug);
-
-    nextItems =
-      [
-        {
-          type: MACHINAU_SAVED_ITEM_TYPE_COLUMN,
-          id: slug,
-          savedAt: Date.now(),
-          title:
-            article && typeof article.title === "string"
-              ? article.title.slice(0, MACHINAU_SAVED_ITEM_TITLE_MAX_LENGTH)
-              : ""
-        }
-      ].concat(items);
-  }
-
-  if (!writeMachinauSavedItems(nextItems)) {
-    showSavedItemsNotice(
-      "saved_items_save_failed"
+      result.reason === "limit"
+        ? "saved_items_limit_reached"
+        : "saved_items_save_failed"
     );
     return false;
   }
@@ -12430,6 +12204,38 @@ function toggleSavedColumnArticle(
   renderSavedArticleList();
   return true;
 }
+
+// 読みもの全文ページで保存・解除してからブラウザの「戻る」でTOPへ戻った時(ページが
+// キャッシュから復元される)や、別のタブで保存が変わった時に、TOPの♡と保存箱の
+// 「お気に入り読み物」を今の保存状態で描き直す(端末内の保存を読むだけで、通信なし)。
+function refreshSavedColumnArticleViews() {
+  updateColumnSaveButtons();
+  renderSavedArticleList();
+}
+
+window.addEventListener(
+  "pageshow",
+  function(event) {
+    if (event.persisted) {
+      refreshSavedColumnArticleViews();
+    }
+  }
+);
+
+window.addEventListener(
+  "storage",
+  function(event) {
+    const store =
+      getMachinauSavedItemsStore();
+
+    if (
+      event.key === null ||
+      (store && event.key === store.STORAGE_KEY)
+    ) {
+      refreshSavedColumnArticleViews();
+    }
+  }
+);
 
 // 保存箱の「お気に入り読み物」。保存の新しい順に、今公開中の記事だけを表示する。
 function renderSavedArticleList() {

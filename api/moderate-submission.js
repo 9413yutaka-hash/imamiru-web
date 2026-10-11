@@ -23404,6 +23404,42 @@ const COLUMN_ARTICLE_PAGE_UI_TEXT =
       en: "← Back to Machinau"
     },
 
+    // 読みもの全文ページ｜記事上部の「← 戻る」と、本文直後の保存ボタン(旅の保存箱)。
+    backButton: {
+      ja: "← 戻る",
+      en: "← Back"
+    },
+
+    saveButton: {
+      ja: "♡ お気に入りに保存",
+      en: "♡ Save to favorites"
+    },
+
+    savedButton: {
+      ja: "♥ 保存済み",
+      en: "♥ Saved"
+    },
+
+    saveButtonAriaLabel: {
+      ja: "この読みものを旅の保存箱に保存",
+      en: "Save this read to your Travel Box"
+    },
+
+    savedButtonAriaLabel: {
+      ja: "この読みものの保存を解除",
+      en: "Remove this read from your Travel Box"
+    },
+
+    saveLimitReached: {
+      ja: "保存できる読みものは{MAX}件までです。旅の保存箱で保存を解除してから、もう一度お試しください。",
+      en: "You can save up to {MAX} reads. Remove some in your Travel Box, then try again."
+    },
+
+    saveFailed: {
+      ja: "保存を変更できませんでした。このブラウザでは保存が使えない可能性があります（プライベートブラウズ等）。",
+      en: "Couldn't update your saved reads. Saving may be unavailable in this browser (e.g. private browsing)."
+    },
+
     // 読みもの回遊導線｜記事の後(コメント欄より前)に出す同カテゴリー記事と一覧への導線。
     relatedHeading: {
       ja: "もう少し、読んでみる？",
@@ -26203,6 +26239,28 @@ function buildColumnArticleHtml(
       article.slug
     );
 
+  // 読みもの全文ページ｜戻るボタン・保存ボタン用の設定。<script>内へ埋め込むため、
+  // タイトル等に含まれる「<」・改行文字(U+2028/2029)をエスケープしてscriptが閉じないようにする。
+  const articleSaveConfigJson =
+    JSON.stringify({
+      slug: article.slug,
+      title:
+        typeof article.saveTitle === "string"
+          ? article.saveTitle
+          : "",
+      text: {
+        save: getColumnArticlePageText("saveButton", language),
+        saved: getColumnArticlePageText("savedButton", language),
+        saveAriaLabel: getColumnArticlePageText("saveButtonAriaLabel", language),
+        savedAriaLabel: getColumnArticlePageText("savedButtonAriaLabel", language),
+        limitReached: getColumnArticlePageText("saveLimitReached", language),
+        failed: getColumnArticlePageText("saveFailed", language)
+      }
+    })
+      .replace(/</g, "\\u003c")
+      .replace(/\u2028/g, "\\u2028")
+      .replace(/\u2029/g, "\\u2029");
+
   const escapedTitleSuffix =
     escapeHtmlForRender(
       getColumnArticlePageText(
@@ -26373,6 +26431,26 @@ function buildColumnArticleHtml(
       border-radius: 9px; background: rgba(255, 255, 255, 0.2); font-size: 15px;
     }
     .page-header h1 { margin: 0; font-size: 22px; line-height: 1.5; }
+    .article-back-row { margin: -14px 0 10px -6px; text-align: left; }
+    .article-back-button {
+      display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px;
+      border-radius: 999px; background: rgba(255, 255, 255, 0.2); color: var(--white);
+      font-size: 14px; font-weight: 700; text-decoration: none;
+    }
+    .article-back-button:focus-visible { outline: 2px solid var(--white); outline-offset: 2px; }
+    .article-save-section { margin: 26px 0 0; }
+    .article-save-button {
+      width: 100%; min-height: 48px; padding: 0 22px; border: 1.5px solid #f2b8c6; border-radius: 14px;
+      background: var(--white); color: #d1477e; font-size: 15px; font-weight: 800;
+      font-family: inherit; cursor: pointer;
+    }
+    .article-save-button.is-saved { border-color: #ef5470; background: #fff0f4; color: #ef5470; }
+    .article-save-button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+    .article-save-notice {
+      margin: 10px 0 0; padding: 8px 12px; border-radius: 10px;
+      background: #fff6e5; color: #7a4b00; font-size: 12px; line-height: 1.6;
+    }
+    @media (min-width: 700px) { .article-save-button { width: auto; } }
     .article-language-switch {
       margin: 0 0 14px; font-size: 12px; text-align: right; color: var(--subtext);
     }
@@ -26496,6 +26574,7 @@ function buildColumnArticleHtml(
   ${article.contentTranslationFallback ? "<!-- content-translation: fallback-ja -->" : ""}
 
   <div class="page-header">
+    <div class="article-back-row"><a id="articleBackButton" class="article-back-button" href="/">${escapeHtmlForRender(getColumnArticlePageText("backButton", language))}</a></div>
     <div class="brand-mini"><span class="brand-mini-icon"><img src="/icon-192.png?v=2" alt="" style="width:100%;height:100%;object-fit:contain;border-radius:inherit;"></span>${escapeHtmlForRender(getColumnArticlePageText("brandName", language))}</div>
     <h1>${escapedTitle}</h1>
   </div>
@@ -26520,6 +26599,11 @@ function buildColumnArticleHtml(
       ${buildColumnArticleParagraphsHtml(
         article.content
       )}
+
+      <div class="article-save-section">
+        <button id="articleSaveButton" class="article-save-button" type="button" aria-pressed="false" aria-label="${escapeHtmlForRender(getColumnArticlePageText("saveButtonAriaLabel", language))}" hidden>${escapeHtmlForRender(getColumnArticlePageText("saveButton", language))}</button>
+        <p id="articleSaveNotice" class="article-save-notice" role="status" aria-live="polite" hidden></p>
+      </div>
 
       <div class="cta-section">
         <p>${escapeHtmlForRender(getColumnArticlePageText("ctaText", language))}</p>
@@ -26674,6 +26758,93 @@ function buildColumnArticleHtml(
     });
 
     loadComments();
+  </script>
+
+  <!-- 旅の保存箱｜保存の読み書き(TOPと共通)。静的ファイルで、Functionや通信は増えない。 -->
+  <script src="/saved-items.js"></script>
+
+  <script>
+    // 読みもの全文ページ｜記事上部の「← 戻る」と、本文直後の保存ボタン。コメント欄とは別の
+    // scriptにして、ここで問題が起きてもコメント欄に影響させない。GA4イベントは送らない。
+    (function () {
+      const config = ${articleSaveConfigJson};
+
+      // 戻る：machinau.jp内の別のページから来たことが確かめられる時だけブラウザの「戻る」を使い、
+      // それ以外(検索・SNS・直接アクセス・同じ記事の言語切替)はリンクどおりTOP(/)へ移動する。
+      const backButton = document.getElementById("articleBackButton");
+
+      if (backButton) {
+        backButton.addEventListener("click", function (event) {
+          let cameFromOtherMachinauPage = false;
+
+          try {
+            if (document.referrer) {
+              const referrerUrl = new URL(document.referrer);
+              cameFromOtherMachinauPage =
+                referrerUrl.origin === window.location.origin &&
+                referrerUrl.pathname !== window.location.pathname;
+            }
+          } catch (error) {
+            cameFromOtherMachinauPage = false;
+          }
+
+          if (cameFromOtherMachinauPage && window.history.length > 1) {
+            event.preventDefault();
+            window.history.back();
+          }
+        });
+      }
+
+      // 保存：saved-items.jsが読み込めない時は、ボタンを出さないまま何もしない。
+      const store = window.MachinauSavedItems;
+      const saveButton = document.getElementById("articleSaveButton");
+      const saveNotice = document.getElementById("articleSaveNotice");
+
+      if (!store || !saveButton || !saveNotice) {
+        return;
+      }
+
+      function renderSaveButton() {
+        const isSaved = store.getIdSetOfType(store.TYPE_COLUMN).has(config.slug);
+        saveButton.textContent = isSaved ? config.text.saved : config.text.save;
+        saveButton.setAttribute("aria-pressed", isSaved ? "true" : "false");
+        saveButton.setAttribute("aria-label", isSaved ? config.text.savedAriaLabel : config.text.saveAriaLabel);
+        saveButton.classList.toggle("is-saved", isSaved);
+      }
+
+      saveButton.addEventListener("click", function () {
+        const result = store.toggle(store.TYPE_COLUMN, config.slug, config.title);
+
+        if (!result.ok) {
+          saveNotice.textContent =
+            result.reason === "limit"
+              ? config.text.limitReached.replace("{MAX}", String(store.MAX_PER_TYPE))
+              : config.text.failed;
+          saveNotice.hidden = false;
+        } else {
+          saveNotice.hidden = true;
+          saveNotice.textContent = "";
+        }
+
+        renderSaveButton();
+      });
+
+      // ブラウザの「戻る／進む」でキャッシュから復元された時・別のタブで保存が変わった時も今の状態にする。
+      window.addEventListener("pageshow", function (event) {
+        if (event.persisted) {
+          renderSaveButton();
+        }
+      });
+
+      window.addEventListener("storage", function (event) {
+        if (event.key === null || event.key === store.STORAGE_KEY) {
+          renderSaveButton();
+        }
+      });
+
+      renderSaveButton();
+      saveButton.hidden = false;
+    })();
   </script>
 
 </body>
@@ -27009,6 +27180,8 @@ async function handleRenderColumnArticleRequest(
         {
           slug: slug,
           title: displayTitle,
+          // 保存ボタンが旅の保存箱へ控えとして残すタイトル(TOPの保存と同じく原文)。
+          saveTitle: originalTitle,
           category: data.category,
           relatedArticles: relatedArticles,
           description: displayDescription,
