@@ -1611,6 +1611,25 @@
       }
     }
 
+    /* 店舗の詳細モーダル(PC・タブレット 701px以上)｜画面下からの大きなシートではなく
+       画面中央にコンパクトに出す。写真の枠は最大320px(object-fit:containのまま全体表示)、
+       モーダル全体は最大760pxで、収まらない本文はこれまでどおりモーダル内でスクロール。
+       無料掲載・正式店舗の詳細(#shopModal)共通。.modal-overlay/.modal-cardを流用している
+       街の今スレッド・楽しみ方のモーダルは対象外。700px以下のスマホ表示は変更しない。 */
+    @media (min-width: 701px) {
+      #shopModal.modal-overlay {
+        align-items: center;
+      }
+
+      #shopModal .modal-card {
+        max-height: min(88vh, 760px);
+      }
+
+      #shopModal .modal-visual {
+        height: min(42vh, 320px);
+      }
+    }
+
     /* 見つける全件表示モード(#shopsSection.shops-show-all)専用。
        スマホの圧縮3枚横スクロール(上のブロック)を解除し、
        既存PC版に近い1列のリッチカードへ切り替える。
