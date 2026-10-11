@@ -1584,6 +1584,33 @@
       }
     }
 
+    /* 店舗カード下部の縦位置揃え(PC・タブレット 701px以上)｜2列gridの同じ行の
+       カードは既に同じ高さになっているため、カード内を縦flexにして本文の行数差で
+       生じた余白を「今の情報を見る」「地図」のボタン群の上へ回し、ボタン群を
+       各カードの下端に揃える(本文は省略・切断しない。本文との間隔は従来の15pxを最低限
+       として保つ)。700px以下のスマホ表示には効かない。 */
+    @media (min-width: 701px) {
+      #shopsList .shop-card {
+        display: flex;
+        flex-direction: column;
+      }
+
+      #shopsList .shop-visual {
+        flex: 0 0 auto;
+      }
+
+      #shopsList .shop-body {
+        flex: 1 1 auto;
+        display: flex;
+        flex-direction: column;
+      }
+
+      #shopsList .shop-actions {
+        margin-top: auto;
+        padding-top: 15px;
+      }
+    }
+
     /* 見つける全件表示モード(#shopsSection.shops-show-all)専用。
        スマホの圧縮3枚横スクロール(上のブロック)を解除し、
        既存PC版に近い1列のリッチカードへ切り替える。
