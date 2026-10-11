@@ -1836,3 +1836,104 @@
     display: grid;
   }
 }
+
+/* 旅の保存箱 Phase 1a｜マイページを保存の種類ごとの枠に分け、保存したお店・施設を
+   スマホ優先のカード一覧(スマホ2列・PCは幅に合わせて列を増やす)にする。
+   一覧の中身(renderFavoriteList)と、TOPカード・地図・詳細モーダルのCSSは変えない。 */
+.travel-box-group {
+  margin-top: 18px;
+}
+
+.travel-box-group-heading {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.travel-box #favoriteList {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 14px;
+  margin-top: 12px;
+}
+
+/* 0件の案内文は1行で全幅に出す */
+.travel-box #favoriteList > p {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--subtext);
+}
+
+.travel-box .favorite-list-item {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 6px 18px rgba(20, 52, 82, 0.08);
+}
+
+.travel-box .favorite-list-item > strong {
+  margin: 10px 12px 0;
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.travel-box .favorite-list-item > p {
+  margin: 4px 12px 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--subtext);
+  overflow-wrap: anywhere;
+}
+
+.travel-box .favorite-list-item .shop-actions {
+  grid-template-columns: 1fr;
+  margin: auto 12px 12px;
+  padding-top: 10px;
+}
+
+.travel-box .favorite-list-item .shop-button {
+  min-height: 42px;
+  font-size: 13px;
+}
+
+.travel-box-note {
+  margin: 20px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--subtext);
+}
+
+@media (max-width: 520px) {
+  .travel-box #favoriteList {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .travel-box .favorite-list-item > strong {
+    margin: 8px 10px 0;
+    font-size: 14px;
+  }
+
+  .travel-box .favorite-list-item > p {
+    margin: 3px 10px 0;
+  }
+
+  .travel-box .favorite-list-item .shop-actions {
+    margin: auto 10px 10px;
+    padding-top: 8px;
+  }
+
+  .travel-box .favorite-list-item .shop-button {
+    padding: 0 6px;
+    font-size: 12px;
+  }
+}

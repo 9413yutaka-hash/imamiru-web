@@ -293,6 +293,10 @@ function switchMachinauLanguage(language) {
   // 既に取得済みのlastLoadedDynamicColumnArticlesを現在言語で再描画する
   // だけ(まだ一度も読み込まれていない場合は関数内で自然に何もしない)。
   renderDynamicColumnEntries();
+
+  // 旅の保存箱 Phase 1a｜保存箱を開いたまま言語を切り替えた時も、保存した
+  // お店・施設の一覧(0件の案内・ボタン文言)を現在言語で描き直す(取得済みデータのみ)。
+  renderFavoriteList();
 }
 
 function initializeMachinauLanguageSwitcher() {
@@ -11052,6 +11056,19 @@ const mapSection =
   shopsSection.style.display = "none";
   mapSection.style.display = "none";
   myPageSection.style.display = "block";
+
+  // 旅の保存箱 Phase 1a｜開いた時点で保存済みのお店・施設を表示する
+  // (以前は「お気に入り一覧」ボタンを押すまで隠れていた)。表示・並びは
+  // style.cssの.travel-box #favoriteList(インラインのdisplay指定は外す)。
+  // 一覧の作り方はrenderFavoriteList()のまま。TOPの選択カテゴリーは変えない。
+  const favoriteList =
+    document.getElementById("favoriteList");
+
+  if (favoriteList) {
+    favoriteList.style.display = "";
+  }
+
+  renderFavoriteList();
 
   myPageSection.scrollIntoView({
     behavior: "smooth"

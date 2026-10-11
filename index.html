@@ -2297,24 +2297,31 @@
 
     </section>
 
-    <section id="myPageSection" style="display:none;">
+    <!-- 旅の保存箱 Phase 1a｜マイページを「旅の保存箱」として、保存の種類ごとの枠に分ける。
+         保存データ(machinauFavoriteShopIds)と一覧の作り方(renderFavoriteList)は変えない。 -->
+    <section id="myPageSection" class="travel-box" style="display:none;">
   <div class="section-header">
-    <h2 data-i18n="mypage_heading">👤 マイページ</h2>
-    <p data-i18n="mypage_description">お気に入りに登録した情報を確認できます。</p>
+    <div class="section-title-area">
+      <h2 data-i18n="mypage_heading">🧳 旅の保存箱</h2>
+      <p data-i18n="mypage_description">旅先で見つけた情報を保存して、旅の途中や旅のあとに振り返れます。</p>
+    </div>
   </div>
 
   <div id="myPageContent">
-    <div id="favoriteList">
-  <p data-i18n="mypage_favorite_empty">まだお気に入りはありません。</p>
+    <section class="travel-box-group" aria-labelledby="travelBoxShopsHeading">
+      <h3 id="travelBoxShopsHeading" class="travel-box-group-heading" data-i18n="travel_box_shops_heading">❤️ お店・施設</h3>
+      <div id="favoriteList">
+  <p data-i18n="mypage_favorite_empty">まだ保存したお店・施設はありません。カードの♡を押すと、ここに保存されます。</p>
 </div>
-    <button
-  class="category-button"
-  type="button"
-  onclick="showFavoriteList()"
-  data-i18n="mypage_favorite_list_button"
->
-  ❤️ お気に入り一覧
-</button>
+    </section>
+
+    <!-- 旅の保存箱 Phase 1b(記事の保存)で表示する枠。今は非表示で、何も読み書きしない。 -->
+    <section id="travelBoxArticlesGroup" class="travel-box-group" aria-labelledby="travelBoxArticlesHeading" hidden>
+      <h3 id="travelBoxArticlesHeading" class="travel-box-group-heading" data-i18n="travel_box_articles_heading">📖 読みもの</h3>
+      <div id="savedArticleList"></div>
+    </section>
+
+    <p class="travel-box-note" data-i18n="travel_box_storage_note">保存した内容は、この端末のブラウザに保存されます。別の端末やブラウザには表示されず、閲覧履歴を消すと消えることがあります。</p>
   </div>
 </section>
 

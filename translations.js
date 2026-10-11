@@ -976,18 +976,34 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   mypage_heading: {
-    ja: "👤 マイページ",
-    en: "👤 My Page"
+    ja: "🧳 旅の保存箱",
+    en: "🧳 Travel Box"
   },
 
   mypage_description: {
-    ja: "お気に入りに登録した情報を確認できます。",
-    en: "See the places and info you've saved."
+    ja: "旅先で見つけた情報を保存して、旅の途中や旅のあとに振り返れます。",
+    en: "Save what you find on your trip and look back on it during or after your travels."
   },
 
   mypage_favorite_empty: {
-    ja: "まだお気に入りはありません。",
-    en: "You haven't saved any favorites yet."
+    ja: "まだ保存したお店・施設はありません。カードの♡を押すと、ここに保存されます。",
+    en: "No places saved yet. Tap ♡ on a card to save it here."
+  },
+
+  // 旅の保存箱 Phase 1a｜保存の種類ごとの見出しと、保存先の説明。
+  travel_box_shops_heading: {
+    ja: "❤️ お店・施設",
+    en: "❤️ Places"
+  },
+
+  travel_box_articles_heading: {
+    ja: "📖 読みもの",
+    en: "📖 Articles"
+  },
+
+  travel_box_storage_note: {
+    ja: "保存した内容は、この端末のブラウザに保存されます。別の端末やブラウザには表示されず、閲覧履歴を消すと消えることがあります。",
+    en: "Your saved items are stored in this browser on this device. They won't appear on other devices or browsers, and may be removed if you clear your browsing data."
   },
 
   mypage_favorite_list_button: {
