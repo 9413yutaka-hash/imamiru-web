@@ -3248,6 +3248,54 @@ function formatStoreProfileListAddress(formattedAddress) {
     .replace(/^〒?[0-9０-９]{3}[-－−ー‐]?[0-9０-９]{4}\s*/, "");
 }
 
+// Phase 2D STEP 4B｜設備code(サーバーのSTORE_FEATURE_CODESと同じ並び・同じcode)。
+// 表示名は既存の store_feature_* 翻訳(JA/EN)を使う。
+const STORE_PROFILE_FEATURE_CODES = [
+  "parking",
+  "free_wifi",
+  "power_outlets",
+  "wheelchair_accessible",
+  "kid_friendly",
+  "pet_friendly",
+  "dine_in",
+  "takeout",
+  "delivery",
+  "store_pickup",
+  "tax_free"
+];
+
+// 詳細の設備表示(テイクアウトは別の行で出すため除く)。
+function getStoreProfileFeatureTexts(shop) {
+  const language =
+    getCurrentMachinauLanguage();
+
+  return (Array.isArray(shop.featureCodes) ? shop.featureCodes : [])
+    .filter(function(code) {
+      return code !== "takeout" && STORE_PROFILE_FEATURE_CODES.includes(code);
+    })
+    .map(function(code) {
+      return getMachinauTranslation("store_feature_" + code, language);
+    })
+    .filter(function(text) {
+      return typeof text === "string" && text !== "";
+    });
+}
+
+// 詳細を開く時、shopsに無いsp_のIDだけを、取得済みの正式店舗から探す(無ければnull)。
+function findStoreProfileListShopForModal(firestoreId) {
+  if (typeof firestoreId !== "string" || firestoreId.indexOf("sp_") !== 0) {
+    return null;
+  }
+
+  for (const store of storeProfileListStores) {
+    if (store && store.id === firestoreId) {
+      return buildStoreProfileListShop(store);
+    }
+  }
+
+  return null;
+}
+
 // APIの正式店舗1件を、一覧カード用の形にする(submissionの形には寄せない)。
 // 表示に必要な値が欠けている店舗は null(その1件だけ表示しない)。
 function buildStoreProfileListShop(store) {
@@ -3305,6 +3353,11 @@ function buildStoreProfileListShop(store) {
         })
       : [],
     takeout: featureCodes.includes("takeout"),
+    // Phase 2D STEP 4B｜詳細用。Webサイトはhttp/httpsだけ(getSafeWebsiteUrl)、設備は許可codeだけ。
+    websiteUrl: getSafeWebsiteUrl(store.websiteUrl),
+    featureCodes: STORE_PROFILE_FEATURE_CODES.filter(function(code) {
+      return featureCodes.includes(code);
+    }),
     // 並び順(新しい順)だけに使う。カードには表示しない。無い・壊れている場合は0扱い(最後)。
     createdAt: typeof store.publishedAt === "string" ? store.publishedAt : null,
     distanceKm: null
@@ -3422,8 +3475,9 @@ function countStoreProfileListShopsInSelectedRegion() {
 
 // 正式店舗カード(STEP 4A)。本部決定：「店舗が管理」＋写真・店名・カテゴリー・紹介文・
 // 距離/徒歩(既存条件)・テイクアウト/支払い・住所・Googleマップ(外部リンク)だけ。
-// ⚡見出し・🆕新着・営業中/閉店まで・時間文言・詳細・お気に入り・カード本体クリックは出さない
-// (詳細・お気に入り・地図への統合は後のSTEP)。本文は店舗が保存した原文のまま。
+// ⚡見出し・🆕新着・営業中/閉店まで・時間文言・お気に入りは出さない(お気に入り・地図は
+// STEP 4C)。カード本体と「詳細を見る」は STEP 4B から詳細表示(openShopModal)へつなぐ。
+// 本文は店舗が保存した原文のまま。
 function buildStoreProfileShopCardHtml(shop, shopCardIndex) {
   const language =
     getCurrentMachinauLanguage();
@@ -3433,7 +3487,20 @@ function buildStoreProfileShopCardHtml(shop, shopCardIndex) {
       class="shop-card store-profile-card"
       data-shop-id="${escapeHtml(shop.firestoreId)}"
       data-listing-type="${STORE_PROFILE_LIST_LISTING_TYPE}"
-      style="cursor: default;"
+      onclick="
+        if (
+          event.target.closest(
+            'button, a'
+          )
+        ) {
+          return;
+        }
+
+        openShopModal(
+          '${escapeHtml(shop.firestoreId)}',
+          '${isShowingAllShopCards ? "full_list" : "card"}'
+        );
+      "
     >
       <div class="shop-visual ${escapeHtml(shop.visualClass)}">
         ${getCardVisualHtml(shop, shopCardIndex < 2)}
@@ -3473,6 +3540,13 @@ function buildStoreProfileShopCardHtml(shop, shopCardIndex) {
             : ""
         }
         <div class="shop-actions">
+          <button
+            class="shop-button detail-button"
+            type="button"
+            onclick="openShopModal('${escapeHtml(shop.firestoreId)}', '${isShowingAllShopCards ? "full_list" : "card"}')"
+          >
+            ${getMachinauTranslation("shop_detail_button", language)}
+          </button>
           ${getMapButtonHtml(shop)}
         </div>
       </div>
@@ -5260,6 +5334,11 @@ function getOrCreateModalWebsiteButton(
 function getShopListingTypeForAnalytics(
   shop
 ) {
+  // Phase 2D STEP 4B｜店主が管理する正式店舗(shop_idは sp_{storeId})。
+  if (shop.listingType === "store_profile") {
+    return "store_profile";
+  }
+
   if (
     shop.isPermanentAd === true &&
     shop.authorType === "shopAd"
@@ -5326,6 +5405,9 @@ function openShopModal(
   firestoreId,
   entryPoint
 ) {
+  // Phase 2D STEP 4B｜まず従来どおりshops(無料掲載等)から探し、見つからずIDがsp_で
+  // 始まる時だけ、取得済みの正式店舗(一覧用データ)から探す。どちらにも無ければ何もしない
+  // (GA4も送らない)。
   const selectedShop =
     shops.find(
       function(shop) {
@@ -5334,11 +5416,18 @@ function openShopModal(
           firestoreId
         );
       }
+    ) ||
+    findStoreProfileListShopForModal(
+      firestoreId
     );
 
   if (!selectedShop) {
     return;
   }
+
+  const isStoreProfileShop =
+    selectedShop.listingType ===
+    STORE_PROFILE_LIST_LISTING_TYPE;
 
   // 広告実証前 GA4最低限行動計測｜店舗一覧・地図・AIコンシェルジュ提案等、
   // 現行UI上の店舗詳細表示の入口はすべてこの共有関数を呼ぶ設計のため、
@@ -5466,8 +5555,10 @@ function openShopModal(
   currentModalReportShopId =
     selectedShop.firestoreId;
 
+  // Phase 2D STEP 4B｜正式店舗は通報の対象外(reportsはsubmission ID前提のため。別課題)。
   currentModalReportIsGeneralPost =
-    !isAdminPost;
+    !isAdminPost &&
+    !isStoreProfileShop;
 
   hasSubmittedReportThisModalSession =
     false;
@@ -5504,8 +5595,10 @@ function openShopModal(
       "";
   }
 
+  // Phase 2D STEP 4B｜正式店舗は営業状態・営業時間・新着・閉店まで・時間文言を出さない
+  // (曜日別営業時間とタイムゾーンへの正しい対応はSTEP 4D)。
   const modalBusinessStatus =
-    isAdminPost
+    isAdminPost || isStoreProfileShop
       ? { text: "", isOpen: null }
       : getBusinessStatus(
           selectedShop
@@ -5543,6 +5636,18 @@ function openShopModal(
     );
 
   if (
+    isStoreProfileShop
+  ) {
+    // Phase 2D STEP 4B｜正式店舗は「店舗が管理」(「一般投稿」等と表示しない)。
+    modalText +=
+      "<br><br>" +
+      escapeHtml(
+        getMachinauTranslation(
+          "shop_store_managed_badge",
+          modalCurrentLanguage
+        )
+      );
+  } else if (
     selectedShop.sourceLabel
   ) {
     // 多言語化 Phase B｜sourceLabelはFirestoreに常に固定文字列
@@ -5633,7 +5738,32 @@ function openShopModal(
       );
   }
 
+  // Phase 2D STEP 4B｜正式店舗の設備(APIのfeatureCodesのうち許可されたcodeだけ。
+  // テイクアウトは上の行で表示済みのため、ここでは重ねて出さない)。
+  if (isStoreProfileShop) {
+    const modalFeatureTexts =
+      getStoreProfileFeatureTexts(
+        selectedShop
+      );
+
+    if (modalFeatureTexts.length > 0) {
+      modalText +=
+        "<br><br>" +
+        escapeHtml(
+          getMachinauTranslation(
+            "store_profile_features_heading",
+            modalCurrentLanguage
+          ) +
+          "：" +
+          modalFeatureTexts.join(
+            modalCurrentLanguage === MACHINAU_DEFAULT_LANGUAGE ? "・" : ", "
+          )
+        );
+    }
+  }
+
   if (
+    !isStoreProfileShop &&
     selectedShop.timeMessage
   ) {
     modalText +=
@@ -5644,7 +5774,7 @@ function openShopModal(
   }
 
   const modalBusinessHoursDisplayText =
-    isAdminPost
+    isAdminPost || isStoreProfileShop
       ? ""
       : getBusinessHoursDisplayText(
           selectedShop
@@ -5659,9 +5789,11 @@ function openShopModal(
   }
 
   const modalExpiryDisplayText =
-    getExpiryDisplayText(
-      selectedShop
-    );
+    isStoreProfileShop
+      ? ""
+      : getExpiryDisplayText(
+          selectedShop
+        );
 
   if (modalExpiryDisplayText) {
     modalText +=
@@ -5672,7 +5804,7 @@ function openShopModal(
   }
 
   const modalBusinessClosingText =
-    isAdminPost
+    isAdminPost || isStoreProfileShop
       ? ""
       : getBusinessClosingText(
           selectedShop
@@ -5687,7 +5819,7 @@ function openShopModal(
   }
 
   const modalBusinessClosedMessage =
-    isAdminPost
+    isAdminPost || isStoreProfileShop
       ? ""
       : getBusinessClosedMessage(
           selectedShop
