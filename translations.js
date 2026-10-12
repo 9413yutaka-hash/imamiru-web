@@ -3374,6 +3374,22 @@ const MACHINAU_TRANSLATIONS = {
     en: "Shown as written by the shop"
   },
 
+  // 今だけ投稿 カード翻訳 STEP 3｜タイトル・紹介文を自動翻訳で表示している時の表示と切り替え。
+  imadake_auto_translated: {
+    ja: "自動翻訳",
+    en: "Automatically translated"
+  },
+
+  imadake_show_original: {
+    ja: "原文を見る",
+    en: "See original"
+  },
+
+  imadake_show_translation: {
+    ja: "翻訳を見る",
+    en: "See translation"
+  },
+
   imadake_expires_in_hours: {
     ja: "掲載あと{HOURS}時間",
     en: "{HOURS}h left"

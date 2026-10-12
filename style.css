@@ -2285,3 +2285,22 @@
     scroll-snap-align: start;
   }
 }
+
+/* 今だけ投稿 カード翻訳 STEP 3｜「自動翻訳」の表示と「原文を見る／翻訳を見る」の切り替え。 */
+.imadake-auto-translated-label {
+  font-weight: 700;
+}
+
+.imadake-translation-toggle {
+  margin-left: 8px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--blue);
+  font-size: 11px;
+  font-weight: 800;
+  font-family: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  min-height: 24px;
+}

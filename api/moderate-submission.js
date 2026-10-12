@@ -56,6 +56,12 @@ import {
   readStoreOfficialLocationFromData
 } from "./_lib/imadake.js";
 
+// 今だけ投稿 カード翻訳 STEP 3｜実処理はapi/_lib/imadake-translation.js(Functionではない)。
+import {
+  handleImadakeCardTranslationGet,
+  callOpenAiImadakeCardTranslation
+} from "./_lib/imadake-translation.js";
+
 // 正式店舗参加基盤 Phase 2A｜セルフ店舗登録。実処理はapi/_lib/store-self-service.js。
 import {
   handleStoreRegistrationPreview,
@@ -29681,6 +29687,23 @@ function buildStoreSelfServiceDeps() {
   };
 }
 
+// 今だけ投稿 カード翻訳｜既存の認証・連打制限・リクエスト読み取りを参照として渡す
+// (既存関数自体は変更しない)。OpenAIの呼び出しはimadake-translation.jsの専用関数。
+function buildImadakeTranslationDeps() {
+  return {
+    getFirebaseAdminApp: getFirebaseAdminApp,
+    getFirestore: getFirestore,
+    verifyIdToken: function(app, idToken) {
+      return getAuth(app).verifyIdToken(idToken);
+    },
+    readBearerToken: readBearerToken,
+    readRequestBody: readRequestBody,
+    claimRateLimit: claimRateLimit,
+    hashClientIpAddress: hashClientIpAddress,
+    translateCards: callOpenAiImadakeCardTranslation
+  };
+}
+
 function buildImadakeDeps() {
   return {
     getFirebaseAdminApp: getFirebaseAdminApp,
@@ -30182,6 +30205,18 @@ export default async function handler(
     return handleCommunityBoardPostCreateRequest(
       request,
       response
+    );
+  }
+
+  // 今だけ投稿 カード翻訳 STEP 3｜TOPのカード(タイトル＋紹介文)の英語訳(匿名認証必須)。
+  // 実処理はapi/_lib/imadake-translation.js。新規翻訳は1日100件まで。
+  if (
+    requestBody.mode === "imadakeCardTranslationGet"
+  ) {
+    return handleImadakeCardTranslationGet(
+      request,
+      response,
+      buildImadakeTranslationDeps()
     );
   }
 

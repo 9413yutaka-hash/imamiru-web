@@ -19818,11 +19818,57 @@ async function loadImadakeNearbyPosts(
   renderImadakeSection();
 }
 
-// 将来、表示言語の翻訳(カードの見出し・紹介文)が届いたらここで差し替える。
-// 今はお店が書いた原文をそのまま返す。
-function getImadakeCardDisplayText(
-  post
+// 今だけ投稿 カード翻訳 STEP 3｜表示言語の訳(タイトル＋紹介文)があり、「原文を見る」中で
+// なければ訳を返す。無ければお店が書いた原文を返す(店名・価格等は常に原文)。
+const IMADAKE_CARD_TRANSLATION_LANGUAGES =
+  ["en"];
+
+// 「原文を見る」を押した投稿(言語を切り替えても、押し直すまで原文のまま)。
+const imadakeShowOriginalPostIds =
+  new Set();
+
+function getImadakeCardTranslation(
+  post,
+  language
 ) {
+  const entry =
+    post &&
+    post.sourceLanguage !== language &&
+    post.cardTranslations &&
+    post.cardTranslations[language];
+
+  return entry &&
+    typeof entry.headline === "string" &&
+    entry.headline !== ""
+    ? entry
+    : null;
+}
+
+function getImadakeCardDisplayText(
+  post,
+  language
+) {
+  const translation =
+    getImadakeCardTranslation(
+      post,
+      language || getCurrentMachinauLanguage()
+    );
+
+  if (
+    translation &&
+    !imadakeShowOriginalPostIds.has(post.postId)
+  ) {
+    return {
+      headline: translation.headline,
+      excerpt:
+        typeof translation.excerpt === "string"
+          ? translation.excerpt
+          : "",
+      isOriginal: false,
+      hasTranslation: true
+    };
+  }
+
   return {
     headline:
       typeof post.headline === "string"
@@ -19832,8 +19878,206 @@ function getImadakeCardDisplayText(
       typeof post.excerpt === "string"
         ? post.excerpt
         : "",
-    isOriginal: true
+    isOriginal: true,
+    hasTranslation: translation !== null
   };
+}
+
+function toggleImadakeCardOriginal(
+  postId
+) {
+  if (imadakeShowOriginalPostIds.has(postId)) {
+    imadakeShowOriginalPostIds.delete(postId);
+  } else {
+    imadakeShowOriginalPostIds.add(postId);
+  }
+
+  renderImadakeSection();
+}
+
+// 訳を頼んだ投稿("language:postId")。同じ投稿を何度も頼まない。
+const imadakeCardTranslationRequestedKeys =
+  new Set();
+
+// 生成中(pending)で1回だけ頼み直した投稿。
+const imadakeCardTranslationRetriedKeys =
+  new Set();
+
+let imadakeCardTranslationInFlight =
+  false;
+
+// 生成中の投稿を頼み直すまでの待ち時間(サーバーの連打制限5秒より長くする)。
+const IMADAKE_CARD_TRANSLATION_RETRY_DELAY_MS =
+  6000;
+
+const IMADAKE_CARD_TRANSLATION_MAX_POSTS_PER_REQUEST =
+  10;
+
+// 表示中のカードのうち、表示言語の訳がまだ無い投稿だけをまとめて頼む。訳が届いたら
+// タイトルと紹介文だけを差し替える。失敗・上限到達の時は何もしない(原文のまま)。
+// 翻訳の要求はCV・課金成果ではない(記録もしない)。
+function requestImadakeCardTranslationsIfNeeded(
+  visiblePosts
+) {
+  const language =
+    getCurrentMachinauLanguage();
+
+  if (
+    imadakeCardTranslationInFlight ||
+    !IMADAKE_CARD_TRANSLATION_LANGUAGES.includes(language)
+  ) {
+    return;
+  }
+
+  const postIds =
+    visiblePosts
+      .filter(function(post) {
+        return (
+          post.sourceLanguage !== language &&
+          !getImadakeCardTranslation(post, language) &&
+          !imadakeCardTranslationRequestedKeys.has(language + ":" + post.postId)
+        );
+      })
+      .slice(0, IMADAKE_CARD_TRANSLATION_MAX_POSTS_PER_REQUEST)
+      .map(function(post) {
+        return post.postId;
+      });
+
+  if (postIds.length === 0) {
+    return;
+  }
+
+  postIds.forEach(function(postId) {
+    imadakeCardTranslationRequestedKeys.add(language + ":" + postId);
+  });
+
+  fetchImadakeCardTranslations(
+    postIds,
+    language
+  );
+}
+
+async function fetchImadakeCardTranslations(
+  postIds,
+  language
+) {
+  imadakeCardTranslationInFlight =
+    true;
+
+  let responseData =
+    null;
+
+  try {
+    const idToken =
+      await getAnonymousIdTokenForLocationCollection();
+
+    const response =
+      await fetch(
+        "/api/moderate-submission",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + idToken
+          },
+          body: JSON.stringify({
+            mode: "imadakeCardTranslationGet",
+            postIds: postIds,
+            language: language
+          })
+        }
+      );
+
+    responseData =
+      response.ok
+        ? await response.json()
+        : null;
+  } catch (error) {
+    // 翻訳は補助機能のため、失敗しても原文のまま表示を続ける。
+    responseData =
+      null;
+  }
+
+  imadakeCardTranslationInFlight =
+    false;
+
+  if (
+    !responseData ||
+    responseData.success !== true
+  ) {
+    // 失敗・上限到達・連打制限：原文のまま。頼み直しはしない。翻訳中に現在地が変わって
+    // いた時のために描き直し、新しい一覧でまだ頼んでいないカードの分を頼む。
+    renderImadakeSection();
+    return;
+  }
+
+  // 訳は頼んだ言語の分として保存する(表示は描くたびに今の表示言語で選ぶため、頼んだ後に
+  // 表示言語が変わっていても、違う言語のカードに訳が出ることは無い)。
+
+  const translations =
+    responseData.translations && typeof responseData.translations === "object"
+      ? responseData.translations
+      : {};
+
+  let didUpdate =
+    false;
+
+  // 今の一覧にある投稿にだけ当てはめる(現在地が変わって一覧から外れた投稿には使わない)。
+  imadakeNearbyPosts.forEach(function(post) {
+    const translation =
+      translations[post.postId];
+
+    if (
+      translation &&
+      typeof translation.headline === "string" &&
+      translation.headline !== ""
+    ) {
+      post.cardTranslations =
+        Object.assign({}, post.cardTranslations || {}, {
+          [language]: {
+            headline: translation.headline,
+            excerpt:
+              typeof translation.excerpt === "string"
+                ? translation.excerpt
+                : ""
+          }
+        });
+
+      didUpdate = true;
+    }
+  });
+
+  // 別のリクエストが翻訳中だった投稿は、少し後に1回だけ頼み直す(上限到達時は頼まない)。
+  const pendingPostIds =
+    Array.isArray(responseData.pending) && responseData.limited !== true
+      ? responseData.pending.filter(function(postId) {
+          return !imadakeCardTranslationRetriedKeys.has(language + ":" + postId);
+        })
+      : [];
+
+  // 頼み直しの印は待ち時間の後で外す(すぐ外すと直後の描き直しで頼んでしまうため)。
+  pendingPostIds.forEach(function(postId) {
+    imadakeCardTranslationRetriedKeys.add(language + ":" + postId);
+  });
+
+  // 訳の差し替えと、翻訳中に現在地が変わって増えたカードの分の依頼のために描き直す
+  // (頼み済みの投稿は二度と頼まないので、繰り返しにはならない)。
+  if (
+    didUpdate ||
+    imadakeNearbyPosts.length > 0
+  ) {
+    renderImadakeSection();
+  }
+
+  if (pendingPostIds.length > 0) {
+    setTimeout(function() {
+      pendingPostIds.forEach(function(postId) {
+        imadakeCardTranslationRequestedKeys.delete(language + ":" + postId);
+      });
+
+      renderImadakeSection();
+    }, IMADAKE_CARD_TRANSLATION_RETRY_DELAY_MS);
+  }
 }
 
 function getImadakeLiveStateText(
@@ -19953,10 +20197,49 @@ function buildImadakeCardHtml(
   nowMillis
 ) {
   const text =
-    getImadakeCardDisplayText(post);
+    getImadakeCardDisplayText(post, language);
 
   const sourceLanguage =
     getImadakeSourceLanguageAttribute(post);
+
+  // タイトル・紹介文の言語(訳を表示中は表示言語、原文なら投稿の言語)。
+  const textLanguage =
+    text.isOriginal
+      ? sourceLanguage
+      : language;
+
+  // 訳を表示中：「自動翻訳」＋「原文を見る」。原文を表示中で訳がある：「翻訳を見る」。
+  // 訳が無い：従来どおり「お店が書いた原文」の注記(投稿の言語と表示言語が違う時)。
+  const toggleButtonHtml =
+    text.hasTranslation
+      ? '<button class="imadake-translation-toggle" type="button" data-imadake-post-id="' +
+        escapeHtml(post.postId) +
+        '" onclick="toggleImadakeCardOriginal(this.getAttribute(\'data-imadake-post-id\'))">' +
+        escapeHtml(
+          getMachinauTranslation(
+            text.isOriginal
+              ? "imadake_show_translation"
+              : "imadake_show_original",
+            language
+          )
+        ) +
+        "</button>"
+      : "";
+
+  const languageNoteHtml =
+    !text.isOriginal
+      ? '<p class="imadake-original-note">' +
+        '<span class="imadake-auto-translated-label">' +
+          escapeHtml(getMachinauTranslation("imadake_auto_translated", language)) +
+        "</span>" +
+        toggleButtonHtml +
+        "</p>"
+      : sourceLanguage !== language
+        ? '<p class="imadake-original-note">' +
+          escapeHtml(getMachinauTranslation("imadake_original_language_note", language)) +
+          toggleButtonHtml +
+          "</p>"
+        : "";
 
   const imageUrl =
     typeof post.imageUrl === "string"
@@ -20003,11 +20286,11 @@ function buildImadakeCardHtml(
             escapeHtml(post.storeName) +
           "</span>" +
         "</div>" +
-        '<p class="imadake-card-title" lang="' + sourceLanguage + '">' +
+        '<p class="imadake-card-title" lang="' + textLanguage + '">' +
           escapeHtml(text.headline) +
         "</p>" +
         (excerptText !== ""
-          ? '<p class="imadake-card-excerpt" lang="' + sourceLanguage + '">' +
+          ? '<p class="imadake-card-excerpt" lang="' + textLanguage + '">' +
             escapeHtml(excerptText) +
             "</p>"
           : "") +
@@ -20018,11 +20301,7 @@ function buildImadakeCardHtml(
             }).join("") +
             "</div>"
           : "") +
-        (sourceLanguage !== language
-          ? '<p class="imadake-original-note">' +
-            escapeHtml(getMachinauTranslation("imadake_original_language_note", language)) +
-            "</p>"
-          : "") +
+        languageNoteHtml +
         '<button class="imadake-read-more" type="button" data-imadake-post-id="' +
           escapeHtml(post.postId) +
           '" onclick="openImadakeDetail(this.getAttribute(\'data-imadake-post-id\'))">' +
@@ -20073,6 +20352,9 @@ function renderImadakeSection() {
 
   section.hidden = false;
   startImadakeExpiryCheck();
+
+  // 今だけ投稿 カード翻訳 STEP 3｜表示中のカードで訳がまだ無いものだけを頼む。
+  requestImadakeCardTranslationsIfNeeded(visiblePosts);
 }
 
 function startImadakeExpiryCheck() {

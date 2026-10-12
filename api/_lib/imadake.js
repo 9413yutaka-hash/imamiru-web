@@ -25,6 +25,10 @@ import {
 } from "firebase-admin/firestore";
 
 import {
+  createHash
+} from "node:crypto";
+
+import {
   encodeTownNowGeohash,
   computeTownNowDistanceKm,
   computeTownNowGeohashQueryRanges
@@ -849,7 +853,8 @@ function toMillis(
     : null;
 }
 
-function isPublishedAndUnexpired(
+// STEP 3｜英語カード翻訳(imadake-translation.js)でも同じ判定を使うためexportする(中身は変えない)。
+export function isPublishedAndUnexpired(
   post,
   nowMillis
 ) {
@@ -1693,6 +1698,88 @@ export function buildImadakeCardExcerpt(
   };
 }
 
+// --------------------------------------------------------------------------
+// 今だけ投稿 STEP 3｜カード(タイトル＋紹介文)の翻訳キャッシュ
+// --------------------------------------------------------------------------
+// 翻訳はimadakePosts/{postId}.translations.{language}.cardに保存する
+// (書き込みはimadake-translation.jsの翻訳専用処理だけ)。カードの原文
+// (headlineと、本文から作る紹介文)のハッシュが一致する訳だけを使い、原文が
+// 変わった後の古い訳は使わない。一覧APIは投稿本体を読んでいるので、訳を返す
+// ための追加の読み取りは無い。
+
+// カード翻訳に対応する表示言語(サーバー側の許可リスト。初期は英語のみ)。
+export const IMADAKE_CARD_TRANSLATION_LANGUAGES =
+  ["en"];
+
+export function getImadakeCardSource(
+  post
+) {
+  return {
+    headline:
+      typeof post.headline === "string"
+        ? post.headline
+        : "",
+    excerpt:
+      buildImadakeCardExcerpt(post.body).excerpt
+  };
+}
+
+export function computeImadakeCardSourceHash(
+  source
+) {
+  return createHash("sha256")
+    .update(
+      JSON.stringify([source.headline, source.excerpt]),
+      "utf8"
+    )
+    .digest("hex");
+}
+
+// 使ってよい(翻訳済み・原文ハッシュ一致・原文と違う言語の)カード翻訳だけを返す。
+export function readReadyImadakeCardTranslations(
+  post
+) {
+  const result =
+    {};
+
+  const translations =
+    post.translations && typeof post.translations === "object"
+      ? post.translations
+      : null;
+
+  if (!translations) {
+    return result;
+  }
+
+  const sourceHash =
+    computeImadakeCardSourceHash(
+      getImadakeCardSource(post)
+    );
+
+  IMADAKE_CARD_TRANSLATION_LANGUAGES.forEach(function(language) {
+    const entry =
+      translations[language] &&
+      translations[language].card;
+
+    if (
+      language !== post.sourceLanguage &&
+      entry &&
+      entry.status === "ready" &&
+      entry.sourceHash === sourceHash &&
+      typeof entry.headline === "string" &&
+      entry.headline !== "" &&
+      typeof entry.excerpt === "string"
+    ) {
+      result[language] = {
+        headline: entry.headline,
+        excerpt: entry.excerpt
+      };
+    }
+  });
+
+  return result;
+}
+
 export function buildImadakeCardPost(
   postId,
   post,
@@ -1731,7 +1818,9 @@ export function buildImadakeCardPost(
     publishedAt: toIsoOrNull(post.publishedAt),
     expiresAt: toIsoOrNull(post.expiresAt),
     // 距離は0.1km単位に丸める(正確な座標は返さない)。
-    distanceKm: Math.round(distanceKm * 10) / 10
+    distanceKm: Math.round(distanceKm * 10) / 10,
+    // STEP 3｜翻訳済みのカード訳(無ければ{})。既存の項目は変えない。
+    cardTranslations: readReadyImadakeCardTranslations(post)
   };
 }
 
