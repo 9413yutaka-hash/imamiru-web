@@ -26,7 +26,8 @@ import {
 
 import {
   encodeTownNowGeohash,
-  computeTownNowDistanceKm
+  computeTownNowDistanceKm,
+  computeTownNowGeohashQueryRanges
 } from "./town-now-threads.js";
 
 // 2026-10-08 代表決定｜今だけ投稿の「近く」＝現在地から半径15km以内
@@ -1605,6 +1606,377 @@ export async function handleImadakePostGet(
     });
   } catch (error) {
     console.error("今だけ投稿の取得に失敗しました：", error);
+
+    return response.status(500).json({
+      success: false,
+      message: "今だけ投稿を取得できませんでした。"
+    });
+  }
+}
+
+// ==========================================================================
+// 今だけ投稿 STEP 5｜旅行者向けの近くの一覧(GET mode=imadakePostsNearby、認証不要)
+// ==========================================================================
+// TOPの独立枠(次工程)が使う、カード表示用の一覧。読み取りだけで、書き込み・
+// AI翻訳・GA4・成果計測は行わない。
+//
+// 1. 店舗ごとの枠(imadakeStoreSlots)を、閲覧者の現在地から15kmのgeohash範囲で
+//    読む(1店舗1件の枠なので、同じ店舗の投稿は重ならない)。
+// 2. 枠の掲載期限・座標で候補を絞り、近い順に上限件数まで投稿本体を読む。
+// 3. 投稿本体で「公開中かつ期限内」「枠と同じ店舗」「15km以内」を再確認する
+//    (枠の情報が古くても、公開していない投稿は返さない)。
+// 返すのはカードに必要な項目だけ(本文は冒頭80文字の紹介文のみ。本文全文・
+// 店舗ID・正確な座標・審査情報・token等は返さない)。詳細はimadakePostGet。
+// ==========================================================================
+
+// 返すカードの最大件数(街の今スレッドの一覧上限20件と同じ)。
+export const IMADAKE_NEARBY_LIST_LIMIT =
+  20;
+
+// geohash範囲ごとに読む店舗枠の上限(街の今スレッドの範囲検索上限50件と同じ)。
+export const IMADAKE_NEARBY_RANGE_QUERY_LIMIT =
+  50;
+
+// 投稿本体を読む候補の上限(近い順)。本体側の再確認で落ちる分を見込み、
+// 返す件数より少し多く読む。
+export const IMADAKE_NEARBY_CANDIDATE_LIMIT =
+  30;
+
+// カードの紹介文(本文の冒頭)の文字数。
+export const IMADAKE_CARD_EXCERPT_LENGTH =
+  80;
+
+// 閲覧者の現在地。街の今スレッドと同じく、約100m(小数点以下3桁まで)に丸めた
+// 値だけを受け付ける(精密な現在地を送らせない・CDNキャッシュが効くようにする)。
+function readImadakeViewerCoordinate(
+  rawValue,
+  min,
+  max
+) {
+  if (
+    typeof rawValue !== "string" ||
+    !/^-?\d{1,3}(\.\d{1,3})?$/.test(rawValue.trim())
+  ) {
+    return null;
+  }
+
+  const value =
+    Number(rawValue.trim());
+
+  return Number.isFinite(value) &&
+    value >= min &&
+    value <= max
+    ? value
+    : null;
+}
+
+// 本文の冒頭をカード用の紹介文にする。改行・連続空白は1つの空白にまとめ、
+// 絵文字等が途中で割れないよう文字(コードポイント)単位で切る。
+export function buildImadakeCardExcerpt(
+  body
+) {
+  const normalized =
+    typeof body === "string"
+      ? body.replace(/\s+/g, " ").trim()
+      : "";
+
+  const characters =
+    Array.from(normalized);
+
+  return {
+    excerpt:
+      characters
+        .slice(0, IMADAKE_CARD_EXCERPT_LENGTH)
+        .join(""),
+    excerptTruncated:
+      characters.length > IMADAKE_CARD_EXCERPT_LENGTH
+  };
+}
+
+export function buildImadakeCardPost(
+  postId,
+  post,
+  distanceKm
+) {
+  const imageUrls =
+    Array.isArray(post.imageUrls)
+      ? post.imageUrls
+      : [];
+
+  const excerpt =
+    buildImadakeCardExcerpt(post.body);
+
+  return {
+    postId: postId,
+    storeName: post.storeNameSnapshot,
+    categoryCode: post.categoryCode,
+    headline: post.headline,
+    excerpt: excerpt.excerpt,
+    excerptTruncated: excerpt.excerptTruncated,
+    sourceLanguage: post.sourceLanguage,
+    imageUrl: imageUrls.length > 0 ? imageUrls[0] : "",
+    imageCount: imageUrls.length,
+    liveState:
+      post.liveState
+        ? {
+            type: post.liveState.type,
+            status: post.liveState.status,
+            quantity:
+              typeof post.liveState.quantity === "number"
+                ? post.liveState.quantity
+                : null
+          }
+        : null,
+    availableUntil: post.availableUntil,
+    publishedAt: toIsoOrNull(post.publishedAt),
+    expiresAt: toIsoOrNull(post.expiresAt),
+    // 距離は0.1km単位に丸める(正確な座標は返さない)。
+    distanceKm: Math.round(distanceKm * 10) / 10
+  };
+}
+
+export async function handleImadakePostsNearby(
+  request,
+  response,
+  deps
+) {
+  try {
+    const query =
+      request.query ||
+      {};
+
+    const viewerLatitude =
+      readImadakeViewerCoordinate(
+        query.latitude,
+        -90,
+        90
+      );
+
+    const viewerLongitude =
+      readImadakeViewerCoordinate(
+        query.longitude,
+        -180,
+        180
+      );
+
+    if (
+      viewerLatitude === null ||
+      viewerLongitude === null
+    ) {
+      return response.status(400).json({
+        success: false,
+        message: "現在地(小数点以下3桁まで)を指定してください。"
+      });
+    }
+
+    const database =
+      deps.getFirestore(
+        deps.getFirebaseAdminApp()
+      );
+
+    const nowMillis =
+      Date.now();
+
+    const slotsCollection =
+      database.collection(
+        IMADAKE_STORE_SLOTS_COLLECTION
+      );
+
+    const ranges =
+      computeTownNowGeohashQueryRanges(
+        viewerLatitude,
+        viewerLongitude,
+        IMADAKE_NEARBY_RADIUS_KM * 1000
+      );
+
+    // activeGeohashだけの範囲条件(単一フィールド)なので、新しい複合indexは不要。
+    // 掲載の無い枠はactiveGeohashが""のため、範囲に入らない。
+    const rangeSnapshots =
+      await Promise.all(
+        ranges.map(
+          function(range) {
+            return slotsCollection
+              .where(
+                "activeGeohash",
+                ">=",
+                range[0]
+              )
+              .where(
+                "activeGeohash",
+                "<",
+                range[1]
+              )
+              .orderBy(
+                "activeGeohash"
+              )
+              .limit(
+                IMADAKE_NEARBY_RANGE_QUERY_LIMIT
+              )
+              .get();
+          }
+        )
+      );
+
+    // 店舗ID(枠のドキュメントID)ごとに1件。geohash範囲が重なっても重複しない。
+    const candidatesByStoreId =
+      new Map();
+
+    rangeSnapshots.forEach(
+      function(snapshot) {
+        snapshot.docs.forEach(
+          function(slotSnapshot) {
+            const slot =
+              slotSnapshot.data() ||
+              {};
+
+            const activePostId =
+              typeof slot.activePostId === "string"
+                ? slot.activePostId
+                : "";
+
+            const activeExpiresAtMillis =
+              toMillis(slot.activeExpiresAt);
+
+            if (
+              activePostId === "" ||
+              activePostId.includes("/") ||
+              activeExpiresAtMillis === null ||
+              activeExpiresAtMillis <= nowMillis ||
+              typeof slot.activeLatitude !== "number" ||
+              typeof slot.activeLongitude !== "number"
+            ) {
+              return;
+            }
+
+            const slotDistanceKm =
+              computeImadakeDistanceKm(
+                viewerLatitude,
+                viewerLongitude,
+                slot.activeLatitude,
+                slot.activeLongitude
+              );
+
+            if (!isWithinImadakeNearbyRadius(slotDistanceKm)) {
+              return;
+            }
+
+            candidatesByStoreId.set(
+              slotSnapshot.id,
+              {
+                storeId: slotSnapshot.id,
+                postId: activePostId,
+                distanceKm: slotDistanceKm
+              }
+            );
+          }
+        );
+      }
+    );
+
+    const candidates =
+      Array.from(
+        candidatesByStoreId.values()
+      )
+        .sort(
+          function(a, b) {
+            return a.distanceKm - b.distanceKm;
+          }
+        )
+        .slice(
+          0,
+          IMADAKE_NEARBY_CANDIDATE_LIMIT
+        );
+
+    const postSnapshots =
+      candidates.length > 0
+        ? await database.getAll(
+            ...candidates.map(
+              function(candidate) {
+                return database
+                  .collection(IMADAKE_POSTS_COLLECTION)
+                  .doc(candidate.postId);
+              }
+            )
+          )
+        : [];
+
+    const cards =
+      [];
+
+    postSnapshots.forEach(
+      function(postSnapshot, index) {
+        const candidate =
+          candidates[index];
+
+        const post =
+          postSnapshot && postSnapshot.exists
+            ? postSnapshot.data() || {}
+            : null;
+
+        if (
+          post === null ||
+          !isPublishedAndUnexpired(post, nowMillis) ||
+          post.storeId !== candidate.storeId ||
+          typeof post.latitude !== "number" ||
+          typeof post.longitude !== "number"
+        ) {
+          return;
+        }
+
+        // 距離は投稿本体の座標(投稿時点の店舗所在地)で計算し直す。
+        const distanceKm =
+          computeImadakeDistanceKm(
+            viewerLatitude,
+            viewerLongitude,
+            post.latitude,
+            post.longitude
+          );
+
+        if (!isWithinImadakeNearbyRadius(distanceKm)) {
+          return;
+        }
+
+        cards.push({
+          card:
+            buildImadakeCardPost(
+              postSnapshot.id,
+              post,
+              distanceKm
+            ),
+          distanceKm: distanceKm,
+          publishedAtMillis: toMillis(post.publishedAt) || 0
+        });
+      }
+    );
+
+    // 近い順。同じ距離なら新しい投稿を先にする。
+    cards.sort(
+      function(a, b) {
+        return (
+          a.distanceKm - b.distanceKm ||
+          b.publishedAtMillis - a.publishedAtMillis
+        );
+      }
+    );
+
+    // 街の今スレッドの周辺取得と同じ短いCDNキャッシュ(30秒)。
+    response.setHeader(
+      "Cache-Control",
+      "public, max-age=0, s-maxage=30, stale-while-revalidate=30"
+    );
+
+    return response.status(200).json({
+      success: true,
+      radiusKm: IMADAKE_NEARBY_RADIUS_KM,
+      posts:
+        cards
+          .slice(0, IMADAKE_NEARBY_LIST_LIMIT)
+          .map(function(entry) {
+            return entry.card;
+          })
+    });
+  } catch (error) {
+    console.error("今だけ投稿の近くの一覧の取得に失敗しました：", error);
 
     return response.status(500).json({
       success: false,

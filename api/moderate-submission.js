@@ -48,6 +48,7 @@ import {
   handleImadakePostCreate,
   handleImadakePostEnd,
   handleImadakePostGet,
+  handleImadakePostsNearby,
   handleImadakeAdminPendingList,
   handleImadakeAdminReview,
   handleImadakeAdminStoreLocation,
@@ -29831,6 +29832,18 @@ export default async function handler(
       request.query.mode === "imadakePostGet"
     ) {
       return handleImadakePostGet(
+        request,
+        response,
+        buildImadakeDeps()
+      );
+    }
+
+    // 今だけ投稿 STEP 5｜旅行者向けの近くの一覧(認証不要、読み取りのみ)。
+    if (
+      request.query &&
+      request.query.mode === "imadakePostsNearby"
+    ) {
+      return handleImadakePostsNearby(
         request,
         response,
         buildImadakeDeps()
