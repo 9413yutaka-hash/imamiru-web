@@ -3345,6 +3345,238 @@ const MACHINAU_TRANSLATIONS = {
   store_claim_err_note: {
     ja: "ひとことは1行・200文字以内で入力してください。",
     en: "Please keep the note to one line and 200 characters."
+  },
+
+  // 今だけ投稿 STEP 2｜TOPの独立枠と詳細表示の固定文言。投稿の見出し・本文・店名・
+  // 価格等(店舗が書いた内容)はここでは扱わず、原文のまま表示する。
+  imadake_heading: {
+    ja: "⏰ 今だけ投稿",
+    en: "⏰ Just for Now"
+  },
+
+  imadake_lead: {
+    ja: "近くのお店・施設が「今」を伝えています（掲載は最長24時間）。",
+    en: "Nearby shops and places sharing what's on right now (posted for up to 24 hours)."
+  },
+
+  imadake_pr_label: {
+    ja: "PR・お店の投稿",
+    en: "PR · From the shop"
+  },
+
+  imadake_read_more: {
+    ja: "続きを見る",
+    en: "See more"
+  },
+
+  imadake_original_language_note: {
+    ja: "お店が書いた原文で表示しています",
+    en: "Shown as written by the shop"
+  },
+
+  imadake_expires_in_hours: {
+    ja: "掲載あと{HOURS}時間",
+    en: "{HOURS}h left"
+  },
+
+  imadake_expires_in_minutes: {
+    ja: "掲載あと{MINUTES}分",
+    en: "{MINUTES} min left"
+  },
+
+  imadake_available_until: {
+    ja: "{TIME}まで",
+    en: "Until {TIME}"
+  },
+
+  imadake_distance: {
+    ja: "約{KM}km",
+    en: "{KM} km away"
+  },
+
+  imadake_category_restaurant: {
+    ja: "飲食店",
+    en: "Restaurant"
+  },
+
+  imadake_category_food_shop: {
+    ja: "食品・テイクアウト",
+    en: "Food & takeout"
+  },
+
+  imadake_category_retail: {
+    ja: "お店",
+    en: "Shop"
+  },
+
+  imadake_category_event: {
+    ja: "イベント",
+    en: "Event"
+  },
+
+  imadake_category_other: {
+    ja: "その他",
+    en: "Other"
+  },
+
+  imadake_live_stock_available: {
+    ja: "在庫あり",
+    en: "In stock"
+  },
+
+  imadake_live_stock_few: {
+    ja: "残りわずか",
+    en: "Almost gone"
+  },
+
+  imadake_live_stock_sold_out: {
+    ja: "売り切れ",
+    en: "Sold out"
+  },
+
+  imadake_live_seats_available: {
+    ja: "空席あり",
+    en: "Seats available"
+  },
+
+  imadake_live_seats_few: {
+    ja: "残り席わずか",
+    en: "Few seats left"
+  },
+
+  imadake_live_seats_full: {
+    ja: "満席",
+    en: "Full"
+  },
+
+  imadake_live_tickets_available: {
+    ja: "チケットあり",
+    en: "Tickets available"
+  },
+
+  imadake_live_tickets_few: {
+    ja: "チケット残りわずか",
+    en: "Few tickets left"
+  },
+
+  imadake_live_tickets_sold_out: {
+    ja: "チケット売り切れ",
+    en: "Tickets sold out"
+  },
+
+  imadake_live_quantity: {
+    ja: "残り{COUNT}",
+    en: "{COUNT} left"
+  },
+
+  imadake_detail_loading: {
+    ja: "読み込んでいます…",
+    en: "Loading…"
+  },
+
+  imadake_detail_error: {
+    ja: "読み込めませんでした。時間をおいて、もう一度お試しください。",
+    en: "Couldn't load this post. Please try again later."
+  },
+
+  imadake_detail_ended: {
+    ja: "この今だけ投稿の掲載は終了しました。",
+    en: "This post is no longer available."
+  },
+
+  imadake_detail_price_label: {
+    ja: "価格",
+    en: "Price"
+  },
+
+  imadake_detail_payment_label: {
+    ja: "支払い方法",
+    en: "Payment"
+  },
+
+  imadake_detail_place_label: {
+    ja: "場所",
+    en: "Location"
+  },
+
+  imadake_detail_event_time_label: {
+    ja: "時間",
+    en: "Time"
+  },
+
+  imadake_detail_event_venue_label: {
+    ja: "会場",
+    en: "Venue"
+  },
+
+  imadake_detail_event_fee_label: {
+    ja: "料金",
+    en: "Fee"
+  },
+
+  imadake_detail_check_note: {
+    ja: "価格・在庫・時間などの最新の情報は、お店にご確認ください。",
+    en: "Please check the latest prices, availability and times with the shop."
+  },
+
+  imadake_payment_cash: {
+    ja: "現金",
+    en: "Cash"
+  },
+
+  imadake_payment_card: {
+    ja: "カード",
+    en: "Card"
+  },
+
+  imadake_payment_qr: {
+    ja: "QRコード決済",
+    en: "QR code payment"
+  },
+
+  imadake_feature_takeout: {
+    ja: "テイクアウト可",
+    en: "Takeout available"
+  },
+
+  imadake_feature_same_day_reservation: {
+    ja: "当日予約可",
+    en: "Same-day booking"
+  },
+
+  imadake_feature_hold_available: {
+    ja: "取り置き可",
+    en: "Can be held for you"
+  },
+
+  imadake_feature_new_arrival: {
+    ja: "新入荷",
+    en: "New arrival"
+  },
+
+  imadake_action_phone: {
+    ja: "📞 電話する",
+    en: "📞 Call"
+  },
+
+  imadake_action_reservation: {
+    ja: "📅 予約する",
+    en: "📅 Book"
+  },
+
+  imadake_action_website: {
+    ja: "🌐 Webサイト",
+    en: "🌐 Website"
+  },
+
+  imadake_action_social: {
+    ja: "📱 SNS",
+    en: "📱 Social media"
+  },
+
+  imadake_action_order: {
+    ja: "🛒 注文する",
+    en: "🛒 Order"
   }
 };
 

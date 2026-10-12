@@ -1771,6 +1771,21 @@
 
     </section>
 
+    <!-- 今だけ投稿 STEP 2｜お店・施設の「今だけ」の投稿(24時間)の独立枠。
+         現在地が分かった時だけapp.jsのloadImadakeNearbyPosts()が一覧(GET imadakePostsNearby)を
+         取得して描く。0件・現在地なしの時は枠ごと隠す。無料店舗一覧(#shopsSection)・
+         地図・お気に入り・旅の保存箱とは別のDOM・状態で、互いに読み書きしない。 -->
+    <section
+      id="imadakeSection"
+      class="imadake-section"
+      aria-labelledby="imadakeHeading"
+      hidden
+    >
+      <h2 id="imadakeHeading" data-i18n="imadake_heading">⏰ 今だけ投稿</h2>
+      <p class="imadake-lead" data-i18n="imadake_lead">近くのお店・施設が「今」を伝えています（掲載は最長24時間）。</p>
+      <div id="imadakeCardList" class="imadake-card-list"></div>
+    </section>
+
     <section
       id="shopsSection"
       class="section"
@@ -2533,6 +2548,29 @@
           ✕
         </button>
         <div id="townNowThreadModalBody"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 今だけ投稿 STEP 2｜今だけ投稿専用の詳細。「続きを見る」を押した時だけ
+       GET imadakePostGetで取得して表示する(店舗の詳細モーダル#shopModalとは別)。 -->
+  <div
+    id="imadakeDetailModal"
+    class="modal-overlay"
+    onclick="closeImadakeDetailOutside(event)"
+  >
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="imadakeDetailTitle">
+      <div class="modal-content">
+        <button
+          class="modal-close"
+          type="button"
+          aria-label="閉じる"
+          data-i18n-aria-label="modal_close_aria_label"
+          onclick="closeImadakeDetail()"
+        >
+          ✕
+        </button>
+        <div id="imadakeDetailBody"></div>
       </div>
     </div>
   </div>

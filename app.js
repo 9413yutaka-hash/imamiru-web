@@ -297,6 +297,10 @@ function switchMachinauLanguage(language) {
   // 旅の保存箱 Phase 1a｜保存箱を開いたまま言語を切り替えた時も、保存した
   // お店・施設の一覧(0件の案内・ボタン文言)を現在言語で描き直す(取得済みデータのみ)。
   renderFavoriteList();
+
+  // 今だけ投稿 STEP 2｜独立枠と開いている詳細の固定文言を現在言語で描き直す(再取得しない)。
+  renderImadakeSection();
+  renderImadakeDetail();
 }
 
 function initializeMachinauLanguageSwitcher() {
@@ -10421,6 +10425,13 @@ function applyUserLocation(
   userLongitude =
     longitude;
 
+  // 今だけ投稿 STEP 2｜現在地が決まった時に、近くの今だけ投稿を取得する
+  // (今だけ投稿の独立枠だけを描く。無料店舗一覧・地図には触れない)。
+  loadImadakeNearbyPosts(
+    latitude,
+    longitude
+  );
+
   // GPS取得時だけ、復元用に保存する。地域名・地域階層データは
   // Geocoderの結果が出た時点で、同じGPSセッションの場合だけ追記する。
   const savedUserLocationEntry =
@@ -19652,3 +19663,808 @@ function updateTodayMachinauCard() {
 
   section.style.display = "";
 }
+
+// ============================================================
+// 今だけ投稿 STEP 2｜TOPの独立枠(#imadakeSection)と今だけ投稿専用の詳細
+// ============================================================
+// 現在地が分かった時だけ、近くの今だけ投稿の一覧(GET imadakePostsNearby)を取得し、
+// 独立枠に描く。0件・現在地なし・取得失敗の時は枠ごと隠す。詳細は「続きを見る」を
+// 押した時だけGET imadakePostGetで取得する。
+// 無料店舗一覧(shops・renderShops)・地図・お気に入り・旅の保存箱・既存のGA4とは
+// 別の状態・DOMで、互いに読み書きしない。GA4イベント・成果計測・AI翻訳は行わない。
+// 投稿の見出し・紹介文・本文・店名・価格は、お店が書いた原文のまま表示する
+// (将来、カードの翻訳結果はgetImadakeCardDisplayText()で差し替える)。
+
+// 最後に受け取った一覧(期限切れは表示のたびに除く)。
+let imadakeNearbyPosts =
+  [];
+
+// 一覧の取得の通し番号。現在地が変わった後に古い取得の応答が届いても使わない。
+let imadakeNearbyRequestSequence =
+  0;
+
+// 最後に取得を始めた現在地(小数点以下3桁に丸めた"緯度,経度")。同じ地点の
+// 重複取得をしない。
+let imadakeNearbyLocationKey =
+  "";
+
+// 期限切れのカードを外すための見直しタイマー。
+let imadakeExpiryCheckTimer =
+  null;
+
+const IMADAKE_EXPIRY_CHECK_INTERVAL_MS =
+  60 * 1000;
+
+// 詳細の状態：{ postId, state: "loading"|"ready"|"ended"|"error", post }
+let imadakeDetailState =
+  null;
+
+let imadakeDetailRequestSequence =
+  0;
+
+const IMADAKE_CATEGORY_EMOJI = {
+  restaurant: "🍽️",
+  food_shop: "🥡",
+  retail: "🛍️",
+  event: "🎪",
+  other: "⏰"
+};
+
+// 閲覧者の現在地は約100m(小数点以下3桁)に丸めて送る(APIの入力条件と同じ)。
+function formatImadakeCoordinate(
+  value
+) {
+  return Number(value).toFixed(3);
+}
+
+function isImadakePostStillListed(
+  post,
+  nowMillis
+) {
+  const expiresAtMillis =
+    post && typeof post.expiresAt === "string"
+      ? Date.parse(post.expiresAt)
+      : NaN;
+
+  return (
+    Number.isFinite(expiresAtMillis) &&
+    expiresAtMillis > nowMillis
+  );
+}
+
+async function loadImadakeNearbyPosts(
+  latitude,
+  longitude
+) {
+  if (
+    typeof latitude !== "number" ||
+    typeof longitude !== "number" ||
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude)
+  ) {
+    return;
+  }
+
+  const latitudeText =
+    formatImadakeCoordinate(latitude);
+
+  const longitudeText =
+    formatImadakeCoordinate(longitude);
+
+  const locationKey =
+    latitudeText + "," + longitudeText;
+
+  if (locationKey === imadakeNearbyLocationKey) {
+    return;
+  }
+
+  imadakeNearbyLocationKey =
+    locationKey;
+
+  const requestSequence =
+    ++imadakeNearbyRequestSequence;
+
+  // 別の地点の投稿を出したままにしない(新しい地点の結果が届くまで枠を隠す)。
+  imadakeNearbyPosts =
+    [];
+
+  renderImadakeSection();
+
+  let posts =
+    [];
+
+  try {
+    const response =
+      await fetch(
+        "/api/moderate-submission?" +
+          new URLSearchParams({
+            mode: "imadakePostsNearby",
+            latitude: latitudeText,
+            longitude: longitudeText
+          }).toString()
+      );
+
+    const responseData =
+      await response.json();
+
+    if (
+      response.ok &&
+      responseData &&
+      responseData.success === true &&
+      Array.isArray(responseData.posts)
+    ) {
+      posts =
+        responseData.posts.filter(function(post) {
+          return (
+            post &&
+            typeof post.postId === "string" &&
+            post.postId !== ""
+          );
+        });
+    }
+  } catch (error) {
+    // 今だけ投稿の取得に失敗しても、TOPの他の表示には影響させない(枠は隠したまま)。
+    posts =
+      [];
+  }
+
+  if (requestSequence !== imadakeNearbyRequestSequence) {
+    return;
+  }
+
+  imadakeNearbyPosts =
+    posts;
+
+  renderImadakeSection();
+}
+
+// 将来、表示言語の翻訳(カードの見出し・紹介文)が届いたらここで差し替える。
+// 今はお店が書いた原文をそのまま返す。
+function getImadakeCardDisplayText(
+  post
+) {
+  return {
+    headline:
+      typeof post.headline === "string"
+        ? post.headline
+        : "",
+    excerpt:
+      typeof post.excerpt === "string"
+        ? post.excerpt
+        : "",
+    isOriginal: true
+  };
+}
+
+function getImadakeLiveStateText(
+  liveState,
+  language
+) {
+  if (
+    !liveState ||
+    typeof liveState.type !== "string" ||
+    typeof liveState.status !== "string"
+  ) {
+    return "";
+  }
+
+  const statusText =
+    getMachinauTranslation(
+      "imadake_live_" + liveState.type + "_" + liveState.status,
+      language
+    );
+
+  if (!statusText) {
+    return "";
+  }
+
+  if (
+    typeof liveState.quantity === "number" &&
+    Number.isFinite(liveState.quantity) &&
+    liveState.status !== "sold_out" &&
+    liveState.status !== "full"
+  ) {
+    return (
+      statusText +
+      "・" +
+      getMachinauTranslation(
+        "imadake_live_quantity",
+        language
+      ).replace(
+        "{COUNT}",
+        String(liveState.quantity)
+      )
+    );
+  }
+
+  return statusText;
+}
+
+// 掲載の残り時間(1時間未満は分、それ以上は時間。切り捨て)。
+function getImadakeRemainingText(
+  expiresAt,
+  language,
+  nowMillis
+) {
+  const expiresAtMillis =
+    Date.parse(expiresAt);
+
+  if (!Number.isFinite(expiresAtMillis)) {
+    return "";
+  }
+
+  const remainingMinutes =
+    Math.floor((expiresAtMillis - nowMillis) / 60000);
+
+  if (remainingMinutes < 1) {
+    return "";
+  }
+
+  if (remainingMinutes < 60) {
+    return getMachinauTranslation(
+      "imadake_expires_in_minutes",
+      language
+    ).replace(
+      "{MINUTES}",
+      String(remainingMinutes)
+    );
+  }
+
+  return getMachinauTranslation(
+    "imadake_expires_in_hours",
+    language
+  ).replace(
+    "{HOURS}",
+    String(Math.floor(remainingMinutes / 60))
+  );
+}
+
+function getImadakeAvailableUntilText(
+  availableUntil,
+  language
+) {
+  if (
+    typeof availableUntil !== "string" ||
+    !/^\d{2}:\d{2}$/.test(availableUntil)
+  ) {
+    return "";
+  }
+
+  return getMachinauTranslation(
+    "imadake_available_until",
+    language
+  ).replace(
+    "{TIME}",
+    availableUntil
+  );
+}
+
+function getImadakeSourceLanguageAttribute(
+  post
+) {
+  return post && (post.sourceLanguage === "ja" || post.sourceLanguage === "en")
+    ? post.sourceLanguage
+    : "ja";
+}
+
+function buildImadakeCardHtml(
+  post,
+  language,
+  nowMillis
+) {
+  const text =
+    getImadakeCardDisplayText(post);
+
+  const sourceLanguage =
+    getImadakeSourceLanguageAttribute(post);
+
+  const imageUrl =
+    typeof post.imageUrl === "string"
+      ? getSafeImageUrl(post.imageUrl)
+      : "";
+
+  const visualHtml =
+    imageUrl !== ""
+      ? '<img src="' +
+        escapeHtml(
+          buildOptimizedImageUrl(
+            imageUrl,
+            { width: OPTIMIZED_IMAGE_WIDTH_CARD }
+          )
+        ) +
+        '" alt="" loading="lazy" onerror="handleBrokenImage(this)">'
+      : '<span class="imadake-card-emoji" aria-hidden="true">' +
+        (IMADAKE_CATEGORY_EMOJI[post.categoryCode] || IMADAKE_CATEGORY_EMOJI.other) +
+        "</span>";
+
+  const chips =
+    [
+      getImadakeLiveStateText(post.liveState, language),
+      getImadakeAvailableUntilText(post.availableUntil, language),
+      getImadakeRemainingText(post.expiresAt, language, nowMillis)
+    ].filter(function(chipText) {
+      return chipText !== "";
+    });
+
+  const excerptText =
+    text.excerpt !== ""
+      ? text.excerpt + (post.excerptTruncated === true ? "…" : "")
+      : "";
+
+  return (
+    '<article class="imadake-card" data-imadake-post-id="' + escapeHtml(post.postId) + '">' +
+      '<div class="imadake-card-visual">' + visualHtml + "</div>" +
+      '<div class="imadake-card-body">' +
+        '<div class="imadake-card-meta">' +
+          '<span class="imadake-pr-badge">' +
+            escapeHtml(getMachinauTranslation("imadake_pr_label", language)) +
+          "</span>" +
+          '<span class="imadake-card-store" lang="' + sourceLanguage + '">' +
+            escapeHtml(post.storeName) +
+          "</span>" +
+        "</div>" +
+        '<p class="imadake-card-title" lang="' + sourceLanguage + '">' +
+          escapeHtml(text.headline) +
+        "</p>" +
+        (excerptText !== ""
+          ? '<p class="imadake-card-excerpt" lang="' + sourceLanguage + '">' +
+            escapeHtml(excerptText) +
+            "</p>"
+          : "") +
+        (chips.length > 0
+          ? '<div class="imadake-card-chips">' +
+            chips.map(function(chipText) {
+              return '<span class="imadake-chip">' + escapeHtml(chipText) + "</span>";
+            }).join("") +
+            "</div>"
+          : "") +
+        (sourceLanguage !== language
+          ? '<p class="imadake-original-note">' +
+            escapeHtml(getMachinauTranslation("imadake_original_language_note", language)) +
+            "</p>"
+          : "") +
+        '<button class="imadake-read-more" type="button" data-imadake-post-id="' +
+          escapeHtml(post.postId) +
+          '" onclick="openImadakeDetail(this.getAttribute(\'data-imadake-post-id\'))">' +
+          escapeHtml(getMachinauTranslation("imadake_read_more", language)) +
+        "</button>" +
+      "</div>" +
+    "</article>"
+  );
+}
+
+// 独立枠を描く。表示のたびに期限切れを除く(CDNに古い一覧が残っていても、期限切れの
+// カードは出さない)。0件なら枠ごと隠す。
+function renderImadakeSection() {
+  const section =
+    document.getElementById("imadakeSection");
+
+  const cardList =
+    document.getElementById("imadakeCardList");
+
+  if (!section || !cardList) {
+    return;
+  }
+
+  const nowMillis =
+    Date.now();
+
+  const language =
+    getCurrentMachinauLanguage();
+
+  const visiblePosts =
+    imadakeNearbyPosts.filter(function(post) {
+      return isImadakePostStillListed(post, nowMillis);
+    });
+
+  if (visiblePosts.length === 0) {
+    cardList.innerHTML = "";
+    section.hidden = true;
+    stopImadakeExpiryCheck();
+    return;
+  }
+
+  cardList.innerHTML =
+    visiblePosts
+      .map(function(post) {
+        return buildImadakeCardHtml(post, language, nowMillis);
+      })
+      .join("");
+
+  section.hidden = false;
+  startImadakeExpiryCheck();
+}
+
+function startImadakeExpiryCheck() {
+  if (imadakeExpiryCheckTimer !== null) {
+    return;
+  }
+
+  imadakeExpiryCheckTimer =
+    setInterval(
+      renderImadakeSection,
+      IMADAKE_EXPIRY_CHECK_INTERVAL_MS
+    );
+}
+
+function stopImadakeExpiryCheck() {
+  if (imadakeExpiryCheckTimer === null) {
+    return;
+  }
+
+  clearInterval(imadakeExpiryCheckTimer);
+  imadakeExpiryCheckTimer = null;
+}
+
+// ---- 詳細 ----
+
+async function openImadakeDetail(
+  postId
+) {
+  const modal =
+    document.getElementById("imadakeDetailModal");
+
+  if (
+    !modal ||
+    typeof postId !== "string" ||
+    postId === ""
+  ) {
+    return;
+  }
+
+  const requestSequence =
+    ++imadakeDetailRequestSequence;
+
+  imadakeDetailState = {
+    postId: postId,
+    state: "loading",
+    post: null
+  };
+
+  renderImadakeDetail();
+
+  modal.classList.add("visible");
+  document.body.style.overflow = "hidden";
+
+  let nextState;
+
+  try {
+    const response =
+      await fetch(
+        "/api/moderate-submission?" +
+          new URLSearchParams({
+            mode: "imadakePostGet",
+            postId: postId
+          }).toString()
+      );
+
+    let responseData =
+      null;
+
+    try {
+      responseData =
+        await response.json();
+    } catch (jsonError) {
+      responseData = null;
+    }
+
+    if (
+      response.ok &&
+      responseData &&
+      responseData.success === true &&
+      responseData.post &&
+      isImadakePostStillListed(responseData.post, Date.now())
+    ) {
+      nextState = { postId: postId, state: "ready", post: responseData.post };
+    } else if (
+      response.status === 404 ||
+      (response.ok && responseData && responseData.post)
+    ) {
+      // 掲載終了(サーバーで404)、または取得できたが期限を過ぎていた時。
+      nextState = { postId: postId, state: "ended", post: null };
+    } else {
+      nextState = { postId: postId, state: "error", post: null };
+    }
+  } catch (error) {
+    nextState = { postId: postId, state: "error", post: null };
+  }
+
+  if (requestSequence !== imadakeDetailRequestSequence) {
+    return;
+  }
+
+  imadakeDetailState =
+    nextState;
+
+  if (nextState.state === "ended") {
+    // 一覧からも外す(次の一覧取得まで期限切れ・終了済みのカードを出さない)。
+    imadakeNearbyPosts =
+      imadakeNearbyPosts.filter(function(post) {
+        return post.postId !== postId;
+      });
+
+    renderImadakeSection();
+  }
+
+  renderImadakeDetail();
+}
+
+function buildImadakeDetailRowHtml(
+  labelKey,
+  valueText,
+  language,
+  sourceLanguage
+) {
+  return (
+    '<div class="imadake-detail-row">' +
+      '<span class="imadake-detail-label">' +
+        escapeHtml(getMachinauTranslation(labelKey, language)) +
+      "</span>" +
+      '<span class="imadake-detail-value"' +
+        (sourceLanguage ? ' lang="' + sourceLanguage + '"' : "") +
+        ">" +
+        escapeHtml(valueText) +
+      "</span>" +
+    "</div>"
+  );
+}
+
+function buildImadakeActionLinksHtml(
+  actionTargets,
+  language
+) {
+  if (!actionTargets || typeof actionTargets !== "object") {
+    return "";
+  }
+
+  const links =
+    [];
+
+  const phone =
+    typeof actionTargets.phone === "string"
+      ? actionTargets.phone.replace(/[^0-9+]/g, "")
+      : "";
+
+  if (phone !== "") {
+    links.push(
+      '<a class="imadake-action-link" href="tel:' + escapeHtml(phone) + '">' +
+        escapeHtml(getMachinauTranslation("imadake_action_phone", language)) +
+      "</a>"
+    );
+  }
+
+  [
+    ["reservationUrl", "imadake_action_reservation"],
+    ["orderUrl", "imadake_action_order"],
+    ["websiteUrl", "imadake_action_website"],
+    ["socialUrl", "imadake_action_social"]
+  ].forEach(function(entry) {
+    const safeUrl =
+      getSafeWebsiteUrl(actionTargets[entry[0]]);
+
+    if (safeUrl !== "") {
+      links.push(
+        '<a class="imadake-action-link" href="' + escapeHtml(safeUrl) + '" target="_blank" rel="noopener noreferrer">' +
+          escapeHtml(getMachinauTranslation(entry[1], language)) +
+        "</a>"
+      );
+    }
+  });
+
+  return links.length > 0
+    ? '<div class="imadake-action-links">' + links.join("") + "</div>"
+    : "";
+}
+
+function buildImadakeDetailHtml(
+  post,
+  language
+) {
+  const sourceLanguage =
+    getImadakeSourceLanguageAttribute(post);
+
+  const imageUrls =
+    (Array.isArray(post.imageUrls) ? post.imageUrls : [])
+      .map(getSafeImageUrl)
+      .filter(function(url) {
+        return url !== "";
+      });
+
+  const imagesHtml =
+    imageUrls.length > 0
+      ? '<div class="imadake-detail-images">' +
+        imageUrls.map(function(url) {
+          return (
+            '<img src="' +
+            escapeHtml(buildOptimizedImageUrl(url, { width: OPTIMIZED_IMAGE_WIDTH_MODAL })) +
+            '" alt="" loading="lazy" onerror="handleBrokenImage(this)">'
+          );
+        }).join("") +
+        "</div>"
+      : "";
+
+  const chips =
+    [
+      getMachinauTranslation("imadake_category_" + post.categoryCode, language),
+      getImadakeLiveStateText(post.liveState, language),
+      getImadakeAvailableUntilText(post.availableUntil, language),
+      getImadakeRemainingText(post.expiresAt, language, Date.now())
+    ].filter(function(chipText) {
+      return chipText !== "";
+    });
+
+  const categoryFields =
+    post.categoryFields && typeof post.categoryFields === "object"
+      ? post.categoryFields
+      : {};
+
+  [
+    ["takeout", "imadake_feature_takeout"],
+    ["sameDayReservation", "imadake_feature_same_day_reservation"],
+    ["holdAvailable", "imadake_feature_hold_available"],
+    ["newArrival", "imadake_feature_new_arrival"]
+  ].forEach(function(entry) {
+    if (categoryFields[entry[0]] === true) {
+      chips.push(getMachinauTranslation(entry[1], language));
+    }
+  });
+
+  let rowsHtml =
+    "";
+
+  if (
+    typeof categoryFields.startTime === "string" &&
+    categoryFields.startTime !== ""
+  ) {
+    rowsHtml +=
+      buildImadakeDetailRowHtml(
+        "imadake_detail_event_time_label",
+        categoryFields.startTime +
+          (typeof categoryFields.endTime === "string" && categoryFields.endTime !== ""
+            ? "〜" + categoryFields.endTime
+            : ""),
+        language,
+        ""
+      );
+  }
+
+  if (typeof categoryFields.venue === "string" && categoryFields.venue !== "") {
+    rowsHtml += buildImadakeDetailRowHtml("imadake_detail_event_venue_label", categoryFields.venue, language, sourceLanguage);
+  }
+
+  if (typeof categoryFields.feeText === "string" && categoryFields.feeText !== "") {
+    rowsHtml += buildImadakeDetailRowHtml("imadake_detail_event_fee_label", categoryFields.feeText, language, sourceLanguage);
+  }
+
+  if (typeof post.priceText === "string" && post.priceText !== "") {
+    rowsHtml += buildImadakeDetailRowHtml("imadake_detail_price_label", post.priceText, language, sourceLanguage);
+  }
+
+  const paymentText =
+    (Array.isArray(post.paymentMethods) ? post.paymentMethods : [])
+      .map(function(code) {
+        return getMachinauTranslation("imadake_payment_" + code, language);
+      })
+      .filter(function(label) {
+        return label !== "";
+      })
+      .join("・");
+
+  if (paymentText !== "") {
+    rowsHtml += buildImadakeDetailRowHtml("imadake_detail_payment_label", paymentText, language, "");
+  }
+
+  if (typeof post.address === "string" && post.address !== "") {
+    rowsHtml += buildImadakeDetailRowHtml("imadake_detail_place_label", post.address, language, sourceLanguage);
+  }
+
+  return (
+    imagesHtml +
+    '<div class="imadake-detail-meta">' +
+      '<span class="imadake-pr-badge">' +
+        escapeHtml(getMachinauTranslation("imadake_pr_label", language)) +
+      "</span>" +
+      '<span class="imadake-card-store" lang="' + sourceLanguage + '">' +
+        escapeHtml(post.storeName) +
+      "</span>" +
+    "</div>" +
+    '<h3 id="imadakeDetailTitle" class="imadake-detail-title" lang="' + sourceLanguage + '">' +
+      escapeHtml(post.headline) +
+    "</h3>" +
+    (chips.length > 0
+      ? '<div class="imadake-card-chips">' +
+        chips.map(function(chipText) {
+          return '<span class="imadake-chip">' + escapeHtml(chipText) + "</span>";
+        }).join("") +
+        "</div>"
+      : "") +
+    (sourceLanguage !== language
+      ? '<p class="imadake-original-note">' +
+        escapeHtml(getMachinauTranslation("imadake_original_language_note", language)) +
+        "</p>"
+      : "") +
+    '<p class="imadake-detail-text" lang="' + sourceLanguage + '">' +
+      escapeHtml(post.body) +
+    "</p>" +
+    (rowsHtml !== "" ? '<div class="imadake-detail-rows">' + rowsHtml + "</div>" : "") +
+    buildImadakeActionLinksHtml(post.actionTargets, language) +
+    '<p class="imadake-detail-note">' +
+      escapeHtml(getMachinauTranslation("imadake_detail_check_note", language)) +
+    "</p>"
+  );
+}
+
+function renderImadakeDetail() {
+  const body =
+    document.getElementById("imadakeDetailBody");
+
+  if (!body || !imadakeDetailState) {
+    return;
+  }
+
+  const language =
+    getCurrentMachinauLanguage();
+
+  if (
+    imadakeDetailState.state === "ready" &&
+    imadakeDetailState.post
+  ) {
+    body.innerHTML =
+      buildImadakeDetailHtml(
+        imadakeDetailState.post,
+        language
+      );
+    return;
+  }
+
+  const messageKey =
+    imadakeDetailState.state === "loading"
+      ? "imadake_detail_loading"
+      : imadakeDetailState.state === "ended"
+        ? "imadake_detail_ended"
+        : "imadake_detail_error";
+
+  body.innerHTML =
+    '<p id="imadakeDetailTitle" class="imadake-detail-message" role="status">' +
+      escapeHtml(getMachinauTranslation(messageKey, language)) +
+    "</p>";
+}
+
+function closeImadakeDetail() {
+  const modal =
+    document.getElementById("imadakeDetailModal");
+
+  if (!modal) {
+    return;
+  }
+
+  imadakeDetailRequestSequence++;
+  imadakeDetailState = null;
+
+  modal.classList.remove("visible");
+  document.body.style.overflow = "";
+}
+
+function closeImadakeDetailOutside(
+  event
+) {
+  if (event.target.id === "imadakeDetailModal") {
+    closeImadakeDetail();
+  }
+}
+
+document.addEventListener(
+  "keydown",
+  function(event) {
+    const modal =
+      document.getElementById("imadakeDetailModal");
+
+    if (
+      event.key === "Escape" &&
+      modal &&
+      modal.classList.contains("visible")
+    ) {
+      closeImadakeDetail();
+    }
+  }
+);
