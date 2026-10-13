@@ -914,6 +914,15 @@
             editLink.href = "store-profile.html?store=" + encodeURIComponent(store.storeId);
             editLink.textContent = t("store_profile_edit_link");
             item.appendChild(editLink);
+
+            // 正式店舗アカウント接続｜この店舗の今だけ投稿へ。tokenは付けず、店舗アカウントの
+            // ログインで操作する(ownerか・有効な店舗かの最終判定はサーバー)。審査待ち・停止中・
+            // 却下の店舗には出さない。文言は既存の今だけ投稿の名前(imadake_heading)を使う。
+            const imadakeLink = document.createElement("a");
+            imadakeLink.className = "store-card-link";
+            imadakeLink.href = "imadake-post.html?store=" + encodeURIComponent(store.storeId);
+            imadakeLink.textContent = t("imadake_heading");
+            item.appendChild(imadakeLink);
           }
 
           list.appendChild(item);

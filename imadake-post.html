@@ -213,6 +213,17 @@
       <p class="hint">ページを再読み込みした場合も、もう一度店舗専用URLから開き直してください。</p>
     </div>
 
+    <!-- 正式店舗アカウント接続｜店舗アカウント画面の「今だけ投稿」(tokenなし)から開いた時の案内。 -->
+    <div id="loginRequiredPanel" class="panel" hidden>
+      <p class="notice">店舗アカウントでログインしてから、もう一度お試しください。</p>
+      <p class="hint"><a href="store-account.html">店舗アカウント画面を開く</a></p>
+    </div>
+
+    <div id="storeDeniedPanel" class="panel" hidden>
+      <p id="storeDeniedMessage" class="notice">この店舗で今だけ投稿を操作する権限がありません。</p>
+      <p class="hint"><a href="store-account.html">店舗アカウント画面へ戻る</a></p>
+    </div>
+
     <div id="storePanel" class="panel" hidden>
       <h2 id="storeNameText"></h2>
       <p class="location-line">掲載場所：<span id="storeLocationText"></span></p>
@@ -417,6 +428,30 @@
       // history.replaceStateが使えない環境でも続行する。
     }
 
+    // 正式店舗アカウント接続｜tokenの無いURL(店舗アカウント画面の「今だけ投稿」から開く)は、
+    // 店舗アカウント画面と同じ名前付きFirebaseアプリ(既定アプリの匿名ログインとは別)の
+    // ログイン状態で操作する。店舗の本人確認(ownerか・有効な店舗か)はサーバーが行う。
+    const isStoreLoginMode = storeToken === "";
+    const STORE_AUTH_APP_NAME = "machinauStoreAccount";
+    let storeLoginUser = null;
+
+    function waitForStoreLoginUser() {
+      return new Promise(function(resolve) {
+        try {
+          const defaultApp = window.machinauFirebaseApp || firebase.app();
+          const storeApp = firebase.apps.find(function(app) {
+            return app.name === STORE_AUTH_APP_NAME;
+          }) || firebase.initializeApp(defaultApp.options, STORE_AUTH_APP_NAME);
+          const unsubscribe = storeApp.auth().onAuthStateChanged(function(user) {
+            unsubscribe();
+            resolve(user && !user.isAnonymous ? user : null);
+          });
+        } catch (error) {
+          resolve(null);
+        }
+      });
+    }
+
     const $ = function(id) { return document.getElementById(id); };
 
     const loadingPanel = $("loadingPanel");
@@ -461,15 +496,32 @@
 
     async function callImadakeApi(mode, payload, idToken) {
       const headers = { "Content-Type": "application/json" };
+      let authToken = idToken;
 
-      if (idToken) {
-        headers.Authorization = "Bearer " + idToken;
+      // ログインした正式店舗：すべての操作に店舗ユーザーのIDトークンを付ける。
+      if (!authToken && isStoreLoginMode && storeLoginUser) {
+        authToken = await storeLoginUser.getIdToken();
       }
+
+      if (authToken) {
+        headers.Authorization = "Bearer " + authToken;
+      }
+
+      // 店舗専用URL：従来どおりstoreIdとtokenを送る。
+      // ログインした正式店舗：tokenは送らない(サーバーがstoreIdとログインを照合する)。
+      // 写真の署名(cloudinarySignature)は、ログインした正式店舗ではstoreId・tokenを送らない
+      // (送ると店舗token用の確認になるため。IDトークンの確認は従来どおり行われる)。
+      const baseBody =
+        !isStoreLoginMode
+          ? { mode: mode, storeId: storeId, token: storeToken }
+          : mode === "cloudinarySignature"
+            ? { mode: mode }
+            : { mode: mode, storeId: storeId };
 
       const response = await fetch("/api/moderate-submission", {
         method: "POST",
         headers: headers,
-        body: JSON.stringify(Object.assign({ mode: mode, storeId: storeId, token: storeToken }, payload || {}))
+        body: JSON.stringify(Object.assign(baseBody, payload || {}))
       });
 
       let data = null;
@@ -515,6 +567,18 @@
       loadingPanel.hidden = true;
 
       if (!result.ok || result.data.success !== true) {
+        if (isStoreLoginMode) {
+          // ログインした正式店舗：権限が無い・審査待ち・停止中・メール未確認など。
+          if (result.status === 401) {
+            $("loginRequiredPanel").hidden = false;
+          } else {
+            $("storeDeniedMessage").textContent =
+              result.data.message || "この店舗で今だけ投稿を操作する権限がありません。";
+            $("storeDeniedPanel").hidden = false;
+          }
+          return;
+        }
+
         invalidPanel.hidden = false;
         return;
       }
@@ -833,7 +897,10 @@
     }
 
     async function uploadPhoto(file) {
-      const idToken = await getAnonymousIdToken();
+      // ログインした正式店舗は店舗ユーザーのIDトークンで署名を取る(既定アプリで匿名ログインしない)。
+      const idToken = isStoreLoginMode && storeLoginUser
+        ? await storeLoginUser.getIdToken()
+        : await getAnonymousIdToken();
       const signatureResult = await callImadakeApi("cloudinarySignature", {}, idToken);
 
       if (!signatureResult.ok || signatureResult.data.success !== true) {
@@ -1108,14 +1175,32 @@
     renderCategoryChips();
     renderPhotos();
 
-    if (!storeId || !storeToken) {
+    if (!storeId) {
       loadingPanel.hidden = true;
       invalidPanel.hidden = false;
-    } else {
+    } else if (!isStoreLoginMode) {
+      // 店舗専用URL(token付き)：従来どおり。
       loadStoreStatus().catch(function() {
         loadingPanel.hidden = true;
         invalidPanel.hidden = false;
       });
+    } else {
+      // 正式店舗アカウント接続｜店舗アカウント画面のログイン状態で開く。未ログインなら案内する。
+      waitForStoreLoginUser()
+        .then(function(user) {
+          if (!user) {
+            loadingPanel.hidden = true;
+            $("loginRequiredPanel").hidden = false;
+            return;
+          }
+
+          storeLoginUser = user;
+          return loadStoreStatus();
+        })
+        .catch(function() {
+          loadingPanel.hidden = true;
+          $("storeDeniedPanel").hidden = false;
+        });
     }
   </script>
 </body>

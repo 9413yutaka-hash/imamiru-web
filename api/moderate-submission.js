@@ -29728,7 +29728,11 @@ function buildImadakeDeps() {
     requireAdmin: requireAdmin,
     // STEP 4A｜店舗所在地のGeocoding結果から国・都道府県・市区町村を取り出す
     // (街の掲示板の地域確認と同じ既存関数)。
-    findAddressComponentByType: findAddressComponentByType
+    findAddressComponentByType: findAddressComponentByType,
+    // 正式店舗アカウント接続｜tokenの無い作成・状態取得・終了で、ログインした正式店舗の
+    // 本人確認に使う既存関数(passwordログイン判定・storeMembersのowner判定)。
+    resolveStoreUserActor: resolveStoreUserActor,
+    checkStoreProfileEditor: checkStoreProfileEditor
   };
 }
 

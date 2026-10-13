@@ -853,6 +853,132 @@ function toMillis(
     : null;
 }
 
+// --------------------------------------------------------------------------
+// 正式店舗アカウント接続｜今だけ投稿の店舗本人の確認(作成・状態取得・終了の3経路で共通)
+// --------------------------------------------------------------------------
+// 方式A(既存の店舗専用URL)：tokenが送られてきた時は、従来どおりvalidateStoreToken()
+//   だけで確かめる。tokenが誤っていても方式Bへは切り替えない(取り違え防止)。
+// 方式B(セルフ登録した正式店舗)：tokenが無い時だけ、AuthorizationヘッダーのFirebase
+//   IDトークンを既存のresolveStoreUserActor()(passwordログインのみ)で確かめ、
+//   メール確認済みであること、既存のcheckStoreProfileEditor()でstoreMembersの有効な
+//   ownerかつstoreAccountsが有効な正式店舗(registrationStatus:"active"・enabled:true)
+//   であることを確かめる。storeIdだけでは操作できない。他店舗・審査待ち・停止中・
+//   メンバーでない場合は、店舗の有無が分からない同じ403にする。
+// 戻り値：{ valid: true, storeId, storeName, method } または { valid: false, status, message }
+export async function verifyImadakeStoreActor(
+  request,
+  requestBody,
+  database,
+  deps
+) {
+  const token =
+    typeof requestBody.token === "string"
+      ? requestBody.token.trim()
+      : "";
+
+  if (token !== "") {
+    const tokenValidation =
+      await deps.validateStoreToken(
+        database,
+        requestBody.storeId,
+        requestBody.token
+      );
+
+    return tokenValidation.valid
+      ? {
+          valid: true,
+          storeId: tokenValidation.storeId,
+          storeName: tokenValidation.storeName,
+          method: "storeToken"
+        }
+      : {
+          valid: false,
+          status: 403,
+          message: "この店舗投稿URLは無効です。"
+        };
+  }
+
+  const storeId =
+    typeof requestBody.storeId === "string"
+      ? requestBody.storeId.trim()
+      : "";
+
+  const forbidden = {
+    valid: false,
+    status: 403,
+    message: "この店舗で今だけ投稿を操作する権限がありません。"
+  };
+
+  if (
+    storeId === "" ||
+    storeId.length > 128 ||
+    storeId.includes("/") ||
+    typeof deps.resolveStoreUserActor !== "function" ||
+    typeof deps.checkStoreProfileEditor !== "function"
+  ) {
+    return forbidden;
+  }
+
+  const actorResult =
+    await deps.resolveStoreUserActor(request);
+
+  if (!actorResult || !actorResult.ok) {
+    return actorResult && actorResult.status === 401
+      ? {
+          valid: false,
+          status: 401,
+          message: "店舗アカウントでログインしてください。"
+        }
+      : forbidden;
+  }
+
+  if (actorResult.actor.emailVerified !== true) {
+    return {
+      valid: false,
+      status: 403,
+      message: "メールアドレスの確認が終わっていません。"
+    };
+  }
+
+  const editorCheck =
+    await deps.checkStoreProfileEditor(
+      database,
+      storeId,
+      actorResult.actor.uid
+    );
+
+  if (!editorCheck || editorCheck.ok !== true) {
+    return forbidden;
+  }
+
+  const accountSnapshot =
+    await database
+      .collection("storeAccounts")
+      .doc(storeId)
+      .get();
+
+  const accountData =
+    accountSnapshot.exists
+      ? accountSnapshot.data() || {}
+      : {};
+
+  const storeName =
+    typeof accountData.storeName === "string"
+      ? accountData.storeName.trim()
+      : "";
+
+  if (storeName === "") {
+    return forbidden;
+  }
+
+  return {
+    valid: true,
+    storeId: storeId,
+    storeName: storeName,
+    method: "storeUser"
+  };
+}
+
 // STEP 3｜英語カード翻訳(imadake-translation.js)でも同じ判定を使うためexportする(中身は変えない)。
 export function isPublishedAndUnexpired(
   post,
@@ -1002,17 +1128,19 @@ export async function handleImadakePostCreate(
 
     // 店舗本人の確認(存在しない店舗・無効化された店舗・誤ったtokenは拒否)。
     // storeIdを送られただけでは信用しない。店名はサーバー側の正式名を使う。
+    // 正式店舗アカウント接続｜方式A(店舗専用URLのtoken)・方式B(ログインした正式店舗)。
     const storeValidation =
-      await deps.validateStoreToken(
+      await verifyImadakeStoreActor(
+        request,
+        requestBody,
         database,
-        requestBody.storeId,
-        requestBody.token
+        deps
       );
 
     if (!storeValidation.valid) {
-      return response.status(403).json({
+      return response.status(storeValidation.status).json({
         success: false,
-        message: "この店舗投稿URLは無効です。"
+        message: storeValidation.message
       });
     }
 
@@ -1349,17 +1477,19 @@ export async function handleImadakePostEnd(
     const database =
       deps.getFirestore(app);
 
+    // 正式店舗アカウント接続｜方式A(店舗専用URLのtoken)・方式B(ログインした正式店舗)。
     const storeValidation =
-      await deps.validateStoreToken(
+      await verifyImadakeStoreActor(
+        request,
+        requestBody,
         database,
-        requestBody.storeId,
-        requestBody.token
+        deps
       );
 
     if (!storeValidation.valid) {
-      return response.status(403).json({
+      return response.status(storeValidation.status).json({
         success: false,
-        message: "この店舗投稿URLは無効です。"
+        message: storeValidation.message
       });
     }
 
@@ -2810,17 +2940,19 @@ export async function handleImadakeStoreStatus(
     const database =
       deps.getFirestore(app);
 
+    // 正式店舗アカウント接続｜方式A(店舗専用URLのtoken)・方式B(ログインした正式店舗)。
     const storeValidation =
-      await deps.validateStoreToken(
+      await verifyImadakeStoreActor(
+        request,
+        requestBody,
         database,
-        requestBody.storeId,
-        requestBody.token
+        deps
       );
 
     if (!storeValidation.valid) {
-      return response.status(403).json({
+      return response.status(storeValidation.status).json({
         success: false,
-        message: "この店舗投稿URLは無効です。"
+        message: storeValidation.message
       });
     }
 
