@@ -1608,6 +1608,23 @@
 
   <main>
 
+    <!-- 今だけ投稿｜ヒーロー(.opening-visual)の直下、<main>の先頭に置く(2026-10-13 本部指示で
+         「気になる情報を見る」と「今、近くで楽しめる場所」の間から移動。中身・表示条件は無変更)。
+         今だけ投稿 STEP 2｜お店・施設の「今だけ」の投稿(24時間)の独立枠。
+         現在地が分かった時だけapp.jsのloadImadakeNearbyPosts()が一覧(GET imadakePostsNearby)を
+         取得して描く。0件・現在地なしの時は枠ごと隠す。無料店舗一覧(#shopsSection)・
+         地図・お気に入り・旅の保存箱とは別のDOM・状態で、互いに読み書きしない。 -->
+    <section
+      id="imadakeSection"
+      class="imadake-section"
+      aria-labelledby="imadakeHeading"
+      hidden
+    >
+      <h2 id="imadakeHeading" data-i18n="imadake_heading">⏰ 今だけ投稿</h2>
+      <p class="imadake-lead" data-i18n="imadake_lead">近くのお店・施設が「今」を伝えています（掲載は最長24時間）。</p>
+      <div id="imadakeCardList" class="imadake-card-list"></div>
+    </section>
+
     <!-- マチナウAI一本化 Phase1｜旧「✨マチナウAI『今どうする？』」は
          「💬マチナウAIと話す」(#aiConciergeChatSection)へ一本化したため
          非表示にする。本部指示により大規模な削除・整理は行わず、DOM・
@@ -1769,21 +1786,6 @@
 
       </div>
 
-    </section>
-
-    <!-- 今だけ投稿 STEP 2｜お店・施設の「今だけ」の投稿(24時間)の独立枠。
-         現在地が分かった時だけapp.jsのloadImadakeNearbyPosts()が一覧(GET imadakePostsNearby)を
-         取得して描く。0件・現在地なしの時は枠ごと隠す。無料店舗一覧(#shopsSection)・
-         地図・お気に入り・旅の保存箱とは別のDOM・状態で、互いに読み書きしない。 -->
-    <section
-      id="imadakeSection"
-      class="imadake-section"
-      aria-labelledby="imadakeHeading"
-      hidden
-    >
-      <h2 id="imadakeHeading" data-i18n="imadake_heading">⏰ 今だけ投稿</h2>
-      <p class="imadake-lead" data-i18n="imadake_lead">近くのお店・施設が「今」を伝えています（掲載は最長24時間）。</p>
-      <div id="imadakeCardList" class="imadake-card-list"></div>
     </section>
 
     <section
