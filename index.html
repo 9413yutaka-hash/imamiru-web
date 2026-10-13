@@ -1264,10 +1264,10 @@
   <!-- TOPヒーロー緊急変更｜旧opening-visual-banner.png(文言・4分類ボタン・
        矢印・ドットが画像へ焼き込まれた1枚絵)を廃止し、背景(実写画像)と
        操作部分(本物のHTML)を分離した新ヒーローに置き換える。画像には
-       一切の文字・ボタンを焼き込まない(本部の最重要指示)。既存の
-       heroPhoto実投稿写真枠(#heroPhotoWrapper等、GPS/Firestoreの既存
-       ロジックは無変更のまま)は、このヒーロー直下に既存どおり再配置して
-       活かす(DOM上の位置・.opening-visual-photo-area配下の構造は無変更)。
+       一切の文字・ボタンを焼き込まない(本部の最重要指示)。
+       2026-10-14 本部指示(代表承認)｜ヒーロー直下にあった実投稿写真枠
+       (#heroPhotoWrapper、無料掲載の写真を1件表示)は撤去した。ヒーローの
+       すぐ下は<main>先頭の「今だけ投稿」枠(#imadakeSection)になる。
        class名はhero-*という汎用名にし、国名(okinawa等)をDOM/CSSへ
        埋め込まない(将来の他地域展開を妨げない、本部指示)。 -->
   <section class="opening-visual">
@@ -1585,23 +1585,6 @@
       </div>
 
     </section>
-
-    <div class="opening-visual-photo-area">
-      <div id="heroPhotoWrapper" class="opening-visual-photo-wrapper" style="display:none;">
-        <button
-          id="heroPhotoButton"
-          type="button"
-          class="opening-visual-photo-button"
-        >
-          <img
-            id="heroPhotoImage"
-            class="opening-visual-photo-image"
-            src=""
-            alt=""
-          >
-        </button>
-      </div>
-    </div>
 
   </section>
 

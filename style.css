@@ -294,42 +294,6 @@
       }
     }
 
-    /* 既存のheroPhoto実投稿写真枠(#heroPhotoWrapper等)を、このビジュアル
-       直下へ再配置するための最小コンテナ。既存の.hero-photo-wrapper/
-       .hero-photo-button/.hero-photo-imageと同じ数値(260px・4:3・700pxで
-       16:9)をそのまま踏襲し、独自のデザインは加えない。 */
-    .opening-visual-photo-area {
-      width: min(100%, 920px);
-      margin: 0 auto;
-      padding: 14px 18px 0;
-    }
-
-    .opening-visual-photo-wrapper {
-      max-width: 520px;
-      margin-left: auto;
-      margin-right: auto;
-    }
-
-    .opening-visual-photo-button {
-      display: block;
-      width: 100%;
-      aspect-ratio: 4 / 3;
-      border: none;
-      padding: 0;
-      border-radius: 18px;
-      overflow: hidden;
-      cursor: pointer;
-      background: rgba(4, 64, 105, 0.08);
-      box-shadow: 0 12px 28px rgba(3, 77, 121, 0.18);
-    }
-
-    .opening-visual-photo-image {
-      display: block;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-
     .hero-actions {
       display: flex;
       flex-wrap: wrap;
@@ -1463,18 +1427,6 @@
     }
 
     @media (max-width: 700px) {
-      /* トップ画面再設計 STEP4｜既存の.hero-photo-wrapper/.hero-photo-button
-         (STEP3で削除)が持っていたモバイル時の値(全幅・16:9)をそのまま
-         .opening-visual-photo-wrapper/.opening-visual-photo-buttonへ踏襲する。 */
-      .opening-visual-photo-wrapper {
-        max-width: none;
-        width: 100%;
-      }
-
-      .opening-visual-photo-button {
-        aspect-ratio: 16 / 9;
-      }
-
       #shopsList {
         display: flex;
         grid-template-columns: unset;
@@ -1736,11 +1688,6 @@
       }
 
       main {
-        padding-left: 14px;
-        padding-right: 14px;
-      }
-
-      .opening-visual-photo-area {
         padding-left: 14px;
         padding-right: 14px;
       }
