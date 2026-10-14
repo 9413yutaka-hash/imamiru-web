@@ -3598,6 +3598,137 @@ const MACHINAU_TRANSLATIONS = {
   imadake_action_order: {
     ja: "🛒 注文する",
     en: "🛒 Order"
+  },
+
+  // 収益化 STEP 4-B｜店舗向け成果レポート(imadake-post.html)。
+  imadake_report_heading: {
+    ja: "📊 成果レポート",
+    en: "📊 Results report"
+  },
+
+  imadake_report_lead: {
+    ja: "今だけ投稿の「続きを見る」が押された件数（有効CV）を、当月を含む直近3か月分確認できます。",
+    en: "See how many travelers opened your posts with “See more” (valid CVs) over the last 3 months, including this month."
+  },
+
+  imadake_report_billing_stopped: {
+    ja: "現在は課金停止中です。料金は発生しません。",
+    en: "Billing is currently paused. No fees are charged."
+  },
+
+  imadake_report_loading: {
+    ja: "集計しています…",
+    en: "Loading the report…"
+  },
+
+  imadake_report_error: {
+    ja: "成果レポートを取得できませんでした。時間をおいて、もう一度お試しください。",
+    en: "Couldn't load the report. Please try again later."
+  },
+
+  imadake_report_retry: {
+    ja: "もう一度読み込む",
+    en: "Try again"
+  },
+
+  imadake_report_valid_cv: {
+    ja: "有効CV件数",
+    en: "Valid CVs"
+  },
+
+  imadake_report_actual_charge: {
+    ja: "実際の請求額",
+    en: "Actual charges"
+  },
+
+  imadake_report_actual_charge_note_stopped: {
+    ja: "課金停止中のため、請求はありません。",
+    en: "Nothing is charged while billing is paused."
+  },
+
+  imadake_report_reference: {
+    ja: "有料運用時の料金目安",
+    en: "Estimated fee if billing were active"
+  },
+
+  imadake_report_reference_note: {
+    ja: "1投稿×日本時間の1日につき、有効CVが1件以上なら100円。請求額ではありません。",
+    en: "¥100 per post per day (Japan time) with at least one valid CV. This is not a charge."
+  },
+
+  imadake_report_posts_heading: {
+    ja: "投稿ごとの内訳",
+    en: "Breakdown by post"
+  },
+
+  imadake_report_no_posts: {
+    ja: "この月に掲載された今だけ投稿はありません。",
+    en: "No posts were live in this month."
+  },
+
+  imadake_report_untitled: {
+    ja: "（見出しなし）",
+    en: "(No headline)"
+  },
+
+  imadake_report_status_published: {
+    ja: "掲載中",
+    en: "Live"
+  },
+
+  imadake_report_status_ended: {
+    ja: "掲載終了",
+    en: "Ended"
+  },
+
+  imadake_report_status_expired: {
+    ja: "掲載期間終了",
+    en: "Expired"
+  },
+
+  imadake_report_period: {
+    ja: "掲載期間",
+    en: "Live period"
+  },
+
+  imadake_report_col_date: {
+    ja: "日付",
+    en: "Date"
+  },
+
+  imadake_report_col_cv: {
+    ja: "有効CV",
+    en: "Valid CVs"
+  },
+
+  imadake_report_col_actual: {
+    ja: "請求額",
+    en: "Charged"
+  },
+
+  imadake_report_col_reference: {
+    ja: "料金目安",
+    en: "Estimate"
+  },
+
+  imadake_report_note_cv: {
+    ja: "有効CV：旅行者が投稿の「続きを見る」を初めて押した件数です。同じ旅行者の2回目以降と、お店の方ご本人の閲覧は数えません。",
+    en: "A valid CV is a traveler's first tap on “See more” for a post. Repeat views by the same traveler and views by your own shop account are not counted."
+  },
+
+  imadake_report_note_dates: {
+    ja: "日付・月は日本時間で集計しています。",
+    en: "Dates and months are counted in Japan time (JST)."
+  },
+
+  imadake_report_generated_at: {
+    ja: "集計時点",
+    en: "As of"
+  },
+
+  imadake_report_truncated: {
+    ja: "投稿が多いため、新しい200件だけを表示しています。",
+    en: "Only the 200 most recent posts are shown."
   }
 };
 

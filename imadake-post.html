@@ -191,6 +191,62 @@
     .current-meta { margin: 0 0 12px; font-size: 13px; color: var(--subtext); }
 
     .notice { font-size: 14px; line-height: 1.7; }
+
+    /* 収益化 STEP 4-B｜成果レポート(スマートフォン優先) */
+    .report-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+    .report-head h2 { margin: 0; }
+    .report-language { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
+    .report-language button {
+      min-height: 32px; padding: 0 12px; border: none; background: var(--white); color: var(--subtext);
+      font-family: inherit; font-size: 12px; font-weight: 800; cursor: pointer;
+    }
+    .report-language button[aria-pressed="true"] { background: var(--navy); color: var(--white); }
+    .report-lead { margin: 8px 0 12px; font-size: 13px; color: var(--subtext); }
+    .report-billing-notice {
+      margin: 0 0 12px; padding: 10px 12px; border-radius: 12px; background: #e8f7f0; color: #146e4a;
+      font-size: 13.5px; font-weight: 800;
+    }
+    .report-month-tabs { display: flex; gap: 6px; margin: 0 0 12px; overflow-x: auto; }
+    .report-month-tabs button {
+      flex: 1 0 auto; min-height: 40px; padding: 0 12px; border: 1px solid var(--border); border-radius: 999px;
+      background: var(--white); color: var(--navy); font-family: inherit; font-size: 13px; font-weight: 800; cursor: pointer;
+    }
+    .report-month-tabs button[aria-pressed="true"] { border-color: var(--blue); background: var(--sky); color: var(--blue); }
+    .report-summary { display: grid; grid-template-columns: 1fr; gap: 8px; margin-bottom: 14px; }
+    .report-card { padding: 12px; border: 1px solid var(--border); border-radius: 14px; background: var(--white); }
+    .report-card-label { font-size: 12.5px; font-weight: 800; color: var(--subtext); }
+    .report-card-value { margin-top: 2px; font-size: 22px; font-weight: 900; color: var(--navy); }
+    .report-card-note { margin-top: 2px; font-size: 11.5px; color: var(--subtext); line-height: 1.6; }
+    .report-card.actual { border-color: #b9e4cf; background: #f3fbf7; }
+    .report-card.reference { border-style: dashed; background: #fbfcfd; }
+    .report-card.reference .report-card-value { color: var(--subtext); }
+    .report-subheading { margin: 4px 0 8px; font-size: 14px; color: var(--navy); }
+    .report-post { border: 1px solid var(--border); border-radius: 14px; margin-bottom: 8px; background: var(--white); }
+    .report-post summary { list-style: none; cursor: pointer; padding: 12px; }
+    .report-post summary::-webkit-details-marker { display: none; }
+    .report-post-title { display: block; font-size: 14px; font-weight: 900; color: var(--navy); word-break: break-word; }
+    .report-post-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; font-size: 12.5px; color: var(--subtext); }
+    .report-status { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 900; background: #eef2f6; color: var(--subtext); }
+    .report-status.published { background: #e8f7f0; color: #146e4a; }
+    .report-post-body { padding: 0 12px 12px; }
+    .report-period { margin: 0 0 8px; font-size: 12px; color: var(--subtext); }
+    .report-days { display: grid; gap: 4px; }
+    .report-day-row {
+      display: grid; grid-template-columns: minmax(0, 1.3fr) repeat(3, minmax(0, 1fr)); gap: 6px; align-items: center;
+      padding: 6px 8px; border-radius: 10px; background: #f6f9fb; font-size: 12.5px;
+    }
+    .report-day-row.head { background: none; padding-top: 0; padding-bottom: 0; font-size: 11px; font-weight: 800; color: var(--subtext); }
+    .report-day-row span:not(:first-child) { text-align: right; }
+    .report-notes { margin: 12px 0 0; padding-left: 18px; font-size: 11.5px; color: var(--subtext); line-height: 1.7; }
+    .report-error { padding: 12px; border-radius: 12px; background: #fdecee; color: #a93d3d; font-size: 13.5px; }
+    .report-retry {
+      margin-top: 10px; min-height: 44px; padding: 0 16px; border: 1px solid var(--blue); border-radius: 12px;
+      background: var(--white); color: var(--blue); font-family: inherit; font-size: 14px; font-weight: 900; cursor: pointer;
+    }
+    @media (min-width: 560px) {
+      .report-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+
     [hidden] { display: none !important; }
   </style>
 </head>
@@ -346,12 +402,31 @@
       <div id="formMessage" class="message-box" role="status" aria-live="polite"></div>
     </form>
 
+    <!-- 収益化 STEP 4-B｜成果レポート(店舗本人だけ。POST imadakeStoreCvReport、読み取りのみ)。
+         直近3か月の有効CV件数・実際の請求額・有料運用時の料金目安を、月別・投稿別・日別に表示する。
+         旅行者のuid・個別の閲覧記録・店舗本人の閲覧件数は表示しない(APIも返さない)。
+         取得できない時は数字を出さず(0件・0円と誤表示しない)、取得できなかったことを伝える。
+         文言はtranslations.jsのimadake_report_*(JA/EN)。言語はTOPと同じ保存値(machinauLanguage)。 -->
+    <section id="reportPanel" class="panel report-panel" hidden aria-labelledby="reportHeading">
+      <div class="report-head">
+        <h2 id="reportHeading"></h2>
+        <div class="report-language" role="group" aria-label="Language">
+          <button type="button" data-report-language="ja">日本語</button>
+          <button type="button" data-report-language="en">English</button>
+        </div>
+      </div>
+      <p id="reportLead" class="report-lead"></p>
+      <div id="reportContent" aria-live="polite"></div>
+    </section>
+
   </main>
 
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
   <script src="firebase.js"></script>
+  <!-- 成果レポートの固定文言(imadake_report_*、JA/EN)。この画面の他の文言は従来どおり。 -->
+  <script src="translations.js"></script>
 
   <script>
     // 画面の固定文言(将来の多言語化のため、ここにまとめる)。送信する値は
@@ -585,6 +660,9 @@
 
       storePanel.hidden = false;
       $("storeNameText").textContent = result.data.storeName || "";
+
+      // 収益化 STEP 4-B｜本人確認が通った店舗だけ、成果レポートを読み込む(投稿の操作とは独立)。
+      loadCvReport();
 
       const location = result.data.location;
 
@@ -1168,6 +1246,310 @@
 
     $("endButton").addEventListener("click", function() { endOrWithdraw(false); });
     $("withdrawButton").addEventListener("click", function() { endOrWithdraw(true); });
+
+    // ------------------------------------------------------------------
+    // 収益化 STEP 4-B｜成果レポート(読み取りのみ。CV・料金はサーバーの集計だけを表示する)
+    // ------------------------------------------------------------------
+    const REPORT_LANGUAGE_STORAGE_KEY = "machinauLanguage";
+    let reportLanguage = "ja";
+    // { state: "loading"|"ready"|"error", data }
+    let reportState = null;
+    let reportSelectedMonth = "";
+    let reportRequestSequence = 0;
+
+    try {
+      const storedLanguage = localStorage.getItem(REPORT_LANGUAGE_STORAGE_KEY);
+      if (typeof MACHINAU_SUPPORTED_LANGUAGES !== "undefined" && MACHINAU_SUPPORTED_LANGUAGES.indexOf(storedLanguage) !== -1) {
+        reportLanguage = storedLanguage;
+      }
+    } catch (error) {
+      // localStorageが使えなくても日本語で表示する。
+    }
+
+    function rt(key) {
+      return typeof getMachinauTranslation === "function"
+        ? getMachinauTranslation(key, reportLanguage)
+        : "";
+    }
+
+    function reportColon() {
+      return reportLanguage === "en" ? ": " : "：";
+    }
+
+    function formatReportYen(amount) {
+      const value = Number(amount) || 0;
+      return reportLanguage === "en"
+        ? "¥" + value.toLocaleString("en-US")
+        : value.toLocaleString("ja-JP") + "円";
+    }
+
+    function formatReportCount(count) {
+      const value = Number(count) || 0;
+      return reportLanguage === "en"
+        ? value.toLocaleString("en-US")
+        : value.toLocaleString("ja-JP") + "件";
+    }
+
+    function formatReportMonth(monthKey) {
+      const year = Number(monthKey.slice(0, 4));
+      const month = Number(monthKey.slice(5, 7));
+      return reportLanguage === "en"
+        ? new Date(Date.UTC(year, month - 1, 1)).toLocaleString("en-US", { timeZone: "UTC", year: "numeric", month: "short" })
+        : year + "年" + month + "月";
+    }
+
+    function formatReportDay(dayKey) {
+      const month = Number(dayKey.slice(5, 7));
+      const day = Number(dayKey.slice(8, 10));
+      return reportLanguage === "en"
+        ? new Date(Date.UTC(2000, month - 1, day)).toLocaleString("en-US", { timeZone: "UTC", month: "short", day: "numeric" })
+        : month + "/" + day;
+    }
+
+    function formatReportDateTime(isoText) {
+      if (!isoText) {
+        return "";
+      }
+
+      try {
+        return new Date(isoText).toLocaleString(reportLanguage === "en" ? "en-US" : "ja-JP", {
+          timeZone: "Asia/Tokyo",
+          month: "numeric",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit"
+        });
+      } catch (error) {
+        return "";
+      }
+    }
+
+    function createReportElement(tagName, className, text) {
+      const element = document.createElement(tagName);
+      if (className) {
+        element.className = className;
+      }
+      if (typeof text === "string") {
+        element.textContent = text;
+      }
+      return element;
+    }
+
+    function buildReportCard(kind, label, value, note) {
+      const card = createReportElement("div", "report-card " + kind);
+      card.appendChild(createReportElement("div", "report-card-label", label));
+      card.appendChild(createReportElement("div", "report-card-value", value));
+      if (note) {
+        card.appendChild(createReportElement("div", "report-card-note", note));
+      }
+      return card;
+    }
+
+    function buildReportPost(post, monthKey) {
+      const days = (Array.isArray(post.days) ? post.days : []).filter(function(day) {
+        return typeof day.date === "string" && day.date.slice(0, 7) === monthKey;
+      });
+
+      const validCvCount = days.reduce(function(sum, day) { return sum + (Number(day.validCvCount) || 0); }, 0);
+      const referenceAmount = days.reduce(function(sum, day) { return sum + (Number(day.referenceAmountJpy) || 0); }, 0);
+
+      const details = createReportElement("details", "report-post");
+      details.setAttribute("data-report-post-id", post.postId);
+
+      const summary = document.createElement("summary");
+      summary.appendChild(createReportElement("span", "report-post-title", post.headline || rt("imadake_report_untitled")));
+
+      const meta = createReportElement("span", "report-post-meta");
+      const statusCode = ["published", "ended", "expired"].indexOf(post.status) !== -1 ? post.status : "expired";
+      meta.appendChild(createReportElement("span", "report-status " + statusCode, rt("imadake_report_status_" + statusCode)));
+      meta.appendChild(createReportElement(
+        "span",
+        "",
+        rt("imadake_report_valid_cv") + " " + formatReportCount(validCvCount) + (reportLanguage === "en" ? " · " : "・") +
+          rt("imadake_report_col_reference") + " " + formatReportYen(referenceAmount)
+      ));
+      summary.appendChild(meta);
+      details.appendChild(summary);
+
+      const body = createReportElement("div", "report-post-body");
+      const endText = formatReportDateTime(post.endedAt || post.expiresAt);
+      body.appendChild(createReportElement(
+        "p",
+        "report-period",
+        rt("imadake_report_period") + reportColon() + formatReportDateTime(post.publishedAt) + (reportLanguage === "en" ? " – " : " 〜 ") + endText
+      ));
+
+      const rows = createReportElement("div", "report-days");
+      const head = createReportElement("div", "report-day-row head");
+      ["imadake_report_col_date", "imadake_report_col_cv", "imadake_report_col_actual", "imadake_report_col_reference"].forEach(function(key) {
+        head.appendChild(createReportElement("span", "", rt(key)));
+      });
+      rows.appendChild(head);
+
+      days.forEach(function(day) {
+        const row = createReportElement("div", "report-day-row");
+        row.setAttribute("data-report-day", day.date);
+        row.appendChild(createReportElement("span", "", formatReportDay(day.date)));
+        row.appendChild(createReportElement("span", "", formatReportCount(day.validCvCount)));
+        row.appendChild(createReportElement("span", "", formatReportYen(day.actualChargeJpy)));
+        row.appendChild(createReportElement("span", "", formatReportYen(day.referenceAmountJpy)));
+        rows.appendChild(row);
+      });
+
+      body.appendChild(rows);
+      details.appendChild(body);
+      return details;
+    }
+
+    function renderReport() {
+      const panel = $("reportPanel");
+      const content = $("reportContent");
+
+      if (!panel || !content || !reportState) {
+        return;
+      }
+
+      panel.hidden = false;
+      $("reportHeading").textContent = rt("imadake_report_heading");
+      $("reportLead").textContent = rt("imadake_report_lead");
+      document.querySelectorAll("[data-report-language]").forEach(function(button) {
+        button.setAttribute("aria-pressed", button.getAttribute("data-report-language") === reportLanguage ? "true" : "false");
+      });
+
+      content.textContent = "";
+
+      if (reportState.state === "loading") {
+        content.appendChild(createReportElement("p", "report-lead", rt("imadake_report_loading")));
+        return;
+      }
+
+      if (reportState.state === "error") {
+        // 取得できない時は数字を出さない(0件・0円と誤表示しない)。
+        const error = createReportElement("div", "report-error");
+        error.setAttribute("role", "alert");
+        error.appendChild(createReportElement("div", "", rt("imadake_report_error")));
+        const retry = createReportElement("button", "report-retry", rt("imadake_report_retry"));
+        retry.type = "button";
+        retry.addEventListener("click", function() { loadCvReport(); });
+        error.appendChild(retry);
+        content.appendChild(error);
+        return;
+      }
+
+      const data = reportState.data;
+      const months = Array.isArray(data.months) ? data.months : [];
+
+      if (!months.some(function(month) { return month.month === reportSelectedMonth; })) {
+        reportSelectedMonth = months.length > 0 ? months[months.length - 1].month : "";
+      }
+
+      if (data.billingStarted !== true) {
+        content.appendChild(createReportElement("p", "report-billing-notice", rt("imadake_report_billing_stopped")));
+      }
+
+      const tabs = createReportElement("div", "report-month-tabs");
+      months.forEach(function(month) {
+        const tab = createReportElement("button", "", formatReportMonth(month.month));
+        tab.type = "button";
+        tab.setAttribute("data-report-month", month.month);
+        tab.setAttribute("aria-pressed", month.month === reportSelectedMonth ? "true" : "false");
+        tab.addEventListener("click", function() {
+          reportSelectedMonth = month.month;
+          renderReport();
+        });
+        tabs.appendChild(tab);
+      });
+      content.appendChild(tabs);
+
+      const selected = months.find(function(month) { return month.month === reportSelectedMonth; }) || {
+        validCvCount: 0, actualChargeJpy: 0, referenceAmountJpy: 0
+      };
+
+      // 実際の請求額と、有料運用時の料金目安は別のカードで分けて表示する。
+      const summary = createReportElement("div", "report-summary");
+      summary.appendChild(buildReportCard("cv", rt("imadake_report_valid_cv"), formatReportCount(selected.validCvCount), ""));
+      summary.appendChild(buildReportCard(
+        "actual",
+        rt("imadake_report_actual_charge"),
+        formatReportYen(data.billingStarted === true ? selected.actualChargeJpy : 0),
+        data.billingStarted === true ? "" : rt("imadake_report_actual_charge_note_stopped")
+      ));
+      summary.appendChild(buildReportCard(
+        "reference",
+        rt("imadake_report_reference"),
+        formatReportYen(selected.referenceAmountJpy),
+        rt("imadake_report_reference_note")
+      ));
+      content.appendChild(summary);
+
+      content.appendChild(createReportElement("h3", "report-subheading", rt("imadake_report_posts_heading")));
+
+      const posts = (Array.isArray(data.posts) ? data.posts : []).filter(function(post) {
+        return Array.isArray(post.days) && post.days.some(function(day) {
+          return typeof day.date === "string" && day.date.slice(0, 7) === reportSelectedMonth;
+        });
+      });
+
+      if (posts.length === 0) {
+        content.appendChild(createReportElement("p", "report-lead", rt("imadake_report_no_posts")));
+      } else {
+        posts.forEach(function(post) {
+          content.appendChild(buildReportPost(post, reportSelectedMonth));
+        });
+      }
+
+      if (data.truncated === true) {
+        content.appendChild(createReportElement("p", "hint", rt("imadake_report_truncated")));
+      }
+
+      const notes = createReportElement("ul", "report-notes");
+      notes.appendChild(createReportElement("li", "", rt("imadake_report_note_cv")));
+      notes.appendChild(createReportElement("li", "", rt("imadake_report_note_dates")));
+      if (data.generatedAt) {
+        notes.appendChild(createReportElement("li", "", rt("imadake_report_generated_at") + reportColon() + formatReportDateTime(data.generatedAt)));
+      }
+      content.appendChild(notes);
+    }
+
+    async function loadCvReport() {
+      const sequence = ++reportRequestSequence;
+      reportState = { state: "loading", data: null };
+      renderReport();
+
+      let nextState;
+
+      try {
+        const result = await callImadakeApi("imadakeStoreCvReport");
+        nextState =
+          result.ok &&
+          result.data.success === true &&
+          Array.isArray(result.data.months) &&
+          result.data.totals
+            ? { state: "ready", data: result.data }
+            : { state: "error", data: null };
+      } catch (error) {
+        nextState = { state: "error", data: null };
+      }
+
+      if (sequence !== reportRequestSequence) {
+        return;
+      }
+
+      reportState = nextState;
+      renderReport();
+    }
+
+    document.querySelectorAll("[data-report-language]").forEach(function(button) {
+      button.addEventListener("click", function() {
+        reportLanguage = button.getAttribute("data-report-language") === "en" ? "en" : "ja";
+        try {
+          localStorage.setItem(REPORT_LANGUAGE_STORAGE_KEY, reportLanguage);
+        } catch (error) {
+          // 保存できなくても表示は切り替える。
+        }
+        renderReport();
+      });
+    });
 
     // ------------------------------------------------------------------
     // 起動

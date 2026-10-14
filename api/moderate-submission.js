@@ -62,6 +62,11 @@ import {
   handleImadakeViewedPosts
 } from "./_lib/imadake-cv.js";
 
+// 今だけ投稿 収益化 STEP 4-A｜店舗向けCVレポート(読み取り専用)。実処理はapi/_lib/imadake-cv-report.js。
+import {
+  handleImadakeStoreCvReport
+} from "./_lib/imadake-cv-report.js";
+
 // 今だけ投稿 カード翻訳 STEP 3｜実処理はapi/_lib/imadake-translation.js(Functionではない)。
 import {
   handleImadakeCardTranslationGet,
@@ -30294,6 +30299,19 @@ export default async function handler(
     requestBody.mode === "imadakeStoreStatus"
   ) {
     return handleImadakeStoreStatus(
+      request,
+      response,
+      buildImadakeDeps()
+    );
+  }
+
+  // 今だけ投稿 収益化 STEP 4-A｜店舗本人だけが見られる成果(CV)レポート(読み取り専用)。
+  // 本人確認はimadakeStoreStatusと同じ既存のverifyImadakeStoreActor()(店舗アカウントのowner
+  // または旧方式の店舗token)。旅行者のuid・店舗本人の閲覧件数は返さない。
+  if (
+    requestBody.mode === "imadakeStoreCvReport"
+  ) {
+    return handleImadakeStoreCvReport(
       request,
       response,
       buildImadakeDeps()
