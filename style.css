@@ -2084,6 +2084,29 @@
   overflow-wrap: anywhere;
 }
 
+/* 収益化 STEP 3｜閲覧済みの投稿は「続きを見る」無しで本文を最初から表示する。
+   長い本文(最大3,000字)でもカードが伸びすぎないよう、本文だけを枠内でスクロールさせる。 */
+.imadake-card-fulltext {
+  max-height: 18em;
+  margin: 0;
+  overflow-y: auto;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.imadake-card-viewed .imadake-detail-rows,
+.imadake-card-viewed .imadake-action-links {
+  margin-top: 4px;
+}
+
+.imadake-detail-retry {
+  width: 100%;
+  margin-top: 16px;
+}
+
 .imadake-card-chips {
   display: flex;
   flex-wrap: wrap;

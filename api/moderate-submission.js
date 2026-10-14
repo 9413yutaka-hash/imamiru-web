@@ -56,6 +56,12 @@ import {
   readStoreOfficialLocationFromData
 } from "./_lib/imadake.js";
 
+// 今だけ投稿 収益化 STEP 2｜CV記録・日次料金台帳。実処理はapi/_lib/imadake-cv.js(Functionではない)。
+import {
+  handleImadakeDetailOpen,
+  handleImadakeViewedPosts
+} from "./_lib/imadake-cv.js";
+
 // 今だけ投稿 カード翻訳 STEP 3｜実処理はapi/_lib/imadake-translation.js(Functionではない)。
 import {
   handleImadakeCardTranslationGet,
@@ -29687,6 +29693,19 @@ function buildStoreSelfServiceDeps() {
   };
 }
 
+// 今だけ投稿 収益化 STEP 2｜CV記録に使う既存の部品(Firebase Adminの初期化・IDトークン検証・
+// リクエスト読み取り)を参照として渡す(既存関数自体は変更しない)。
+function buildImadakeCvDeps() {
+  return {
+    getFirebaseAdminApp: getFirebaseAdminApp,
+    getFirestore: getFirestore,
+    verifyIdToken: function(app, idToken) {
+      return getAuth(app).verifyIdToken(idToken);
+    },
+    readRequestBody: readRequestBody
+  };
+}
+
 // 今だけ投稿 カード翻訳｜既存の認証・連打制限・リクエスト読み取りを参照として渡す
 // (既存関数自体は変更しない)。OpenAIの呼び出しはimadake-translation.jsの専用関数。
 function buildImadakeTranslationDeps() {
@@ -30209,6 +30228,30 @@ export default async function handler(
     return handleCommunityBoardPostCreateRequest(
       request,
       response
+    );
+  }
+
+  // 今だけ投稿 収益化 STEP 2｜「続きを見る」の詳細取得と初回閲覧(CV)の記録。
+  // 実処理はapi/_lib/imadake-cv.js。CV判定・料金台帳はサーバー側のトランザクションだけで行う。
+  if (
+    requestBody.mode === "imadakeDetailOpen"
+  ) {
+    return handleImadakeDetailOpen(
+      request,
+      response,
+      buildImadakeCvDeps()
+    );
+  }
+
+  // 今だけ投稿 収益化 STEP 3｜この旅行者(匿名uid)が閲覧済みの投稿だけを、サーバーのCV記録で確かめる
+  // (読み取りのみ。旅行者ごとの結果のため共有キャッシュしない)。
+  if (
+    requestBody.mode === "imadakeViewedPosts"
+  ) {
+    return handleImadakeViewedPosts(
+      request,
+      response,
+      buildImadakeCvDeps()
     );
   }
 

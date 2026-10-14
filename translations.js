@@ -3495,6 +3495,11 @@ const MACHINAU_TRANSLATIONS = {
     en: "Couldn't load this post. Please try again later."
   },
 
+  imadake_detail_retry: {
+    ja: "もう一度読み込む",
+    en: "Try again"
+  },
+
   imadake_detail_ended: {
     ja: "この今だけ投稿の掲載は終了しました。",
     en: "This post is no longer available."

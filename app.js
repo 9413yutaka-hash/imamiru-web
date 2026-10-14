@@ -19469,9 +19469,10 @@ function updateTodayMachinauCard() {
 // ============================================================
 // 現在地が分かった時だけ、近くの今だけ投稿の一覧(GET imadakePostsNearby)を取得し、
 // 独立枠に描く。0件・現在地なし・取得失敗の時は枠ごと隠す。詳細は「続きを見る」を
-// 押した時だけGET imadakePostGetで取得する。
+// 押した時だけPOST imadakeDetailOpenで取得する(収益化 STEP 3：サーバーが初回閲覧＝CVを
+// 記録してから本文を返す。課金対象外の投稿で取得に失敗した時だけ、従来のGET imadakePostGetへ戻る)。
 // 無料店舗一覧(shops・renderShops)・地図・お気に入り・旅の保存箱・既存のGA4とは
-// 別の状態・DOMで、互いに読み書きしない。GA4イベント・成果計測・AI翻訳は行わない。
+// 別の状態・DOMで、互いに読み書きしない。CVの判定・料金はサーバーだけが行う(GA4は分析用)。
 // 投稿の見出し・紹介文・本文・店名・価格は、お店が書いた原文のまま表示する
 // (将来、カードの翻訳結果はgetImadakeCardDisplayText()で差し替える)。
 
@@ -19501,6 +19502,35 @@ let imadakeDetailState =
 
 let imadakeDetailRequestSequence =
   0;
+
+// 収益化 STEP 3｜この旅行者(今の匿名ログインのuid)が閲覧済みの投稿。サーバーのCV記録
+// (imadakeDetailOpenの応答、またはimadakeViewedPostsの確認)で確かめた投稿だけを入れる。
+// 閲覧済みかどうかは「旅行者uid×投稿ID」で決まり、他の旅行者の閲覧や投稿全体のCV件数は
+// 使わない。uidが分からない時は空(初回表示)。posts[postId] = 公開用の詳細(本文を含む)。
+let imadakeViewedState = {
+  uid: "",
+  posts: {}
+};
+
+// 閲覧済み確認の通し番号(古い確認の応答を使わない)。
+let imadakeViewedCheckSequence =
+  0;
+
+// localStorageは補助(どの投稿をサーバーへ確認するかの手がかり)だけに使う。
+// { uid, postIds } で、今の匿名uidと一致する時だけ読む。これだけで閲覧済みとは判断しない。
+const IMADAKE_VIEWED_STORAGE_KEY =
+  "machinau_imadake_viewed_v1";
+
+const IMADAKE_VIEWED_STORAGE_MAX =
+  50;
+
+// サーバーへ一度に確認する投稿数の上限(サーバーのIMADAKE_VIEWED_POSTS_LIMITと同じ)。
+const IMADAKE_VIEWED_CHECK_LIMIT =
+  20;
+
+// 同じページ表示の中でGA4の初回閲覧イベントを重ねて送らないための記録。
+const imadakeCvAnalyticsSentPostIds =
+  new Set();
 
 const IMADAKE_CATEGORY_EMOJI = {
   restaurant: "🍽️",
@@ -19616,6 +19646,9 @@ async function loadImadakeNearbyPosts(
     posts;
 
   renderImadakeSection();
+
+  // 収益化 STEP 3｜この旅行者が以前に開いた投稿があれば、サーバー記録で確かめて全文表示にする。
+  refreshImadakeViewedPosts();
 }
 
 // 今だけ投稿 カード翻訳 STEP 3｜表示言語の訳(タイトル＋紹介文)があり、「原文を見る」中で
@@ -20074,6 +20107,60 @@ function buildImadakeCardHtml(
       ? text.excerpt + (post.excerptTruncated === true ? "…" : "")
       : "";
 
+  // 収益化 STEP 3｜この旅行者が閲覧済み(サーバー記録で確認済み)の投稿は、「続きを見る」を
+  // 出さずに詳細本文を最初から表示する(同じ旅行者・同じ投稿ではCVを追加しない)。
+  // 他の旅行者の閲覧は関係しない(未閲覧の旅行者には常に「続きを見る」を出す)。
+  const viewedPost =
+    getImadakeViewedPost(post.postId);
+
+  if (viewedPost) {
+    const bodyText =
+      typeof viewedPost.body === "string"
+        ? viewedPost.body
+        : "";
+
+    const viewedRowsHtml =
+      buildImadakeDetailRowsHtml(viewedPost, language, sourceLanguage);
+
+    return (
+      '<article class="imadake-card imadake-card-viewed" data-imadake-post-id="' + escapeHtml(post.postId) + '">' +
+        '<div class="imadake-card-visual">' + visualHtml + "</div>" +
+        '<div class="imadake-card-body">' +
+          '<div class="imadake-card-meta">' +
+            '<span class="imadake-pr-badge">' +
+              escapeHtml(getMachinauTranslation("imadake_pr_label", language)) +
+            "</span>" +
+            '<span class="imadake-card-store" lang="' + sourceLanguage + '">' +
+              escapeHtml(post.storeName) +
+            "</span>" +
+          "</div>" +
+          '<p class="imadake-card-title" lang="' + textLanguage + '">' +
+            escapeHtml(text.headline) +
+          "</p>" +
+          (chips.length > 0
+            ? '<div class="imadake-card-chips">' +
+              chips.map(function(chipText) {
+                return '<span class="imadake-chip">' + escapeHtml(chipText) + "</span>";
+              }).join("") +
+              "</div>"
+            : "") +
+          languageNoteHtml +
+          // 見出しを訳で表示中でも、本文はお店が書いた原文(本文の翻訳は無い)。
+          (!text.isOriginal && sourceLanguage !== language
+            ? '<p class="imadake-original-note">' +
+              escapeHtml(getMachinauTranslation("imadake_original_language_note", language)) +
+              "</p>"
+            : "") +
+          '<p class="imadake-card-fulltext" lang="' + sourceLanguage + '">' +
+            escapeHtml(bodyText) +
+          "</p>" +
+          (viewedRowsHtml !== "" ? '<div class="imadake-detail-rows">' + viewedRowsHtml + "</div>" : "") +
+          buildImadakeActionLinksHtml(viewedPost.actionTargets, language) +
+        "</div>" +
+      "</article>"
+    );
+  }
+
   return (
     '<article class="imadake-card" data-imadake-post-id="' + escapeHtml(post.postId) + '">' +
       '<div class="imadake-card-visual">' + visualHtml + "</div>" +
@@ -20178,6 +20265,486 @@ function stopImadakeExpiryCheck() {
   imadakeExpiryCheckTimer = null;
 }
 
+// ---- 収益化 STEP 3｜閲覧済み(旅行者uid×投稿)の状態 ----
+
+// 今の旅行者(既定appの匿名ログイン)のuid。分からない時は""(閲覧済みの判断に使わない)。
+function getCurrentImadakeTravelerUid() {
+  try {
+    if (typeof firebase === "undefined" || !firebase.auth) {
+      return "";
+    }
+
+    const user =
+      firebase.auth().currentUser;
+
+    return user && user.isAnonymous && typeof user.uid === "string"
+      ? user.uid
+      : "";
+  } catch (error) {
+    return "";
+  }
+}
+
+// サーバーで閲覧済みと確かめた投稿の詳細。今のuidと一致する時だけ返す。
+function getImadakeViewedPost(
+  postId
+) {
+  const uid =
+    getCurrentImadakeTravelerUid();
+
+  if (
+    uid === "" ||
+    imadakeViewedState.uid !== uid ||
+    !Object.prototype.hasOwnProperty.call(imadakeViewedState.posts, postId)
+  ) {
+    return null;
+  }
+
+  return imadakeViewedState.posts[postId];
+}
+
+function readImadakeViewedStoragePostIds(
+  uid
+) {
+  try {
+    const stored =
+      JSON.parse(localStorage.getItem(IMADAKE_VIEWED_STORAGE_KEY) || "null");
+
+    return stored &&
+      stored.uid === uid &&
+      Array.isArray(stored.postIds)
+      ? stored.postIds.filter(function(postId) {
+          return typeof postId === "string" && postId !== "";
+        })
+      : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function writeImadakeViewedStoragePostIds(
+  uid,
+  postIds
+) {
+  try {
+    localStorage.setItem(
+      IMADAKE_VIEWED_STORAGE_KEY,
+      JSON.stringify({
+        uid: uid,
+        postIds: postIds.slice(-IMADAKE_VIEWED_STORAGE_MAX)
+      })
+    );
+  } catch (error) {
+    // localStorageが使えなくても、サーバー記録での表示は続ける。
+  }
+}
+
+// サーバーが「この旅行者のCV記録がある」と返した投稿を閲覧済みにする。
+function rememberImadakeViewedPost(
+  uid,
+  post
+) {
+  if (uid === "" || !post || typeof post.postId !== "string") {
+    return;
+  }
+
+  if (imadakeViewedState.uid !== uid) {
+    imadakeViewedState = { uid: uid, posts: {} };
+  }
+
+  imadakeViewedState.posts[post.postId] =
+    post;
+
+  const postIds =
+    readImadakeViewedStoragePostIds(uid).filter(function(postId) {
+      return postId !== post.postId;
+    });
+
+  postIds.push(post.postId);
+
+  writeImadakeViewedStoragePostIds(uid, postIds);
+}
+
+// 一覧の表示中の投稿のうち、この旅行者が以前に開いた(localStorageの手がかりがある)投稿だけを
+// サーバー(POST imadakeViewedPosts)で確かめる。サーバーが記録を返した投稿だけ閲覧済みにし、
+// 返さなかった投稿は手がかりから外す。匿名ログインが無い・手がかりが無い時は何もしない
+// (初回表示のまま)。旅行者ごとの確認のため、共有キャッシュされる一覧APIとは別の通信。
+async function refreshImadakeViewedPosts() {
+  const checkSequence =
+    ++imadakeViewedCheckSequence;
+
+  try {
+    const idToken =
+      await getExistingTownNowIdToken();
+
+    const uid =
+      getCurrentImadakeTravelerUid();
+
+    if (idToken === "" || uid === "") {
+      return;
+    }
+
+    const storedPostIds =
+      readImadakeViewedStoragePostIds(uid);
+
+    const candidatePostIds =
+      imadakeNearbyPosts
+        .map(function(post) {
+          return post.postId;
+        })
+        .filter(function(postId) {
+          return (
+            storedPostIds.indexOf(postId) !== -1 &&
+            !(imadakeViewedState.uid === uid && imadakeViewedState.posts[postId])
+          );
+        })
+        .slice(0, IMADAKE_VIEWED_CHECK_LIMIT);
+
+    if (candidatePostIds.length === 0) {
+      return;
+    }
+
+    const response =
+      await fetch(
+        "/api/moderate-submission",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + idToken
+          },
+          body: JSON.stringify({
+            mode: "imadakeViewedPosts",
+            postIds: candidatePostIds
+          })
+        }
+      );
+
+    const responseData =
+      await response.json();
+
+    if (
+      checkSequence !== imadakeViewedCheckSequence ||
+      getCurrentImadakeTravelerUid() !== uid ||
+      !response.ok ||
+      !responseData ||
+      responseData.success !== true ||
+      !Array.isArray(responseData.posts)
+    ) {
+      return;
+    }
+
+    const confirmedPostIds =
+      [];
+
+    responseData.posts.forEach(function(post) {
+      if (post && typeof post.postId === "string" && candidatePostIds.indexOf(post.postId) !== -1) {
+        rememberImadakeViewedPost(uid, post);
+        confirmedPostIds.push(post.postId);
+      }
+    });
+
+    // サーバーに記録が無かった手がかりは消す(localStorageだけで閲覧済みとは扱わない)。
+    writeImadakeViewedStoragePostIds(
+      uid,
+      readImadakeViewedStoragePostIds(uid).filter(function(postId) {
+        return (
+          candidatePostIds.indexOf(postId) === -1 ||
+          confirmedPostIds.indexOf(postId) !== -1
+        );
+      })
+    );
+
+    if (confirmedPostIds.length > 0) {
+      renderImadakeSection();
+    }
+  } catch (error) {
+    // 確認できない時は初回表示のまま(開けばサーバーが重複CVにせず本文を返す)。
+  }
+}
+
+// 同じブラウザでログイン中の店舗アカウント(名前付きapp "machinauStoreAccount"、
+// store-account.htmlと同じ)のIDトークン。ログインしていない・確認できない時は""。
+// 読むだけで、ここからログイン・ログアウトはしない(旅行者の匿名ログインとは別のapp)。
+const IMADAKE_STORE_AUTH_APP_NAME =
+  "machinauStoreAccount";
+
+const IMADAKE_STORE_AUTH_WAIT_MS =
+  1500;
+
+function getImadakeStoreOwnerIdToken() {
+  return new Promise(
+    function(resolve) {
+      let storeAuth;
+
+      try {
+        if (typeof firebase === "undefined" || !firebase.auth || !firebase.apps) {
+          resolve("");
+          return;
+        }
+
+        const defaultApp =
+          window.machinauFirebaseApp || firebase.app();
+
+        const storeApp =
+          firebase.apps.find(function(app) {
+            return app.name === IMADAKE_STORE_AUTH_APP_NAME;
+          }) ||
+          firebase.initializeApp(defaultApp.options, IMADAKE_STORE_AUTH_APP_NAME);
+
+        storeAuth =
+          storeApp.auth();
+      } catch (error) {
+        resolve("");
+        return;
+      }
+
+      let settled =
+        false;
+
+      let unsubscribe =
+        null;
+
+      const finish =
+        function(token) {
+          if (settled) {
+            return;
+          }
+
+          settled =
+            true;
+
+          window.clearTimeout(timeoutId);
+
+          if (unsubscribe) {
+            window.setTimeout(unsubscribe, 0);
+          }
+
+          resolve(token);
+        };
+
+      const timeoutId =
+        window.setTimeout(
+          function() {
+            finish("");
+          },
+          IMADAKE_STORE_AUTH_WAIT_MS
+        );
+
+      try {
+        unsubscribe =
+          storeAuth.onAuthStateChanged(
+            function(user) {
+              if (!user || user.isAnonymous) {
+                finish("");
+                return;
+              }
+
+              user
+                .getIdToken()
+                .then(
+                  finish,
+                  function() {
+                    finish("");
+                  }
+                );
+            }
+          );
+      } catch (error) {
+        finish("");
+      }
+    }
+  );
+}
+
+// GA4：この旅行者の初回閲覧(有効CV)が今回サーバーで記録された時だけ送る。分析用で、
+// 料金の根拠にはしない(料金はサーバーの台帳だけ)。
+function sendImadakeFirstViewAnalytics(
+  post
+) {
+  if (!post || imadakeCvAnalyticsSentPostIds.has(post.postId)) {
+    return;
+  }
+
+  imadakeCvAnalyticsSentPostIds.add(post.postId);
+
+  sendMachinauAnalyticsEvent(
+    "imadake_first_view",
+    {
+      post_id: post.postId,
+      category_code: post.categoryCode || "",
+      ui_language: getCurrentMachinauLanguage()
+    }
+  );
+}
+
+// 詳細を取得する。POST imadakeDetailOpen(サーバーが初回閲覧＝CVを記録してから本文を返す。
+// 同じ旅行者の2回目以降・再試行はCVを増やさず本文を返す)。
+//   ・匿名ログインできない時はトークン無しで送る(サーバーは本文を返し、CVは記録しない)
+//   ・店舗ログイン中なら店舗トークンも送る(本人の閲覧かどうかはサーバーが照合する)
+//   ・通信・サーバーの障害時だけ、従来のGET imadakePostGetへ戻る。課金対象の投稿は
+//     GETでは本文が返らない(bodyProtected)ため、本文を出さず再試行の表示にする
+// 戻り値：{ postId, state, post, viewedChanged }
+async function fetchImadakeDetailWithCv(
+  postId
+) {
+  let travelerToken =
+    "";
+
+  try {
+    travelerToken =
+      await getAnonymousIdTokenForLocationCollection();
+  } catch (error) {
+    travelerToken = "";
+  }
+
+  const travelerUid =
+    travelerToken !== ""
+      ? getCurrentImadakeTravelerUid()
+      : "";
+
+  const storeToken =
+    await getImadakeStoreOwnerIdToken();
+
+  const headers = {
+    "Content-Type": "application/json"
+  };
+
+  if (travelerToken !== "") {
+    headers.Authorization = "Bearer " + travelerToken;
+  }
+
+  if (storeToken !== "") {
+    headers["X-Machinau-Store-Authorization"] = "Bearer " + storeToken;
+  }
+
+  let response =
+    null;
+
+  let responseData =
+    null;
+
+  try {
+    response =
+      await fetch(
+        "/api/moderate-submission",
+        {
+          method: "POST",
+          headers: headers,
+          body: JSON.stringify({
+            mode: "imadakeDetailOpen",
+            postId: postId
+          })
+        }
+      );
+
+    try {
+      responseData =
+        await response.json();
+    } catch (jsonError) {
+      responseData = null;
+    }
+  } catch (networkError) {
+    response = null;
+  }
+
+  if (
+    response &&
+    response.ok &&
+    responseData &&
+    responseData.success === true &&
+    responseData.post
+  ) {
+    const cv =
+      responseData.cv || {};
+
+    let viewedChanged =
+      false;
+
+    // サーバーにこの旅行者の記録がある(今回記録した／既にあった)時だけ閲覧済みにする。
+    if (
+      travelerUid !== "" &&
+      (cv.status === "new" || cv.status === "existing") &&
+      getCurrentImadakeTravelerUid() === travelerUid
+    ) {
+      rememberImadakeViewedPost(travelerUid, responseData.post);
+      viewedChanged = true;
+    }
+
+    if (cv.status === "new" && cv.counted === true) {
+      sendImadakeFirstViewAnalytics(responseData.post);
+    }
+
+    return isImadakePostStillListed(responseData.post, Date.now())
+      ? { postId: postId, state: "ready", post: responseData.post, viewedChanged: viewedChanged }
+      : { postId: postId, state: "ended", post: null, viewedChanged: viewedChanged };
+  }
+
+  if (response && response.status === 404) {
+    return { postId: postId, state: "ended", post: null, viewedChanged: false };
+  }
+
+  return fetchImadakeDetailFromPublicGet(postId);
+}
+
+// 障害時の戻り先(課金対象外の投稿だけ本文が返る、従来のGET)。
+async function fetchImadakeDetailFromPublicGet(
+  postId
+) {
+  try {
+    const response =
+      await fetch(
+        "/api/moderate-submission?" +
+          new URLSearchParams({
+            mode: "imadakePostGet",
+            postId: postId
+          }).toString()
+      );
+
+    let responseData =
+      null;
+
+    try {
+      responseData =
+        await response.json();
+    } catch (jsonError) {
+      responseData = null;
+    }
+
+    if (response.status === 404) {
+      return { postId: postId, state: "ended", post: null, viewedChanged: false };
+    }
+
+    if (
+      response.ok &&
+      responseData &&
+      responseData.success === true &&
+      responseData.post &&
+      responseData.bodyProtected !== true
+    ) {
+      // 掲載終了(期限を過ぎていた)なら終了表示。
+      return isImadakePostStillListed(responseData.post, Date.now())
+        ? { postId: postId, state: "ready", post: responseData.post, viewedChanged: false }
+        : { postId: postId, state: "ended", post: null, viewedChanged: false };
+    }
+  } catch (error) {
+    // 下の再試行表示へ。
+  }
+
+  return { postId: postId, state: "error", post: null, viewedChanged: false };
+}
+
+// 「もう一度読み込む」(詳細の取得に失敗した時)。
+function retryImadakeDetail() {
+  if (
+    imadakeDetailState &&
+    imadakeDetailState.state === "error" &&
+    typeof imadakeDetailState.postId === "string"
+  ) {
+    openImadakeDetail(imadakeDetailState.postId);
+  }
+}
+
 // ---- 詳細 ----
 
 async function openImadakeDetail(
@@ -20211,52 +20778,31 @@ async function openImadakeDetail(
   let nextState;
 
   try {
-    const response =
-      await fetch(
-        "/api/moderate-submission?" +
-          new URLSearchParams({
-            mode: "imadakePostGet",
-            postId: postId
-          }).toString()
-      );
-
-    let responseData =
-      null;
-
-    try {
-      responseData =
-        await response.json();
-    } catch (jsonError) {
-      responseData = null;
-    }
-
-    if (
-      response.ok &&
-      responseData &&
-      responseData.success === true &&
-      responseData.post &&
-      isImadakePostStillListed(responseData.post, Date.now())
-    ) {
-      nextState = { postId: postId, state: "ready", post: responseData.post };
-    } else if (
-      response.status === 404 ||
-      (response.ok && responseData && responseData.post)
-    ) {
-      // 掲載終了(サーバーで404)、または取得できたが期限を過ぎていた時。
-      nextState = { postId: postId, state: "ended", post: null };
-    } else {
-      nextState = { postId: postId, state: "error", post: null };
-    }
+    nextState =
+      await fetchImadakeDetailWithCv(postId);
   } catch (error) {
     nextState = { postId: postId, state: "error", post: null };
   }
 
   if (requestSequence !== imadakeDetailRequestSequence) {
+    // 詳細を閉じた・別の投稿を開いた後でも、閲覧済みになったカードは全文表示に変える。
+    if (nextState.viewedChanged) {
+      renderImadakeSection();
+    }
+
     return;
   }
 
-  imadakeDetailState =
-    nextState;
+  imadakeDetailState = {
+    postId: nextState.postId,
+    state: nextState.state,
+    post: nextState.post
+  };
+
+  if (nextState.viewedChanged) {
+    // 閲覧済みになったカードは、次から「続きを見る」無しの全文表示(詳細の後ろで描き直す)。
+    renderImadakeSection();
+  }
 
   if (nextState.state === "ended") {
     // 一覧からも外す(次の一覧取得まで期限切れ・終了済みのカードを出さない)。
@@ -20338,6 +20884,69 @@ function buildImadakeActionLinksHtml(
     : "";
 }
 
+// 詳細の補足行(イベント時間・会場・料金・価格・支払い・場所)。詳細モーダルと閲覧済みカードで共通。
+function buildImadakeDetailRowsHtml(
+  post,
+  language,
+  sourceLanguage
+) {
+  const categoryFields =
+    post.categoryFields && typeof post.categoryFields === "object"
+      ? post.categoryFields
+      : {};
+
+  let rowsHtml =
+    "";
+
+  if (
+    typeof categoryFields.startTime === "string" &&
+    categoryFields.startTime !== ""
+  ) {
+    rowsHtml +=
+      buildImadakeDetailRowHtml(
+        "imadake_detail_event_time_label",
+        categoryFields.startTime +
+          (typeof categoryFields.endTime === "string" && categoryFields.endTime !== ""
+            ? "〜" + categoryFields.endTime
+            : ""),
+        language,
+        ""
+      );
+  }
+
+  if (typeof categoryFields.venue === "string" && categoryFields.venue !== "") {
+    rowsHtml += buildImadakeDetailRowHtml("imadake_detail_event_venue_label", categoryFields.venue, language, sourceLanguage);
+  }
+
+  if (typeof categoryFields.feeText === "string" && categoryFields.feeText !== "") {
+    rowsHtml += buildImadakeDetailRowHtml("imadake_detail_event_fee_label", categoryFields.feeText, language, sourceLanguage);
+  }
+
+  if (typeof post.priceText === "string" && post.priceText !== "") {
+    rowsHtml += buildImadakeDetailRowHtml("imadake_detail_price_label", post.priceText, language, sourceLanguage);
+  }
+
+  const paymentText =
+    (Array.isArray(post.paymentMethods) ? post.paymentMethods : [])
+      .map(function(code) {
+        return getMachinauTranslation("imadake_payment_" + code, language);
+      })
+      .filter(function(label) {
+        return label !== "";
+      })
+      .join("・");
+
+  if (paymentText !== "") {
+    rowsHtml += buildImadakeDetailRowHtml("imadake_detail_payment_label", paymentText, language, "");
+  }
+
+  if (typeof post.address === "string" && post.address !== "") {
+    rowsHtml += buildImadakeDetailRowHtml("imadake_detail_place_label", post.address, language, sourceLanguage);
+  }
+
+  return rowsHtml;
+}
+
 function buildImadakeDetailHtml(
   post,
   language
@@ -20391,54 +21000,8 @@ function buildImadakeDetailHtml(
     }
   });
 
-  let rowsHtml =
-    "";
-
-  if (
-    typeof categoryFields.startTime === "string" &&
-    categoryFields.startTime !== ""
-  ) {
-    rowsHtml +=
-      buildImadakeDetailRowHtml(
-        "imadake_detail_event_time_label",
-        categoryFields.startTime +
-          (typeof categoryFields.endTime === "string" && categoryFields.endTime !== ""
-            ? "〜" + categoryFields.endTime
-            : ""),
-        language,
-        ""
-      );
-  }
-
-  if (typeof categoryFields.venue === "string" && categoryFields.venue !== "") {
-    rowsHtml += buildImadakeDetailRowHtml("imadake_detail_event_venue_label", categoryFields.venue, language, sourceLanguage);
-  }
-
-  if (typeof categoryFields.feeText === "string" && categoryFields.feeText !== "") {
-    rowsHtml += buildImadakeDetailRowHtml("imadake_detail_event_fee_label", categoryFields.feeText, language, sourceLanguage);
-  }
-
-  if (typeof post.priceText === "string" && post.priceText !== "") {
-    rowsHtml += buildImadakeDetailRowHtml("imadake_detail_price_label", post.priceText, language, sourceLanguage);
-  }
-
-  const paymentText =
-    (Array.isArray(post.paymentMethods) ? post.paymentMethods : [])
-      .map(function(code) {
-        return getMachinauTranslation("imadake_payment_" + code, language);
-      })
-      .filter(function(label) {
-        return label !== "";
-      })
-      .join("・");
-
-  if (paymentText !== "") {
-    rowsHtml += buildImadakeDetailRowHtml("imadake_detail_payment_label", paymentText, language, "");
-  }
-
-  if (typeof post.address === "string" && post.address !== "") {
-    rowsHtml += buildImadakeDetailRowHtml("imadake_detail_place_label", post.address, language, sourceLanguage);
-  }
+  const rowsHtml =
+    buildImadakeDetailRowsHtml(post, language, sourceLanguage);
 
   return (
     imagesHtml +
@@ -20509,7 +21072,12 @@ function renderImadakeDetail() {
   body.innerHTML =
     '<p id="imadakeDetailTitle" class="imadake-detail-message" role="status">' +
       escapeHtml(getMachinauTranslation(messageKey, language)) +
-    "</p>";
+    "</p>" +
+    (imadakeDetailState.state === "error"
+      ? '<button class="imadake-read-more imadake-detail-retry" type="button" onclick="retryImadakeDetail()">' +
+        escapeHtml(getMachinauTranslation("imadake_detail_retry", language)) +
+        "</button>"
+      : "");
 }
 
 function closeImadakeDetail() {

@@ -1095,6 +1095,37 @@ const EMPTY_ACTIVE_SLOT_FIELDS = {
 };
 
 // ---------------------------------------------------------------------------
+// 収益化 STEP 3｜課金対象(cvBillingEnabled)は投稿作成時にサーバーだけが決め、その投稿では
+// 以後変えない(投稿者・画面からは指定できない。公開・終了・審査の更新でも書き換えない)。
+// 正式な課金開始前のため、現在はすべての新規投稿をfalseにする。課金開始後も、テスト事業者
+// (storeAccounts.isTestAccount: true)の投稿はfalse。既存投稿は項目なし＝課金対象外。
+// ---------------------------------------------------------------------------
+export const IMADAKE_CV_BILLING_STARTED =
+  false;
+
+export async function decideImadakeCvBillingForNewPost(
+  database,
+  storeId
+) {
+  if (!IMADAKE_CV_BILLING_STARTED) {
+    return false;
+  }
+
+  const snapshot =
+    await database
+      .collection("storeAccounts")
+      .doc(storeId)
+      .get();
+
+  const account =
+    snapshot.exists
+      ? snapshot.data() || {}
+      : null;
+
+  return !!account && account.isTestAccount !== true;
+}
+
+// ---------------------------------------------------------------------------
 // mode: imadakePostCreate (POST)
 // ---------------------------------------------------------------------------
 export async function handleImadakePostCreate(
@@ -1256,6 +1287,13 @@ export async function handleImadakePostCreate(
         officialLocation.prefecture
       );
 
+    // 収益化 STEP 3｜課金対象かどうかは作成時にサーバーで決めて固定する(現在は常にfalse)。
+    const cvBillingEnabled =
+      await decideImadakeCvBillingForNewPost(
+        database,
+        storeId
+      );
+
     const result =
       await database.runTransaction(
         async function(transaction) {
@@ -1351,7 +1389,8 @@ export async function handleImadakePostCreate(
             moderationVersion: deps.AI_REVIEW_VERSION,
             createdByType: "store",
             authMethod: "storeToken",
-            createdIpHash: ipHash
+            createdIpHash: ipHash,
+            cvBillingEnabled: cvBillingEnabled === true
           };
 
           transaction.set(postRef, post);
@@ -1732,6 +1771,20 @@ export async function handleImadakePostGet(
       return response.status(404).json({
         success: false,
         message: "この今だけ投稿は掲載されていません。"
+      });
+    }
+
+    // 収益化 STEP 3｜課金対象の投稿は、この認証不要のGETでは本文を返さない(本文は
+    // POST imadakeDetailOpenでCVを記録してから返す。CVを迂回して全文を得る経路を作らない)。
+    // 課金対象外(既存投稿・現在の新規投稿)は従来どおり本文を返す。
+    if (post.cvBillingEnabled === true) {
+      return response.status(200).json({
+        success: true,
+        bodyProtected: true,
+        post: {
+          ...buildImadakePublicPost(snapshot.id, post),
+          body: ""
+        }
       });
     }
 
