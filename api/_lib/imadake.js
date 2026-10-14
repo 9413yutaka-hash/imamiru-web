@@ -739,6 +739,88 @@ export function validateImadakePostInput(
 // 安全チェック(既存Moderation・安全重大語判定をそのまま使う)
 // ---------------------------------------------------------------------------
 
+// 今だけ投稿専用の追加の重大語(2026-10-15)。共有のSAFETY_CRITICAL_KEYWORDS・
+// matchesSafetyCriticalKeywords(店舗投稿・掲示板・スレッド・広告でも使用)は変更せず、
+// 今だけ投稿だけで追加判定する。目的は危険情報の削除ではなく、未確認の重大情報を
+// 自動公開せず運営確認待ちにすること(過検知は許容、既存方針と同じ)。
+// ・日本語：既存の一覧で漏れていた表現(「通行止」は「全面通行止」「通行止め」も含む)
+// ・英語：大文字小文字を区別せず、語の区切りで判定(複数形・活用形を含む)。一般的な語
+//   (cancel・suspend・crash・warning等)は、交通・気象など重大情報の文脈に限る
+// ・投稿の言語(sourceLanguage)に関係なく、日本語・英語の両方を必ず確認する(混在文も対象)
+// ・対象は投稿者が入力する見出し・本文・価格・会場・料金だけ(店舗名は対象にしない：
+//   「Fire Grill」のような店名で毎回確認待ちにならないように)。全角英数字・半角カナは
+//   NFKC正規化してから判定する
+export const IMADAKE_EXTRA_SAFETY_KEYWORDS_JA = [
+  "洪水", "噴火", "運転見合わせ", "交通規制", "爆発", "救助", "大雨", "竜巻", "落雷",
+  "ツナミ", "つなみ", "通行止", "火事", "災害", "高潮", "暴風", "冠水", "土石流",
+  "がけ崩れ", "崖崩れ", "地すべり", "地滑り"
+];
+
+const IMADAKE_TRANSPORT_WORDS =
+  "(?:flights?|trains?|bus(?:es)?|ferr(?:y|ies)|ships?|boats?|rail(?:way)?s?|services?|lines?|monorail|yui\\s*rail)";
+
+const IMADAKE_DISRUPTION_WORDS =
+  "(?:cancel(?:l)?ed|cancel(?:l)?ations?|suspend(?:ed)?|suspensions?|delay(?:ed|s)?|halted|stopped|not\\s+running)";
+
+export const IMADAKE_EXTRA_SAFETY_PATTERNS_EN = [
+  /\btyphoons?\b/i,
+  /\b(?:storms?|stormy|thunderstorms?|rainstorms?)\b/i,
+  /\btsunamis?\b/i,
+  /\b(?:earthquakes?|quakes?|tremors?|aftershocks?)\b/i,
+  /\bflood(?:s|ed|ing)?\b/i,
+  /\b(?:land|mud|rock)slides?\b/i,
+  /\b(?:wild)?fires?\b/i,
+  /\bexplo(?:sion|sions|ded|de|des)\b/i,
+  /\baccidents?\b/i,
+  /\b(?:car|traffic|road|bus|plane|train)\s+crash(?:es)?\b/i,
+  /\broads?\s+(?:closures?|closed|blocked)\b/i,
+  /\b(?:closed|blocked)\s+roads?\b/i,
+  /\broad\s*blocks?\b/i,
+  /\bevacuat\w*/i,
+  /\bemergenc(?:y|ies)\b/i,
+  /\b(?:power|water|electricity|gas)\s+(?:outages?|cuts?|failures?|shortages?)\b/i,
+  /\boutages?\b/i,
+  /\bblackouts?\b/i,
+  /\bno\s+(?:running\s+)?water\b/i,
+  /\bmissing\s+(?:persons?|people|child|children|hikers?|swimmers?|divers?)\b/i,
+  /\brescu(?:e|ed|es|ing)\b/i,
+  new RegExp("\\b" + IMADAKE_TRANSPORT_WORDS + "\\b[^.!?\\n]{0,40}?\\b" + IMADAKE_DISRUPTION_WORDS + "\\b", "i"),
+  new RegExp("\\b" + IMADAKE_DISRUPTION_WORDS + "\\b[^.!?\\n]{0,40}?\\b" + IMADAKE_TRANSPORT_WORDS + "\\b", "i"),
+  /\b(?:weather|storm|typhoon|tsunami|flood|heat|rain|wind|evacuation|emergency)\s+(?:warnings?|alerts?|advisor(?:y|ies))\b/i,
+  /\bdisasters?\b/i,
+  /\b(?:volcan\w*|eruptions?|erupted)\b/i,
+  /\bheavy\s+rain\b/i,
+  /\btornado(?:e)?s?\b/i,
+  /\blightning\b/i,
+  /\bhigh\s+waves?\b/i,
+  /\bstorm\s+surges?\b/i
+];
+
+// 見出し・本文(価格・会場・料金を含む)に、今だけ投稿専用の追加の重大語があるか。
+export function matchesImadakeExtraSafetyKeywords(
+  moderationSubject
+) {
+  const text =
+    [
+      moderationSubject && moderationSubject.title,
+      moderationSubject && moderationSubject.content
+    ]
+      .map(function(value) {
+        return String(value || "");
+      })
+      .join("\n")
+      .normalize("NFKC");
+
+  return (
+    IMADAKE_EXTRA_SAFETY_KEYWORDS_JA.some(function(keyword) {
+      return text.indexOf(keyword) !== -1;
+    }) ||
+    IMADAKE_EXTRA_SAFETY_PATTERNS_EN.some(function(pattern) {
+      return pattern.test(text);
+    })
+  );
+}
+
 // 戻り値："published" / "pending" / "rejected"。Moderationが判定できない場合は
 // 例外を投げる(呼び出し元で投稿失敗として返し、公開も保存もしない＝fail closed)。
 async function decideImadakeSafety(
@@ -825,7 +907,12 @@ async function decideImadakeSafety(
     };
   }
 
-  if (deps.matchesSafetyCriticalKeywords(moderationSubject)) {
+  // 既存の共有判定(日本語16語、店舗名も対象)はそのまま。加えて今だけ投稿専用の
+  // 追加判定(日本語の補強・英語、見出しと本文だけ)。どちらかに該当すれば運営確認待ち。
+  if (
+    deps.matchesSafetyCriticalKeywords(moderationSubject) ||
+    matchesImadakeExtraSafetyKeywords(moderationSubject)
+  ) {
     return {
       decision: "pending",
       moderationStatus: "REVIEW",
