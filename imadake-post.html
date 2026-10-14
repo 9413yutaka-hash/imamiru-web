@@ -47,6 +47,14 @@
     }
 
     header .page-label { font-size: 12px; opacity: 0.85; }
+    .header-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    /* 多言語化｜ページ全体の表示言語の切り替え(言語の一覧はMACHINAU_SUPPORTED_LANGUAGES) */
+    .language-switch { display: inline-flex; flex: none; border: 1px solid rgba(255, 255, 255, 0.45); border-radius: 999px; overflow: hidden; }
+    .language-switch button {
+      min-height: 32px; padding: 0 12px; border: none; background: transparent; color: var(--white);
+      font-family: inherit; font-size: 12px; font-weight: 800; cursor: pointer;
+    }
+    .language-switch button[aria-pressed="true"] { background: var(--white); color: var(--navy); }
     header h1 { margin: 4px 0 2px; font-size: 22px; }
     header p { margin: 0; font-size: 13px; opacity: 0.9; }
 
@@ -195,12 +203,6 @@
     /* 収益化 STEP 4-B｜成果レポート(スマートフォン優先) */
     .report-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
     .report-head h2 { margin: 0; }
-    .report-language { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
-    .report-language button {
-      min-height: 32px; padding: 0 12px; border: none; background: var(--white); color: var(--subtext);
-      font-family: inherit; font-size: 12px; font-weight: 800; cursor: pointer;
-    }
-    .report-language button[aria-pressed="true"] { background: var(--navy); color: var(--white); }
     .report-lead { margin: 8px 0 12px; font-size: 13px; color: var(--subtext); }
     .report-billing-notice {
       margin: 0 0 12px; padding: 10px 12px; border-radius: 12px; background: #e8f7f0; color: #146e4a;
@@ -252,153 +254,172 @@
 </head>
 <body>
 
+  <!-- 多言語化｜固定文言はtranslations.jsのimadake_post_*(JA/EN、成果レポートはimadake_report_*)。
+       data-i18n(文字)・data-i18n-placeholder・data-i18n-aria-label を applyPageLanguage() が差し替える。
+       HTMLに書いた日本語は初期表示用(訳と同じ文)。店舗名・投稿の見出し・入力した値・登録住所は翻訳しない。
+       言語はTOP・店舗アカウント画面と同じ保存値(machinauLanguage)。言語の一覧はMACHINAU_SUPPORTED_LANGUAGES。 -->
   <header>
-    <div class="page-label">マチナウ｜お店・施設の方へ</div>
-    <h1>⏰ 今だけ投稿</h1>
-    <p>「今、伝えたいこと」を、24時間だけ旅行者へ届けます。</p>
+    <div class="header-top">
+      <div class="page-label" data-i18n="imadake_post_header_label">マチナウ｜お店・施設の方へ</div>
+      <div id="languageSwitch" class="language-switch" role="group" aria-label="表示言語" data-i18n-aria-label="imadake_post_language_aria"></div>
+    </div>
+    <h1 data-i18n="imadake_heading">⏰ 今だけ投稿</h1>
+    <p data-i18n="imadake_post_header_lead">「今、伝えたいこと」を、24時間だけ旅行者へ届けます。</p>
   </header>
 
   <main>
 
     <div id="loadingPanel" class="panel">
-      <p class="notice">読み込んでいます…</p>
+      <p class="notice" data-i18n="imadake_post_loading">読み込んでいます…</p>
     </div>
 
     <div id="invalidPanel" class="panel" hidden>
-      <p class="notice">この店舗投稿URLは無効です。マチナウ運営からお渡しした店舗専用URLから開いてください。</p>
-      <p class="hint">ページを再読み込みした場合も、もう一度店舗専用URLから開き直してください。</p>
+      <p class="notice" data-i18n="imadake_post_invalid_url">この店舗投稿URLは無効です。マチナウ運営からお渡しした店舗専用URLから開いてください。</p>
+      <p class="hint" data-i18n="imadake_post_invalid_url_hint">ページを再読み込みした場合も、もう一度店舗専用URLから開き直してください。</p>
     </div>
 
     <!-- 正式店舗アカウント接続｜店舗アカウント画面の「今だけ投稿」(tokenなし)から開いた時の案内。 -->
     <div id="loginRequiredPanel" class="panel" hidden>
-      <p class="notice">店舗アカウントでログインしてから、もう一度お試しください。</p>
-      <p class="hint"><a href="store-account.html">店舗アカウント画面を開く</a></p>
+      <p class="notice" data-i18n="imadake_post_login_required">店舗アカウントでログインしてから、もう一度お試しください。</p>
+      <p class="hint"><a href="store-account.html" data-i18n="imadake_post_open_store_account">店舗アカウント画面を開く</a></p>
     </div>
 
     <div id="storeDeniedPanel" class="panel" hidden>
       <p id="storeDeniedMessage" class="notice">この店舗で今だけ投稿を操作する権限がありません。</p>
-      <p class="hint"><a href="store-account.html">店舗アカウント画面へ戻る</a></p>
+      <p class="hint"><a href="store-account.html" data-i18n="imadake_post_back_to_store_account">店舗アカウント画面へ戻る</a></p>
     </div>
 
     <div id="storePanel" class="panel" hidden>
       <h2 id="storeNameText"></h2>
-      <p class="location-line">掲載場所：<span id="storeLocationText"></span></p>
-      <p class="location-note">掲載場所の変更はマチナウ運営へご連絡ください。</p>
+      <p class="location-line"><span data-i18n="imadake_post_location_label">掲載場所：</span><span id="storeLocationText"></span></p>
+      <p class="location-note" data-i18n="imadake_post_location_note">掲載場所の変更はマチナウ運営へご連絡ください。</p>
     </div>
 
     <div id="noLocationPanel" class="panel" hidden>
-      <p class="notice">店舗の掲載場所がまだ登録されていません。運営へお問い合わせください。</p>
+      <p class="notice" data-i18n="imadake_post_no_location">店舗の掲載場所がまだ登録されていません。運営へお問い合わせください。</p>
     </div>
 
     <div id="aboutPanel" class="panel" hidden>
-      <h2><span class="badge-24h">24時間限定</span> 今だけ投稿とは</h2>
+      <h2><span class="badge-24h" data-i18n="imadake_post_badge_24h">24時間限定</span> <span data-i18n="imadake_post_about_heading">今だけ投稿とは</span></h2>
       <ul class="about-list">
-        <li>「今だから役立つ」情報を、近くの旅行者へ届けます</li>
-        <li>公開から24時間で自動的に終わります</li>
-        <li>1店舗につき、同時に掲載できるのは1件です</li>
-        <li>安全確認のあとに公開します（内容によっては運営が確認してから公開します）</li>
+        <li data-i18n="imadake_post_about_1">「今だから役立つ」情報を、近くの旅行者へ届けます</li>
+        <li data-i18n="imadake_post_about_2">公開から24時間で自動的に終わります</li>
+        <li data-i18n="imadake_post_about_3">1店舗につき、同時に掲載できるのは1件です</li>
+        <li data-i18n="imadake_post_about_4">安全確認のあとに公開します（内容によっては運営が確認してから公開します）</li>
       </ul>
     </div>
 
     <div id="currentPanel" class="panel" hidden>
-      <h2>今の今だけ投稿</h2>
+      <h2 data-i18n="imadake_post_current_heading">今の今だけ投稿</h2>
       <span id="currentStatusLabel" class="current-status-label"></span>
       <p id="currentHeadline" class="current-headline"></p>
       <p id="currentMeta" class="current-meta"></p>
-      <button id="endButton" class="danger-button" type="button" hidden>掲載を終了する</button>
-      <button id="withdrawButton" class="danger-button" type="button" hidden>投稿を取り下げる</button>
+      <button id="endButton" class="danger-button" type="button" hidden data-i18n="imadake_post_end_button">掲載を終了する</button>
+      <button id="withdrawButton" class="danger-button" type="button" hidden data-i18n="imadake_post_withdraw_button">投稿を取り下げる</button>
       <div id="currentMessage" class="message-box" role="status" aria-live="polite"></div>
     </div>
 
     <form id="postForm" class="panel" novalidate hidden>
-      <h2>新しく投稿する</h2>
+      <h2 data-i18n="imadake_post_new_heading">新しく投稿する</h2>
 
       <div class="field">
-        <span class="field-label">どんなお店・催しですか？<span class="required">必須</span></span>
-        <div id="categoryChips" class="chip-group" role="radiogroup" aria-label="カテゴリー"></div>
+        <span class="field-label"><span data-i18n="imadake_post_category_label">どんなお店・催しですか？</span><span class="required" data-i18n="imadake_post_required">必須</span></span>
+        <div id="categoryChips" class="chip-group" role="radiogroup" aria-label="カテゴリー" data-i18n-aria-label="imadake_post_category_aria"></div>
+      </div>
+
+      <!-- 原文言語｜店舗が見出し・説明を書いた言語(sourceLanguage)。画面の表示言語とは別の値で、
+           表示言語を切り替えても変わらない。初期値は日本語。自動判定はしない。
+           選択肢の名前はその言語での表記(日本語 / English)のまま、どの表示言語でも同じ。 -->
+      <div class="field">
+        <span class="field-label"><span data-i18n="imadake_post_source_language_label">投稿する言語</span><span class="required" data-i18n="imadake_post_required">必須</span></span>
+        <div id="sourceLanguageChips" class="chip-group" role="radiogroup" aria-label="投稿する言語" data-i18n-aria-label="imadake_post_source_language_label">
+          <label class="chip selected"><input type="radio" name="sourceLanguage" value="ja" checked><span lang="ja">日本語</span></label>
+          <label class="chip"><input type="radio" name="sourceLanguage" value="en"><span lang="en">English</span></label>
+        </div>
+        <p class="hint" data-i18n="imadake_post_source_language_hint">見出しと説明を書いた言語を選んでください。旅行者の表示言語に合わせた自動翻訳に使います。</p>
       </div>
 
       <div class="field">
-        <label for="headlineInput">いちばん伝えたいこと<span class="required">必須</span></label>
-        <input id="headlineInput" type="text" maxlength="40" autocomplete="off" placeholder="例：本日まだ空席あります">
+        <label for="headlineInput"><span data-i18n="imadake_post_headline_label">いちばん伝えたいこと</span><span class="required" data-i18n="imadake_post_required">必須</span></label>
+        <input id="headlineInput" type="text" maxlength="40" autocomplete="off" placeholder="例：本日まだ空席あります" data-i18n-placeholder="imadake_post_headline_placeholder">
         <div id="headlineCounter" class="counter">0 / 40</div>
-        <p class="hint">例：「本日まだ空席あります」「タルト、あと6個です」「新作が入荷しました」「本日17時まで営業」「当日券あります」</p>
+        <p class="hint" data-i18n="imadake_post_headline_hint">例：「本日まだ空席あります」「タルト、あと6個です」「新作が入荷しました」「本日17時まで営業」「当日券あります」</p>
       </div>
 
       <div id="liveStateField" class="field" hidden>
         <span id="liveStateLabel" class="field-label"></span>
         <div id="liveStateChips" class="chip-group" role="radiogroup"></div>
         <div id="quantityField" style="margin-top:10px;" hidden>
-          <label for="quantityInput" style="font-size:13px; font-weight:700;">残りの数<span class="optional">任意</span></label>
-          <input id="quantityInput" type="number" inputmode="numeric" min="0" max="9999" step="1" placeholder="例：6">
+          <label for="quantityInput" style="font-size:13px; font-weight:700;"><span data-i18n="imadake_post_quantity_label">残りの数</span><span class="optional" data-i18n="imadake_post_optional">任意</span></label>
+          <input id="quantityInput" type="number" inputmode="numeric" min="0" max="9999" step="1" placeholder="例：6" data-i18n-placeholder="imadake_post_quantity_placeholder">
         </div>
       </div>
 
       <div class="field">
-        <span class="field-label">写真<span class="optional">任意・最大10枚</span></span>
-        <button id="photoAddButton" class="photo-add-button" type="button">📷 写真を選ぶ</button>
+        <span class="field-label"><span data-i18n="imadake_post_photos_label">写真</span><span class="optional" data-i18n="imadake_post_photos_optional">任意・最大10枚</span></span>
+        <button id="photoAddButton" class="photo-add-button" type="button" data-i18n="imadake_post_photo_add">📷 写真を選ぶ</button>
         <input id="photoInput" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden>
         <div id="photoGrid" class="photo-grid"></div>
-        <p id="photoHint" class="hint">1枚目がメインの写真になります。</p>
+        <p id="photoHint" class="hint" data-i18n="imadake_post_photo_hint_basic">1枚目がメインの写真になります。</p>
       </div>
 
       <div class="field">
-        <label for="bodyInput">くわしい説明<span class="optional">任意</span></label>
-        <textarea id="bodyInput" maxlength="3000" placeholder="今日の様子、限定の内容、時間、おすすめなど"></textarea>
+        <label for="bodyInput"><span data-i18n="imadake_post_body_label">くわしい説明</span><span class="optional" data-i18n="imadake_post_optional">任意</span></label>
+        <textarea id="bodyInput" maxlength="3000" placeholder="今日の様子、限定の内容、時間、おすすめなど" data-i18n-placeholder="imadake_post_body_placeholder"></textarea>
         <div id="bodyCounter" class="counter">0 / 3000</div>
       </div>
 
       <details class="extra">
-        <summary>追加情報（必要なものだけ）</summary>
+        <summary data-i18n="imadake_post_extra_summary">追加情報（必要なものだけ）</summary>
 
         <div id="categoryFieldsBox"></div>
 
         <div class="field">
-          <label for="availableUntilInput">何時まで<span class="optional">任意</span></label>
+          <label for="availableUntilInput"><span data-i18n="imadake_post_available_until_label">何時まで</span><span class="optional" data-i18n="imadake_post_optional">任意</span></label>
           <input id="availableUntilInput" type="time">
         </div>
 
         <div class="field">
-          <label for="priceTextInput">価格<span class="optional">任意</span></label>
-          <input id="priceTextInput" type="text" maxlength="60" placeholder="例：1個 450円">
+          <label for="priceTextInput"><span data-i18n="imadake_post_price_label">価格</span><span class="optional" data-i18n="imadake_post_optional">任意</span></label>
+          <input id="priceTextInput" type="text" maxlength="60" placeholder="例：1個 450円" data-i18n-placeholder="imadake_post_price_placeholder">
         </div>
 
         <div class="field">
-          <span class="field-label">お支払い<span class="optional">任意</span></span>
+          <span class="field-label"><span data-i18n="imadake_post_payment_label">お支払い</span><span class="optional" data-i18n="imadake_post_optional">任意</span></span>
           <div class="check-row">
-            <label><input type="checkbox" name="paymentMethod" value="cash"> 現金</label>
-            <label><input type="checkbox" name="paymentMethod" value="card"> カード</label>
-            <label><input type="checkbox" name="paymentMethod" value="qr"> QR決済</label>
+            <label><input type="checkbox" name="paymentMethod" value="cash"> <span data-i18n="imadake_post_payment_cash">現金</span></label>
+            <label><input type="checkbox" name="paymentMethod" value="card"> <span data-i18n="imadake_post_payment_card">カード</span></label>
+            <label><input type="checkbox" name="paymentMethod" value="qr"> <span data-i18n="imadake_post_payment_qr">QR決済</span></label>
           </div>
         </div>
 
         <div class="field">
-          <label for="phoneInput">電話番号<span class="optional">任意</span></label>
-          <input id="phoneInput" type="tel" maxlength="20" placeholder="例：098-000-0000">
+          <label for="phoneInput"><span data-i18n="imadake_post_phone_label">電話番号</span><span class="optional" data-i18n="imadake_post_optional">任意</span></label>
+          <input id="phoneInput" type="tel" maxlength="20" placeholder="例：098-000-0000" data-i18n-placeholder="imadake_post_phone_placeholder">
         </div>
 
         <div class="field">
-          <label for="reservationUrlInput">予約ページ<span class="optional">任意</span></label>
+          <label for="reservationUrlInput"><span data-i18n="imadake_post_reservation_label">予約ページ</span><span class="optional" data-i18n="imadake_post_optional">任意</span></label>
           <input id="reservationUrlInput" type="url" maxlength="500" placeholder="https://">
         </div>
 
         <div class="field">
-          <label for="websiteUrlInput">お店のページ<span class="optional">任意</span></label>
+          <label for="websiteUrlInput"><span data-i18n="imadake_post_website_label">お店のページ</span><span class="optional" data-i18n="imadake_post_optional">任意</span></label>
           <input id="websiteUrlInput" type="url" maxlength="500" placeholder="https://">
         </div>
 
         <div class="field">
-          <label for="socialUrlInput">SNS<span class="optional">任意</span></label>
+          <label for="socialUrlInput"><span data-i18n="imadake_post_social_label">SNS</span><span class="optional" data-i18n="imadake_post_optional">任意</span></label>
           <input id="socialUrlInput" type="url" maxlength="500" placeholder="https://">
         </div>
 
         <div class="field">
-          <label for="orderUrlInput">注文ページ<span class="optional">任意</span></label>
+          <label for="orderUrlInput"><span data-i18n="imadake_post_order_label">注文ページ</span><span class="optional" data-i18n="imadake_post_optional">任意</span></label>
           <input id="orderUrlInput" type="url" maxlength="500" placeholder="https://">
         </div>
       </details>
 
-      <button id="submitButton" class="primary-button" type="submit">今だけ投稿を届ける</button>
+      <button id="submitButton" class="primary-button" type="submit" data-i18n="imadake_post_submit">今だけ投稿を届ける</button>
       <div id="formMessage" class="message-box" role="status" aria-live="polite"></div>
     </form>
 
@@ -406,14 +427,10 @@
          直近3か月の有効CV件数・実際の請求額・有料運用時の料金目安を、月別・投稿別・日別に表示する。
          旅行者のuid・個別の閲覧記録・店舗本人の閲覧件数は表示しない(APIも返さない)。
          取得できない時は数字を出さず(0件・0円と誤表示しない)、取得できなかったことを伝える。
-         文言はtranslations.jsのimadake_report_*(JA/EN)。言語はTOPと同じ保存値(machinauLanguage)。 -->
+         文言はtranslations.jsのimadake_report_*。言語はページ上部の切り替えに従う。 -->
     <section id="reportPanel" class="panel report-panel" hidden aria-labelledby="reportHeading">
       <div class="report-head">
         <h2 id="reportHeading"></h2>
-        <div class="report-language" role="group" aria-label="Language">
-          <button type="button" data-report-language="ja">日本語</button>
-          <button type="button" data-report-language="en">English</button>
-        </div>
       </div>
       <p id="reportLead" class="report-lead"></p>
       <div id="reportContent" aria-live="polite"></div>
@@ -425,31 +442,18 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
   <script src="firebase.js"></script>
-  <!-- 成果レポートの固定文言(imadake_report_*、JA/EN)。この画面の他の文言は従来どおり。 -->
+  <!-- この画面の固定文言(imadake_post_*・imadake_report_*、JA/EN)。 -->
   <script src="translations.js"></script>
 
   <script>
-    // 画面の固定文言(将来の多言語化のため、ここにまとめる)。送信する値は
-    // すべてサーバーと同じ固定英語コード(表示文言は保存しない)。
-    const TEXT = {
-      categories: {
-        restaurant: "飲食店",
-        food_shop: "食品・スイーツ",
-        retail: "ショップ・物販",
-        event: "イベント",
-        other: "その他"
-      },
-      liveStateLabels: {
-        seats: "今の空席状況",
-        stock: "今の在庫・残り状況",
-        tickets: "今の当日券の状況"
-      },
-      liveStateOptions: {
-        seats: { available: "空席あり", few: "残りわずか", full: "満席" },
-        stock: { available: "あり", few: "残りわずか", sold_out: "売り切れ" },
-        tickets: { available: "当日券あり", few: "残りわずか", sold_out: "完売" }
-      },
-      liveStateNone: "指定しない"
+    // 画面の選択肢。送信する値はすべてサーバーと同じ固定英語コード(表示文言は保存しない)。
+    // 表示文言はtranslations.jsのキー(imadake_post_*)で、表示言語に合わせて差し替える。
+    const CATEGORY_CODES = ["restaurant", "food_shop", "retail", "event", "other"];
+
+    const LIVE_STATE_OPTIONS = {
+      seats: ["available", "few", "full"],
+      stock: ["available", "few", "sold_out"],
+      tickets: ["available", "few", "sold_out"]
     };
 
     // 業種ごとに出す「今の状態」(サーバーのliveState.type)。
@@ -461,27 +465,200 @@
       other: ""
     };
 
-    // 業種ごとの追加項目(サーバーのcategoryFieldsと同じkey)。
+    // 業種ごとの追加項目(サーバーのcategoryFieldsと同じkey)。表示名は imadake_post_field_{key}。
     const CATEGORY_FIELD_SPECS = {
       restaurant: [
-        { key: "takeout", type: "boolean", label: "テイクアウトできる" },
-        { key: "sameDayReservation", type: "boolean", label: "当日予約できる" }
+        { key: "takeout", type: "boolean" },
+        { key: "sameDayReservation", type: "boolean" }
       ],
       food_shop: [
-        { key: "takeout", type: "boolean", label: "テイクアウトできる" },
-        { key: "holdAvailable", type: "boolean", label: "取り置きできる" }
+        { key: "takeout", type: "boolean" },
+        { key: "holdAvailable", type: "boolean" }
       ],
       retail: [
-        { key: "newArrival", type: "boolean", label: "新入荷" }
+        { key: "newArrival", type: "boolean" }
       ],
       event: [
-        { key: "startTime", type: "time", label: "開始時刻" },
-        { key: "endTime", type: "time", label: "終了時刻" },
-        { key: "venue", type: "text", label: "会場", maxLength: 60 },
-        { key: "feeText", type: "text", label: "料金", maxLength: 60 }
+        { key: "startTime", type: "time" },
+        { key: "endTime", type: "time" },
+        { key: "venue", type: "text", maxLength: 60 },
+        { key: "feeText", type: "text", maxLength: 60 }
       ],
       other: []
     };
+
+    // ------------------------------------------------------------------
+    // 多言語化｜表示言語(TOP・店舗アカウント画面と同じ保存値)。固定文言はすべて t(key, params)。
+    // 店舗名・投稿の見出し・入力した値・登録住所は翻訳しない(原文のまま表示する)。
+    // ------------------------------------------------------------------
+    const LANGUAGE_STORAGE_KEY = "machinauLanguage";
+    // 切り替えボタンに出す各言語の名前(その言語での表記)。無い言語はコードを出す。
+    const LANGUAGE_NATIVE_NAMES = { ja: "日本語", en: "English" };
+
+    function getSupportedLanguages() {
+      return typeof MACHINAU_SUPPORTED_LANGUAGES !== "undefined" && Array.isArray(MACHINAU_SUPPORTED_LANGUAGES)
+        ? MACHINAU_SUPPORTED_LANGUAGES
+        : ["ja"];
+    }
+
+    let pageLanguage = "ja";
+
+    // 日付・数字の書式に使う地域設定(日本語・英語以外は言語コードのまま)。
+    function getPageLocale() {
+      return pageLanguage === "ja" ? "ja-JP" : pageLanguage === "en" ? "en-US" : pageLanguage;
+    }
+
+    try {
+      const storedLanguage = localStorage.getItem(LANGUAGE_STORAGE_KEY);
+
+      if (getSupportedLanguages().indexOf(storedLanguage) !== -1) {
+        pageLanguage = storedLanguage;
+      }
+    } catch (error) {
+      // localStorageが使えなくても日本語で表示する。
+    }
+
+    // {name} を params の値で置き換える(語順が違う言語でも訳の側で位置を決められる)。
+    function t(key, params) {
+      const text =
+        typeof getMachinauTranslation === "function"
+          ? getMachinauTranslation(key, pageLanguage)
+          : "";
+
+      return params
+        ? text.replace(/\{(\w+)\}/g, function(match, name) {
+            return Object.prototype.hasOwnProperty.call(params, name) ? String(params[name]) : match;
+          })
+        : text;
+    }
+
+    // 文言をキーで持たせる(言語を切り替えた時に、作り直さず文字だけ差し替えるため)。
+    function setI18nText(element, key, params) {
+      element.setAttribute("data-i18n", key);
+
+      if (params) {
+        element.setAttribute("data-i18n-params", JSON.stringify(params));
+      } else {
+        element.removeAttribute("data-i18n-params");
+      }
+
+      element.textContent = t(key, params);
+    }
+
+    function readI18nParams(element) {
+      try {
+        return JSON.parse(element.getAttribute("data-i18n-params") || "null");
+      } catch (error) {
+        return null;
+      }
+    }
+
+    // メッセージは文言のキー(と、日本語表示の時だけ使うサーバーの日本語文)で持ち、表示言語で組み立てる。
+    // part: { key, params, timeParams } または { key, serverText }(serverTextは日本語表示の時だけ従来どおり出す)。
+    // timeParams の日時(ISO)は表示のたびに表示言語の書式にする(言語を切り替えても書式が揃う)。
+    function renderMessageParts(parts) {
+      return parts
+        .map(function(part) {
+          if (part.serverText && pageLanguage === "ja") {
+            return part.serverText;
+          }
+
+          const params = Object.assign({}, part.params || {});
+
+          Object.keys(part.timeParams || {}).forEach(function(name) {
+            params[name] = formatJst(part.timeParams[name]);
+          });
+
+          return t(part.key, params);
+        })
+        .filter(Boolean)
+        .join("\n");
+    }
+
+    function showMessageParts(element, parts, type) {
+      element._messageParts = parts;
+      element.setAttribute("data-message", "");
+      element.textContent = renderMessageParts(parts);
+
+      // メッセージ欄(.message-box)だけ種類の色を付ける(案内文の要素はクラスを変えない)。
+      if (element.classList.contains("message-box")) {
+        element.className = "message-box" + (type ? " " + type : "");
+      }
+    }
+
+    function renderLanguageSwitch() {
+      const box = document.getElementById("languageSwitch");
+
+      if (!box) {
+        return;
+      }
+
+      box.textContent = "";
+
+      getSupportedLanguages().forEach(function(language) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.setAttribute("data-language", language);
+        button.setAttribute("lang", language);
+        button.textContent = LANGUAGE_NATIVE_NAMES[language] || language;
+        button.addEventListener("click", function() {
+          setPageLanguage(language);
+        });
+        box.appendChild(button);
+      });
+    }
+
+    function setPageLanguage(language) {
+      if (getSupportedLanguages().indexOf(language) === -1) {
+        return;
+      }
+
+      pageLanguage = language;
+
+      try {
+        localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
+      } catch (error) {
+        // 保存できなくても表示は切り替える。
+      }
+
+      applyPageLanguage();
+    }
+
+    // 固定文言だけを差し替える(フォームは作り直さないので、入力途中の値・選んだ写真・カテゴリは残る)。
+    function applyPageLanguage() {
+      document.documentElement.lang = pageLanguage;
+      document.title = t("imadake_post_doc_title");
+
+      document.querySelectorAll("[data-i18n]").forEach(function(element) {
+        element.textContent = t(element.getAttribute("data-i18n"), readI18nParams(element));
+      });
+
+      document.querySelectorAll("[data-i18n-placeholder]").forEach(function(element) {
+        element.setAttribute("placeholder", t(element.getAttribute("data-i18n-placeholder")));
+      });
+
+      document.querySelectorAll("[data-i18n-aria-label]").forEach(function(element) {
+        element.setAttribute("aria-label", t(element.getAttribute("data-i18n-aria-label")));
+      });
+
+      document.querySelectorAll("#languageSwitch [data-language]").forEach(function(button) {
+        button.setAttribute("aria-pressed", button.getAttribute("data-language") === pageLanguage ? "true" : "false");
+      });
+
+      document.querySelectorAll("[data-message]").forEach(function(element) {
+        if (Array.isArray(element._messageParts) && element._messageParts.length > 0) {
+          element.textContent = renderMessageParts(element._messageParts);
+        }
+      });
+
+      if (typeof renderCurrentPost === "function" && currentPost) {
+        renderCurrentPost();
+      }
+
+      if (typeof renderReport === "function") {
+        renderReport();
+      }
+    }
 
     const HEADLINE_MAX = 40;
     const BODY_MAX = 3000;
@@ -547,17 +724,20 @@
     let isSubmitting = false;
 
     function showMessage(element, text, type) {
+      element._messageParts = null;
+      element.removeAttribute("data-message");
       element.textContent = text || "";
       element.className = "message-box" + (type ? " " + type : "");
     }
 
+    // 日時は日本時間のまま、表示言語の書式で出す。
     function formatJst(isoText) {
       if (!isoText) {
         return "";
       }
 
       try {
-        return new Date(isoText).toLocaleString("ja-JP", {
+        return new Date(isoText).toLocaleString(getPageLocale(), {
           timeZone: "Asia/Tokyo",
           month: "numeric",
           day: "numeric",
@@ -625,12 +805,12 @@
       const statusLabel = $("currentStatusLabel");
       const isPending = currentPost.status === "pending";
 
-      statusLabel.textContent = isPending ? "運営確認中（まだ公開されていません）" : "公開中";
+      statusLabel.textContent = t(isPending ? "imadake_post_status_pending" : "imadake_post_status_published");
       statusLabel.className = "current-status-label" + (isPending ? " pending" : "");
 
       $("currentMeta").textContent = isPending
-        ? "確認が終わると公開され、その時点から24時間掲載されます。"
-        : "掲載終了予定：" + formatJst(currentPost.expiresAt) + "（公開から24時間）";
+        ? t("imadake_post_meta_pending")
+        : t("imadake_post_meta_published", { time: formatJst(currentPost.expiresAt) });
 
       $("endButton").hidden = isPending;
       $("withdrawButton").hidden = !isPending;
@@ -647,8 +827,12 @@
           if (result.status === 401) {
             $("loginRequiredPanel").hidden = false;
           } else {
-            $("storeDeniedMessage").textContent =
-              result.data.message || "この店舗で今だけ投稿を操作する権限がありません。";
+            // サーバーの日本語文は日本語表示の時だけ従来どおり出し、他の言語では訳の文にする。
+            showMessageParts(
+              $("storeDeniedMessage"),
+              [{ key: "imadake_post_store_denied", serverText: result.data.message || "" }],
+              ""
+            );
             $("storeDeniedPanel").hidden = false;
           }
           return;
@@ -667,7 +851,7 @@
       const location = result.data.location;
 
       if (!location) {
-        $("storeLocationText").textContent = "未登録";
+        setI18nText($("storeLocationText"), "imadake_post_location_unregistered");
         noLocationPanel.hidden = false;
         aboutPanel.hidden = false;
         postForm.hidden = true;
@@ -676,6 +860,8 @@
         return;
       }
 
+      // 登録住所は店舗のデータなので翻訳しない(原文のまま)。
+      $("storeLocationText").removeAttribute("data-i18n");
       $("storeLocationText").textContent =
         [location.prefecture, location.city].filter(Boolean).join(" ") || location.address || "";
 
@@ -690,7 +876,7 @@
     // ------------------------------------------------------------------
     // フォーム(カテゴリー・今の状態・業種別項目)
     // ------------------------------------------------------------------
-    function buildChip(groupName, value, label, onSelect) {
+    function buildChip(groupName, value, labelKey, onSelect) {
       const chip = document.createElement("label");
       chip.className = "chip";
 
@@ -708,7 +894,10 @@
       });
 
       chip.appendChild(input);
-      chip.appendChild(document.createTextNode(label));
+
+      const text = document.createElement("span");
+      setI18nText(text, labelKey);
+      chip.appendChild(text);
       return chip;
     }
 
@@ -716,8 +905,8 @@
       const box = $("categoryChips");
       box.innerHTML = "";
 
-      Object.keys(TEXT.categories).forEach(function(code) {
-        box.appendChild(buildChip("category", code, TEXT.categories[code], onCategoryChange));
+      CATEGORY_CODES.forEach(function(code) {
+        box.appendChild(buildChip("category", code, "imadake_post_category_" + code, onCategoryChange));
       });
     }
 
@@ -735,17 +924,15 @@
       }
 
       field.hidden = false;
-      $("liveStateLabel").textContent = TEXT.liveStateLabels[type];
+      setI18nText($("liveStateLabel"), "imadake_post_live_label_" + type);
 
       const box = $("liveStateChips");
       box.innerHTML = "";
 
-      box.appendChild(buildChip("liveState", "", TEXT.liveStateNone, function() { selectedLiveStatus = ""; }));
+      box.appendChild(buildChip("liveState", "", "imadake_post_live_none", function() { selectedLiveStatus = ""; }));
 
-      const options = TEXT.liveStateOptions[type];
-
-      Object.keys(options).forEach(function(status) {
-        box.appendChild(buildChip("liveState", status, options[status], function(value) { selectedLiveStatus = value; }));
+      LIVE_STATE_OPTIONS[type].forEach(function(status) {
+        box.appendChild(buildChip("liveState", status, "imadake_post_live_" + type + "_" + status, function(value) { selectedLiveStatus = value; }));
       });
 
       // 最初は「指定しない」を選んだ状態にする。
@@ -783,15 +970,21 @@
           checkbox.dataset.fieldType = "boolean";
 
           label.appendChild(checkbox);
-          label.appendChild(document.createTextNode(spec.label));
+
+          const text = document.createElement("span");
+          setI18nText(text, "imadake_post_field_" + spec.key);
+          label.appendChild(text);
           wrapper.appendChild(label);
         } else {
           const label = document.createElement("label");
-          label.textContent = spec.label;
+
+          const text = document.createElement("span");
+          setI18nText(text, "imadake_post_field_" + spec.key);
+          label.appendChild(text);
 
           const optional = document.createElement("span");
           optional.className = "optional";
-          optional.textContent = "任意";
+          setI18nText(optional, "imadake_post_optional");
           label.appendChild(optional);
 
           const input = document.createElement("input");
@@ -811,6 +1004,22 @@
         box.appendChild(wrapper);
       });
     }
+
+    // 原文言語(投稿する言語)。サーバーが受け付ける ja / en 以外は日本語として扱う。
+    function getSelectedSourceLanguage() {
+      const checked = document.querySelector('input[name="sourceLanguage"]:checked');
+      return checked && (checked.value === "ja" || checked.value === "en") ? checked.value : "ja";
+    }
+
+    function syncSourceLanguageChips() {
+      document.querySelectorAll("#sourceLanguageChips .chip").forEach(function(chip) {
+        chip.classList.toggle("selected", chip.querySelector("input").checked);
+      });
+    }
+
+    document.querySelectorAll('input[name="sourceLanguage"]').forEach(function(input) {
+      input.addEventListener("change", syncSourceLanguageChips);
+    });
 
     function onCategoryChange(code) {
       selectedCategory = code;
@@ -871,14 +1080,15 @@
         if (index === 0) {
           const mainLabel = document.createElement("span");
           mainLabel.className = "photo-main-label";
-          mainLabel.textContent = "メイン";
+          setI18nText(mainLabel, "imadake_post_photo_main");
           item.appendChild(mainLabel);
         }
 
         const removeButton = document.createElement("button");
         removeButton.type = "button";
         removeButton.className = "photo-remove";
-        removeButton.setAttribute("aria-label", "この写真を外す");
+        removeButton.setAttribute("data-i18n-aria-label", "imadake_post_photo_remove");
+        removeButton.setAttribute("aria-label", t("imadake_post_photo_remove"));
         removeButton.textContent = "×";
         removeButton.addEventListener("click", function() {
           URL.revokeObjectURL(photo.previewUrl);
@@ -891,10 +1101,11 @@
       });
 
       $("photoAddButton").hidden = selectedPhotos.length >= MAX_PHOTOS;
-      $("photoHint").textContent =
-        selectedPhotos.length >= MAX_PHOTOS
-          ? "写真は最大10枚までです。1枚目がメインの写真になります。"
-          : "1枚目がメインの写真になります（" + selectedPhotos.length + " / 10枚）。";
+      if (selectedPhotos.length >= MAX_PHOTOS) {
+        setI18nText($("photoHint"), "imadake_post_photo_hint_max");
+      } else {
+        setI18nText($("photoHint"), "imadake_post_photo_hint_count", { count: selectedPhotos.length });
+      }
     }
 
     $("photoAddButton").addEventListener("click", function() {
@@ -924,7 +1135,7 @@
       renderPhotos();
 
       if (skipped) {
-        showMessage(formMessage, "写真はjpeg・png・webpで1枚10MBまで、最大10枚まで選べます。", "info");
+        showMessageParts(formMessage, [{ key: "imadake_post_photo_rules" }], "info");
       }
     });
 
@@ -947,6 +1158,13 @@
       return anonymousAuthPromise.then(function(user) { return user.getIdToken(); });
     }
 
+    // 画面に出すエラーは文言のキーで持つ(表示言語で組み立てる)。
+    function createI18nError(key) {
+      const error = new Error(t(key));
+      error.i18nKey = key;
+      return error;
+    }
+
     async function compressImageFile(file) {
       const maximumLongSide = 1600;
       const imageBitmap = await createImageBitmap(file);
@@ -959,7 +1177,7 @@
 
       if (!context) {
         imageBitmap.close();
-        throw new Error("写真を軽量化できませんでした。");
+        throw createI18nError("imadake_post_error_compress");
       }
 
       context.drawImage(imageBitmap, 0, 0, canvas.width, canvas.height);
@@ -967,7 +1185,7 @@
 
       const blob = await new Promise(function(resolve, reject) {
         canvas.toBlob(function(result) {
-          result ? resolve(result) : reject(new Error("写真を軽量化できませんでした。"));
+          result ? resolve(result) : reject(createI18nError("imadake_post_error_compress"));
         }, "image/webp", 0.82);
       });
 
@@ -982,7 +1200,7 @@
       const signatureResult = await callImadakeApi("cloudinarySignature", {}, idToken);
 
       if (!signatureResult.ok || signatureResult.data.success !== true) {
-        throw new Error("写真のアップロードの準備ができませんでした。");
+        throw createI18nError("imadake_post_error_upload_prepare");
       }
 
       const signature = signatureResult.data;
@@ -1004,7 +1222,7 @@
       const data = await response.json().catch(function() { return null; });
 
       if (!response.ok || !data || !data.secure_url) {
-        throw new Error("写真をアップロードできませんでした。");
+        throw createI18nError("imadake_post_error_upload");
       }
 
       return { url: data.secure_url, publicId: data.public_id || "" };
@@ -1013,44 +1231,45 @@
     // ------------------------------------------------------------------
     // 投稿
     // ------------------------------------------------------------------
-    const RESULT_MESSAGES = {
-      published: "今だけ投稿を公開しました。",
-      pending: "内容を運営が確認しています。確認が終わると公開され、その時点から24時間掲載されます（まだ公開されていません）。",
-      rejected: "この内容は掲載できません。内容を見直して、もう一度投稿してください。"
+    const RESULT_MESSAGE_KEYS = {
+      published: "imadake_post_result_published",
+      pending: "imadake_post_result_pending",
+      rejected: "imadake_post_result_rejected"
     };
 
-    function messageForError(result) {
+    // 投稿できなかった理由(サーバーの理由コード・応答コード)を、表示言語の文にする。
+    function messagePartsForError(result) {
       const data = result.data || {};
 
       if (data.reason === "active_post_exists") {
-        return "すでに公開中の今だけ投稿があります。1店舗につき同時に掲載できるのは1件です。終了してから新しく投稿できます。";
+        return [{ key: "imadake_post_error_active_exists" }];
       }
 
       if (data.reason === "pending_post_exists") {
-        return "運営が確認中の今だけ投稿があります。確認が終わるか、取り下げてから新しく投稿できます。";
+        return [{ key: "imadake_post_error_pending_exists" }];
       }
 
       if (data.reason === "location_not_registered") {
-        return "店舗の掲載場所がまだ登録されていません。運営へお問い合わせください。";
+        return [{ key: "imadake_post_no_location" }];
       }
 
       if (data.reason === "safety_check_unavailable") {
-        return "ただいま投稿を確認できません。少し時間をおいてから、もう一度お試しください（まだ公開されていません）。";
+        return [{ key: "imadake_post_error_safety_unavailable" }];
       }
 
       if (result.status === 429) {
-        return "少し時間をおいてから、もう一度お試しください。";
+        return [{ key: "imadake_post_error_rate_limited" }];
       }
 
       if (result.status === 403) {
-        return "この店舗投稿URLは無効です。マチナウ運営からお渡しした店舗専用URLから開き直してください。";
+        return [{ key: "imadake_post_error_invalid_url" }];
       }
 
       if (data.field) {
-        return "入力内容を確認してください（" + data.field + "）。";
+        return [{ key: "imadake_post_error_field", params: { field: data.field } }];
       }
 
-      return data.message || "投稿できませんでした。時間をおいて、もう一度お試しください。";
+      return [{ key: "imadake_post_error_post_failed", serverText: data.message || "" }];
     }
 
     postForm.addEventListener("submit", async function(event) {
@@ -1066,35 +1285,35 @@
       const body = $("bodyInput").value.trim();
 
       if (!selectedCategory) {
-        showMessage(formMessage, "「どんなお店・催しですか？」を選んでください。", "error");
+        showMessageParts(formMessage, [{ key: "imadake_post_validation_category" }], "error");
         return;
       }
 
       if (headline === "") {
-        showMessage(formMessage, "「いちばん伝えたいこと」を入力してください。", "error");
+        showMessageParts(formMessage, [{ key: "imadake_post_validation_headline" }], "error");
         return;
       }
 
       if (Array.from(headline).length > HEADLINE_MAX) {
-        showMessage(formMessage, "「いちばん伝えたいこと」は40文字以内で入力してください。", "error");
+        showMessageParts(formMessage, [{ key: "imadake_post_validation_headline_length" }], "error");
         return;
       }
 
       if (Array.from(body).length > BODY_MAX) {
-        showMessage(formMessage, "「くわしい説明」は3,000文字以内で入力してください。", "error");
+        showMessageParts(formMessage, [{ key: "imadake_post_validation_body_length" }], "error");
         return;
       }
 
       isSubmitting = true;
       submitButton.disabled = true;
-      submitButton.textContent = "送信しています…";
+      setI18nText(submitButton, "imadake_post_submitting");
 
       try {
         const imageUrls = [];
         const imagePublicIds = [];
 
         for (let index = 0; index < selectedPhotos.length; index += 1) {
-          showMessage(formMessage, "写真をアップロードしています（" + (index + 1) + " / " + selectedPhotos.length + "）…", "info");
+          showMessageParts(formMessage, [{ key: "imadake_post_progress_upload", params: { current: index + 1, total: selectedPhotos.length } }], "info");
           const uploaded = await uploadPhoto(selectedPhotos[index].file);
           imageUrls.push(uploaded.url);
 
@@ -1103,7 +1322,7 @@
           }
         }
 
-        showMessage(formMessage, "安全確認をしています…", "info");
+        showMessageParts(formMessage, [{ key: "imadake_post_progress_safety" }], "info");
 
         const liveStateType = LIVE_STATE_TYPE_BY_CATEGORY[selectedCategory] || "";
         let liveState = null;
@@ -1149,27 +1368,31 @@
           actionTargets: actionTargets,
           imageUrls: imageUrls,
           imagePublicIds: imagePublicIds,
-          sourceLanguage: "ja"
+          // 店舗が選んだ原文言語(画面の表示言語は使わない)。
+          sourceLanguage: getSelectedSourceLanguage()
         });
 
         if (!result.ok || result.data.success !== true) {
-          showMessage(formMessage, messageForError(result), "error");
+          showMessageParts(formMessage, messagePartsForError(result), "error");
           return;
         }
 
         const status = result.data.status;
-        let message = RESULT_MESSAGES[status] || result.data.message || "";
+        const messageParts = RESULT_MESSAGE_KEYS[status]
+          ? [{ key: RESULT_MESSAGE_KEYS[status] }]
+          : [{ key: "imadake_post_error_post_failed", serverText: result.data.message || "" }];
 
         if (status === "published" && result.data.expiresAt) {
-          message += "\n24時間限定です。掲載終了予定：" + formatJst(result.data.expiresAt);
+          messageParts.push({ key: "imadake_post_result_expires", timeParams: { time: result.data.expiresAt } });
         }
 
-        showMessage(formMessage, message, status === "rejected" ? "error" : "success");
+        showMessageParts(formMessage, messageParts, status === "rejected" ? "error" : "success");
 
         if (status === "published" || status === "pending") {
           selectedPhotos.forEach(function(photo) { URL.revokeObjectURL(photo.previewUrl); });
           selectedPhotos = [];
           postForm.reset();
+          syncSourceLanguageChips();
           selectedCategory = "";
           renderCategoryChips();
           renderLiveState();
@@ -1187,15 +1410,22 @@
           };
 
           renderCurrentPost();
-          showMessage(currentMessage, message, "success");
+          showMessageParts(currentMessage, messageParts, "success");
           postForm.hidden = true;
         }
       } catch (error) {
-        showMessage(formMessage, (error && error.message) || "投稿できませんでした。時間をおいて、もう一度お試しください。", "error");
+        // 文言キーのあるエラーは表示言語で、その他(通信の失敗など)は日本語表示の時だけ従来どおりの文。
+        showMessageParts(
+          formMessage,
+          error && error.i18nKey
+            ? [{ key: error.i18nKey }]
+            : [{ key: "imadake_post_error_post_failed", serverText: (error && error.message) || "" }],
+          "error"
+        );
       } finally {
         isSubmitting = false;
         submitButton.disabled = false;
-        submitButton.textContent = "今だけ投稿を届ける";
+        setI18nText(submitButton, "imadake_post_submit");
       }
     });
 
@@ -1207,9 +1437,7 @@
         return;
       }
 
-      const confirmText = isWithdraw
-        ? "確認中の投稿を取り下げますか？（公開されません）"
-        : "公開中の今だけ投稿の掲載を終了しますか？（旅行者から見えなくなります）";
+      const confirmText = t(isWithdraw ? "imadake_post_confirm_withdraw" : "imadake_post_confirm_end");
 
       if (!window.confirm(confirmText)) {
         return;
@@ -1222,7 +1450,7 @@
         const result = await callImadakeApi("imadakePostEnd", { postId: currentPost.postId });
 
         if (!result.ok || result.data.success !== true) {
-          showMessage(currentMessage, (result.data && result.data.message) || "処理できませんでした。", "error");
+          showMessageParts(currentMessage, [{ key: "imadake_post_action_failed", serverText: (result.data && result.data.message) || "" }], "error");
           await loadStoreStatus();
           return;
         }
@@ -1230,15 +1458,13 @@
         currentPost = null;
         renderCurrentPost();
         postForm.hidden = false;
-        showMessage(
+        showMessageParts(
           formMessage,
-          isWithdraw
-            ? "確認中の投稿を取り下げました。新しく投稿できます。"
-            : "今だけ投稿の掲載を終了しました。新しく投稿できます。",
+          [{ key: isWithdraw ? "imadake_post_withdrawn_done" : "imadake_post_ended_done" }],
           "success"
         );
       } catch (error) {
-        showMessage(currentMessage, "処理できませんでした。時間をおいて、もう一度お試しください。", "error");
+        showMessageParts(currentMessage, [{ key: "imadake_post_action_failed_retry" }], "error");
       } finally {
         button.disabled = false;
       }
@@ -1250,60 +1476,50 @@
     // ------------------------------------------------------------------
     // 収益化 STEP 4-B｜成果レポート(読み取りのみ。CV・料金はサーバーの集計だけを表示する)
     // ------------------------------------------------------------------
-    const REPORT_LANGUAGE_STORAGE_KEY = "machinauLanguage";
-    let reportLanguage = "ja";
     // { state: "loading"|"ready"|"error", data }
     let reportState = null;
     let reportSelectedMonth = "";
     let reportRequestSequence = 0;
 
-    try {
-      const storedLanguage = localStorage.getItem(REPORT_LANGUAGE_STORAGE_KEY);
-      if (typeof MACHINAU_SUPPORTED_LANGUAGES !== "undefined" && MACHINAU_SUPPORTED_LANGUAGES.indexOf(storedLanguage) !== -1) {
-        reportLanguage = storedLanguage;
-      }
-    } catch (error) {
-      // localStorageが使えなくても日本語で表示する。
-    }
-
+    // 成果レポートの文言もページ全体と同じ表示言語(pageLanguage)で出す。
     function rt(key) {
-      return typeof getMachinauTranslation === "function"
-        ? getMachinauTranslation(key, reportLanguage)
-        : "";
+      return t(key);
     }
 
+    // 区切り記号・単位・日付の並びも訳(imadake_post_colon・imadake_report_format_*)で決める
+    // (言語を追加する時は訳を足すだけで、ここは変えない)。
     function reportColon() {
-      return reportLanguage === "en" ? ": " : "：";
+      return t("imadake_post_colon");
     }
 
     function formatReportYen(amount) {
       const value = Number(amount) || 0;
-      return reportLanguage === "en"
-        ? "¥" + value.toLocaleString("en-US")
-        : value.toLocaleString("ja-JP") + "円";
+      return t("imadake_report_format_yen", { amount: value.toLocaleString(getPageLocale()) });
     }
 
     function formatReportCount(count) {
       const value = Number(count) || 0;
-      return reportLanguage === "en"
-        ? value.toLocaleString("en-US")
-        : value.toLocaleString("ja-JP") + "件";
+      return t("imadake_report_format_count", { count: value.toLocaleString(getPageLocale()) });
+    }
+
+    function getShortMonthName(month) {
+      try {
+        return new Date(Date.UTC(2000, month - 1, 1)).toLocaleString(getPageLocale(), { timeZone: "UTC", month: "short" });
+      } catch (error) {
+        return String(month);
+      }
     }
 
     function formatReportMonth(monthKey) {
       const year = Number(monthKey.slice(0, 4));
       const month = Number(monthKey.slice(5, 7));
-      return reportLanguage === "en"
-        ? new Date(Date.UTC(year, month - 1, 1)).toLocaleString("en-US", { timeZone: "UTC", year: "numeric", month: "short" })
-        : year + "年" + month + "月";
+      return t("imadake_report_format_month", { year: year, month: month, monthShort: getShortMonthName(month) });
     }
 
     function formatReportDay(dayKey) {
       const month = Number(dayKey.slice(5, 7));
       const day = Number(dayKey.slice(8, 10));
-      return reportLanguage === "en"
-        ? new Date(Date.UTC(2000, month - 1, day)).toLocaleString("en-US", { timeZone: "UTC", month: "short", day: "numeric" })
-        : month + "/" + day;
+      return t("imadake_report_format_day", { month: month, day: day, monthShort: getShortMonthName(month) });
     }
 
     function formatReportDateTime(isoText) {
@@ -1312,7 +1528,7 @@
       }
 
       try {
-        return new Date(isoText).toLocaleString(reportLanguage === "en" ? "en-US" : "ja-JP", {
+        return new Date(isoText).toLocaleString(getPageLocale(), {
           timeZone: "Asia/Tokyo",
           month: "numeric",
           day: "numeric",
@@ -1365,7 +1581,7 @@
       meta.appendChild(createReportElement(
         "span",
         "",
-        rt("imadake_report_valid_cv") + " " + formatReportCount(validCvCount) + (reportLanguage === "en" ? " · " : "・") +
+        rt("imadake_report_valid_cv") + " " + formatReportCount(validCvCount) + t("imadake_report_meta_separator") +
           rt("imadake_report_col_reference") + " " + formatReportYen(referenceAmount)
       ));
       summary.appendChild(meta);
@@ -1376,7 +1592,7 @@
       body.appendChild(createReportElement(
         "p",
         "report-period",
-        rt("imadake_report_period") + reportColon() + formatReportDateTime(post.publishedAt) + (reportLanguage === "en" ? " – " : " 〜 ") + endText
+        rt("imadake_report_period") + reportColon() + formatReportDateTime(post.publishedAt) + t("imadake_post_range_separator") + endText
       ));
 
       const rows = createReportElement("div", "report-days");
@@ -1412,9 +1628,6 @@
       panel.hidden = false;
       $("reportHeading").textContent = rt("imadake_report_heading");
       $("reportLead").textContent = rt("imadake_report_lead");
-      document.querySelectorAll("[data-report-language]").forEach(function(button) {
-        button.setAttribute("aria-pressed", button.getAttribute("data-report-language") === reportLanguage ? "true" : "false");
-      });
 
       content.textContent = "";
 
@@ -1539,23 +1752,14 @@
       renderReport();
     }
 
-    document.querySelectorAll("[data-report-language]").forEach(function(button) {
-      button.addEventListener("click", function() {
-        reportLanguage = button.getAttribute("data-report-language") === "en" ? "en" : "ja";
-        try {
-          localStorage.setItem(REPORT_LANGUAGE_STORAGE_KEY, reportLanguage);
-        } catch (error) {
-          // 保存できなくても表示は切り替える。
-        }
-        renderReport();
-      });
-    });
 
     // ------------------------------------------------------------------
     // 起動
     // ------------------------------------------------------------------
+    renderLanguageSwitch();
     renderCategoryChips();
     renderPhotos();
+    applyPageLanguage();
 
     if (!storeId) {
       loadingPanel.hidden = true;

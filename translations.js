@@ -3729,6 +3729,638 @@ const MACHINAU_TRANSLATIONS = {
   imadake_report_truncated: {
     ja: "投稿が多いため、新しい200件だけを表示しています。",
     en: "Only the 200 most recent posts are shown."
+  },
+
+  // 多言語化｜店舗の今だけ投稿画面(imadake-post.html)。日本語は従来の画面の文言と同じ。
+  // {name} は画面側で値を差し込む(語順は言語ごとに訳の中で決める)。
+  imadake_post_doc_title: {
+    ja: "今だけ投稿｜マチナウ",
+    en: "Just for Now | Machinau"
+  },
+
+  imadake_post_header_label: {
+    ja: "マチナウ｜お店・施設の方へ",
+    en: "Machinau | For shops and facilities"
+  },
+
+  imadake_post_header_lead: {
+    ja: "「今、伝えたいこと」を、24時間だけ旅行者へ届けます。",
+    en: "Share what you want travelers to know right now, for 24 hours."
+  },
+
+  imadake_post_language_aria: {
+    ja: "表示言語",
+    en: "Display language"
+  },
+
+  imadake_post_loading: {
+    ja: "読み込んでいます…",
+    en: "Loading…"
+  },
+
+  imadake_post_invalid_url: {
+    ja: "この店舗投稿URLは無効です。マチナウ運営からお渡しした店舗専用URLから開いてください。",
+    en: "This shop posting URL is not valid. Please open the shop URL provided by Machinau."
+  },
+
+  imadake_post_invalid_url_hint: {
+    ja: "ページを再読み込みした場合も、もう一度店舗専用URLから開き直してください。",
+    en: "If you reloaded this page, please open it again from your shop URL."
+  },
+
+  imadake_post_login_required: {
+    ja: "店舗アカウントでログインしてから、もう一度お試しください。",
+    en: "Please sign in to your shop account and try again."
+  },
+
+  imadake_post_open_store_account: {
+    ja: "店舗アカウント画面を開く",
+    en: "Open the shop account page"
+  },
+
+  imadake_post_store_denied: {
+    ja: "この店舗で今だけ投稿を操作する権限がありません。",
+    en: "You don't have permission to manage Just for Now posts for this shop."
+  },
+
+  imadake_post_back_to_store_account: {
+    ja: "店舗アカウント画面へ戻る",
+    en: "Back to the shop account page"
+  },
+
+  imadake_post_location_label: {
+    ja: "掲載場所：",
+    en: "Listing location: "
+  },
+
+  imadake_post_location_note: {
+    ja: "掲載場所の変更はマチナウ運営へご連絡ください。",
+    en: "To change the listing location, please contact Machinau."
+  },
+
+  imadake_post_location_unregistered: {
+    ja: "未登録",
+    en: "Not registered"
+  },
+
+  imadake_post_no_location: {
+    ja: "店舗の掲載場所がまだ登録されていません。運営へお問い合わせください。",
+    en: "Your shop's listing location hasn't been registered yet. Please contact Machinau."
+  },
+
+  imadake_post_badge_24h: {
+    ja: "24時間限定",
+    en: "24 hours only"
+  },
+
+  imadake_post_about_heading: {
+    ja: "今だけ投稿とは",
+    en: "About Just for Now"
+  },
+
+  imadake_post_about_1: {
+    ja: "「今だから役立つ」情報を、近くの旅行者へ届けます",
+    en: "Share timely, useful information with travelers nearby"
+  },
+
+  imadake_post_about_2: {
+    ja: "公開から24時間で自動的に終わります",
+    en: "Posts end automatically 24 hours after going live"
+  },
+
+  imadake_post_about_3: {
+    ja: "1店舗につき、同時に掲載できるのは1件です",
+    en: "Each shop can have one post live at a time"
+  },
+
+  imadake_post_about_4: {
+    ja: "安全確認のあとに公開します（内容によっては運営が確認してから公開します）",
+    en: "Posts go live after a safety check (some posts are reviewed by Machinau first)"
+  },
+
+  imadake_post_current_heading: {
+    ja: "今の今だけ投稿",
+    en: "Your current post"
+  },
+
+  imadake_post_status_published: {
+    ja: "公開中",
+    en: "Live"
+  },
+
+  imadake_post_status_pending: {
+    ja: "運営確認中（まだ公開されていません）",
+    en: "Under review (not live yet)"
+  },
+
+  imadake_post_meta_pending: {
+    ja: "確認が終わると公開され、その時点から24時間掲載されます。",
+    en: "Once the review is complete, it will go live for 24 hours from that time."
+  },
+
+  imadake_post_meta_published: {
+    ja: "掲載終了予定：{time}（公開から24時間）",
+    en: "Scheduled to end: {time} (24 hours after going live)"
+  },
+
+  imadake_post_end_button: {
+    ja: "掲載を終了する",
+    en: "End this post"
+  },
+
+  imadake_post_withdraw_button: {
+    ja: "投稿を取り下げる",
+    en: "Withdraw this post"
+  },
+
+  imadake_post_new_heading: {
+    ja: "新しく投稿する",
+    en: "Create a new post"
+  },
+
+  imadake_post_required: {
+    ja: "必須",
+    en: "Required"
+  },
+
+  imadake_post_optional: {
+    ja: "任意",
+    en: "Optional"
+  },
+
+  imadake_post_category_label: {
+    ja: "どんなお店・催しですか？",
+    en: "What kind of shop or event is this?"
+  },
+
+  imadake_post_source_language_label: {
+    ja: "投稿する言語",
+    en: "Language of your post"
+  },
+
+  imadake_post_source_language_hint: {
+    ja: "見出しと説明を書いた言語を選んでください。旅行者の表示言語に合わせた自動翻訳に使います。",
+    en: "Choose the language you wrote the headline and details in. It's used to translate your post automatically for travelers."
+  },
+
+  imadake_post_category_aria: {
+    ja: "カテゴリー",
+    en: "Category"
+  },
+
+  imadake_post_category_restaurant: {
+    ja: "飲食店",
+    en: "Restaurant / café"
+  },
+
+  imadake_post_category_food_shop: {
+    ja: "食品・スイーツ",
+    en: "Food & sweets"
+  },
+
+  imadake_post_category_retail: {
+    ja: "ショップ・物販",
+    en: "Shop / retail"
+  },
+
+  imadake_post_category_event: {
+    ja: "イベント",
+    en: "Event"
+  },
+
+  imadake_post_category_other: {
+    ja: "その他",
+    en: "Other"
+  },
+
+  imadake_post_headline_label: {
+    ja: "いちばん伝えたいこと",
+    en: "Your main message"
+  },
+
+  imadake_post_headline_placeholder: {
+    ja: "例：本日まだ空席あります",
+    en: "e.g. Seats still available today"
+  },
+
+  imadake_post_headline_hint: {
+    ja: "例：「本日まだ空席あります」「タルト、あと6個です」「新作が入荷しました」「本日17時まで営業」「当日券あります」",
+    en: "Examples: “Seats still available today”, “Only 6 tarts left”, “New items just arrived”, “Open until 5 pm today”, “Same-day tickets available”"
+  },
+
+  imadake_post_live_label_seats: {
+    ja: "今の空席状況",
+    en: "Seats right now"
+  },
+
+  imadake_post_live_label_stock: {
+    ja: "今の在庫・残り状況",
+    en: "Stock right now"
+  },
+
+  imadake_post_live_label_tickets: {
+    ja: "今の当日券の状況",
+    en: "Same-day tickets right now"
+  },
+
+  imadake_post_live_none: {
+    ja: "指定しない",
+    en: "Not specified"
+  },
+
+  imadake_post_live_seats_available: {
+    ja: "空席あり",
+    en: "Seats available"
+  },
+
+  imadake_post_live_seats_few: {
+    ja: "残りわずか",
+    en: "Almost full"
+  },
+
+  imadake_post_live_seats_full: {
+    ja: "満席",
+    en: "Full"
+  },
+
+  imadake_post_live_stock_available: {
+    ja: "あり",
+    en: "Available"
+  },
+
+  imadake_post_live_stock_few: {
+    ja: "残りわずか",
+    en: "Only a few left"
+  },
+
+  imadake_post_live_stock_sold_out: {
+    ja: "売り切れ",
+    en: "Sold out"
+  },
+
+  imadake_post_live_tickets_available: {
+    ja: "当日券あり",
+    en: "Same-day tickets available"
+  },
+
+  imadake_post_live_tickets_few: {
+    ja: "残りわずか",
+    en: "Only a few left"
+  },
+
+  imadake_post_live_tickets_sold_out: {
+    ja: "完売",
+    en: "Sold out"
+  },
+
+  imadake_post_quantity_label: {
+    ja: "残りの数",
+    en: "Number left"
+  },
+
+  imadake_post_quantity_placeholder: {
+    ja: "例：6",
+    en: "e.g. 6"
+  },
+
+  imadake_post_photos_label: {
+    ja: "写真",
+    en: "Photos"
+  },
+
+  imadake_post_photos_optional: {
+    ja: "任意・最大10枚",
+    en: "Optional · up to 10"
+  },
+
+  imadake_post_photo_add: {
+    ja: "📷 写真を選ぶ",
+    en: "📷 Choose photos"
+  },
+
+  imadake_post_photo_hint_basic: {
+    ja: "1枚目がメインの写真になります。",
+    en: "The first photo will be the main photo."
+  },
+
+  imadake_post_photo_hint_count: {
+    ja: "1枚目がメインの写真になります（{count} / 10枚）。",
+    en: "The first photo will be the main photo ({count} / 10)."
+  },
+
+  imadake_post_photo_hint_max: {
+    ja: "写真は最大10枚までです。1枚目がメインの写真になります。",
+    en: "You can add up to 10 photos. The first photo will be the main photo."
+  },
+
+  imadake_post_photo_main: {
+    ja: "メイン",
+    en: "Main"
+  },
+
+  imadake_post_photo_remove: {
+    ja: "この写真を外す",
+    en: "Remove this photo"
+  },
+
+  imadake_post_photo_rules: {
+    ja: "写真はjpeg・png・webpで1枚10MBまで、最大10枚まで選べます。",
+    en: "Photos must be JPEG, PNG or WebP, up to 10 MB each. You can choose up to 10."
+  },
+
+  imadake_post_body_label: {
+    ja: "くわしい説明",
+    en: "Details"
+  },
+
+  imadake_post_body_placeholder: {
+    ja: "今日の様子、限定の内容、時間、おすすめなど",
+    en: "Today's situation, what's limited, times, recommendations, etc."
+  },
+
+  imadake_post_extra_summary: {
+    ja: "追加情報（必要なものだけ）",
+    en: "More details (only what you need)"
+  },
+
+  imadake_post_field_takeout: {
+    ja: "テイクアウトできる",
+    en: "Takeout available"
+  },
+
+  imadake_post_field_sameDayReservation: {
+    ja: "当日予約できる",
+    en: "Same-day reservations accepted"
+  },
+
+  imadake_post_field_holdAvailable: {
+    ja: "取り置きできる",
+    en: "Items can be held"
+  },
+
+  imadake_post_field_newArrival: {
+    ja: "新入荷",
+    en: "New arrivals"
+  },
+
+  imadake_post_field_startTime: {
+    ja: "開始時刻",
+    en: "Start time"
+  },
+
+  imadake_post_field_endTime: {
+    ja: "終了時刻",
+    en: "End time"
+  },
+
+  imadake_post_field_venue: {
+    ja: "会場",
+    en: "Venue"
+  },
+
+  imadake_post_field_feeText: {
+    ja: "料金",
+    en: "Fee"
+  },
+
+  imadake_post_available_until_label: {
+    ja: "何時まで",
+    en: "Available until"
+  },
+
+  imadake_post_price_label: {
+    ja: "価格",
+    en: "Price"
+  },
+
+  imadake_post_price_placeholder: {
+    ja: "例：1個 450円",
+    en: "e.g. ¥450 each"
+  },
+
+  imadake_post_payment_label: {
+    ja: "お支払い",
+    en: "Payment"
+  },
+
+  imadake_post_payment_cash: {
+    ja: "現金",
+    en: "Cash"
+  },
+
+  imadake_post_payment_card: {
+    ja: "カード",
+    en: "Card"
+  },
+
+  imadake_post_payment_qr: {
+    ja: "QR決済",
+    en: "QR code payment"
+  },
+
+  imadake_post_phone_label: {
+    ja: "電話番号",
+    en: "Phone number"
+  },
+
+  imadake_post_phone_placeholder: {
+    ja: "例：098-000-0000",
+    en: "e.g. 098-000-0000"
+  },
+
+  imadake_post_reservation_label: {
+    ja: "予約ページ",
+    en: "Reservation page"
+  },
+
+  imadake_post_website_label: {
+    ja: "お店のページ",
+    en: "Shop website"
+  },
+
+  imadake_post_social_label: {
+    ja: "SNS",
+    en: "Social media"
+  },
+
+  imadake_post_order_label: {
+    ja: "注文ページ",
+    en: "Order page"
+  },
+
+  imadake_post_submit: {
+    ja: "今だけ投稿を届ける",
+    en: "Publish your post"
+  },
+
+  imadake_post_submitting: {
+    ja: "送信しています…",
+    en: "Sending…"
+  },
+
+  imadake_post_validation_category: {
+    ja: "「どんなお店・催しですか？」を選んでください。",
+    en: "Please choose “What kind of shop or event is this?”."
+  },
+
+  imadake_post_validation_headline: {
+    ja: "「いちばん伝えたいこと」を入力してください。",
+    en: "Please enter “Your main message”."
+  },
+
+  imadake_post_validation_headline_length: {
+    ja: "「いちばん伝えたいこと」は40文字以内で入力してください。",
+    en: "“Your main message” must be 40 characters or fewer."
+  },
+
+  imadake_post_validation_body_length: {
+    ja: "「くわしい説明」は3,000文字以内で入力してください。",
+    en: "“Details” must be 3,000 characters or fewer."
+  },
+
+  imadake_post_progress_upload: {
+    ja: "写真をアップロードしています（{current} / {total}）…",
+    en: "Uploading photos ({current} / {total})…"
+  },
+
+  imadake_post_progress_safety: {
+    ja: "安全確認をしています…",
+    en: "Running the safety check…"
+  },
+
+  imadake_post_result_published: {
+    ja: "今だけ投稿を公開しました。",
+    en: "Your post is now live."
+  },
+
+  imadake_post_result_pending: {
+    ja: "内容を運営が確認しています。確認が終わると公開され、その時点から24時間掲載されます（まだ公開されていません）。",
+    en: "Machinau is reviewing your post. Once the review is complete, it will go live for 24 hours from that time (not live yet)."
+  },
+
+  imadake_post_result_rejected: {
+    ja: "この内容は掲載できません。内容を見直して、もう一度投稿してください。",
+    en: "This post can't be published. Please revise it and try again."
+  },
+
+  imadake_post_result_expires: {
+    ja: "24時間限定です。掲載終了予定：{time}",
+    en: "It stays live for 24 hours. Scheduled to end: {time}"
+  },
+
+  imadake_post_error_active_exists: {
+    ja: "すでに公開中の今だけ投稿があります。1店舗につき同時に掲載できるのは1件です。終了してから新しく投稿できます。",
+    en: "You already have a live post. Each shop can have one post live at a time. End it before creating a new one."
+  },
+
+  imadake_post_error_pending_exists: {
+    ja: "運営が確認中の今だけ投稿があります。確認が終わるか、取り下げてから新しく投稿できます。",
+    en: "You have a post under review. You can create a new one after the review is complete or after withdrawing it."
+  },
+
+  imadake_post_error_safety_unavailable: {
+    ja: "ただいま投稿を確認できません。少し時間をおいてから、もう一度お試しください（まだ公開されていません）。",
+    en: "We can't check posts right now. Please try again in a little while (not live yet)."
+  },
+
+  imadake_post_error_rate_limited: {
+    ja: "少し時間をおいてから、もう一度お試しください。",
+    en: "Please wait a moment and try again."
+  },
+
+  imadake_post_error_invalid_url: {
+    ja: "この店舗投稿URLは無効です。マチナウ運営からお渡しした店舗専用URLから開き直してください。",
+    en: "This shop posting URL is not valid. Please open the page again from the shop URL provided by Machinau."
+  },
+
+  imadake_post_error_field: {
+    ja: "入力内容を確認してください（{field}）。",
+    en: "Please check what you entered ({field})."
+  },
+
+  imadake_post_error_post_failed: {
+    ja: "投稿できませんでした。時間をおいて、もう一度お試しください。",
+    en: "Couldn't publish your post. Please try again later."
+  },
+
+  imadake_post_error_compress: {
+    ja: "写真を軽量化できませんでした。",
+    en: "Couldn't resize the photo."
+  },
+
+  imadake_post_error_upload_prepare: {
+    ja: "写真のアップロードの準備ができませんでした。",
+    en: "Couldn't prepare the photo upload."
+  },
+
+  imadake_post_error_upload: {
+    ja: "写真をアップロードできませんでした。",
+    en: "Couldn't upload the photo."
+  },
+
+  imadake_post_confirm_end: {
+    ja: "公開中の今だけ投稿の掲載を終了しますか？（旅行者から見えなくなります）",
+    en: "End your live post? (Travelers will no longer see it.)"
+  },
+
+  imadake_post_confirm_withdraw: {
+    ja: "確認中の投稿を取り下げますか？（公開されません）",
+    en: "Withdraw the post under review? (It won't be published.)"
+  },
+
+  imadake_post_action_failed: {
+    ja: "処理できませんでした。",
+    en: "Couldn't complete this action."
+  },
+
+  imadake_post_action_failed_retry: {
+    ja: "処理できませんでした。時間をおいて、もう一度お試しください。",
+    en: "Couldn't complete this action. Please try again later."
+  },
+
+  imadake_post_withdrawn_done: {
+    ja: "確認中の投稿を取り下げました。新しく投稿できます。",
+    en: "Your post under review was withdrawn. You can create a new post."
+  },
+
+  imadake_post_ended_done: {
+    ja: "今だけ投稿の掲載を終了しました。新しく投稿できます。",
+    en: "Your post has ended. You can create a new post."
+  },
+
+  imadake_post_colon: {
+    ja: "：",
+    en: ": "
+  },
+
+  imadake_post_range_separator: {
+    ja: " 〜 ",
+    en: " – "
+  },
+
+  imadake_report_meta_separator: {
+    ja: "・",
+    en: " · "
+  },
+
+  imadake_report_format_yen: {
+    ja: "{amount}円",
+    en: "¥{amount}"
+  },
+
+  imadake_report_format_count: {
+    ja: "{count}件",
+    en: "{count}"
+  },
+
+  imadake_report_format_month: {
+    ja: "{year}年{month}月",
+    en: "{monthShort} {year}"
+  },
+
+  imadake_report_format_day: {
+    ja: "{month}/{day}",
+    en: "{monthShort} {day}"
   }
 };
 
