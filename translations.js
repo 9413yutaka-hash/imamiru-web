@@ -3903,6 +3903,197 @@ const MACHINAU_TRANSLATIONS = {
     en: "Choose the language you wrote the headline and details in. It's used to translate your post automatically for travelers."
   },
 
+  // 投稿場所 STEP 5｜投稿場所の指定・掲載中の場所変更(imadake-post.html)。
+  imadake_post_location_heading: {
+    ja: "投稿場所",
+    en: "Post location"
+  },
+
+  imadake_post_location_registered: {
+    ja: "登録所在地を使う",
+    en: "Use registered location"
+  },
+
+  imadake_post_location_custom: {
+    ja: "別の場所を指定する",
+    en: "Choose another place"
+  },
+
+  imadake_post_location_registered_hint: {
+    ja: "店舗・事業者として登録した所在地に投稿します。",
+    en: "Your post appears at the location registered for your business."
+  },
+
+  imadake_post_location_no_registered: {
+    ja: "登録所在地がないため、投稿する場所を指定してください。",
+    en: "Your business has no registered location, so please enter where you'll be."
+  },
+
+  imadake_post_location_address_label: {
+    ja: "投稿場所の住所",
+    en: "Address of the location"
+  },
+
+  imadake_post_location_address_placeholder: {
+    ja: "例：沖縄県名護市為又1-1",
+    en: "e.g. 1-1 Bimata, Nago, Okinawa"
+  },
+
+  imadake_post_location_place_label: {
+    ja: "場所名",
+    en: "Place name"
+  },
+
+  imadake_post_location_place_placeholder: {
+    ja: "例：北部フェス会場",
+    en: "e.g. Northern Festival venue"
+  },
+
+  imadake_post_location_show_address: {
+    ja: "住所を旅行者に表示する",
+    en: "Show the address to travelers"
+  },
+
+  imadake_post_location_verify_note: {
+    ja: "住所はマチナウのサーバーで位置を確認します。確認できない場合は投稿・変更されません。登録所在地の住所は旅行者に表示されません。",
+    en: "Machinau's server checks the address. If it can't be confirmed, nothing is posted or changed. Your registered address is not shown to travelers."
+  },
+
+  imadake_post_location_current: {
+    ja: "投稿場所：",
+    en: "Location: "
+  },
+
+  imadake_post_location_current_registered: {
+    ja: "登録所在地",
+    en: "Registered location"
+  },
+
+  imadake_post_location_address_hidden: {
+    ja: "（住所は非表示）",
+    en: "(address hidden)"
+  },
+
+  imadake_post_location_change_button: {
+    ja: "投稿場所を変更する",
+    en: "Change location"
+  },
+
+  imadake_post_location_change_heading: {
+    ja: "投稿場所の変更",
+    en: "Change the location"
+  },
+
+  imadake_post_location_change_note: {
+    ja: "場所を変更しても同じ投稿のままです。掲載終了時刻と料金の計算は変わりません。",
+    en: "Changing the location keeps the same post. The end time and fee calculation don't change."
+  },
+
+  imadake_post_location_change_limits: {
+    ja: "場所の変更は1つの投稿につき20回まで、前回の変更から60秒以上あけてください。",
+    en: "You can change the location up to 20 times per post, at least 60 seconds apart."
+  },
+
+  imadake_post_location_confirm_button: {
+    ja: "変更内容を確認する",
+    en: "Review changes"
+  },
+
+  imadake_post_location_confirm_heading: {
+    ja: "変更内容の確認",
+    en: "Review your changes"
+  },
+
+  imadake_post_location_confirm_place: {
+    ja: "場所名：{value}",
+    en: "Place name: {value}"
+  },
+
+  imadake_post_location_confirm_address: {
+    ja: "住所：{value}",
+    en: "Address: {value}"
+  },
+
+  imadake_post_location_confirm_show_yes: {
+    ja: "住所を旅行者に表示します。",
+    en: "The address will be shown to travelers."
+  },
+
+  imadake_post_location_confirm_show_no: {
+    ja: "住所は旅行者に表示しません。",
+    en: "The address will not be shown to travelers."
+  },
+
+  imadake_post_location_confirm_registered: {
+    ja: "登録所在地に戻します。",
+    en: "Return to the registered location."
+  },
+
+  imadake_post_location_save: {
+    ja: "保存",
+    en: "Save"
+  },
+
+  imadake_post_location_back: {
+    ja: "戻る",
+    en: "Back"
+  },
+
+  imadake_post_location_cancel: {
+    ja: "やめる",
+    en: "Cancel"
+  },
+
+  imadake_post_location_saving: {
+    ja: "確認しています…",
+    en: "Checking…"
+  },
+
+  imadake_post_location_changed: {
+    ja: "投稿場所を変更しました。",
+    en: "The location has been changed."
+  },
+
+  imadake_post_location_unchanged: {
+    ja: "同じ場所のため、変更はありません。",
+    en: "It's the same place, so nothing changed."
+  },
+
+  imadake_post_location_error_not_verified: {
+    ja: "投稿場所を確認できませんでした。住所を見直して、もう一度お試しください。",
+    en: "We couldn't confirm the location. Please check the address and try again."
+  },
+
+  imadake_post_location_error_limit: {
+    ja: "この投稿の場所はこれ以上変更できません（1つの投稿につき20回まで）。",
+    en: "This post's location can't be changed any more (up to 20 times per post)."
+  },
+
+  imadake_post_location_error_too_soon: {
+    ja: "前回の変更から60秒以上あけて、もう一度お試しください。",
+    en: "Please wait at least 60 seconds after the last change and try again."
+  },
+
+  imadake_post_location_error_not_active: {
+    ja: "掲載中の投稿だけ、場所を変更できます。",
+    en: "Only a live post's location can be changed."
+  },
+
+  imadake_post_location_error_login: {
+    ja: "投稿場所の指定・変更には、店舗アカウントでのログインが必要です。",
+    en: "Signing in to your shop account is required to choose or change the location."
+  },
+
+  imadake_post_location_error_failed: {
+    ja: "場所を変更できませんでした。時間をおいて、もう一度お試しください。",
+    en: "Couldn't change the location. Please try again later."
+  },
+
+  imadake_post_validation_location_address: {
+    ja: "「投稿場所の住所」を入力してください。",
+    en: "Please enter the address of the location."
+  },
+
   imadake_post_category_aria: {
     ja: "カテゴリー",
     en: "Category"

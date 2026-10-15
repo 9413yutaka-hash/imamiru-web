@@ -183,6 +183,23 @@
 
     .danger-button:disabled { opacity: 0.6; cursor: wait; }
 
+    /* 投稿場所 STEP 5｜投稿場所の指定・掲載中の場所変更 */
+    .secondary-button {
+      width: 100%; min-height: 44px; margin-bottom: 10px; border: 1px solid var(--blue); border-radius: 12px;
+      background: var(--white); color: var(--blue); font-family: inherit; font-size: 14px; font-weight: 900; cursor: pointer;
+    }
+    .secondary-button:disabled { opacity: 0.6; cursor: wait; }
+    .chip.disabled { opacity: 0.45; cursor: not-allowed; }
+    .check-line { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; min-height: 40px; }
+    .current-location { margin: 0 0 12px; padding: 10px 12px; border-radius: 12px; background: #f4f8fa; font-size: 13px; }
+    .current-location-text { font-weight: 800; color: var(--navy); word-break: break-word; }
+    .location-change-form { margin: 0 0 12px; padding: 12px; border: 1px solid var(--border); border-radius: 14px; }
+    .location-change-form h3 { margin: 0 0 6px; font-size: 14px; color: var(--navy); }
+    .location-confirm { margin: 10px 0; padding: 10px 12px; border-radius: 12px; background: var(--sky); font-size: 13px; }
+    .location-confirm p { margin: 2px 0; word-break: break-word; }
+    .button-row { display: flex; gap: 8px; }
+    .button-row > button { flex: 1; }
+
     .message-box { margin-top: 10px; font-size: 13.5px; line-height: 1.7; white-space: pre-line; }
     .message-box:empty { display: none; }
     .message-box.success { padding: 12px; border-radius: 12px; background: #e8f7f0; color: #146e4a; }
@@ -314,6 +331,45 @@
       <span id="currentStatusLabel" class="current-status-label"></span>
       <p id="currentHeadline" class="current-headline"></p>
       <p id="currentMeta" class="current-meta"></p>
+      <!-- 投稿場所 STEP 5｜今の投稿場所と、掲載中の場所変更(店舗アカウントでログインした本人だけ)。 -->
+      <div id="currentLocationBox" class="current-location" hidden>
+        <span data-i18n="imadake_post_location_current">投稿場所：</span><span id="currentLocationText" class="current-location-text"></span>
+      </div>
+      <button id="changeLocationButton" class="secondary-button" type="button" hidden data-i18n="imadake_post_location_change_button">投稿場所を変更する</button>
+      <div id="locationChangeForm" class="location-change-form" hidden>
+        <h3 data-i18n="imadake_post_location_change_heading">投稿場所の変更</h3>
+        <p class="hint" data-i18n="imadake_post_location_change_note">場所を変更しても同じ投稿のままです。掲載終了時刻と料金の計算は変わりません。</p>
+        <div id="changeLocationChoices" class="chip-group" role="radiogroup" aria-label="投稿場所" data-i18n-aria-label="imadake_post_location_heading" style="margin-top:8px;">
+          <label class="chip"><input type="radio" name="changeLocationType" value="registered"><span data-i18n="imadake_post_location_registered">登録所在地を使う</span></label>
+          <label class="chip selected"><input type="radio" name="changeLocationType" value="custom" checked><span data-i18n="imadake_post_location_custom">別の場所を指定する</span></label>
+        </div>
+        <div id="changeLocationCustomFields">
+          <div class="field" style="margin-top:12px;">
+            <label for="changeLocationAddressInput"><span data-i18n="imadake_post_location_address_label">投稿場所の住所</span><span class="required" data-i18n="imadake_post_required">必須</span></label>
+            <input id="changeLocationAddressInput" type="text" maxlength="200" autocomplete="off" placeholder="例：沖縄県名護市為又1-1" data-i18n-placeholder="imadake_post_location_address_placeholder">
+          </div>
+          <div class="field">
+            <label for="changeLocationPlaceInput"><span data-i18n="imadake_post_location_place_label">場所名</span><span class="optional" data-i18n="imadake_post_optional">任意</span></label>
+            <input id="changeLocationPlaceInput" type="text" maxlength="60" autocomplete="off" placeholder="例：北部フェス会場" data-i18n-placeholder="imadake_post_location_place_placeholder">
+          </div>
+          <label class="check-line"><input id="changeLocationShowAddressInput" type="checkbox" checked> <span data-i18n="imadake_post_location_show_address">住所を旅行者に表示する</span></label>
+          <p class="hint" data-i18n="imadake_post_location_verify_note">住所はマチナウのサーバーで位置を確認します。確認できない場合は投稿・変更されません。登録所在地の住所は旅行者に表示されません。</p>
+        </div>
+        <p class="hint" data-i18n="imadake_post_location_change_limits">場所の変更は1つの投稿につき20回まで、前回の変更から60秒以上あけてください。</p>
+        <div id="locationConfirmBox" class="location-confirm" hidden>
+          <p><strong data-i18n="imadake_post_location_confirm_heading">変更内容の確認</strong></p>
+          <div id="locationConfirmLines"></div>
+        </div>
+        <div class="button-row" id="locationStepButtons">
+          <button id="locationCancelButton" class="secondary-button" type="button" data-i18n="imadake_post_location_cancel">やめる</button>
+          <button id="locationReviewButton" class="secondary-button" type="button" data-i18n="imadake_post_location_confirm_button">変更内容を確認する</button>
+        </div>
+        <div class="button-row" id="locationConfirmButtons" hidden>
+          <button id="locationBackButton" class="secondary-button" type="button" data-i18n="imadake_post_location_back">戻る</button>
+          <button id="locationSaveButton" class="primary-button" type="button" data-i18n="imadake_post_location_save">保存</button>
+        </div>
+        <div id="locationChangeMessage" class="message-box" role="status" aria-live="polite"></div>
+      </div>
       <button id="endButton" class="danger-button" type="button" hidden data-i18n="imadake_post_end_button">掲載を終了する</button>
       <button id="withdrawButton" class="danger-button" type="button" hidden data-i18n="imadake_post_withdraw_button">投稿を取り下げる</button>
       <div id="currentMessage" class="message-box" role="status" aria-live="polite"></div>
@@ -325,6 +381,30 @@
       <div class="field">
         <span class="field-label"><span data-i18n="imadake_post_category_label">どんなお店・催しですか？</span><span class="required" data-i18n="imadake_post_required">必須</span></span>
         <div id="categoryChips" class="chip-group" role="radiogroup" aria-label="カテゴリー" data-i18n-aria-label="imadake_post_category_aria"></div>
+      </div>
+
+      <!-- 投稿場所 STEP 5｜投稿場所(店舗アカウントでログインした事業者だけ。旧token方式では表示せず従来どおり登録所在地)。
+           別の場所の住所はサーバーで確認する(画面からは緯度経度を送らない)。事業者の登録住所はここに表示しない。 -->
+      <div class="field" id="postLocationField" hidden>
+        <span class="field-label"><span data-i18n="imadake_post_location_heading">投稿場所</span><span class="required" data-i18n="imadake_post_required">必須</span></span>
+        <div id="postLocationChoices" class="chip-group" role="radiogroup" aria-label="投稿場所" data-i18n-aria-label="imadake_post_location_heading">
+          <label class="chip selected"><input type="radio" name="postLocationType" value="registered" checked><span data-i18n="imadake_post_location_registered">登録所在地を使う</span></label>
+          <label class="chip"><input type="radio" name="postLocationType" value="custom"><span data-i18n="imadake_post_location_custom">別の場所を指定する</span></label>
+        </div>
+        <p id="postLocationRegisteredHint" class="hint" data-i18n="imadake_post_location_registered_hint">店舗・事業者として登録した所在地に投稿します。</p>
+        <p id="postLocationNoRegisteredHint" class="hint" hidden data-i18n="imadake_post_location_no_registered">登録所在地がないため、投稿する場所を指定してください。</p>
+        <div id="postLocationCustomFields" hidden>
+          <div class="field" style="margin-top:12px;">
+            <label for="postLocationAddressInput"><span data-i18n="imadake_post_location_address_label">投稿場所の住所</span><span class="required" data-i18n="imadake_post_required">必須</span></label>
+            <input id="postLocationAddressInput" type="text" maxlength="200" autocomplete="off" placeholder="例：沖縄県名護市為又1-1" data-i18n-placeholder="imadake_post_location_address_placeholder">
+          </div>
+          <div class="field">
+            <label for="postLocationPlaceInput"><span data-i18n="imadake_post_location_place_label">場所名</span><span class="optional" data-i18n="imadake_post_optional">任意</span></label>
+            <input id="postLocationPlaceInput" type="text" maxlength="60" autocomplete="off" placeholder="例：北部フェス会場" data-i18n-placeholder="imadake_post_location_place_placeholder">
+          </div>
+          <label class="check-line"><input id="postLocationShowAddressInput" type="checkbox" checked> <span data-i18n="imadake_post_location_show_address">住所を旅行者に表示する</span></label>
+          <p class="hint" data-i18n="imadake_post_location_verify_note">住所はマチナウのサーバーで位置を確認します。確認できない場合は投稿・変更されません。登録所在地の住所は旅行者に表示されません。</p>
+        </div>
       </div>
 
       <!-- 原文言語｜店舗が見出し・説明を書いた言語(sourceLanguage)。画面の表示言語とは別の値で、
@@ -791,11 +871,265 @@
     }
 
     // ------------------------------------------------------------------
+    // 投稿場所 STEP 5｜投稿場所の指定・掲載中の場所変更(画面)。位置の確認と保存はサーバーだけが行う。
+    // 店舗アカウントでログインした時だけ使える(旧token方式では従来どおり登録所在地だけ)。
+    // ------------------------------------------------------------------
+    // 事業者に登録所在地があるか(imadakeStoreStatusのlocationで判断)。
+    let registeredLocationAvailable = true;
+    let locationChangeSubmitting = false;
+
+    function readChoice(groupName) {
+      const checked = document.querySelector('input[name="' + groupName + '"]:checked');
+      return checked ? checked.value : "registered";
+    }
+
+    function syncChoiceChips(boxId) {
+      document.querySelectorAll("#" + boxId + " .chip").forEach(function(chip) {
+        const input = chip.querySelector("input");
+        chip.classList.toggle("selected", input.checked);
+        chip.classList.toggle("disabled", input.disabled);
+      });
+    }
+
+    function setChoice(groupName, value) {
+      document.querySelectorAll('input[name="' + groupName + '"]').forEach(function(input) {
+        input.disabled = input.value === "registered" && !registeredLocationAvailable;
+        input.checked = input.value === value;
+      });
+    }
+
+    function syncPostLocationUi() {
+      const type = readChoice("postLocationType");
+      $("postLocationCustomFields").hidden = type !== "custom";
+      $("postLocationRegisteredHint").hidden = type !== "registered";
+      $("postLocationNoRegisteredHint").hidden = registeredLocationAvailable;
+      syncChoiceChips("postLocationChoices");
+    }
+
+    // 登録所在地がある事業者は「登録所在地を使う」、無い事業者は「別の場所を指定する」が初期選択。
+    function setPostLocationDefault() {
+      $("postLocationField").hidden = !isStoreLoginMode;
+      setChoice("postLocationType", registeredLocationAvailable ? "registered" : "custom");
+      syncPostLocationUi();
+    }
+
+    function readCustomLocationInputs(prefix) {
+      return {
+        type: "custom",
+        address: $(prefix + "AddressInput").value.trim(),
+        placeLabel: $(prefix + "PlaceInput").value.trim(),
+        showAddress: $(prefix + "ShowAddressInput").checked
+      };
+    }
+
+    // 投稿作成で送る投稿場所。登録所在地(または旧token方式)では送らない(従来と同じリクエスト)。
+    function buildCreatePostLocation() {
+      if (!isStoreLoginMode || readChoice("postLocationType") !== "custom") {
+        return null;
+      }
+
+      return readCustomLocationInputs("postLocation");
+    }
+
+    document.querySelectorAll('input[name="postLocationType"]').forEach(function(input) {
+      input.addEventListener("change", syncPostLocationUi);
+    });
+
+    // 今の投稿場所の表示(事業者本人向け。登録所在地の住所はここでも出さない)。
+    function renderCurrentLocation() {
+      if (!currentPost) {
+        $("currentLocationBox").hidden = true;
+        $("changeLocationButton").hidden = true;
+        closeLocationChangeForm();
+        return;
+      }
+
+      if (currentPost.locationSource === "postLocation") {
+        const parts = [currentPost.placeLabel || ""].filter(Boolean);
+        parts.push(currentPost.address ? currentPost.address : t("imadake_post_location_address_hidden"));
+        $("currentLocationText").textContent = parts.join(" ／ ");
+      } else {
+        $("currentLocationText").textContent = t("imadake_post_location_current_registered");
+      }
+
+      $("currentLocationBox").hidden = false;
+
+      // 変更できるのは、店舗アカウントでログインした本人の、掲載中・期限内の投稿だけ。
+      const expiresAtMillis = currentPost.expiresAt ? Date.parse(currentPost.expiresAt) : NaN;
+      const canChange =
+        isStoreLoginMode &&
+        currentPost.status === "published" &&
+        Number.isFinite(expiresAtMillis) &&
+        expiresAtMillis > Date.now();
+
+      $("changeLocationButton").hidden = !canChange || !$("locationChangeForm").hidden;
+
+      if (!canChange) {
+        closeLocationChangeForm();
+      }
+    }
+
+    function syncLocationChangeUi() {
+      $("changeLocationCustomFields").hidden = readChoice("changeLocationType") !== "custom";
+      syncChoiceChips("changeLocationChoices");
+    }
+
+    function showLocationReviewStep(isReview) {
+      $("locationConfirmBox").hidden = !isReview;
+      $("locationConfirmButtons").hidden = !isReview;
+      $("locationStepButtons").hidden = isReview;
+      document.querySelectorAll("#locationChangeForm input").forEach(function(input) {
+        input.disabled = isReview || (input.name === "changeLocationType" && input.value === "registered" && !registeredLocationAvailable);
+      });
+      syncChoiceChips("changeLocationChoices");
+    }
+
+    function openLocationChangeForm() {
+      if (!currentPost) {
+        return;
+      }
+
+      const isCustom = currentPost.locationSource === "postLocation" || !registeredLocationAvailable;
+      setChoice("changeLocationType", isCustom ? "custom" : "registered");
+      $("changeLocationAddressInput").value = currentPost.locationSource === "postLocation" ? (currentPost.address || "") : "";
+      $("changeLocationPlaceInput").value = currentPost.locationSource === "postLocation" ? (currentPost.placeLabel || "") : "";
+      $("changeLocationShowAddressInput").checked = !(currentPost.locationSource === "postLocation" && !currentPost.address);
+      showMessage($("locationChangeMessage"), "", "");
+      $("locationChangeForm").hidden = false;
+      $("changeLocationButton").hidden = true;
+      showLocationReviewStep(false);
+      syncLocationChangeUi();
+    }
+
+    function closeLocationChangeForm() {
+      $("locationChangeForm").hidden = true;
+      locationChangeSubmitting = false;
+    }
+
+    function buildChangePostLocation() {
+      return readChoice("changeLocationType") === "registered"
+        ? { type: "registered" }
+        : readCustomLocationInputs("changeLocation");
+    }
+
+    function appendConfirmLine(box, key, params) {
+      const line = document.createElement("p");
+      setI18nText(line, key, params);
+      box.appendChild(line);
+    }
+
+    function reviewLocationChange() {
+      const location = buildChangePostLocation();
+
+      if (location.type === "custom" && location.address === "") {
+        showMessageParts($("locationChangeMessage"), [{ key: "imadake_post_validation_location_address" }], "error");
+        return;
+      }
+
+      showMessage($("locationChangeMessage"), "", "");
+      const box = $("locationConfirmLines");
+      box.textContent = "";
+
+      if (location.type === "registered") {
+        appendConfirmLine(box, "imadake_post_location_confirm_registered");
+      } else {
+        appendConfirmLine(box, "imadake_post_location_confirm_place", { value: location.placeLabel || "—" });
+        appendConfirmLine(box, "imadake_post_location_confirm_address", { value: location.address });
+        appendConfirmLine(box, location.showAddress ? "imadake_post_location_confirm_show_yes" : "imadake_post_location_confirm_show_no");
+      }
+
+      appendConfirmLine(box, "imadake_post_location_change_note");
+      showLocationReviewStep(true);
+    }
+
+    function messageKeyForLocationError(result) {
+      const reason = (result.data && result.data.reason) || "";
+
+      if (reason === "post_location_not_verified") return "imadake_post_location_error_not_verified";
+      if (reason === "location_change_too_soon") return "imadake_post_location_error_too_soon";
+      if (reason === "location_change_limit") return "imadake_post_location_error_limit";
+      if (reason === "not_active" || reason === "slot_mismatch") return "imadake_post_location_error_not_active";
+      if (reason === "post_location_requires_login") return "imadake_post_location_error_login";
+      if (reason === "location_not_registered") return "imadake_post_no_location";
+      return "imadake_post_location_error_failed";
+    }
+
+    async function saveLocationChange() {
+      if (locationChangeSubmitting || !currentPost) {
+        return;
+      }
+
+      const location = buildChangePostLocation();
+      locationChangeSubmitting = true;
+      $("locationSaveButton").disabled = true;
+      $("locationBackButton").disabled = true;
+      setI18nText($("locationSaveButton"), "imadake_post_location_saving");
+
+      try {
+        const result = await callImadakeApi("imadakePostLocationUpdate", {
+          postId: currentPost.postId,
+          postLocation: location
+        });
+
+        if (!result.ok || result.data.success !== true) {
+          // 失敗時は入力内容を残し、画面の投稿場所は変えない。
+          showMessageParts($("locationChangeMessage"), [{ key: messageKeyForLocationError(result) }], "error");
+          showLocationReviewStep(false);
+          syncLocationChangeUi();
+          return;
+        }
+
+        // 成功した時だけ、サーバーが返した場所で画面を更新する。
+        const saved = result.data.location || {};
+        currentPost.locationSource = saved.locationSource || currentPost.locationSource;
+        currentPost.placeLabel = typeof saved.placeLabel === "string" ? saved.placeLabel : "";
+        currentPost.address = typeof saved.address === "string" ? saved.address : "";
+
+        if (result.data.status === "updated") {
+          currentPost.locationChangeCount = (Number(currentPost.locationChangeCount) || 0) + 1;
+        }
+
+        closeLocationChangeForm();
+        renderCurrentPost();
+        showMessageParts(
+          currentMessage,
+          [{ key: result.data.status === "unchanged" ? "imadake_post_location_unchanged" : "imadake_post_location_changed" }],
+          "success"
+        );
+      } catch (error) {
+        showMessageParts($("locationChangeMessage"), [{ key: "imadake_post_location_error_failed" }], "error");
+        showLocationReviewStep(false);
+        syncLocationChangeUi();
+      } finally {
+        locationChangeSubmitting = false;
+        $("locationSaveButton").disabled = false;
+        $("locationBackButton").disabled = false;
+        setI18nText($("locationSaveButton"), "imadake_post_location_save");
+      }
+    }
+
+    document.querySelectorAll('input[name="changeLocationType"]').forEach(function(input) {
+      input.addEventListener("change", syncLocationChangeUi);
+    });
+    $("changeLocationButton").addEventListener("click", openLocationChangeForm);
+    $("locationCancelButton").addEventListener("click", function() {
+      closeLocationChangeForm();
+      renderCurrentPost();
+    });
+    $("locationReviewButton").addEventListener("click", reviewLocationChange);
+    $("locationBackButton").addEventListener("click", function() {
+      showLocationReviewStep(false);
+      syncLocationChangeUi();
+    });
+    $("locationSaveButton").addEventListener("click", saveLocationChange);
+
+    // ------------------------------------------------------------------
     // 店舗の状態(店名・掲載場所・今の投稿)
     // ------------------------------------------------------------------
     function renderCurrentPost() {
       if (!currentPost) {
         currentPanel.hidden = true;
+        renderCurrentLocation();
         return;
       }
 
@@ -814,6 +1148,9 @@
 
       $("endButton").hidden = isPending;
       $("withdrawButton").hidden = !isPending;
+
+      // 投稿場所 STEP 5｜今の投稿場所と、場所変更の操作。
+      renderCurrentLocation();
     }
 
     async function loadStoreStatus() {
@@ -850,13 +1187,24 @@
 
       const location = result.data.location;
 
+      // 投稿場所 STEP 5｜登録所在地の有無(店舗アカウントでログインした事業者は、無くても別の場所で投稿できる)。
+      registeredLocationAvailable = !!location;
+      setPostLocationDefault();
+
       if (!location) {
         setI18nText($("storeLocationText"), "imadake_post_location_unregistered");
-        noLocationPanel.hidden = false;
         aboutPanel.hidden = false;
-        postForm.hidden = true;
         currentPost = result.data.currentPost || null;
         renderCurrentPost();
+
+        if (!isStoreLoginMode) {
+          // 旧token方式：従来どおり、登録所在地が無ければ投稿できない。
+          noLocationPanel.hidden = false;
+          postForm.hidden = true;
+          return;
+        }
+
+        postForm.hidden = currentPost !== null;
         return;
       }
 
@@ -1257,6 +1605,15 @@
         return [{ key: "imadake_post_error_safety_unavailable" }];
       }
 
+      // 投稿場所 STEP 5｜投稿場所を確認できない・ログインが必要。
+      if (data.reason === "post_location_not_verified") {
+        return [{ key: "imadake_post_location_error_not_verified" }];
+      }
+
+      if (data.reason === "post_location_requires_login") {
+        return [{ key: "imadake_post_location_error_login" }];
+      }
+
       if (result.status === 429) {
         return [{ key: "imadake_post_error_rate_limited" }];
       }
@@ -1301,6 +1658,14 @@
 
       if (Array.from(body).length > BODY_MAX) {
         showMessageParts(formMessage, [{ key: "imadake_post_validation_body_length" }], "error");
+        return;
+      }
+
+      // 投稿場所 STEP 5｜別の場所は住所が必須(位置の確認はサーバー)。
+      const createPostLocation = buildCreatePostLocation();
+
+      if (createPostLocation && createPostLocation.address === "") {
+        showMessageParts(formMessage, [{ key: "imadake_post_validation_location_address" }], "error");
         return;
       }
 
@@ -1369,7 +1734,9 @@
           imageUrls: imageUrls,
           imagePublicIds: imagePublicIds,
           // 店舗が選んだ原文言語(画面の表示言語は使わない)。
-          sourceLanguage: getSelectedSourceLanguage()
+          sourceLanguage: getSelectedSourceLanguage(),
+          // 投稿場所 STEP 5｜別の場所を選んだ時だけ送る(登録所在地では従来と同じリクエスト)。
+          ...(createPostLocation ? { postLocation: createPostLocation } : {})
         });
 
         if (!result.ok || result.data.success !== true) {
@@ -1393,6 +1760,10 @@
           selectedPhotos = [];
           postForm.reset();
           syncSourceLanguageChips();
+          setPostLocationDefault();
+          $("postLocationAddressInput").value = "";
+          $("postLocationPlaceInput").value = "";
+          $("postLocationShowAddressInput").checked = true;
           selectedCategory = "";
           renderCategoryChips();
           renderLiveState();
@@ -1406,7 +1777,12 @@
             status: status,
             headline: headline,
             publishedAt: result.data.publishedAt,
-            expiresAt: result.data.expiresAt
+            expiresAt: result.data.expiresAt,
+            // 投稿場所 STEP 5｜送った投稿場所(公開用の住所は「表示する」を選んだ時だけ)。
+            locationSource: createPostLocation ? "postLocation" : "storeAccount",
+            placeLabel: createPostLocation ? createPostLocation.placeLabel : "",
+            address: createPostLocation && createPostLocation.showAddress ? createPostLocation.address : "",
+            locationChangeCount: 0
           };
 
           renderCurrentPost();

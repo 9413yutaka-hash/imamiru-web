@@ -47,6 +47,7 @@ import {
 import {
   handleImadakePostCreate,
   handleImadakePostEnd,
+  handleImadakePostLocationUpdate,
   handleImadakePostGet,
   handleImadakePostsNearby,
   handleImadakeAdminPendingList,
@@ -30277,6 +30278,18 @@ export default async function handler(
     requestBody.mode === "imadakePostCreate"
   ) {
     return handleImadakePostCreate(
+      request,
+      response,
+      buildImadakeDeps()
+    );
+  }
+
+  // 投稿場所 STEP 4｜掲載中の今だけ投稿の場所変更(店舗アカウントでログインした事業者だけ)。
+  // 投稿ID・掲載期限・CV・日別料金台帳は変えない。実処理はapi/_lib/imadake.js。
+  if (
+    requestBody.mode === "imadakePostLocationUpdate"
+  ) {
+    return handleImadakePostLocationUpdate(
       request,
       response,
       buildImadakeDeps()

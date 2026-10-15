@@ -80,6 +80,18 @@ export const IMADAKE_POSTS_COLLECTION =
 export const IMADAKE_STORE_SLOTS_COLLECTION =
   "imadakeStoreSlots";
 
+// 投稿場所 STEP 4｜投稿の場所の変更履歴(監査用、追記のみ。サーバーだけが書く)。
+export const IMADAKE_POST_LOCATION_LOGS_COLLECTION =
+  "imadakePostLocationLogs";
+
+// 投稿場所の入力の上限。
+export const IMADAKE_PLACE_LABEL_MAX_LENGTH = 60;
+export const IMADAKE_LOCATION_ADDRESS_MAX_LENGTH = 200;
+
+// 掲載中の場所変更の上限(1投稿あたりの回数・連続変更の間隔)。偽装・連打の抑止。
+export const IMADAKE_LOCATION_CHANGE_MAX_PER_POST = 20;
+export const IMADAKE_LOCATION_CHANGE_COOLDOWN_MILLISECONDS = 60 * 1000;
+
 export const IMADAKE_RATE_LIMITS_COLLECTION =
   "imadakeRateLimits";
 
@@ -577,6 +589,63 @@ function validateImages(
   return { imageUrls: imageUrls, imagePublicIds: imagePublicIds };
 }
 
+// 投稿場所 STEP 4｜投稿場所の入力。緯度経度は受け取らない(サーバーが住所を確認して決める)。
+//   未指定 または { type: "registered" }       事業者の登録所在地を使う(従来どおり)
+//   { type: "custom", address, placeLabel, showAddress }
+//     address      出店場所の住所(必須。サーバーでGeocodingして確認する)
+//     placeLabel   旅行者に見せる場所名(任意。例：北部フェス会場)
+//     showAddress  出店場所の住所を旅行者に表示するか(既定 true)
+// 戻り値：{ ok: true, value } または { ok: false }
+export function readImadakePostLocationInput(
+  value
+) {
+  if (value === undefined || value === null) {
+    return { ok: true, value: { type: "registered" } };
+  }
+
+  if (typeof value !== "object" || Array.isArray(value)) {
+    return { ok: false };
+  }
+
+  const type =
+    readTrimmedString(value.type);
+
+  if (type === "registered") {
+    return { ok: true, value: { type: "registered" } };
+  }
+
+  if (type !== "custom") {
+    return { ok: false };
+  }
+
+  const address =
+    readTrimmedString(value.address);
+
+  const placeLabel =
+    readTrimmedString(value.placeLabel);
+
+  if (
+    address === "" ||
+    countCharacters(address) > IMADAKE_LOCATION_ADDRESS_MAX_LENGTH ||
+    /[\r\n]/.test(address) ||
+    countCharacters(placeLabel) > IMADAKE_PLACE_LABEL_MAX_LENGTH ||
+    /[\r\n]/.test(placeLabel) ||
+    (value.showAddress !== undefined && typeof value.showAddress !== "boolean")
+  ) {
+    return { ok: false };
+  }
+
+  return {
+    ok: true,
+    value: {
+      type: "custom",
+      address: address,
+      placeLabel: placeLabel,
+      showAddress: value.showAddress !== false
+    }
+  };
+}
+
 // 店舗が入力する項目だけを検証して返す。status・publishedAt・expiresAt・
 // storeNameSnapshot等はここでは一切受け取らない(サーバー側で決める)。
 // 戻り値：{ ok: true, fields } または { ok: false, field }
@@ -716,9 +785,17 @@ export function validateImadakePostInput(
     return fail("sourceLanguage");
   }
 
+  const postLocation =
+    readImadakePostLocationInput(body.postLocation);
+
+  if (!postLocation.ok) {
+    return fail("postLocation");
+  }
+
   return {
     ok: true,
     fields: {
+      postLocation: postLocation.value,
       categoryCode: categoryCode,
       headline: headline,
       body: bodyText,
@@ -1062,7 +1139,9 @@ export async function verifyImadakeStoreActor(
     valid: true,
     storeId: storeId,
     storeName: storeName,
-    method: "storeUser"
+    method: "storeUser",
+    // 投稿場所 STEP 4｜場所変更の監査記録に使う(誰が変更したか)。
+    uid: actorResult.actor.uid
   };
 }
 
@@ -1270,19 +1349,27 @@ export async function handleImadakePostCreate(
 
     // STEP 4A(Option A)｜所在地は運営が登録したstoreAccountsの正式所在地だけを
     // 使う(サーバー側で読む。ブラウザの値は使わない)。未登録の店舗は投稿不可。
-    const officialLocation =
-      await readStoreOfficialLocation(
+    // 投稿場所 STEP 4｜投稿場所に「別の場所」が指定された時は、その住所をサーバーで
+    // 確認した位置を使う(登録所在地は使わず、投稿へもコピーしない)。未指定は従来どおり。
+    const locationResult =
+      await resolveImadakePostLocation(
+        fields.postLocation,
+        storeValidation,
         database,
-        storeId
+        storeId,
+        deps
       );
 
-    if (!officialLocation) {
-      return response.status(409).json({
+    if (!locationResult.ok) {
+      return response.status(locationResult.status).json({
         success: false,
-        reason: "location_not_registered",
-        message: "店舗の掲載場所がまだ登録されていません。運営へお問い合わせください。"
+        reason: locationResult.reason,
+        message: locationResult.message
       });
     }
+
+    const officialLocation =
+      locationResult.location;
 
     // 連打対策(店舗ごとに一定間隔)。
     const rateLimitOk =
@@ -1447,13 +1534,20 @@ export async function handleImadakePostCreate(
             endedAt: null,
             // storeAccountsの正式所在地を投稿時点のsnapshotとして保存する
             // (後で店舗の所在地が変わっても、この投稿の値は変えない)。
+            // 投稿場所 STEP 4｜別の場所の時は、確認済みの投稿場所(address＝旅行者に見せる住所、
+            // 非表示を選んだ時は空)。登録所在地は投稿に入れない。
             latitude: officialLocation.latitude,
             longitude: officialLocation.longitude,
             countryCode: officialLocation.countryCode,
             prefecture: officialLocation.prefecture,
             city: officialLocation.city,
             address: officialLocation.address,
-            locationSource: "storeAccount",
+            locationSource: officialLocation.locationSource,
+            placeLabel: officialLocation.placeLabel,
+            ...(officialLocation.locationVerification
+              ? { locationVerification: officialLocation.locationVerification }
+              : {}),
+            locationChangeCount: 0,
             regionKey: regionKey,
             geohash: geohash,
             actionTargets: fields.actionTargets,
@@ -1757,6 +1851,322 @@ export async function handleImadakePostEnd(
 }
 
 // ---------------------------------------------------------------------------
+// mode: imadakePostLocationUpdate (POST、店舗アカウントでログインした事業者だけ)
+// 投稿場所 STEP 4｜掲載中の投稿の場所を変更する(代表A案)。
+// 変えるのは投稿の位置・場所名・公開用住所と、その事業者の掲載枠の位置だけ。
+// postId・storeId・createdAt・expiresAt・本文・写真・課金対象(cvBillingEnabled)は変えず、
+// CV記録(imadakeCvViews)・日別料金台帳(imadakePostDailyCharges)には一切触れない
+// (＝同じ投稿のまま。掲載期限は延びず、CVはリセットされず、1日100円の上限もそのまま)。
+// 入力 { storeId, postLocation: { type: "custom", address, placeLabel, showAddress } | { type: "registered" }, postId }
+// ・旧token方式では変更できない(権限を広げない)
+// ・場所はサーバーで確認(Geocoding)。確認できない時は何も変えない
+// ・投稿と掲載枠と変更履歴(imadakePostLocationLogs)を1つのトランザクションで更新
+// ・同じ場所への再送は変更なしとして成功(回数に数えない)
+// ---------------------------------------------------------------------------
+function readImadakeLocationSummary(
+  post
+) {
+  return {
+    latitude: typeof post.latitude === "number" ? post.latitude : null,
+    longitude: typeof post.longitude === "number" ? post.longitude : null,
+    prefecture: typeof post.prefecture === "string" ? post.prefecture : "",
+    city: typeof post.city === "string" ? post.city : "",
+    placeLabel: typeof post.placeLabel === "string" ? post.placeLabel : "",
+    locationSource: typeof post.locationSource === "string" ? post.locationSource : ""
+  };
+}
+
+export async function handleImadakePostLocationUpdate(
+  request,
+  response,
+  deps
+) {
+  try {
+    const requestBody =
+      deps.readRequestBody(request) || {};
+
+    const postId =
+      readTrimmedString(requestBody.postId);
+
+    if (
+      postId === "" ||
+      postId.length > 100 ||
+      postId.includes("/")
+    ) {
+      return response.status(400).json({
+        success: false,
+        message: "入力内容を確認してください。"
+      });
+    }
+
+    const postLocationInput =
+      readImadakePostLocationInput(requestBody.postLocation);
+
+    if (
+      !postLocationInput.ok ||
+      requestBody.postLocation === undefined ||
+      requestBody.postLocation === null
+    ) {
+      return response.status(400).json({
+        success: false,
+        field: "postLocation",
+        message: "入力内容を確認してください。"
+      });
+    }
+
+    const app =
+      deps.getFirebaseAdminApp();
+
+    const database =
+      deps.getFirestore(app);
+
+    const storeValidation =
+      await verifyImadakeStoreActor(
+        request,
+        requestBody,
+        database,
+        deps
+      );
+
+    if (!storeValidation.valid) {
+      return response.status(storeValidation.status).json({
+        success: false,
+        message: storeValidation.message
+      });
+    }
+
+    // 旧token方式の権限は広げない(場所変更は店舗アカウントのログインだけ)。
+    if (storeValidation.method !== "storeUser") {
+      return response.status(403).json({
+        success: false,
+        reason: "post_location_requires_login",
+        message: "投稿場所を変更するには、店舗アカウントでログインしてください。"
+      });
+    }
+
+    const storeId =
+      storeValidation.storeId;
+
+    const now =
+      typeof deps.now === "function"
+        ? deps.now
+        : Date.now;
+
+    const postRef =
+      database
+        .collection(IMADAKE_POSTS_COLLECTION)
+        .doc(postId);
+
+    // 確認(Geocoding)の前に、自分の掲載中の投稿かを確かめる(他人の投稿で外部APIを呼ばない)。
+    const preSnapshot =
+      await postRef.get();
+
+    const prePost =
+      preSnapshot.exists
+        ? preSnapshot.data() || {}
+        : null;
+
+    if (prePost === null || prePost.storeId !== storeId) {
+      return response.status(404).json({
+        success: false,
+        message: "この今だけ投稿は見つかりません。"
+      });
+    }
+
+    if (prePost.status !== "published" || !isPublishedAndUnexpired(prePost, now())) {
+      return response.status(409).json({
+        success: false,
+        reason: "not_active",
+        message: "掲載中の今だけ投稿だけ、場所を変更できます。"
+      });
+    }
+
+    const locationResult =
+      await resolveImadakePostLocation(
+        postLocationInput.value,
+        storeValidation,
+        database,
+        storeId,
+        deps
+      );
+
+    if (!locationResult.ok) {
+      return response.status(locationResult.status).json({
+        success: false,
+        reason: locationResult.reason,
+        message: locationResult.message
+      });
+    }
+
+    const location =
+      locationResult.location;
+
+    const result =
+      await database.runTransaction(
+        async function(transaction) {
+          const nowMillis =
+            now();
+
+          const postSnapshot =
+            await transaction.get(postRef);
+
+          const slotRef =
+            database
+              .collection(IMADAKE_STORE_SLOTS_COLLECTION)
+              .doc(storeId);
+
+          const slotSnapshot =
+            await transaction.get(slotRef);
+
+          const post =
+            postSnapshot.exists
+              ? postSnapshot.data() || {}
+              : null;
+
+          if (post === null || post.storeId !== storeId) {
+            return { error: 404 };
+          }
+
+          if (post.status !== "published" || !isPublishedAndUnexpired(post, nowMillis)) {
+            return { error: 409, reason: "not_active" };
+          }
+
+          const slot =
+            slotSnapshot.exists
+              ? slotSnapshot.data() || {}
+              : {};
+
+          // 掲載枠がこの投稿を指していない時は、位置が食い違うため変更しない。
+          if (slot.activePostId !== postId) {
+            return { error: 409, reason: "slot_mismatch" };
+          }
+
+          const unchanged =
+            post.latitude === location.latitude &&
+            post.longitude === location.longitude &&
+            (post.placeLabel || "") === location.placeLabel &&
+            (post.address || "") === location.address &&
+            post.locationSource === location.locationSource;
+
+          if (unchanged) {
+            return { status: "unchanged" };
+          }
+
+          const changeCount =
+            typeof post.locationChangeCount === "number"
+              ? post.locationChangeCount
+              : 0;
+
+          if (changeCount >= IMADAKE_LOCATION_CHANGE_MAX_PER_POST) {
+            return { error: 429, reason: "location_change_limit" };
+          }
+
+          const lastChangedMillis =
+            toMillis(post.locationUpdatedAt);
+
+          if (
+            lastChangedMillis !== null &&
+            nowMillis - lastChangedMillis < IMADAKE_LOCATION_CHANGE_COOLDOWN_MILLISECONDS
+          ) {
+            return { error: 429, reason: "location_change_too_soon" };
+          }
+
+          const locationFields = {
+            latitude: location.latitude,
+            longitude: location.longitude,
+            countryCode: location.countryCode,
+            prefecture: location.prefecture,
+            city: location.city,
+            address: location.address,
+            placeLabel: location.placeLabel,
+            locationSource: location.locationSource,
+            regionKey: location.regionKey,
+            geohash: encodeTownNowGeohash(location.latitude, location.longitude),
+            locationVerification: location.locationVerification || null
+          };
+
+          transaction.update(postRef, {
+            ...locationFields,
+            locationChangeCount: changeCount + 1,
+            locationUpdatedAt: Timestamp.fromMillis(nowMillis),
+            updatedAt: FieldValue.serverTimestamp()
+          });
+
+          // 掲載枠の位置も同じトランザクションで更新(掲載期限は投稿のまま)。
+          transaction.set(
+            slotRef,
+            {
+              ...buildSlotLocationFields({ ...post, ...locationFields }),
+              updatedAt: FieldValue.serverTimestamp()
+            },
+            { merge: true }
+          );
+
+          // 変更履歴(監査用)。
+          transaction.set(
+            database.collection(IMADAKE_POST_LOCATION_LOGS_COLLECTION).doc(),
+            {
+              postId: postId,
+              storeId: storeId,
+              changedByUid: storeValidation.uid || "",
+              changedAt: Timestamp.fromMillis(nowMillis),
+              changeNumber: changeCount + 1,
+              from: readImadakeLocationSummary(post),
+              to: readImadakeLocationSummary(locationFields),
+              verification: location.locationVerification || null
+            }
+          );
+
+          return { status: "updated" };
+        }
+      );
+
+    if (result.error === 404) {
+      return response.status(404).json({
+        success: false,
+        message: "この今だけ投稿は見つかりません。"
+      });
+    }
+
+    if (result.error === 409) {
+      return response.status(409).json({
+        success: false,
+        reason: result.reason,
+        message: "掲載中の今だけ投稿だけ、場所を変更できます。"
+      });
+    }
+
+    if (result.error === 429) {
+      return response.status(429).json({
+        success: false,
+        reason: result.reason,
+        message: "場所の変更が多すぎるか、間隔が短すぎます。少し時間をおいてから、もう一度お試しください。"
+      });
+    }
+
+    return response.status(200).json({
+      success: true,
+      postId: postId,
+      status: result.status,
+      location: {
+        placeLabel: location.placeLabel,
+        address: location.address,
+        prefecture: location.prefecture,
+        city: location.city,
+        locationSource: location.locationSource
+      }
+    });
+  } catch (error) {
+    console.error("今だけ投稿の場所変更に失敗しました：", error);
+
+    return response.status(500).json({
+      success: false,
+      message: "場所を変更できませんでした。時間をおいて、もう一度お試しください。"
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
 // mode: imadakePostGet (GET、認証不要)
 // 公開中(published かつ expiresAt > 現在)の1件だけを、公開してよい項目に
 // 絞って返す。それ以外の状態は「見つからない」と同じ応答にする。
@@ -1791,6 +2201,8 @@ export function buildImadakePublicPost(
     prefecture: post.prefecture,
     city: post.city,
     address: post.address,
+    // 投稿場所 STEP 4｜旅行者に見せる場所名(登録所在地で投稿した時は空)。
+    placeLabel: typeof post.placeLabel === "string" ? post.placeLabel : "",
     regionKey: post.regionKey,
     actionTargets: post.actionTargets || {},
     categoryFields: post.categoryFields || {},
@@ -2775,6 +3187,120 @@ async function readStoreOfficialLocation(
     : null;
 }
 
+// 投稿場所 STEP 4｜「別の場所」の住所をサーバーで確認(Geocoding)して、投稿に保存する位置を作る。
+// ブラウザから緯度経度は受け取らない。確認できない時は { ok:false }(呼び出し元は保存しない)。
+// deps.geocodePostLocationAddress があればそれを使う(テスト用の差し替え)。
+async function verifyImadakeCustomLocation(
+  postLocation,
+  deps
+) {
+  const geocode =
+    typeof deps.geocodePostLocationAddress === "function"
+      ? deps.geocodePostLocationAddress
+      : geocodeStoreAddress;
+
+  let geocoded;
+
+  try {
+    geocoded =
+      await geocode(postLocation.address, deps);
+  } catch (error) {
+    geocoded = { ok: false, reason: "geocoding_failed" };
+  }
+
+  const verified =
+    geocoded && geocoded.ok === true
+      ? readStoreOfficialLocationFromData({
+          latitude: geocoded.latitude,
+          longitude: geocoded.longitude,
+          countryCode: geocoded.countryCode,
+          prefecture: geocoded.prefecture,
+          city: geocoded.city,
+          regionKey: geocoded.regionKey
+        })
+      : null;
+
+  if (!verified) {
+    return {
+      ok: false,
+      status: 422,
+      reason: "post_location_not_verified",
+      message: "投稿場所を確認できませんでした。住所を見直して、もう一度お試しください。"
+    };
+  }
+
+  return {
+    ok: true,
+    location: {
+      latitude: verified.latitude,
+      longitude: verified.longitude,
+      countryCode: verified.countryCode,
+      prefecture: verified.prefecture,
+      city: verified.city,
+      regionKey: verified.regionKey,
+      // 旅行者に見せる住所(非表示を選んだ時は空)。事業者の登録住所は使わない。
+      address: postLocation.showAddress ? postLocation.address : "",
+      placeLabel: postLocation.placeLabel,
+      locationSource: "postLocation",
+      // 確認の記録(公開APIには出さない)。
+      locationVerification: {
+        inputAddress: postLocation.address,
+        formattedAddress:
+          typeof geocoded.formattedAddress === "string" ? geocoded.formattedAddress : "",
+        partialMatch: geocoded.partialMatch === true
+      }
+    }
+  };
+}
+
+// 投稿場所 STEP 4｜投稿作成時の位置を決める。
+//   registered：事業者の登録所在地(従来どおり。旧token方式もこの方式だけ)
+//   custom    ：確認済みの別の場所(店舗アカウントでログインした事業者だけ。旧token方式の権限は広げない)
+async function resolveImadakePostLocation(
+  postLocation,
+  storeValidation,
+  database,
+  storeId,
+  deps
+) {
+  if (postLocation && postLocation.type === "custom") {
+    if (storeValidation.method !== "storeUser") {
+      return {
+        ok: false,
+        status: 403,
+        reason: "post_location_requires_login",
+        message: "別の投稿場所を指定するには、店舗アカウントでログインしてください。"
+      };
+    }
+
+    return verifyImadakeCustomLocation(postLocation, deps);
+  }
+
+  const registered =
+    await readStoreOfficialLocation(
+      database,
+      storeId
+    );
+
+  if (!registered) {
+    return {
+      ok: false,
+      status: 409,
+      reason: "location_not_registered",
+      message: "店舗の掲載場所がまだ登録されていません。運営へお問い合わせください。"
+    };
+  }
+
+  return {
+    ok: true,
+    location: {
+      ...registered,
+      placeLabel: "",
+      locationSource: "storeAccount"
+    }
+  };
+}
+
 // 住所 → 緯度経度・国・都道府県・市区町村(サーバー側Google Geocoding)。
 // 既存のapi/edit-ad.js geocodeAddress()・街の掲示板の地域確認と同じ
 // エンドポイント・同じサーバー用APIキー(GOOGLE_MAPS_API_KEY)・日本語指定。
@@ -3061,7 +3587,12 @@ function buildImadakeStoreCurrentPost(
     headline: post.headline,
     categoryCode: post.categoryCode,
     publishedAt: toIsoOrNull(post.publishedAt),
-    expiresAt: toIsoOrNull(post.expiresAt)
+    expiresAt: toIsoOrNull(post.expiresAt),
+    // 投稿場所 STEP 4｜今の投稿場所(事業者本人向け。場所変更の画面で使う)。
+    locationSource: typeof post.locationSource === "string" ? post.locationSource : "storeAccount",
+    placeLabel: typeof post.placeLabel === "string" ? post.placeLabel : "",
+    address: typeof post.address === "string" ? post.address : "",
+    locationChangeCount: typeof post.locationChangeCount === "number" ? post.locationChangeCount : 0
   };
 }
 
