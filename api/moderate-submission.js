@@ -2490,49 +2490,20 @@ async function handleCommunityBoardPostCreateRequest(
       });
     }
 
-    // 街の掲示板 運営限定URL｜本文にURLらしき部分がある時だけ、既存の運営権限判定
-    // (resolveRequestActor：IDトークンをサーバーで検証し、代表=ADMIN_EMAIL一致の
-    // ときだけadmin)で投稿者を確認する。運営(admin)だけhttps URLを書ける。
-    // 一般利用者(匿名・Editor・店舗アカウント等)はURLを含む投稿を送れない。
+    // 街の掲示板 運営専用投稿｜一般投稿(TOP・community-board-post.html)では、運営を含む
+    // 全員のURLを拒否する。運営のURL・写真付き投稿は運営本部の
+    // adminCommunityBoardPostCreate からだけ受け付ける。
     // 連打防止の枠を消費する前に判定する(不正な入力で枠を使わせない)。
-    let operatorLinksEnabled = false;
-
     if (
       containsCommunityBoardUrlLikeText(
         formData.text
       )
     ) {
-      const actorResult =
-        await resolveRequestActor(
-          request
-        );
-
-      const isOperator =
-        actorResult.ok === true &&
-        !!actorResult.actor &&
-        actorResult.actor.type === "admin";
-
-      if (!isOperator) {
-        return response.status(400).json({
-          success: false,
-          reason: "url_not_allowed",
-          message: "URLを含む投稿はできません。URLを除いて投稿してください。"
-        });
-      }
-
-      if (
-        !validateCommunityBoardOperatorUrls(
-          formData.text
-        )
-      ) {
-        return response.status(400).json({
-          success: false,
-          reason: "invalid_url",
-          message: "URLは https:// で始まる正しい形式で入力してください。"
-        });
-      }
-
-      operatorLinksEnabled = true;
+      return response.status(400).json({
+        success: false,
+        reason: "url_not_allowed",
+        message: "URLを含む投稿はできません。URLを除いて投稿してください。"
+      });
     }
 
     // 街の掲示板 Phase7｜スパム対策。入力の基本検証を通過したリクエストに
@@ -2603,10 +2574,9 @@ async function handleCommunityBoardPostCreateRequest(
         status:
           "pending",
 
-        // 街の掲示板 運営限定URL｜サーバーが運営と確認したURL付き投稿だけtrue。
-        // 承認後、TOPはこの投稿だけ本文中のhttps URLをリンクにする。
+        // 街の掲示板 運営専用投稿｜一般投稿はリンクにしない(URLは上で拒否済み)。
         operatorLinksEnabled:
-          operatorLinksEnabled,
+          false,
 
         approvedAt: null,
 
@@ -2758,6 +2728,561 @@ async function handleCommunityBoardPostCreateRequest(
     return response.status(500).json({
       success: false,
       message: "投稿の送信中にエラーが発生しました。時間をおいて、もう一度お試しください。"
+    });
+  }
+}
+
+
+// ============================================================
+// 街の掲示板 運営専用投稿｜mode: adminCommunityBoardPostCreate (POST、運営adminのみ)
+// ============================================================
+// 運営本部(admin-community-board.html)から、都道府県・市区町村を選んで、文章・写真
+// (最大3枚)・https URLを投稿する。新しいコレクションは作らず communityBoardPosts に保存する。
+// ・運営判定はサーバーのrequireAdmin()(IDトークン検証＋ADMIN_EMAIL)。運営以外は403
+// ・街はサーバーでGoogle地点検索して確定する。候補が複数・名前が一致しない場合は
+//   誤った街へ保存せずエラー(書き込む前に確認する)
+// ・既存の安全審査(OpenAI Moderation＋重大情報キーワード)を文章・写真に行い、
+//   問題がない時だけ即時公開(status:"approved")。不合格・失敗は自動公開せず
+//   承認待ち(pending)で保存し、理由を返す(既存の承認画面で確認できる)
+// ・一般利用者の投稿・60秒制限・承認フローは変更しない
+const COMMUNITY_BOARD_OPERATOR_MAX_IMAGES =
+  3;
+
+// 既存の運営・今だけ投稿と同じ署名付きアップロード(cloud name: cdhyctnp、
+// folder: machinau_submissions)で上げた画像だけを受け付ける。
+const COMMUNITY_BOARD_IMAGE_URL_PREFIX =
+  "https://res.cloudinary.com/cdhyctnp/image/upload/";
+
+const COMMUNITY_BOARD_IMAGE_FOLDER_SEGMENT =
+  "/machinau_submissions/";
+
+const COMMUNITY_BOARD_IMAGE_URL_MAX_LENGTH =
+  500;
+
+// Cloudinaryが返すURLの文字(英数字と / . _ - , %)だけを許可する(引用符・山括弧等は拒否)。
+const COMMUNITY_BOARD_IMAGE_URL_PATTERN =
+  /^https:\/\/res\.cloudinary\.com\/cdhyctnp\/image\/upload\/[A-Za-z0-9_\-.\/,%]+$/;
+
+const COMMUNITY_BOARD_AREA_NAME_MAX_LENGTH =
+  40;
+
+const COMMUNITY_BOARD_PREFECTURE_NAMES =
+  [
+    "北海道", "青森県", "岩手県", "宮城県", "秋田県", "山形県", "福島県",
+    "茨城県", "栃木県", "群馬県", "埼玉県", "千葉県", "東京都", "神奈川県",
+    "新潟県", "富山県", "石川県", "福井県", "山梨県", "長野県", "岐阜県",
+    "静岡県", "愛知県", "三重県", "滋賀県", "京都府", "大阪府", "兵庫県",
+    "奈良県", "和歌山県", "鳥取県", "島根県", "岡山県", "広島県", "山口県",
+    "徳島県", "香川県", "愛媛県", "高知県", "福岡県", "佐賀県", "長崎県",
+    "熊本県", "大分県", "宮崎県", "鹿児島県", "沖縄県"
+  ];
+
+function isAllowedCommunityBoardImageUrl(
+  value
+) {
+  return (
+    typeof value === "string" &&
+    value !== "" &&
+    value.length <= COMMUNITY_BOARD_IMAGE_URL_MAX_LENGTH &&
+    COMMUNITY_BOARD_IMAGE_URL_PATTERN.test(value) &&
+    value.startsWith(COMMUNITY_BOARD_IMAGE_URL_PREFIX) &&
+    value.includes(COMMUNITY_BOARD_IMAGE_FOLDER_SEGMENT)
+  );
+}
+
+// 一覧で返す写真。保存済みの値も、許可した形のものだけを最大3枚返す。
+function readCommunityBoardDisplayImageUrls(
+  value
+) {
+  return Array.isArray(value)
+    ? value
+        .filter(
+          isAllowedCommunityBoardImageUrl
+        )
+        .slice(
+          0,
+          COMMUNITY_BOARD_OPERATOR_MAX_IMAGES
+        )
+    : [];
+}
+
+function normalizeCommunityBoardAreaNameForMatching(
+  value
+) {
+  return String(value || "")
+    .normalize("NFKC")
+    .replace(/\s+/g, "");
+}
+
+// 都道府県＋市区町村名 → Googleの地点ID。TOPの「ほかの地域を見る」と同じ規則
+// (日本・同じ都道府県の結果だけ、市町村(locality)を優先し無ければ区(sublocality_level_1))。
+// 候補が複数ある場合は曖昧として扱い、誤った街を選ばない。
+async function geocodeCommunityBoardAreaPlaceId(
+  prefectureName,
+  areaName
+) {
+  const apiKey =
+    process.env.GOOGLE_MAPS_API_KEY;
+
+  if (!apiKey) {
+    return { ok: false, reason: "geocoding_unavailable" };
+  }
+
+  const requestUrl =
+    new URL(
+      "https://maps.googleapis.com/maps/api/geocode/json"
+    );
+
+  requestUrl.searchParams.set(
+    "address",
+    prefectureName + areaName + ", 日本"
+  );
+  requestUrl.searchParams.set(
+    "components",
+    "country:JP"
+  );
+  requestUrl.searchParams.set(
+    "language",
+    "ja"
+  );
+  requestUrl.searchParams.set(
+    "region",
+    "jp"
+  );
+  requestUrl.searchParams.set(
+    "key",
+    apiKey
+  );
+
+  const abortController =
+    new AbortController();
+
+  const timeoutId =
+    setTimeout(
+      function() {
+        abortController.abort();
+      },
+      COMMUNITY_BOARD_GOOGLE_VERIFICATION_TIMEOUT_MS
+    );
+
+  let responseData;
+
+  try {
+    const geocodeResponse =
+      await fetch(
+        requestUrl,
+        {
+          signal: abortController.signal
+        }
+      );
+
+    responseData =
+      await geocodeResponse.json();
+  } catch (error) {
+    return { ok: false, reason: "geocoding_unavailable" };
+  } finally {
+    clearTimeout(
+      timeoutId
+    );
+  }
+
+  if (responseData && responseData.status === "ZERO_RESULTS") {
+    return { ok: false, reason: "area_not_found" };
+  }
+
+  if (
+    !responseData ||
+    responseData.status !== "OK" ||
+    !Array.isArray(responseData.results)
+  ) {
+    return { ok: false, reason: "geocoding_unavailable" };
+  }
+
+  const findComponent =
+    function(result, typeName) {
+      const components =
+        Array.isArray(result.address_components)
+          ? result.address_components
+          : [];
+
+      return (
+        components.find(
+          function(component) {
+            return (
+              Array.isArray(component.types) &&
+              component.types.includes(typeName)
+            );
+          }
+        ) || null
+      );
+    };
+
+  const inPrefecture =
+    responseData.results.filter(
+      function(result) {
+        const country =
+          findComponent(result, "country");
+        const prefecture =
+          findComponent(result, "administrative_area_level_1");
+
+        return (
+          !!country &&
+          country.short_name === "JP" &&
+          !!prefecture &&
+          prefecture.long_name === prefectureName &&
+          typeof result.place_id === "string" &&
+          result.place_id !== ""
+        );
+      }
+    );
+
+  const pickByType =
+    function(typeName) {
+      return inPrefecture.filter(
+        function(result) {
+          return (
+            Array.isArray(result.types) &&
+            result.types.includes(typeName)
+          );
+        }
+      );
+    };
+
+  const localityCandidates =
+    pickByType("locality");
+
+  const candidates =
+    localityCandidates.length > 0
+      ? localityCandidates
+      : pickByType("sublocality_level_1");
+
+  const placeIds =
+    Array.from(
+      new Set(
+        candidates.map(
+          function(result) {
+            return result.place_id;
+          }
+        )
+      )
+    );
+
+  if (placeIds.length === 0) {
+    return { ok: false, reason: "area_not_found" };
+  }
+
+  if (placeIds.length > 1) {
+    return { ok: false, reason: "area_ambiguous" };
+  }
+
+  return { ok: true, placeId: placeIds[0] };
+}
+
+const COMMUNITY_BOARD_OPERATOR_AREA_ERROR_MESSAGES =
+  {
+    geocoding_unavailable:
+      "街の確認(地点検索)ができませんでした。時間をおいて、もう一度お試しください。",
+    area_not_found:
+      "選んだ市区町村を地図で確認できませんでした。都道府県と市区町村を確認してください。",
+    area_ambiguous:
+      "同じ名前の候補が複数あり、街を1つに決められませんでした。投稿していません。",
+    area_mismatch:
+      "選んだ市区町村と地図で確認した街が一致しませんでした。誤った街へ投稿しないよう、投稿していません。",
+    region_unavailable:
+      "街の情報を確定できませんでした。時間をおいて、もう一度お試しください。"
+  };
+
+async function handleAdminCommunityBoardPostCreateRequest(
+  request,
+  response
+) {
+  try {
+    const authResult =
+      await requireAdmin(
+        request
+      );
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({
+        success: false,
+        message: authResult.message
+      });
+    }
+
+    const database =
+      authResult.database;
+
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    const prefectureName =
+      typeof requestBody.prefectureName === "string"
+        ? requestBody.prefectureName.trim()
+        : "";
+
+    const areaName =
+      typeof requestBody.areaName === "string"
+        ? requestBody.areaName.trim()
+        : "";
+
+    if (
+      !COMMUNITY_BOARD_PREFECTURE_NAMES.includes(prefectureName) ||
+      areaName === "" ||
+      areaName.length > COMMUNITY_BOARD_AREA_NAME_MAX_LENGTH ||
+      /[\u0000-\u001f<>]/.test(areaName)
+    ) {
+      return response.status(400).json({
+        success: false,
+        reason: "invalid_area",
+        message: "都道府県と市区町村を選んでください。"
+      });
+    }
+
+    const text =
+      sanitizeRegionEditorialText(
+        requestBody.text,
+        COMMUNITY_BOARD_POST_FIELD_MAX_LENGTHS.text
+      );
+
+    const rawImageUrls =
+      requestBody.imageUrls === undefined || requestBody.imageUrls === null
+        ? []
+        : requestBody.imageUrls;
+
+    if (!Array.isArray(rawImageUrls)) {
+      return response.status(400).json({
+        success: false,
+        reason: "invalid_images",
+        message: "写真の情報が正しくありません。"
+      });
+    }
+
+    if (rawImageUrls.length > COMMUNITY_BOARD_OPERATOR_MAX_IMAGES) {
+      return response.status(400).json({
+        success: false,
+        reason: "too_many_images",
+        message: "写真は最大" + COMMUNITY_BOARD_OPERATOR_MAX_IMAGES + "枚までです。"
+      });
+    }
+
+    const imageUrls =
+      rawImageUrls.map(
+        function(value) {
+          return typeof value === "string" ? value.trim() : "";
+        }
+      );
+
+    if (!imageUrls.every(isAllowedCommunityBoardImageUrl)) {
+      return response.status(400).json({
+        success: false,
+        reason: "invalid_image_url",
+        message: "写真は運営画面からアップロードしたものだけ使えます。"
+      });
+    }
+
+    if (
+      text === "" &&
+      imageUrls.length === 0
+    ) {
+      return response.status(400).json({
+        success: false,
+        reason: "empty",
+        message: "本文か写真を入力してください。"
+      });
+    }
+
+    if (
+      containsCommunityBoardUrlLikeText(text) &&
+      !validateCommunityBoardOperatorUrls(text)
+    ) {
+      return response.status(400).json({
+        success: false,
+        reason: "invalid_url",
+        message: "URLは https:// で始まる正しい形式で入力してください(http://・javascript:等は使えません)。"
+      });
+    }
+
+    // 街の確定。書き込みの前に、地点検索→地点IDでの確認→名前の一致まで確かめる。
+    const geocoded =
+      await geocodeCommunityBoardAreaPlaceId(
+        prefectureName,
+        areaName
+      );
+
+    if (!geocoded.ok) {
+      return response.status(geocoded.reason === "geocoding_unavailable" ? 503 : 400).json({
+        success: false,
+        reason: geocoded.reason,
+        message: COMMUNITY_BOARD_OPERATOR_AREA_ERROR_MESSAGES[geocoded.reason]
+      });
+    }
+
+    const verifiedArea =
+      await resolveTrustedCommunityBoardRegionInfoFromGoogle(
+        geocoded.placeId
+      );
+
+    if (!verifiedArea) {
+      return response.status(503).json({
+        success: false,
+        reason: "geocoding_unavailable",
+        message: COMMUNITY_BOARD_OPERATOR_AREA_ERROR_MESSAGES.geocoding_unavailable
+      });
+    }
+
+    if (
+      verifiedArea.countryCode !== "JP" ||
+      normalizeCommunityBoardAreaNameForMatching(verifiedArea.regionName) !==
+        normalizeCommunityBoardAreaNameForMatching(areaName)
+    ) {
+      return response.status(400).json({
+        success: false,
+        reason: "area_mismatch",
+        message: COMMUNITY_BOARD_OPERATOR_AREA_ERROR_MESSAGES.area_mismatch
+      });
+    }
+
+    const regionInfo =
+      await resolveOrCreateCommunityBoardRegion(
+        database,
+        verifiedArea.googlePlaceId,
+        "JP"
+      );
+
+    if (
+      !regionInfo ||
+      normalizeCommunityBoardAreaNameForMatching(regionInfo.regionName) !==
+        normalizeCommunityBoardAreaNameForMatching(areaName)
+    ) {
+      return response.status(regionInfo ? 400 : 503).json({
+        success: false,
+        reason: regionInfo ? "area_mismatch" : "region_unavailable",
+        message:
+          COMMUNITY_BOARD_OPERATOR_AREA_ERROR_MESSAGES[
+            regionInfo ? "area_mismatch" : "region_unavailable"
+          ]
+      });
+    }
+
+    // 既存の安全審査(文章＋写真)。運営の即時公開も審査を省略しない。
+    let aiReviewStatus =
+      "ERROR";
+    let aiReviewReason =
+      "";
+
+    try {
+      const moderationInputData =
+        {
+          content: text,
+          imageUrls: imageUrls
+        };
+
+      const moderationResults =
+        await callOpenAiModeration(
+          buildModerationInput(
+            moderationInputData
+          )
+        );
+
+      const allSafe =
+        Array.isArray(moderationResults) &&
+        moderationResults.length > 0 &&
+        moderationResults.every(
+          function(result) {
+            return (
+              result &&
+              result.flagged === false
+            );
+          }
+        );
+
+      const isSafetyCriticalContent =
+        matchesSafetyCriticalKeywords(
+          { content: text }
+        );
+
+      if (
+        allSafe &&
+        !isSafetyCriticalContent
+      ) {
+        aiReviewStatus =
+          "SAFE";
+      } else {
+        aiReviewStatus =
+          "REVIEW";
+        aiReviewReason =
+          allSafe && isSafetyCriticalContent
+            ? "安全・災害・交通に関する情報の可能性があるため、内容を人間が確認します。"
+            : buildReviewReason(
+                moderationResults
+              ) || "安全確認で問題の可能性があるため、内容を人間が確認します。";
+      }
+    } catch (moderationError) {
+      aiReviewStatus =
+        "ERROR";
+      aiReviewReason =
+        classifyModerationError(
+          moderationError
+        );
+
+      console.error(
+        "街の掲示板(運営投稿)：AI自動審査エラー：",
+        moderationError
+      );
+    }
+
+    const published =
+      aiReviewStatus === "SAFE";
+
+    const postDocumentReference =
+      await database
+        .collection("communityBoardPosts")
+        .add(
+          {
+            text: text,
+            imageUrls: imageUrls,
+            regionId: regionInfo.regionId,
+            googlePlaceId: regionInfo.googlePlaceId,
+            countryCode: regionInfo.countryCode,
+            regionName: regionInfo.regionName,
+            administrativeLevel: regionInfo.administrativeLevel,
+            status: published ? "approved" : "pending",
+            authorType: "operator",
+            createdByUid: authResult.actor.uid,
+            operatorLinksEnabled: true,
+            approvedAt: published ? FieldValue.serverTimestamp() : null,
+            rejectedAt: null,
+            disabledAt: null,
+            aiReviewStatus: aiReviewStatus,
+            ...(aiReviewReason !== "" ? { aiReviewReason: aiReviewReason } : {}),
+            aiReviewedAt: FieldValue.serverTimestamp(),
+            aiReviewVersion: AI_REVIEW_VERSION,
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp()
+          }
+        );
+
+    return response.status(200).json({
+      success: true,
+      published: published,
+      status: published ? "approved" : "pending",
+      postId: postDocumentReference.id,
+      regionId: regionInfo.regionId,
+      regionName: regionInfo.regionName,
+      reviewStatus: aiReviewStatus,
+      reviewReason: aiReviewReason
+    });
+  } catch (error) {
+    console.error(
+      "街の掲示板(運営投稿)：処理エラー：",
+      error
+    );
+
+    return response.status(500).json({
+      success: false,
+      message: "投稿の保存中にエラーが発生しました。時間をおいて、もう一度お試しください。"
     });
   }
 }
@@ -3016,6 +3541,15 @@ function convertCommunityBoardPostSnapshotToAdminListItem(
     approvedAtMillis: approvedAtMillis,
     rejectedAtMillis: rejectedAtMillis,
     disabledAtMillis: disabledAtMillis,
+    // 街の掲示板 運営専用投稿｜運営投稿の印と写真(承認画面での確認用)。
+    authorType:
+      data.authorType === "operator"
+        ? "operator"
+        : "",
+    imageUrls:
+      readCommunityBoardDisplayImageUrls(
+        data.imageUrls
+      ),
     // 運営固定投稿＋外部動画リンク｜未設定の既存投稿は固定なし・動画なし。
     isPinned:
       data.isPinned === true,
@@ -4433,6 +4967,12 @@ async function handleCommunityBoardPostsListRequest(
             // 街の掲示板 運営限定URL｜運営のURL付き投稿だけtrue(リンク表示の可否)。
             operatorLinksEnabled:
               data.operatorLinksEnabled === true,
+
+            // 街の掲示板 運営専用投稿｜運営投稿の写真(許可した形のものだけ、最大3枚)。
+            imageUrls:
+              readCommunityBoardDisplayImageUrls(
+                data.imageUrls
+              ),
 
             regionId:
               typeof data.regionId === "string"
@@ -30563,6 +31103,16 @@ export default async function handler(
     requestBody.mode === "adminSetCommunityBoardPostExternalVideoUrl"
   ) {
     return handleAdminSetCommunityBoardPostExternalVideoUrlRequest(
+      request,
+      response
+    );
+  }
+
+  // 街の掲示板 運営専用投稿｜運営本部(admin-community-board.html)からの投稿。
+  if (
+    requestBody.mode === "adminCommunityBoardPostCreate"
+  ) {
+    return handleAdminCommunityBoardPostCreateRequest(
       request,
       response
     );

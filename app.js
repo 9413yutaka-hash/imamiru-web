@@ -13734,6 +13734,74 @@ function buildCommunityBoardPostTextHtml(
   );
 }
 
+// 街の掲示板 運営専用投稿｜運営投稿の写真(最大3枚)。サーバーで許可した形
+// (既存の署名付きアップロード先のCloudinary画像)だけを、既存の最適化URLで表示する。
+const COMMUNITY_BOARD_POST_IMAGE_URL_PREFIX =
+  "https://res.cloudinary.com/cdhyctnp/image/upload/";
+
+function buildCommunityBoardPostImagesHtml(
+  post
+) {
+  const imageUrls =
+    Array.isArray(
+      post.imageUrls
+    )
+      ? post.imageUrls
+      : [];
+
+  const safeImageUrls =
+    imageUrls
+      .map(
+        getSafeImageUrl
+      )
+      .filter(
+        function(imageUrl) {
+          return (
+            imageUrl.indexOf(
+              COMMUNITY_BOARD_POST_IMAGE_URL_PREFIX
+            ) === 0 &&
+            imageUrl.indexOf(
+              "/machinau_submissions/"
+            ) !== -1 &&
+            !/[\s"'<>]/.test(
+              imageUrl
+            )
+          );
+        }
+      )
+      .slice(
+        0,
+        3
+      );
+
+  if (safeImageUrls.length === 0) {
+    return "";
+  }
+
+  return (
+    '<div class="community-board-post-images community-board-post-images-' +
+      safeImageUrls.length +
+      '">' +
+      safeImageUrls
+        .map(
+          function(imageUrl) {
+            return (
+              '<img class="community-board-post-image" src="' +
+              escapeHtmlForCommunityBoard(
+                buildOptimizedImageUrl(
+                  imageUrl,
+                  { width: OPTIMIZED_IMAGE_WIDTH_REGION_RECOMMENDATION }
+                )
+              ) +
+              '" alt="" loading="lazy" decoding="async">'
+            );
+          }
+        )
+        .join("") +
+    '</div>'
+  );
+}
+
 // 運営固定投稿＋外部動画リンク｜サーバーで検証済みのexternalVideoUrlを、
 // 念のためここでもhttp/httpsだけに限定してから「🎥 動画を見る」導線にする
 // (URLが無い通常投稿には何も足さない)。文言はdata-i18nで言語切替に追従する。
@@ -13768,6 +13836,9 @@ function buildCommunityBoardPostItemHtml(
         post
       ) +
       '</p>' +
+      buildCommunityBoardPostImagesHtml(
+        post
+      ) +
       videoLinkHtml +
     '</div>'
   );

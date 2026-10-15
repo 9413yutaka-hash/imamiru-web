@@ -325,6 +325,31 @@
       white-space: pre-wrap;
     }
 
+    /* 街の掲示板 運営専用投稿｜運営投稿の写真(最大3枚)。スマホでは横に並べて縦長にしない。 */
+    .community-board-post-images {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .community-board-post-images-1 {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .community-board-post-images-2 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .community-board-post-image {
+      display: block;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      object-fit: cover;
+      border-radius: 10px;
+      background: var(--sky);
+    }
+
     /* 街の掲示板 運営限定URL｜運営投稿の本文中リンク。長いURLも画面幅で折り返す。 */
     .community-board-text-link {
       color: var(--blue, #0788c9);
