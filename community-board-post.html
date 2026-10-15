@@ -680,17 +680,97 @@
 
     let anonymousAuthPromise = null;
 
-    function getAnonymousIdTokenForCommunityBoard() {
-      if (typeof firebase === "undefined" || !firebase.auth) {
-        return Promise.reject(new Error("投稿の準備ができませんでした。"));
+    // 街の掲示板 運営ログイン維持｜Firebase Authenticationはfirebase.auth()を最初に呼んだ時に
+    // 保存済みのログイン(運営・一般ユーザー)を復元し始めるため、ページ読み込み時に初期化し、
+    // onAuthStateChangedの最初の通知(=復元完了)を待ってからユーザーを判定する。
+    // 復元前にsignInAnonymously()を呼ぶと、復元された運営ログインが匿名ユーザーで置き換わる。
+    // 初期化に失敗・時間切れの場合は匿名ログインへ切り替えず、エラーとして止める。
+    const COMMUNITY_BOARD_AUTH_READY_TIMEOUT_MS = 10000;
+    let communityBoardAuthReadyPromise = null;
+
+    function waitForCommunityBoardAuthReady() {
+      if (communityBoardAuthReadyPromise) {
+        return communityBoardAuthReadyPromise;
       }
 
-      const auth = firebase.auth();
+      communityBoardAuthReadyPromise = new Promise(function (resolve, reject) {
+        let auth;
 
+        try {
+          if (typeof firebase === "undefined" || !firebase.auth) {
+            throw new Error("Firebase Authenticationが利用できません。");
+          }
+
+          auth = firebase.auth();
+        } catch (error) {
+          reject(error);
+          return;
+        }
+
+        let settled = false;
+        let unsubscribe = null;
+
+        const finish = function (error) {
+          if (settled) {
+            return;
+          }
+
+          settled = true;
+          clearTimeout(timeoutId);
+
+          if (typeof unsubscribe === "function") {
+            unsubscribe();
+          }
+
+          if (error) {
+            reject(error);
+          } else {
+            resolve(auth);
+          }
+        };
+
+        const timeoutId = setTimeout(function () {
+          finish(new Error("ログイン状態の確認が時間内に終わりませんでした。"));
+        }, COMMUNITY_BOARD_AUTH_READY_TIMEOUT_MS);
+
+        unsubscribe = auth.onAuthStateChanged(
+          function () {
+            finish(null);
+          },
+          function (error) {
+            finish(error || new Error("ログイン状態を確認できませんでした。"));
+          }
+        );
+
+        if (settled && typeof unsubscribe === "function") {
+          unsubscribe();
+        }
+      }).catch(function (error) {
+        // 次の投稿操作で、もう一度初期化からやり直せるようにする。
+        communityBoardAuthReadyPromise = null;
+        console.error("街の掲示板：ログイン状態の確認に失敗しました：", error);
+        throw new Error("ログイン状態を確認できませんでした。ページを読み込み直してから、もう一度お試しください。");
+      });
+
+      return communityBoardAuthReadyPromise;
+    }
+
+    // ページ読み込み時に初期化を始める(投稿ボタンを押すまでに復元を終わらせておく)。
+    waitForCommunityBoardAuthReady().catch(function () {});
+
+    async function getAnonymousIdTokenForCommunityBoard() {
+      if (typeof firebase === "undefined" || !firebase.auth) {
+        throw new Error("投稿の準備ができませんでした。");
+      }
+
+      const auth = await waitForCommunityBoardAuthReady();
+
+      // 復元済みのログイン(運営・一般ユーザー・以前の匿名ユーザー)があれば、そのまま使う。
       if (auth.currentUser) {
         return auth.currentUser.getIdToken();
       }
 
+      // 誰もログインしていない時だけ匿名ログインする。
       if (!anonymousAuthPromise) {
         anonymousAuthPromise = auth
           .signInAnonymously()
