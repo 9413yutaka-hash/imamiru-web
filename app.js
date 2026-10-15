@@ -5931,33 +5931,8 @@ function toggleModalReportReasons() {
 // 使い回す」方針だが、通報にはIDトークン自体は不要でuidのみ使うため、
 // signInAnonymously()の完了を待ってauth.currentUserを返す専用関数とする。
 function getAnonymousUserForReport() {
-  if (
-    typeof firebase === "undefined" ||
-    !firebase.auth
-  ) {
-    return Promise.reject(
-      new Error(
-        "Firebase Authenticationが利用できません。"
-      )
-    );
-  }
-
-  const auth =
-    firebase.auth();
-
-  if (auth.currentUser) {
-    return Promise.resolve(
-      auth.currentUser
-    );
-  }
-
-  return auth
-    .signInAnonymously()
-    .then(
-      function(credential) {
-        return credential.user;
-      }
-    );
+  // TOPのログイン維持｜保存済みログインの復元を待ってから判定する共通処理を使う。
+  return getSignedInOrAnonymousMachinauUser();
 }
 
 // 通報をFirestoreの`reports`コレクションへ保存する。ドキュメントIDを
@@ -9540,34 +9515,168 @@ function markShopsLoadedForMachinauSuggestion() {
 // 同じ匿名セッションを使い回すことで、GPS取得のたびに新しい匿名ユーザーを
 // 作らないようにする。
 function getAnonymousIdTokenForLocationCollection() {
-  if (
-    typeof firebase === "undefined" ||
-    !firebase.auth
-  ) {
-    return Promise.reject(
-      new Error(
-        "Firebase Authenticationが利用できません。"
-      )
-    );
+  // TOPのログイン維持｜保存済みログインの復元を待ってから判定する共通処理を使う。
+  return getSignedInOrAnonymousMachinauUser().then(
+    function(user) {
+      return user.getIdToken();
+    }
+  );
+}
+
+// TOPのログイン維持｜Firebase Authenticationはfirebase.auth()を最初に呼んだ時に
+// 保存済みのログイン(運営・一般ユーザー・以前の匿名ユーザー)を復元し始めるため、
+// 復元前(currentUserが空)にsignInAnonymously()を呼ぶと、復元されたログインが
+// 匿名ユーザーで置き換わる。ここでは最初のonAuthStateChanged(=復元完了)を待ってから
+// 判定し、ログイン中ならそのユーザーを、誰もいない時だけ匿名ユーザーを返す。
+// 同時に複数のAPIから呼ばれても、匿名ログインは1回だけ行う(同じ結果を共有する)。
+// 復元の確認に失敗・時間切れ(10秒)の場合は匿名ログインへ切り替えず、エラーにする
+// (呼び出し元の既存の失敗時処理に任せる。画面全体は止めない)。
+// var：app.jsの読み込み途中に呼ばれても未初期化エラーにならないようにする。
+var MACHINAU_AUTH_READY_TIMEOUT_MS =
+  10000;
+
+var machinauAuthReadyPromise =
+  null;
+
+var machinauAnonymousSignInPromise =
+  null;
+
+function waitForMachinauAuthReady() {
+  if (machinauAuthReadyPromise) {
+    return machinauAuthReadyPromise;
   }
 
-  const auth =
-    firebase.auth();
+  machinauAuthReadyPromise =
+    new Promise(
+      function(resolve, reject) {
+        let auth;
 
-  const currentUser =
-    auth.currentUser;
+        try {
+          if (
+            typeof firebase === "undefined" ||
+            !firebase.auth
+          ) {
+            throw new Error(
+              "Firebase Authenticationが利用できません。"
+            );
+          }
 
-  if (currentUser) {
-    return currentUser.getIdToken();
-  }
+          auth =
+            firebase.auth();
+        } catch (error) {
+          reject(
+            error
+          );
+          return;
+        }
 
-  return auth
-    .signInAnonymously()
-    .then(
-      function(credential) {
-        return credential.user.getIdToken();
+        let settled =
+          false;
+        let unsubscribe =
+          null;
+
+        const finish =
+          function(error) {
+            if (settled) {
+              return;
+            }
+
+            settled =
+              true;
+            window.clearTimeout(
+              timeoutId
+            );
+
+            if (typeof unsubscribe === "function") {
+              unsubscribe();
+            }
+
+            if (error) {
+              reject(
+                error
+              );
+            } else {
+              resolve(
+                auth
+              );
+            }
+          };
+
+        const timeoutId =
+          window.setTimeout(
+            function() {
+              finish(
+                new Error(
+                  "ログイン状態の確認が時間内に終わりませんでした。"
+                )
+              );
+            },
+            MACHINAU_AUTH_READY_TIMEOUT_MS
+          );
+
+        unsubscribe =
+          auth.onAuthStateChanged(
+            function() {
+              finish(
+                null
+              );
+            },
+            function(error) {
+              finish(
+                error ||
+                  new Error(
+                    "ログイン状態を確認できませんでした。"
+                  )
+              );
+            }
+          );
+
+        if (
+          settled &&
+          typeof unsubscribe === "function"
+        ) {
+          unsubscribe();
+        }
+      }
+    ).catch(
+      function(error) {
+        // 次の呼び出しで、もう一度確認からやり直せるようにする。
+        machinauAuthReadyPromise =
+          null;
+        throw error;
       }
     );
+
+  return machinauAuthReadyPromise;
+}
+
+function getSignedInOrAnonymousMachinauUser() {
+  return waitForMachinauAuthReady().then(
+    function(auth) {
+      if (auth.currentUser) {
+        return auth.currentUser;
+      }
+
+      if (!machinauAnonymousSignInPromise) {
+        machinauAnonymousSignInPromise =
+          auth
+            .signInAnonymously()
+            .then(
+              function(credential) {
+                return credential.user;
+              }
+            )
+            .finally(
+              function() {
+                machinauAnonymousSignInPromise =
+                  null;
+              }
+            );
+      }
+
+      return machinauAnonymousSignInPromise;
+    }
+  );
 }
 
 // 「この街の情報」Phase1｜regionProfiles/regionRecommendations/
