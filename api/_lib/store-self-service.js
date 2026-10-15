@@ -53,6 +53,22 @@ export const STORE_CATEGORY_CODES = [
   "other"
 ];
 
+// 出店型事業者 STEP 8｜事業者の形態。fixed＝固定店舗・施設がある(従来どおり、未指定もこれ)、
+// mobile＝移動販売・イベント出店など固定の店舗を持たない(所在地を登録しない)。
+export const STORE_BUSINESS_TYPES = ["fixed", "mobile"];
+
+// 出店型の業種(storeAccounts.businessCategoryCode)。常設店舗の業種(STORE_CATEGORY_CODES、
+// 店舗カードのカテゴリ)とは別の一覧にして、既存の店舗カード・TOPの表示には影響させない。
+export const MOBILE_BUSINESS_CATEGORY_CODES = [
+  "kitchen_car",
+  "mobile_sales",
+  "street_stall",
+  "market_vendor",
+  "event_vendor",
+  "popup_store",
+  "other"
+];
+
 const STORE_SOURCE_LANGUAGES = ["ja", "en"];
 
 // 連打・機械的な大量登録を止めるための待ち時間(同じユーザー単位)。
@@ -597,9 +613,159 @@ export async function handleStoreRegistrationPreview(request, response, deps) {
 }
 
 
+// 出店型事業者 STEP 8｜出店型(mobile)の登録項目。所在地(住所・緯度経度)は受け取らない。
+function readMobileRegistrationInput(body) {
+  const storeName = readSingleLineText(body.storeName, STORE_NAME_MAX_LENGTH);
+
+  if (storeName === null || storeName === "") {
+    return { ok: false, field: "storeName" };
+  }
+
+  const categoryCode = readTrimmedString(body.categoryCode);
+
+  if (!MOBILE_BUSINESS_CATEGORY_CODES.includes(categoryCode)) {
+    return { ok: false, field: "categoryCode" };
+  }
+
+  const countryCode = readCountryCode(body.countryCode);
+
+  if (countryCode === "") {
+    return { ok: false, field: "countryCode" };
+  }
+
+  const sourceLanguage = STORE_SOURCE_LANGUAGES.includes(body.sourceLanguage)
+    ? body.sourceLanguage
+    : "ja";
+
+  return {
+    ok: true,
+    storeName: storeName,
+    categoryCode: categoryCode,
+    countryCode: countryCode,
+    sourceLanguage: sourceLanguage
+  };
+}
+
+// 出店型事業者 STEP 8｜同じ人が同じ名前の出店型事業者を重ねて登録していないか。
+// 固定の所在地が無いため「近くの同名店」の判定(常設店舗)は使えない。本人の登録だけを見る。
+async function findSameOwnerMobileDuplicate(database, storeName, uid) {
+  const normalizedName = normalizeStoreNameForMatching(storeName);
+
+  if (normalizedName === "") {
+    return false;
+  }
+
+  const snapshot = await database
+    .collection(STORE_ACCOUNTS_COLLECTION)
+    .where("createdByUid", "==", uid)
+    .get();
+
+  return snapshot.docs.some(function(documentSnapshot) {
+    const data = documentSnapshot.data() || {};
+
+    return (
+      data.createdByType === "storeUser" &&
+      data.businessType === "mobile" &&
+      data.registrationStatus !== "rejected" &&
+      normalizeStoreNameForMatching(data.storeName) === normalizedName
+    );
+  });
+}
+
+// 出店型事業者 STEP 8｜固定の店舗を持たない事業者の登録。
+// ・作るのは管理情報(storeAccounts、所在地なし)と本人との紐付け(storeMembers)だけ。
+//   店舗カード(storeProfiles)は作らない(店舗カードは任意。今だけ投稿は店舗カードなしで使える)
+// ・旅行者向けには何も公開しない(公開されるのは今だけ投稿で指定した投稿場所だけ)
+// ・運営無料掲載(submissions)・引き継ぎ(storeListingClaims/Links)には一切触れない
+// ・tokenHashは作らない(旧token方式では操作できない)
+// ・連打防止(常設店舗の登録と同じ待ち時間)・短時間の大量登録は運営確認・同名の重複登録は拒否
+async function handleMobileSelfRegister(request, response, deps, actor, body) {
+  const input = readMobileRegistrationInput(body);
+
+  if (!input.ok) {
+    return sendError(response, 400, "invalid_input", { field: input.field });
+  }
+
+  const database = deps.getFirestore(deps.getFirebaseAdminApp());
+  const allowed = await deps.claimRateLimit(
+    database,
+    STORE_REGISTRATION_RATE_LIMITS_COLLECTION,
+    deps.computeRateLimitIdentifier("storeSelfRegister", actor.uid),
+    STORE_REGISTRATION_COOLDOWN_MS
+  );
+
+  if (!allowed) {
+    return sendError(response, 429, "rate_limited");
+  }
+
+  if (await findSameOwnerMobileDuplicate(database, input.storeName, actor.uid)) {
+    return sendError(response, 409, "already_registered");
+  }
+
+  const reviewFlags = [];
+
+  if (
+    (await countRecentRegistrationsByUser(database, actor.uid)) >= STORE_RAPID_REGISTRATION_LIMIT
+  ) {
+    reviewFlags.push("rapid_registrations");
+  }
+
+  const registrationStatus = reviewFlags.length > 0 ? "pending_review" : "active";
+  const storeRef = database.collection(STORE_ACCOUNTS_COLLECTION).doc();
+  const storeId = storeRef.id;
+  const memberRef = database.collection(STORE_MEMBERS_COLLECTION).doc(storeId + "_" + actor.uid);
+
+  await database.runTransaction(async function(transaction) {
+    const existing = await Promise.all([
+      transaction.get(storeRef),
+      transaction.get(memberRef)
+    ]);
+
+    if (existing.some(function(snapshot) { return snapshot.exists; })) {
+      throw new Error("store_id_collision");
+    }
+
+    // 管理情報。所在地の項目(latitude・longitude・address等)は持たない。
+    transaction.set(storeRef, {
+      storeName: input.storeName,
+      enabled: true,
+      createdByType: "storeUser",
+      createdByUid: actor.uid,
+      registrationStatus: registrationStatus,
+      reviewFlags: reviewFlags,
+      duplicateCandidates: [],
+      businessType: "mobile",
+      businessCategoryCode: input.categoryCode,
+      countryCode: input.countryCode,
+      sourceLanguage: input.sourceLanguage,
+      locationSource: "none",
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
+    });
+
+    transaction.set(memberRef, {
+      storeId: storeId,
+      uid: actor.uid,
+      role: "owner",
+      status: "active",
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
+    });
+  });
+
+  return response.status(200).json({
+    success: true,
+    storeId: storeId,
+    registrationStatus: registrationStatus,
+    businessType: "mobile"
+  });
+}
+
 // mode: storeSelfRegister (POST、メール確認済み店舗アカウント)
 // { storeName, categoryCode, countryCode, address, sourceLanguage }
 // 所在地はクライアントの値を信用せず、サーバーで改めてGeocodingして確定する。
+// 出店型事業者 STEP 8｜{ businessType: "mobile", storeName, categoryCode, countryCode, sourceLanguage }
+// は出店型として登録する(所在地なし・店舗カードなし)。未指定・"fixed" は従来どおり。
 export async function handleStoreSelfRegister(request, response, deps) {
   try {
     const actor = await requireVerifiedStoreUser(request, response, deps);
@@ -608,7 +774,17 @@ export async function handleStoreSelfRegister(request, response, deps) {
       return;
     }
 
-    const input = readStoreRegistrationInput(deps.readRequestBody(request));
+    const requestBody = deps.readRequestBody(request) || {};
+
+    if (requestBody.businessType !== undefined && !STORE_BUSINESS_TYPES.includes(requestBody.businessType)) {
+      return sendError(response, 400, "invalid_input", { field: "businessType" });
+    }
+
+    if (requestBody.businessType === "mobile") {
+      return await handleMobileSelfRegister(request, response, deps, actor, requestBody);
+    }
+
+    const input = readStoreRegistrationInput(requestBody);
 
     if (!input.ok) {
       return sendError(response, 400, "invalid_input", { field: input.field });
@@ -778,6 +954,10 @@ export async function handleStoreMyStores(request, response, deps) {
           role: member.role,
           storeName: typeof account.storeName === "string" ? account.storeName : "",
           categoryCode: typeof profile.categoryCode === "string" ? profile.categoryCode : "",
+          // 出店型事業者 STEP 8｜事業者の形態(未設定の既存店舗は fixed)と出店型の業種。
+          businessType: account.businessType === "mobile" ? "mobile" : "fixed",
+          businessCategoryCode:
+            typeof account.businessCategoryCode === "string" ? account.businessCategoryCode : "",
           registrationStatus:
             account.enabled !== true && account.registrationStatus === "active"
               ? "suspended"

@@ -210,6 +210,14 @@
 
     .store-section h3, .store-form h3 { margin: 0 0 10px; font-size: 15px; color: var(--navy); }
     .store-form { margin-top: 14px; }
+    /* 出店型事業者 STEP 8｜事業者の形態の選択 */
+    .business-type-options { display: grid; gap: 8px; }
+    .field .business-type-option {
+      display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; min-height: 44px; margin: 0;
+      border: 1px solid var(--border); border-radius: 12px; font-size: 14px; font-weight: 600; color: var(--text); cursor: pointer;
+    }
+    .business-type-option input { margin-top: 3px; }
+    .field .business-type-option.selected { border-color: var(--blue, #0788c9); background: var(--sky); }
 
     .store-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 10px; }
 
@@ -423,6 +431,16 @@
 
         <form id="storeForm" class="store-form" hidden novalidate>
           <h3 data-i18n="store_account_store_form_heading">店舗・施設の登録</h3>
+          <!-- 出店型事業者 STEP 8｜事業者の形態。固定店舗(従来どおり、初期選択)か、固定の店舗を持たない出店型か。
+               出店型は所在地を登録せず、店舗カードも作らない(今だけ投稿で投稿ごとに出店場所を指定する)。 -->
+          <div class="field">
+            <span class="field-label" data-i18n="store_account_business_type_label">事業者の形態</span>
+            <div class="business-type-options" id="businessTypeOptions">
+              <label class="business-type-option selected"><input type="radio" name="storeBusinessType" value="fixed" checked><span data-i18n="store_account_business_type_fixed">固定の店舗・施設がある</span></label>
+              <label class="business-type-option"><input type="radio" name="storeBusinessType" value="mobile"><span data-i18n="store_account_business_type_mobile">移動販売・イベント出店など（固定の店舗なし）</span></label>
+            </div>
+            <p class="hint" id="businessTypeMobileHint" hidden data-i18n="store_account_business_type_mobile_hint">所在地は登録しません。今だけ投稿では、投稿ごとに出店場所を指定します。店舗カードは作成されません（店舗カードは任意です）。</p>
+          </div>
           <div class="field">
             <label for="storeNameInput" data-i18n="store_account_store_name_label">店舗・施設名</label>
             <input type="text" id="storeNameInput" maxlength="60" autocomplete="organization" required>
@@ -435,7 +453,7 @@
             <label for="storeCountrySelect" data-i18n="store_account_store_country_label">国・地域</label>
             <select id="storeCountrySelect" required></select>
           </div>
-          <div class="field">
+          <div class="field" id="storeAddressField">
             <label for="storeAddressInput" data-i18n="store_account_store_address_label">住所</label>
             <input type="text" id="storeAddressInput" maxlength="200" autocomplete="street-address" required>
             <p class="hint" data-i18n="store_account_store_address_hint"></p>
@@ -735,6 +753,38 @@
       ).split(" ");
       const STORE_DEFAULT_COUNTRY = "JP";
 
+      // 出店型事業者 STEP 8｜出店型の業種(サーバーのMOBILE_BUSINESS_CATEGORY_CODESと同じ並び)。
+      const MOBILE_BUSINESS_CATEGORY_CODES = [
+        "kitchen_car",
+        "mobile_sales",
+        "street_stall",
+        "market_vendor",
+        "event_vendor",
+        "popup_store",
+        "other"
+      ];
+
+      function readBusinessType() {
+        const checked = document.querySelector('input[name="storeBusinessType"]:checked');
+        return checked && checked.value === "mobile" ? "mobile" : "fixed";
+      }
+
+      // 形態に合わせて、業種の選択肢・住所欄・所在地確認の表示を切り替える。
+      function syncBusinessTypeUi() {
+        const isMobile = readBusinessType() === "mobile";
+        document.querySelectorAll("#businessTypeOptions .business-type-option").forEach(function (option) {
+          option.classList.toggle("selected", option.querySelector("input").checked);
+        });
+        document.getElementById("businessTypeMobileHint").hidden = !isMobile;
+        document.getElementById("storeAddressField").hidden = isMobile;
+        document.getElementById("storePreviewButton").hidden = isMobile;
+        if (isMobile) {
+          document.getElementById("storePreviewBox").hidden = true;
+        }
+        buildStoreSelectOptions();
+        updateStoreRegisterButton();
+      }
+
       // サーバーの理由code → 画面文言キー。
       const STORE_ERROR_MESSAGE_KEYS = {
         email_not_verified: "store_account_store_err_verify",
@@ -782,13 +832,19 @@
         placeholder.value = "";
         placeholder.textContent = t("store_account_store_category_placeholder");
         categorySelect.appendChild(placeholder);
-        STORE_CATEGORY_CODES.forEach(function (code) {
+        const isMobileBusiness = readBusinessType() === "mobile";
+        (isMobileBusiness ? MOBILE_BUSINESS_CATEGORY_CODES : STORE_CATEGORY_CODES).forEach(function (code) {
           const option = document.createElement("option");
           option.value = code;
-          option.textContent = t("store_account_category_" + code);
+          option.textContent = t((isMobileBusiness ? "store_account_business_category_" : "store_account_category_") + code);
           categorySelect.appendChild(option);
         });
-        categorySelect.value = selectedCategory;
+        // 形態を切り替えて選択肢に無くなった業種は、選び直してもらう。
+        categorySelect.value = Array.from(categorySelect.options).some(function (option) {
+          return option.value === selectedCategory;
+        })
+          ? selectedCategory
+          : "";
 
         const countries = STORE_COUNTRY_CODES
           .map(function (code) {
@@ -885,8 +941,12 @@
 
           const meta = document.createElement("div");
           meta.className = "store-card-meta";
+          const isMobileBusiness = store.businessType === "mobile";
           meta.textContent = [
-            store.categoryCode ? t("store_account_category_" + store.categoryCode) : "",
+            isMobileBusiness
+              ? t("store_account_business_type_mobile_short") +
+                (store.businessCategoryCode ? "・" + t("store_account_business_category_" + store.businessCategoryCode) : "")
+              : store.categoryCode ? t("store_account_category_" + store.categoryCode) : "",
             [getCountryDisplayName(store.countryCode), store.prefecture, store.city]
               .filter(Boolean)
               .join(" ")
@@ -903,17 +963,28 @@
 
           const note = document.createElement("div");
           note.className = "store-card-note";
-          note.textContent = t("store_account_store_note_" + statusCode);
-          item.appendChild(note);
+          // 出店型事業者 STEP 8｜出店型の登録済み(active)は店舗カードの案内を出さない(下の出店型の案内に置き換える)。
+          if (!(isMobileBusiness && statusCode === "active")) {
+            note.textContent = t("store_account_store_note_" + statusCode);
+            item.appendChild(note);
+          }
 
           // Phase 2B｜常設店舗情報の編集画面へ。編集できる(登録済み)店舗だけに出す
           // (編集できるかの最終判定はサーバー)。
           if (statusCode === "active") {
-            const editLink = document.createElement("a");
-            editLink.className = "store-card-link";
-            editLink.href = "store-profile.html?store=" + encodeURIComponent(store.storeId);
-            editLink.textContent = t("store_profile_edit_link");
-            item.appendChild(editLink);
+            // 出店型事業者 STEP 8｜出店型は店舗カード(固定の所在地が必要)を作らない。今だけ投稿はそのまま使える。
+            if (isMobileBusiness) {
+              const cardNote = document.createElement("div");
+              cardNote.className = "store-card-note";
+              cardNote.textContent = t("store_account_mobile_no_card_note");
+              item.appendChild(cardNote);
+            } else {
+              const editLink = document.createElement("a");
+              editLink.className = "store-card-link";
+              editLink.href = "store-profile.html?store=" + encodeURIComponent(store.storeId);
+              editLink.textContent = t("store_profile_edit_link");
+              item.appendChild(editLink);
+            }
 
             // 正式店舗アカウント接続｜この店舗の今だけ投稿へ。tokenは付けず、店舗アカウントの
             // ログインで操作する(ownerか・有効な店舗かの最終判定はサーバー)。審査待ち・停止中・
@@ -1252,7 +1323,8 @@
           storeName: document.getElementById("storeNameInput").value.trim(),
           categoryCode: document.getElementById("storeCategorySelect").value,
           countryCode: document.getElementById("storeCountrySelect").value,
-          address: document.getElementById("storeAddressInput").value.trim()
+          address: document.getElementById("storeAddressInput").value.trim(),
+          businessType: readBusinessType()
         };
       }
 
@@ -1260,7 +1332,8 @@
         if (values.storeName === "") return "store_account_store_err_name";
         if (values.categoryCode === "") return "store_account_store_err_category";
         if (values.countryCode === "") return "store_account_store_err_country";
-        if (values.address === "") return "store_account_store_err_address";
+        // 出店型は住所を登録しない。
+        if (values.businessType !== "mobile" && values.address === "") return "store_account_store_err_address";
         return "";
       }
 
@@ -1277,10 +1350,12 @@
 
       function updateStoreRegisterButton() {
         const values = readStoreForm();
+        // 出店型は所在地の確認が無いので、確認を待たずに登録できる(入力の確認はサーバーでも行う)。
         document.getElementById("storeRegisterButton").disabled =
           storeRequestPending ||
-          storePreviewKey === "" ||
-          storePreviewKey !== values.countryCode + "|" + values.address;
+          (values.businessType !== "mobile" &&
+            (storePreviewKey === "" ||
+              storePreviewKey !== values.countryCode + "|" + values.address));
         document.getElementById("storePreviewButton").disabled = storeRequestPending;
       }
 
@@ -1318,7 +1393,7 @@
         storePreviewKey = "";
         storePreviewLocation = null;
         document.getElementById("storePreviewBox").hidden = true;
-        updateStoreRegisterButton();
+        syncBusinessTypeUi();
       }
 
       function handleStorePreview() {
@@ -1362,7 +1437,7 @@
         if (storeRequestPending) {
           return;
         }
-        if (storePreviewKey !== values.countryCode + "|" + values.address) {
+        if (values.businessType !== "mobile" && storePreviewKey !== values.countryCode + "|" + values.address) {
           // 所在地の確認前(Enterキー等)は、登録せず確認だけを行う。
           return handleStorePreview();
         }
@@ -1373,14 +1448,26 @@
         }
         storeRequestPending = true;
         updateStoreRegisterButton();
-        callStoreApi({
-          mode: "storeSelfRegister",
-          storeName: values.storeName,
-          categoryCode: values.categoryCode,
-          countryCode: values.countryCode,
-          address: values.address,
-          sourceLanguage: currentLanguage
-        })
+        // 出店型事業者 STEP 8｜出店型は所在地を送らない(固定店舗は従来と同じリクエスト)。
+        callStoreApi(
+          values.businessType === "mobile"
+            ? {
+                mode: "storeSelfRegister",
+                businessType: "mobile",
+                storeName: values.storeName,
+                categoryCode: values.categoryCode,
+                countryCode: values.countryCode,
+                sourceLanguage: currentLanguage
+              }
+            : {
+                mode: "storeSelfRegister",
+                storeName: values.storeName,
+                categoryCode: values.categoryCode,
+                countryCode: values.countryCode,
+                address: values.address,
+                sourceLanguage: currentLanguage
+              }
+        )
           .then(function (response) {
             if (response.status === 200 && response.result && response.result.success) {
               closeStoreForm();
@@ -1776,6 +1863,9 @@
           closeStoreForm();
         });
         document.getElementById("storePreviewButton").addEventListener("click", handleStorePreview);
+        document.querySelectorAll('input[name="storeBusinessType"]').forEach(function (input) {
+          input.addEventListener("change", syncBusinessTypeUi);
+        });
         document.getElementById("storeForm").addEventListener("submit", handleStoreRegister);
         // 住所欄でEnterを押したら、登録ではなく所在地の確認を行う
         // (登録ボタンは確認前は無効のため、ブラウザ標準の送信は起きない)。

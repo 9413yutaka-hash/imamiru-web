@@ -2347,6 +2347,72 @@ const MACHINAU_TRANSLATIONS = {
     en: "Lodging"
   },
 
+  // 出店型事業者 STEP 8｜事業者の形態・出店型の業種(store-account.html)。
+  store_account_business_type_label: {
+    ja: "事業者の形態",
+    en: "Type of business"
+  },
+
+  store_account_business_type_fixed: {
+    ja: "固定の店舗・施設がある",
+    en: "I have a fixed shop or facility"
+  },
+
+  store_account_business_type_mobile: {
+    ja: "移動販売・イベント出店など（固定の店舗なし）",
+    en: "Mobile or event vendor (no fixed shop)"
+  },
+
+  store_account_business_type_mobile_short: {
+    ja: "出店型",
+    en: "Mobile vendor"
+  },
+
+  store_account_business_type_mobile_hint: {
+    ja: "所在地は登録しません。今だけ投稿では、投稿ごとに出店場所を指定します。店舗カードは作成されません（店舗カードは任意です）。",
+    en: "No address is registered. In Just for Now posts, you enter where you'll be for each post. No shop card is created (shop cards are optional)."
+  },
+
+  store_account_business_category_kitchen_car: {
+    ja: "キッチンカー",
+    en: "Food truck"
+  },
+
+  store_account_business_category_mobile_sales: {
+    ja: "移動販売",
+    en: "Mobile sales"
+  },
+
+  store_account_business_category_street_stall: {
+    ja: "露店・屋台",
+    en: "Street stall"
+  },
+
+  store_account_business_category_market_vendor: {
+    ja: "マルシェ出店",
+    en: "Market vendor"
+  },
+
+  store_account_business_category_event_vendor: {
+    ja: "イベント出店",
+    en: "Event vendor"
+  },
+
+  store_account_business_category_popup_store: {
+    ja: "ポップアップストア",
+    en: "Pop-up store"
+  },
+
+  store_account_business_category_other: {
+    ja: "その他",
+    en: "Other"
+  },
+
+  store_account_mobile_no_card_note: {
+    ja: "出店型のため店舗カードはありません。今だけ投稿は店舗カードなしで使えます（投稿ごとに出店場所を指定）。",
+    en: "As a mobile vendor, you don't have a shop card. You can still use Just for Now posts (enter your location for each post)."
+  },
+
   store_account_category_other: {
     ja: "その他",
     en: "Other"
