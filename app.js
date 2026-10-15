@@ -13517,6 +13517,114 @@ function escapeHtmlForCommunityBoard(
   );
 }
 
+// 街の掲示板 運営限定URL｜サーバーが運営のURL付き投稿と確認した投稿
+// (operatorLinksEnabled)だけ、本文中のhttps URLを外部リンクにする。
+// URL以外の部分と、条件に合わないURLは従来どおりエスケープした文字のまま。
+// 規則はサーバー(api/moderate-submission.js)のCOMMUNITY_BOARD_HTTPS_URL_PATTERNと同じ。
+const COMMUNITY_BOARD_TEXT_HTTPS_URL_PATTERN =
+  /https:\/\/[A-Za-z0-9\-._~:/?#@!$&*+,;=%]+/g;
+
+function isSafeCommunityBoardTextUrl(
+  value
+) {
+  let parsedUrl;
+
+  try {
+    parsedUrl =
+      new URL(
+        value
+      );
+  } catch (error) {
+    return false;
+  }
+
+  return (
+    parsedUrl.protocol === "https:" &&
+    parsedUrl.username === "" &&
+    parsedUrl.password === "" &&
+    parsedUrl.hostname.includes(".")
+  );
+}
+
+function buildCommunityBoardPostTextHtml(
+  post
+) {
+  const text =
+    typeof post.text === "string"
+      ? post.text
+      : "";
+
+  if (post.operatorLinksEnabled !== true) {
+    return escapeHtmlForCommunityBoard(
+      text
+    );
+  }
+
+  let html = "";
+  let lastIndex = 0;
+  let match;
+
+  COMMUNITY_BOARD_TEXT_HTTPS_URL_PATTERN.lastIndex = 0;
+
+  while (
+    (match =
+      COMMUNITY_BOARD_TEXT_HTTPS_URL_PATTERN.exec(
+        text
+      )) !== null
+  ) {
+    const trailing =
+      (match[0].match(/[.,!?;:]+$/) || [""])[0];
+    const url =
+      match[0].slice(
+        0,
+        match[0].length - trailing.length
+      );
+
+    html +=
+      escapeHtmlForCommunityBoard(
+        text.slice(
+          lastIndex,
+          match.index
+        )
+      );
+
+    html +=
+      isSafeCommunityBoardTextUrl(
+        url
+      )
+        ? '<a class="community-board-text-link" href="' +
+          escapeHtmlForCommunityBoard(
+            url
+          ) +
+          '" target="_blank" rel="noopener noreferrer">' +
+          escapeHtmlForCommunityBoard(
+            url
+          ) +
+          '</a>'
+        : escapeHtmlForCommunityBoard(
+            url
+          );
+
+    html +=
+      escapeHtmlForCommunityBoard(
+        trailing
+      );
+
+    lastIndex =
+      match.index +
+      match[0].length;
+  }
+
+  return (
+    html +
+    escapeHtmlForCommunityBoard(
+      text.slice(
+        lastIndex
+      )
+    )
+  );
+}
+
 // 運営固定投稿＋外部動画リンク｜サーバーで検証済みのexternalVideoUrlを、
 // 念のためここでもhttp/httpsだけに限定してから「🎥 動画を見る」導線にする
 // (URLが無い通常投稿には何も足さない)。文言はdata-i18nで言語切替に追従する。
@@ -13547,8 +13655,8 @@ function buildCommunityBoardPostItemHtml(
   return (
     '<div class="community-board-post-item">' +
       '<p class="community-board-post-text">' +
-      escapeHtmlForCommunityBoard(
-        post.text
+      buildCommunityBoardPostTextHtml(
+        post
       ) +
       '</p>' +
       videoLinkHtml +

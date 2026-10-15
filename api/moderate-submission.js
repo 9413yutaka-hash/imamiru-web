@@ -2356,6 +2356,83 @@ function sanitizeCommunityBoardPostFormData(
   };
 }
 
+// 街の掲示板 運営限定URL｜本文中の「URLらしき部分」(スキーム付き・www.始まり・
+// 危険なスキーム)を見つける。一般利用者はこれを含む投稿を送れない。
+const COMMUNITY_BOARD_URL_LIKE_PATTERN =
+  /[a-z][a-z0-9+.-]*:\/\/|www\.|(?:javascript|data|vbscript|file)\s*:/i;
+
+// 運営が本文に書けるURL(https://のみ)。使える文字はURLの半角文字だけにし、
+// 直後の日本語や括弧・引用符はURLに含めない(app.jsのリンク表示と同じ規則)。
+const COMMUNITY_BOARD_HTTPS_URL_PATTERN =
+  /https:\/\/[A-Za-z0-9\-._~:/?#@!$&*+,;=%]+/g;
+
+const COMMUNITY_BOARD_URL_TRAILING_PUNCTUATION_PATTERN =
+  /[.,!?;:]+$/;
+
+function containsCommunityBoardUrlLikeText(
+  text
+) {
+  return COMMUNITY_BOARD_URL_LIKE_PATTERN.test(
+    text
+  );
+}
+
+function isSafeCommunityBoardHttpsUrl(
+  value
+) {
+  let parsedUrl;
+
+  try {
+    parsedUrl =
+      new URL(
+        value
+      );
+  } catch (error) {
+    return false;
+  }
+
+  return (
+    parsedUrl.protocol === "https:" &&
+    parsedUrl.username === "" &&
+    parsedUrl.password === "" &&
+    parsedUrl.hostname.includes(".")
+  );
+}
+
+// 運営の本文：URLらしき部分がすべて安全なhttps URLならtrue。
+// http://・javascript:・www.だけ・認証情報付き等が1つでもあればfalse。
+function validateCommunityBoardOperatorUrls(
+  text
+) {
+  const matches =
+    text.match(
+      COMMUNITY_BOARD_HTTPS_URL_PATTERN
+    ) || [];
+
+  const allSafe =
+    matches.every(
+      function(rawUrl) {
+        return isSafeCommunityBoardHttpsUrl(
+          rawUrl.replace(
+            COMMUNITY_BOARD_URL_TRAILING_PUNCTUATION_PATTERN,
+            ""
+          )
+        );
+      }
+    );
+
+  if (!allSafe) {
+    return false;
+  }
+
+  return !containsCommunityBoardUrlLikeText(
+    text.replace(
+      COMMUNITY_BOARD_HTTPS_URL_PATTERN,
+      " "
+    )
+  );
+}
+
 async function handleCommunityBoardPostCreateRequest(
   request,
   response
@@ -2411,6 +2488,51 @@ async function handleCommunityBoardPostCreateRequest(
         success: false,
         message: "入力内容を確認してください。"
       });
+    }
+
+    // 街の掲示板 運営限定URL｜本文にURLらしき部分がある時だけ、既存の運営権限判定
+    // (resolveRequestActor：IDトークンをサーバーで検証し、代表=ADMIN_EMAIL一致の
+    // ときだけadmin)で投稿者を確認する。運営(admin)だけhttps URLを書ける。
+    // 一般利用者(匿名・Editor・店舗アカウント等)はURLを含む投稿を送れない。
+    // 連打防止の枠を消費する前に判定する(不正な入力で枠を使わせない)。
+    let operatorLinksEnabled = false;
+
+    if (
+      containsCommunityBoardUrlLikeText(
+        formData.text
+      )
+    ) {
+      const actorResult =
+        await resolveRequestActor(
+          request
+        );
+
+      const isOperator =
+        actorResult.ok === true &&
+        !!actorResult.actor &&
+        actorResult.actor.type === "admin";
+
+      if (!isOperator) {
+        return response.status(400).json({
+          success: false,
+          reason: "url_not_allowed",
+          message: "URLを含む投稿はできません。URLを除いて投稿してください。"
+        });
+      }
+
+      if (
+        !validateCommunityBoardOperatorUrls(
+          formData.text
+        )
+      ) {
+        return response.status(400).json({
+          success: false,
+          reason: "invalid_url",
+          message: "URLは https:// で始まる正しい形式で入力してください。"
+        });
+      }
+
+      operatorLinksEnabled = true;
     }
 
     // 街の掲示板 Phase7｜スパム対策。入力の基本検証を通過したリクエストに
@@ -2480,6 +2602,11 @@ async function handleCommunityBoardPostCreateRequest(
 
         status:
           "pending",
+
+        // 街の掲示板 運営限定URL｜サーバーが運営と確認したURL付き投稿だけtrue。
+        // 承認後、TOPはこの投稿だけ本文中のhttps URLをリンクにする。
+        operatorLinksEnabled:
+          operatorLinksEnabled,
 
         approvedAt: null,
 
@@ -4302,6 +4429,10 @@ async function handleCommunityBoardPostsListRequest(
               typeof data.text === "string"
                 ? data.text
                 : "",
+
+            // 街の掲示板 運営限定URL｜運営のURL付き投稿だけtrue(リンク表示の可否)。
+            operatorLinksEnabled:
+              data.operatorLinksEnabled === true,
 
             regionId:
               typeof data.regionId === "string"
