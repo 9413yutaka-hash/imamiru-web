@@ -1545,6 +1545,12 @@ const MACHINAU_TRANSLATIONS = {
     en: "📌 {AREA} Community Board"
   },
 
+  // 街の掲示板 停止防止｜掲示板を取得できなかった時(投稿0件とは別の表示)。
+  community_board_load_error: {
+    ja: "掲示板を読み込めませんでした。時間をおいて、もう一度お試しください。",
+    en: "We couldn't load this community board. Please try again later."
+  },
+
   community_board_empty: {
     ja: "この街の掲示板は、まだ投稿がありません。",
     en: "There are no posts on this community board yet."

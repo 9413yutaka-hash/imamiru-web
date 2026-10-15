@@ -13680,13 +13680,26 @@ async function fetchCommunityBoardPostsForCurrentArea(
       imageUrl: ""
     };
 
+  // 街の掲示板 停止防止｜取得できなかった場合は「投稿0件」と区別する(loadFailed)。
+  const failedResult =
+    {
+      posts: [],
+      imageUrl: "",
+      loadFailed: true
+    };
+
   if (
-    !window.firebase ||
-    !firebase.auth ||
     googlePlaceId === "" ||
     countryCode === ""
   ) {
     return emptyResult;
+  }
+
+  if (
+    !window.firebase ||
+    !firebase.auth
+  ) {
+    return failedResult;
   }
 
   try {
@@ -13723,7 +13736,7 @@ async function fetchCommunityBoardPostsForCurrentArea(
       responseData.success !== true ||
       !Array.isArray(responseData.posts)
     ) {
-      return emptyResult;
+      return failedResult;
     }
 
     return {
@@ -13737,7 +13750,7 @@ async function fetchCommunityBoardPostsForCurrentArea(
   } catch (error) {
     // 掲示板の取得に失敗しても、TOPの他機能には一切影響させない
     // (既存regionRecommendations取得の失敗時と同じ方針)。
-    return emptyResult;
+    return failedResult;
   }
 }
 
@@ -13821,7 +13834,8 @@ function renderCommunityBoardForCurrentArea(
   posts,
   isManualSelection,
   imageUrl,
-  remoteRegionInfo
+  remoteRegionInfo,
+  loadFailed
 ) {
   const section =
     document.getElementById(
@@ -14019,7 +14033,18 @@ function renderCommunityBoardForCurrentArea(
       ? regionName
       : "";
 
-  if (
+  if (loadFailed === true) {
+    // 街の掲示板 停止防止｜取得エラーは「まだ投稿がありません」と区別して表示する。
+    list.innerHTML =
+      '<p class="region-recommendation-empty-message community-board-load-error" data-i18n="community_board_load_error">' +
+      escapeHtmlForCommunityBoard(
+        getMachinauTranslation(
+          "community_board_load_error",
+          currentLanguage
+        )
+      ) +
+      '</p>';
+  } else if (
     !Array.isArray(posts) ||
     posts.length === 0
   ) {
@@ -14081,7 +14106,9 @@ async function loadCommunityBoardForCurrentArea(
     regionName,
     fetchResult.posts,
     false,
-    fetchResult.imageUrl
+    fetchResult.imageUrl,
+    undefined,
+    fetchResult.loadFailed === true
   );
 }
 
@@ -15665,7 +15692,8 @@ async function loadCommunityBoardForSelectedArea(
     fetchResult.posts,
     true,
     fetchResult.imageUrl,
-    resolvedRegion
+    resolvedRegion,
+    fetchResult.loadFailed === true
   );
 
   return true;
@@ -18285,6 +18313,22 @@ if (regionRecommendationAreaPickerElement) {
       }
     } else {
       showCommunityBoardAreaSearchError();
+
+      // 街の掲示板 停止防止｜選んだ地域を確認できなかった時は、掲示板が表示されて
+      // いない(投稿先の街が確定していない)限り投稿リンクを出さない
+      // (「今いる街について投稿する」から現在地の判定へ進ませない)。
+      const communityBoardPostLinkElement =
+        document.getElementById(
+          "communityBoardPostLink"
+        );
+
+      if (
+        communityBoardPostLinkElement &&
+        communityBoardDisplayedAreaName === ""
+      ) {
+        communityBoardPostLinkElement.style.display =
+          "none";
+      }
     }
   }
 

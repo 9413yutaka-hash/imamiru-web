@@ -536,67 +536,144 @@
       updateSubmitButtonEnabled();
     });
 
+    // 街の掲示板 停止防止｜現在地の取得(10秒)と、地図による街の判定(8秒、地図の読み込みを含む)に
+    // 上限を設ける。応答が無い場合(位置情報の確認が終わらない・地図キーが使えない環境で
+    // 判定が返らない等)も、必ずエラーを表示して「現在地から調べる」を押し直せる状態に戻す。
+    // 街が確定するまでは投稿ボタンを有効にしない(updateSubmitButtonEnabled())。
+    const COMMUNITY_BOARD_GEOLOCATION_TIMEOUT_MS = 10000;
+    const COMMUNITY_BOARD_GEOCODER_TIMEOUT_MS = 8000;
+    let locationRequestSequence = 0;
+
+    function geocodeCommunityBoardLocationWithTimeout(latitude, longitude) {
+      return new Promise(function (resolve) {
+        let settled = false;
+        const finish = function (result) {
+          if (!settled) {
+            settled = true;
+            clearTimeout(timeoutId);
+            resolve(result);
+          }
+        };
+        const timeoutId = setTimeout(function () {
+          finish({ status: "timeout" });
+        }, COMMUNITY_BOARD_GEOCODER_TIMEOUT_MS);
+
+        ensureGoogleMapsLoadedForCommunityBoard()
+          .then(function (mapsLoaded) {
+            if (!mapsLoaded || typeof google === "undefined" || !google.maps || !google.maps.Geocoder) {
+              finish({ status: "maps_unavailable" });
+              return;
+            }
+            new google.maps.Geocoder().geocode(
+              { location: { lat: latitude, lng: longitude } },
+              function (results, status) {
+                finish({ status: status, results: results });
+              }
+            );
+          })
+          .catch(function (error) {
+            console.error("街の特定に失敗しました：", error);
+            finish({ status: "error" });
+          });
+      });
+    }
+
     detectLocationButton.addEventListener("click", function () {
       if (!navigator.geolocation) {
         showMessage(locationMessage, "この端末では現在地を取得できません。", "error");
         return;
       }
 
+      const requestSequence = ++locationRequestSequence;
+      let geolocationSettled = false;
+
+      // 調べ直す間は、前回の街を使わない(街が確定するまで投稿ボタンは無効)。
+      resolvedCommunityBoardRegion = null;
+      updateSubmitButtonEnabled();
       detectLocationButton.disabled = true;
       showMessage(locationMessage, "現在地を取得しています…", "");
       regionResultBox.style.display = "none";
 
+      function finishWithError(text) {
+        if (requestSequence !== locationRequestSequence) {
+          return;
+        }
+        showMessage(locationMessage, text, "error");
+        detectLocationButton.disabled = false;
+      }
+
+      // ブラウザのtimeoutは位置情報の許可確認中は数えないため、同じ10秒の上限を別にも設ける。
+      const geolocationGuardId = setTimeout(function () {
+        if (!geolocationSettled) {
+          geolocationSettled = true;
+          finishWithError("現在地を取得できませんでした（時間切れ）。もう一度お試しいただくか、TOPの「ほかの地域を見る」から地域を選んで投稿してください。");
+        }
+      }, COMMUNITY_BOARD_GEOLOCATION_TIMEOUT_MS);
+
       navigator.geolocation.getCurrentPosition(
         async function (position) {
-          try {
-            const mapsLoaded = await ensureGoogleMapsLoadedForCommunityBoard();
-
-            if (!mapsLoaded) {
-              showMessage(locationMessage, "地図情報の読み込みに失敗しました。時間をおいて、もう一度お試しください。", "error");
-              return;
-            }
-
-            const geocoder = new google.maps.Geocoder();
-
-            geocoder.geocode(
-              {
-                location: {
-                  lat: position.coords.latitude,
-                  lng: position.coords.longitude
-                }
-              },
-              function (results, status) {
-                if (status !== "OK" || !Array.isArray(results)) {
-                  showMessage(locationMessage, "対象の街を特定できませんでした。", "error");
-                  return;
-                }
-
-                const region = resolveCommunityBoardRegionFromGeocoderResults(results);
-
-                if (!region) {
-                  showMessage(locationMessage, "対象の街を特定できませんでした。", "error");
-                  return;
-                }
-
-                resolvedCommunityBoardRegion = region;
-
-                regionResultBox.textContent = "対象の街：" + region.regionName;
-                regionResultBox.style.display = "";
-
-                showMessage(locationMessage, "", "");
-                updateSubmitButtonEnabled();
-              }
-            );
-          } catch (error) {
-            console.error("街の特定に失敗しました：", error);
-            showMessage(locationMessage, "対象の街を特定できませんでした。", "error");
-          } finally {
-            detectLocationButton.disabled = false;
+          if (geolocationSettled) {
+            return;
           }
-        },
-        function () {
+          geolocationSettled = true;
+          clearTimeout(geolocationGuardId);
+
+          const geocodeResult = await geocodeCommunityBoardLocationWithTimeout(
+            position.coords.latitude,
+            position.coords.longitude
+          );
+
+          if (requestSequence !== locationRequestSequence) {
+            return;
+          }
+
+          if (geocodeResult.status === "timeout") {
+            finishWithError("対象の街を確認できませんでした（応答がありません）。時間をおいてもう一度お試しいただくか、TOPの「ほかの地域を見る」から地域を選んで投稿してください。");
+            return;
+          }
+
+          if (geocodeResult.status === "maps_unavailable") {
+            finishWithError("地図情報の読み込みに失敗しました。時間をおいて、もう一度お試しください。");
+            return;
+          }
+
+          if (geocodeResult.status !== "OK" || !Array.isArray(geocodeResult.results)) {
+            finishWithError("対象の街を特定できませんでした。");
+            return;
+          }
+
+          const region = resolveCommunityBoardRegionFromGeocoderResults(geocodeResult.results);
+
+          if (!region) {
+            finishWithError("対象の街を特定できませんでした。");
+            return;
+          }
+
+          resolvedCommunityBoardRegion = region;
+
+          regionResultBox.textContent = "対象の街：" + region.regionName;
+          regionResultBox.style.display = "";
+
+          showMessage(locationMessage, "", "");
           detectLocationButton.disabled = false;
-          showMessage(locationMessage, "現在地を取得できませんでした。位置情報の利用を許可してください。", "error");
+          updateSubmitButtonEnabled();
+        },
+        function (error) {
+          if (geolocationSettled) {
+            return;
+          }
+          geolocationSettled = true;
+          clearTimeout(geolocationGuardId);
+
+          finishWithError(
+            error && error.code === 3
+              ? "現在地を取得できませんでした（時間切れ）。もう一度お試しいただくか、TOPの「ほかの地域を見る」から地域を選んで投稿してください。"
+              : "現在地を取得できませんでした。位置情報の利用を許可してください。"
+          );
+        },
+        {
+          timeout: COMMUNITY_BOARD_GEOLOCATION_TIMEOUT_MS,
+          maximumAge: 60000
         }
       );
     });
