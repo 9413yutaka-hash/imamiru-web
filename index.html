@@ -325,16 +325,21 @@
       white-space: pre-wrap;
     }
 
-    /* 街の掲示板 運営専用投稿｜運営投稿の写真(最大3枚)。スマホでは横に並べて縦長にしない。 */
+    /* 街の掲示板 運営専用投稿｜運営投稿の写真(最大3枚)。写真は切り取らず全体を表示し、
+       PCでも広がりすぎない(並び全体は最大560px)。
+       1枚：縦横比のまま、高さは最大360px・元の大きさ以上に拡大しない。
+       2〜3枚：正方形の枠に全体を収める(余白は既存の薄い水色)。 */
     .community-board-post-images {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 6px;
+      max-width: 560px;
       margin-top: 8px;
     }
 
     .community-board-post-images-1 {
       grid-template-columns: minmax(0, 1fr);
+      justify-items: start;
     }
 
     .community-board-post-images-2 {
@@ -344,10 +349,18 @@
     .community-board-post-image {
       display: block;
       width: 100%;
-      aspect-ratio: 4 / 3;
-      object-fit: cover;
+      aspect-ratio: 1 / 1;
+      object-fit: contain;
       border-radius: 10px;
       background: var(--sky);
+    }
+
+    .community-board-post-images-1 .community-board-post-image {
+      width: auto;
+      max-width: 100%;
+      height: auto;
+      max-height: 360px;
+      aspect-ratio: auto;
     }
 
     /* 街の掲示板 運営限定URL｜運営投稿の本文中リンク。長いURLも画面幅で折り返す。 */
