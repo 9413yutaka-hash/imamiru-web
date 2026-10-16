@@ -105,6 +105,14 @@ import {
   handleAdminStoreListingLinkRevoke
 } from "./_lib/store-listing-claims.js";
 
+// 今だけ投稿 決済 STEP 31｜店舗のカード登録(Stripe SetupIntent、テスト環境のみ・請求なし)。
+// 実処理はapi/_lib/store-billing.js。
+import {
+  handleStoreBillingStatus,
+  handleStoreBillingSetupIntentCreate,
+  handleStoreBillingSetupConfirm
+} from "./_lib/store-billing.js";
+
 
 function getFirebaseAdminApp() {
   if (getApps().length > 0) {
@@ -30369,6 +30377,24 @@ function buildStoreSelfServiceDeps() {
   };
 }
 
+// 今だけ投稿 決済 STEP 31｜店舗のカード登録へ渡す既存関数と、環境変数・fetchの参照。
+// Stripeのキーは環境変数からstore-billing.jsが読み、安全条件(テストのみ・Productionでは無効)を確かめる。
+function buildStoreBillingDeps() {
+  return {
+    getFirebaseAdminApp: getFirebaseAdminApp,
+    getFirestore: getFirestore,
+    readRequestBody: readRequestBody,
+    resolveStoreUserActor: resolveStoreUserActor,
+    checkStoreProfileEditor: checkStoreProfileEditor,
+    claimRateLimit: claimRateLimit,
+    computeRateLimitIdentifier: computeRateLimitIdentifier,
+    env: process.env,
+    fetch: function(url, options) {
+      return fetch(url, options);
+    }
+  };
+}
+
 // 今だけ投稿 収益化 STEP 2｜CV記録に使う既存の部品(Firebase Adminの初期化・IDトークン検証・
 // リクエスト読み取り)を参照として渡す(既存関数自体は変更しない)。
 function buildImadakeCvDeps() {
@@ -30688,6 +30714,37 @@ export default async function handler(
       request,
       response,
       buildStoreSelfServiceDeps()
+    );
+  }
+
+  // 今だけ投稿 決済 STEP 31｜店舗のカード登録(ownerのみ・テスト環境のみ・請求なし)。
+  if (
+    requestBody.mode === "storeBillingStatus"
+  ) {
+    return handleStoreBillingStatus(
+      request,
+      response,
+      buildStoreBillingDeps()
+    );
+  }
+
+  if (
+    requestBody.mode === "storeBillingSetupIntentCreate"
+  ) {
+    return handleStoreBillingSetupIntentCreate(
+      request,
+      response,
+      buildStoreBillingDeps()
+    );
+  }
+
+  if (
+    requestBody.mode === "storeBillingSetupConfirm"
+  ) {
+    return handleStoreBillingSetupConfirm(
+      request,
+      response,
+      buildStoreBillingDeps()
     );
   }
 

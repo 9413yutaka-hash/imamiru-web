@@ -2353,6 +2353,122 @@ const MACHINAU_TRANSLATIONS = {
     en: "Lodging"
   },
 
+  // 今だけ投稿 決済 STEP 31｜お支払い方法(カード登録、store-account.html)。
+  store_billing_heading: {
+    ja: "お支払い方法",
+    en: "Payment method"
+  },
+
+  store_billing_test_badge: {
+    ja: "テスト環境",
+    en: "Test mode"
+  },
+
+  store_billing_intro: {
+    ja: "今だけ投稿の利用料金（有効な閲覧があった「投稿×1日」ごとに100円・税込、月末締め・翌月まとめてカード請求）に使うカードを登録します。現在、請求は行っていません。カード番号は決済会社（Stripe）が直接受け取り、マチナウには保存されません。",
+    en: "Register the card used for Just for Now fees (¥100 incl. tax per post per day with at least one valid view, billed together monthly). No charges are being made at this time. Your card number goes directly to our payment provider (Stripe) and is not stored by Machinau."
+  },
+
+  store_billing_store_label: {
+    ja: "事業者",
+    en: "Business"
+  },
+
+  store_billing_card_registered: {
+    ja: "登録済みのカード",
+    en: "Registered card"
+  },
+
+  store_billing_card_none: {
+    ja: "カードはまだ登録されていません。",
+    en: "No card registered yet."
+  },
+
+  store_billing_start_button: {
+    ja: "カードを登録する",
+    en: "Register a card"
+  },
+
+  store_billing_change_button: {
+    ja: "カードを変更する",
+    en: "Change card"
+  },
+
+  store_billing_consent: {
+    ja: "このカードを、今だけ投稿の利用料金（月末締め・翌月まとめて請求）の支払いに使うことに同意します。",
+    en: "I agree that this card will be used to pay Just for Now fees (billed monthly)."
+  },
+
+  store_billing_submit_button: {
+    ja: "このカードを登録する",
+    en: "Register this card"
+  },
+
+  store_billing_cancel_button: {
+    ja: "やめる",
+    en: "Cancel"
+  },
+
+  store_billing_loading: {
+    ja: "カードの入力欄を準備しています…",
+    en: "Preparing the card form…"
+  },
+
+  store_billing_confirming: {
+    ja: "カードを確認しています…",
+    en: "Checking your card…"
+  },
+
+  store_billing_saved: {
+    ja: "カードを登録しました。",
+    en: "Your card has been registered."
+  },
+
+  store_billing_processing: {
+    ja: "カードの確認中です。しばらくしてから、もう一度開いてください。",
+    en: "Your card is still being checked. Please reopen this page in a moment."
+  },
+
+  store_billing_err_consent: {
+    ja: "カードを使うことへの同意にチェックしてください。",
+    en: "Please check the box to agree to how your card will be used."
+  },
+
+  store_billing_err_requires_action: {
+    ja: "カード会社の認証が完了していません。もう一度お試しください。",
+    en: "Your card issuer's authentication was not completed. Please try again."
+  },
+
+  store_billing_err_failed: {
+    ja: "このカードは登録できませんでした。別のカードでお試しください。",
+    en: "This card could not be registered. Please try another card."
+  },
+
+  store_billing_err_rate_limited: {
+    ja: "少し時間をおいて、もう一度お試しください。",
+    en: "Please wait a moment and try again."
+  },
+
+  store_billing_err_unavailable: {
+    ja: "現在、カード登録はご利用いただけません。",
+    en: "Card registration is not available right now."
+  },
+
+  store_billing_err_stripe: {
+    ja: "決済会社との通信に失敗しました。時間をおいて、もう一度お試しください。",
+    en: "We couldn't reach the payment provider. Please try again later."
+  },
+
+  store_billing_err_retry: {
+    ja: "登録の手続きをやり直してください。",
+    en: "Please start the registration again."
+  },
+
+  store_billing_err_generic: {
+    ja: "カードを登録できませんでした。時間をおいて、もう一度お試しください。",
+    en: "We couldn't register your card. Please try again later."
+  },
+
   store_account_category_other: {
     ja: "その他",
     en: "Other"

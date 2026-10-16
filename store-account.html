@@ -209,6 +209,11 @@
     }
 
     .store-section h3, .store-form h3 { margin: 0 0 10px; font-size: 15px; color: var(--navy); }
+    /* 今だけ投稿 決済 STEP 31｜お支払い方法(カード登録) */
+    .billing-card-status { margin: 10px 0; padding: 12px; border: 1px solid var(--border); border-radius: 12px; font-size: 14px; }
+    .billing-card-status strong { color: var(--navy); }
+    .billing-payment-element { margin: 12px 0; min-height: 60px; }
+    .billing-test-badge { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: #fff3cd; color: #7a5b00; font-size: 11px; font-weight: 700; }
     .store-form { margin-top: 14px; }
 
     .store-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 10px; }
@@ -454,6 +459,28 @@
           <button type="submit" class="primary-button" id="storeRegisterButton" disabled data-i18n="store_account_store_register_button">この内容で登録する</button>
           <button type="button" class="secondary-button" id="storeFormCancelButton" data-i18n="store_account_store_cancel_button">やめる</button>
         </form>
+      </div>
+
+      <!-- 今だけ投稿 決済 STEP 31｜お支払い方法(カード登録)。事業者のownerだけ。サーバーが
+           「利用可能」と返した時だけ表示する(本番サイト・キー未設定では表示しない)。
+           カード番号はStripeの入力欄(Payment Element)からStripeへ直接送られ、マチナウには届かない。
+           カード登録だけで、請求はしない。 -->
+      <div class="store-section" id="billingSection" hidden>
+        <h3><span data-i18n="store_billing_heading">お支払い方法</span><span class="billing-test-badge" id="billingTestBadge" hidden data-i18n="store_billing_test_badge">テスト環境</span></h3>
+        <p class="hint" data-i18n="store_billing_intro"></p>
+        <div class="field" id="billingStoreField">
+          <label for="billingStoreSelect" data-i18n="store_billing_store_label">事業者</label>
+          <select id="billingStoreSelect"></select>
+        </div>
+        <div class="billing-card-status" id="billingCardStatus"></div>
+        <button type="button" class="primary-button" id="billingStartButton" data-i18n="store_billing_start_button">カードを登録する</button>
+        <div id="billingForm" hidden>
+          <div class="billing-payment-element" id="billingPaymentElement"></div>
+          <label class="check-line"><input type="checkbox" id="billingConsentCheck"> <span data-i18n="store_billing_consent"></span></label>
+          <button type="button" class="primary-button" id="billingSubmitButton" disabled data-i18n="store_billing_submit_button">このカードを登録する</button>
+          <button type="button" class="secondary-button" id="billingCancelButton" data-i18n="store_billing_cancel_button">やめる</button>
+        </div>
+        <div id="billingMessage" class="message" role="status" aria-live="polite"></div>
       </div>
 
       <!-- 運営無料掲載 → 店舗オーナー化 MVP-1｜マチナウ運営が掲載したお店を、本当のお店が
@@ -968,6 +995,8 @@
           .finally(function () {
             storesLoading = false;
             renderStoreList();
+            // 今だけ投稿 決済 STEP 31｜お支払い方法の表示可否を確かめる(失敗しても他の表示には影響しない)。
+            loadBillingStatuses().catch(function () {});
           });
       }
 
@@ -978,6 +1007,293 @@
         clearStoreMessage();
         renderStoreLinkStatus();
         resetClaimState();
+        billingStatusByStore = {};
+        billingLastMessage = null;
+        closeBillingForm();
+        showBillingMessage("", "");
+      }
+
+      // ===== 今だけ投稿 決済 STEP 31｜お支払い方法(カード登録) =====
+      // サーバー(storeBillingStatus)が available:true を返した事業者がある時だけ表示する。
+      // Stripe.js は登録を始める時だけ js.stripe.com から読み込む(自前で配信しない)。
+      // 登録結果は画面では確定せず、サーバー(storeBillingSetupConfirm)がStripeに照会して確定する。
+      const STRIPE_JS_URL = "https://js.stripe.com/endive/stripe.js";
+      const BILLING_CONSENT_STORAGE_KEY = "machinauBillingConsent";
+      const BILLING_ERROR_KEYS = {
+        rate_limited: "store_billing_err_rate_limited",
+        billing_unavailable: "store_billing_err_unavailable",
+        stripe_unavailable: "store_billing_err_stripe",
+        stripe_auth_failed: "store_billing_err_stripe",
+        stripe_request_failed: "store_billing_err_stripe",
+        setup_intent_mismatch: "store_billing_err_retry",
+        consent_required: "store_billing_err_consent",
+        email_not_verified: "store_account_store_err_verify",
+        login_required: "store_account_store_err_login",
+        store_account_required: "store_account_store_err_login"
+      };
+      let billingStatusByStore = {};
+      let billingStripe = null;
+      let billingElements = null;
+      let billingSetup = null;
+      let billingBusy = false;
+      let billingLastMessage = null;
+      let stripeJsPromise = null;
+
+      function loadStripeJs() {
+        if (window.Stripe) {
+          return Promise.resolve(window.Stripe);
+        }
+        if (!stripeJsPromise) {
+          stripeJsPromise = new Promise(function (resolve, reject) {
+            const script = document.createElement("script");
+            script.src = STRIPE_JS_URL;
+            script.async = true;
+            script.onload = function () {
+              if (window.Stripe) {
+                resolve(window.Stripe);
+              } else {
+                stripeJsPromise = null;
+                reject(new Error("stripe_js_unavailable"));
+              }
+            };
+            script.onerror = function () {
+              stripeJsPromise = null;
+              reject(new Error("stripe_js_unavailable"));
+            };
+            document.head.appendChild(script);
+          });
+        }
+        return stripeJsPromise;
+      }
+
+      function showBillingMessage(key, type) {
+        const box = document.getElementById("billingMessage");
+        billingLastMessage = key ? { key: key, type: type } : null;
+        box.textContent = key ? t(key) : "";
+        box.className = key ? "message show " + type : "message";
+      }
+
+      function billingOwnerStores() {
+        return myStores.filter(function (store) {
+          return store.role === "owner" && store.registrationStatus === "active";
+        });
+      }
+
+      function selectedBillingStoreId() {
+        return document.getElementById("billingStoreSelect").value;
+      }
+
+      function formatBillingCard(card) {
+        const month = String(card.expMonth || "").padStart(2, "0");
+        return String(card.brand || "").toUpperCase() + " •••• " + card.last4 + "（" + month + "/" + card.expYear + "）";
+      }
+
+      function renderBillingSection() {
+        const section = document.getElementById("billingSection");
+        const availableStores = billingOwnerStores().filter(function (store) {
+          return billingStatusByStore[store.storeId] && billingStatusByStore[store.storeId].available === true;
+        });
+        section.hidden = availableStores.length === 0;
+        if (section.hidden) {
+          return;
+        }
+        const select = document.getElementById("billingStoreSelect");
+        const previous = select.value;
+        select.textContent = "";
+        availableStores.forEach(function (store) {
+          const option = document.createElement("option");
+          option.value = store.storeId;
+          option.textContent = store.storeName;
+          select.appendChild(option);
+        });
+        select.value = availableStores.some(function (store) { return store.storeId === previous; })
+          ? previous
+          : availableStores[0].storeId;
+        document.getElementById("billingStoreField").hidden = availableStores.length < 2;
+        const status = billingStatusByStore[select.value] || {};
+        document.getElementById("billingTestBadge").hidden = status.mode !== "test";
+        const statusBox = document.getElementById("billingCardStatus");
+        statusBox.textContent = "";
+        if (status.card && status.card.last4) {
+          const label = document.createElement("span");
+          label.textContent = t("store_billing_card_registered") + "：";
+          const value = document.createElement("strong");
+          value.textContent = formatBillingCard(status.card);
+          statusBox.appendChild(label);
+          statusBox.appendChild(value);
+        } else {
+          statusBox.textContent = t("store_billing_card_none");
+        }
+        document.getElementById("billingStartButton").textContent = t(
+          status.card && status.card.last4 ? "store_billing_change_button" : "store_billing_start_button"
+        );
+        document.getElementById("billingStartButton").hidden = !document.getElementById("billingForm").hidden;
+        updateBillingSubmitButton();
+        if (billingLastMessage) {
+          showBillingMessage(billingLastMessage.key, billingLastMessage.type);
+        }
+      }
+
+      function updateBillingSubmitButton() {
+        document.getElementById("billingSubmitButton").disabled =
+          billingBusy || !billingSetup || !document.getElementById("billingConsentCheck").checked;
+      }
+
+      function loadBillingStatuses() {
+        const stores = billingOwnerStores();
+        billingStatusByStore = {};
+        return Promise.all(stores.map(function (store) {
+          return callStoreApi({ mode: "storeBillingStatus", storeId: store.storeId })
+            .then(function (response) {
+              if (response.status === 200 && response.result && response.result.success) {
+                billingStatusByStore[store.storeId] = response.result;
+              }
+            })
+            .catch(function () {});
+        })).then(function () {
+          renderBillingSection();
+          return resumeBillingRedirect();
+        });
+      }
+
+      function closeBillingForm() {
+        billingSetup = null;
+        billingElements = null;
+        document.getElementById("billingForm").hidden = true;
+        document.getElementById("billingPaymentElement").textContent = "";
+        document.getElementById("billingConsentCheck").checked = false;
+        renderBillingSection();
+      }
+
+      function startBillingSetup() {
+        if (billingBusy) {
+          return;
+        }
+        const storeId = selectedBillingStoreId();
+        billingBusy = true;
+        showBillingMessage("store_billing_loading", "info");
+        callStoreApi({ mode: "storeBillingSetupIntentCreate", storeId: storeId })
+          .then(function (response) {
+            const result = response.result || {};
+            if (response.status !== 200 || !result.success || !result.clientSecret || !result.publishableKey) {
+              throw { billingReason: result.reason || "" };
+            }
+            return loadStripeJs().then(function (StripeConstructor) {
+              billingStripe = StripeConstructor(result.publishableKey);
+              billingElements = billingStripe.elements({
+                clientSecret: result.clientSecret,
+                locale: currentLanguage === "en" ? "en" : "ja"
+              });
+              billingElements.create("payment", { layout: "tabs" }).mount("#billingPaymentElement");
+              billingSetup = { storeId: storeId, setupIntentId: result.setupIntentId, consentVersion: result.consentVersion };
+              document.getElementById("billingForm").hidden = false;
+              document.getElementById("billingStartButton").hidden = true;
+              showBillingMessage("", "");
+            });
+          })
+          .catch(function (error) {
+            const reason = error && error.billingReason !== undefined ? error.billingReason : "";
+            showBillingMessage(BILLING_ERROR_KEYS[reason] || (error && error.message === "stripe_js_unavailable" ? "store_billing_err_stripe" : "store_billing_err_generic"), "error");
+          })
+          .finally(function () {
+            billingBusy = false;
+            updateBillingSubmitButton();
+          });
+      }
+
+      function confirmBillingOnServer(storeId, setupIntentId, consentVersion) {
+        showBillingMessage("store_billing_confirming", "info");
+        return callStoreApi({
+          mode: "storeBillingSetupConfirm",
+          storeId: storeId,
+          setupIntentId: setupIntentId,
+          consentVersion: consentVersion
+        }).then(function (response) {
+          const result = response.result || {};
+          if (response.status !== 200 || !result.success) {
+            showBillingMessage(BILLING_ERROR_KEYS[result.reason] || "store_billing_err_generic", "error");
+            return;
+          }
+          if (result.status === "succeeded") {
+            billingStatusByStore[storeId] = Object.assign({}, billingStatusByStore[storeId], { card: result.card });
+            closeBillingForm();
+            showBillingMessage("store_billing_saved", "success");
+          } else if (result.status === "requires_action") {
+            showBillingMessage("store_billing_err_requires_action", "error");
+          } else if (result.status === "processing") {
+            showBillingMessage("store_billing_processing", "info");
+          } else {
+            showBillingMessage("store_billing_err_failed", "error");
+          }
+        });
+      }
+
+      function submitBillingSetup() {
+        if (billingBusy || !billingSetup || !billingStripe || !billingElements) {
+          return;
+        }
+        if (!document.getElementById("billingConsentCheck").checked) {
+          showBillingMessage("store_billing_err_consent", "error");
+          return;
+        }
+        const setup = billingSetup;
+        billingBusy = true;
+        updateBillingSubmitButton();
+        showBillingMessage("store_billing_confirming", "info");
+        try {
+          sessionStorage.setItem(BILLING_CONSENT_STORAGE_KEY, JSON.stringify({ storeId: setup.storeId, consentVersion: setup.consentVersion }));
+        } catch (error) {
+          // 保存できなくても、リダイレクトの無いカード登録は続けられる。
+        }
+        const returnUrl = window.location.origin + window.location.pathname + "?billingStore=" + encodeURIComponent(setup.storeId);
+        billingStripe.confirmSetup({
+          elements: billingElements,
+          redirect: "if_required",
+          confirmParams: { return_url: returnUrl }
+        })
+          .then(function (result) {
+            if (result && result.error) {
+              const box = document.getElementById("billingMessage");
+              billingLastMessage = null;
+              box.textContent = result.error.message || t("store_billing_err_failed");
+              box.className = "message show error";
+              return;
+            }
+            const setupIntentId = result && result.setupIntent && result.setupIntent.id ? result.setupIntent.id : setup.setupIntentId;
+            return confirmBillingOnServer(setup.storeId, setupIntentId, setup.consentVersion);
+          })
+          .catch(function () {
+            showBillingMessage("store_billing_err_generic", "error");
+          })
+          .finally(function () {
+            billingBusy = false;
+            updateBillingSubmitButton();
+          });
+      }
+
+      // 外部の認証画面から戻った時(?setup_intent=...&billingStore=...)は、サーバーで確定する。
+      function resumeBillingRedirect() {
+        const params = new URLSearchParams(window.location.search);
+        const setupIntentId = params.get("setup_intent") || "";
+        const storeId = params.get("billingStore") || "";
+        if (!/^seti_[A-Za-z0-9]+$/.test(setupIntentId) || storeId === "") {
+          return Promise.resolve();
+        }
+        let consentVersion = "";
+        try {
+          const saved = JSON.parse(sessionStorage.getItem(BILLING_CONSENT_STORAGE_KEY) || "null");
+          if (saved && saved.storeId === storeId) {
+            consentVersion = saved.consentVersion;
+          }
+        } catch (error) {
+          consentVersion = "";
+        }
+        try {
+          window.history.replaceState(null, "", window.location.pathname);
+        } catch (error) {
+          // URLを戻せなくても確定処理は続ける。
+        }
+        return confirmBillingOnServer(storeId, setupIntentId, consentVersion);
       }
 
       // ===== 運営無料掲載 → 店舗オーナー化 MVP-1｜オーナー申請 =====
@@ -1817,8 +2133,22 @@
               // localStorageが使えなくても表示切替は続ける。
             }
             applyLanguage();
+            renderBillingSection();
           });
         });
+
+        // 今だけ投稿 決済 STEP 31｜お支払い方法
+        document.getElementById("billingStoreSelect").addEventListener("change", function () {
+          closeBillingForm();
+          showBillingMessage("", "");
+        });
+        document.getElementById("billingStartButton").addEventListener("click", startBillingSetup);
+        document.getElementById("billingSubmitButton").addEventListener("click", submitBillingSetup);
+        document.getElementById("billingCancelButton").addEventListener("click", function () {
+          closeBillingForm();
+          showBillingMessage("", "");
+        });
+        document.getElementById("billingConsentCheck").addEventListener("change", updateBillingSubmitButton);
       }
 
       function init() {
