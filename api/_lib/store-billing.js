@@ -329,6 +329,11 @@ async function ensureStripeCustomer(database, config, deps, storeId, uid) {
   return { ok: true, customerId: customerId };
 }
 
+// Stripeが計算した利用可能な決済手段がカードだけかを確かめる(カード以外は画面に出さない)。
+function isCardOnlyPaymentMethodTypes(types) {
+  return Array.isArray(types) && types.length === 1 && types[0] === "card";
+}
+
 function respondStripeFailure(response, failure) {
   const stripeError = failure || {};
 
@@ -387,7 +392,8 @@ export async function handleStoreBillingSetupIntentCreate(request, response, dep
       {
         "customer": customer.customerId,
         "usage": "off_session",
-        "payment_method_types[]": "card",
+        // 現行APIでは payment_method_types を送ると400になるため、許可リストでカードだけに絞る。
+        "allowed_payment_method_types[]": "card",
         "metadata[storeId]": storeId,
         "metadata[machinauMode]": config.mode
       },
@@ -398,7 +404,8 @@ export async function handleStoreBillingSetupIntentCreate(request, response, dep
       !setupIntent.ok ||
       typeof setupIntent.data.id !== "string" ||
       !STRIPE_SETUP_INTENT_ID_PATTERN.test(setupIntent.data.id) ||
-      typeof setupIntent.data.client_secret !== "string"
+      typeof setupIntent.data.client_secret !== "string" ||
+      !isCardOnlyPaymentMethodTypes(setupIntent.data.payment_method_types)
     ) {
       return respondStripeFailure(response, setupIntent);
     }
