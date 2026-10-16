@@ -411,22 +411,27 @@ export async function handleStoreBillingSetupIntentCreate(request, response, dep
     }
 
     // 入れ子の項目は、既存の値＋変更をまとめて書く(合流の仕方に依存しない)。
+    // 同時に確定したカードを古い読み取り結果で戻さないよう、読み取りと保存はトランザクションで行う。
     const billingRef = database.collection(STORE_BILLING_COLLECTION).doc(storeId);
-    const latest = await billingRef.get();
-    const latestSection = readModeSection(latest.exists ? latest.data() : null, config.mode);
 
-    await billingRef.set(
-      {
-        storeId: storeId,
-        [config.mode]: {
-          ...latestSection,
-          pendingSetupIntentId: setupIntent.data.id,
-          pendingSetupStartedAt: FieldValue.serverTimestamp(),
-          pendingSetupStartedByUid: actor.uid
-        }
-      },
-      { merge: true }
-    );
+    await database.runTransaction(async function(transaction) {
+      const latest = await transaction.get(billingRef);
+      const latestSection = readModeSection(latest.exists ? latest.data() : null, config.mode);
+
+      transaction.set(
+        billingRef,
+        {
+          storeId: storeId,
+          [config.mode]: {
+            ...latestSection,
+            pendingSetupIntentId: setupIntent.data.id,
+            pendingSetupStartedAt: FieldValue.serverTimestamp(),
+            pendingSetupStartedByUid: actor.uid
+          }
+        },
+        { merge: true }
+      );
+    });
 
     return response.status(200).json({
       success: true,
@@ -539,25 +544,51 @@ export async function handleStoreBillingSetupConfirm(request, response, deps) {
       expYear: Number.isInteger(card.exp_year) ? card.exp_year : 0
     };
 
-    await billingRef.set(
-      {
-        storeId: storeId,
-        [config.mode]: {
-          ...section,
-          paymentMethodId: paymentMethod.id,
-          card: cardSummary,
-          setupStatus: "succeeded",
-          lastSetupIntentId: setupIntentId,
-          pendingSetupIntentId: "",
-          consentVersion: STORE_BILLING_CONSENT_VERSION,
-          consentAt: FieldValue.serverTimestamp(),
-          consentByUid: actor.uid,
-          updatedAt: FieldValue.serverTimestamp(),
-          updatedByUid: actor.uid
-        }
-      },
-      { merge: true }
-    );
+    // Stripeへの照会は上で済ませ、ここではFirestoreだけを扱う。登録中のSetupIntentの一致確認と
+    // 新しいカードの保存を同じトランザクションで行い、別タブ・同時操作の古いSetupIntentが
+    // 新しい登録状態を上書きしないようにする(一致しなければ保存せず、登録済みカードはそのまま)。
+    // cardVersionは保存が成立するたびに1つ増える(既存データは未設定=0として扱う)。
+    const committed = await database.runTransaction(async function(transaction) {
+      const current = await transaction.get(billingRef);
+      const currentSection = readModeSection(current.exists ? current.data() : null, config.mode);
+
+      if (
+        currentSection.customerId !== section.customerId ||
+        currentSection.pendingSetupIntentId !== setupIntentId
+      ) {
+        return false;
+      }
+
+      const previousCardVersion = Number.isInteger(currentSection.cardVersion) ? currentSection.cardVersion : 0;
+
+      transaction.set(
+        billingRef,
+        {
+          storeId: storeId,
+          [config.mode]: {
+            ...currentSection,
+            paymentMethodId: paymentMethod.id,
+            card: cardSummary,
+            cardVersion: previousCardVersion + 1,
+            setupStatus: "succeeded",
+            lastSetupIntentId: setupIntentId,
+            pendingSetupIntentId: "",
+            consentVersion: STORE_BILLING_CONSENT_VERSION,
+            consentAt: FieldValue.serverTimestamp(),
+            consentByUid: actor.uid,
+            updatedAt: FieldValue.serverTimestamp(),
+            updatedByUid: actor.uid
+          }
+        },
+        { merge: true }
+      );
+
+      return true;
+    });
+
+    if (!committed) {
+      return sendError(response, 409, "setup_intent_mismatch");
+    }
 
     return response.status(200).json({ success: true, status: "succeeded", card: cardSummary });
   } catch (error) {
