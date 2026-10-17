@@ -15,7 +15,7 @@
 // 保存先(サーバーのAdmin SDKだけが読み書きする。ブラウザからは読み書き不可にする)
 //   storeBilling/{storeId}
 //     test: { customerId, paymentMethodId, card: { brand, last4, expMonth, expYear }, cardVersion,
-//             detachPendingPaymentMethods: [ 置き換え前のカード(取り外し待ち) ],
+//             detachPendingPaymentMethods: [ 置き換え前のカード(取り外し待ち) ], lastDetachResult,
 //             pendingSetupIntentId, consentVersion, consentAt, updatedAt, updatedByUid }
 //     live: (本番用。この工程では作らない)
 //   PreviewとProductionは同じFirestoreなので、テスト用と本番用は必ず別の項目に分ける。
@@ -31,8 +31,16 @@ import {
 } from "firebase-admin/firestore";
 
 import {
+  randomUUID
+} from "node:crypto";
+
+import {
   requireVerifiedStoreUser
 } from "./store-self-service.js";
+
+import {
+  IMADAKE_CV_BILLING_STARTED
+} from "./imadake.js";
 
 export const STORE_BILLING_COLLECTION =
   "storeBilling";
@@ -150,11 +158,11 @@ function encodeStripeForm(params) {
 
 // Stripe APIを呼ぶ。失敗しても例外は投げず { ok:false, status, type, code } を返す
 // (キー・応答本文はどこにも出さない)。
-async function callStripe(config, deps, method, path, params, idempotencyKey) {
+async function callStripe(config, deps, method, path, params, idempotencyKey, timeoutMs) {
   const abortController = new AbortController();
   const timeoutId = setTimeout(function() {
     abortController.abort();
-  }, STRIPE_REQUEST_TIMEOUT_MS);
+  }, timeoutMs || STRIPE_REQUEST_TIMEOUT_MS);
 
   const headers = {
     "Authorization": "Bearer " + config.serverKey
@@ -361,6 +369,275 @@ function isCardOnlyPaymentMethodTypes(types) {
   return Array.isArray(types) && types.length === 1 && types[0] === "card";
 }
 
+// ---------------------------------------------------------------------------
+// STEP 31-B②｜取り外し待ちの旧カードを、1件ずつ安全にStripeから取り外す
+// ---------------------------------------------------------------------------
+// 流れ(Stripe APIはトランザクションの外でだけ呼ぶ):
+//   ① 確保(トランザクション)：pending(再試行時刻を過ぎたもの)か、確保期限切れのdetachingを1件選び、
+//      現在のカードと違うことを確かめて state=detaching・leaseId・leaseUntilMs を書く。
+//   ② 照会：GET /v1/payment_methods/{id}。IDとtype=cardを確認し、customerが空なら取り外し済み、
+//      保存済みの顧客と違えば触らずに保留(blocked)、一致したときだけ③へ。
+//   ③ 取り外し：POST /v1/payment_methods/{id}/detach(冪等キー付き)。確保期限が近ければ送らない。
+//   ④ 反映(トランザクション)：leaseIdが一致する項目だけを更新する。成功→一覧から除く、
+//      失敗→pendingに戻して再試行時刻とエラー(status・type・codeだけ)を残す。
+// 安全の前提：取り外し待ちのカードは現在のカードとして保存されない(確定時に拒否)ため、
+// ②〜③の間にカード変更が起きても、取り外す対象が現在のカードになることはない。
+// 請求が始まった後(課金開始フラグがtrue)、または請求ロック(billingLock)がある間は、取り外さずに保留する。
+const DETACH_LEASE_MS =
+  60 * 1000;
+
+// 確保期限の残りがこれより短ければ、取り外しを送らない(期限切れ後の別処理と重ならないように)。
+const DETACH_LEASE_SAFETY_MS =
+  20 * 1000;
+
+const DETACH_STRIPE_TIMEOUT_MS =
+  5000;
+
+const DETACH_MAX_ATTEMPTS =
+  5;
+
+const DETACH_RETRY_BASE_MS =
+  60 * 1000;
+
+// 権限不足(401・403)は回数切れにせず、間隔をあけて再試行する(権限を直せば回復する)。
+const DETACH_AUTH_RETRY_MS =
+  60 * 60 * 1000;
+
+function currentTimeMs(deps) {
+  return deps && typeof deps.now === "function" ? deps.now() : Date.now();
+}
+
+function isDetachAllowedNow(section) {
+  // 月次請求は未実装。請求が始まった後は、未完了の請求との関係を確かめる処理が入るまで取り外さない。
+  return IMADAKE_CV_BILLING_STARTED === false && !section.billingLock;
+}
+
+function isClaimableDetachEntry(entry, nowMs) {
+  if (entry.state === "pending") {
+    return !(Number(entry.nextRetryAtMs) > nowMs);
+  }
+
+  if (entry.state === "detaching") {
+    return !(Number(entry.leaseUntilMs) > nowMs);
+  }
+
+  return false;
+}
+
+function summarizeStripeError(failure) {
+  const source = failure || {};
+
+  return {
+    status: Number.isInteger(source.status) ? source.status : 0,
+    type: typeof source.type === "string" ? source.type.slice(0, 60) : "",
+    code: typeof source.code === "string" ? source.code.slice(0, 60) : ""
+  };
+}
+
+async function claimDetachEntry(database, billingRef, config, nowMs) {
+  return database.runTransaction(async function(transaction) {
+    const snapshot = await transaction.get(billingRef);
+    const section = readModeSection(snapshot.exists ? snapshot.data() : null, config.mode);
+
+    if (!isDetachAllowedNow(section) || typeof section.customerId !== "string" || section.customerId === "") {
+      return null;
+    }
+
+    const list = readDetachPending(section);
+    const currentPaymentMethodId = typeof section.paymentMethodId === "string" ? section.paymentMethodId : "";
+    const index = list.findIndex(function(entry) {
+      return (
+        STRIPE_PAYMENT_METHOD_ID_PATTERN.test(entry.paymentMethodId) &&
+        entry.paymentMethodId !== currentPaymentMethodId &&
+        isClaimableDetachEntry(entry, nowMs)
+      );
+    });
+
+    if (index < 0) {
+      return null;
+    }
+
+    const leaseId = randomUUID();
+    const leaseUntilMs = nowMs + DETACH_LEASE_MS;
+    const nextList = list.slice();
+
+    nextList[index] = {
+      ...list[index],
+      state: "detaching",
+      leaseId: leaseId,
+      leaseUntilMs: leaseUntilMs,
+      attempts: (Number.isInteger(list[index].attempts) ? list[index].attempts : 0) + 1,
+      lastAttemptAtMs: nowMs
+    };
+
+    transaction.set(
+      billingRef,
+      { [config.mode]: { ...section, detachPendingPaymentMethods: nextList } },
+      { merge: true }
+    );
+
+    return {
+      paymentMethodId: list[index].paymentMethodId,
+      customerId: section.customerId,
+      leaseId: leaseId,
+      leaseUntilMs: leaseUntilMs
+    };
+  });
+}
+
+// result: { kind: "done", outcome } | { kind: "blocked", reason } | { kind: "retry", error }
+async function finishDetachEntry(database, billingRef, config, claim, result, nowMs) {
+  return database.runTransaction(async function(transaction) {
+    const snapshot = await transaction.get(billingRef);
+    const section = readModeSection(snapshot.exists ? snapshot.data() : null, config.mode);
+    const list = readDetachPending(section);
+    const index = list.findIndex(function(entry) {
+      return entry.paymentMethodId === claim.paymentMethodId && entry.leaseId === claim.leaseId;
+    });
+
+    // 確保が期限切れで別の処理に引き継がれていたら、何も書かない(記録は引き継いだ側が扱う)。
+    if (index < 0) {
+      return false;
+    }
+
+    const nextList = list.slice();
+    const extra = {};
+
+    if (result.kind === "done") {
+      nextList.splice(index, 1);
+      extra.lastDetachResult = {
+        paymentMethodId: claim.paymentMethodId,
+        outcome: result.outcome,
+        atMs: nowMs
+      };
+    } else if (result.kind === "blocked") {
+      nextList[index] = {
+        ...list[index],
+        state: "blocked",
+        blockedReason: result.reason,
+        leaseId: "",
+        leaseUntilMs: 0
+      };
+    } else {
+      const error = result.error || {};
+      const isAuthError = error.status === 401 || error.status === 403;
+      const attempts = Number.isInteger(list[index].attempts) ? list[index].attempts : 0;
+      const exhausted = !isAuthError && attempts >= DETACH_MAX_ATTEMPTS;
+
+      nextList[index] = {
+        ...list[index],
+        state: exhausted ? "failed" : "pending",
+        leaseId: "",
+        leaseUntilMs: 0,
+        lastError: error,
+        nextRetryAtMs:
+          nowMs + (isAuthError ? DETACH_AUTH_RETRY_MS : DETACH_RETRY_BASE_MS * Math.pow(2, Math.max(0, attempts - 1)))
+      };
+    }
+
+    transaction.set(
+      billingRef,
+      { [config.mode]: { ...section, ...extra, detachPendingPaymentMethods: nextList } },
+      { merge: true }
+    );
+
+    return true;
+  });
+}
+
+// 取り外し待ちを最大maxEntries件まで処理する。失敗しても例外を投げない(呼び出し元の操作を失敗させない)。
+async function processDetachPending(database, config, deps, storeId, maxEntries) {
+  const billingRef = database.collection(STORE_BILLING_COLLECTION).doc(storeId);
+  let processed = 0;
+
+  for (let count = 0; count < maxEntries; count++) {
+    let claim = null;
+
+    try {
+      claim = await claimDetachEntry(database, billingRef, config, currentTimeMs(deps));
+    } catch (error) {
+      console.error("店舗カード登録：取り外し対象の確保エラー：", error && error.message);
+      return processed;
+    }
+
+    if (!claim) {
+      return processed;
+    }
+
+    let result;
+    const fetched = await callStripe(
+      config,
+      deps,
+      "GET",
+      "/payment_methods/" + claim.paymentMethodId,
+      {},
+      null,
+      DETACH_STRIPE_TIMEOUT_MS
+    );
+
+    if (!fetched.ok) {
+      result =
+        fetched.status === 404
+          ? { kind: "blocked", reason: "payment_method_not_found" }
+          : { kind: "retry", error: summarizeStripeError(fetched) };
+    } else {
+      const paymentMethod = fetched.data || {};
+      const owner =
+        typeof paymentMethod.customer === "string"
+          ? paymentMethod.customer
+          : paymentMethod.customer && typeof paymentMethod.customer.id === "string"
+            ? paymentMethod.customer.id
+            : "";
+
+      if (paymentMethod.id !== claim.paymentMethodId || paymentMethod.type !== "card") {
+        result = { kind: "blocked", reason: "payment_method_unexpected" };
+      } else if (owner === "") {
+        result = { kind: "done", outcome: "already_detached" };
+      } else if (owner !== claim.customerId) {
+        result = { kind: "blocked", reason: "customer_mismatch" };
+      } else if (currentTimeMs(deps) > claim.leaseUntilMs - DETACH_LEASE_SAFETY_MS) {
+        result = { kind: "retry", error: { status: 0, type: "lease_too_short", code: "" } };
+      } else {
+        const detached = await callStripe(
+          config,
+          deps,
+          "POST",
+          "/payment_methods/" + claim.paymentMethodId + "/detach",
+          {},
+          "machinau-detach-" + config.mode + "-" + claim.paymentMethodId,
+          DETACH_STRIPE_TIMEOUT_MS
+        );
+
+        result = detached.ok
+          ? { kind: "done", outcome: "detached" }
+          : { kind: "retry", error: summarizeStripeError(detached) };
+      }
+    }
+
+    try {
+      await finishDetachEntry(database, billingRef, config, claim, result, currentTimeMs(deps));
+    } catch (error) {
+      // 反映に失敗しても、項目はdetachingのまま残る。確保期限が切れた後の再処理で、
+      // 照会(取り外し済みならcustomerが空)から正しく完了させる。
+      console.error("店舗カード登録：取り外し結果の保存エラー：", error && error.message);
+      return processed;
+    }
+
+    processed++;
+  }
+
+  return processed;
+}
+
+async function processDetachPendingSafely(database, config, deps, storeId, maxEntries) {
+  try {
+    return await processDetachPending(database, config, deps, storeId, maxEntries);
+  } catch (error) {
+    console.error("店舗カード登録：取り外し処理エラー：", error && error.message);
+    return 0;
+  }
+}
+
 function respondStripeFailure(response, failure) {
   const stripeError = failure || {};
 
@@ -395,11 +672,20 @@ export async function handleStoreBillingSetupIntentCreate(request, response, dep
     }
 
     // 取り外し待ちが上限に達している間は、Stripeに何も作らずに止める(旧カードの記録を捨てない)。
-    const queueSnapshot = await database.collection(STORE_BILLING_COLLECTION).doc(storeId).get();
+    // 上限に達していたら、先に取り外しを最大2件試してから数え直す(回復の機会)。
+    const queueRef = database.collection(STORE_BILLING_COLLECTION).doc(storeId);
+    const queueSnapshot = await queueRef.get();
     const queueSection = readModeSection(queueSnapshot.exists ? queueSnapshot.data() : null, config.mode);
 
     if (readDetachPending(queueSection).length >= DETACH_PENDING_LIMIT) {
-      return sendError(response, 409, "detach_pending_limit");
+      await processDetachPendingSafely(database, config, deps, storeId, 2);
+
+      const recheckSnapshot = await queueRef.get();
+      const recheckSection = readModeSection(recheckSnapshot.exists ? recheckSnapshot.data() : null, config.mode);
+
+      if (readDetachPending(recheckSection).length >= DETACH_PENDING_LIMIT) {
+        return sendError(response, 409, "detach_pending_limit");
+      }
     }
 
     const allowed = await deps.claimRateLimit(
@@ -663,6 +949,9 @@ export async function handleStoreBillingSetupConfirm(request, response, deps) {
     if (outcome !== "committed") {
       return sendError(response, 409, outcome);
     }
+
+    // 新しいカードの保存が成立した後だけ、旧カードの取り外しを1件試す(失敗しても登録成功のまま)。
+    await processDetachPendingSafely(database, config, deps, storeId, 1);
 
     return response.status(200).json({ success: true, status: "succeeded", card: cardSummary });
   } catch (error) {
