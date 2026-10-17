@@ -480,7 +480,8 @@ async function claimDetachEntry(database, billingRef, config, nowMs) {
       paymentMethodId: list[index].paymentMethodId,
       customerId: section.customerId,
       leaseId: leaseId,
-      leaseUntilMs: leaseUntilMs
+      leaseUntilMs: leaseUntilMs,
+      attempts: nextList[index].attempts
     };
   });
 }
@@ -604,7 +605,9 @@ async function processDetachPending(database, config, deps, storeId, maxEntries)
           "POST",
           "/payment_methods/" + claim.paymentMethodId + "/detach",
           {},
-          "machinau-detach-" + config.mode + "-" + claim.paymentMethodId,
+          // Stripeは同じ冪等キーの再送に最初の応答(500も含む)を返すため、確保のたびに番号を変える。
+          // 同じ確保の中の重複送信だけが同じキーになる(二重の取り外しは照会と確保期限で防ぐ)。
+          "machinau-detach-" + config.mode + "-" + claim.paymentMethodId + "-" + claim.attempts,
           DETACH_STRIPE_TIMEOUT_MS
         );
 
