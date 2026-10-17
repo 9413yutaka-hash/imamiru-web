@@ -14,7 +14,8 @@
 //
 // 保存先(サーバーのAdmin SDKだけが読み書きする。ブラウザからは読み書き不可にする)
 //   storeBilling/{storeId}
-//     test: { customerId, paymentMethodId, card: { brand, last4, expMonth, expYear },
+//     test: { customerId, paymentMethodId, card: { brand, last4, expMonth, expYear }, cardVersion,
+//             detachPendingPaymentMethods: [ 置き換え前のカード(取り外し待ち) ],
 //             pendingSetupIntentId, consentVersion, consentAt, updatedAt, updatedByUid }
 //     live: (本番用。この工程では作らない)
 //   PreviewとProductionは同じFirestoreなので、テスト用と本番用は必ず別の項目に分ける。
@@ -59,6 +60,32 @@ const ALLOWED_STRIPE_MODES =
 
 const STRIPE_SETUP_INTENT_ID_PATTERN =
   /^seti_[A-Za-z0-9]{1,100}$/;
+
+// 現在のカードとして保存するIDと、取り外し待ちに記録するIDは同じ条件で判定する(記録漏れを防ぐ)。
+const STRIPE_PAYMENT_METHOD_ID_PATTERN =
+  /^pm_[A-Za-z0-9_]{1,100}$/;
+
+// カード変更で置き換わった旧カードの「取り外し待ち」の上限。上限に達している間は新しい
+// カード変更を始めさせない(確定時には記録を捨てない)。取り外し処理は別の工程で追加する。
+const DETACH_PENDING_LIMIT =
+  10;
+
+// 取り外し待ち(detachPendingPaymentMethods)の1件:
+//   { paymentMethodId, state: "pending", queuedAtMs, queuedCardVersion, attempts }
+// 一度ここに入ったカードは、二度と現在のカードとして保存しない(確定時に拒否する)。
+function readDetachPending(section) {
+  const list = Array.isArray(section.detachPendingPaymentMethods) ? section.detachPendingPaymentMethods : [];
+
+  return list.filter(function(entry) {
+    return entry && typeof entry.paymentMethodId === "string" && entry.paymentMethodId !== "";
+  });
+}
+
+function isDetachPending(list, paymentMethodId) {
+  return list.some(function(entry) {
+    return entry.paymentMethodId === paymentMethodId;
+  });
+}
 
 const STORE_ID_PATTERN =
   /^[A-Za-z0-9_-]{1,128}$/;
@@ -367,6 +394,14 @@ export async function handleStoreBillingSetupIntentCreate(request, response, dep
       return sendError(response, 503, "billing_unavailable", { unavailableReason: config.reason });
     }
 
+    // 取り外し待ちが上限に達している間は、Stripeに何も作らずに止める(旧カードの記録を捨てない)。
+    const queueSnapshot = await database.collection(STORE_BILLING_COLLECTION).doc(storeId).get();
+    const queueSection = readModeSection(queueSnapshot.exists ? queueSnapshot.data() : null, config.mode);
+
+    if (readDetachPending(queueSection).length >= DETACH_PENDING_LIMIT) {
+      return sendError(response, 409, "detach_pending_limit");
+    }
+
     const allowed = await deps.claimRateLimit(
       database,
       STORE_BILLING_RATE_LIMITS_COLLECTION,
@@ -531,10 +566,23 @@ export async function handleStoreBillingSetupConfirm(request, response, deps) {
     if (
       !paymentMethod ||
       typeof paymentMethod.id !== "string" ||
-      !paymentMethod.id.startsWith("pm_") ||
+      !STRIPE_PAYMENT_METHOD_ID_PATTERN.test(paymentMethod.id) ||
       !card
     ) {
       return sendError(response, 502, "stripe_request_failed");
+    }
+
+    // 新しいカードが、保存済みのStripe顧客に付いていることを確かめる。別の顧客のカード・
+    // 取り外し済み(customerが空)のカードは、現在のカードとして保存しない。
+    const paymentMethodCustomer =
+      typeof paymentMethod.customer === "string"
+        ? paymentMethod.customer
+        : paymentMethod.customer && typeof paymentMethod.customer.id === "string"
+          ? paymentMethod.customer.id
+          : "";
+
+    if (paymentMethodCustomer === "" || paymentMethodCustomer !== section.customerId) {
+      return sendError(response, 409, "payment_method_mismatch");
     }
 
     const cardSummary = {
@@ -548,7 +596,9 @@ export async function handleStoreBillingSetupConfirm(request, response, deps) {
     // 新しいカードの保存を同じトランザクションで行い、別タブ・同時操作の古いSetupIntentが
     // 新しい登録状態を上書きしないようにする(一致しなければ保存せず、登録済みカードはそのまま)。
     // cardVersionは保存が成立するたびに1つ増える(既存データは未設定=0として扱う)。
-    const committed = await database.runTransaction(async function(transaction) {
+    // 置き換え前のカードは、同じトランザクションで「取り外し待ち」に記録する(初回登録・同じカード・
+    // 記録済みのカードは記録しない。上限を超えても捨てない)。取り外し待ちのカードは現在のカードにしない。
+    const outcome = await database.runTransaction(async function(transaction) {
       const current = await transaction.get(billingRef);
       const currentSection = readModeSection(current.exists ? current.data() : null, config.mode);
 
@@ -556,10 +606,33 @@ export async function handleStoreBillingSetupConfirm(request, response, deps) {
         currentSection.customerId !== section.customerId ||
         currentSection.pendingSetupIntentId !== setupIntentId
       ) {
-        return false;
+        return "setup_intent_mismatch";
+      }
+
+      const detachPending = readDetachPending(currentSection);
+
+      if (isDetachPending(detachPending, paymentMethod.id)) {
+        return "payment_method_mismatch";
       }
 
       const previousCardVersion = Number.isInteger(currentSection.cardVersion) ? currentSection.cardVersion : 0;
+      const previousPaymentMethodId =
+        typeof currentSection.paymentMethodId === "string" ? currentSection.paymentMethodId : "";
+      const nextDetachPending = detachPending.slice();
+
+      if (
+        STRIPE_PAYMENT_METHOD_ID_PATTERN.test(previousPaymentMethodId) &&
+        previousPaymentMethodId !== paymentMethod.id &&
+        !isDetachPending(detachPending, previousPaymentMethodId)
+      ) {
+        nextDetachPending.push({
+          paymentMethodId: previousPaymentMethodId,
+          state: "pending",
+          queuedAtMs: Date.now(),
+          queuedCardVersion: previousCardVersion + 1,
+          attempts: 0
+        });
+      }
 
       transaction.set(
         billingRef,
@@ -570,6 +643,7 @@ export async function handleStoreBillingSetupConfirm(request, response, deps) {
             paymentMethodId: paymentMethod.id,
             card: cardSummary,
             cardVersion: previousCardVersion + 1,
+            detachPendingPaymentMethods: nextDetachPending,
             setupStatus: "succeeded",
             lastSetupIntentId: setupIntentId,
             pendingSetupIntentId: "",
@@ -583,11 +657,11 @@ export async function handleStoreBillingSetupConfirm(request, response, deps) {
         { merge: true }
       );
 
-      return true;
+      return "committed";
     });
 
-    if (!committed) {
-      return sendError(response, 409, "setup_intent_mismatch");
+    if (outcome !== "committed") {
+      return sendError(response, 409, outcome);
     }
 
     return response.status(200).json({ success: true, status: "succeeded", card: cardSummary });
