@@ -38,9 +38,6 @@ import {
   requireVerifiedStoreUser
 } from "./store-self-service.js";
 
-import {
-  IMADAKE_CV_BILLING_STARTED
-} from "./imadake.js";
 
 export const STORE_BILLING_COLLECTION =
   "storeBilling";
@@ -382,7 +379,13 @@ function isCardOnlyPaymentMethodTypes(types) {
 //      失敗→pendingに戻して再試行時刻とエラー(status・type・codeだけ)を残す。
 // 安全の前提：取り外し待ちのカードは現在のカードとして保存されない(確定時に拒否)ため、
 // ②〜③の間にカード変更が起きても、取り外す対象が現在のカードになることはない。
-// 請求が始まった後(課金開始フラグがtrue)、または請求ロック(billingLock)がある間は、取り外さずに保留する。
+// STEP 32-D①：課金開始フラグでは止めない。取り外すカードが未解決の月次請求(imadakeMonthlyInvoices)で
+// 使われている・使われた可能性がある間、またはその店舗の請求書を読めない間は、取り外さずに保留する(安全側)。
+// STEP 32-D③：請求ロック(billingLock)がある間も、ロックが指す請求書が実在して未解決で、使ったカードが
+// 記録されていることを確かめられた場合に限り、守るカード以外を取り外す。確かめられない時は全部止める。
+// 安全の根拠：月次請求は「確保した時点の現在のカード」だけを使う。取り外しの確保は「現在のカードではない」
+// ことをトランザクション内で確かめ、取り外し待ちのカードは二度と現在のカードにならない。したがって、
+// 取り外すカードを使う請求は、取り外しの確保より前に記録済みであり、確保の後の再確認で必ず見つかる。
 const DETACH_LEASE_MS =
   60 * 1000;
 
@@ -407,9 +410,65 @@ function currentTimeMs(deps) {
   return deps && typeof deps.now === "function" ? deps.now() : Date.now();
 }
 
-function isDetachAllowedNow(section) {
-  // 月次請求は未実装。請求が始まった後は、未完了の請求との関係を確かめる処理が入るまで取り外さない。
-  return IMADAKE_CV_BILLING_STARTED === false && !section.billingLock;
+// 請求ロックがある時は、ロックが指す請求書を確かめられた場合だけ取り外しを続ける(守るカードは別に除く)。
+function isDetachAllowedNow(section, protection) {
+  if (!section.billingLock) {
+    return true;
+  }
+
+  const lockInvoiceId = typeof section.billingLock.invoiceId === "string" ? section.billingLock.invoiceId : "";
+
+  return Boolean(protection && protection.ok && lockInvoiceId && protection.unresolvedInvoiceIds.has(lockInvoiceId));
+}
+
+const MONTHLY_INVOICES_COLLECTION =
+  "imadakeMonthlyInvoices";
+
+// 請求書の状態のうち、カードを取り外してよいと分かっているもの(支払いを作っていない、または支払い済み)。
+// これ以外(請求中・処理中・本人認証待ち・人の確認待ち・支払い失敗・知らない状態)は、使ったカードを守る。
+const INVOICE_STATUSES_RELEASING_CARD =
+  ["closing", "closed", "paid", "charge_error"];
+
+// その店舗の請求書から、取り外してはいけないカードを集める。読めなければ { ok:false }(取り外しを止める)。
+async function readInvoiceProtectedPaymentMethods(database, storeId) {
+  try {
+    const snapshot = await database
+      .collection(MONTHLY_INVOICES_COLLECTION)
+      .where("storeId", "==", storeId)
+      .get();
+
+    const protectedIds = new Set();
+    const unresolvedInvoiceIds = new Set();
+    let unknownCard = false;
+
+    snapshot.docs.forEach(function(doc) {
+      const invoice = doc.data() || {};
+      const usedId = typeof invoice.chargePaymentMethodId === "string" ? invoice.chargePaymentMethodId : "";
+      const releasing = INVOICE_STATUSES_RELEASING_CARD.includes(invoice.status) && invoice.chargeOutcomeUnknown !== true;
+
+      if (releasing) {
+        return;
+      }
+
+      unresolvedInvoiceIds.add(doc.id);
+
+      if (STRIPE_PAYMENT_METHOD_ID_PATTERN.test(usedId)) {
+        protectedIds.add(usedId);
+      } else {
+        // 未解決なのに使ったカードが分からない：どのカードを守ればよいか判断できない。
+        unknownCard = true;
+      }
+    });
+
+    if (unknownCard) {
+      return { ok: false, protectedIds: protectedIds, unresolvedInvoiceIds: unresolvedInvoiceIds };
+    }
+
+    return { ok: true, protectedIds: protectedIds, unresolvedInvoiceIds: unresolvedInvoiceIds };
+  } catch (error) {
+    console.error("店舗カード登録：請求書の確認エラー：", error && error.message);
+    return { ok: false, protectedIds: new Set(), unresolvedInvoiceIds: new Set() };
+  }
 }
 
 function isClaimableDetachEntry(entry, nowMs) {
@@ -434,12 +493,12 @@ function summarizeStripeError(failure) {
   };
 }
 
-async function claimDetachEntry(database, billingRef, config, nowMs) {
+async function claimDetachEntry(database, billingRef, config, nowMs, protection) {
   return database.runTransaction(async function(transaction) {
     const snapshot = await transaction.get(billingRef);
     const section = readModeSection(snapshot.exists ? snapshot.data() : null, config.mode);
 
-    if (!isDetachAllowedNow(section) || typeof section.customerId !== "string" || section.customerId === "") {
+    if (!isDetachAllowedNow(section, protection) || typeof section.customerId !== "string" || section.customerId === "") {
       return null;
     }
 
@@ -449,6 +508,7 @@ async function claimDetachEntry(database, billingRef, config, nowMs) {
       return (
         STRIPE_PAYMENT_METHOD_ID_PATTERN.test(entry.paymentMethodId) &&
         entry.paymentMethodId !== currentPaymentMethodId &&
+        !protection.protectedIds.has(entry.paymentMethodId) &&
         isClaimableDetachEntry(entry, nowMs)
       );
     });
@@ -546,6 +606,26 @@ async function finishDetachEntry(database, billingRef, config, claim, result, no
   });
 }
 
+// Stripeで取り外す直前の確認：請求ロックがなく、現在のカードではなく、未解決の請求書が使っていないこと。
+async function isStillSafeToDetach(database, billingRef, config, storeId, paymentMethodId) {
+  let section;
+
+  try {
+    const snapshot = await billingRef.get();
+    section = readModeSection(snapshot.exists ? snapshot.data() : null, config.mode);
+  } catch (error) {
+    return false;
+  }
+
+  if (section.paymentMethodId === paymentMethodId) {
+    return false;
+  }
+
+  const protection = await readInvoiceProtectedPaymentMethods(database, storeId);
+
+  return protection.ok && isDetachAllowedNow(section, protection) && !protection.protectedIds.has(paymentMethodId);
+}
+
 // 取り外し待ちを最大maxEntries件まで処理する。失敗しても例外を投げない(呼び出し元の操作を失敗させない)。
 async function processDetachPending(database, config, deps, storeId, maxEntries) {
   const billingRef = database.collection(STORE_BILLING_COLLECTION).doc(storeId);
@@ -554,8 +634,15 @@ async function processDetachPending(database, config, deps, storeId, maxEntries)
   for (let count = 0; count < maxEntries; count++) {
     let claim = null;
 
+    // 未解決の月次請求で使われている(使われた可能性がある)カードは確保しない。請求書を読めなければ止める。
+    const protection = await readInvoiceProtectedPaymentMethods(database, storeId);
+
+    if (!protection.ok) {
+      return processed;
+    }
+
     try {
-      claim = await claimDetachEntry(database, billingRef, config, currentTimeMs(deps));
+      claim = await claimDetachEntry(database, billingRef, config, currentTimeMs(deps), protection);
     } catch (error) {
       console.error("店舗カード登録：取り外し対象の確保エラー：", error && error.message);
       return processed;
@@ -598,6 +685,9 @@ async function processDetachPending(database, config, deps, storeId, maxEntries)
         result = { kind: "blocked", reason: "customer_mismatch" };
       } else if (currentTimeMs(deps) > claim.leaseUntilMs - DETACH_LEASE_SAFETY_MS) {
         result = { kind: "retry", error: { status: 0, type: "lease_too_short", code: "" } };
+      } else if (!(await isStillSafeToDetach(database, billingRef, config, storeId, claim.paymentMethodId))) {
+        // 確保の後に、請求ロックが付いた・未解決の請求書がこのカードを使っている・確認できない：送らない。
+        result = { kind: "retry", error: { status: 0, type: "protected_by_invoice", code: "" } };
       } else {
         const detached = await callStripe(
           config,

@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+
+  <title>
+    今だけ投稿の請求確認｜マチナウ運営
+  </title>
+
+  <!-- 今だけ投稿 決済 STEP 32-D⑥｜月次請求の運営確認画面(読み取り専用)。
+       サーバーの imadakeBillingOverview(requireAdmin・Firestoreを読むだけ・Stripeに接続しない)を呼び、
+       対応が必要な請求を表示する。支払い確定・再請求・ロック解除・カード変更・返金などの操作は置かない。
+       全ページの確認が終わり、エラーがなく、要確認が0件の時だけ「対応が必要な請求はありません」と表示する。
+       表示する値はすべて textContent で入れ、innerHTML に応答の値を入れない。
+       他のアカウントでログイン中でもログアウトさせない(旅行者の匿名ログインを消さないため)。 -->
+
+  <style>
+    :root {
+      --navy: #071a33;
+      --blue: #0788c9;
+      --sky: #dff7ff;
+      --green: #19a96b;
+      --red: #ef5a67;
+      --orange: #e88932;
+      --white: #ffffff;
+      --text: #15233a;
+      --subtext: #697386;
+      --border: #e2eaf1;
+      --background: #f4f8fb;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Yu Gothic", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+      background: var(--background);
+      color: var(--text);
+    }
+
+    header { background: var(--navy); color: var(--white); padding: 18px 20px; }
+    header .page-label { font-size: 12px; opacity: 0.8; }
+    header h1 { margin: 4px 0 0; font-size: 20px; }
+    header a { display: inline-block; margin-top: 10px; color: var(--sky); font-size: 13px; text-decoration: none; }
+
+    main { max-width: 860px; margin: 0 auto; padding: 20px 16px 60px; }
+
+    .panel { background: var(--white); border: 1px solid var(--border); border-radius: 16px; padding: 20px; margin-bottom: 20px; }
+    .panel h2 { margin: 0 0 14px; font-size: 16px; }
+
+    .field { margin-bottom: 16px; }
+    .field label { display: block; font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+    .field input { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; font-size: 14px; font-family: inherit; }
+
+    .primary-button, .secondary-button {
+      border-radius: 12px; padding: 11px 18px; font-size: 14px; font-weight: 700; font-family: inherit; cursor: pointer;
+    }
+    .primary-button { background: linear-gradient(135deg, var(--blue), #04b7d7); color: var(--white); border: none; }
+    .secondary-button { background: var(--white); color: var(--blue); border: 1px solid var(--blue); }
+    .primary-button:disabled, .secondary-button:disabled { opacity: 0.5; cursor: default; }
+
+    .message-box { display: none; margin-top: 12px; padding: 10px 12px; border-radius: 10px; font-size: 13px; line-height: 1.6; }
+    .message-box.show { display: block; }
+    .message-box.error { background: #fdecee; color: #a5303b; }
+    .message-box.info { background: var(--sky); color: var(--navy); }
+
+    #adminArea { display: none; }
+    #adminArea.visible { display: block; }
+
+    .overall { padding: 14px 16px; border-radius: 12px; font-size: 15px; font-weight: 700; line-height: 1.6; }
+    .overall.running { background: var(--sky); color: var(--navy); }
+    .overall.incomplete { background: #fff4e5; color: #8a4b08; border: 1px solid var(--orange); }
+    .overall.error { background: #fdecee; color: #a5303b; border: 1px solid var(--red); }
+    .overall.attention { background: #fdecee; color: #a5303b; }
+    .overall.ok { background: #e6f7ef; color: #0e6b43; }
+
+    .button-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+
+    .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 14px; font-size: 13px; }
+    .summary div { background: var(--background); border-radius: 10px; padding: 8px 10px; }
+    .summary strong { display: block; font-size: 16px; }
+
+    .note { font-size: 12px; color: var(--subtext); line-height: 1.6; margin-top: 10px; }
+
+    .item { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; }
+    .item-title { font-weight: 700; font-size: 14px; margin-bottom: 6px; overflow-wrap: anywhere; }
+    .item dl { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 0; font-size: 13px; }
+    .item dt { color: var(--subtext); }
+    .item dd { margin: 0; overflow-wrap: anywhere; }
+    .reasons { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .reason { background: #fdecee; color: #a5303b; border-radius: 999px; padding: 3px 10px; font-size: 12px; }
+    .errors li { overflow-wrap: anywhere; }
+
+    .inspect-button { margin-top: 10px; background: var(--white); color: var(--navy); border: 1px solid var(--border); border-radius: 10px; padding: 7px 12px; font-size: 13px; font-family: inherit; cursor: pointer; }
+    .inspect-button:disabled { opacity: 0.5; cursor: default; }
+    .inspect-result { margin-top: 10px; border-top: 1px dashed var(--border); padding-top: 10px; font-size: 13px; }
+    .verdict { display: inline-block; font-weight: 700; padding: 4px 10px; border-radius: 8px; margin-bottom: 6px; }
+    .verdict.severe { background: #fdecee; color: #a5303b; border: 1px solid var(--red); }
+    .verdict.incomplete { background: #fff4e5; color: #8a4b08; border: 1px solid var(--orange); }
+    .verdict.attention { background: #fff4e5; color: #8a4b08; }
+    .verdict.neutral { background: var(--background); color: var(--text); }
+    .verdict.ok { background: #e6f7ef; color: #0e6b43; }
+    .finding { margin: 2px 0; overflow-wrap: anywhere; }
+    .finding.severe { color: #a5303b; font-weight: 700; }
+    .pi-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12px; }
+    .pi-table th, .pi-table td { border: 1px solid var(--border); padding: 4px 6px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+    .pi-wrap { overflow-x: auto; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="page-label">マチナウ運営</div>
+    <h1>今だけ投稿の請求確認</h1>
+    <a href="admin.html">← 管理本部へ戻る</a>
+  </header>
+
+  <main>
+
+    <section id="loginPanel" class="panel">
+      <h2>管理者ログイン</h2>
+
+      <form id="loginForm" novalidate>
+        <div class="field">
+          <label for="adminEmail">メールアドレス</label>
+          <input id="adminEmail" type="text" autocomplete="email" required>
+        </div>
+
+        <div class="field">
+          <label for="adminPassword">パスワード</label>
+          <input id="adminPassword" type="password" autocomplete="current-password" required>
+        </div>
+
+        <button id="loginButton" class="primary-button" type="submit">管理画面へログイン</button>
+      </form>
+
+      <div id="loginMessage" class="message-box" role="status" aria-live="polite"></div>
+    </section>
+
+    <section id="adminArea">
+
+      <div class="panel">
+        <h2>確認の状況</h2>
+        <div id="overallStatus" class="overall running" role="status" aria-live="polite">確認していません。</div>
+
+        <div class="button-row">
+          <button id="restartButton" class="secondary-button" type="button">最初から確認する</button>
+          <button id="continueButton" class="primary-button" type="button" hidden>続きを確認する</button>
+          <button id="stripeCheckButton" class="secondary-button" type="button">Stripeとの接続を確認（読み取りのみ）</button>
+        </div>
+
+        <div id="stripeCheckResult" class="inspect-result" hidden></div>
+
+        <div class="summary">
+          <div>確認したページ<strong id="pageCount">0</strong></div>
+          <div>読んだ請求書<strong id="invoiceCount">0</strong></div>
+          <div>読んだ支払い情報<strong id="billingCount">0</strong></div>
+          <div>対応が必要<strong id="attentionCount">0</strong></div>
+        </div>
+
+        <p id="thresholdNote" class="note"></p>
+        <p class="note">この画面は確認専用です。支払いの確定・再請求・ロックの解除・カードの変更・返金はできません。「Stripeの記録を確認（読み取りのみ）」はStripeの記録を読むだけで、請求書の状態は変えません。</p>
+
+        <div id="errorBox" class="message-box error" role="alert"></div>
+      </div>
+
+      <div class="panel">
+        <h2>対応が必要な請求</h2>
+        <div id="itemList"></div>
+        <p id="displayLimitNote" class="note" hidden></p>
+      </div>
+
+    </section>
+
+  </main>
+
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore-compat.js"></script>
+  <script src="firebase.js"></script>
+
+  <script>
+    const ADMIN_EMAIL =
+      "9413yutaka@gmail.com";
+
+    // 画面に並べる件数の上限(件数の合計はすべて数える)。
+    const DISPLAY_LIMIT = 2000;
+
+    const STATUS_LABELS = {
+      closing: "締め処理中",
+      closed: "請求額確定・未請求",
+      charging: "請求中",
+      processing: "Stripeで処理中",
+      requires_action: "本人認証が必要",
+      needs_review: "人の確認が必要",
+      payment_failed: "支払い失敗",
+      charge_error: "請求不備",
+      paid: "支払い済み"
+    };
+
+    const REASON_LABELS = {
+      status_needs_review: "人の確認が必要",
+      status_requires_action: "本人認証(3Dセキュア)待ち",
+      status_processing: "Stripeで処理中",
+      status_payment_failed: "支払い失敗",
+      status_charge_error: "請求不備(Stripeが受け付けなかった)",
+      charging_outcome_unknown: "請求の結果が不明",
+      charging_lease_expired: "請求の確保期限切れ",
+      closing_stale: "締め処理が止まっている",
+      closed_uncharged: "確定後に請求されていない",
+      unknown_status: "未知の状態",
+      invalid_invoice_id: "請求書IDの不整合",
+      amount_mismatch: "金額が件数×100円と合わない",
+      paid_without_payment_intent: "支払い済みなのに支払いIDがない",
+      charge_card_unknown: "請求に使ったカードの記録がない",
+      invoice_without_lock: "請求中ロックがない",
+      ledger_count_mismatch: "日別台帳の件数と合わない",
+      ledger_count_unavailable: "日別台帳を照合できなかった",
+      store_billing_unavailable: "支払い情報を読めなかった",
+      lock_without_invoice: "ロックに請求書IDがない",
+      lock_stale: "請求中ロックが長く続いている",
+      lock_invoice_missing: "ロックが指す請求書が存在しない",
+      lock_invoice_not_holding: "ロックが解決済みの請求書を指している",
+      lock_invoice_other_store: "ロックが他店の請求書を指している",
+      lock_invoice_without_card: "ロックの請求書に使ったカードの記録がない",
+      lock_invoice_unavailable: "ロックの請求書を読めなかった"
+    };
+
+    const loginPanel = document.getElementById("loginPanel");
+    const adminArea = document.getElementById("adminArea");
+    const loginForm = document.getElementById("loginForm");
+    const loginButton = document.getElementById("loginButton");
+    const loginMessage = document.getElementById("loginMessage");
+    const overallStatus = document.getElementById("overallStatus");
+    const restartButton = document.getElementById("restartButton");
+    const continueButton = document.getElementById("continueButton");
+    const errorBox = document.getElementById("errorBox");
+    const itemList = document.getElementById("itemList");
+    const displayLimitNote = document.getElementById("displayLimitNote");
+
+    // 確認の状態(最初から確認するたびに作り直す)。
+    let check = null;
+    let busy = false;
+
+    function newCheck() {
+      return { pages: 0, invoices: 0, billing: 0, items: 0, displayed: 0, hadErrors: false, hadSkips: false, finished: false, next: null, thresholds: null };
+    }
+
+    function showMessage(element, text, type) {
+      element.textContent = text || "";
+      element.className = "message-box" + (text ? " show " + (type || "info") : "");
+    }
+
+    function setOverall(text, kind) {
+      overallStatus.textContent = text;
+      overallStatus.className = "overall " + kind;
+    }
+
+    function updateSummary() {
+      document.getElementById("pageCount").textContent = String(check.pages);
+      document.getElementById("invoiceCount").textContent = String(check.invoices);
+      document.getElementById("billingCount").textContent = String(check.billing);
+      document.getElementById("attentionCount").textContent = String(check.items);
+
+      if (check.thresholds) {
+        document.getElementById("thresholdNote").textContent =
+          "警告の基準(暫定・正式な請求日は未決定)：確定後に未請求 " + check.thresholds.closedUnchargedWarnHours +
+          "時間超、請求中ロック " + check.thresholds.lockWarnHours + "時間超、締め処理中 " + check.thresholds.closingWarnHours + "時間超。";
+      }
+    }
+
+    // 全体の判定。問題なしと言えるのは「全ページを読み終え、エラー・省略がなく、要確認が0件」の時だけ。
+    function updateOverall() {
+      if (check.hadErrors) {
+        setOverall("確認が完了していません：読み取りエラーがありました。最初から確認し直してください。", "error");
+        return;
+      }
+
+      if (!check.finished) {
+        setOverall("確認が完了していません：続きがあります。全件の確認が終わるまで「問題なし」とは判断できません。" +
+          (check.items > 0 ? "(ここまでで対応が必要な請求 " + check.items + " 件)" : ""), "incomplete");
+        return;
+      }
+
+      if (check.items > 0) {
+        setOverall("全件を確認しました。対応が必要な請求が " + check.items + " 件あります。", "attention");
+        return;
+      }
+
+      setOverall("全件を確認しました。対応が必要な請求はありません。", "ok");
+    }
+
+    async function getAdminIdToken() {
+      const currentUser = firebase.auth().currentUser;
+
+      if (!currentUser) {
+        throw new Error("ログイン状態を確認できませんでした。再度ログインしてください。");
+      }
+
+      return currentUser.getIdToken();
+    }
+
+    // APIを呼ぶ。失敗の理由(認証・権限・応答なし・サーバーエラー)を区別して返す。
+    async function callOverview(payload) {
+      let idToken;
+
+      try {
+        idToken = await getAdminIdToken();
+      } catch (error) {
+        return { ok: false, message: error.message };
+      }
+
+      let response;
+
+      try {
+        response = await fetch("/api/moderate-submission", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": "Bearer " + idToken },
+          body: JSON.stringify(Object.assign({ mode: "imadakeBillingOverview" }, payload || {}))
+        });
+      } catch (error) {
+        return { ok: false, message: "サーバーと通信できませんでした。" };
+      }
+
+      let data = null;
+
+      try {
+        data = await response.json();
+      } catch (error) {
+        data = null;
+      }
+
+      if (response.status === 401) {
+        return { ok: false, message: "ログインが必要です(401)。再度ログインしてください。" };
+      }
+
+      if (response.status === 403) {
+        return { ok: false, message: "このアカウントには運営の権限がありません(403)。" };
+      }
+
+      if (!response.ok || !data || data.success !== true) {
+        const reason = data && (data.reason || data.message) ? String(data.reason || data.message) : "";
+        return { ok: false, message: "確認一覧を取得できませんでした(" + response.status + (reason ? "・" + reason : "") + ")。" };
+      }
+
+      return { ok: true, data: data };
+    }
+
+    const VERDICT_LABELS = {
+      verified: ["Stripeの記録と一致しました。", "ok"],
+      mismatch: ["重大な食い違いがあります。", "severe"],
+      mode_mismatch: ["本番／テストの取り違えの疑い（重大）。照合を止めました。", "severe"],
+      incomplete: ["照合未完了：Stripeの記録をすべて確認できていません。", "incomplete"],
+      attention: ["要確認：Stripeと請求書の状態が合っていません。", "attention"],
+      not_found_in_range: ["この顧客・この期間の範囲では、この請求書の支払いは見つかりませんでした（Stripe上に支払いが無いことの証明ではありません）。", "neutral"],
+      invoice_not_found: ["請求書が見つかりません。", "neutral"]
+    };
+
+    const FINDING_LABELS = {
+      duplicate_charge_suspected: "二重請求の疑い（成功・処理中の支払いが2件以上）",
+      received_exceeds_invoice: "受け取った額が請求額を超えている",
+      payment_intent_mismatch: "支払いの内容（金額・通貨・顧客・カード・metadata・試行番号）が請求書と合わない",
+      mode_mismatch: "本番／テストの取り違え",
+      recorded_payment_intent_not_found: "記録した支払いIDがStripeで見つからない",
+      history_payment_intent_not_found: "履歴の支払いIDがStripeで見つからない",
+      paid_not_confirmed: "支払い済みの記録をStripeで確認できない",
+      payment_exists_for_unbilled_invoice: "未請求の扱いなのにStripeに支払いがある（再請求すると二重請求）",
+      succeeded_but_marked_failed: "支払い失敗の扱いなのにStripeでは成功している",
+      stripe_has_active_payment: "Stripeでは成功・処理中の支払いがある",
+      recorded_payment_intent_missing: "記録した支払いが見つからない",
+      status_differs: "Stripeの状態と請求書の状態が違う",
+      payment_exists_for_charge_error: "請求不備の扱いなのにStripeに支払いがある",
+      unrecorded_payment_intent: "請求書に記録されていない支払いがある",
+      possible_unlinked_payment: "請求書IDの無い同額の成功した支払いがある（参考・断定しない）",
+      recorded_status_outdated: "記録しているStripeの状態が古い",
+      not_found_in_range: "範囲内で見つからない",
+      retrieve_failed: "支払いIDでの照会に失敗した",
+      list_failed: "支払い一覧の取得に失敗した",
+      list_page_limit: "支払い一覧が多く、読み切れなかった",
+      history_retrieve_limit: "履歴の支払いIDが多く、すべては照会していない",
+      no_customer_to_search: "照会する顧客がない",
+      store_billing_unavailable: "支払い情報を読めなかった",
+      range_start_unknown: "探す期間の始まりが分からない（全期間を対象）"
+    };
+
+    const SEVERITY_LABELS = { severe: "重大", warning: "要確認", incomplete: "未完了", info: "参考" };
+
+    const MISMATCH_LABELS = {
+      amount: "金額", amount_received: "受取額", currency: "通貨", customer: "顧客", payment_method: "カード",
+      metadata_invoice: "請求書ID", metadata_store: "店舗", metadata_month: "対象月", metadata_mode: "モード(metadata)",
+      livemode: "本番／テスト", attempt: "試行番号"
+    };
+
+    async function callInspect(invoiceId) {
+      let idToken;
+
+      try {
+        idToken = await getAdminIdToken();
+      } catch (error) {
+        return { ok: false, message: error.message };
+      }
+
+      let response;
+
+      try {
+        response = await fetch("/api/moderate-submission", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": "Bearer " + idToken },
+          body: JSON.stringify({ mode: "imadakeBillingInspect", invoiceId: invoiceId })
+        });
+      } catch (error) {
+        return { ok: false, message: "サーバーと通信できませんでした。" };
+      }
+
+      let data = null;
+
+      try {
+        data = await response.json();
+      } catch (error) {
+        data = null;
+      }
+
+      if (response.status === 401 || response.status === 403) {
+        return { ok: false, message: "権限がないため照合できません(" + response.status + ")。" };
+      }
+
+      if (!response.ok || !data || data.success !== true) {
+        const reason = data && (data.reason || data.message) ? String(data.reason || data.message) : "";
+        return { ok: false, message: "照合できませんでした(" + response.status + (reason ? "・" + reason : "") + ")。" };
+      }
+
+      return { ok: true, data: data };
+    }
+
+    function formatDate(ms) {
+      if (typeof ms !== "number") {
+        return "";
+      }
+
+      const d = new Date(ms);
+      return d.getFullYear() + "/" + String(d.getMonth() + 1).padStart(2, "0") + "/" + String(d.getDate()).padStart(2, "0") + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+    }
+
+    function cell(row, value) {
+      const td = document.createElement("td");
+      td.textContent = value === undefined || value === null ? "" : String(value);
+      row.appendChild(td);
+    }
+
+    function renderInspectResult(container, data) {
+      container.textContent = "";
+      const verdict = VERDICT_LABELS[data.verdict] || ["照合結果：" + String(data.verdict || "不明"), "attention"];
+      const badge = document.createElement("div");
+      badge.className = "verdict " + verdict[1];
+      badge.textContent = verdict[0];
+      container.appendChild(badge);
+
+      if (data.complete !== true && data.verdict !== "incomplete" && data.verdict !== "invoice_not_found") {
+        const incomplete = document.createElement("div");
+        incomplete.className = "verdict incomplete";
+        incomplete.textContent = "照合未完了：Stripeの記録をすべて確認できていません。";
+        container.appendChild(incomplete);
+      }
+
+      (Array.isArray(data.findings) ? data.findings : []).forEach(function(f) {
+        const line = document.createElement("div");
+        line.className = "finding " + (f.severity === "severe" ? "severe" : "");
+        line.textContent = "・[" + (SEVERITY_LABELS[f.severity] || "要確認") + "] " + (FINDING_LABELS[f.code] || "要確認") + "(" + f.code + ")";
+        container.appendChild(line);
+      });
+
+      if (data.stripe) {
+        const info = document.createElement("div");
+        info.className = "note";
+        info.textContent = "照会した範囲：顧客 " + (data.stripe.customersChecked || 0) + " 件、" +
+          (data.stripe.rangeStartMs ? formatDate(data.stripe.rangeStartMs) + " 以降" : "全期間") +
+          "、一覧 " + (data.stripe.listPagesRead || 0) + " ページ" + (data.stripe.listComplete ? "(読み切り)" : "(読み切れていない)") +
+          "、IDでの照会 " + (data.stripe.retrieved || 0) + " 件。";
+        container.appendChild(info);
+      }
+
+      const list = Array.isArray(data.paymentIntents) ? data.paymentIntents : [];
+
+      if (list.length > 0) {
+        const wrap = document.createElement("div");
+        wrap.className = "pi-wrap";
+        const table = document.createElement("table");
+        table.className = "pi-table";
+        const head = document.createElement("tr");
+        ["支払いID", "状態", "金額", "受取額", "作成日時", "試行", "見つけた方法", "合わない項目", "エラー"].forEach(function(label) {
+          const th = document.createElement("th");
+          th.textContent = label;
+          head.appendChild(th);
+        });
+        table.appendChild(head);
+
+        list.forEach(function(pi) {
+          const row = document.createElement("tr");
+          cell(row, pi.id);
+          cell(row, pi.status);
+          cell(row, typeof pi.amount === "number" ? pi.amount + " " + String(pi.currency || "").toUpperCase() : "");
+          cell(row, typeof pi.amountReceived === "number" ? pi.amountReceived : "");
+          cell(row, formatDate(pi.createdMs));
+          cell(row, pi.metadata ? pi.metadata.chargeAttempt : "");
+          cell(row, Array.isArray(pi.sources) ? pi.sources.join(", ") + (pi.recorded ? "" : "(記録外)") : "");
+          cell(row, Array.isArray(pi.mismatches) && pi.mismatches.length > 0 ? pi.mismatches.map(function(m) { return MISMATCH_LABELS[m] || m; }).join("、") : "なし");
+          cell(row, [pi.lastErrorCode, pi.lastDeclineCode].filter(Boolean).join(" / "));
+          table.appendChild(row);
+        });
+
+        wrap.appendChild(table);
+        container.appendChild(wrap);
+      }
+    }
+
+    function addInspectButton(box, invoiceId) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "inspect-button";
+      button.textContent = "Stripeの記録を確認（読み取りのみ）";
+      const result = document.createElement("div");
+      result.className = "inspect-result";
+      result.hidden = true;
+
+      button.addEventListener("click", async function() {
+        button.disabled = true;
+        result.hidden = false;
+        result.textContent = "Stripeの記録を確認しています…";
+        const answer = await callInspect(invoiceId);
+        button.disabled = false;
+
+        if (!answer.ok) {
+          result.textContent = "";
+          const badge = document.createElement("div");
+          badge.className = "verdict severe";
+          badge.textContent = answer.message + " 照合は完了していません。";
+          result.appendChild(badge);
+          return;
+        }
+
+        renderInspectResult(result, answer.data);
+      });
+
+      box.appendChild(button);
+      box.appendChild(result);
+    }
+
+    function addField(dl, label, value) {
+      if (value === undefined || value === null || value === "") {
+        return;
+      }
+
+      const dt = document.createElement("dt");
+      dt.textContent = label;
+      const dd = document.createElement("dd");
+      dd.textContent = String(value);
+      dl.appendChild(dt);
+      dl.appendChild(dd);
+    }
+
+    function renderItem(item) {
+      const box = document.createElement("div");
+      box.className = "item";
+      const title = document.createElement("div");
+      title.className = "item-title";
+      const dl = document.createElement("dl");
+
+      if (item.kind === "store_billing") {
+        title.textContent = "店舗の請求中ロック：" + (item.storeId || "(店舗IDなし)");
+        addField(dl, "店舗ID", item.storeId);
+        addField(dl, "モード", item.mode);
+        addField(dl, "ロックが指す請求書", item.lockInvoiceId || "(なし)");
+        addField(dl, "その請求書の状態", item.lockInvoiceStatus ? (STATUS_LABELS[item.lockInvoiceStatus] || item.lockInvoiceStatus) + "(" + item.lockInvoiceStatus + ")" : "");
+        addField(dl, "ロックの経過時間", item.lockHours === null || item.lockHours === undefined ? "不明" : item.lockHours + "時間");
+      } else {
+        title.textContent = "請求書：" + (item.invoiceId || "(IDなし)");
+        addField(dl, "店舗ID", item.storeId);
+        addField(dl, "対象月", item.month);
+        addField(dl, "状態", item.status ? (STATUS_LABELS[item.status] || "未知の状態") + "(" + item.status + ")" : "(なし)");
+        addField(dl, "金額", typeof item.amountJpy === "number" ? item.amountJpy + "円(税込)" : "");
+        addField(dl, "件数", typeof item.lineCount === "number" ? item.lineCount + "件" : "");
+        addField(dl, "日別台帳の件数", typeof item.ledgerLineCount === "number" ? item.ledgerLineCount + "件" : "");
+        addField(dl, "試行番号", item.chargeAttempt ? item.chargeAttempt : "");
+        addField(dl, "支払いID", item.paymentIntentId);
+        addField(dl, "Stripeの状態", item.paymentIntentStatus);
+        addField(dl, "確認が必要な理由", item.chargeReviewReason);
+        addField(dl, "請求不備の理由", item.chargeErrorReason);
+        addField(dl, "エラーコード", [item.lastErrorCode, item.lastErrorDeclineCode].filter(Boolean).join(" / "));
+        addField(dl, "最後の更新からの時間", item.hoursSinceUpdate === null || item.hoursSinceUpdate === undefined ? "不明" : item.hoursSinceUpdate + "時間");
+      }
+
+      box.appendChild(title);
+      box.appendChild(dl);
+
+      const reasons = document.createElement("div");
+      reasons.className = "reasons";
+
+      (Array.isArray(item.reasons) ? item.reasons : []).forEach(function(code) {
+        const chip = document.createElement("span");
+        chip.className = "reason";
+        chip.textContent = (REASON_LABELS[code] || "要確認") + "(" + code + ")";
+        reasons.appendChild(chip);
+      });
+
+      box.appendChild(reasons);
+
+      if (item.kind !== "store_billing" && item.invoiceId) {
+        addInspectButton(box, item.invoiceId);
+      }
+
+      return box;
+    }
+
+    function renderItems(items) {
+      const fragment = document.createDocumentFragment();
+
+      items.forEach(function(item) {
+        if (check.displayed < DISPLAY_LIMIT) {
+          fragment.appendChild(renderItem(item));
+          check.displayed++;
+        }
+      });
+
+      itemList.appendChild(fragment);
+
+      if (check.items > check.displayed) {
+        displayLimitNote.hidden = false;
+        displayLimitNote.textContent = "画面に表示しているのは先頭の " + check.displayed + " 件です(対応が必要な件数の合計は " + check.items + " 件)。";
+      }
+    }
+
+    async function loadPage() {
+      if (busy) {
+        return;
+      }
+
+      busy = true;
+      restartButton.disabled = true;
+      continueButton.disabled = true;
+      showMessage(errorBox, "", "");
+      setOverall("確認中です…", "running");
+
+      const payload = check.next
+        ? { invoiceCursor: check.next.invoiceCursor || "", billingCursor: check.next.billingCursor || "", invoicesDone: check.next.invoicesDone === true, billingDone: check.next.billingDone === true }
+        : {};
+
+      const result = await callOverview(payload);
+
+      busy = false;
+      restartButton.disabled = false;
+      continueButton.disabled = false;
+
+      if (!result.ok) {
+        // 取得に失敗したページは数えない。全体は「確認が完了していない」のまま。
+        showMessage(errorBox, result.message, "error");
+        setOverall("確認できませんでした：" + result.message + " 全件の確認は完了していません。", "error");
+        continueButton.hidden = check.finished || check.pages === 0;
+        return;
+      }
+
+      const data = result.data;
+      check.pages++;
+      check.invoices += Number(data.scanned && data.scanned.invoices) || 0;
+      check.billing += Number(data.scanned && data.scanned.storeBilling) || 0;
+      check.items += Array.isArray(data.items) ? data.items.length : 0;
+      check.thresholds = data.thresholds || check.thresholds;
+
+      if (Array.isArray(data.errors) && data.errors.length > 0) {
+        check.hadErrors = true;
+        showMessage(errorBox, "読み取りエラー：" + data.errors.map(function(e) { return String(e.scope) + "・" + String(e.reason); }).join("、"), "error");
+      }
+
+      if (data.truncated === true) {
+        check.hadErrors = true;
+      }
+
+      const next = data.next || {};
+      check.next = next;
+      check.finished = next.invoicesDone === true && next.billingDone === true && !check.hadErrors;
+
+      renderItems(Array.isArray(data.items) ? data.items : []);
+      updateSummary();
+      updateOverall();
+      continueButton.hidden = check.finished || check.hadErrors;
+    }
+
+    function restart() {
+      check = newCheck();
+      itemList.textContent = "";
+      displayLimitNote.hidden = true;
+      continueButton.hidden = true;
+      updateSummary();
+      loadPage();
+    }
+
+    const STRIPE_CHECK_LABELS = {
+      connected: ["Stripeとの読み取り接続：成功", "ok"],
+      stripe_disabled: ["Stripeの設定が無効のため、接続していません", "incomplete"],
+      unauthorized: ["接続失敗：Stripeがキーを受け付けませんでした(401)", "severe"],
+      forbidden: ["接続失敗：キーに読み取り権限がありません(403)", "severe"],
+      network_error: ["接続失敗：Stripeと通信できませんでした", "severe"],
+      rate_limited: ["接続失敗：Stripeの利用回数の制限(429)", "severe"],
+      stripe_error: ["接続失敗：Stripeでエラーが起きました", "severe"],
+      invalid_response: ["接続失敗：Stripeの応答の形が想定と違います", "severe"],
+      mode_mismatch: ["重大：Stripeの応答が本番環境のものです(テスト環境のはず)", "severe"]
+    };
+
+    const stripeCheckButton = document.getElementById("stripeCheckButton");
+    const stripeCheckResult = document.getElementById("stripeCheckResult");
+
+    async function runStripeCheck() {
+      stripeCheckButton.disabled = true;
+      stripeCheckResult.hidden = false;
+      stripeCheckResult.textContent = "Stripeとの接続を確認しています…";
+      let message = "";
+      let kind = "severe";
+      const lines = [];
+
+      try {
+        const idToken = await getAdminIdToken();
+        const response = await fetch("/api/moderate-submission", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": "Bearer " + idToken },
+          body: JSON.stringify({ mode: "imadakeBillingStripeCheck" })
+        });
+        let data = null;
+
+        try {
+          data = await response.json();
+        } catch (error) {
+          data = null;
+        }
+
+        if (response.status === 401 || response.status === 403) {
+          message = "権限がないため確認できません(" + response.status + ")。";
+        } else if (!response.ok || !data || data.success !== true) {
+          message = "確認できませんでした(" + response.status + ")。";
+        } else {
+          const label = STRIPE_CHECK_LABELS[data.status] || ["結果を判断できません(" + String(data.status) + ")", "severe"];
+          message = label[0];
+          kind = label[1];
+          lines.push("テスト環境：" + (data.testMode === true ? "はい" : data.testMode === false ? "いいえ" : "不明"));
+          lines.push("エラーの種類：" + (data.status === "connected" ? "なし" : String(data.status) + (data.configReason ? "・" + String(data.configReason) : "") + (data.errorCode ? "・" + String(data.errorCode) : "")));
+        }
+      } catch (error) {
+        message = error && error.message ? error.message : "確認できませんでした。";
+      }
+
+      stripeCheckResult.textContent = "";
+      const badge = document.createElement("div");
+      badge.className = "verdict " + kind;
+      badge.textContent = message;
+      stripeCheckResult.appendChild(badge);
+
+      lines.forEach(function(text) {
+        const line = document.createElement("div");
+        line.className = "finding";
+        line.textContent = text;
+        stripeCheckResult.appendChild(line);
+      });
+
+      stripeCheckButton.disabled = false;
+    }
+
+    stripeCheckButton.addEventListener("click", runStripeCheck);
+    restartButton.addEventListener("click", restart);
+    continueButton.addEventListener("click", loadPage);
+
+    loginForm.addEventListener("submit", async function(event) {
+      event.preventDefault();
+      showMessage(loginMessage, "", "");
+
+      const email = document.getElementById("adminEmail").value.trim().toLowerCase();
+      const password = document.getElementById("adminPassword").value;
+
+      if (email !== ADMIN_EMAIL.toLowerCase()) {
+        showMessage(loginMessage, "このメールアドレスには管理者権限がありません。", "error");
+        return;
+      }
+
+      loginButton.disabled = true;
+      loginButton.textContent = "ログインしています…";
+
+      try {
+        await firebase.auth().signInWithEmailAndPassword(email, password);
+      } catch (error) {
+        showMessage(loginMessage, "ログインできませんでした。メールアドレスとパスワードを確認してください。", "error");
+      } finally {
+        loginButton.disabled = false;
+        loginButton.textContent = "管理画面へログイン";
+      }
+    });
+
+    // 画面の切り替えは運営のメールアドレスで判定する(最終的な権限確認はサーバーの requireAdmin)。
+    // 他のアカウントでログイン中でもログアウトはさせない。
+    firebase.auth().onAuthStateChanged(function(user) {
+      if (user && user.email && user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+        loginPanel.style.display = "none";
+        adminArea.classList.add("visible");
+        restart();
+        return;
+      }
+
+      if (user && !user.isAnonymous) {
+        showMessage(loginMessage, "このアカウントには管理者権限がありません。運営のアカウントでログインしてください。", "error");
+      }
+
+      loginPanel.style.display = "block";
+      adminArea.classList.remove("visible");
+    });
+  </script>
+
+</body>
+</html>

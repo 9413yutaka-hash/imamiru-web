@@ -113,6 +113,25 @@ import {
   handleStoreBillingSetupConfirm
 } from "./_lib/store-billing.js";
 
+// 今だけ投稿 決済 STEP 32-B｜月末締め(店舗別・月別の請求額の確定、運営のみ、既定は試算)。
+// 実処理はapi/_lib/imadake-monthly-close.js。Stripeには接続しない。
+import {
+  handleImadakeMonthlyClose
+} from "./_lib/imadake-monthly-close.js";
+
+// 今だけ投稿 決済 STEP 32-C｜月次請求(確定済みの請求書を登録カードへ請求、運営のみ、既定は試算)。
+// 実処理はapi/_lib/imadake-monthly-charge.js。実行は許可フラグと課金開始フラグの両方がtrueの時だけ。
+import {
+  handleImadakeMonthlyCharge
+} from "./_lib/imadake-monthly-charge.js";
+
+// 今だけ投稿 決済 STEP 32-D⑤｜月次請求の運営確認一覧(運営のみ、読み取り専用、Stripeに接続しない)。
+import {
+  handleImadakeBillingOverview,
+  handleImadakeBillingInspect,
+  handleImadakeBillingStripeCheck
+} from "./_lib/imadake-billing-admin.js";
+
 
 function getFirebaseAdminApp() {
   if (getApps().length > 0) {
@@ -30745,6 +30764,87 @@ export default async function handler(
       request,
       response,
       buildStoreBillingDeps()
+    );
+  }
+
+  // 今だけ投稿 決済 STEP 32-B｜月末締め(運営のみ、既定は試算＝書き込みなし)。
+  // 今だけ投稿 決済 STEP 32-D⑤｜月次請求の運営確認一覧(運営のみ、読み取り専用)。
+  if (
+    requestBody.mode === "imadakeBillingOverview"
+  ) {
+    return handleImadakeBillingOverview(
+      request,
+      response,
+      {
+        requireAdmin: requireAdmin,
+        readRequestBody: readRequestBody
+      }
+    );
+  }
+
+  // 今だけ投稿 決済 STEP 32-D⑩｜Stripeとの読み取り接続の確認(運営のみ、GETを1回だけ、書き込みなし)。
+  if (
+    requestBody.mode === "imadakeBillingStripeCheck"
+  ) {
+    return handleImadakeBillingStripeCheck(
+      request,
+      response,
+      {
+        requireAdmin: requireAdmin,
+        env: process.env,
+        fetch: function(url, options) {
+          return fetch(url, options);
+        }
+      }
+    );
+  }
+
+  // 今だけ投稿 決済 STEP 32-D⑧｜請求書1件とStripeの照合(運営のみ、StripeへはGETだけ、書き込みなし)。
+  if (
+    requestBody.mode === "imadakeBillingInspect"
+  ) {
+    return handleImadakeBillingInspect(
+      request,
+      response,
+      {
+        requireAdmin: requireAdmin,
+        readRequestBody: readRequestBody,
+        env: process.env,
+        fetch: function(url, options) {
+          return fetch(url, options);
+        }
+      }
+    );
+  }
+
+  // 今だけ投稿 決済 STEP 32-C｜月次請求(運営のみ、既定は試算＝書き込み・Stripe接続なし)。
+  if (
+    requestBody.mode === "imadakeMonthlyCharge"
+  ) {
+    return handleImadakeMonthlyCharge(
+      request,
+      response,
+      {
+        requireAdmin: requireAdmin,
+        readRequestBody: readRequestBody,
+        env: process.env,
+        fetch: function(url, options) {
+          return fetch(url, options);
+        }
+      }
+    );
+  }
+
+  if (
+    requestBody.mode === "imadakeMonthlyClose"
+  ) {
+    return handleImadakeMonthlyClose(
+      request,
+      response,
+      {
+        requireAdmin: requireAdmin,
+        readRequestBody: readRequestBody
+      }
     );
   }
 
