@@ -1,4 +1,9 @@
 import {
+  assertFirebaseTarget,
+  readFirebaseServiceAccountText
+} from "./_lib/firebase-target.js";
+
+import {
   cert,
   getApps,
   initializeApp
@@ -18,8 +23,9 @@ function getFirebaseAdminApp() {
     return getApps()[0];
   }
 
+  // Preview専用Firebaseの対象ブランチでは FIREBASE_SERVICE_ACCOUNT_KEY_PREVIEW だけを読む(無ければ止める)。
   const serviceAccountText =
-    process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+    readFirebaseServiceAccountText(process.env);
 
   if (!serviceAccountText) {
     throw new Error(
@@ -38,6 +44,9 @@ function getFirebaseAdminApp() {
       "FIREBASE_SERVICE_ACCOUNT_KEY のJSON形式が正しくありません。"
     );
   }
+
+  // Preview専用Firebaseの対象ブランチでは、接続先が期待値と一致する時だけ初期化する(不一致・未設定は止める)。
+  assertFirebaseTarget(process.env, serviceAccount);
 
   return initializeApp({
     credential: cert(serviceAccount)

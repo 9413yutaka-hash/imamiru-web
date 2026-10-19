@@ -1,4 +1,10 @@
 import {
+  assertFirebaseTarget,
+  checkFirebaseTargetFromEnv,
+  readFirebaseServiceAccountText
+} from "./_lib/firebase-target.js";
+
+import {
   cert,
   getApps,
   initializeApp
@@ -138,8 +144,9 @@ function getFirebaseAdminApp() {
     return getApps()[0];
   }
 
+  // Preview専用Firebaseの対象ブランチでは FIREBASE_SERVICE_ACCOUNT_KEY_PREVIEW だけを読む(無ければ止める)。
   const serviceAccountText =
-    process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+    readFirebaseServiceAccountText(process.env);
 
   if (!serviceAccountText) {
     throw new Error(
@@ -158,6 +165,9 @@ function getFirebaseAdminApp() {
       "FIREBASE_SERVICE_ACCOUNT_KEY のJSON形式が正しくありません。"
     );
   }
+
+  // Preview専用Firebaseの対象ブランチでは、接続先が期待値と一致する時だけ初期化する(不一致・未設定は止める)。
+  assertFirebaseTarget(process.env, serviceAccount);
 
   return initializeApp({
     credential: cert(serviceAccount)
@@ -30476,6 +30486,33 @@ function buildImadakeDeps() {
   };
 }
 
+// Preview専用Firebaseの分離 STEP 32-D㉗｜GET mode=firebaseTarget
+//   出力 { success:true, projectId, enforced } か 503 { success:false, reason }。
+//   ブラウザ(firebase.js)は、本番のドメイン以外ではこの申告と同じプロジェクトの時だけFirebaseを初期化する。
+function handleFirebaseTargetRequest(
+  request,
+  response
+) {
+  const target =
+    checkFirebaseTargetFromEnv(
+      process.env
+    );
+
+  if (!target.ok) {
+    return response.status(503).json({
+      success: false,
+      reason: target.reason
+    });
+  }
+
+  return response.status(200).json({
+    success: true,
+    projectId: target.projectId,
+    enforced: target.enforced
+  });
+}
+
+
 export default async function handler(
   request,
   response
@@ -30491,6 +30528,18 @@ export default async function handler(
   if (
     request.method === "GET"
   ) {
+    // Preview専用Firebaseの分離 STEP 32-D㉗｜サーバーのFirebase接続先(プロジェクトIDだけ)をブラウザへ申告する。
+    // 読み取りのみ・Firebaseを初期化しない・鍵の中身は返さない。接続先を確かめられない時は503。
+    if (
+      request.query &&
+      request.query.mode === "firebaseTarget"
+    ) {
+      return handleFirebaseTargetRequest(
+        request,
+        response
+      );
+    }
+
     // マチナウ読み物コメント機能MVP｜既存のsubmissions一覧取得(query無し)とは
     // 別のquery(mode=articleComments)でのみ分岐させ、既存の呼び出し(query無し)
     // には一切影響させない。
