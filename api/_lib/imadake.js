@@ -1226,6 +1226,19 @@ export async function decideImadakeCvBillingForNewPost(
   return !!account && account.isTestAccount !== true;
 }
 
+// STEP 35-A｜カード登録必須の理由コード → サーバーの応答の文(画面は理由コードから日英の文を出す)。
+function buildImadakeCardRequirementMessage(reason) {
+  if (reason === "card_expired") {
+    return "登録しているクレジットカードの有効期限が切れています。店舗アカウント画面でカードを変更してください。";
+  }
+
+  if (reason === "card_billing_unavailable") {
+    return "ただいまカードの登録状態を確認できません。少し時間をおいてから、もう一度お試しください。";
+  }
+
+  return "今だけ投稿の利用には、クレジットカードの登録が必要です。店舗アカウント画面でカードを登録してください。";
+}
+
 // ---------------------------------------------------------------------------
 // mode: imadakePostCreate (POST)
 // ---------------------------------------------------------------------------
@@ -1296,6 +1309,35 @@ export async function handleImadakePostCreate(
         reason: "location_not_registered",
         message: "店舗の掲載場所がまだ登録されていません。運営へお問い合わせください。"
       });
+    }
+
+    // 収益化 STEP 3｜課金対象かどうかは作成時にサーバーで決めて固定する(Productionでは現在常にfalse)。
+    // STEP 35-A｜回数制限・投稿枠より前に決め、課金対象になる投稿はカード登録(storeBilling)を必須にする
+    // (未登録・不整合・期限切れ等は保存せず409。課金対象でない投稿・Productionの現行動作は変えない)。
+    const cvBillingEnabled =
+      await decideImadakeCvBillingForNewPost(
+        database,
+        storeId
+      );
+
+    if (cvBillingEnabled === true) {
+      const cardCheck =
+        typeof deps.checkImadakeBillingCard === "function"
+          ? await deps.checkImadakeBillingCard(database, storeId)
+          : { ok: false, reason: "card_billing_unavailable" };
+
+      if (!cardCheck || cardCheck.ok !== true) {
+        const cardReason =
+          cardCheck && typeof cardCheck.reason === "string" && cardCheck.reason !== ""
+            ? cardCheck.reason
+            : "card_billing_unavailable";
+
+        return response.status(409).json({
+          success: false,
+          reason: cardReason,
+          message: buildImadakeCardRequirementMessage(cardReason)
+        });
+      }
     }
 
     // 連打対策(店舗ごとに一定間隔)。
@@ -1388,13 +1430,6 @@ export async function handleImadakePostCreate(
         officialLocation.prefecture
       );
 
-    // 収益化 STEP 3｜課金対象かどうかは作成時にサーバーで決めて固定する(現在は常にfalse)。
-    const cvBillingEnabled =
-      await decideImadakeCvBillingForNewPost(
-        database,
-        storeId
-      );
-
     const result =
       await database.runTransaction(
         async function(transaction) {
@@ -1408,6 +1443,24 @@ export async function handleImadakePostCreate(
               storeId,
               nowMillis
             );
+
+          // STEP 35-A｜確認の後・保存までの間のカード変更・取り外しとの競合を防ぐため、保存の
+          // トランザクションの中でもカードを確かめる(読み取りは書き込みより前)。
+          if (cvBillingEnabled === true) {
+            const cardInTransaction =
+              typeof deps.checkImadakeBillingCardInTransaction === "function"
+                ? await deps.checkImadakeBillingCardInTransaction(transaction, database, storeId)
+                : { ok: false, reason: "card_billing_unavailable" };
+
+            if (!cardInTransaction || cardInTransaction.ok !== true) {
+              return {
+                conflict:
+                  cardInTransaction && typeof cardInTransaction.reason === "string" && cardInTransaction.reason !== ""
+                    ? cardInTransaction.reason
+                    : "card_billing_unavailable"
+              };
+            }
+          }
 
           // 並行リクエスト・二重タップでも、ここで必ず1件に絞られる。
           if (safety.decision === "published" && state.hasActive) {
@@ -1547,9 +1600,11 @@ export async function handleImadakePostCreate(
         success: false,
         reason: result.conflict,
         message:
-          result.conflict === "pending_post_exists"
-            ? "確認中の今だけ投稿があります。確認が終わるまでお待ちください。"
-            : "掲載中の今だけ投稿があります。終了してから新しく投稿できます。"
+          String(result.conflict).startsWith("card_")
+            ? buildImadakeCardRequirementMessage(result.conflict)
+            : result.conflict === "pending_post_exists"
+              ? "確認中の今だけ投稿があります。確認が終わるまでお待ちください。"
+              : "掲載中の今だけ投稿があります。終了してから新しく投稿できます。"
       });
     }
 

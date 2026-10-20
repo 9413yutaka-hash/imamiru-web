@@ -119,6 +119,12 @@ import {
   handleStoreBillingSetupConfirm
 } from "./_lib/store-billing.js";
 
+// 今だけ投稿 決済 STEP 35-A｜カード登録必須の判定(課金対象になる今だけ投稿の作成時だけ使う)。
+import {
+  checkImadakeBillingCard,
+  checkImadakeBillingCardInTransaction
+} from "./_lib/imadake-card-requirement.js";
+
 // 今だけ投稿 決済 STEP 32-B｜月末締め(店舗別・月別の請求額の確定、運営のみ、既定は試算)。
 // 実処理はapi/_lib/imadake-monthly-close.js。Stripeには接続しない。
 import {
@@ -30482,7 +30488,15 @@ function buildImadakeDeps() {
     // 正式店舗アカウント接続｜tokenの無い作成・状態取得・終了で、ログインした正式店舗の
     // 本人確認に使う既存関数(passwordログイン判定・storeMembersのowner判定)。
     resolveStoreUserActor: resolveStoreUserActor,
-    checkStoreProfileEditor: checkStoreProfileEditor
+    checkStoreProfileEditor: checkStoreProfileEditor,
+    // 決済 STEP 35-A｜課金対象になる今だけ投稿の作成時だけ使う、カード登録(storeBilling)の確認。
+    // Firestoreを読むだけ(Stripeへの問い合わせ・書き込みなし)。
+    checkImadakeBillingCard: function(database, storeId) {
+      return checkImadakeBillingCard(database, storeId, { env: process.env });
+    },
+    checkImadakeBillingCardInTransaction: function(transaction, database, storeId) {
+      return checkImadakeBillingCardInTransaction(transaction, database, storeId, { env: process.env });
+    }
   };
 }
 

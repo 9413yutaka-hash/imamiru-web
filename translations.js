@@ -3925,6 +3925,27 @@ const MACHINAU_TRANSLATIONS = {
     en: "Not registered"
   },
 
+  // 決済 STEP 35-A｜今だけ投稿のカード登録必須
+  imadake_post_error_card_required: {
+    ja: "今だけ投稿の利用には、クレジットカードの登録が必要です。店舗アカウント画面でカードを登録してから、もう一度お試しください。",
+    en: "A credit card is required to use Just for Now posts. Please register a card on your shop account page and try again."
+  },
+
+  imadake_post_error_card_expired: {
+    ja: "登録しているクレジットカードの有効期限が切れています。店舗アカウント画面でカードを変更してから、もう一度お試しください。",
+    en: "Your registered credit card has expired. Please update your card on your shop account page and try again."
+  },
+
+  imadake_post_error_card_unavailable: {
+    ja: "ただいまカードの登録状態を確認できません。少し時間をおいてから、もう一度お試しください。",
+    en: "We can't check your card status right now. Please wait a moment and try again."
+  },
+
+  imadake_post_card_setup_link: {
+    ja: "店舗アカウント画面でカードを登録する",
+    en: "Register a card on your shop account page"
+  },
+
   imadake_post_no_location: {
     ja: "店舗の掲載場所がまだ登録されていません。運営へお問い合わせください。",
     en: "Your shop's listing location hasn't been registered yet. Please contact Machinau."

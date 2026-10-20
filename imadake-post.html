@@ -421,6 +421,8 @@
 
       <button id="submitButton" class="primary-button" type="submit" data-i18n="imadake_post_submit">今だけ投稿を届ける</button>
       <div id="formMessage" class="message-box" role="status" aria-live="polite"></div>
+      <!-- 決済 STEP 35-A｜カード登録が必要な時だけ、店舗アカウント画面のお支払い方法へ案内する。 -->
+      <p id="cardSetupGuide" hidden><a href="store-account.html#billingSection" data-i18n="imadake_post_card_setup_link">店舗アカウント画面でカードを登録する</a></p>
     </form>
 
     <!-- 収益化 STEP 4-B｜成果レポート(店舗本人だけ。POST imadakeStoreCvReport、読み取りのみ)。
@@ -1253,6 +1255,19 @@
         return [{ key: "imadake_post_no_location" }];
       }
 
+      // 決済 STEP 35-A｜課金対象の今だけ投稿はカード登録が必須(サーバーが storeBilling を確認)。
+      if (data.reason === "card_expired") {
+        return [{ key: "imadake_post_error_card_expired" }];
+      }
+
+      if (data.reason === "card_billing_unavailable") {
+        return [{ key: "imadake_post_error_card_unavailable" }];
+      }
+
+      if (typeof data.reason === "string" && data.reason.indexOf("card_") === 0) {
+        return [{ key: "imadake_post_error_card_required" }];
+      }
+
       if (data.reason === "safety_check_unavailable") {
         return [{ key: "imadake_post_error_safety_unavailable" }];
       }
@@ -1371,6 +1386,14 @@
           // 店舗が選んだ原文言語(画面の表示言語は使わない)。
           sourceLanguage: getSelectedSourceLanguage()
         });
+
+        // 決済 STEP 35-A｜カード登録が必要な理由の時だけ、カード登録への案内を出す。
+        const cardGuide = $("cardSetupGuide");
+
+        if (cardGuide) {
+          const cardReason = result.data && typeof result.data.reason === "string" ? result.data.reason : "";
+          cardGuide.hidden = !(cardReason.indexOf("card_") === 0 && cardReason !== "card_billing_unavailable");
+        }
 
         if (!result.ok || result.data.success !== true) {
           showMessageParts(formMessage, messagePartsForError(result), "error");

@@ -38,6 +38,9 @@ node --import ./tests/mockfa-target/register.mjs tests/firebase-target-test.mjs
 # Preview専用の課金対象判定(STEP 34-A：machinau-preview に接続した対象ブランチのPreviewだけ、新規の今だけ投稿を課金対象にする)
 node --import ./tests/mockfa-occ/register.mjs tests/preview-billing-trial-test.mjs
 
+# 今だけ投稿のカード登録必須(STEP 35-A：課金対象の投稿の作成時だけ storeBilling を確認)
+node --import ./tests/mockfa-occ/register.mjs tests/imadake-card-requirement-test.mjs
+
 # 既存の回帰(サーバー)
 for f in imadake-store-login-test imadake-safety-test imadake-translation-test imadake-nearby-test route-test; do
   node --import ./tests/mockfa/register.mjs tests/$f.mjs
