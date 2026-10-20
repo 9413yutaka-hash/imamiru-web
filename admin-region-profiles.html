@@ -147,13 +147,33 @@
   }
 
   .warning-box {
-    background: #fff6e5;
-    border: 1px solid #f0c869;
+    background: #fff;
+    border: 1px solid #d8dee8;
+    border-left: 4px solid #b58100;
     border-radius: 8px;
     padding: 12px;
     font-size: 13px;
     margin-bottom: 14px;
-    color: #7a5b00;
+    color: var(--text);
+  }
+
+  /* STEP 36｜保管中（凍結）の表示 */
+  .frozen-banner {
+    background: #fff;
+    border: 2px solid #b42318;
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+    color: #7a1a12;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  button:disabled,
+  input:disabled,
+  select:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
   }
 
   .candidate-card {
@@ -256,15 +276,20 @@
   <section id="adminArea">
 
     <div class="panel">
+      <div class="frozen-banner" role="note">
+        <strong>現在この機能は保管中（凍結）です。</strong><br>
+        2026年9月19日の方針により、地域プロフィール（街の記憶）は「保管」としています。
+        完成済みの八重瀬町のプロフィールを守るため、この画面では<strong>保存・AIによる調査・写真の登録を止めています</strong>。
+        「読み込む」で内容を確認することだけができます。
+      </div>
+
       <h2>
-        八重瀬町（Phase3.1実証中・対象はこの1件のみ）
+        八重瀬町（保管中・閲覧のみ）
       </h2>
 
       <div class="warning-box">
-        Phase3.1はregionProfilesの保存・読出し経路が正しく動くかだけを
-        確認するテストです。実際の人口・歴史等の地域データをここへ
-        入力しないでください。保存はテスト用の値、または全項目
-        unknownの状態のみで行ってください。
+        「読み込む」を押すと、保存済みの八重瀬町の地域プロフィールを表示します（読み取りだけで、データは変わりません）。
+        この内容は運営の「地域のおすすめ」下書き作成（AI地域編集部）が参照しています。旅行者向けの画面からは直接使われていません。
       </div>
 
       <button id="loadButton" class="secondary-button" type="button">
@@ -279,15 +304,15 @@
 
     <div class="panel">
       <h2>
-        PROFILE JSON（読込内容の確認・テスト保存用の編集）
+        PROFILE JSON（読み込んだ内容の確認・閲覧のみ）
       </h2>
 
       <div class="field">
-        <textarea id="profileJsonTextarea" spellcheck="false"></textarea>
+        <textarea id="profileJsonTextarea" spellcheck="false" readonly></textarea>
       </div>
 
-      <button id="saveButton" class="primary-button" type="button">
-        このJSONを保存する（テスト）
+      <button id="saveButton" class="primary-button" type="button" disabled>
+        保存は停止中（保管中）
       </button>
 
       <div id="saveStatus" class="message-box" role="status" aria-live="polite"></div>
@@ -295,20 +320,15 @@
 
     <div class="panel">
       <h2>
-        不足している街の記憶をAIに調べてもらう（Phase3.2）
+        不足している街の記憶をAIに調べてもらう（停止中）
       </h2>
 
       <div class="warning-box">
-        対象は「基本統計(人口・面積)」「成立・地理」「食・特産」「移動」
-        「性格・文化・安全」「気候・代表スポット」の6グループのみです。
-        1グループ＝OpenAI呼び出し1回(最大6回、確認済みグループは
-        呼び出しません)。AIはこの場でPROFILEへ書き込みません。候補ごとに
-        内容と出典を確認し、「採用」を押したものだけがPROFILEへ
-        保存されます。
+        保管中のため、AIによる調査は止めています（OpenAIは呼び出しません・費用は発生しません）。
       </div>
 
-      <button id="researchButton" class="secondary-button" type="button">
-        不足している街の記憶をAIに調べてもらう
+      <button id="researchButton" class="secondary-button" type="button" disabled>
+        AIによる調査は停止中（保管中）
       </button>
 
       <div id="researchStatus" class="message-box" role="status" aria-live="polite"></div>
@@ -318,14 +338,11 @@
 
     <div class="panel">
       <h2>
-        写真の登録（Phase3完成）
+        写真の登録（停止中）
       </h2>
 
       <div class="warning-box">
-        ここで運営者が実際にアップロードした画像だけがPROFILEへ保存されます。
-        Web上で見つけた画像やAIが生成した画像はここでは扱いません。
-        メイン写真を1枚保存するだけで「写真」のチェック項目が確認済みに
-        なります。
+        保管中のため、写真の登録（アップロードとPROFILEへの保存）は止めています。登録済みの写真の件数は「読み込む」で確認できます。
       </div>
 
       <div id="photoSummaryLine" class="completeness-line"></div>
@@ -335,7 +352,7 @@
           分類
         </label>
 
-        <select id="photoCategorySelect">
+        <select id="photoCategorySelect" disabled>
           <option value="heroImage">メイン写真（1枚のみ・上書き保存）</option>
           <option value="landscapeImages">風景</option>
           <option value="foodImages">食</option>
@@ -349,7 +366,7 @@
           画像ファイル（jpeg/png/webp・10MBまで）
         </label>
 
-        <input id="photoFileInput" type="file" accept="image/jpeg,image/png,image/webp">
+        <input id="photoFileInput" type="file" accept="image/jpeg,image/png,image/webp" disabled>
       </div>
 
       <div id="photoPreviewWrapper" style="display:none; margin-bottom:14px;">
@@ -361,7 +378,7 @@
           キャプション
         </label>
 
-        <input id="photoCaptionInput" type="text">
+        <input id="photoCaptionInput" type="text" disabled>
       </div>
 
       <div class="field">
@@ -369,7 +386,7 @@
           出典・撮影者
         </label>
 
-        <input id="photoSourceInput" type="text">
+        <input id="photoSourceInput" type="text" disabled>
       </div>
 
       <div class="field">
@@ -377,7 +394,7 @@
           権利状態
         </label>
 
-        <input id="photoRightsStatusInput" type="text" placeholder="例：運営撮影・掲載許諾済み">
+        <input id="photoRightsStatusInput" type="text" placeholder="例：運営撮影・掲載許諾済み" disabled>
       </div>
 
       <div class="field">
@@ -385,10 +402,10 @@
           この街との関係
         </label>
 
-        <input id="photoRegionRelevanceInput" type="text" placeholder="例：役場前の街並み">
+        <input id="photoRegionRelevanceInput" type="text" placeholder="例：役場前の街並み" disabled>
       </div>
 
-      <button id="photoUploadButton" class="primary-button" type="button">
+      <button id="photoUploadButton" class="primary-button" type="button" disabled>
         アップロードしてPROFILEへ保存する
       </button>
 
@@ -411,6 +428,12 @@
   // REGION_PROFILE_ALLOWED_AREASと一致させる)。
   const TARGET_AREA =
     "八重瀬町";
+
+  // STEP 36｜保管中（凍結）。2026-09-19の方針で地域プロフィールは保管とし、この画面は閲覧（regionProfileGet）だけにする。
+  // 保存・AIによる調査・写真の登録（Cloudinaryへのアップロードを含む）は、ボタンを無効にしたうえで、
+  // 呼び出しの手前でも止める（ボタンの状態に関係なく、画面からは送らない）。
+  const REGION_PROFILE_FROZEN = true;
+  const REGION_PROFILE_FROZEN_MESSAGE = "現在この機能は保管中（凍結）のため、保存・AIによる調査・写真の登録はできません。";
 
   const loginPanel = document.getElementById("loginPanel");
   const adminArea = document.getElementById("adminArea");
@@ -551,6 +574,10 @@
   // 取得方式と同じ考え方(既存のcloudinarySignature modeをそのまま使う。
   // 新しいCloudinary設定・新しいAPI modeは作らない)。
   async function getCloudinaryUploadSignature() {
+    if (REGION_PROFILE_FROZEN) {
+      throw new Error(REGION_PROFILE_FROZEN_MESSAGE);
+    }
+
     const idToken = await getIdTokenOrThrow();
 
     const response = await fetch("/api/moderate-submission", {
@@ -626,6 +653,11 @@
   }
 
   photoUploadButton.addEventListener("click", async function() {
+    if (REGION_PROFILE_FROZEN) {
+      showPhotoStatus(REGION_PROFILE_FROZEN_MESSAGE, "error");
+      return;
+    }
+
     if (!currentLoadedProfile) {
       showPhotoStatus("先にPROFILEを「読み込む」を押して読み込んでください。", "error");
       return;
@@ -706,6 +738,10 @@
   }
 
   async function callRegionProfileApi(mode, extraBody) {
+    if (REGION_PROFILE_FROZEN && mode !== "regionProfileGet") {
+      throw new Error(REGION_PROFILE_FROZEN_MESSAGE);
+    }
+
     const idToken = await getIdTokenOrThrow();
 
     const response = await fetch("/api/moderate-submission", {
@@ -753,6 +789,11 @@
   });
 
   saveButton.addEventListener("click", async function() {
+    if (REGION_PROFILE_FROZEN) {
+      showSaveStatus(REGION_PROFILE_FROZEN_MESSAGE, "error");
+      return;
+    }
+
     let parsedProfile;
 
     try {
@@ -852,6 +893,11 @@
     rejectButton.textContent = "却下";
 
     adoptButton.addEventListener("click", async function() {
+      if (REGION_PROFILE_FROZEN) {
+        showResearchStatus(REGION_PROFILE_FROZEN_MESSAGE, "error");
+        return;
+      }
+
       if (!currentLoadedProfile) {
         showResearchStatus("先にPROFILEを「読み込む」を押して読み込んでください。", "error");
         return;
@@ -929,6 +975,11 @@
   }
 
   researchButton.addEventListener("click", async function() {
+    if (REGION_PROFILE_FROZEN) {
+      showResearchStatus(REGION_PROFILE_FROZEN_MESSAGE, "error");
+      return;
+    }
+
     researchButton.disabled = true;
     candidateList.innerHTML = "";
     showResearchStatus("AIが街の記憶を調査しています…（Web検索を伴うため、時間がかかる場合があります）", "");
