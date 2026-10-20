@@ -174,3 +174,47 @@ export function checkFirebaseTargetFromEnv(env, targets) {
 
   return result;
 }
+
+// ==========================================================================
+// STEP 34-A｜Preview専用の課金対象判定（今だけ投稿の「課金対象の印」だけに使う）
+// ==========================================================================
+// 対象ブランチのPreviewで、サーバーのFirebase接続先が Preview専用プロジェクトだと確認できた時だけ true。
+// 次をすべて満たす必要がある(1つでも不明・不一致なら false)：
+//   ・VERCEL_ENV が "preview"
+//   ・ブランチ(VERCEL_GIT_COMMIT_REF)が下の表にある
+//   ・接続先の検査(checkFirebaseTargetFromEnv)が通り、検査の対象(enforced)で、
+//     サーバーの鍵の project_id が表の期待値と一致し、本番のIDではない
+// 請求(月次請求の実行・Stripe)・月末締めの書き込みには使わない(それぞれのフラグはfalseのまま)。
+export const PREVIEW_CV_BILLING_TRIAL_TARGETS = Object.freeze({
+  "preview/stripe-card-setup": "machinau-preview"
+});
+
+export function isPreviewCvBillingTrialEnabled(env, targets) {
+  const source = env || {};
+
+  if (source.VERCEL_ENV !== "preview") {
+    return false;
+  }
+
+  const branch = typeof source.VERCEL_GIT_COMMIT_REF === "string" ? source.VERCEL_GIT_COMMIT_REF.trim() : "";
+  const table = targets || PREVIEW_CV_BILLING_TRIAL_TARGETS;
+
+  if (branch === "" || !Object.prototype.hasOwnProperty.call(table, branch)) {
+    return false;
+  }
+
+  const expected = table[branch];
+
+  if (typeof expected !== "string" || expected === "" || expected === PRODUCTION_FIREBASE_PROJECT_ID) {
+    return false;
+  }
+
+  const target = checkFirebaseTargetFromEnv(source);
+
+  return (
+    target.ok === true &&
+    target.enforced === true &&
+    target.projectId === expected &&
+    target.projectId !== PRODUCTION_FIREBASE_PROJECT_ID
+  );
+}

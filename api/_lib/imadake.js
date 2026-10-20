@@ -20,6 +20,10 @@
 // ==========================================================================
 
 import {
+  isPreviewCvBillingTrialEnabled
+} from "./firebase-target.js";
+
+import {
   FieldValue,
   Timestamp
 } from "firebase-admin/firestore";
@@ -1190,11 +1194,21 @@ const EMPTY_ACTIVE_SLOT_FIELDS = {
 export const IMADAKE_CV_BILLING_STARTED =
   false;
 
+// STEP 34-A｜Preview専用の課金対象判定：対象ブランチのPreviewで、サーバーのFirebase接続先が
+// Preview専用プロジェクト(machinau-preview)だと確認できた時だけ、課金開始前でも新規投稿を課金対象にする
+// (試験用)。Productionでは常に従来どおり IMADAKE_CV_BILLING_STARTED だけで決まる。
+// この判定は投稿の課金対象の印だけに使い、月末締め・月次請求・Stripeの実行には使わない。
+// テスト事業者(isTestAccount)は、どちらの場合も課金対象にしない。
 export async function decideImadakeCvBillingForNewPost(
   database,
-  storeId
+  storeId,
+  env
 ) {
-  if (!IMADAKE_CV_BILLING_STARTED) {
+  const billingActive =
+    IMADAKE_CV_BILLING_STARTED ||
+    isPreviewCvBillingTrialEnabled(env || process.env);
+
+  if (!billingActive) {
     return false;
   }
 
