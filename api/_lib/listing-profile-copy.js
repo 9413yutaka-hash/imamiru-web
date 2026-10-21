@@ -31,9 +31,9 @@ export const LISTING_PHOTO_COPY_ENABLED =
 // STEP 42-F｜写真の複製の Preview 実証(代表決定 2026-10-22)。true の間も、次をすべて満たす時だけ複製する：
 //   ・運営掲載に試験の印 previewTrial: "STEP42-F" がある(実証用に作った試験の掲載だけ)
 //   ・サーバーが Preview・対象ブランチ・machinau-preview に接続している(deps.isListingPhotoCopyTrialEnabled)
-// Productionでは常に複製しない。実証が終わったら false に戻す。
+// Productionでは常に複製しない。実証は 2026-10-22 に完了(10枚の複製・上限・保存先を確認)したため false に戻した。
 export const LISTING_PHOTO_COPY_PREVIEW_TRIAL =
-  true;
+  false;
 
 export const LISTING_PHOTO_COPY_PREVIEW_TRIAL_MARKER = "STEP42-F";
 

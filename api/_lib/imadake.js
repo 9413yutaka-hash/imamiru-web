@@ -3041,7 +3041,10 @@ export async function handleImadakeAdminStoreLocation(
 
     // 正式店舗参加基盤 Phase 2A｜セルフ登録店舗の所在地は、店舗が選んだ国で
     // 確定済み。日本固定のこの運営用Geocodingでは上書きしない。
-    if ((storeSnapshot.data() || {}).createdByType === "storeUser") {
+    // STEP 42-F｜運営掲載の引き継ぎで作られた店舗(listingClaim)も店主が管理する店舗のため同じ扱い。
+    const storeCreatedByType = (storeSnapshot.data() || {}).createdByType;
+
+    if (storeCreatedByType === "storeUser" || storeCreatedByType === "listingClaim") {
       return response.status(409).json({
         success: false,
         reason: "self_registered_store",

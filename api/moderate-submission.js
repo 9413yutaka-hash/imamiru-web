@@ -1265,9 +1265,10 @@ async function handleAdminListStoreAccountsRequest(
               data.enabled === true,
 
             // Phase 2A｜セルフ登録店舗の区別と登録状態(運営登録店舗は"operator"/"active")。
+            // STEP 42-F｜運営掲載の引き継ぎで作られた店舗(listingClaim)もそのまま返す(店主が管理する店舗)。
             createdByType:
-              data.createdByType === "storeUser"
-                ? "storeUser"
+              data.createdByType === "storeUser" || data.createdByType === "listingClaim"
+                ? data.createdByType
                 : "operator",
 
             registrationStatus:
@@ -1377,8 +1378,10 @@ async function handleAdminRotateStoreTokenRequest(
     }
 
     // Phase 2A｜セルフ登録店舗にはtokenを発行しない(旧店舗URL方式は運営登録店舗だけ)。
+    // STEP 42-F｜運営掲載の引き継ぎで作られた店舗(listingClaim)も店主が管理するため発行しない。
     if (
-      (storeAccountSnapshot.data() || {}).createdByType === "storeUser"
+      (storeAccountSnapshot.data() || {}).createdByType === "storeUser" ||
+      (storeAccountSnapshot.data() || {}).createdByType === "listingClaim"
     ) {
       return response.status(409).json({
         success: false,

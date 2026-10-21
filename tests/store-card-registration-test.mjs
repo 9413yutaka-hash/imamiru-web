@@ -118,6 +118,15 @@ r = await call(CLAIM("L1"), "u4");
 t("B12 運営による紐付けの解除は従来どおり（Admin だけ・履歴を残す）。解除後は別のカード登録済みアカウントが引き継げる", rv.code === 200 && r.code === 200 && S.docs.get("storeListingLinks/L1").status === "active" && S.docs.get("storeListingLinks/L1").storeId === r.body.storeId && (S.docs.get("storeListingLinks/L1").history || []).some((h) => h.event === "revoked"), { rv: rv.body, r: r.body });
 const notAdmin = await call({ mode: "adminStoreListingLinkRevoke", submissionId: "L1", reason: "x" }, "u3");
 t("B13 店主は紐付けを解除できない（Admin だけ）", notAdmin.code === 403 || notAdmin.code === 401, notAdmin.code);
+// STEP 42-F｜運営の店舗一覧：引き継ぎで作られた店舗は listingClaim として返し、旧店舗URL(token)の発行・運営の所在地上書きはしない。
+const claimedId = S.docs.get("storeListingLinks/L1").storeId;
+const adminList = await call({ mode: "adminListStoreAccounts" }, "admin");
+const listed = ((adminList.body && adminList.body.storeAccounts) || []).find((x) => x.storeId === claimedId) || {};
+t("B14 運営の店舗一覧：引き継いだ店舗は createdByType listingClaim（運営登録の店舗と区別）", adminList.code === 200 && listed.createdByType === "listingClaim", { code: adminList.code, listed: listed.createdByType });
+const rot = await call({ mode: "adminRotateStoreToken", storeId: claimedId }, "admin");
+t("B15 引き継いだ店舗には旧店舗URL(token)を発行しない：409 self_registered_store・tokenHash なし", rot.code === 409 && rot.body.reason === "self_registered_store" && !S.docs.get("storeAccounts/" + claimedId).tokenHash, rot.body);
+const loc = await call({ mode: "imadakeAdminStoreLocation", storeId: claimedId, address: "沖縄県那覇市泉崎1-1-1" }, "admin");
+t("B16 引き継いだ店舗の所在地は運営の画面から上書きしない：409 self_registered_store", loc.code === 409 && loc.body.reason === "self_registered_store", loc.body);
 
 // ===================== C: photos (copy logic, mocked Cloudinary) =====================
 const db = getFirestore();
@@ -143,10 +152,10 @@ S.docs.set("storeProfiles/pc2", { storeId: "pc2", status: "draft" });
 const before5 = copies.length;
 const offEnv = await LC.copyListingPhotosToProfile(db, "pc2", marked, trialOff);
 const onTrial = await LC.copyListingPhotosToProfile(db, "pc2", marked, trialOn);
-t("C6 試験の印＋試験環境の時だけ複製（最大10枚・店舗の写真フォルダー）", offEnv.status === "disabled" && onTrial.status === "copied" && copies.length - before5 === 10 && (S.docs.get("storeProfiles/pc2").photos || []).every((p) => p.publicId.startsWith("machinau_store_profiles/pc2/")), { offEnv, onTrial });
+t("C6 試験の印＋試験環境の時だけ複製（最大10枚・店舗の写真フォルダー）。実証の終了後（LISTING_PHOTO_COPY_PREVIEW_TRIAL false）は複製しない", offEnv.status === "disabled" && (LC.LISTING_PHOTO_COPY_PREVIEW_TRIAL ? onTrial.status === "copied" && copies.length - before5 === 10 : onTrial.status === "disabled" && copies.length === before5) && (S.docs.get("storeProfiles/pc2").photos || []).every((p) => p.publicId.startsWith("machinau_store_profiles/pc2/")), { offEnv, onTrial });
 const prodEnv = { VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main" };
 t("C7 環境の判定：Production・対象外のブランチ・ローカルでは false", FT.isPreviewListingPhotoCopyTrialEnabled(prodEnv) === false && FT.isPreviewListingPhotoCopyTrialEnabled({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "preview/other" }) === false && FT.isPreviewListingPhotoCopyTrialEnabled({}) === false);
-t("C8 本番の有効化 LISTING_PHOTO_COPY_ENABLED は false のまま", LC.LISTING_PHOTO_COPY_ENABLED === false);
+t("C8 本番の有効化 LISTING_PHOTO_COPY_ENABLED は false のまま・Preview実証の有効化も解除済み", LC.LISTING_PHOTO_COPY_ENABLED === false && LC.LISTING_PHOTO_COPY_PREVIEW_TRIAL === false);
 S.docs.set("storeProfiles/pc3", { storeId: "pc3", status: "draft" });
 let active = 0, peak = 0;
 const slowDeps = { copyListingPhotoToStore: async (url, storeId) => { active++; peak = Math.max(peak, active); const n = Number(url.split("/p").pop().split(".")[0]); await new Promise((r) => setTimeout(r, 30 - n * 2)); active--; if (n === 3) throw new Error("x"); return { url: "https://res.cloudinary.com/cdhyctnp/image/upload/v2/machinau_store_profiles/" + storeId + "/k" + n + ".jpg", publicId: "machinau_store_profiles/" + storeId + "/k" + n }; } };
