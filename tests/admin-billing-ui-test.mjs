@@ -94,7 +94,10 @@ try {
   const page = await p.ev(`document.body.innerText`);
   t("U3c カードID・顧客ID・冪等キーは表示しない", !/pm_secret|cus_secret|machinau-invoice-test/.test(page));
   const buttons = await p.ev(`[...document.querySelectorAll("button")].map((b) => b.id || ("class:" + b.className + ":" + b.textContent))`);
-  const others = buttons.filter((b) => !["continueButton", "loginButton", "restartButton", "stripeCheckButton"].includes(b));
+  // STEP 37-C｜月末締め（Preview試験）の2つのボタンは、Previewの専用Firebaseの時だけ表示される（本番のドメインでは非表示）。
+  const closeTrialHidden = await p.ev(`document.getElementById("closeTrialPanel").hidden === true`);
+  t("U3d0 本番のドメインでは月末締め（Preview試験）の欄を表示しない", closeTrialHidden === true);
+  const others = buttons.filter((b) => !["continueButton", "loginButton", "restartButton", "stripeCheckButton", "closeDryRunButton", "closeExecuteButton"].includes(b));
   const checkLabel = await p.ev(`document.getElementById("stripeCheckButton").textContent`);
   t("U3d ボタンは「ログイン」「最初から確認」「続きを確認」「Stripeとの接続を確認（読み取りのみ）」と、請求書ごとの「Stripeの記録を確認（読み取りのみ）」だけ（支払い確定・再請求・ロック解除・返金などは無い）", checkLabel === "Stripeとの接続を確認（読み取りのみ）" && buttons.includes("stripeCheckButton") &&  others.length === 2 && others.every((b) => b === "class:inspect-button:Stripeの記録を確認（読み取りのみ）"), buttons);
   t("U3e 一覧の表示では書き込みゼロ・Stripe呼び出しゼロ", S.writes.length === w0 && stripeCalls === 0);

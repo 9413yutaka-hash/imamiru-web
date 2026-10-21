@@ -173,6 +173,24 @@
         <p id="displayLimitNote" class="note" hidden></p>
       </div>
 
+      <!-- STEP 37-C｜月末締め（Preview試験）。Previewの試験環境（machinau-preview）の時だけ表示する。
+           書き込みの可否はサーバーが判断する（Productionでは表示せず、呼び出してもサーバーが拒否する）。
+           Stripeでの請求はここからは行わない。 -->
+      <div class="panel" id="closeTrialPanel" hidden>
+        <h2>月末締め（Preview試験・2026年10月分）</h2>
+        <p class="note">Previewの試験環境（専用のFirebase）だけで使えます。Stripeでの請求は行いません。まず「試算」で対象を確認し、確認の印を付けてから締めを実行します。</p>
+        <div class="button-row">
+          <button id="closeDryRunButton" class="secondary-button" type="button">10月分を試算する（書き込みなし）</button>
+        </div>
+        <div id="closeTrialResult" class="inspect-result" hidden></div>
+        <div id="closeConfirmBox" class="inspect-result" hidden>
+          <label><input type="checkbox" id="closeConfirmCheck"> 試算の内容（店舗数・件数・金額）を確認しました</label>
+          <div class="button-row">
+            <button id="closeExecuteButton" class="primary-button" type="button" disabled>10月分の月末締めを実行する（Preview）</button>
+          </div>
+        </div>
+      </div>
+
     </section>
 
   </main>
@@ -766,6 +784,149 @@
     }
 
     stripeCheckButton.addEventListener("click", runStripeCheck);
+
+    // STEP 37-C｜月末締め（Preview試験）
+    const CLOSE_TRIAL_MONTH = "2026-10";
+    const closeTrialPanel = document.getElementById("closeTrialPanel");
+    const closeDryRunButton = document.getElementById("closeDryRunButton");
+    const closeTrialResult = document.getElementById("closeTrialResult");
+    const closeConfirmBox = document.getElementById("closeConfirmBox");
+    const closeConfirmCheck = document.getElementById("closeConfirmCheck");
+    const closeExecuteButton = document.getElementById("closeExecuteButton");
+    let closeTrialPlan = null;
+
+    // 表示はブラウザの接続先が Preview専用のFirebase の時だけ（本番のドメイン・本番のFirebaseでは出さない）。
+    function isPreviewFirebaseTarget() {
+      const target = window.machinauFirebaseTarget;
+      return !!target && target.ok === true && target.source === "server_preview" && typeof target.projectId === "string" && target.projectId !== "" && target.projectId !== "chikashoku-app";
+    }
+
+    function addCloseLine(container, text, className) {
+      const line = document.createElement("div");
+      line.className = className || "finding";
+      line.textContent = text;
+      container.appendChild(line);
+    }
+
+    async function callMonthlyClose(dryRun) {
+      const idToken = await getAdminIdToken();
+      const body = { mode: "imadakeMonthlyClose", month: CLOSE_TRIAL_MONTH };
+
+      if (dryRun === false) {
+        body.dryRun = false;
+      }
+
+      const response = await fetch("/api/moderate-submission", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + idToken },
+        body: JSON.stringify(body)
+      });
+      let data = null;
+
+      try {
+        data = await response.json();
+      } catch (error) {
+        data = null;
+      }
+
+      return { status: response.status, data: data };
+    }
+
+    function renderCloseResult(result, executed) {
+      closeTrialResult.hidden = false;
+      closeTrialResult.textContent = "";
+      const data = result.data || {};
+
+      if (result.status !== 200 || data.success !== true) {
+        const reason = data.reason ? String(data.reason) : "";
+        const label = reason === "close_writes_disabled" ? "この環境では締めを実行できません（サーバーが拒否）" :
+          reason === "month_not_closable" ? "まだ締められません（10月分は 2026年11月2日0時（日本時間）以降）" :
+          "締めの処理に失敗しました";
+        addCloseLine(closeTrialResult, label + "（" + result.status + (reason ? "・" + reason : "") + "）", "verdict severe");
+        return null;
+      }
+
+      const totals = data.totals || {};
+      addCloseLine(closeTrialResult, executed ? "月末締めを実行しました（結果）" : "試算の結果（書き込みはしていません）", "verdict " + (executed ? "ok" : "neutral"));
+      addCloseLine(closeTrialResult, "対象月：" + String(data.month) + "（" + (data.period ? String(data.period.startKey) + "〜" + String(data.period.endKeyExclusive) + "の前日" : "") + "）");
+      addCloseLine(closeTrialResult, "店舗：" + Number(totals.storeCount || 0) + "件・件数：" + Number(totals.expectedLineCount || 0) + "件・金額：" + Number(totals.expectedAmountJpy || 0) + "円（税込）");
+      addCloseLine(closeTrialResult, "今すぐ締められるか：" + (data.closable === true ? "はい" : "いいえ（10月分は 2026年11月2日0時（日本時間）以降）"));
+      addCloseLine(closeTrialResult, "この環境での締めの実行：" + (data.writeAllowed === true ? "できる（Preview試験）" : "できない"));
+
+      Object.keys(data.excluded || {}).forEach(function(reason) {
+        addCloseLine(closeTrialResult, "請求に入れない台帳：" + reason + "・" + Number(data.excluded[reason].count || 0) + "件");
+      });
+
+      (Array.isArray(data.stores) ? data.stores : []).forEach(function(store) {
+        addCloseLine(closeTrialResult, "・" + String(store.storeId) + "：" + Number(store.expectedLineCount || 0) + "件・" + Number(store.expectedAmountJpy || 0) + "円" +
+          (store.invoiceStatus ? "・請求書 " + String(store.invoiceStatus) : "") + (store.outcome ? "・結果 " + String(store.outcome) : ""));
+      });
+
+      return data;
+    }
+
+    function updateCloseExecuteState() {
+      closeExecuteButton.disabled = !(closeTrialPlan && closeConfirmCheck.checked);
+    }
+
+    async function runCloseDryRun() {
+      closeDryRunButton.disabled = true;
+      closeConfirmBox.hidden = true;
+      closeConfirmCheck.checked = false;
+      closeTrialPlan = null;
+      updateCloseExecuteState();
+
+      try {
+        const result = await callMonthlyClose(true);
+        const data = renderCloseResult(result, false);
+        const totals = data ? data.totals || {} : {};
+
+        // 実行できるのは、サーバーが書き込みを許し・今締められ・対象がある時だけ。
+        if (data && data.writeAllowed === true && data.closable === true && Number(totals.expectedLineCount || 0) > 0) {
+          closeTrialPlan = { storeCount: Number(totals.storeCount || 0), lineCount: Number(totals.expectedLineCount || 0), amountJpy: Number(totals.expectedAmountJpy || 0) };
+          closeConfirmBox.hidden = false;
+        }
+      } catch (error) {
+        closeTrialResult.hidden = false;
+        closeTrialResult.textContent = "試算できませんでした：" + (error && error.message ? error.message : "");
+      } finally {
+        closeDryRunButton.disabled = false;
+        updateCloseExecuteState();
+      }
+    }
+
+    async function runCloseExecute() {
+      if (!closeTrialPlan || !closeConfirmCheck.checked) {
+        return;
+      }
+
+      const ok = window.confirm("2026年10月分の月末締めを実行します（Preview試験）。\n店舗 " + closeTrialPlan.storeCount + "件・" + closeTrialPlan.lineCount + "件・" + closeTrialPlan.amountJpy + "円（税込）\nStripeでの請求は行いません。実行してよろしいですか？");
+
+      if (!ok) {
+        return;
+      }
+
+      closeExecuteButton.disabled = true;
+      closeDryRunButton.disabled = true;
+
+      try {
+        const result = await callMonthlyClose(false);
+        renderCloseResult(result, true);
+      } catch (error) {
+        closeTrialResult.hidden = false;
+        closeTrialResult.textContent = "締めを実行できませんでした：" + (error && error.message ? error.message : "");
+      } finally {
+        closeTrialPlan = null;
+        closeConfirmCheck.checked = false;
+        closeConfirmBox.hidden = true;
+        closeDryRunButton.disabled = false;
+        updateCloseExecuteState();
+      }
+    }
+
+    closeDryRunButton.addEventListener("click", runCloseDryRun);
+    closeConfirmCheck.addEventListener("change", updateCloseExecuteState);
+    closeExecuteButton.addEventListener("click", runCloseExecute);
     restartButton.addEventListener("click", restart);
     continueButton.addEventListener("click", loadPage);
 
@@ -800,6 +961,7 @@
       if (user && user.email && user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
         loginPanel.style.display = "none";
         adminArea.classList.add("visible");
+        closeTrialPanel.hidden = !isPreviewFirebaseTarget();
         restart();
         return;
       }

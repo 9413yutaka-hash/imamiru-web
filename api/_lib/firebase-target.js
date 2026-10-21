@@ -218,3 +218,10 @@ export function isPreviewCvBillingTrialEnabled(env, targets) {
     target.projectId !== PRODUCTION_FIREBASE_PROJECT_ID
   );
 }
+
+// STEP 37-C｜Preview限定の月末締めの書き込み許可。STEP 34-A の試験環境の判定
+// (Preview・対象ブランチ・サーバーの鍵が machinau-preview)をそのまま使う。月末締めの書き込みだけに使い、
+// 月次請求(Stripe)の実行には使わない。Productionでは常に false。
+export function isPreviewMonthlyCloseTrialEnabled(env, targets) {
+  return isPreviewCvBillingTrialEnabled(env, targets);
+}

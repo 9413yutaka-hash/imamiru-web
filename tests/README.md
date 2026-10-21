@@ -41,6 +41,10 @@ node --import ./tests/mockfa-occ/register.mjs tests/preview-billing-trial-test.m
 # 今だけ投稿のカード登録必須(STEP 35-A：課金対象の投稿の作成時だけ storeBilling を確認)
 node --import ./tests/mockfa-occ/register.mjs tests/imadake-card-requirement-test.mjs
 
+# 月末締めのPreview試験(STEP 37-C：Preview限定の書き込み許可・運営画面の試算と実行。画面のテストは Chrome を使う)
+node --import ./tests/mockfa-occ/register.mjs tests/imadake-monthly-close-preview-trial-test.mjs
+node --import ./tests/mockfa/register.mjs     tests/admin-billing-close-trial-ui-test.mjs
+
 # 既存の回帰(サーバー)
 for f in imadake-store-login-test imadake-safety-test imadake-translation-test imadake-nearby-test route-test; do
   node --import ./tests/mockfa/register.mjs tests/$f.mjs

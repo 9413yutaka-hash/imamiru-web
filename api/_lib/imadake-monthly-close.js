@@ -44,6 +44,10 @@ import {
 } from "./imadake.js";
 
 import {
+  isPreviewMonthlyCloseTrialEnabled
+} from "./firebase-target.js";
+
+import {
   IMADAKE_POST_DAILY_CHARGES_COLLECTION,
   IMADAKE_DAILY_CHARGE_AMOUNT_JPY,
   computeImadakeCvDayKey
@@ -745,7 +749,14 @@ export async function handleImadakeMonthlyClose(request, response, deps) {
       return response.status(400).json({ success: false, reason: "invalid_month" });
     }
 
-    if (!dryRun && !IMADAKE_MONTHLY_CLOSE_WRITES_ENABLED) {
+    // STEP 37-C｜書き込みを許すのは、従来のフラグ(false)か、Previewの試験環境(サーバー側で確認：Preview・
+    // 対象ブランチ・サーバーの鍵が machinau-preview)の時だけ。Production・別ブランチ・接続先の不一致では拒否。
+    // この許可は月末締めの書き込みだけに使い、月次請求(Stripe)の実行には作用しない。
+    const writesAllowed =
+      IMADAKE_MONTHLY_CLOSE_WRITES_ENABLED === true ||
+      isPreviewMonthlyCloseTrialEnabled(deps.env || process.env);
+
+    if (!dryRun && !writesAllowed) {
       return response.status(403).json({ success: false, reason: "close_writes_disabled" });
     }
 
@@ -754,7 +765,7 @@ export async function handleImadakeMonthlyClose(request, response, deps) {
       month: month,
       nowMillis: Date.now(),
       dryRun: dryRun,
-      allowWrite: IMADAKE_MONTHLY_CLOSE_WRITES_ENABLED,
+      allowWrite: writesAllowed,
       actorUid: typeof actor.uid === "string" ? actor.uid : ""
     });
 
@@ -762,7 +773,13 @@ export async function handleImadakeMonthlyClose(request, response, deps) {
       return response.status(result.reason === "month_not_closable" ? 409 : 400).json({ success: false, reason: result.reason });
     }
 
-    return response.status(200).json({ success: true, ...result });
+    // 画面が「締めを実行できるか」を判断できるよう、書き込みの可否と、それがPreview試験によるものかを返す。
+    return response.status(200).json({
+      success: true,
+      ...result,
+      writeAllowed: writesAllowed,
+      previewTrial: IMADAKE_MONTHLY_CLOSE_WRITES_ENABLED !== true && writesAllowed
+    });
   } catch (error) {
     console.error("今だけ投稿 月末締めエラー：", error && error.message);
     return response.status(500).json({ success: false, reason: "server_error" });
