@@ -1255,7 +1255,7 @@
         return [{ key: "imadake_post_no_location" }];
       }
 
-      // 決済 STEP 35-A｜課金対象の今だけ投稿はカード登録が必須(サーバーが storeBilling を確認)。
+      // 決済 STEP 35-A｜課金対象の今だけ投稿はカード登録が必須(サーバーが店舗の請求先アカウントのカードを確認)。
       if (data.reason === "card_expired") {
         return [{ key: "imadake_post_error_card_expired" }];
       }

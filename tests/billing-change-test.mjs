@@ -25,7 +25,7 @@ globalThis.fetch = async (url, opts = {}) => {
   if (opts.method === "POST" && u.pathname === "/v1/setup_intents") {
     if (Object.keys(form).some((k) => k.startsWith("payment_method_types"))) return json(400, { error: { type: "invalid_request_error", code: "payment_method_types_no_longer_supported" } });
     const id = "seti_c" + ++ST.seq;
-    ST.intents.set(id, { id, client_secret: id + "_secret_FAKE", customer: form.customer, payment_method_types: ["card"], metadata: { storeId: form["metadata[storeId]"] }, status: "succeeded", card: ST.nextCard || CARDS.visa });
+    ST.intents.set(id, { id, client_secret: id + "_secret_FAKE", customer: form.customer, payment_method_types: ["card"], metadata: { accountUid: form["metadata[accountUid]"] }, status: "succeeded", card: ST.nextCard || CARDS.visa });
     const si = ST.intents.get(id); return json(200, { id, client_secret: si.client_secret, customer: si.customer, payment_method_types: si.payment_method_types, metadata: si.metadata, status: "requires_payment_method" });
   }
   if (/^\/v1\/payment_methods\//.test(u.pathname)) return json(503, { error: { type: "api_error" } });
@@ -50,7 +50,9 @@ async function call(mode, body, token) {
 }
 const CONSENT = "2026-10-16";
 const resetRate = () => { for (const k of [...S.docs.keys()]) if (k.startsWith("storeBillingRateLimits/")) S.docs.delete(k); };
-const sec = (id = "s1") => ((S.docs.get("storeBilling/" + id) || {}).test) || {};
+// STEP 42-C｜カードはアカウント単位(店舗 sN の owner は uN)。
+const ACC = { s1: "u1", s2: "u2", s3: "u3", s4: "u4" };
+const sec = (id = "s1") => ((S.docs.get("accountBilling/" + (ACC[id] || id)) || {}).test) || {};
 const start = async (store = "s1", token = "owner", card = null) => { resetRate(); ST.nextCard = card; const r = await call("storeBillingSetupIntentCreate", { storeId: store }, token); return r; };
 const confirm = (si, store = "s1", token = "owner") => call("storeBillingSetupConfirm", { storeId: store, setupIntentId: si, consentVersion: CONSENT }, token);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -113,7 +115,7 @@ const after6 = JSON.stringify({ pm: sec().paymentMethodId, card: sec().card, v: 
 t("6 Stripe失敗（500・通信断・401）・カード拒否・3Dセキュア未完了・カード以外・顧客不一致：すべて旧カードを維持", JSON.stringify(res6) === JSON.stringify([503, 503, 503, "failed", "requires_action", 502, 409]) && before6 === after6 && sec().pendingSetupIntentId === c8.body.setupIntentId, { res6, before6, after6 });
 
 // 7 compatibility with the existing (STEP 29) data shape: no cardVersion field
-S.docs.set("storeBilling/s2", { storeId: "s2", test: { customerId: "cus_existing", customerCreatedAt: { ms: 1 }, customerCreatedByUid: "u2", paymentMethodId: "pm_existing4242", card: { brand: "visa", last4: "4242", expMonth: 12, expYear: 2030 }, setupStatus: "succeeded", lastSetupIntentId: "seti_existing", pendingSetupIntentId: "", consentVersion: CONSENT, consentAt: { ms: 2 }, consentByUid: "u2", updatedAt: { ms: 3 }, updatedByUid: "u2" } });
+S.docs.set("accountBilling/u2", { uid: "u2", test: { customerId: "cus_existing", customerCreatedAt: { ms: 1 }, customerCreatedByUid: "u2", paymentMethodId: "pm_existing4242", card: { brand: "visa", last4: "4242", expMonth: 12, expYear: 2030 }, setupStatus: "succeeded", lastSetupIntentId: "seti_existing", pendingSetupIntentId: "", consentVersion: CONSENT, consentAt: { ms: 2 }, consentByUid: "u2", updatedAt: { ms: 3 }, updatedByUid: "u2" } });
 const custCallsBefore = ST.calls.filter((x) => x === "POST /v1/customers").length;
 const st7 = await call("storeBillingStatus", { storeId: "s2" }, "owner2");
 t("7 既存形式（cardVersionなし）のVISA 4242：状態表示は従来どおり", st7.code === 200 && st7.body.available === true && JSON.stringify(st7.body.card) === JSON.stringify({ brand: "visa", last4: "4242", expMonth: 12, expYear: 2030 }), st7.body);
@@ -121,8 +123,9 @@ const c9 = await start("s2", "owner2", CARDS.mc);
 t("7b 既存形式で変更開始：既存の顧客を再利用（顧客を作らない）・登録済みカードは保持", c9.code === 200 && ST.calls.filter((x) => x === "POST /v1/customers").length === custCallsBefore && sec("s2").paymentMethodId === "pm_existing4242" && sec("s2").customerCreatedAt.ms === 1, sec("s2"));
 const f9 = await confirm(c9.body.setupIntentId, "s2", "owner2");
 t("7c 既存形式からの変更確定：cardVersionは未設定=0として1になり、顧客作成記録など既存項目は残る", f9.code === 200 && sec("s2").cardVersion === 1 && sec("s2").paymentMethodId === "pm_" + c9.body.setupIntentId && sec("s2").customerId === "cus_existing" && sec("s2").customerCreatedAt.ms === 1 && sec("s2").customerCreatedByUid === "u2", sec("s2"));
+const u2Before = JSON.stringify(sec("s2"));
 const otherStore = await confirm(c9.body.setupIntentId, "s2", "owner");
-t("7d 他店のオーナーは確定できない（404）", otherStore.code === 404, otherStore.body);
+t("7d 他のアカウント（u1）は u2 のSetupIntentで確定できない（409 setup_intent_mismatch・u2 のカード情報は変わらない）", otherStore.code === 409 && otherStore.body.reason === "setup_intent_mismatch" && JSON.stringify(sec("s2")) === u2Before, otherStore.body);
 
 // ===== STEP 31-B①: detach-pending record =====
 const q = (id) => (sec(id).detachPendingPaymentMethods || []);
@@ -164,31 +167,31 @@ globalThis.__MOCK_TOKENS.owner4 = pw("u4", "owner4@example.com");
 S.docs.set("storeAccounts/s4", { storeName: "店4", enabled: true, createdByType: "storeUser", registrationStatus: "active" });
 S.docs.set("storeMembers/s4_u4", { storeId: "s4", uid: "u4", role: "owner", status: "active" });
 const mk = (n) => Array.from({ length: n }, (_, i) => ({ paymentMethodId: "pm_old" + i, state: "pending", queuedAtMs: 1000 + i, queuedCardVersion: i + 2, attempts: 0 }));
-S.docs.set("storeBilling/s4", { storeId: "s4", test: { customerId: "cus_s4", paymentMethodId: "pm_cur4", card: { brand: "visa", last4: "4242", expMonth: 12, expYear: 2030 }, cardVersion: 10, detachPendingPaymentMethods: mk(10), pendingSetupIntentId: "" } });
+S.docs.set("accountBilling/u4", { uid: "u4", test: { customerId: "cus_s4", paymentMethodId: "pm_cur4", card: { brand: "visa", last4: "4242", expMonth: 12, expYear: 2030 }, cardVersion: 10, detachPendingPaymentMethods: mk(10), pendingSetupIntentId: "" } });
 const callsBefore = ST.calls.length;
 const b7 = await start("s4", "owner4", CARDS.mc);
 t("B7 取り外し待ちが上限（10件）：新しい変更は開始前に409 detach_pending_limit・Stripeを呼ばない・記録10件はそのまま", b7.code === 409 && b7.body.reason === "detach_pending_limit" && !ST.calls.slice(callsBefore).some((x) => /customers|setup_intents/.test(x)) && JSON.stringify(q("s4").map((e) => e.paymentMethodId)) === JSON.stringify(mk(10).map((e) => e.paymentMethodId)) && sec("s4").paymentMethodId === "pm_cur4", { b7: b7.body, calls: ST.calls.length - callsBefore });
-S.docs.set("storeBilling/s4", { storeId: "s4", test: { ...sec("s4"), detachPendingPaymentMethods: mk(9) } });
+S.docs.set("accountBilling/u4", { uid: "u4", test: { ...sec("s4"), detachPendingPaymentMethods: mk(9) } });
 const b7b = await start("s4", "owner4", CARDS.mc), b7bf = await confirm(b7b.body.setupIntentId, "s4", "owner4");
 t("B7b 9件のときは変更でき、確定で10件目（直前のカード）が入る", b7b.code === 200 && b7bf.code === 200 && q("s4").length === 10 && q("s4")[9].paymentMethodId === "pm_cur4", q("s4").map((e) => e.paymentMethodId));
 // over-limit at confirm time (e.g. started before the limit was reached): never drop
 const cur4 = sec("s4").paymentMethodId; const siOver = "seti_over1";
-ST.intents.set(siOver, { id: siOver, client_secret: "x", customer: "cus_s4", payment_method_types: ["card"], metadata: { storeId: "s4" }, status: "succeeded", card: CARDS.amex });
-S.docs.set("storeBilling/s4", { storeId: "s4", test: { ...sec("s4"), detachPendingPaymentMethods: mk(12), pendingSetupIntentId: siOver } });
+ST.intents.set(siOver, { id: siOver, client_secret: "x", customer: "cus_s4", payment_method_types: ["card"], metadata: { accountUid: "u4" }, status: "succeeded", card: CARDS.amex });
+S.docs.set("accountBilling/u4", { uid: "u4", test: { ...sec("s4"), detachPendingPaymentMethods: mk(12), pendingSetupIntentId: siOver } });
 const b7c = await confirm(siOver, "s4", "owner4");
 t("B7c 上限を超えた状態で確定しても、既存12件＋直前のカードの13件をすべて保持（黙って捨てない）", b7c.code === 200 && q("s4").length === 13 && JSON.stringify(q("s4").slice(0, 12).map((e) => e.paymentMethodId)) === JSON.stringify(mk(12).map((e) => e.paymentMethodId)) && q("s4")[12].paymentMethodId === cur4, { len: q("s4").length });
 // malformed entries in existing data are ignored, valid ones kept
-S.docs.set("storeBilling/s4", { storeId: "s4", test: { ...sec("s4"), detachPendingPaymentMethods: [null, { foo: 1 }, { paymentMethodId: "pm_keep", state: "pending" }] } });
+S.docs.set("accountBilling/u4", { uid: "u4", test: { ...sec("s4"), detachPendingPaymentMethods: [null, { foo: 1 }, { paymentMethodId: "pm_keep", state: "pending" }] } });
 const st8 = await call("storeBillingStatus", { storeId: "s4" }, "owner4");
 t("B8 取り外し待ちに不正な要素が混じっていても状態表示は正常（カード表示は従来どおり）", st8.code === 200 && st8.body.available === true && st8.body.card && st8.body.card.last4 === "8431", st8.body);
 t("B9 取り外し（detach）はStripeに一度も送っていない", !ST.calls.some((x) => /detach/.test(x)), [...new Set(ST.calls)]);
 
 // 8 safety invariants
-const stored = JSON.stringify([...S.docs.entries()].filter(([k]) => k.startsWith("storeBilling/")));
+const stored = JSON.stringify([...S.docs.entries()].filter(([k]) => k.startsWith("accountBilling/")));
 t("8 カード番号全体・CVCは保存されない（Stripe応答に含まれていても）", !stored.includes("4242424242424242") && !stored.includes('"cvc"') && !stored.includes('"number"'));
-t("8b liveの欄は作られない", ![...S.docs.entries()].some(([k, v]) => k.startsWith("storeBilling/") && "live" in v));
+t("8b liveの欄は作られない", ![...S.docs.entries()].some(([k, v]) => k.startsWith("accountBilling/") && "live" in v));
 const touched = [...new Set(S.writes.map((w) => w.split("/")[0]))].sort();
-t("8c 書き込み先は storeBilling と連打防止だけ", JSON.stringify(touched) === JSON.stringify(["storeBilling", "storeBillingRateLimits"]), touched);
+t("8c 書き込み先は accountBilling と連打防止だけ", JSON.stringify(touched) === JSON.stringify(["accountBilling", "storeBillingRateLimits"]), touched);
 t("8d トランザクション内ではStripeを呼ばない（呼び出しは作成・照会だけ）", ST.calls.every((x) => /^(POST \/v1\/customers|POST \/v1\/setup_intents|GET \/v1\/setup_intents\/seti_(c\d+|over1)|GET \/v1\/payment_methods\/pm_[A-Za-z0-9_]+)$/.test(x)), [...new Set(ST.calls)]);
 t("8e サーバーキーはログに出ない", !logs.join("\n").includes(FAKE_SERVER_KEY));
 t("8f 課金停止フラグは false のまま", (await import(REPO_URL + "/api/_lib/imadake.js")).IMADAKE_CV_BILLING_STARTED === false);

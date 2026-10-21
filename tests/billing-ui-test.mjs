@@ -20,7 +20,7 @@ globalThis.fetch = async (url, opts = {}) => {
   const form = Object.fromEntries(new URLSearchParams(opts.body || "")); ST.calls.push(opts.method + " " + u.pathname);
   const json = (status, data) => ({ ok: status < 400, status, json: async () => data });
   if (u.pathname === "/v1/customers") return json(200, { id: "cus_ui1" });
-  if (u.pathname === "/v1/setup_intents") { if (Object.keys(form).some((k) => k.startsWith("payment_method_types"))) return json(400, { error: { type: "invalid_request_error", code: "payment_method_types_no_longer_supported" } }); const allowed = form["allowed_payment_method_types[]"]; const id = "seti_ui" + ++ST.seq; ST.intents.set(id, { id, client_secret: id + "_secret_X", customer: form.customer, payment_method_types: allowed ? ["card", "link"].filter((x) => x === allowed) : ["card", "link"], metadata: { storeId: form["metadata[storeId]"] } }); return json(200, ST.intents.get(id)); }
+  if (u.pathname === "/v1/setup_intents") { if (Object.keys(form).some((k) => k.startsWith("payment_method_types"))) return json(400, { error: { type: "invalid_request_error", code: "payment_method_types_no_longer_supported" } }); const allowed = form["allowed_payment_method_types[]"]; const id = "seti_ui" + ++ST.seq; ST.intents.set(id, { id, client_secret: id + "_secret_X", customer: form.customer, payment_method_types: allowed ? ["card", "link"].filter((x) => x === allowed) : ["card", "link"], metadata: { accountUid: form["metadata[accountUid]"] } }); return json(200, ST.intents.get(id)); }
   const m = u.pathname.match(/^\/v1\/setup_intents\/(seti_[A-Za-z0-9]+)$/);
   if (m) return json(200, { ...ST.intents.get(m[1]), status: ST.siStatus, payment_method: ST.siStatus === "succeeded" ? { id: "pm_ui1", customer: ST.intents.get(m[1]).customer, card: { brand: "visa", last4: "4242", exp_month: 3, exp_year: 2031 } } : null });
   return json(404, { error: {} });
@@ -63,7 +63,8 @@ try {
   }
   setEnv(TEST_ENV);
   let p = await open("editor"); let s = await sec(p);
-  t("2 owner以外（editor）には表示しない", !s.shown, s); await p.close();
+  // STEP 42-C｜カードはアカウント単位。店舗の owner でなくても、ログインした店舗アカウントは自分のカードの欄を見られる(他の店舗・他のアカウントのカードは見えない)。
+  t("2 owner以外（editor）のアカウント：自分のアカウントのカードの欄（未登録）を表示し、店舗 s1（u1）のカードは見えない", s.shown && s.status === "カードはまだ登録されていません。", s); await p.close();
   p = await open("owner"); s = await sec(p);
   t("3 テスト環境のowner：欄を表示・「テスト環境」・未登録・カード登録ボタン（Stripe.jsはまだ読み込まない）", s.shown && s.badge && s.status === "カードはまだ登録されていません。" && s.start === "カードを登録する" && stripeJsLoads.length === 0, s);
   await p.ev(`document.getElementById("billingStartButton").click(), true`);
@@ -77,19 +78,19 @@ try {
   // declined
   await p.ev(`window.__stripeScenario = "declined"; document.getElementById("billingSubmitButton").click(); true`); await sleep(800);
   s = await sec(p);
-  t("6 カード拒否（Stripeのエラー）→ Stripeのメッセージを表示・保存しない", s.msg === "Your card was declined." && !(S.docs.get("storeBilling/s1") || {}).test?.paymentMethodId, s);
+  t("6 カード拒否（Stripeのエラー）→ Stripeのメッセージを表示・保存しない", s.msg === "Your card was declined." && !(S.docs.get("accountBilling/u1") || {}).test?.paymentMethodId, s);
   // requires_action
   ST.siStatus = "requires_action";
   await p.ev(`window.__stripeScenario = "action"; document.getElementById("billingSubmitButton").click(); true`); await sleep(1000);
   s = await sec(p);
-  t("7 3Dセキュア未完了（サーバー照会でrequires_action）→ 案内を表示・保存しない", s.msg === "カード会社の認証が完了していません。もう一度お試しください。" && !(S.docs.get("storeBilling/s1") || {}).test?.paymentMethodId, s);
+  t("7 3Dセキュア未完了（サーバー照会でrequires_action）→ 案内を表示・保存しない", s.msg === "カード会社の認証が完了していません。もう一度お試しください。" && !(S.docs.get("accountBilling/u1") || {}).test?.paymentMethodId, s);
   // success
   ST.siStatus = "succeeded";
   await p.ev(`window.__stripeScenario = "ok"; document.getElementById("billingSubmitButton").click(); true`);
   await p.waitFor(`/登録しました/.test(document.getElementById("billingMessage").textContent)`, 8000);
   s = await sec(p); const ca = await p.ev(`window.__confirmArgs`);
-  t("8 登録成功：confirmSetup（redirect:if_required）→ サーバー照会 → 「VISA •••• 4242（03/2031）」を表示・入力欄を閉じる", s.msg === "カードを登録しました。" && s.status.includes("VISA •••• 4242（03/2031）") && !s.form && s.start === "カードを変更する" && ca.redirect === "if_required" && ca.returnUrl.includes("/store-account.html?billingStore=s1"), { s, ca });
-  const saved = S.docs.get("storeBilling/s1") || {};
+  t("8 登録成功：confirmSetup（redirect:if_required）→ サーバー照会 → 「VISA •••• 4242（03/2031）」を表示・入力欄を閉じる", s.msg === "カードを登録しました。" && s.status.includes("VISA •••• 4242（03/2031）") && !s.form && s.start === "カードを変更する" && ca.redirect === "if_required" && ca.returnUrl.includes("/store-account.html?billingAccount=1"), { s, ca });
+  const saved = S.docs.get("accountBilling/u1") || {};
   t("8b 保存はテスト用の項目だけ（顧客・支払い方法・カード表示情報・同意）", saved.test && saved.test.paymentMethodId === "pm_ui1" && saved.test.card.last4 === "4242" && saved.test.consentVersion && !saved.live, saved);
   t("9 マチナウのAPIにはカード番号・セキュリティコードを送っていない", !apiBodies.some((b) => /4242424242424242|"number"|"cvc"/.test(b)), apiBodies.slice(-3));
   const lay = await p.ev(`({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth })`);

@@ -5,7 +5,7 @@
 // 一覧(imadakeBillingOverview)はStripeに接続しない。1件ずつの照合(imadakeBillingInspect)はStripeへGETだけを送る。支払い確定・再請求・ロック解除・カード
 // 取り外しの操作はこのファイルに置かない。
 //
-// 読み取り範囲：請求書 imadakeMonthlyInvoices と支払い情報 storeBilling を、文書ID順に
+// 読み取り範囲：請求書 imadakeMonthlyInvoices と支払い情報 accountBilling(STEP 42-C：1アカウント1枚)を、文書ID順に
 // ページ分割して読む。1回の呼び出しで読む件数には上限があり、残りは続きの位置(cursor)として返す。
 // 全件を読み終えていない・読み取りに失敗した・照合を省略した場合は complete:false を返し、
 // 警告が0件でも「問題なし」(problemFree:true)とは返さない。
@@ -30,15 +30,16 @@ import {
 const INVOICES_COLLECTION =
   "imadakeMonthlyInvoices";
 
-const STORE_BILLING_COLLECTION =
-  "storeBilling";
+// STEP 42-C｜アカウント単位の支払い情報(store-billing.js の ACCOUNT_BILLING_COLLECTION と同じ)。
+const ACCOUNT_BILLING_COLLECTION =
+  "accountBilling";
 
 // ---- 警告の暫定値(正式な請求日・運用は未決定。変更する時はこの値だけを変える) ----
 // closed(請求額確定)のまま請求されていない日数。
 export const BILLING_OVERVIEW_CLOSED_UNCHARGED_WARN_MS =
   3 * 24 * 60 * 60 * 1000;
 
-// 請求中ロック(billingLock)が続いている時間。
+// 請求中ロック(billingLocks の各請求書)が続いている時間。
 export const BILLING_OVERVIEW_LOCK_WARN_MS =
   24 * 60 * 60 * 1000;
 
@@ -221,26 +222,25 @@ function describeInvoice(id, invoice, nowMs) {
 }
 
 // 店舗の支払い情報(モードごと)の請求中ロックを調べる。
-function inspectLock(section, nowMs) {
-  const lock = section && section.billingLock;
+// 請求書ごとのロック(billingLocks)を1件ずつ確かめる。
+function inspectLocks(section, nowMs) {
+  const locks = section && section.billingLocks && typeof section.billingLocks === "object" ? section.billingLocks : {};
 
-  if (!lock) {
-    return null;
-  }
+  return Object.keys(locks).map(function(lockInvoiceId) {
+    const lock = locks[lockInvoiceId] && typeof locks[lockInvoiceId] === "object" ? locks[lockInvoiceId] : {};
+    const reasons = [];
+    const sinceMs = Number(lock.sinceMs) || 0;
 
-  const reasons = [];
-  const lockInvoiceId = typeof lock.invoiceId === "string" ? lock.invoiceId : "";
-  const sinceMs = Number(lock.sinceMs) || 0;
+    if (!lockInvoiceId) {
+      reasons.push("lock_without_invoice");
+    }
 
-  if (!lockInvoiceId) {
-    reasons.push("lock_without_invoice");
-  }
+    if (!sinceMs || nowMs - sinceMs > BILLING_OVERVIEW_LOCK_WARN_MS) {
+      reasons.push("lock_stale");
+    }
 
-  if (!sinceMs || nowMs - sinceMs > BILLING_OVERVIEW_LOCK_WARN_MS) {
-    reasons.push("lock_stale");
-  }
-
-  return { lockInvoiceId: lockInvoiceId, sinceMs: sinceMs, reasons: reasons };
+    return { lockInvoiceId: lockInvoiceId, sinceMs: sinceMs, reasons: reasons };
+  });
 }
 
 async function readDocOrError(database, collectionName, id) {
@@ -349,20 +349,25 @@ export async function buildImadakeBillingOverview(database, options) {
       }
     }
 
-    // ロックを持つべき請求書：店舗の支払い情報にこの請求書のロックがあるか。
+    // ロックを持つべき請求書：確保の時に記録した請求先アカウントの支払い情報に、この請求書のロックがあるか。
     if (needsLinked) {
-      {
+      const billingAccountUid = typeof doc.data.chargeBillingAccountUid === "string" ? doc.data.chargeBillingAccountUid : "";
+
+      if (!billingAccountUid) {
+        entry.reasons.push("invoice_without_billing_account");
+      } else {
         linkedReads++;
-        const billing = await readDocOrError(database, STORE_BILLING_COLLECTION, entry.storeId);
+        const billing = await readDocOrError(database, ACCOUNT_BILLING_COLLECTION, billingAccountUid);
 
         if (!billing.ok) {
-          entry.reasons.push("store_billing_unavailable");
+          entry.reasons.push("account_billing_unavailable");
           complete = false;
         } else {
           const mode = typeof doc.data.chargeMode === "string" ? doc.data.chargeMode : "";
           const section = billing.data && billing.data[mode] && typeof billing.data[mode] === "object" ? billing.data[mode] : {};
+          const locks = section.billingLocks && typeof section.billingLocks === "object" ? section.billingLocks : {};
 
-          if (!section.billingLock || section.billingLock.invoiceId !== doc.id) {
+          if (!Object.prototype.hasOwnProperty.call(locks, doc.id)) {
             entry.reasons.push("invoice_without_lock");
           }
         }
@@ -382,15 +387,15 @@ export async function buildImadakeBillingOverview(database, options) {
     complete = false;
   }
 
-  // ---- 店舗の支払い情報(請求中ロック) ----
+  // ---- アカウントの支払い情報(請求書ごとの請求中ロック) ----
   let billingScan = { docs: [], reachedEnd: false, nextCursor: billingCursor };
 
   try {
     billingScan = billingDone || invoiceStoppedAt !== null
       ? (billingDone ? { docs: [], reachedEnd: true, nextCursor: "" } : { docs: [], reachedEnd: false, nextCursor: billingCursor })
-      : await scanCollection(database, STORE_BILLING_COLLECTION, billingCursor, BILLING_PAGE_SIZE, BILLING_MAX_PAGES_PER_CALL);
+      : await scanCollection(database, ACCOUNT_BILLING_COLLECTION, billingCursor, BILLING_PAGE_SIZE, BILLING_MAX_PAGES_PER_CALL);
   } catch (error) {
-    errors.push({ scope: "storeBilling", reason: "read_failed" });
+    errors.push({ scope: "accountBilling", reason: "read_failed" });
     complete = false;
   }
 
@@ -403,13 +408,16 @@ export async function buildImadakeBillingOverview(database, options) {
   let billingProcessed = 0;
 
   for (const doc of billingScan.docs) {
-    const neededReads = MODE_KEYS.filter(function(mode) {
-      const section = doc.data[mode];
-      const lockInvoiceId = section && section.billingLock && typeof section.billingLock.invoiceId === "string" ? section.billingLock.invoiceId : "";
-      return lockInvoiceId && !invoicesById.has(lockInvoiceId);
-    }).length;
+    const docLocks = MODE_KEYS.map(function(mode) {
+      const section = doc.data[mode] && typeof doc.data[mode] === "object" ? doc.data[mode] : null;
+      return { mode: mode, locks: section ? inspectLocks(section, nowMs) : [] };
+    });
+    const lockCount = docLocks.reduce(function(sum, entry) { return sum + entry.locks.length; }, 0);
+    const neededReads = docLocks.reduce(function(sum, entry) {
+      return sum + entry.locks.filter(function(lock) { return lock.lockInvoiceId && !invoicesById.has(lock.lockInvoiceId); }).length;
+    }, 0);
 
-    if (items.length + MODE_KEYS.length > ITEMS_MAX) {
+    if (items.length + lockCount > ITEMS_MAX) {
       billingStoppedAt = lastBillingProcessed;
       break;
     }
@@ -420,57 +428,56 @@ export async function buildImadakeBillingOverview(database, options) {
       break;
     }
 
-    for (const mode of MODE_KEYS) {
-      const section = doc.data[mode] && typeof doc.data[mode] === "object" ? doc.data[mode] : null;
-      const lock = section ? inspectLock(section, nowMs) : null;
+    for (const lockEntry of docLocks) {
+      const mode = lockEntry.mode;
 
-      if (!lock) {
-        continue;
-      }
+      for (const lock of lockEntry.locks) {
+        const entry = {
+          kind: "account_billing",
+          accountUid: doc.id,
+          mode: mode,
+          lockInvoiceId: lock.lockInvoiceId,
+          lockHours: hoursSince(nowMs, lock.sinceMs),
+          reasons: lock.reasons.slice()
+        };
 
-      const entry = {
-        kind: "store_billing",
-        storeId: doc.id,
-        mode: mode,
-        lockInvoiceId: lock.lockInvoiceId,
-        lockHours: hoursSince(nowMs, lock.sinceMs),
-        reasons: lock.reasons.slice()
-      };
+        if (lock.lockInvoiceId) {
+          let invoice = invoicesById.has(lock.lockInvoiceId) ? { ok: true, exists: true, data: invoicesById.get(lock.lockInvoiceId) } : null;
 
-      if (lock.lockInvoiceId) {
-        let invoice = invoicesById.has(lock.lockInvoiceId) ? { ok: true, exists: true, data: invoicesById.get(lock.lockInvoiceId) } : null;
+          if (!invoice) {
+            linkedReads++;
+            invoice = await readDocOrError(database, INVOICES_COLLECTION, lock.lockInvoiceId);
+          }
 
-        if (!invoice) {
-          linkedReads++;
-          invoice = await readDocOrError(database, INVOICES_COLLECTION, lock.lockInvoiceId);
+          if (invoice && !invoice.ok) {
+            entry.reasons.push("lock_invoice_unavailable");
+            complete = false;
+          } else if (invoice && !invoice.exists) {
+            entry.reasons.push("lock_invoice_missing");
+          } else if (invoice) {
+            const status = invoice.data.status;
+
+            if (!LOCK_HOLDING_STATUSES.includes(status)) {
+              entry.reasons.push("lock_invoice_not_holding");
+            }
+
+            if (invoice.data.chargeBillingAccountUid !== doc.id) {
+              entry.reasons.push("lock_invoice_other_account");
+            }
+
+            entry.lockStoreId = typeof invoice.data.storeId === "string" ? invoice.data.storeId : "";
+
+            if (!(typeof invoice.data.chargePaymentMethodId === "string" && invoice.data.chargePaymentMethodId.startsWith("pm_"))) {
+              entry.reasons.push("lock_invoice_without_card");
+            }
+
+            entry.lockInvoiceStatus = typeof status === "string" ? status : "";
+          }
         }
 
-        if (invoice && !invoice.ok) {
-          entry.reasons.push("lock_invoice_unavailable");
-          complete = false;
-        } else if (invoice && !invoice.exists) {
-          entry.reasons.push("lock_invoice_missing");
-        } else if (invoice) {
-          const status = invoice.data.status;
-
-          if (!LOCK_HOLDING_STATUSES.includes(status)) {
-            entry.reasons.push("lock_invoice_not_holding");
-          }
-
-          if (invoice.data.storeId !== doc.id) {
-            entry.reasons.push("lock_invoice_other_store");
-          }
-
-          if (!(typeof invoice.data.chargePaymentMethodId === "string" && invoice.data.chargePaymentMethodId.startsWith("pm_"))) {
-            entry.reasons.push("lock_invoice_without_card");
-          }
-
-          entry.lockInvoiceStatus = typeof status === "string" ? status : "";
+        if (entry.reasons.length > 0) {
+          items.push(entry);
         }
-      }
-
-      if (entry.reasons.length > 0) {
-        items.push(entry);
       }
     }
 
@@ -502,10 +509,10 @@ export async function buildImadakeBillingOverview(database, options) {
     scanned: {
       // 確認を終えた件数(途中で止めた場合、その先は次の呼び出しで確認する)。
       invoices: invoicesProcessed,
-      storeBilling: billingProcessed,
+      accountBilling: billingProcessed,
       // 実際に読んだ文書数(止めた先の分を含む。読み取り費用の目安)。
       invoiceDocsRead: invoiceScan.docs.length,
-      storeBillingDocsRead: billingScan.docs.length,
+      accountBillingDocsRead: billingScan.docs.length,
       ledgerCounts: ledgerCounts,
       linkedReads: linkedReads,
       // 上限で照合を省略した件数(0でなければ complete:false。次の呼び出しでは同じ範囲を読み直す必要がある)。
@@ -527,7 +534,7 @@ export async function buildImadakeBillingOverview(database, options) {
     },
     limits: {
       invoicesPerCall: INVOICE_PAGE_SIZE * INVOICE_MAX_PAGES_PER_CALL,
-      storeBillingPerCall: BILLING_PAGE_SIZE * BILLING_MAX_PAGES_PER_CALL,
+      accountBillingPerCall: BILLING_PAGE_SIZE * BILLING_MAX_PAGES_PER_CALL,
       ledgerCountsPerCall: LEDGER_COUNT_MAX_PER_CALL,
       linkedReadsPerCall: LINKED_DOC_READS_MAX_PER_CALL,
       itemsMax: ITEMS_MAX
@@ -771,15 +778,20 @@ export async function inspectImadakeInvoice(database, deps, invoiceId, nowMs) {
     customers.add(invoice.chargeCustomerId);
   }
 
-  try {
-    const billingSnapshot = await database.collection(STORE_BILLING_COLLECTION).doc(String(invoice.storeId || "")).get();
-    const section = billingSnapshot.exists && billingSnapshot.data() ? billingSnapshot.data()[config.mode] : null;
+  // 今の支払い情報：確保の時に記録した請求先アカウント(記録が無ければ照会しない)。
+  const billingAccountUid = typeof invoice.chargeBillingAccountUid === "string" ? invoice.chargeBillingAccountUid : "";
 
-    if (section && typeof section.customerId === "string" && section.customerId.startsWith("cus_")) {
-      customers.add(section.customerId);
+  if (billingAccountUid) {
+    try {
+      const billingSnapshot = await database.collection(ACCOUNT_BILLING_COLLECTION).doc(billingAccountUid).get();
+      const section = billingSnapshot.exists && billingSnapshot.data() ? billingSnapshot.data()[config.mode] : null;
+
+      if (section && typeof section.customerId === "string" && section.customerId.startsWith("cus_")) {
+        customers.add(section.customerId);
+      }
+    } catch (error) {
+      findings.push(finding("account_billing_unavailable", "incomplete"));
     }
-  } catch (error) {
-    findings.push(finding("store_billing_unavailable", "incomplete"));
   }
 
   const knownIds = new Set();

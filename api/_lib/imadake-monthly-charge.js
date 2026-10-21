@@ -2,7 +2,9 @@
 // 今だけ投稿 決済 STEP 32-C｜月次請求(確定済みの請求書を、登録カードへStripeで請求、サーバー側のみ)
 // ==========================================================================
 // 対象：imadakeMonthlyInvoices/{storeId}_{YYYY-MM} のうち status "closed"(STEP 32-Bで確定済み)。
-// 請求先：storeBilling/{storeId}.{mode} の正式な paymentMethodId(A案。Stripeの既定カードは使わない)。
+// 請求先：店舗の請求先アカウント(有効な owner が1人)の accountBilling/{uid}.{mode} の正式な paymentMethodId
+// (A案。Stripeの既定カードは使わない。STEP 42-C で1アカウント1枚に変更。請求は各カードの登録先へ行う)。
+// 請求書は店舗・月ごとのまま。確保の時に請求先アカウントを決め、請求書に chargeBillingAccountUid として記録する。
 // 1店舗・1か月につき請求書は1件、その請求書への支払い(PaymentIntent)は成功するまで1件ずつ。
 //
 // 請求書の状態(この工程で追加)：
@@ -19,7 +21,8 @@
 //
 // 二重請求の防止：
 //   ・請求書の確保(トランザクション)：closed の請求書だけを確保し、leaseId・期限を書く。同じ店舗の
-//     storeBilling.{mode}.billingLock も同じトランザクションで設定(請求中は旧カードの取り外しが止まる)。
+//     請求先アカウントの accountBilling.{mode}.billingLocks[請求書ID] も同じトランザクションで設定(請求中は
+//     旧カードの取り外しが止まる。1つのアカウントで複数の店舗の請求が重なるため、ロックは請求書ごと)。
 //   ・冪等キー：machinau-invoice-{mode}-{invoiceId}-{試行番号}。試行番号は「前の試行で支払いが
 //     作られていないことが確実な場合」だけ増やす。結果不明のときは同じ番号・同じキーのまま。
 //   ・結果不明の照合：PaymentIntent IDが分かればStripeにそのIDで照会(最優先)。分からなければ、その顧客の
@@ -47,8 +50,9 @@ import {
 } from "node:crypto";
 
 import {
-  STORE_BILLING_COLLECTION,
-  readStripeBillingConfig
+  ACCOUNT_BILLING_COLLECTION,
+  readStripeBillingConfig,
+  resolveStoreBillingAccount
 } from "./store-billing.js";
 
 import {
@@ -221,8 +225,9 @@ function checkInvoiceAmount(invoice) {
   return "";
 }
 
-// 店舗の支払い情報(storeBilling.{mode})が請求に使えるか。
-function checkBillingSection(section, invoiceId) {
+// 請求先アカウントの支払い情報(accountBilling.{mode})が請求に使えるか。
+// STEP 42-C：ロックは請求書ごとのため、同じアカウントの別の請求書が請求中でも止めない。
+function checkBillingSection(section) {
   if (typeof section.customerId !== "string" || !section.customerId.startsWith("cus_")) {
     return "no_customer";
   }
@@ -235,10 +240,6 @@ function checkBillingSection(section, invoiceId) {
 
   if (pending.some(function(entry) { return entry && entry.paymentMethodId === section.paymentMethodId; })) {
     return "payment_method_retiring";
-  }
-
-  if (section.billingLock && section.billingLock.invoiceId !== invoiceId) {
-    return "store_busy";
   }
 
   return "";
@@ -326,23 +327,25 @@ function resultFromCreateResponse(response, claim) {
   return { kind: "charge_error", reason: "stripe_request_rejected", error: summary };
 }
 
-// 結果を請求書へ記録する(確保の leaseId が一致するときだけ)。billingLock も同じトランザクションで扱う。
+// 結果を請求書へ記録する(確保の leaseId が一致するときだけ)。請求書ごとのロックも同じトランザクションで扱う。
 async function finishCharge(database, claim, result, deps) {
   const invoiceRef = database.collection(IMADAKE_MONTHLY_INVOICES_COLLECTION).doc(claim.invoiceId);
-  const billingRef = database.collection(STORE_BILLING_COLLECTION).doc(claim.storeId);
+  const billingRef = claim.billingAccountUid
+    ? database.collection(ACCOUNT_BILLING_COLLECTION).doc(claim.billingAccountUid)
+    : null;
   const nowMs = nowOf(deps);
   const nowTimestamp = Timestamp.fromMillis(nowMs);
 
   return database.runTransaction(async function(transaction) {
     const invoiceSnapshot = await transaction.get(invoiceRef);
-    const billingSnapshot = await transaction.get(billingRef);
+    const billingSnapshot = billingRef ? await transaction.get(billingRef) : null;
     const invoice = invoiceSnapshot.exists ? invoiceSnapshot.data() || {} : null;
 
     if (!invoice || invoice.chargeLeaseId !== claim.leaseId) {
       return { recorded: false, status: invoice ? invoice.status : "" };
     }
 
-    const billingData = billingSnapshot.exists ? billingSnapshot.data() || {} : {};
+    const billingData = billingSnapshot && billingSnapshot.exists ? billingSnapshot.data() || {} : {};
     const section = readSection(billingData, claim.mode);
     let nextStatus = invoice.status;
     let releaseLock = false;
@@ -388,7 +391,7 @@ async function finishCharge(database, claim, result, deps) {
         releaseLock = !result.keepLock;
         break;
       case "needs_review":
-        // 結果を確定できない：自動では新しい支払いを作らず、人の確認を待つ。billingLock は残す。
+        // 結果を確定できない：自動では新しい支払いを作らず、人の確認を待つ。請求書のロック(billingLocks)は残す。
         nextStatus = "needs_review";
         update.chargeReviewReason = result.reason || "";
         break;
@@ -400,7 +403,7 @@ async function finishCharge(database, claim, result, deps) {
         releaseLock = true;
         break;
       default:
-        // 結果不明：同じ試行番号・同じキーのまま、次の実行で照合する。billingLock は残す。
+        // 結果不明：同じ試行番号・同じキーのまま、次の実行で照合する。請求書のロック(billingLocks)は残す。
         // needs_review の照合で分からなかった時は needs_review のまま。
         nextStatus = invoice.status === "needs_review" ? "needs_review" : "charging";
         update.chargeOutcomeUnknown = true;
@@ -422,10 +425,12 @@ async function finishCharge(database, claim, result, deps) {
 
     transaction.update(invoiceRef, update);
 
-    if (releaseLock && section.billingLock && section.billingLock.invoiceId === claim.invoiceId) {
-      const nextSection = { ...section };
-      delete nextSection.billingLock;
-      transaction.set(billingRef, { ...billingData, [claim.mode]: nextSection });
+    const locks = section.billingLocks && typeof section.billingLocks === "object" ? section.billingLocks : {};
+
+    if (releaseLock && billingRef && Object.prototype.hasOwnProperty.call(locks, claim.invoiceId)) {
+      const nextLocks = { ...locks };
+      delete nextLocks[claim.invoiceId];
+      transaction.set(billingRef, { ...billingData, [claim.mode]: { ...section, billingLocks: nextLocks } });
     }
 
     return { recorded: true, status: nextStatus };
@@ -462,11 +467,23 @@ async function claimForCharge(database, invoiceId, config, deps) {
       return { skip: amountProblem };
     }
 
-    const billingRef = database.collection(STORE_BILLING_COLLECTION).doc(storeId);
+    // 請求先アカウント(店舗の有効な owner が1人)。決まらなければ請求しない。
+    const account = await resolveStoreBillingAccount(database, storeId, transaction);
+
+    if (!account.ok) {
+      return { skip: account.reason };
+    }
+
+    const billingRef = database.collection(ACCOUNT_BILLING_COLLECTION).doc(account.uid);
     const billingSnapshot = await transaction.get(billingRef);
     const billingData = billingSnapshot.exists ? billingSnapshot.data() || {} : {};
+
+    if (billingSnapshot.exists && billingData.uid !== account.uid) {
+      return { skip: "billing_account_mismatch" };
+    }
+
     const section = readSection(billingData, config.mode);
-    const billingProblem = checkBillingSection(section, invoiceId);
+    const billingProblem = checkBillingSection(section);
 
     if (billingProblem) {
       return { skip: billingProblem };
@@ -486,6 +503,7 @@ async function claimForCharge(database, invoiceId, config, deps) {
       chargeLeaseId: leaseId,
       chargeLeaseUntilMs: leaseUntilMs,
       chargeOutcomeUnknown: false,
+      chargeBillingAccountUid: account.uid,
       chargeCustomerId: section.customerId,
       chargePaymentMethodId: section.paymentMethodId,
       chargeCardVersion: Number.isInteger(section.cardVersion) ? section.cardVersion : 0,
@@ -494,9 +512,11 @@ async function claimForCharge(database, invoiceId, config, deps) {
       chargeUpdatedAt: Timestamp.fromMillis(nowMs)
     });
 
+    const locks = section.billingLocks && typeof section.billingLocks === "object" ? section.billingLocks : {};
+
     transaction.set(billingRef, {
       ...billingData,
-      [config.mode]: { ...section, billingLock: { invoiceId: invoiceId, attempt: attempt, sinceMs: nowMs } }
+      [config.mode]: { ...section, billingLocks: { ...locks, [invoiceId]: { attempt: attempt, sinceMs: nowMs, storeId: storeId } } }
     });
 
     return {
@@ -504,6 +524,7 @@ async function claimForCharge(database, invoiceId, config, deps) {
         action: "charge",
         invoiceId: invoiceId,
         storeId: storeId,
+        billingAccountUid: account.uid,
         month: invoice.month,
         mode: config.mode,
         attempt: attempt,
@@ -553,6 +574,8 @@ async function claimForReconcile(database, invoiceId, config, deps) {
         action: "reconcile",
         invoiceId: invoiceId,
         storeId: invoice.storeId,
+        // 確保の時に記録した請求先アカウント(ロックの解除先)。照合は請求書に記録した顧客・カードで行う。
+        billingAccountUid: typeof invoice.chargeBillingAccountUid === "string" ? invoice.chargeBillingAccountUid : "",
         month: invoice.month,
         mode: invoice.chargeMode,
         status: invoice.status,
@@ -660,7 +683,7 @@ function resultFromFoundPaymentIntents(items, claim) {
 // 新しい試行：送信直前にカードが変わっていないか、この請求書の支払いがStripeに既に無いかを確かめ、
 // 確保期限に余裕があるときだけ送る。
 async function performCharge(database, config, deps, claim) {
-  const billingSnapshot = await database.collection(STORE_BILLING_COLLECTION).doc(claim.storeId).get();
+  const billingSnapshot = await database.collection(ACCOUNT_BILLING_COLLECTION).doc(claim.billingAccountUid).get();
   const section = readSection(billingSnapshot.exists ? billingSnapshot.data() : null, claim.mode);
 
   if (section.paymentMethodId !== claim.paymentMethodId || section.customerId !== claim.customerId) {
@@ -770,9 +793,15 @@ export async function runImadakeMonthlyCharge(database, deps, options) {
     let reason = "";
 
     if (invoice.status === "closed") {
-      const billingSnapshot = await database.collection(STORE_BILLING_COLLECTION).doc(String(invoice.storeId)).get();
-      const section = readSection(billingSnapshot.exists ? billingSnapshot.data() : null, mode);
-      reason = checkInvoiceAmount(invoice) || checkBillingSection(section, doc.id);
+      const account = await resolveStoreBillingAccount(database, String(invoice.storeId || ""));
+      let billingReason = account.ok ? "" : account.reason;
+
+      if (account.ok) {
+        const billingSnapshot = await database.collection(ACCOUNT_BILLING_COLLECTION).doc(account.uid).get();
+        billingReason = checkBillingSection(readSection(billingSnapshot.exists ? billingSnapshot.data() : null, mode));
+      }
+
+      reason = checkInvoiceAmount(invoice) || billingReason;
       plan = reason ? "skip" : "charge";
     } else if (LOCK_HOLDING_STATUSES.includes(invoice.status)) {
       plan = "reconcile";

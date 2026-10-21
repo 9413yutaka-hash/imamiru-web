@@ -2,18 +2,18 @@
 // 今だけ投稿 決済 STEP 35-A｜カード登録必須の判定(サーバー側のみ)
 // ==========================================================================
 // 代表確定仕様：今だけ投稿の利用にはクレジットカード登録が必須。正式な請求先は
-// storeBilling/{storeId}.{mode}.paymentMethodId(A案)。常設店舗の基本情報はカードなしで使える。
+// 店舗の請求先アカウントの accountBilling/{uid}.{mode}.paymentMethodId(A案。STEP 42-C で1アカウント1枚に変更)。
 //
 // このファイルは「課金対象になる今だけ投稿を新しく作る時」の確認だけに使う
 // (呼び出すのは api/_lib/imadake.js の handleImadakePostCreate。課金対象でない投稿・運営投稿・
 //  一般の投稿・店舗の基本情報では使わない)。
-// Firestoreの storeBilling だけを読む。Stripeへは問い合わせない(カードは登録・変更の確定時に
+// Firestoreの storeMembers(請求先アカウントの特定)と accountBilling だけを読む。Stripeへは問い合わせない(カードは登録・変更の確定時に
 // Stripeで確認済み)。書き込みはしない。カード番号・CVCは扱わない(保存されているのは
 // ブランド・下4桁・有効期限の月年だけ)。
 //
 // 有効な請求先とみなす条件(すべて満たす時だけ。不明・不整合は拒否)：
 //   ・Stripeの設定がこの環境で有効(テスト用のみ・Productionでは無効)
-//   ・storeBilling/{storeId} があり、文書の storeId が一致する
+//   ・店舗の請求先アカウント(有効な owner が1人)が決まり、accountBilling/{uid} があり、文書の uid が一致する
 //   ・その環境のモードの区画に、確定済み(setupStatus "succeeded")の customerId(cus_)と paymentMethodId(pm_)
 //   ・paymentMethodId が取り外し待ち(detachPendingPaymentMethods)に入っていない
 //   ・保存されている有効期限(月・年)が、日本時間の今月以降
@@ -22,7 +22,8 @@
 // 拒否の理由コード：
 //   card_required             未登録・登録途中だけ・その環境のモードの区画が無い
 //   card_invalid              確定済みでない・顧客IDやカードの有効期限が読めない等の不整合
-//   card_store_mismatch       文書の storeId が投稿の店舗と違う
+//   card_account_mismatch     文書の uid が請求先アカウントと違う
+//   card_billing_account_unresolved  店舗の請求先アカウントが決まらない(有効な owner が0人・2人以上)
 //   card_retiring             正式なカードが取り外し待ちに入っている
 //   card_expired              有効期限切れ
 //   card_billing_unavailable  Stripeの設定が無効・確認の部品が無い
@@ -30,8 +31,9 @@
 // ==========================================================================
 
 import {
-  STORE_BILLING_COLLECTION,
-  readStripeBillingConfig
+  ACCOUNT_BILLING_COLLECTION,
+  readStripeBillingConfig,
+  resolveStoreBillingAccount
 } from "./store-billing.js";
 
 const CUSTOMER_ID_PATTERN =
@@ -46,14 +48,14 @@ function jstYearMonth(nowMillis) {
   return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1 };
 }
 
-// storeBilling の文書(データ)から判定する(読み取り済みのデータを渡す。純粋な関数)。
-export function evaluateImadakeBillingCard(billingData, storeId, mode, nowMillis) {
+// accountBilling の文書(データ)から判定する(読み取り済みのデータを渡す。純粋な関数)。
+export function evaluateImadakeBillingCard(billingData, uid, mode, nowMillis) {
   if (!billingData || typeof billingData !== "object") {
     return { ok: false, reason: "card_required" };
   }
 
-  if (billingData.storeId !== storeId) {
-    return { ok: false, reason: typeof billingData.storeId === "string" && billingData.storeId !== "" ? "card_store_mismatch" : "card_invalid" };
+  if (billingData.uid !== uid) {
+    return { ok: false, reason: typeof billingData.uid === "string" && billingData.uid !== "" ? "card_account_mismatch" : "card_invalid" };
   }
 
   const section = billingData[mode];
@@ -111,9 +113,15 @@ export async function checkImadakeBillingCard(database, storeId, options) {
     return { ok: false, reason: "card_billing_unavailable" };
   }
 
-  const snapshot = await database.collection(STORE_BILLING_COLLECTION).doc(storeId).get();
+  const account = await resolveStoreBillingAccount(database, storeId);
 
-  return evaluateImadakeBillingCard(snapshot.exists ? snapshot.data() || {} : null, storeId, mode, options && options.nowMillis);
+  if (!account.ok) {
+    return { ok: false, reason: "card_billing_account_unresolved" };
+  }
+
+  const snapshot = await database.collection(ACCOUNT_BILLING_COLLECTION).doc(account.uid).get();
+
+  return evaluateImadakeBillingCard(snapshot.exists ? snapshot.data() || {} : null, account.uid, mode, options && options.nowMillis);
 }
 
 // 保存のトランザクションの中での確認(確認と保存の間のカード変更・取り外しとの競合を防ぐ)。
@@ -124,7 +132,13 @@ export async function checkImadakeBillingCardInTransaction(transaction, database
     return { ok: false, reason: "card_billing_unavailable" };
   }
 
-  const snapshot = await transaction.get(database.collection(STORE_BILLING_COLLECTION).doc(storeId));
+  const account = await resolveStoreBillingAccount(database, storeId, transaction);
 
-  return evaluateImadakeBillingCard(snapshot.exists ? snapshot.data() || {} : null, storeId, mode, options && options.nowMillis);
+  if (!account.ok) {
+    return { ok: false, reason: "card_billing_account_unresolved" };
+  }
+
+  const snapshot = await transaction.get(database.collection(ACCOUNT_BILLING_COLLECTION).doc(account.uid));
+
+  return evaluateImadakeBillingCard(snapshot.exists ? snapshot.data() || {} : null, account.uid, mode, options && options.nowMillis);
 }

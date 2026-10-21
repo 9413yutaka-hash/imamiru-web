@@ -2365,8 +2365,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_billing_intro: {
-    ja: "今だけ投稿の利用料金（有効な閲覧があった「投稿×1日」ごとに100円・税込、月末締め・翌月まとめてカード請求）に使うカードを登録します。現在、請求は行っていません。カード番号は決済会社（Stripe）が直接受け取り、マチナウには保存されません。",
-    en: "Register the card used for Just for Now fees (¥100 incl. tax per post per day with at least one valid view, billed together monthly). No charges are being made at this time. Your card number goes directly to our payment provider (Stripe) and is not stored by Machinau."
+    ja: "今だけ投稿の利用料金（有効な閲覧があった「投稿×1日」ごとに100円・税込、月末締め・翌月まとめてカード請求）に使うカードを登録します。カードは1つのアカウントに1枚で、このアカウントで管理するすべてのお店・施設に共通です。現在、請求は行っていません。カード番号は決済会社（Stripe）が直接受け取り、マチナウには保存されません。",
+    en: "Register the card used for Just for Now fees (¥100 incl. tax per post per day with at least one valid view, billed together monthly). One card per account, shared by all the shops and venues you manage with this account. No charges are being made at this time. Your card number goes directly to our payment provider (Stripe) and is not stored by Machinau."
   },
 
   store_billing_store_label: {

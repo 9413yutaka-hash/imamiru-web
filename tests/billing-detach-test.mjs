@@ -24,8 +24,8 @@ globalThis.fetch = async (url, opts = {}) => {
   if ((opts.headers || {}).Authorization !== "Bearer " + FAKE_SERVER_KEY) return json(401, { error: { type: "invalid_request_error" } });
   if (opts.method === "POST" && u.pathname === "/v1/customers") return json(200, { id: "cus_d" + ++ST.seq });
   if (opts.method === "POST" && u.pathname === "/v1/setup_intents") {
-    const id = "seti_d" + ++ST.seq; ST.intents.set(id, { id, customer: form.customer, metadata: { storeId: form["metadata[storeId]"] } });
-    return json(200, { id, client_secret: id + "_secret_FAKE", customer: form.customer, payment_method_types: ["card"], metadata: { storeId: form["metadata[storeId]"] }, status: "requires_payment_method" });
+    const id = "seti_d" + ++ST.seq; ST.intents.set(id, { id, customer: form.customer, metadata: { accountUid: form["metadata[accountUid]"] } });
+    return json(200, { id, client_secret: id + "_secret_FAKE", customer: form.customer, payment_method_types: ["card"], metadata: { accountUid: form["metadata[accountUid]"] }, status: "requires_payment_method" });
   }
   let m = u.pathname.match(/^\/v1\/setup_intents\/(seti_[A-Za-z0-9]+)$/);
   if (opts.method === "GET" && m) {
@@ -67,14 +67,15 @@ async function call(mode, body, token) {
 }
 const CONSENT = "2026-10-16";
 const resetRate = () => { for (const k of [...S.docs.keys()]) if (k.startsWith("storeBillingRateLimits/")) S.docs.delete(k); };
-const sec = (n) => ((S.docs.get("storeBilling/s" + n) || {}).test) || {};
+// STEP 42-C｜カードはアカウント単位(店舗 sN の owner は uN)。
+const sec = (n) => ((S.docs.get("accountBilling/u" + n) || {}).test) || {};
 const q = (n) => sec(n).detachPendingPaymentMethods || [];
 const start = async (n) => { resetRate(); return call("storeBillingSetupIntentCreate", { storeId: "s" + n }, "o" + n); };
 const confirm = (n, si) => call("storeBillingSetupConfirm", { storeId: "s" + n, setupIntentId: si, consentVersion: CONSENT }, "o" + n);
 const register = async (n) => { const c = await start(n); const f = await confirm(n, c.body.setupIntentId); return { c, f, pm: sec(n).paymentMethodId }; };
 const posts = (pm) => ST.detachPosts.filter((x) => x.pm === pm).length;
 // seed a store with a given current card and queue (customer known to the stub)
-const seed = (n, cur, entries, extra = {}) => { const cust = "cus_seed" + n; ST.pms.set(cur, { customer: cust, type: "card" }); for (const e of entries) if (!ST.pms.has(e.paymentMethodId)) ST.pms.set(e.paymentMethodId, { customer: cust, type: "card" }); S.docs.set("storeBilling/s" + n, { storeId: "s" + n, test: { customerId: cust, paymentMethodId: cur, card: { brand: "visa", last4: "4242", expMonth: 12, expYear: 2030 }, cardVersion: 3, pendingSetupIntentId: "", detachPendingPaymentMethods: entries, ...extra } }); return cust; };
+const seed = (n, cur, entries, extra = {}) => { const cust = "cus_seed" + n; ST.pms.set(cur, { customer: cust, type: "card" }); for (const e of entries) if (!ST.pms.has(e.paymentMethodId)) ST.pms.set(e.paymentMethodId, { customer: cust, type: "card" }); S.docs.set("accountBilling/u" + n, { uid: "u" + n, test: { customerId: cust, paymentMethodId: cur, card: { brand: "visa", last4: "4242", expMonth: 12, expYear: 2030 }, cardVersion: 3, pendingSetupIntentId: "", detachPendingPaymentMethods: entries, ...extra } }); return cust; };
 const ent = (pm, more = {}) => ({ paymentMethodId: pm, state: "pending", queuedAtMs: 1, queuedCardVersion: 2, attempts: 0, ...more });
 
 // D1 first registration
@@ -94,7 +95,7 @@ const callsBefore3 = ST.calls.length; const r3b = await start(3);
 t("D3b 上限10件の先頭に現在のカードが混じっていても、回復処理はそれを飛ばして他の2件だけ取り外す", posts("pm_cur3") === 0 && !ST.calls.slice(callsBefore3).includes("GET /v1/payment_methods/pm_cur3") && posts("pm_q3_0") === 1 && posts("pm_q3_1") === 1 && sec(3).paymentMethodId === "pm_cur3" && ST.pms.get("pm_cur3").customer === "cus_seed3", { calls: ST.calls.slice(callsBefore3), code: r3b.code });
 // D4 foreign customer
 seed(4, "pm_cur4", []); const r4a = await register(4); ST.pms.set("pm_cur4", { customer: "cus_OTHER", type: "card" }); // not used
-S.docs.set("storeBilling/s4", { storeId: "s4", test: { ...sec(4), detachPendingPaymentMethods: [ent("pm_foreign4")] } }); ST.pms.set("pm_foreign4", { customer: "cus_OTHER", type: "card" });
+S.docs.set("accountBilling/u4", { uid: "u4", test: { ...sec(4), detachPendingPaymentMethods: [ent("pm_foreign4")] } }); ST.pms.set("pm_foreign4", { customer: "cus_OTHER", type: "card" });
 await register(4);
 const f4 = q(4).find((e) => e.paymentMethodId === "pm_foreign4");
 t("D4 他の顧客のカード：取り外さず blocked（customer_mismatch）として記録を残す", posts("pm_foreign4") === 0 && f4 && f4.state === "blocked" && f4.blockedReason === "customer_mismatch" && ST.pms.get("pm_foreign4").customer === "cus_OTHER", f4);
@@ -202,22 +203,23 @@ seed(16, "pm_cur16", Array.from({ length: 10 }, (_, i) => ent("pm_l16_" + i)));
 ST.getFail.push(503, 503); const r16 = await start(16);
 t("D13b 上限10件でStripe障害：409 detach_pending_limit・10件の記録はすべて残る（エラー記録つき）", r16.code === 409 && r16.body.reason === "detach_pending_limit" && q(16).length === 10 && q(16).filter((e) => e.lastError && e.lastError.status === 503).length === 2, { code: r16.code, q: q(16).map((e) => [e.paymentMethodId, e.state]) });
 // D14 billing lock holds detaching
-seed(17, "pm_cur17", [ent("pm_old17")], { billingLock: { atMs: 1, runId: "x" } });
+seed(17, "pm_cur17", [ent("pm_old17")], { billingLocks: { s17_unknown: { attempt: 1, sinceMs: 1 } } });
 const g17 = ST.calls.length; const r17 = await register(17);
 const f17 = q(17).find((e) => e.paymentMethodId === "pm_old17");
-t("D14 請求ロック（billingLock）中は取り外さずに保留（照会もしない・attemptsも増えない）", r17.f.code === 200 && f17 && f17.state === "pending" && f17.attempts === 0 && posts("pm_old17") === 0 && !ST.calls.slice(g17).some((x) => x === "GET /v1/payment_methods/pm_old17") && q(17).length === 2, { q: q(17) });
+t("D14 請求ロック（billingLocks、確かめられない請求書）中は取り外さずに保留（照会もしない・attemptsも増えない）", r17.f.code === 200 && f17 && f17.state === "pending" && f17.attempts === 0 && posts("pm_old17") === 0 && !ST.calls.slice(g17).some((x) => x === "GET /v1/payment_methods/pm_old17") && q(17).length === 2, { q: q(17) });
 // D15 Stripe failure during post-processing never breaks the registration
 seed(18, "pm_cur18", []); ST.getFail.push("network");
 const r18 = await register(18);
 t("D15 取り外しの照会が通信断でも、カード登録・変更は成功（新カード保存・旧カードは再試行待ち）", r18.f.code === 200 && r18.f.body.status === "succeeded" && sec(18).paymentMethodId === r18.pm && q(18).some((e) => e.paymentMethodId === "pm_cur18" && e.state === "pending"), { f: r18.f.body, q: q(18) });
 // D16 existing data (no queue field, old card) works end-to-end
 ST.pms.set("pm_existing4444", { customer: "cus_legacy19", type: "card" });
-S.docs.set("storeBilling/s19", { storeId: "s19", test: { customerId: "cus_legacy19", paymentMethodId: "pm_existing4444", card: { brand: "mastercard", last4: "4444", expMonth: 6, expYear: 2031 }, cardVersion: 2, setupStatus: "succeeded", lastSetupIntentId: "seti_x", pendingSetupIntentId: "", consentVersion: CONSENT } });
+S.docs.set("accountBilling/u19", { uid: "u19", test: { customerId: "cus_legacy19", paymentMethodId: "pm_existing4444", card: { brand: "mastercard", last4: "4444", expMonth: 6, expYear: 2031 }, cardVersion: 2, setupStatus: "succeeded", lastSetupIntentId: "seti_x", pendingSetupIntentId: "", consentVersion: CONSENT } });
 const st19 = await call("storeBillingStatus", { storeId: "s19" }, "o19");
 const r19 = await register(19);
 t("D16 既存形式（取り外し待ち項目なし・Mastercard 4444）：表示は従来どおり→変更で4444だけ取り外し", st19.body.card && st19.body.card.last4 === "4444" && r19.f.code === 200 && posts("pm_existing4444") === 1 && q(19).length === 0 && sec(19).cardVersion === 3, { st: st19.body, q: q(19) });
 // ===== STEP 32-D①: detach is no longer stopped by the billing-start flag, but protected by unresolved invoices =====
-const invoiceOf = (n, month, status, pm, extra = {}) => S.docs.set("imadakeMonthlyInvoices/s" + n + "_" + month, { storeId: "s" + n, month, status, lineCount: 1, amountJpy: 100, currency: "JPY", taxIncluded: true, chargePaymentMethodId: pm, ...extra });
+// STEP 42-C｜取り外しの保護は、請求書に記録した顧客(chargeCustomerId)で探す。種まきした店舗の顧客は cus_seed{n}。
+const invoiceOf = (n, month, status, pm, extra = {}) => S.docs.set("imadakeMonthlyInvoices/s" + n + "_" + month, { storeId: "s" + n, month, status, lineCount: 1, amountJpy: 100, currency: "JPY", taxIncluded: true, chargeCustomerId: "cus_seed" + n, chargeBillingAccountUid: "u" + n, chargePaymentMethodId: pm, ...extra });
 const src = fs.readFileSync(new URL("../api/_lib/store-billing.js", import.meta.url), "utf8");
 t("E0 取り外しの可否は課金開始フラグに依存しない（store-billing.js は IMADAKE_CV_BILLING_STARTED を参照しない）", !/IMADAKE_CV_BILLING_STARTED/.test(src));
 
@@ -255,7 +257,7 @@ globalThis.__QUERY_FAIL = null;
 t("E5 請求書を読めない：カード登録は成功、取り外しは一切しない（照会も送らない・記録は手つかず）", r38.f.code === 200 && posts("pm_old38") === 0 && posts("pm_cur38") === 0 && q(38).every((e) => e.state === "pending" && e.attempts === 0), q(38));
 
 // E6 billingLock still holds everything
-seed(39, "pm_cur39", [ent("pm_old39")], { billingLock: { invoiceId: "s39_2027-11", attempt: 1, sinceMs: 1 } });
+seed(39, "pm_cur39", [ent("pm_old39")], { billingLocks: { "s39_2027-11": { attempt: 1, sinceMs: 1 } } });
 await register(39);
 t("E6 請求ロックがある間は、請求書に関係なくどのカードも取り外さない", posts("pm_old39") === 0 && posts("pm_cur39") === 0, q(39));
 
@@ -272,7 +274,7 @@ t("E7 確保した後に未解決の請求書がそのカードを使い始め�
 seed(41, "pm_cur41", [ent("pm_old41")]);
 const h41 = mkHold("pm_old41");
 const p41 = register(41); await h41.rp;
-S.docs.set("storeBilling/s41", { ...S.docs.get("storeBilling/s41"), test: { ...S.docs.get("storeBilling/s41").test, billingLock: { invoiceId: "s41_2027-11", attempt: 1, sinceMs: 1 } } });
+S.docs.set("accountBilling/u41", { ...S.docs.get("accountBilling/u41"), test: { ...S.docs.get("accountBilling/u41").test, billingLocks: { "s41_2027-11": { attempt: 1, sinceMs: 1 } } } });
 h41.release(); await p41;
 t("E8 確保した後に請求ロックが付いた：取り外し直前の確認で止める", posts("pm_old41") === 0 && q(41).find((e) => e.paymentMethodId === "pm_old41").state === "pending", q(41));
 
@@ -282,7 +284,7 @@ await register(33);
 t("E9 守っていた請求書が解決（paid）した後のカード変更で、その旧カードも取り外される", posts("pm_old33") === 1, q(33));
 
 // ===== STEP 32-D③: while a billingLock exists, only cards not used by unresolved invoices are detached =====
-const lockOn = (n, invoiceId) => { const d = S.docs.get("storeBilling/s" + n); S.docs.set("storeBilling/s" + n, { ...d, test: { ...d.test, billingLock: { invoiceId, attempt: 1, sinceMs: 1 } } }); };
+const lockOn = (n, invoiceId) => { const d = S.docs.get("accountBilling/u" + n); S.docs.set("accountBilling/u" + n, { ...d, test: { ...d.test, billingLocks: { ...(d.test.billingLocks || {}), [invoiceId]: { attempt: 1, sinceMs: 1 } } } }); };
 // F1 the card in use by the locked (charging) invoice was the current card before this change
 seed(46, "pm_inuse46", [ent("pm_y46")]);
 invoiceOf(46, "2027-12", "charging", "pm_inuse46"); lockOn(46, "s46_2027-12");
@@ -321,17 +323,31 @@ h54.release(); await p54;
 t("F7 確保した後に未解決の請求書がそのカードを使っていると分かった：取り外し直前の確認で止める", posts("pm_y54") === 0 && q(54).find((e) => e.paymentMethodId === "pm_y54").lastError.type === "protected_by_invoice", q(54));
 // F8 after the locked invoice is paid and the lock is released, the protected card is detached
 S.docs.set("imadakeMonthlyInvoices/s46_2027-12", { ...S.docs.get("imadakeMonthlyInvoices/s46_2027-12"), status: "paid" });
-{ const d = S.docs.get("storeBilling/s46"); const t2 = { ...d.test }; delete t2.billingLock; S.docs.set("storeBilling/s46", { ...d, test: t2 }); }
+{ const d = S.docs.get("accountBilling/u46"); const t2 = { ...d.test }; delete t2.billingLocks; S.docs.set("accountBilling/u46", { ...d, test: t2 }); }
 for (let i = 0; i < 3 && posts("pm_inuse46") === 0; i++) await register(46);
 t("F8 ロックの請求書が支払い済みになりロックが外れた後、守っていたカードも取り外される", posts("pm_inuse46") === 1, q(46));
 
+// ===== STEP 42-C: one card per account, shared by the stores of that account =====
+// G1 an unresolved invoice of ANOTHER store of the same account (same Stripe customer) protects the card
+S.docs.set("storeMembers/s61_u60", { storeId: "s61", uid: "u60", role: "owner", status: "active" }); S.docs.set("storeAccounts/s61", { storeName: "店61", enabled: true, createdByType: "storeUser", registrationStatus: "active" });
+seed(60, "pm_cur60", [ent("pm_old60")]);
+S.docs.set("imadakeMonthlyInvoices/s61_2027-11", { storeId: "s61", month: "2027-11", status: "charging", lineCount: 1, amountJpy: 100, currency: "JPY", taxIncluded: true, chargeCustomerId: "cus_seed60", chargeBillingAccountUid: "u60", chargePaymentMethodId: "pm_old60" });
+await register(60);
+t("G1 同じアカウントの別の店舗（s61）の未解決の請求書が使ったカードも、取り外さない（顧客単位で保護）", posts("pm_old60") === 0 && q(60).some((e) => e.paymentMethodId === "pm_old60" && e.state === "pending"), q(60));
+// G2 an invoice of a different account (different customer) does not affect this account
+addStore(63); addStore(64);
+seed(63, "pm_cur63", [ent("pm_old63")]);
+S.docs.set("imadakeMonthlyInvoices/s64_2027-11", { storeId: "s64", month: "2027-11", status: "charging", lineCount: 1, amountJpy: 100, currency: "JPY", taxIncluded: true, chargeCustomerId: "cus_seed64", chargeBillingAccountUid: "u64", chargePaymentMethodId: "pm_old63" });
+await register(63);
+t("G2 別のアカウント（別の顧客）の請求書は、このアカウントのカードの取り外しに影響しない", posts("pm_old63") === 1, q(63));
+
 // D17 invariants
-const stored = JSON.stringify([...S.docs.entries()].filter(([k]) => k.startsWith("storeBilling/")));
+const stored = JSON.stringify([...S.docs.entries()].filter(([k]) => k.startsWith("accountBilling/")));
 t("D17 秘密情報・カード番号はログにも保存にも出ない", !logs.join("\n").includes(FAKE_SERVER_KEY) && !stored.includes(FAKE_SERVER_KEY) && !stored.includes("4242424242424242"));
 const touched = [...new Set(S.writes.map((w) => w.split("/")[0]))].sort();
-t("D17b 書き込み先は storeBilling と連打防止だけ", JSON.stringify(touched) === JSON.stringify(["storeBilling", "storeBillingRateLimits"]), touched);
+t("D17b 書き込み先は accountBilling と連打防止だけ", JSON.stringify(touched) === JSON.stringify(["accountBilling", "storeBillingRateLimits"]), touched);
 t("D17c Stripeへの呼び出しは許可した種類だけ（顧客作成・SetupIntent作成/照会・カード照会・取り外し）", ST.calls.every((x) => /^(POST \/v1\/customers|POST \/v1\/setup_intents|GET \/v1\/setup_intents\/seti_d\d+|GET \/v1\/payment_methods\/pm_[A-Za-z0-9_]+|POST \/v1\/payment_methods\/pm_[A-Za-z0-9_]+\/detach)$/.test(x)), [...new Set(ST.calls.map((x) => x.replace(/pm_[A-Za-z0-9_]+/, "pm_*").replace(/seti_d\d+/, "seti_*")))]);
-t("D17d 現在のカードとして保存されているカードは、どの店舗でも取り外されていない", [...S.docs.entries()].filter(([k]) => k.startsWith("storeBilling/")).every(([, v]) => !v.test || !v.test.paymentMethodId || posts(v.test.paymentMethodId) === 0), [...S.docs.entries()].filter(([k]) => k.startsWith("storeBilling/")).map(([k, v]) => [k, v.test && v.test.paymentMethodId, v.test && posts(v.test.paymentMethodId)]));
+t("D17d 現在のカードとして保存されているカードは、どの店舗でも取り外されていない", [...S.docs.entries()].filter(([k]) => k.startsWith("accountBilling/")).every(([, v]) => !v.test || !v.test.paymentMethodId || posts(v.test.paymentMethodId) === 0), [...S.docs.entries()].filter(([k]) => k.startsWith("accountBilling/")).map(([k, v]) => [k, v.test && v.test.paymentMethodId, v.test && posts(v.test.paymentMethodId)]));
 t("D17e 課金停止フラグは false のまま", (await import(REPO_URL + "/api/_lib/imadake.js")).IMADAKE_CV_BILLING_STARTED === false);
 console.log("detach posts=" + ST.detachPosts.length + " tx commits=" + S.txStats.commits + " retries=" + S.txStats.retries);
 console.log(`\nTOTAL ${pass + fail}  PASS ${pass}  FAIL ${fail}`);

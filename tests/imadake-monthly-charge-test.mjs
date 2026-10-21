@@ -73,9 +73,14 @@ const deps = { fetch: stripeFetch, env: ENV };
 const GATES = { chargeEnabled: true, billingStarted: true };
 const run = (month, extra = {}) => CH.runImadakeMonthlyCharge(db, deps, { month, dryRun: false, gates: GATES, ...extra });
 const inv = (id) => S.docs.get("imadakeMonthlyInvoices/" + id);
-const bill = (storeId) => (S.docs.get("storeBilling/" + storeId) || {}).test || {};
-const setup = (storeId, month, { lineCount = 5, pm = "pm_" + storeId + "a", status = "closed", extraBilling = {}, extraInvoice = {} } = {}) => {
-  S.docs.set("storeBilling/" + storeId, { storeId, test: { customerId: "cus_" + storeId, paymentMethodId: pm, card: { brand: "visa", last4: "4242", expMonth: 12, expYear: 2030 }, cardVersion: 2, ...extraBilling } });
+// STEP 42-C｜カードはアカウント単位(accountBilling/{uid})。店舗 sN の請求先は owner の u_sN(共有の試験は uid を指定)。
+const acctOf = (storeId) => { const m = [...S.docs.entries()].find(([k, v]) => k.startsWith("storeMembers/" + storeId + "_") && v.role === "owner" && v.status === "active"); return m ? m[1].uid : "u_" + storeId; };
+const bill = (storeId) => (S.docs.get("accountBilling/" + acctOf(storeId)) || {}).test || {};
+// 旧 billingLock と同じ形({ invoiceId, ... })で、請求書ごとのロックの最初の1件を返す(無ければ undefined)。
+const lockOf = (storeId, invoiceId) => { const l = bill(storeId).billingLocks || {}; const k = invoiceId || Object.keys(l)[0]; return k && l[k] ? { invoiceId: k, ...l[k] } : undefined; };
+const setup = (storeId, month, { lineCount = 5, pm = "pm_" + storeId + "a", status = "closed", extraBilling = {}, extraInvoice = {}, uid = "u_" + storeId, customerKey = storeId } = {}) => {
+  S.docs.set("storeMembers/" + storeId + "_" + uid, { storeId, uid, role: "owner", status: "active" });
+  S.docs.set("accountBilling/" + uid, { uid, test: { customerId: "cus_" + customerKey, paymentMethodId: pm, card: { brand: "visa", last4: "4242", expMonth: 12, expYear: 2030 }, cardVersion: 2, ...extraBilling } });
   S.docs.set("imadakeMonthlyInvoices/" + storeId + "_" + month, { storeId, month, status, lineCount, amountJpy: lineCount * 100, currency: "JPY", taxIncluded: true, ...extraInvoice });
   return storeId + "_" + month;
 };
@@ -106,7 +111,7 @@ t("C1d 課金開始フラグがfalseなら実行不可・Productionでは実行�
 // C2 success
 const r2 = await run("2027-11");
 const pi2 = createsFor(i1)[0];
-t("C2 請求成功：PaymentIntent（500円・jpy・顧客・登録カード・off_session・confirm・カードのみ）を1件作り paid に、billingLockを外す", inv(i1).status === "paid" && inv(i1).paymentIntentId === pi2.id && pi2.amount === 500 && pi2.currency === "jpy" && pi2.customer === "cus_s1" && pi2.payment_method === "pm_s1a" && pi2.form.off_session === "true" && pi2.form.confirm === "true" && pi2.form["allowed_payment_method_types[]"] === "card" && !("payment_method_types[]" in pi2.form) && !bill("s1").billingLock && ST.creates === 1, { inv: inv(i1), pi2 });
+t("C2 請求成功：PaymentIntent（500円・jpy・顧客・登録カード・off_session・confirm・カードのみ）を1件作り paid に、請求書のロックを外す", inv(i1).status === "paid" && inv(i1).paymentIntentId === pi2.id && pi2.amount === 500 && pi2.currency === "jpy" && pi2.customer === "cus_s1" && pi2.payment_method === "pm_s1a" && pi2.form.off_session === "true" && pi2.form.confirm === "true" && pi2.form["allowed_payment_method_types[]"] === "card" && !("payment_method_types[]" in pi2.form) && !lockOf("s1") && ST.creates === 1, { inv: inv(i1), pi2 });
 t("C2b 冪等キーは machinau-invoice-test-{請求書ID}-1、metadataに請求書ID・試行番号", inv(i1).chargeIdempotencyKey === "machinau-invoice-test-" + i1 + "-1" && pi2.metadata.invoiceId === i1 && pi2.metadata.chargeAttempt === "1" && pi2.metadata.machinauMode === "test", inv(i1));
 const before3 = ST.calls.length;
 await run("2027-11");
@@ -116,27 +121,27 @@ t("C3b カード未登録・締め処理中の請求書は実行時も請求し�
 // C4 decline
 const i4 = setup("s4", "2027-12"); ST.modes.push("decline");
 await run("2027-12");
-t("C4 カード拒否（402）：payment_failed・拒否理由とPaymentIntent IDを記録・billingLockを外す・自動の再請求なし", inv(i4).status === "payment_failed" && inv(i4).lastChargeError.declineCode === "insufficient_funds" && inv(i4).paymentIntentId.startsWith("pi_") && !bill("s4").billingLock, inv(i4));
+t("C4 カード拒否（402）：payment_failed・拒否理由とPaymentIntent IDを記録・請求書のロックを外す・自動の再請求なし", inv(i4).status === "payment_failed" && inv(i4).lastChargeError.declineCode === "insufficient_funds" && inv(i4).paymentIntentId.startsWith("pi_") && !lockOf("s4"), inv(i4));
 const c4 = ST.creates; await run("2027-12");
 t("C4b 再実行しても拒否済みの請求書へ自動では送り直さない", ST.creates === c4 && inv(i4).status === "payment_failed");
 
 // C5 3DS required
 const i5 = setup("s5", "2028-01"); ST.modes.push("auth_required");
 await run("2028-01");
-t("C5 本人認証が必要（authentication_required）：requires_action・billingLockは残す（旧カードの取り外しを止めたまま）", inv(i5).status === "requires_action" && bill("s5").billingLock && bill("s5").billingLock.invoiceId === i5, { inv: inv(i5), lock: bill("s5").billingLock });
+t("C5 本人認証が必要（authentication_required）：requires_action・請求書のロックは残す（旧カードの取り外しを止めたまま）", inv(i5).status === "requires_action" && lockOf("s5") && lockOf("s5").invoiceId === i5, { inv: inv(i5), lock: lockOf("s5") });
 
 // C6 processing -> later succeeded via reconcile
 const i6 = setup("s6", "2028-02"); ST.modes.push("processing");
 await run("2028-02");
-t("C6 処理中（processing）：状態を記録しbillingLockを残す", inv(i6).status === "processing" && !!bill("s6").billingLock);
+t("C6 処理中（processing）：状態を記録し請求書のロックを残す", inv(i6).status === "processing" && !!lockOf("s6"));
 ST.pis.get(inv(i6).paymentIntentId).status = "succeeded";
 const c6 = ST.creates; await run("2028-02");
-t("C6b 再実行でPaymentIntentを照会し、成功を確認して paid に（新しい支払いは作らない）", inv(i6).status === "paid" && ST.creates === c6 && !bill("s6").billingLock, inv(i6));
+t("C6b 再実行でPaymentIntentを照会し、成功を確認して paid に（新しい支払いは作らない）", inv(i6).status === "paid" && ST.creates === c6 && !lockOf("s6"), inv(i6));
 
 // C7 network error after Stripe created the payment
 const i7 = setup("s7", "2028-03"); ST.modes.push("network_after_create");
 await run("2028-03");
-t("C7 通信切断（Stripe側では作成済み）：結果不明として charging のまま・billingLockを残す・試行番号は1のまま", inv(i7).status === "charging" && inv(i7).chargeOutcomeUnknown === true && inv(i7).chargeAttempt === 1 && !!bill("s7").billingLock, inv(i7));
+t("C7 通信切断（Stripe側では作成済み）：結果不明として charging のまま・請求書のロックを残す・試行番号は1のまま", inv(i7).status === "charging" && inv(i7).chargeOutcomeUnknown === true && inv(i7).chargeAttempt === 1 && !!lockOf("s7"), inv(i7));
 const c7 = ST.creates; await run("2028-03");
 t("C7b 再実行：一覧から同じ請求書の支払いを見つけて paid に（新しい支払いもキーも作らない、合計1件）", inv(i7).status === "paid" && ST.creates === c7 && createsFor(i7).length === 1 && inv(i7).chargeAttempt === 1, inv(i7));
 
@@ -144,9 +149,9 @@ t("C7b 再実行：一覧から同じ請求書の支払いを見つけて paid �
 const i8 = setup("s8", "2028-04"); ST.modes.push("network_before_create");
 await run("2028-04");
 const key8 = inv(i8).chargeIdempotencyKey;
-t("C8 時間切れ：結果不明として charging のまま（chargeOutcomeUnknown）・billingLockを残す", inv(i8).status === "charging" && inv(i8).chargeOutcomeUnknown === true && !!bill("s8").billingLock && createsFor(i8).length === 0, inv(i8));
+t("C8 時間切れ：結果不明として charging のまま（chargeOutcomeUnknown）・請求書のロックを残す", inv(i8).status === "charging" && inv(i8).chargeOutcomeUnknown === true && !!lockOf("s8") && createsFor(i8).length === 0, inv(i8));
 await run("2028-04");
-t("C8b 次の実行：一覧に見つからなくても「作られていない」とは判断せず needs_review（outcome_unknown_not_found）で止める", inv(i8).status === "needs_review" && inv(i8).chargeReviewReason === "outcome_unknown_not_found" && !!bill("s8").billingLock && createsFor(i8).length === 0, inv(i8));
+t("C8b 次の実行：一覧に見つからなくても「作られていない」とは判断せず needs_review（outcome_unknown_not_found）で止める", inv(i8).status === "needs_review" && inv(i8).chargeReviewReason === "outcome_unknown_not_found" && !!lockOf("s8") && createsFor(i8).length === 0, inv(i8));
 offset += 16 * 60 * 1000; await run("2028-04");
 offset += 25 * 60 * 60 * 1000; await run("2028-04"); await run("2028-04");
 t("C8c 15分後・25時間後（冪等キーの保存期間後）に何度実行しても、新しい支払いを作らない（送信は最初の1回だけ・試行番号1・キーも同じ）", inv(i8).status === "needs_review" && createsFor(i8).length === 0 && inv(i8).chargeAttempt === 1 && inv(i8).chargeIdempotencyKey === key8, inv(i8));
@@ -156,7 +161,7 @@ const i9 = setup("s9", "2028-05"); ST.modes.push("500_cached");
 await run("2028-05"); await run("2028-05");
 ST.idem.delete(inv(i9).chargeIdempotencyKey); offset += 25 * 60 * 60 * 1000;   // Stripe pruned the key (>=24h)
 await run("2028-05"); await run("2028-05");
-t("C9 500（結果不明）→ needs_review。冪等キーが消えた後も自動では新しい支払いを作らない（支払い0件・試行番号1）", inv(i9).status === "needs_review" && createsFor(i9).length === 0 && inv(i9).chargeAttempt === 1 && !!bill("s9").billingLock, inv(i9));
+t("C9 500（結果不明）→ needs_review。冪等キーが消えた後も自動では新しい支払いを作らない（支払い0件・試行番号1）", inv(i9).status === "needs_review" && createsFor(i9).length === 0 && inv(i9).chargeAttempt === 1 && !!lockOf("s9"), inv(i9));
 
 // C9b 429 is treated as unknown too
 const i9b = setup("s9b", "2028-05"); ST.modes.push("429");
@@ -203,36 +208,36 @@ t("C12b needs_review の照合（読み取りだけ）で最初の送信の支�
 // C13 card changed between claim and send
 const i13 = setup("s13", "2028-09");
 let fired = false;
-globalThis.__TX_AFTER_COMMIT = async () => { if (fired) return; fired = true; await db.collection("storeBilling").doc("s13").set({ test: { ...bill("s13"), paymentMethodId: "pm_s13b", cardVersion: 3 } }, { merge: true }); };
+globalThis.__TX_AFTER_COMMIT = async () => { if (fired) return; fired = true; await db.collection("accountBilling").doc("u_s13").set({ test: { ...bill("s13"), paymentMethodId: "pm_s13b", cardVersion: 3 } }, { merge: true }); };
 await run("2028-09");
 globalThis.__TX_AFTER_COMMIT = null;
-t("C13 確保の後・送信の前にカードが変わった：送らずに closed へ戻す（card_changed_before_send）・billingLockを外す", inv(i13).status === "closed" && inv(i13).chargeNotSentReason === "card_changed_before_send" && createsFor(i13).length === 0 && !bill("s13").billingLock, inv(i13));
+t("C13 確保の後・送信の前にカードが変わった：送らずに closed へ戻す（card_changed_before_send）・請求書のロックを外す", inv(i13).status === "closed" && inv(i13).chargeNotSentReason === "card_changed_before_send" && createsFor(i13).length === 0 && !lockOf("s13"), inv(i13));
 await run("2028-09");
 t("C13b 次の実行で新しいカード（pm_s13b）へ請求、試行番号2・新しいキー（前の試行は送っていないことが確実）", inv(i13).status === "paid" && createsFor(i13)[0].payment_method === "pm_s13b" && inv(i13).chargeAttempt === 2 && inv(i13).chargeIdempotencyKey.endsWith("-2"), inv(i13));
 
 // C14 permission error (not executed at Stripe)
 const i14 = setup("s14", "2028-10"); ST.modes.push("403");
 await run("2028-10");
-t("C14 権限不足（403）：支払いは作られていない→ closed に戻し、エラーを記録・billingLockを外す", inv(i14).status === "closed" && inv(i14).lastChargeError.status === 403 && createsFor(i14).length === 0 && !bill("s14").billingLock, inv(i14));
+t("C14 権限不足（403）：支払いは作られていない→ closed に戻し、エラーを記録・請求書のロックを外す", inv(i14).status === "closed" && inv(i14).lastChargeError.status === 403 && createsFor(i14).length === 0 && !lockOf("s14"), inv(i14));
 
 // C15 request rejected (400)
 const i15 = setup("s15", "2028-11"); ST.modes.push("400");
 await run("2028-11");
 t("C15 請求内容の不備（400）：charge_error（人の確認が必要）・自動の再送なし", inv(i15).status === "charge_error" && createsFor(i15).length === 0, inv(i15));
 
-// C16 store busy / bad amount / retiring card
-const i16 = setup("s16", "2028-12", { extraBilling: { billingLock: { invoiceId: "s16_2028-11", attempt: 1, sinceMs: 1 } } });
+// C16 (STEP 42-C) another invoice of the same account is being charged: per-invoice locks do not block / bad amount / retiring card
+const i16 = setup("s16", "2028-12", { extraBilling: { billingLocks: { "s16_2028-11": { attempt: 1, sinceMs: 1 } } } });
 const i16b = setup("s17", "2028-12", { extraInvoice: { amountJpy: 999 } });
 const i16c = setup("s18", "2028-12", { extraBilling: { detachPendingPaymentMethods: [{ paymentMethodId: "pm_s18a", state: "pending" }] } });
 await run("2028-12");
-t("C16 別の請求書が請求中の店舗（store_busy）・金額不整合・取り外し待ちのカードは請求しない", inv(i16).status === "closed" && inv(i16b).status === "closed" && inv(i16c).status === "closed" && createsFor(i16).length + createsFor(i16b).length + createsFor(i16c).length === 0);
+t("C16 同じアカウントの別の請求書が請求中でも、この請求書は請求できる（ロックは請求書ごと、相手のロックは残る）・金額不整合・取り外し待ちのカードは請求しない", inv(i16).status === "paid" && !!lockOf("s16", "s16_2028-11") && !lockOf("s16", i16) && inv(i16b).status === "closed" && inv(i16c).status === "closed" && createsFor(i16).length === 1 && createsFor(i16b).length + createsFor(i16c).length === 0, { i16: inv(i16), locks: bill("s16").billingLocks });
 
 // C17 mismatched PaymentIntent is never treated as paid
 const i17 = setup("s19", "2029-01"); ST.modes.push("network_before_create"); const creates17 = ST.creates;
 await run("2029-01");
 ST.pis.set("pi_forged", { id: "pi_forged", amount: 1, currency: "jpy", customer: "cus_s19", status: "succeeded", created: Math.floor(Date.now() / 1000), metadata: { invoiceId: i17, chargeAttempt: "1" } });
 await run("2029-01");
-t("C17 金額が合わない支払いが見つかっても paid にしない（needs_review・payment_intent_mismatch・billingLockは残す）", inv(i17).status === "needs_review" && inv(i17).chargeReviewReason === "payment_intent_mismatch" && !!bill("s19").billingLock && ST.creates === creates17, inv(i17));
+t("C17 金額が合わない支払いが見つかっても paid にしない（needs_review・payment_intent_mismatch・請求書のロックは残す）", inv(i17).status === "needs_review" && inv(i17).chargeReviewReason === "payment_intent_mismatch" && !!lockOf("s19") && ST.creates === creates17, inv(i17));
 
 // C19 pre-send check: the invoice is "closed" but Stripe already has a succeeded payment for it
 const i19 = setup("s20", "2029-03");
@@ -243,7 +248,7 @@ t("C19 送信前の確認：この請求書の成功した支払いがStripeに�
 // C20 pre-send list fails -> not sent
 const i20 = setup("s21", "2029-04"); ST.listFail = 1;
 const c20 = ST.creates; await run("2029-04");
-t("C20 送信前の確認（一覧）が失敗：送らずに closed へ戻す（precheck_failed）・billingLockを外す", ST.creates === c20 && inv(i20).status === "closed" && inv(i20).chargeNotSentReason === "precheck_failed" && !bill("s21").billingLock, inv(i20));
+t("C20 送信前の確認（一覧）が失敗：送らずに closed へ戻す（precheck_failed）・請求書のロックを外す", ST.creates === c20 && inv(i20).status === "closed" && inv(i20).chargeNotSentReason === "precheck_failed" && !lockOf("s21"), inv(i20));
 
 // C21 paid evidence on a "closed" invoice
 const i21 = setup("s22", "2029-05", { extraInvoice: { paidAt: { ms: 1 }, paymentIntentStatus: "succeeded", paymentIntentId: "pi_old" } });
@@ -273,9 +278,23 @@ const createsBefore24 = ST.creates;
 for (const m of ["2027-11", "2028-02", "2028-03", "2028-06", "2028-07", "2029-02", "2029-03", "2029-06"]) await run(m);
 t("C24 支払い済みの請求書を含む月を再実行しても、新しい支払いは作られない", ST.creates === createsBefore24 && paidIds.every((id) => inv(id).status === "paid"), { before: createsBefore24, after: ST.creates });
 
+// C25-C28 (STEP 42-C) one card per account
+const i25a = setup("s30", "2029-09", { uid: "shared", customerKey: "shared", pm: "pm_shared" });
+const i25b = setup("s31", "2029-09", { uid: "shared", customerKey: "shared", pm: "pm_shared" });
+await run("2029-09");
+const p25a = createsFor(i25a)[0], p25b = createsFor(i25b)[0];
+t("C25 同じアカウントの2店舗：それぞれの請求書を、同じ顧客・同じカード（1枚を共用）で別々に請求し、請求先アカウントを請求書に記録・ロックはすべて外れる", inv(i25a).status === "paid" && inv(i25b).status === "paid" && p25a.customer === "cus_shared" && p25b.customer === "cus_shared" && p25a.payment_method === "pm_shared" && p25b.payment_method === "pm_shared" && inv(i25a).chargeBillingAccountUid === "shared" && inv(i25b).chargeBillingAccountUid === "shared" && Object.keys(bill("s30").billingLocks || {}).length === 0, { a: inv(i25a), b: inv(i25b) });
+const i26 = setup("s32", "2029-10"); S.docs.set("storeMembers/s32_u_second", { storeId: "s32", uid: "u_second", role: "owner", status: "active" });
+const r26 = await run("2029-10");
+t("C26 有効な owner が2人の店舗は請求先を決めない：請求しない（billing_account_ambiguous）・closed のまま", inv(i26).status === "closed" && createsFor(i26).length === 0 && r26.invoices.find((x) => x.invoiceId === i26).planReason === "billing_account_ambiguous", r26.invoices.find((x) => x.invoiceId === i26));
+const i27 = setup("s33", "2029-11"); S.docs.set("storeMembers/s33_u_s33", { storeId: "s33", uid: "u_s33", role: "owner", status: "removed" });
+const r27 = await run("2029-11");
+t("C27 有効な owner がいない店舗は請求しない（billing_account_missing）", inv(i27).status === "closed" && createsFor(i27).length === 0 && r27.invoices.find((x) => x.invoiceId === i27).planReason === "billing_account_missing", r27.invoices.find((x) => x.invoiceId === i27));
+t("C28 請求書に請求先アカウント（chargeBillingAccountUid）を記録・既存の顧客・カード・カードの版の記録はそのまま", inv(i1).chargeBillingAccountUid === "u_s1" && inv(i1).chargeCustomerId === "cus_s1" && inv(i1).chargePaymentMethodId === "pm_s1a" && inv(i1).chargeCardVersion === 2, inv(i1));
+
 // C18 safety invariants
 const touched = [...new Set(S.writes.map((w) => w.split("/")[0]))].sort();
-t("C18 書き込み先は imadakeMonthlyInvoices と storeBilling だけ", JSON.stringify(touched) === JSON.stringify(["imadakeMonthlyInvoices", "storeBilling"]), touched);
+t("C18 書き込み先は imadakeMonthlyInvoices と accountBilling だけ（storeMembers は試験の種まき）", JSON.stringify(touched.filter((c) => c !== "storeMembers")) === JSON.stringify(["accountBilling", "imadakeMonthlyInvoices"]), touched);
 const stored = JSON.stringify([...S.docs.entries()]);
 t("C18b 秘密鍵・Stripeの応答本文はFirestoreに保存しない", !stored.includes(FAKE_SERVER_KEY) && !stored.includes("socket hang up"));
 t("C18c Stripeへの呼び出しは作成・照会・一覧だけ（グローバルfetchは0回）", ST.calls.every((c) => /^(POST \/v1\/payment_intents|GET \/v1\/payment_intents(\/pi_[A-Za-z0-9_]+)?)$/.test(c)) && globalFetchCalls === 0, [...new Set(ST.calls)]);

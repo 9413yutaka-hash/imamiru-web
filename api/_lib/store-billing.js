@@ -1,7 +1,9 @@
 // ==========================================================================
 // 今だけ投稿 決済 STEP 31｜店舗のカード登録(Stripe SetupIntent、サーバー側のみ)
 // ==========================================================================
-// 将来の月次請求に備えて、事業者(storeId)ごとにStripeの顧客を1つ作り、カードを登録する。
+// 将来の月次請求に備えて、店舗アカウント(Firebase Authのuid)ごとにStripeの顧客を1つ作り、カードを登録する。
+// STEP 42-C(代表決定)：カードは1アカウント1枚を共用する。同じアカウントが管理する複数の店舗は同じカードを使い、
+// 請求は各カードの登録先(登録したアカウント)へ行う。店舗ごとに別の顧客・カード登録は求めない。
 // このファイルは請求をしない(お金は動かない)。月次の締め・請求・返金は別の工程。
 //
 // 安全装置(どれか1つでも満たさなければ、カード登録の機能そのものを止める)
@@ -13,7 +15,7 @@
 // キーの値はログ・応答・Firestoreに一切出さない。Stripeの応答本文もログに出さない。
 //
 // 保存先(サーバーのAdmin SDKだけが読み書きする。ブラウザからは読み書き不可にする)
-//   storeBilling/{storeId}
+//   accountBilling/{uid}   (STEP 42-C。以前の storeBilling/{storeId} は使わない)
 //     test: { customerId, paymentMethodId, card: { brand, last4, expMonth, expYear }, cardVersion,
 //             detachPendingPaymentMethods: [ 置き換え前のカード(取り外し待ち) ], lastDetachResult,
 //             pendingSetupIntentId, consentVersion, consentAt, updatedAt, updatedByUid }
@@ -21,8 +23,10 @@
 //   PreviewとProductionは同じFirestoreなので、テスト用と本番用は必ず別の項目に分ける。
 //   カード番号・セキュリティコードは受け取らない・保存しない(Stripeが直接受け取る)。
 //
-// 操作できるのは、メール確認済みの店舗アカウントで、その事業者の有効なownerだけ
-// (既存のrequireVerifiedStoreUser＋checkStoreProfileEditor)。
+// 操作できるのは、メール確認済み・パスワードでログインした店舗アカウント本人だけ(自分のアカウントの
+// カードだけ。既存のrequireVerifiedStoreUser)。店舗を持つ前でも登録できる(登録・引き継ぎの前にカードを登録するため)。
+// 店舗の請求先：店舗の有効なowner(storeMembers の role "owner"・status "active")のアカウント。現行の構造では
+// 店舗のメンバーは作成時の owner 1人だけ(追加する処理は無い)。0人・2人以上なら請求先を決めない(請求しない)。
 // このファイルはVercel Functionではない(api/moderate-submission.jsから呼ばれる)。
 // ==========================================================================
 
@@ -52,8 +56,15 @@ import {
 } from "./imadake-cv.js";
 
 
-export const STORE_BILLING_COLLECTION =
-  "storeBilling";
+// STEP 42-C｜アカウント単位の支払い情報(1アカウント1枚のカード)。
+export const ACCOUNT_BILLING_COLLECTION =
+  "accountBilling";
+
+const STORE_MEMBERS_COLLECTION =
+  "storeMembers";
+
+const ACCOUNT_UID_PATTERN =
+  /^[A-Za-z0-9_-]{1,128}$/;
 
 const STORE_BILLING_RATE_LIMITS_COLLECTION =
   "storeBillingRateLimits";
@@ -258,6 +269,61 @@ async function requireStoreBillingOwner(request, response, deps, database, store
   return actor;
 }
 
+// STEP 42-C｜カードの操作：ログイン・メール確認済みの店舗アカウント本人(自分のアカウントのカードだけ)。
+async function requireBillingAccountUser(request, response, deps) {
+  const actor = await requireVerifiedStoreUser(request, response, deps);
+
+  if (!actor) {
+    return null;
+  }
+
+  if (typeof actor.uid !== "string" || !ACCOUNT_UID_PATTERN.test(actor.uid)) {
+    sendError(response, 403, "store_account_required");
+    return null;
+  }
+
+  return actor;
+}
+
+// STEP 42-C｜店舗の請求先アカウント：店舗の有効な owner が1人だけの時、その uid。
+// transaction を渡すとトランザクションの中で読む。owner が0人・2人以上なら決めない(請求しない)。
+// 戻り値 { ok: true, uid } | { ok: false, reason: "billing_account_missing" | "billing_account_ambiguous" }
+export async function resolveStoreBillingAccount(database, storeId, transaction) {
+  const query = database.collection(STORE_MEMBERS_COLLECTION).where("storeId", "==", storeId);
+  const snapshot = transaction ? await transaction.get(query) : await query.get();
+  const owners = [];
+
+  snapshot.docs.forEach(function(doc) {
+    const member = doc.data() || {};
+
+    if (
+      member.storeId === storeId &&
+      member.role === "owner" &&
+      member.status === "active" &&
+      typeof member.uid === "string" &&
+      ACCOUNT_UID_PATTERN.test(member.uid) &&
+      doc.id === storeId + "_" + member.uid
+    ) {
+      owners.push(member.uid);
+    }
+  });
+
+  if (owners.length === 1) {
+    return { ok: true, uid: owners[0] };
+  }
+
+  return { ok: false, reason: owners.length === 0 ? "billing_account_missing" : "billing_account_ambiguous" };
+}
+
+// 請求中のロック(請求書ごと)。1つのアカウントで複数の店舗の請求が重なるため、請求書IDごとに持つ。
+export function readBillingLocks(section) {
+  const locks = section && section.billingLocks && typeof section.billingLocks === "object" ? section.billingLocks : {};
+
+  return Object.keys(locks).filter(function(invoiceId) {
+    return invoiceId !== "" && locks[invoiceId] && typeof locks[invoiceId] === "object";
+  });
+}
+
 function readModeSection(billingData, mode) {
   const section = billingData && billingData[mode];
 
@@ -280,13 +346,12 @@ function buildCardSummary(section) {
 }
 
 // mode: storeBillingStatus (POST)
-// { storeId } → { success, available, unavailableReason, card }
+// {} → { success, available, unavailableReason, card }(STEP 42-C：ログイン中のアカウントのカード。storeId は使わない)
 // available:false の時、画面はカード登録欄を出さない(本番サイト・キー未設定など)。
 export async function handleStoreBillingStatus(request, response, deps) {
   try {
     const database = deps.getFirestore(deps.getFirebaseAdminApp());
-    const storeId = readStoreId(deps.readRequestBody(request));
-    const actor = await requireStoreBillingOwner(request, response, deps, database, storeId);
+    const actor = await requireBillingAccountUser(request, response, deps);
 
     if (!actor) {
       return;
@@ -303,7 +368,7 @@ export async function handleStoreBillingStatus(request, response, deps) {
       });
     }
 
-    const snapshot = await database.collection(STORE_BILLING_COLLECTION).doc(storeId).get();
+    const snapshot = await database.collection(ACCOUNT_BILLING_COLLECTION).doc(actor.uid).get();
     const section = readModeSection(snapshot.exists ? snapshot.data() : null, config.mode);
 
     return response.status(200).json({
@@ -318,10 +383,10 @@ export async function handleStoreBillingStatus(request, response, deps) {
   }
 }
 
-// 事業者のStripe顧客を1つだけ用意する。既にあればそれを使う。作成は冪等キーで
+// アカウントのStripe顧客を1つだけ用意する。既にあればそれを使う。作成は冪等キーで
 // 重複を防ぎ、保存はトランザクションで先に保存された値を優先する。
-async function ensureStripeCustomer(database, config, deps, storeId, uid) {
-  const billingRef = database.collection(STORE_BILLING_COLLECTION).doc(storeId);
+async function ensureStripeCustomer(database, config, deps, uid) {
+  const billingRef = database.collection(ACCOUNT_BILLING_COLLECTION).doc(uid);
   const snapshot = await billingRef.get();
   const existing = readModeSection(snapshot.exists ? snapshot.data() : null, config.mode);
 
@@ -335,11 +400,11 @@ async function ensureStripeCustomer(database, config, deps, storeId, uid) {
     "POST",
     "/customers",
     {
-      "metadata[storeId]": storeId,
+      "metadata[accountUid]": uid,
       "metadata[machinauMode]": config.mode,
-      "description": "Machinau store " + storeId
+      "description": "Machinau account " + uid
     },
-    "machinau-customer-" + config.mode + "-" + storeId
+    "machinau-customer-" + config.mode + "-account-" + uid
   );
 
   if (!created.ok || typeof created.data.id !== "string" || !created.data.id.startsWith("cus_")) {
@@ -357,7 +422,7 @@ async function ensureStripeCustomer(database, config, deps, storeId, uid) {
     transaction.set(
       billingRef,
       {
-        storeId: storeId,
+        uid: uid,
         [config.mode]: {
           ...section,
           customerId: created.data.id,
@@ -423,15 +488,18 @@ function currentTimeMs(deps) {
   return deps && typeof deps.now === "function" ? deps.now() : Date.now();
 }
 
-// 請求ロックがある時は、ロックが指す請求書を確かめられた場合だけ取り外しを続ける(守るカードは別に除く)。
+// 請求ロックがある時は、ロックが指す請求書をすべて確かめられた場合だけ取り外しを続ける(守るカードは別に除く)。
+// STEP 42-C：ロックは請求書ごと(billingLocks)。1つでも確かめられなければ止める。
 function isDetachAllowedNow(section, protection) {
-  if (!section.billingLock) {
+  const lockInvoiceIds = readBillingLocks(section);
+
+  if (lockInvoiceIds.length === 0) {
     return true;
   }
 
-  const lockInvoiceId = typeof section.billingLock.invoiceId === "string" ? section.billingLock.invoiceId : "";
-
-  return Boolean(protection && protection.ok && lockInvoiceId && protection.unresolvedInvoiceIds.has(lockInvoiceId));
+  return Boolean(protection && protection.ok) && lockInvoiceIds.every(function(invoiceId) {
+    return protection.unresolvedInvoiceIds.has(invoiceId);
+  });
 }
 
 const MONTHLY_INVOICES_COLLECTION =
@@ -442,12 +510,18 @@ const MONTHLY_INVOICES_COLLECTION =
 const INVOICE_STATUSES_RELEASING_CARD =
   ["closing", "closed", "paid", "charge_error"];
 
-// その店舗の請求書から、取り外してはいけないカードを集める。読めなければ { ok:false }(取り外しを止める)。
-async function readInvoiceProtectedPaymentMethods(database, storeId) {
+// そのアカウントの顧客で請求した請求書(どの店舗の分でも)から、取り外してはいけないカードを集める。
+// 読めなければ { ok:false }(取り外しを止める)。STEP 42-C：店舗単位ではなく、請求書に記録した顧客(chargeCustomerId)で探す。
+// 請求の確保は、顧客・カードの記録と請求中の状態を同じトランザクションで書くため、請求中の請求書は必ず見つかる。
+async function readInvoiceProtectedPaymentMethods(database, customerId) {
+  if (typeof customerId !== "string" || customerId === "") {
+    return { ok: true, protectedIds: new Set(), unresolvedInvoiceIds: new Set() };
+  }
+
   try {
     const snapshot = await database
       .collection(MONTHLY_INVOICES_COLLECTION)
-      .where("storeId", "==", storeId)
+      .where("chargeCustomerId", "==", customerId)
       .get();
 
     const protectedIds = new Set();
@@ -620,7 +694,7 @@ async function finishDetachEntry(database, billingRef, config, claim, result, no
 }
 
 // Stripeで取り外す直前の確認：請求ロックがなく、現在のカードではなく、未解決の請求書が使っていないこと。
-async function isStillSafeToDetach(database, billingRef, config, storeId, paymentMethodId) {
+async function isStillSafeToDetach(database, billingRef, config, paymentMethodId) {
   let section;
 
   try {
@@ -634,21 +708,30 @@ async function isStillSafeToDetach(database, billingRef, config, storeId, paymen
     return false;
   }
 
-  const protection = await readInvoiceProtectedPaymentMethods(database, storeId);
+  const protection = await readInvoiceProtectedPaymentMethods(database, section.customerId);
 
   return protection.ok && isDetachAllowedNow(section, protection) && !protection.protectedIds.has(paymentMethodId);
 }
 
 // 取り外し待ちを最大maxEntries件まで処理する。失敗しても例外を投げない(呼び出し元の操作を失敗させない)。
-async function processDetachPending(database, config, deps, storeId, maxEntries) {
-  const billingRef = database.collection(STORE_BILLING_COLLECTION).doc(storeId);
+async function processDetachPending(database, config, deps, uid, maxEntries) {
+  const billingRef = database.collection(ACCOUNT_BILLING_COLLECTION).doc(uid);
   let processed = 0;
 
   for (let count = 0; count < maxEntries; count++) {
     let claim = null;
 
     // 未解決の月次請求で使われている(使われた可能性がある)カードは確保しない。請求書を読めなければ止める。
-    const protection = await readInvoiceProtectedPaymentMethods(database, storeId);
+    let customerId = "";
+
+    try {
+      const current = await billingRef.get();
+      customerId = readModeSection(current.exists ? current.data() : null, config.mode).customerId || "";
+    } catch (error) {
+      return processed;
+    }
+
+    const protection = await readInvoiceProtectedPaymentMethods(database, customerId);
 
     if (!protection.ok) {
       return processed;
@@ -698,7 +781,7 @@ async function processDetachPending(database, config, deps, storeId, maxEntries)
         result = { kind: "blocked", reason: "customer_mismatch" };
       } else if (currentTimeMs(deps) > claim.leaseUntilMs - DETACH_LEASE_SAFETY_MS) {
         result = { kind: "retry", error: { status: 0, type: "lease_too_short", code: "" } };
-      } else if (!(await isStillSafeToDetach(database, billingRef, config, storeId, claim.paymentMethodId))) {
+      } else if (!(await isStillSafeToDetach(database, billingRef, config, claim.paymentMethodId))) {
         // 確保の後に、請求ロックが付いた・未解決の請求書がこのカードを使っている・確認できない：送らない。
         result = { kind: "retry", error: { status: 0, type: "protected_by_invoice", code: "" } };
       } else {
@@ -735,9 +818,9 @@ async function processDetachPending(database, config, deps, storeId, maxEntries)
   return processed;
 }
 
-async function processDetachPendingSafely(database, config, deps, storeId, maxEntries) {
+async function processDetachPendingSafely(database, config, deps, uid, maxEntries) {
   try {
-    return await processDetachPending(database, config, deps, storeId, maxEntries);
+    return await processDetachPending(database, config, deps, uid, maxEntries);
   } catch (error) {
     console.error("店舗カード登録：取り外し処理エラー：", error && error.message);
     return 0;
@@ -759,13 +842,12 @@ function respondStripeFailure(response, failure) {
 }
 
 // mode: storeBillingSetupIntentCreate (POST)
-// { storeId } → { success, clientSecret, publishableKey, setupIntentId }
+// {} → { success, clientSecret, publishableKey, setupIntentId }(STEP 42-C：ログイン中のアカウントのカード)
 // 将来の請求(off_session)のためのカード登録を始める。請求はしない。
 export async function handleStoreBillingSetupIntentCreate(request, response, deps) {
   try {
     const database = deps.getFirestore(deps.getFirebaseAdminApp());
-    const storeId = readStoreId(deps.readRequestBody(request));
-    const actor = await requireStoreBillingOwner(request, response, deps, database, storeId);
+    const actor = await requireBillingAccountUser(request, response, deps);
 
     if (!actor) {
       return;
@@ -779,12 +861,13 @@ export async function handleStoreBillingSetupIntentCreate(request, response, dep
 
     // 取り外し待ちが上限に達している間は、Stripeに何も作らずに止める(旧カードの記録を捨てない)。
     // 上限に達していたら、先に取り外しを最大2件試してから数え直す(回復の機会)。
-    const queueRef = database.collection(STORE_BILLING_COLLECTION).doc(storeId);
+    const uid = actor.uid;
+    const queueRef = database.collection(ACCOUNT_BILLING_COLLECTION).doc(uid);
     const queueSnapshot = await queueRef.get();
     const queueSection = readModeSection(queueSnapshot.exists ? queueSnapshot.data() : null, config.mode);
 
     if (readDetachPending(queueSection).length >= DETACH_PENDING_LIMIT) {
-      await processDetachPendingSafely(database, config, deps, storeId, 2);
+      await processDetachPendingSafely(database, config, deps, uid, 2);
 
       const recheckSnapshot = await queueRef.get();
       const recheckSection = readModeSection(recheckSnapshot.exists ? recheckSnapshot.data() : null, config.mode);
@@ -797,7 +880,7 @@ export async function handleStoreBillingSetupIntentCreate(request, response, dep
     const allowed = await deps.claimRateLimit(
       database,
       STORE_BILLING_RATE_LIMITS_COLLECTION,
-      deps.computeRateLimitIdentifier("storeBillingSetup", storeId),
+      deps.computeRateLimitIdentifier("accountBillingSetup", uid),
       STORE_BILLING_SETUP_COOLDOWN_MS
     );
 
@@ -805,7 +888,7 @@ export async function handleStoreBillingSetupIntentCreate(request, response, dep
       return sendError(response, 429, "rate_limited");
     }
 
-    const customer = await ensureStripeCustomer(database, config, deps, storeId, actor.uid);
+    const customer = await ensureStripeCustomer(database, config, deps, uid);
 
     if (!customer.ok) {
       return respondStripeFailure(response, customer.stripeError);
@@ -821,7 +904,7 @@ export async function handleStoreBillingSetupIntentCreate(request, response, dep
         "usage": "off_session",
         // 現行APIでは payment_method_types を送ると400になるため、許可リストでカードだけに絞る。
         "allowed_payment_method_types[]": "card",
-        "metadata[storeId]": storeId,
+        "metadata[accountUid]": uid,
         "metadata[machinauMode]": config.mode
       },
       null
@@ -839,7 +922,7 @@ export async function handleStoreBillingSetupIntentCreate(request, response, dep
 
     // 入れ子の項目は、既存の値＋変更をまとめて書く(合流の仕方に依存しない)。
     // 同時に確定したカードを古い読み取り結果で戻さないよう、読み取りと保存はトランザクションで行う。
-    const billingRef = database.collection(STORE_BILLING_COLLECTION).doc(storeId);
+    const billingRef = database.collection(ACCOUNT_BILLING_COLLECTION).doc(uid);
 
     await database.runTransaction(async function(transaction) {
       const latest = await transaction.get(billingRef);
@@ -848,7 +931,7 @@ export async function handleStoreBillingSetupIntentCreate(request, response, dep
       transaction.set(
         billingRef,
         {
-          storeId: storeId,
+          uid: uid,
           [config.mode]: {
             ...latestSection,
             pendingSetupIntentId: setupIntent.data.id,
@@ -875,14 +958,13 @@ export async function handleStoreBillingSetupIntentCreate(request, response, dep
 }
 
 // mode: storeBillingSetupConfirm (POST)
-// { storeId, setupIntentId, consentVersion } → { success, status, card }
+// { setupIntentId, consentVersion } → { success, status, card }(STEP 42-C：ログイン中のアカウントのカード)
 // 画面の結果は信用せず、サーバーがStripeにSetupIntentを照会して確かめてから保存する。
 export async function handleStoreBillingSetupConfirm(request, response, deps) {
   try {
     const database = deps.getFirestore(deps.getFirebaseAdminApp());
     const body = deps.readRequestBody(request) || {};
-    const storeId = readStoreId(body);
-    const actor = await requireStoreBillingOwner(request, response, deps, database, storeId);
+    const actor = await requireBillingAccountUser(request, response, deps);
 
     if (!actor) {
       return;
@@ -904,11 +986,12 @@ export async function handleStoreBillingSetupConfirm(request, response, deps) {
       return sendError(response, 400, "consent_required");
     }
 
-    const billingRef = database.collection(STORE_BILLING_COLLECTION).doc(storeId);
+    const uid = actor.uid;
+    const billingRef = database.collection(ACCOUNT_BILLING_COLLECTION).doc(uid);
     const snapshot = await billingRef.get();
     const section = readModeSection(snapshot.exists ? snapshot.data() : null, config.mode);
 
-    // この事業者で、このサーバーが作ったSetupIntentだけを受け付ける(他の事業者のIDを使わせない)。
+    // このアカウントで、このサーバーが作ったSetupIntentだけを受け付ける(他のアカウントのIDを使わせない)。
     if (
       typeof section.customerId !== "string" ||
       section.customerId === "" ||
@@ -933,7 +1016,7 @@ export async function handleStoreBillingSetupConfirm(request, response, deps) {
     const setupIntent = fetched.data;
     const metadata = setupIntent.metadata && typeof setupIntent.metadata === "object" ? setupIntent.metadata : {};
 
-    if (setupIntent.customer !== section.customerId || metadata.storeId !== storeId) {
+    if (setupIntent.customer !== section.customerId || metadata.accountUid !== uid) {
       return sendError(response, 409, "setup_intent_mismatch");
     }
 
@@ -1029,7 +1112,7 @@ export async function handleStoreBillingSetupConfirm(request, response, deps) {
       transaction.set(
         billingRef,
         {
-          storeId: storeId,
+          uid: uid,
           [config.mode]: {
             ...currentSection,
             paymentMethodId: paymentMethod.id,
@@ -1057,7 +1140,7 @@ export async function handleStoreBillingSetupConfirm(request, response, deps) {
     }
 
     // 新しいカードの保存が成立した後だけ、旧カードの取り外しを1件試す(失敗しても登録成功のまま)。
-    await processDetachPendingSafely(database, config, deps, storeId, 1);
+    await processDetachPendingSafely(database, config, deps, uid, 1);
 
     return response.status(200).json({ success: true, status: "succeeded", card: cardSummary });
   } catch (error) {

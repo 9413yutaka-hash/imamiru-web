@@ -85,7 +85,8 @@ try {
   inv("a1", "2027-11", { status: "needs_review", chargeMode: "test", chargePaymentMethodId: "pm_secret1", chargeIdempotencyKey: "machinau-invoice-test-a1_2027-11-1", chargeCustomerId: "cus_secret", chargeLeaseUntilMs: 0, chargeReviewReason: "outcome_unknown_not_found", paymentIntentId: "" });
   inv("a2", "2027-11", { status: "payment_failed", lastChargeError: { code: "card_declined", declineCode: "insufficient_funds" }, chargePaymentMethodId: "pm_secret2", paymentIntentId: "pi_abc" });
   inv("a3", "2027-11", { status: "paid", paymentIntentId: "pi_ok" });
-  S.docs.set("storeBilling/a9", { test: { customerId: "cus_secret9", paymentMethodId: "pm_secret9", billingLock: { invoiceId: "a9_2027-11", attempt: 1, sinceMs: NOW - 30 * H } } });
+  // STEP 42-C｜支払い情報はアカウント単位(accountBilling)、ロックは請求書ごと(billingLocks)。
+  S.docs.set("accountBilling/u_a9", { uid: "u_a9", test: { customerId: "cus_secret9", paymentMethodId: "pm_secret9", billingLocks: { "a9_2027-11": { attempt: 1, sinceMs: NOW - 30 * H } } } });
   const w0 = S.writes.length;
   p = await open(); await login(p); await p.waitFor(`document.getElementById("adminArea").classList.contains("visible")`, 15000); await waitIdle(p); s = await state(p);
   t("U3 運営ログイン：自動で確認し、要確認（人の確認待ち・支払い失敗・ロックの食い違い）を表示・全件確認済みで「対応が必要な請求が3件」", s.areaShown && /全件を確認しました。対応が必要な請求が 3 件あります/.test(s.overall) && s.items === 3 && s.attention === "3" && !s.cont, s);

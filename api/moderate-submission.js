@@ -30497,7 +30497,7 @@ function buildImadakeDeps() {
     // 本人確認に使う既存関数(passwordログイン判定・storeMembersのowner判定)。
     resolveStoreUserActor: resolveStoreUserActor,
     checkStoreProfileEditor: checkStoreProfileEditor,
-    // 決済 STEP 35-A｜課金対象になる今だけ投稿の作成時だけ使う、カード登録(storeBilling)の確認。
+    // 決済 STEP 35-A｜課金対象になる今だけ投稿の作成時だけ使う、カード登録の確認(STEP 42-C：店舗の請求先アカウントの accountBilling)。
     // Firestoreを読むだけ(Stripeへの問い合わせ・書き込みなし)。
     checkImadakeBillingCard: function(database, storeId) {
       return checkImadakeBillingCard(database, storeId, { env: process.env });

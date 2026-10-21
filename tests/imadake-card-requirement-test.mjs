@@ -14,16 +14,17 @@ const t = (n, ok, d = "") => { ok ? pass++ : fail++; console.log(`${ok ? "PASS" 
 const NOW = Date.parse("2026-10-20T03:00:00Z"); // 2026-10 (JST)
 const CARD = (o = {}) => ({ brand: "visa", last4: "4242", expMonth: 12, expYear: 2030, ...o });
 const SECTION = (o = {}) => ({ customerId: "cus_TestCustomer1", paymentMethodId: "pm_TestCard1", card: CARD(), cardVersion: 1, setupStatus: "succeeded", detachPendingPaymentMethods: [], ...o });
-const DOC = (o = {}, section = SECTION()) => ({ storeId: "s1", test: section, ...o });
-const ev = (data, nowMs = NOW) => CR.evaluateImadakeBillingCard(data, "s1", "test", nowMs);
+// STEP 42-C｜カードはアカウント単位(accountBilling/{uid})。店舗 s1 の請求先は owner の u1。
+const DOC = (o = {}, section = SECTION()) => ({ uid: "u1", test: section, ...o });
+const ev = (data, nowMs = NOW) => CR.evaluateImadakeBillingCard(data, "u1", "test", nowMs);
 
 // ---------------- U: the judgment ----------------
 t("U1 有効なカード：ok", ev(DOC()).ok === true && ev(DOC()).paymentMethodId === "pm_TestCard1");
-t("U2 storeBilling の文書が無い：card_required", ev(null).reason === "card_required");
-t("U3 その環境のモードの区画が無い（live だけ等）：card_required", ev({ storeId: "s1", live: SECTION() }).reason === "card_required");
+t("U2 accountBilling の文書が無い：card_required", ev(null).reason === "card_required");
+t("U3 その環境のモードの区画が無い（live だけ等）：card_required", ev({ uid: "u1", live: SECTION() }).reason === "card_required");
 t("U4 登録の途中だけ（pendingSetupIntentId だけ・paymentMethodId なし）：card_required", ev(DOC({}, { customerId: "cus_TestCustomer1", pendingSetupIntentId: "seti_123" })).reason === "card_required");
-t("U5 文書の storeId が別の店舗：card_store_mismatch", ev(DOC({ storeId: "other" })).reason === "card_store_mismatch");
-t("U5b 文書に storeId が無い：card_invalid", ev({ test: SECTION() }).reason === "card_invalid");
+t("U5 文書の uid が請求先アカウントと違う：card_account_mismatch", ev(DOC({ uid: "other" })).reason === "card_account_mismatch");
+t("U5b 文書に uid が無い：card_invalid", ev({ test: SECTION() }).reason === "card_invalid");
 t("U6 確定済みでない（setupStatus が succeeded 以外）：card_invalid", ev(DOC({}, SECTION({ setupStatus: "requires_action" }))).reason === "card_invalid");
 t("U7 顧客IDが無い・形が違う：card_invalid", ev(DOC({}, SECTION({ customerId: "" }))).reason === "card_invalid" && ev(DOC({}, SECTION({ customerId: "x_1" }))).reason === "card_invalid");
 t("U8 paymentMethodId の形が違う：card_invalid", ev(DOC({}, SECTION({ paymentMethodId: "card_123" }))).reason === "card_invalid");
@@ -45,11 +46,15 @@ function makeDb() {
   const setPath = (o, dotted, v) => { const ks = dotted.split("."); let x = o; for (let i = 0; i < ks.length - 1; i++) { if (!x[ks[i]] || typeof x[ks[i]] !== "object") x[ks[i]] = {}; x = x[ks[i]]; } x[ks[ks.length - 1]] = v; };
   const apply = (w) => { const cur = store.get(w.ref.path); let data = cur ? clone(cur.data) : {}; if (w.type === "set") data = w.merge ? { ...data, ...clone(w.data) } : clone(w.data); if (w.type === "update") Object.entries(clone(w.data)).forEach(([k, v]) => setPath(data, k, v)); store.set(w.ref.path, { data, version: (cur ? cur.version : 0) + 1 }); };
   const db = {
-    collection: (col) => ({ doc: (id) => ref(col, id || "auto" + (++auto)), where: () => { throw new Error("where not mocked: " + col); } }),
+    collection: (col) => ({ doc: (id) => ref(col, id || "auto" + (++auto)), where: (field, op, value) => {
+      if (op !== "==") throw new Error("where op not mocked: " + op);
+      const keys = () => [...store.keys()].filter((k) => k.startsWith(col + "/") && store.get(k).data && store.get(k).data[field] === value);
+      return { __query: true, keys, get: async () => ({ docs: keys().map((k) => snap({ path: k, id: k.slice(col.length + 1) })) }) };
+    } }),
     async runTransaction(fn) {
       for (let a = 0; a < 20; a++) {
         const reads = new Map(); const writes = [];
-        const tx = { get: async (r) => { const cur = store.get(r.path); reads.set(r.path, cur ? cur.version : 0); return snap(r); }, set: (r, d, o) => writes.push({ type: "set", ref: r, data: d, merge: !!(o && o.merge) }), update: (r, d) => writes.push({ type: "update", ref: r, data: d }) };
+        const tx = { get: async (r) => { if (r && r.__query) { const ks = r.keys(); ks.forEach((k) => reads.set(k, store.get(k).version)); return r.get(); } const cur = store.get(r.path); reads.set(r.path, cur ? cur.version : 0); return snap(r); }, set: (r, d, o) => writes.push({ type: "set", ref: r, data: d, merge: !!(o && o.merge) }), update: (r, d) => writes.push({ type: "update", ref: r, data: d }) };
         const result = await fn(tx);
         let ok = true; for (const [p, v] of reads) { const cur = store.get(p); if ((cur ? cur.version : 0) !== v) ok = false; }
         if (!ok) continue; writes.forEach(apply); return result;
@@ -99,15 +104,15 @@ const futureCard = CARD({ expMonth: 12, expYear: 2099 });
 withEnv(TRIAL_ENV);
 let m = makeDb(); seedStore(m); let d = deps(m); let r = await create(m, d);
 t("H1 課金対象（Preview試験）・カード未登録：409 card_required・投稿は保存されない・回数制限も消費しない", r.code === 409 && r.body.reason === "card_required" && m.list("imadakePosts").length === 0 && d.calls.rate === 0 && d.calls.moderation === 0, { code: r.code, body: r.body, rate: d.calls.rate });
-m = makeDb(); seedStore(m); m.seed("storeBilling", "s1", DOC({}, SECTION({ card: CARD({ expMonth: 1, expYear: 2020 }) }))); d = deps(m); r = await create(m, d);
+m = makeDb(); seedStore(m); m.seed("accountBilling", "u1", DOC({}, SECTION({ card: CARD({ expMonth: 1, expYear: 2020 }) }))); d = deps(m); r = await create(m, d);
 t("H2 期限切れのカード：409 card_expired・保存なし", r.code === 409 && r.body.reason === "card_expired" && m.list("imadakePosts").length === 0, r.body);
-m = makeDb(); seedStore(m); m.seed("storeBilling", "s1", DOC({}, SECTION({ card: futureCard }))); d = deps(m); r = await create(m, d);
+m = makeDb(); seedStore(m); m.seed("accountBilling", "u1", DOC({}, SECTION({ card: futureCard }))); d = deps(m); r = await create(m, d);
 const saved = m.list("imadakePosts").map((k) => m.get("imadakePosts", k.split("/")[1]));
 t("H3 有効なカード：200・課金対象（cvBillingEnabled true）で保存", r.code === 200 && r.body.success === true && saved.length === 1 && saved[0].cvBillingEnabled === true, { code: r.code, body: r.body });
-m = makeDb(); seedStore(m); m.seed("storeBilling", "s1", DOC({}, SECTION({ card: futureCard, pendingSetupIntentId: "seti_change" }))); d = deps(m); r = await create(m, d);
+m = makeDb(); seedStore(m); m.seed("accountBilling", "u1", DOC({}, SECTION({ card: futureCard, pendingSetupIntentId: "seti_change" }))); d = deps(m); r = await create(m, d);
 t("H4 カード変更の途中でも、確定済みの旧カードが有効なら投稿できる", r.code === 200 && r.body.success === true, r.body);
-m = makeDb(); seedStore(m); m.seed("storeBilling", "s1", DOC({}, SECTION({ card: futureCard })));
-d = deps(m, { duringRateLimit: async () => { m.seed("storeBilling", "s1", DOC({}, SECTION({ card: futureCard, detachPendingPaymentMethods: [{ paymentMethodId: "pm_TestCard1", state: "pending" }] }))); } });
+m = makeDb(); seedStore(m); m.seed("accountBilling", "u1", DOC({}, SECTION({ card: futureCard })));
+d = deps(m, { duringRateLimit: async () => { m.seed("accountBilling", "u1", DOC({}, SECTION({ card: futureCard, detachPendingPaymentMethods: [{ paymentMethodId: "pm_TestCard1", state: "pending" }] }))); } });
 r = await create(m, d);
 t("H5 競合：最初の確認の後・保存の前にカードが取り外し待ちになった → 保存トランザクション内の確認で 409 card_retiring・保存なし", r.code === 409 && r.body.reason === "card_retiring" && m.list("imadakePosts").length === 0, r.body);
 m = makeDb(); seedStore(m); d = deps(m, { noCardDeps: true }); r = await create(m, d);
@@ -115,8 +120,23 @@ t("H6 課金対象なのにカード確認の部品が無い：409 card_billing_
 m = makeDb(); seedStore(m, { isTestAccount: true }); d = deps(m); r = await create(m, d);
 t("H7 テスト事業者は課金対象外 → カードなしでも投稿できる（従来どおり）", r.code === 200 && r.body.success === true, r.body);
 withEnv({ ...TRIAL_ENV, STRIPE_MODE: "" });
-m = makeDb(); seedStore(m); m.seed("storeBilling", "s1", DOC({}, SECTION({ card: futureCard }))); d = deps(m); r = await create(m, d);
+m = makeDb(); seedStore(m); m.seed("accountBilling", "u1", DOC({}, SECTION({ card: futureCard }))); d = deps(m); r = await create(m, d);
 t("H8 課金対象でもStripeの設定が無効：409 card_billing_unavailable", r.code === 409 && r.body.reason === "card_billing_unavailable", r.body);
+
+withEnv(TRIAL_ENV);
+// STEP 42-C｜請求先アカウント
+m = makeDb(); seedStore(m); m.seed("storeMembers", "s1_u1", { storeId: "s1", uid: "u1", role: "owner", status: "removed" }); m.seed("accountBilling", "u1", DOC({}, SECTION({ card: futureCard })));
+const h9 = await CR.checkImadakeBillingCard(m.db, "s1", { env: process.env, nowMillis: NOW });
+t("H9 店舗の有効な owner がいない（請求先アカウントが決まらない）：card_billing_account_unresolved（判定の単体。投稿は owner でなければそもそも拒否される）", h9.ok === false && h9.reason === "card_billing_account_unresolved", h9);
+m = makeDb(); seedStore(m); m.seed("storeMembers", "s1_u2", { storeId: "s1", uid: "u2", role: "owner", status: "active" }); m.seed("accountBilling", "u1", DOC({}, SECTION({ card: futureCard }))); d = deps(m); r = await create(m, d);
+t("H10 有効な owner が2人（請求先を独断で選ばない）：409 card_billing_account_unresolved・保存なし", r.code === 409 && r.body.reason === "card_billing_account_unresolved" && m.list("imadakePosts").length === 0, r.body);
+m = makeDb(); seedStore(m); m.seed("accountBilling", "u2", { uid: "u2", test: SECTION({ card: futureCard }) }); d = deps(m); r = await create(m, d);
+t("H11 他のアカウント（u2）のカードは使えない：s1（u1）は card_required", r.code === 409 && r.body.reason === "card_required" && m.list("imadakePosts").length === 0, r.body);
+m = makeDb(); seedStore(m); m.seed("storeAccounts", "s2", { storeName: "2店目", enabled: true, createdByType: "storeUser", registrationStatus: "active", latitude: 26.15, longitude: 127.72, countryCode: "JP", prefecture: "沖縄県", city: "八重瀬町", regionKey: "JP-47", address: "沖縄県八重瀬町" });
+m.seed("storeMembers", "s2_u1", { storeId: "s2", uid: "u1", role: "owner", status: "active" }); m.seed("accountBilling", "u1", DOC({}, SECTION({ card: futureCard }))); d = deps(m);
+const r2a = res(); await IM.handleImadakePostCreate({ body: { ...BODY, storeId: "s2" }, headers: { authorization: "Bearer owner" } }, r2a, d);
+const r1a = await create(m, d);
+t("H12 同じアカウント（u1）の2店舗（s1・s2）が1枚のカードを共用して、どちらも投稿できる", r2a.code === 200 && r1a.code === 200 && m.list("imadakePosts").length === 2 && m.list("accountBilling").length === 1, { r2: r2a.body, r1: r1a.body });
 
 withEnv(PROD_ENV);
 m = makeDb(); seedStore(m); d = deps(m); r = await create(m, d);

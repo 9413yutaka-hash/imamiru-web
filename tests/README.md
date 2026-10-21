@@ -38,7 +38,7 @@ node --import ./tests/mockfa-target/register.mjs tests/firebase-target-test.mjs
 # Preview専用の課金対象判定(STEP 34-A：machinau-preview に接続した対象ブランチのPreviewだけ、新規の今だけ投稿を課金対象にする)
 node --import ./tests/mockfa-occ/register.mjs tests/preview-billing-trial-test.mjs
 
-# 今だけ投稿のカード登録必須(STEP 35-A：課金対象の投稿の作成時だけ storeBilling を確認)
+# 今だけ投稿のカード登録必須(STEP 35-A：課金対象の投稿の作成時だけ、店舗の請求先アカウントの accountBilling を確認。STEP 42-C で1アカウント1枚に変更)
 node --import ./tests/mockfa-occ/register.mjs tests/imadake-card-requirement-test.mjs
 
 # 月末締めのPreview試験(STEP 37-C：Preview限定の書き込み許可・運営画面の試算と実行。画面のテストは Chrome を使う)

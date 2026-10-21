@@ -20,7 +20,7 @@ const EXEC_OK = { ...DRY_OK, dryRun: false, stores: [{ ...DRY_OK.stores[0], outc
 async function api(url, method, log, postData) {
   if (method !== "POST") return null;
   const body = JSON.parse(postData || "{}"); calls.push(body);
-  if (body.mode === "imadakeBillingOverview") return { status: 200, body: { success: true, items: [], errors: [], truncated: false, next: { invoicesDone: true, billingDone: true }, scanned: { invoices: 0, storeBilling: 0 }, thresholds: { closedUncharredWarnHours: 72, lockWarnHours: 24, closingWarnHours: 24 } } };
+  if (body.mode === "imadakeBillingOverview") return { status: 200, body: { success: true, items: [], errors: [], truncated: false, next: { invoicesDone: true, billingDone: true }, scanned: { invoices: 0, accountBilling: 0 }, thresholds: { closedUncharredWarnHours: 72, lockWarnHours: 24, closingWarnHours: 24 } } };
   if (body.mode === "imadakeMonthlyClose") return body.dryRun === false ? closeExec : closeDry;
   return { status: 500, body: { success: false } };
 }

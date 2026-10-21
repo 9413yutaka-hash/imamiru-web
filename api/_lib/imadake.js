@@ -1312,7 +1312,7 @@ export async function handleImadakePostCreate(
     }
 
     // 収益化 STEP 3｜課金対象かどうかは作成時にサーバーで決めて固定する(Productionでは現在常にfalse)。
-    // STEP 35-A｜回数制限・投稿枠より前に決め、課金対象になる投稿はカード登録(storeBilling)を必須にする
+    // STEP 35-A｜回数制限・投稿枠より前に決め、課金対象になる投稿はカード登録(店舗の請求先アカウントの accountBilling、STEP 42-C)を必須にする
     // (未登録・不整合・期限切れ等は保存せず409。課金対象でない投稿・Productionの現行動作は変えない)。
     const cvBillingEnabled =
       await decideImadakeCvBillingForNewPost(

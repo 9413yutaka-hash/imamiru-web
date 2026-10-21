@@ -238,11 +238,14 @@
       ledger_count_mismatch: "日別台帳の件数と合わない",
       ledger_count_unavailable: "日別台帳を照合できなかった",
       store_billing_unavailable: "支払い情報を読めなかった",
+      account_billing_unavailable: "支払い情報(アカウント)を読めなかった",
       lock_without_invoice: "ロックに請求書IDがない",
       lock_stale: "請求中ロックが長く続いている",
       lock_invoice_missing: "ロックが指す請求書が存在しない",
       lock_invoice_not_holding: "ロックが解決済みの請求書を指している",
       lock_invoice_other_store: "ロックが他店の請求書を指している",
+      lock_invoice_other_account: "ロックが別のアカウントの請求書を指している",
+      invoice_without_billing_account: "請求書に請求先アカウントの記録がない",
       lock_invoice_without_card: "ロックの請求書に使ったカードの記録がない",
       lock_invoice_unavailable: "ロックの請求書を読めなかった"
     };
@@ -401,6 +404,7 @@
       history_retrieve_limit: "履歴の支払いIDが多く、すべては照会していない",
       no_customer_to_search: "照会する顧客がない",
       store_billing_unavailable: "支払い情報を読めなかった",
+      account_billing_unavailable: "支払い情報(アカウント)を読めなかった",
       range_start_unknown: "探す期間の始まりが分からない（全期間を対象）"
     };
 
@@ -586,9 +590,10 @@
       title.className = "item-title";
       const dl = document.createElement("dl");
 
-      if (item.kind === "store_billing") {
-        title.textContent = "店舗の請求中ロック：" + (item.storeId || "(店舗IDなし)");
-        addField(dl, "店舗ID", item.storeId);
+      if (item.kind === "account_billing") {
+        title.textContent = "アカウントの請求中ロック：" + (item.accountUid || "(アカウントなし)");
+        addField(dl, "請求先アカウント(uid)", item.accountUid);
+        addField(dl, "ロックの請求書の店舗ID", item.lockStoreId || "(不明)");
         addField(dl, "モード", item.mode);
         addField(dl, "ロックが指す請求書", item.lockInvoiceId || "(なし)");
         addField(dl, "その請求書の状態", item.lockInvoiceStatus ? (STATUS_LABELS[item.lockInvoiceStatus] || item.lockInvoiceStatus) + "(" + item.lockInvoiceStatus + ")" : "");
@@ -625,7 +630,7 @@
 
       box.appendChild(reasons);
 
-      if (item.kind !== "store_billing" && item.invoiceId) {
+      if (item.kind !== "account_billing" && item.invoiceId) {
         addInspectButton(box, item.invoiceId);
       }
 
@@ -682,7 +687,7 @@
       const data = result.data;
       check.pages++;
       check.invoices += Number(data.scanned && data.scanned.invoices) || 0;
-      check.billing += Number(data.scanned && data.scanned.storeBilling) || 0;
+      check.billing += Number(data.scanned && data.scanned.accountBilling) || 0;
       check.items += Array.isArray(data.items) ? data.items.length : 0;
       check.thresholds = data.thresholds || check.thresholds;
 
