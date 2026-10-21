@@ -951,6 +951,11 @@
             ONにすると掲載終了日時の指定が不要になり、この画面から終了操作をするまで掲載され続けます。新規投稿時のみ選択できます(編集時は変更できません)。
           </p>
 
+          <!-- STEP 40-B｜店舗名の欄はチェックを入れた時だけ、このすぐ下に出る(見落としを防ぐ案内)。 -->
+          <p class="form-help">
+            ONにすると、このすぐ下に「店舗名（必須）」と「営業時間・定休日（任意）」の入力欄が表示されます。
+          </p>
+
         </div>
 
         <div
@@ -976,6 +981,72 @@
 
           <p class="form-help">
             カード本文に大きく表示される、実際の店舗名を入力してください。「情報タイトル」欄は、写真上に表示される小さいラベルの文言になります。
+          </p>
+
+        </div>
+
+        <!-- STEP 40-A｜常設店舗広告の営業時間・定休日(任意)。常設店舗広告のときだけ表示する。
+             営業時間は既存の店舗投稿(post.html)と同じ businessStartTime / businessEndTime("HH:MM")を再利用し、
+             定休日は closedDays(mon..sun)・不定休は irregularClosed で保存する(api/_lib/permanent-ad-hours.js)。
+             未設定なら旅行者側には表示しない。 -->
+        <div
+          class="form-group"
+          id="permanentAdHoursFormGroup"
+        >
+
+          <div class="form-label">
+            営業時間
+            <span class="optional">任意</span>
+          </div>
+
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px;">
+            <label for="businessStartTime" style="font-size: 14px;">開店</label>
+            <select id="businessStartTime" name="businessStartTime">
+              <option value="">未設定</option>
+            </select>
+            <span aria-hidden="true">〜</span>
+            <label for="businessEndTime" style="font-size: 14px;">閉店</label>
+            <select id="businessEndTime" name="businessEndTime">
+              <option value="">未設定</option>
+            </select>
+          </div>
+
+          <p class="form-help">
+            30分刻みで選べます。閉店が開店より早い時刻の場合は、翌日の閉店（深夜営業）として表示します。未設定にする場合は両方とも「未設定」にしてください。
+          </p>
+
+          <div
+            class="form-label"
+            style="margin-top: 16px;"
+          >
+            定休日
+            <span class="optional">任意・複数選択可</span>
+          </div>
+
+          <div id="closedDaysChoices" style="display: flex; flex-wrap: wrap; gap: 4px 14px;">
+            <label class="form-label" for="closedDay_mon"><input id="closedDay_mon" type="checkbox" value="mon" data-closed-day> 月</label>
+            <label class="form-label" for="closedDay_tue"><input id="closedDay_tue" type="checkbox" value="tue" data-closed-day> 火</label>
+            <label class="form-label" for="closedDay_wed"><input id="closedDay_wed" type="checkbox" value="wed" data-closed-day> 水</label>
+            <label class="form-label" for="closedDay_thu"><input id="closedDay_thu" type="checkbox" value="thu" data-closed-day> 木</label>
+            <label class="form-label" for="closedDay_fri"><input id="closedDay_fri" type="checkbox" value="fri" data-closed-day> 金</label>
+            <label class="form-label" for="closedDay_sat"><input id="closedDay_sat" type="checkbox" value="sat" data-closed-day> 土</label>
+            <label class="form-label" for="closedDay_sun"><input id="closedDay_sun" type="checkbox" value="sun" data-closed-day> 日</label>
+          </div>
+
+          <label
+            class="form-label"
+            for="irregularClosed"
+          >
+            <input
+              id="irregularClosed"
+              name="irregularClosed"
+              type="checkbox"
+            >
+            不定休
+          </label>
+
+          <p class="form-help">
+            旅行者向けの店舗の詳細に表示します。どれも選ばなければ表示しません。
           </p>
 
         </div>
@@ -1430,6 +1501,43 @@
     const contentInput = document.getElementById("content");
     const isPermanentAdCheckbox = document.getElementById("isPermanentAd");
     const shopNameFormGroup = document.getElementById("shopNameFormGroup");
+
+    // STEP 40-A｜常設店舗広告の営業時間・定休日(任意)
+    const permanentAdHoursFormGroup = document.getElementById("permanentAdHoursFormGroup");
+    const businessStartTimeInput = document.getElementById("businessStartTime");
+    const businessEndTimeInput = document.getElementById("businessEndTime");
+    const closedDayInputs = Array.prototype.slice.call(document.querySelectorAll("[data-closed-day]"));
+    const irregularClosedInput = document.getElementById("irregularClosed");
+
+    // 開店・閉店の選択肢(00:00〜23:30、30分刻み)。
+    [businessStartTimeInput, businessEndTimeInput].forEach(function(select) {
+      for (let minutes = 0; minutes < 24 * 60; minutes += 30) {
+        const value =
+          String(Math.floor(minutes / 60)).padStart(2, "0") + ":" + String(minutes % 60).padStart(2, "0");
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = value;
+        select.appendChild(option);
+      }
+    });
+
+    function readClosedDays() {
+      return closedDayInputs
+        .filter(function(input) { return input.checked; })
+        .map(function(input) { return input.value; });
+    }
+
+    // 保存済みの時刻が選択肢に無い場合(30分刻み以外)は、その値を選択肢に足して消さないようにする。
+    function setTimeSelectValue(select, value) {
+      const text = typeof value === "string" ? value : "";
+      if (text !== "" && !Array.prototype.some.call(select.options, function(option) { return option.value === text; })) {
+        const option = document.createElement("option");
+        option.value = text;
+        option.textContent = text;
+        select.appendChild(option);
+      }
+      select.value = text;
+    }
     const shopNameInput = document.getElementById("shopName");
     const expiresAtFormGroup = document.getElementById("expiresAtFormGroup");
     const expiresAtInput = document.getElementById("expiresAt");
@@ -2146,6 +2254,9 @@
       shopNameFormGroup.style.display = isPermanentAd ? "" : "none";
       shopNameInput.required = isPermanentAd;
 
+      // STEP 40-A｜営業時間・定休日は常設店舗広告のときだけ表示する(通常の運営投稿では送らない)。
+      permanentAdHoursFormGroup.style.display = isPermanentAd ? "" : "none";
+
       if (isPermanentAd) {
         areaInput.placeholder = "那覇市、八重瀬町";
         areaRequirementLabel.textContent = "必須";
@@ -2224,6 +2335,22 @@
           validationErrors.push({
             message: "常設店舗広告では店舗名の入力が必須です。",
             element: shopNameInput
+          });
+        }
+
+        // STEP 40-A｜営業時間は両方未設定か両方選択。開店と閉店が同じ時刻は不可。
+        const startValue = businessStartTimeInput.value;
+        const endValue = businessEndTimeInput.value;
+
+        if ((startValue === "") !== (endValue === "")) {
+          validationErrors.push({
+            message: "営業時間は開店と閉店の両方を選んでください（未設定にする場合は両方とも「未設定」）。",
+            element: startValue === "" ? businessStartTimeInput : businessEndTimeInput
+          });
+        } else if (startValue !== "" && startValue === endValue) {
+          validationErrors.push({
+            message: "営業時間の開店と閉店が同じ時刻です。",
+            element: businessEndTimeInput
           });
         }
       }
@@ -2388,6 +2515,12 @@
           // 既存ドキュメントのisPermanentAdだけを見て判断する、という
           // 既存仕様を維持する)。
           payload.shopName = shopNameInput.value.trim();
+
+          // STEP 40-A｜営業時間・定休日(任意)。常設店舗広告のときだけ送る(新規・編集とも)。
+          payload.businessStartTime = businessStartTimeInput.value;
+          payload.businessEndTime = businessEndTimeInput.value;
+          payload.closedDays = readClosedDays();
+          payload.irregularClosed = irregularClosedInput.checked;
 
           if (!isEditMode) {
             payload.isPermanentAd = true;
@@ -2562,6 +2695,15 @@
       paymentCashInput.checked = existingPaymentMethods.includes("cash");
       paymentCardInput.checked = existingPaymentMethods.includes("card");
       paymentQrInput.checked = existingPaymentMethods.includes("qr");
+
+      // STEP 40-A｜営業時間・定休日。この機能より前の常設店舗広告(フィールドが無い)は未設定のまま。
+      setTimeSelectValue(businessStartTimeInput, submission.businessStartTime);
+      setTimeSelectValue(businessEndTimeInput, submission.businessEndTime);
+      const existingClosedDays = Array.isArray(submission.closedDays) ? submission.closedDays : [];
+      closedDayInputs.forEach(function(input) {
+        input.checked = existingClosedDays.includes(input.value);
+      });
+      irregularClosedInput.checked = submission.irregularClosed === true;
 
       // Ver1.8 Phase2 STEP7-G2A｜このAPI追加より前に作成された投稿(area
       // フィールド自体が存在しない)でも編集画面が壊れないよう、文字列以外は
@@ -3100,6 +3242,14 @@
     });
 
     isPermanentAdCheckbox.addEventListener("change", updateExpiresAtVisibility);
+
+    // STEP 40-B｜運営がチェックを入れた時だけ、表示された店舗名の欄を画面内へ移す(見落とし防止)。
+    // 編集画面の読み込み・フォームのリセットなど、画面の処理で状態が変わる時は動かさない。
+    isPermanentAdCheckbox.addEventListener("change", function() {
+      if (isPermanentAdCheckbox.checked && typeof shopNameFormGroup.scrollIntoView === "function") {
+        shopNameFormGroup.scrollIntoView({ block: "center", behavior: "smooth" });
+      }
+    });
     categoryInput.addEventListener("change", updateShopAttributesVisibility);
 
     adminPostForm.addEventListener("submit", submitAdminPost);

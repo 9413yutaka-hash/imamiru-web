@@ -1328,6 +1328,40 @@ const MACHINAU_TRANSLATIONS = {
     en: "🕘 Hours: {START}–{END}"
   },
 
+  // STEP 40-A｜常設店舗広告の営業時間(閉店が翌日)・定休日(TOPの店舗詳細)。
+  shop_hours_range_overnight: {
+    ja: "🕘 営業時間 {START}〜翌{END}",
+    en: "🕘 Hours: {START}–{END} (next day)"
+  },
+
+  shop_closed_days: {
+    ja: "🗓 定休日 {DAYS}",
+    en: "🗓 Closed: {DAYS}"
+  },
+
+  shop_closed_days_separator: {
+    ja: "・",
+    en: ", "
+  },
+
+  shop_closed_days_with_irregular: {
+    ja: "{DAYS}（不定休あり）",
+    en: "{DAYS} (also irregular holidays)"
+  },
+
+  shop_closed_irregular: {
+    ja: "不定休",
+    en: "Irregular holidays"
+  },
+
+  shop_closed_day_mon: { ja: "月", en: "Mon" },
+  shop_closed_day_tue: { ja: "火", en: "Tue" },
+  shop_closed_day_wed: { ja: "水", en: "Wed" },
+  shop_closed_day_thu: { ja: "木", en: "Thu" },
+  shop_closed_day_fri: { ja: "金", en: "Fri" },
+  shop_closed_day_sat: { ja: "土", en: "Sat" },
+  shop_closed_day_sun: { ja: "日", en: "Sun" },
+
   shop_walking_distance_unknown: {
     ja: "距離を確認",
     en: "Check Distance"

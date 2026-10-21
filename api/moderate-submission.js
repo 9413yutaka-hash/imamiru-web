@@ -21750,6 +21750,8 @@ const PUBLIC_SUBMISSION_FIELD_ALLOWLIST =
     "businessName",
     "businessStartTime",
     "category",
+    // STEP 40-A｜常設店舗広告の定休日・不定休(TOPの詳細に表示)。
+    "closedDays",
     "content",
     "createdAt",
     "description",
@@ -21760,6 +21762,7 @@ const PUBLIC_SUBMISSION_FIELD_ALLOWLIST =
     "headline",
     "images",
     "imageUrls",
+    "irregularClosed",
     "isOpen",
     "isPermanentAd",
     "latitude",
