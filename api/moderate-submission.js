@@ -1,7 +1,8 @@
 import {
   assertFirebaseTarget,
   checkFirebaseTargetFromEnv,
-  readFirebaseServiceAccountText
+  readFirebaseServiceAccountText,
+  isPreviewStoreInvoiceHistoryEnabled
 } from "./_lib/firebase-target.js";
 
 import {
@@ -59,7 +60,8 @@ import {
   handleImadakeAdminReview,
   handleImadakeAdminStoreLocation,
   handleImadakeStoreStatus,
-  readStoreOfficialLocationFromData
+  readStoreOfficialLocationFromData,
+  IMADAKE_CV_BILLING_STARTED
 } from "./_lib/imadake.js";
 
 // 今だけ投稿 収益化 STEP 2｜CV記録・日次料金台帳。実処理はapi/_lib/imadake-cv.js(Functionではない)。
@@ -116,7 +118,8 @@ import {
 import {
   handleStoreBillingStatus,
   handleStoreBillingSetupIntentCreate,
-  handleStoreBillingSetupConfirm
+  handleStoreBillingSetupConfirm,
+  handleStoreBillingInvoices
 } from "./_lib/store-billing.js";
 
 // 今だけ投稿 決済 STEP 35-A｜カード登録必須の判定(課金対象になる今だけ投稿の作成時だけ使う)。
@@ -30426,6 +30429,11 @@ function buildStoreBillingDeps() {
     env: process.env,
     fetch: function(url, options) {
       return fetch(url, options);
+    },
+    // 決済 STEP 38-B｜店舗向けの請求履歴を公開してよいか(課金開始後、または Preview試験の環境だけ)。
+    // 課金開始前のProduction・ほかのPreviewでは false(請求書・台帳を読まない)。
+    isStoreInvoiceHistoryAvailable: function() {
+      return IMADAKE_CV_BILLING_STARTED === true || isPreviewStoreInvoiceHistoryEnabled(process.env);
     }
   };
 }
@@ -30824,6 +30832,17 @@ export default async function handler(
     requestBody.mode === "storeBillingSetupConfirm"
   ) {
     return handleStoreBillingSetupConfirm(
+      request,
+      response,
+      buildStoreBillingDeps()
+    );
+  }
+
+  // 今だけ投稿 決済 STEP 38-B｜店舗向けの請求履歴(ownerのみ・読み取り専用・課金開始後またはPreview試験だけ)。
+  if (
+    requestBody.mode === "storeBillingInvoices"
+  ) {
+    return handleStoreBillingInvoices(
       request,
       response,
       buildStoreBillingDeps()

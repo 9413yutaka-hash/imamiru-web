@@ -45,6 +45,10 @@ node --import ./tests/mockfa-occ/register.mjs tests/imadake-card-requirement-tes
 node --import ./tests/mockfa-occ/register.mjs tests/imadake-monthly-close-preview-trial-test.mjs
 node --import ./tests/mockfa/register.mjs     tests/admin-billing-close-trial-ui-test.mjs
 
+# 店舗向けの請求履歴(STEP 38-B：ownerだけ・読み取り専用・課金開始前のProductionでは非表示)
+node --import ./tests/mockfa-occ/register.mjs tests/store-billing-invoices-test.mjs
+node --import ./tests/mockfa/register.mjs     tests/store-invoice-history-ui-test.mjs   # Chrome を使う
+
 # 既存の回帰(サーバー)
 for f in imadake-store-login-test imadake-safety-test imadake-translation-test imadake-nearby-test route-test; do
   node --import ./tests/mockfa/register.mjs tests/$f.mjs
@@ -68,6 +72,7 @@ done
 | `cvmock.mjs`・`reportfixtures.mjs` | CV・成果レポートの模擬データ |
 | `columns.json` | 公開済みの読みもの一覧(公開APIの応答の写し)。画面テストの固定データ |
 | `billing-*-test.mjs` | STEP 31：カード登録(SetupIntent)・カード変更(トランザクション・cardVersion)・旧カードの取り外し(確保・照会・detach・冪等キー) |
+| `store-billing-invoices-test.mjs`・`store-invoice-history-ui-test.mjs` | STEP 38-B：店舗向けの請求履歴(mode storeBillingInvoices)。ownerだけ・editor/旧token/他店は拒否・直近12か月・状態の表示・見込みと確定の分離・内部情報の非公開・XSS・読み取り専用・課金開始前のProductionでは読まずに非表示 |
 | `imadake-*-test.mjs` | 今だけ投稿：店舗ログイン・CV記録と日別料金台帳・成果レポート・月末締め(請求額の確定)・安全審査・翻訳・近くの判定 |
 | `route-test.mjs` | `api/moderate-submission.js` の mode 振り分け |
 | `tests3〜10.mjs` | 今だけ投稿のTOP枠・詳細・店舗画面・成果レポート・日英表示(画面) |

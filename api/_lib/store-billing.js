@@ -38,6 +38,19 @@ import {
   requireVerifiedStoreUser
 } from "./store-self-service.js";
 
+// STEP 38-B｜請求履歴(読み取り専用)で使う既存の定数。どれも store-billing.js を読み込まない(循環なし)。
+// 公開条件(課金開始フラグ・Preview試験の判定)はこのファイルでは参照せず、呼び出し元から deps で受け取る
+// (カードの取り外しなど既存の処理が課金開始フラグに依存しないことを保つ)。
+import {
+  IMADAKE_POSTS_COLLECTION
+} from "./imadake.js";
+
+import {
+  IMADAKE_POST_DAILY_CHARGES_COLLECTION,
+  IMADAKE_DAILY_CHARGE_AMOUNT_JPY,
+  computeImadakeCvDayKey
+} from "./imadake-cv.js";
+
 
 export const STORE_BILLING_COLLECTION =
   "storeBilling";
@@ -1049,6 +1062,273 @@ export async function handleStoreBillingSetupConfirm(request, response, deps) {
     return response.status(200).json({ success: true, status: "succeeded", card: cardSummary });
   } catch (error) {
     console.error("店舗カード登録：登録確認エラー：", error && error.message);
+    return sendError(response, 500, "server_error");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// STEP 38-B｜店舗向けの請求履歴(読み取り専用)
+// ---------------------------------------------------------------------------
+// 見られるのは、メール確認済み・パスワードでログインした、その事業者の有効なownerだけ
+// (カード登録と同じ requireStoreBillingOwner。editor・旧方式の店舗token・他店は不可)。
+// 読むのはFirestoreだけ(Stripeへの問い合わせ・書き込みなし)。
+//
+// 公開条件：課金開始後、または Preview試験の環境(machinau-preview)だけ。判定は呼び出し元(moderate-submission.js)が
+// deps.isStoreInvoiceHistoryAvailable として渡す。無い・true 以外なら公開しない(安全側)。
+// 公開しない時(課金開始前のProduction・ほかのPreview)は、請求書・台帳を読まずに available:false だけを返す。
+//
+// 返すのは許可した項目だけ：対象年月・店舗向けの状態・確定請求額・件数・確定日時・支払日時・明細(日付と投稿の見出し)、
+// 別枠の見込み(未確定)。請求書ID・投稿ID・StripeのID・冪等キー・lease・実行者のuid・エラーの原文は返さない。
+//
+// 見込み(未確定)の計算基準は成果レポート(imadake-cv-report.js の料金目安)と同じ：
+//   有効CVが1件以上ある「投稿×日本時間の1日」につき IMADAKE_DAILY_CHARGE_AMOUNT_JPY 円。
+// ただし請求されるのは課金対象の投稿(料金台帳がある投稿)だけなので、料金台帳の未請求の行から数える
+// (月末締めが請求に入れる条件と同じ確認をする)。請求書がある月(締め処理中を含む)は見込みに入れない。
+export const STORE_INVOICE_HISTORY_MONTHS =
+  12;
+
+// 1件の請求書で返す明細の上限(超えた分は linesTruncated で知らせる)。
+const STORE_INVOICE_LINES_LIMIT =
+  200;
+
+// 請求書の状態 → 店舗向けの状態(画面の文言キーの一部)。知らない状態は「確認中」。
+const STORE_INVOICE_STATUS_KEYS = {
+  closing: "aggregating",
+  closed: "confirmed_unbilled",
+  charging: "processing",
+  processing: "processing",
+  paid: "paid",
+  payment_failed: "payment_failed",
+  requires_action: "requires_action",
+  charge_error: "under_review",
+  needs_review: "under_review"
+};
+
+export function isStoreInvoiceHistoryAvailable(deps) {
+  return Boolean(deps) && typeof deps.isStoreInvoiceHistoryAvailable === "function" && deps.isStoreInvoiceHistoryAvailable() === true;
+}
+
+export function mapStoreInvoiceStatus(invoice) {
+  const status = invoice && typeof invoice.status === "string" ? invoice.status : "";
+  const key = Object.prototype.hasOwnProperty.call(STORE_INVOICE_STATUS_KEYS, status)
+    ? STORE_INVOICE_STATUS_KEYS[status]
+    : "under_review";
+
+  // 支払いの結果が分からない請求は、支払い済み以外は「確認中」にする(誤って案内しない)。
+  if (invoice && invoice.chargeOutcomeUnknown === true && key !== "paid") {
+    return "under_review";
+  }
+
+  return key;
+}
+
+// 当月を含む直近 months か月の "YYYY-MM"(新しい順)。
+export function computeStoreInvoiceHistoryMonths(nowMs, months) {
+  const todayKey = computeImadakeCvDayKey(nowMs);
+  const year = Number(todayKey.slice(0, 4));
+  const monthIndex = Number(todayKey.slice(5, 7)) - 1;
+  const keys = [];
+
+  for (let offset = 0; offset < months; offset++) {
+    keys.push(new Date(Date.UTC(year, monthIndex - offset, 1)).toISOString().slice(0, 7));
+  }
+
+  return keys;
+}
+
+function toIsoOrNull(value) {
+  if (value && typeof value.toMillis === "function") {
+    return new Date(value.toMillis()).toISOString();
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return new Date(value).toISOString();
+  }
+
+  return null;
+}
+
+async function readDocsByIdOnce(database, collectionName, ids) {
+  const unique = Array.from(new Set(ids.filter(function(id) {
+    return typeof id === "string" && id !== "" && !id.includes("/");
+  })));
+  const result = new Map();
+
+  await Promise.all(unique.map(async function(id) {
+    const snapshot = await database.collection(collectionName).doc(id).get();
+
+    if (snapshot.exists) {
+      result.set(id, snapshot.data() || {});
+    }
+  }));
+
+  return result;
+}
+
+// 1店舗の請求履歴と見込みを作る(読み取りだけ)。storeId は認証済みのownerの店舗だけを渡す。
+export async function buildStoreInvoiceHistory(database, storeId, nowMs) {
+  const monthKeys = computeStoreInvoiceHistoryMonths(nowMs, STORE_INVOICE_HISTORY_MONTHS);
+  const oldestMonth = monthKeys[monthKeys.length - 1];
+
+  // どちらも storeId の一致だけ(単一項目のインデックスで足りる。複合インデックスは不要)。
+  const [invoiceSnapshot, chargeSnapshot, storeSnapshot] = await Promise.all([
+    database.collection(MONTHLY_INVOICES_COLLECTION).where("storeId", "==", storeId).get(),
+    database.collection(IMADAKE_POST_DAILY_CHARGES_COLLECTION).where("storeId", "==", storeId).get(),
+    database.collection("storeAccounts").doc(storeId).get()
+  ]);
+
+  const invoices = new Map();
+
+  invoiceSnapshot.docs.forEach(function(doc) {
+    const data = doc.data() || {};
+    const month = typeof data.month === "string" ? data.month : "";
+
+    // 請求書IDの形・店舗・期間を確かめる(他店・想定外の文書を混ぜない)。
+    if (data.storeId !== storeId || doc.id !== storeId + "_" + month || !monthKeys.includes(month)) {
+      return;
+    }
+
+    invoices.set(doc.id, { month: month, data: data });
+  });
+
+  const rows = [];
+
+  chargeSnapshot.docs.forEach(function(doc) {
+    const data = doc.data() || {};
+    const jstDate = typeof data.jstDate === "string" ? data.jstDate : "";
+
+    if (data.storeId !== storeId || !/^\d{4}-\d{2}-\d{2}$/.test(jstDate) || jstDate.slice(0, 7) < oldestMonth) {
+      return;
+    }
+
+    rows.push(data);
+  });
+
+  const posts = await readDocsByIdOnce(database, IMADAKE_POSTS_COLLECTION, rows.map(function(row) {
+    return row.postId;
+  }));
+
+  const headlineOf = function(row) {
+    const post = posts.get(row.postId);
+
+    return post && post.storeId === storeId && typeof post.headline === "string" ? post.headline : "";
+  };
+
+  const linesByInvoice = new Map();
+  const estimateByMonth = new Map();
+  const storeData = storeSnapshot.exists ? storeSnapshot.data() || {} : {};
+  const testAccount = storeData.isTestAccount === true;
+
+  rows.forEach(function(row) {
+    const month = row.jstDate.slice(0, 7);
+
+    if (row.status === "invoiced") {
+      const invoiceId = typeof row.invoiceId === "string" ? row.invoiceId : "";
+
+      if (invoiceId === storeId + "_" + month && invoices.has(invoiceId)) {
+        if (!linesByInvoice.has(invoiceId)) {
+          linesByInvoice.set(invoiceId, []);
+        }
+
+        linesByInvoice.get(invoiceId).push({ date: row.jstDate, headline: headlineOf(row) });
+      }
+
+      return;
+    }
+
+    // 見込み：月末締めが請求に入れる条件と同じ(未請求・金額と通貨・有効CV1件以上・課金対象の投稿・同じ店舗・テスト事業者でない)。
+    const post = posts.get(row.postId);
+
+    if (
+      row.status !== "accrued" ||
+      row.invoiceId ||
+      row.amountJpy !== IMADAKE_DAILY_CHARGE_AMOUNT_JPY ||
+      row.currency !== "JPY" ||
+      !(Number(row.validCvCount) >= 1) ||
+      !post ||
+      post.cvBillingEnabled !== true ||
+      post.storeId !== storeId ||
+      testAccount ||
+      invoices.has(storeId + "_" + month)
+    ) {
+      return;
+    }
+
+    estimateByMonth.set(month, (estimateByMonth.get(month) || 0) + 1);
+  });
+
+  const invoiceList = Array.from(invoices.entries())
+    .sort(function(a, b) {
+      return a[1].month < b[1].month ? 1 : a[1].month > b[1].month ? -1 : 0;
+    })
+    .map(function(entry) {
+      const invoiceId = entry[0];
+      const data = entry[1].data;
+      const statusKey = mapStoreInvoiceStatus(data);
+      const aggregating = statusKey === "aggregating";
+      const lines = (linesByInvoice.get(invoiceId) || []).sort(function(a, b) {
+        return a.date < b.date ? -1 : a.date > b.date ? 1 : a.headline < b.headline ? -1 : a.headline > b.headline ? 1 : 0;
+      });
+
+      // 締め処理中(closing)は金額・明細が確定していないため出さない。
+      return {
+        month: entry[1].month,
+        statusKey: statusKey,
+        amountJpy: aggregating ? null : Number(data.amountJpy) || 0,
+        lineCount: aggregating ? null : Number(data.lineCount) || 0,
+        closedAt: aggregating ? null : toIsoOrNull(data.closedAt),
+        paidAt: statusKey === "paid" ? toIsoOrNull(data.paidAt) : null,
+        lines: aggregating ? [] : lines.slice(0, STORE_INVOICE_LINES_LIMIT),
+        linesTruncated: !aggregating && lines.length > STORE_INVOICE_LINES_LIMIT
+      };
+    });
+
+  const estimateMonths = monthKeys
+    .filter(function(month) {
+      return estimateByMonth.has(month);
+    })
+    .map(function(month) {
+      const lineCount = estimateByMonth.get(month);
+
+      return { month: month, lineCount: lineCount, amountJpy: lineCount * IMADAKE_DAILY_CHARGE_AMOUNT_JPY };
+    });
+
+  return {
+    months: monthKeys,
+    dailyChargeAmountJpy: IMADAKE_DAILY_CHARGE_AMOUNT_JPY,
+    invoices: invoiceList,
+    estimate: {
+      months: estimateMonths,
+      lineCount: estimateMonths.reduce(function(sum, month) { return sum + month.lineCount; }, 0),
+      amountJpy: estimateMonths.reduce(function(sum, month) { return sum + month.amountJpy; }, 0)
+    }
+  };
+}
+
+// mode: storeBillingInvoices (POST)
+// { storeId } → { success, available, invoices, estimate, months, dailyChargeAmountJpy }
+export async function handleStoreBillingInvoices(request, response, deps) {
+  response.setHeader("Cache-Control", "no-store");
+
+  try {
+    const database = deps.getFirestore(deps.getFirebaseAdminApp());
+    const storeId = readStoreId(deps.readRequestBody(request));
+    const actor = await requireStoreBillingOwner(request, response, deps, database, storeId);
+
+    if (!actor) {
+      return;
+    }
+
+    // 課金開始前のProduction・ほかのPreviewでは、請求書・台帳を読まずに返す(未開始の課金情報を出さない)。
+    if (!isStoreInvoiceHistoryAvailable(deps)) {
+      return response.status(200).json({ success: true, available: false });
+    }
+
+    const history = await buildStoreInvoiceHistory(database, storeId, currentTimeMs(deps));
+
+    return response.status(200).json({ success: true, available: true, ...history });
+  } catch (error) {
+    console.error("店舗の請求履歴：取得エラー：", error && error.message);
     return sendError(response, 500, "server_error");
   }
 }

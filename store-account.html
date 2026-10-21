@@ -214,6 +214,15 @@
     .billing-card-status strong { color: var(--navy); }
     .billing-payment-element { margin: 12px 0; min-height: 60px; }
     .billing-test-badge { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: #fff3cd; color: #7a5b00; font-size: 11px; font-weight: 700; }
+    .invoice-block { margin: 12px 0; }
+    .invoice-block h4 { margin: 0 0 6px; font-size: 14px; color: var(--navy); }
+    .invoice-estimate { padding: 12px; border: 1px dashed var(--border); border-radius: 12px; font-size: 14px; }
+    .invoice-item { margin: 8px 0; padding: 12px; border: 1px solid var(--border); border-radius: 12px; font-size: 14px; }
+    .invoice-item-head { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; justify-content: space-between; }
+    .invoice-status { display: inline-block; padding: 2px 8px; border-radius: 8px; background: #eef2f7; font-size: 12px; font-weight: 700; }
+    .invoice-status.attention { background: #fde8e6; color: #8a1c12; }
+    .invoice-lines { margin: 6px 0 0; padding-left: 18px; font-size: 13px; overflow-wrap: anywhere; }
+    .invoice-note { margin: 4px 0 0; font-size: 12px; color: #555; }
     .store-form { margin-top: 14px; }
 
     .store-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 10px; }
@@ -481,6 +490,27 @@
           <button type="button" class="secondary-button" id="billingCancelButton" data-i18n="store_billing_cancel_button">やめる</button>
         </div>
         <div id="billingMessage" class="message" role="status" aria-live="polite"></div>
+      </div>
+
+      <!-- 今だけ投稿 決済 STEP 38-B｜ご請求の履歴(読み取りだけ)。事業者のownerだけ。サーバー(storeBillingInvoices)が
+           「利用可能」と返した時だけ表示する(課金開始前の本番サイトでは表示しない)。
+           見込み(未確定)と確定したご請求は別の枠に分け、合計しない。表示はすべて文字(textContent)。 -->
+      <div class="store-section" id="invoiceHistorySection" hidden>
+        <h3 data-i18n="store_invoice_heading">ご請求の履歴</h3>
+        <p class="hint" data-i18n="store_invoice_intro"></p>
+        <div class="field" id="invoiceStoreField">
+          <label for="invoiceStoreSelect" data-i18n="store_billing_store_label">事業者</label>
+          <select id="invoiceStoreSelect"></select>
+        </div>
+        <div class="invoice-block">
+          <h4 data-i18n="store_invoice_estimate_heading">見込み（未確定）</h4>
+          <div class="invoice-estimate" id="invoiceEstimate"></div>
+        </div>
+        <div class="invoice-block">
+          <h4 data-i18n="store_invoice_confirmed_heading">確定したご請求</h4>
+          <div id="invoiceList"></div>
+        </div>
+        <div id="invoiceMessage" class="message" role="status" aria-live="polite"></div>
       </div>
 
       <!-- 運営無料掲載 → 店舗オーナー化 MVP-1｜マチナウ運営が掲載したお店を、本当のお店が
@@ -997,6 +1027,8 @@
             renderStoreList();
             // 今だけ投稿 決済 STEP 31｜お支払い方法の表示可否を確かめる(失敗しても他の表示には影響しない)。
             loadBillingStatuses().catch(function () {});
+            // 今だけ投稿 決済 STEP 38-B｜ご請求の履歴(失敗しても他の表示には影響しない)。
+            loadInvoiceHistories().catch(function () {});
           });
       }
 
@@ -1011,6 +1043,166 @@
         billingLastMessage = null;
         closeBillingForm();
         showBillingMessage("", "");
+        invoiceHistoryByStore = {};
+        invoiceHistoryFailed = false;
+        renderInvoiceHistorySection();
+      }
+
+      // ===== 今だけ投稿 決済 STEP 38-B｜ご請求の履歴(読み取りだけ) =====
+      // サーバー(storeBillingInvoices)が available:true を返した事業者がある時だけ表示する。
+      // サーバーが返すのは許可した項目だけ(内部ID・StripeのIDは来ない)。表示はすべて textContent。
+      const INVOICE_STATUS_KEYS = {
+        aggregating: "store_invoice_status_aggregating",
+        confirmed_unbilled: "store_invoice_status_confirmed_unbilled",
+        processing: "store_invoice_status_processing",
+        paid: "store_invoice_status_paid",
+        payment_failed: "store_invoice_status_payment_failed",
+        requires_action: "store_invoice_status_requires_action",
+        under_review: "store_invoice_status_under_review"
+      };
+      const INVOICE_ATTENTION_STATUSES = ["payment_failed", "requires_action"];
+      let invoiceHistoryByStore = {};
+      let invoiceHistoryFailed = false;
+
+      function formatInvoiceMonth(month) {
+        const text = String(month || "");
+        const year = text.slice(0, 4);
+        const monthNumber = String(Number(text.slice(5, 7)) || "");
+        return t("store_invoice_month_format").replace("{year}", year).replace("{month}", monthNumber);
+      }
+
+      // ISOの日時 → 日本時間の日付(YYYY/MM/DD)。
+      function formatInvoiceDate(iso) {
+        const millis = Date.parse(String(iso || ""));
+        if (!Number.isFinite(millis)) {
+          return "";
+        }
+        return new Date(millis + 9 * 60 * 60 * 1000).toISOString().slice(0, 10).replace(/-/g, "/");
+      }
+
+      function formatInvoiceYen(amount) {
+        return t("store_invoice_yen_format").replace("{amount}", String(Number(amount) || 0));
+      }
+
+      function addInvoiceText(parent, tagName, text, className) {
+        const element = document.createElement(tagName);
+        if (className) {
+          element.className = className;
+        }
+        element.textContent = text;
+        parent.appendChild(element);
+        return element;
+      }
+
+      function invoiceAvailableStores() {
+        return billingOwnerStores().filter(function (store) {
+          return invoiceHistoryByStore[store.storeId] && invoiceHistoryByStore[store.storeId].available === true;
+        });
+      }
+
+      function renderInvoiceHistorySection() {
+        const section = document.getElementById("invoiceHistorySection");
+        const stores = invoiceAvailableStores();
+        section.hidden = stores.length === 0;
+        if (section.hidden) {
+          return;
+        }
+        const select = document.getElementById("invoiceStoreSelect");
+        const previous = select.value;
+        select.textContent = "";
+        stores.forEach(function (store) {
+          const option = document.createElement("option");
+          option.value = store.storeId;
+          option.textContent = store.storeName;
+          select.appendChild(option);
+        });
+        select.value = stores.some(function (store) { return store.storeId === previous; })
+          ? previous
+          : stores[0].storeId;
+        document.getElementById("invoiceStoreField").hidden = stores.length < 2;
+        const history = invoiceHistoryByStore[select.value] || {};
+
+        // 見込み(未確定)：確定したご請求とは別の枠。合計しない。
+        const estimateBox = document.getElementById("invoiceEstimate");
+        estimateBox.textContent = "";
+        const estimate = history.estimate || {};
+        const estimateMonths = Array.isArray(estimate.months) ? estimate.months : [];
+        if (estimateMonths.length === 0) {
+          addInvoiceText(estimateBox, "div", t("store_invoice_estimate_none"));
+        } else {
+          estimateMonths.forEach(function (month) {
+            addInvoiceText(estimateBox, "div", t("store_invoice_estimate_line")
+              .replace("{month}", formatInvoiceMonth(month.month))
+              .replace("{count}", String(Number(month.lineCount) || 0))
+              .replace("{amount}", formatInvoiceYen(month.amountJpy)));
+          });
+        }
+        addInvoiceText(estimateBox, "p", t("store_invoice_estimate_note"), "invoice-note");
+
+        // 確定したご請求
+        const list = document.getElementById("invoiceList");
+        list.textContent = "";
+        const invoices = Array.isArray(history.invoices) ? history.invoices : [];
+        if (invoices.length === 0) {
+          addInvoiceText(list, "div", t("store_invoice_none"), "invoice-item");
+        }
+        invoices.forEach(function (invoice) {
+          const item = addInvoiceText(list, "div", "", "invoice-item");
+          const head = addInvoiceText(item, "div", "", "invoice-item-head");
+          addInvoiceText(head, "strong", t("store_invoice_month_label").replace("{month}", formatInvoiceMonth(invoice.month)));
+          const statusKey = Object.prototype.hasOwnProperty.call(INVOICE_STATUS_KEYS, invoice.statusKey)
+            ? invoice.statusKey
+            : "under_review";
+          addInvoiceText(head, "span", t(INVOICE_STATUS_KEYS[statusKey]),
+            "invoice-status" + (INVOICE_ATTENTION_STATUSES.includes(statusKey) ? " attention" : ""));
+          if (statusKey === "aggregating") {
+            addInvoiceText(item, "p", t("store_invoice_aggregating_note"), "invoice-note");
+            return;
+          }
+          addInvoiceText(item, "div", t("store_invoice_amount_line")
+            .replace("{amount}", formatInvoiceYen(invoice.amountJpy))
+            .replace("{count}", String(Number(invoice.lineCount) || 0)));
+          if (invoice.closedAt) {
+            addInvoiceText(item, "div", t("store_invoice_closed_at").replace("{date}", formatInvoiceDate(invoice.closedAt)));
+          }
+          if (statusKey === "paid" && invoice.paidAt) {
+            addInvoiceText(item, "div", t("store_invoice_paid_at").replace("{date}", formatInvoiceDate(invoice.paidAt)));
+          }
+          const lines = Array.isArray(invoice.lines) ? invoice.lines : [];
+          if (lines.length > 0) {
+            const listElement = addInvoiceText(item, "ul", "", "invoice-lines");
+            lines.forEach(function (line) {
+              addInvoiceText(listElement, "li", String(line.date || "").replace(/-/g, "/") + "　" +
+                (line.headline ? String(line.headline) : t("store_invoice_line_no_headline")));
+            });
+          }
+          if (invoice.linesTruncated) {
+            addInvoiceText(item, "p", t("store_invoice_lines_truncated"), "invoice-note");
+          }
+        });
+
+        const message = document.getElementById("invoiceMessage");
+        message.textContent = invoiceHistoryFailed ? t("store_invoice_err_load") : "";
+        message.className = invoiceHistoryFailed ? "message show error" : "message";
+      }
+
+      function loadInvoiceHistories() {
+        const stores = billingOwnerStores();
+        invoiceHistoryByStore = {};
+        invoiceHistoryFailed = false;
+        return Promise.all(stores.map(function (store) {
+          return callStoreApi({ mode: "storeBillingInvoices", storeId: store.storeId })
+            .then(function (response) {
+              if (response.status === 200 && response.result && response.result.success) {
+                invoiceHistoryByStore[store.storeId] = response.result;
+              } else if (response.status >= 500) {
+                invoiceHistoryFailed = true;
+              }
+            })
+            .catch(function () {});
+        })).then(function () {
+          renderInvoiceHistorySection();
+        });
       }
 
       // ===== 今だけ投稿 決済 STEP 31｜お支払い方法(カード登録) =====
@@ -2134,6 +2326,7 @@
             }
             applyLanguage();
             renderBillingSection();
+            renderInvoiceHistorySection();
           });
         });
 
@@ -2142,6 +2335,8 @@
           closeBillingForm();
           showBillingMessage("", "");
         });
+        // 今だけ投稿 決済 STEP 38-B｜ご請求の履歴の事業者の切り替え(読み直さず、取得済みの内容を表示する)。
+        document.getElementById("invoiceStoreSelect").addEventListener("change", renderInvoiceHistorySection);
         document.getElementById("billingStartButton").addEventListener("click", startBillingSetup);
         document.getElementById("billingSubmitButton").addEventListener("click", submitBillingSetup);
         document.getElementById("billingCancelButton").addEventListener("click", function () {

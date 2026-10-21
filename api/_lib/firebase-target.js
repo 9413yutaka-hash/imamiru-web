@@ -225,3 +225,9 @@ export function isPreviewCvBillingTrialEnabled(env, targets) {
 export function isPreviewMonthlyCloseTrialEnabled(env, targets) {
   return isPreviewCvBillingTrialEnabled(env, targets);
 }
+
+// STEP 38-B｜店舗向けの請求履歴(読み取り専用)を Preview試験の環境で見せてよいか。条件は課金対象判定の試験と同じ
+// (Preview・対象ブランチ・machinau-preview)。請求・締め・Stripeの実行には使わない。
+export function isPreviewStoreInvoiceHistoryEnabled(env, targets) {
+  return isPreviewCvBillingTrialEnabled(env, targets);
+}

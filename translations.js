@@ -2469,6 +2469,132 @@ const MACHINAU_TRANSLATIONS = {
     en: "We couldn't register your card. Please try again later."
   },
 
+  // 今だけ投稿 決済 STEP 38-B｜ご請求の履歴(store-account.html、読み取りだけ)。
+  store_invoice_heading: {
+    ja: "ご請求の履歴",
+    en: "Billing history"
+  },
+
+  store_invoice_intro: {
+    ja: "今だけ投稿のご利用料金（有効な閲覧があった「投稿×1日」ごとに100円・税込）です。月末に締めて金額を確定し、翌月にまとめて登録カードへご請求します。直近12か月分を表示します。",
+    en: "Fees for Just for Now posts (¥100 incl. tax per post per day with at least one valid view). Amounts are confirmed at month-end and charged together to your registered card the following month. Shows the last 12 months."
+  },
+
+  store_invoice_estimate_heading: {
+    ja: "見込み（未確定）",
+    en: "Estimate (not confirmed)"
+  },
+
+  store_invoice_estimate_line: {
+    ja: "{month}：{count}件・{amount}（見込み）",
+    en: "{month}: {count} item(s), {amount} (estimate)"
+  },
+
+  store_invoice_estimate_none: {
+    ja: "未確定の見込みはありません。",
+    en: "No pending estimate."
+  },
+
+  store_invoice_estimate_note: {
+    ja: "見込みは月末の締めの後に確定します。確定したご請求額とは別で、合計していません。",
+    en: "Estimates are confirmed after the month-end close. They are separate from confirmed charges and not added to them."
+  },
+
+  store_invoice_confirmed_heading: {
+    ja: "確定したご請求",
+    en: "Confirmed charges"
+  },
+
+  store_invoice_none: {
+    ja: "確定した請求はまだありません。",
+    en: "There are no confirmed charges yet."
+  },
+
+  store_invoice_month_format: {
+    ja: "{year}年{month}月",
+    en: "{year}/{month}"
+  },
+
+  store_invoice_month_label: {
+    ja: "{month}分",
+    en: "{month}"
+  },
+
+  store_invoice_yen_format: {
+    ja: "{amount}円",
+    en: "¥{amount}"
+  },
+
+  store_invoice_amount_line: {
+    ja: "ご請求額：{amount}（税込）・{count}件",
+    en: "Amount: {amount} (incl. tax), {count} item(s)"
+  },
+
+  store_invoice_closed_at: {
+    ja: "確定日：{date}",
+    en: "Confirmed on: {date}"
+  },
+
+  store_invoice_paid_at: {
+    ja: "お支払い日：{date}",
+    en: "Paid on: {date}"
+  },
+
+  store_invoice_line_no_headline: {
+    ja: "（見出しなし）",
+    en: "(no headline)"
+  },
+
+  store_invoice_lines_truncated: {
+    ja: "明細が多いため、一部だけを表示しています。",
+    en: "Only part of the details is shown because there are many items."
+  },
+
+  store_invoice_aggregating_note: {
+    ja: "月末の締めの集計中です。金額は確定後に表示します。",
+    en: "The month-end close is in progress. The amount will be shown once confirmed."
+  },
+
+  store_invoice_status_aggregating: {
+    ja: "集計処理中",
+    en: "Calculating"
+  },
+
+  store_invoice_status_confirmed_unbilled: {
+    ja: "確定済み・カードへのご請求前",
+    en: "Confirmed, not yet charged"
+  },
+
+  store_invoice_status_processing: {
+    ja: "ご請求の処理中",
+    en: "Charge in progress"
+  },
+
+  store_invoice_status_paid: {
+    ja: "お支払い済み",
+    en: "Paid"
+  },
+
+  store_invoice_status_payment_failed: {
+    ja: "カードでのお支払いができませんでした（カードの確認をお願いします）",
+    en: "The card payment failed (please check your card)"
+  },
+
+  store_invoice_status_requires_action: {
+    ja: "カードの本人確認が必要です。運営からご連絡します",
+    en: "Card authentication is required. We will contact you."
+  },
+
+  store_invoice_status_under_review: {
+    ja: "確認中（運営が確認しています）",
+    en: "Under review by Machinau"
+  },
+
+  store_invoice_err_load: {
+    ja: "ご請求の履歴を読み込めませんでした。時間をおいて、もう一度お試しください。",
+    en: "We couldn't load your billing history. Please try again later."
+  },
+
   store_account_category_other: {
     ja: "その他",
     en: "Other"
