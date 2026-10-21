@@ -701,6 +701,7 @@
       suspended: "停止中"
     };
 
+    // STEP 42-D｜重複の候補・短時間の大量登録は運営の承認待ちにせず、記録として表示する。
     const SELF_REGISTRATION_FLAG_LABELS = {
       possible_duplicate: "既存店舗と同じ名前・100m以内",
       rapid_registrations: "24時間以内の連続登録"
@@ -722,7 +723,8 @@
           // 正式店舗参加基盤 Phase 2A｜店舗自身がアカウントから登録した店舗。
           // tokenは発行しない(専用URL再発行なし)。所在地は店舗が選んだ国で確定済みのため
           // 日本固定の運営用所在地登録も出さない。運営確認待ちだけ承認・却下を出す。
-          const isSelfRegistered = storeAccount.createdByType === "storeUser";
+          // STEP 42-D｜運営掲載の引き継ぎで作られた店舗(listingClaim)も、店舗自身が管理する店舗として扱う(tokenなし)。
+          const isSelfRegistered = storeAccount.createdByType === "storeUser" || storeAccount.createdByType === "listingClaim";
           const registrationStatus = storeAccount.registrationStatus || "active";
 
           return (
@@ -741,10 +743,10 @@
               '</div>' +
               (isSelfRegistered
                 ? '<div class="store-self-line" style="margin:4px 0 0; font-size:12.5px; color:var(--subtext);">' +
-                    '<strong>店舗が自分で登録</strong>（専用URLなし）｜状態：' +
+                    (storeAccount.createdByType === "listingClaim" ? '<strong>運営掲載を店主が引き継ぎ</strong>（専用URLなし）｜状態：' : '<strong>店舗が自分で登録</strong>（専用URLなし）｜状態：') +
                     escapeHtmlText(SELF_REGISTRATION_STATUS_LABELS[registrationStatus] || registrationStatus) +
                     ((storeAccount.reviewFlags || []).length > 0
-                      ? '｜確認理由：' + escapeHtmlText(storeAccount.reviewFlags.map(function(flag) {
+                      ? '｜記録：' + escapeHtmlText(storeAccount.reviewFlags.map(function(flag) {
                           return SELF_REGISTRATION_FLAG_LABELS[flag] || flag;
                         }).join('、'))
                       : '') +

@@ -1,5 +1,10 @@
 // ==========================================================================
 // 運営無料掲載 → 店舗オーナー化 MVP-1(サーバー側)
+// STEP 42-D(代表決定 2026-10-21)：引き継ぎは、アカウント作成・メール確認・クレジットカード登録(1アカウント1枚)を
+// 条件に、運営の個別承認なしで自動で完了する。追加の本人確認(電話・公式サイトの照合等)は行わない。
+// 運営掲載の文章・営業時間・カテゴリ等は店主の店舗情報(draft)へ写す(listing-profile-copy.js)。
+// 「1つの無料掲載に有効な紐付けは1つ」「既存の紐付けは奪えない」「解除は Admin だけ」は従来どおり。
+// 以下の MVP-1 の説明のうち「全件運営確認」の部分は、この決定で置き換わった(運営の承認の処理は残す)。
 // ==========================================================================
 // マチナウ運営が先に無料掲載した店舗(submissions の運営常設掲載)を、後から本当の
 // 店舗が自分の店舗として引き継ぐ。初期MVPでは自動の本人確認は行わず、全件
@@ -36,6 +41,13 @@ import {
   validateImadakeUrl
 } from "./imadake.js";
 
+// STEP 42-D｜運営掲載の情報を店主の店舗情報へ写す(写真の複製は代表の承認まで止める)。
+import {
+  buildEmptyFieldFill,
+  buildProfileFieldsFromListing,
+  copyListingPhotosToProfile
+} from "./listing-profile-copy.js";
+
 const SUBMISSIONS_COLLECTION = "submissions";
 const STORE_ACCOUNTS_COLLECTION = "storeAccounts";
 const STORE_MEMBERS_COLLECTION = "storeMembers";
@@ -60,18 +72,6 @@ export const VERIFICATION_CHANNELS = ["official_website", "official_sns", "map_l
 // 紛らわしい文字(I/O/0/1)を除いた英数字。申請と運営の確認を照合するための番号。
 const CLAIM_CODE_CHARACTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
-// 運営無料掲載のカテゴリ(日本語の内部値) → 常設店舗のカテゴリcode。
-const LISTING_CATEGORY_TO_CODE = {
-  "グルメ": "gourmet",
-  "カフェ": "cafe_sweets",
-  "カフェ・スイーツ": "cafe_sweets",
-  "ショッピング": "shopping",
-  "観光・体験": "sightseeing_experience",
-  "ナイトスポット": "nightlife",
-  "居酒屋": "nightlife",
-  "美容・リラクゼーション": "beauty_relaxation",
-  "宿泊": "lodging"
-};
 
 
 function sendError(response, status, reason, extra) {
@@ -245,7 +245,8 @@ export async function handleStoreListingClaimPreview(request, response, deps) {
 
 // mode: storeListingClaimCreate
 // { submissionId, targetType: "new_store"|"existing_store", targetStoreId?, role, publicReferenceUrl?, note? }
-// 申請者の電話番号・メール等の連絡先は受け取らない(本人確認は運営が独立して行うため)。
+// STEP 42-D｜カード登録済み(1アカウント1枚)のアカウントなら、運営の個別承認なしでその場で引き継ぎを完了する。
+// カードが無い・確認できない時は引き継がない(card_*)。申請者の電話番号・メール等の連絡先は受け取らない。
 export async function handleStoreListingClaimCreate(request, response, deps) {
   try {
     const actor = await requireVerifiedStoreUser(request, response, deps);
@@ -303,6 +304,20 @@ export async function handleStoreListingClaimCreate(request, response, deps) {
       return sendError(response, 409, "already_linked_to_this_store");
     }
 
+    // 既に管理者がいる掲載は奪えない(解除は Admin だけ)。
+    if (isActiveLink(link)) {
+      return sendError(response, 409, "listing_already_linked");
+    }
+
+    // STEP 42-D｜引き継ぎの条件：このアカウントにクレジットカードが登録済み(有効)であること。
+    const card = typeof deps.checkAccountBillingCard === "function"
+      ? await deps.checkAccountBillingCard(database, actor.uid)
+      : { ok: false, reason: "card_billing_unavailable" };
+
+    if (!card || card.ok !== true) {
+      return sendError(response, 409, card && typeof card.reason === "string" && card.reason !== "" ? card.reason : "card_billing_unavailable");
+    }
+
     const myClaims = myClaimsSnapshot.docs.map(function(documentSnapshot) { return documentSnapshot.data() || {}; });
 
     if (myClaims.some(function(claim) { return claim.submissionId === submissionId && claim.status === "pending"; })) {
@@ -326,30 +341,79 @@ export async function handleStoreListingClaimCreate(request, response, deps) {
 
     const claimRef = database.collection(CLAIMS_COLLECTION).doc();
     const claimCode = generateClaimCode(deps.randomInt);
+    let newStoreLocation = null;
 
-    await claimRef.set({
-      submissionId: submissionId,
-      // 申請時点の掲載の概要(公開情報のみ)。運営の確認と監査のために残す。
-      listingSnapshot: buildListingSummary(listing),
-      claimantUid: actor.uid,
-      targetType: targetType,
-      targetStoreId: targetStoreId,
-      role: role,
-      publicReferenceUrl: publicReferenceUrl,
-      note: note,
-      claimCode: claimCode,
-      status: "pending",
-      linkConflictAtCreation: isActiveLink(link),
-      verificationMethod: "operator_review",
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp()
+    // 新しい店舗を作る場合の所在地は、外部APIのため transaction の前に準備する(運営掲載の座標を使う)。
+    if (targetType === "new_store") {
+      newStoreLocation = await buildNewStoreLocation(listing, deps);
+
+      if (!newStoreLocation.ok) {
+        return sendError(response, newStoreLocation.reason === "geocoding_unavailable" ? 503 : 400, newStoreLocation.reason);
+      }
+    }
+
+    const newStoreRef = targetType === "new_store" ? database.collection(STORE_ACCOUNTS_COLLECTION).doc() : null;
+    let outcome = null;
+
+    await database.runTransaction(async function(transaction) {
+      const linked = await linkListingInTransaction(transaction, database, {
+        claimId: claimRef.id,
+        submissionId: submissionId,
+        targetType: targetType,
+        targetStoreId: targetStoreId,
+        claimantUid: actor.uid,
+        newStoreRef: newStoreRef,
+        newStoreLocation: newStoreLocation,
+        decidedByUid: actor.uid,
+        verificationMethod: "auto_card_registered",
+        verificationChannel: "",
+        reason: ""
+      });
+
+      if (linked.status !== 200) {
+        outcome = linked;
+        return;
+      }
+
+      // 引き継ぎの記録(運営が管理本部で確認する履歴)。運営の個別承認は無い。
+      transaction.set(claimRef, {
+        submissionId: submissionId,
+        // 引き継ぎ時点の掲載の概要(公開情報のみ)。監査のために残す。
+        listingSnapshot: buildListingSummary(listing),
+        claimantUid: actor.uid,
+        targetType: targetType,
+        targetStoreId: targetStoreId,
+        role: role,
+        publicReferenceUrl: publicReferenceUrl,
+        note: note,
+        claimCode: claimCode,
+        status: "approved",
+        linkConflictAtCreation: false,
+        verificationMethod: "auto_card_registered",
+        decidedByType: "auto",
+        decidedByUid: actor.uid,
+        decidedAt: FieldValue.serverTimestamp(),
+        resultStoreId: linked.storeId,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
+      });
+
+      outcome = { status: 200, storeId: linked.storeId, listing: linked.listing };
     });
+
+    if (outcome.status !== 200) {
+      return sendError(response, outcome.status, outcome.reason);
+    }
+
+    // STEP 42-D｜写真の複製(代表の承認まで止める。失敗しても引き継ぎは成立したまま)。
+    const photoCopy = await copyListingPhotosToProfile(database, outcome.storeId, outcome.listing, deps);
 
     return response.status(200).json({
       success: true,
       claimId: claimRef.id,
-      claimCode: claimCode,
-      status: "pending"
+      status: "approved",
+      storeId: outcome.storeId,
+      photoCopy: photoCopy.status
     });
   } catch (error) {
     console.error("オーナー申請：作成エラー：", error && error.message);
@@ -542,6 +606,7 @@ export async function handleAdminStoreListingClaimList(request, response, deps) 
         decidedAtMillis: millisOf(claim.decidedAt),
         decisionReason: claim.decisionReason || "",
         verificationChannel: claim.verificationChannel || "",
+        verificationMethod: claim.verificationMethod || "",
         resultStoreId: claim.resultStoreId || "",
         currentLink: link ? { storeId: link.storeId, storeName: await readStoreName(link.storeId) } : null,
         otherPendingClaimsForListing: Math.max(0, (pendingCountBySubmission[claim.submissionId] || 0) - (claim.status === "pending" ? 1 : 0))
@@ -606,6 +671,132 @@ async function buildNewStoreLocation(listing, deps) {
       locationSource: "listingCoordinates"
     }
   };
+}
+
+// STEP 42-D｜紐付けの本体(自動の引き継ぎと運営の承認で共通)。transaction の中で呼ぶ。
+// 読み取りをすべて済ませてから書き込む。紐付けが既に有効なら奪わない(listing_already_linked)。
+// params: { claimId, submissionId, targetType, targetStoreId, claimantUid, newStoreRef, newStoreLocation,
+//           decidedByUid, verificationMethod, verificationChannel, reason }
+// 戻り値 { status: 200, storeId, listing } か { status, reason }
+async function linkListingInTransaction(transaction, database, params) {
+  const submissionRef = database.collection(SUBMISSIONS_COLLECTION).doc(params.submissionId);
+  const linkRef = database.collection(LINKS_COLLECTION).doc(params.submissionId);
+  const linkSnapshot = await transaction.get(linkRef);
+  const submissionSnapshot = await transaction.get(submissionRef);
+
+  // 「1つの無料掲載に有効な紐付けは1つ」。既存の有効な紐付けは、Adminが明示的に
+  // 解除するまで別の申請からは奪えない(同時の引き継ぎでも片方しか通らない)。
+  const existingLink = linkSnapshot.exists ? linkSnapshot.data() || {} : null;
+
+  if (isActiveLink(existingLink)) {
+    return { status: 409, reason: "listing_already_linked" };
+  }
+
+  if (!submissionSnapshot.exists || !isClaimableListing(submissionSnapshot.data())) {
+    return { status: 409, reason: "listing_not_claimable" };
+  }
+
+  const listing = submissionSnapshot.data();
+  const copiedFields = buildProfileFieldsFromListing(listing, params.submissionId);
+  let storeId;
+
+  if (params.targetType === "existing_store") {
+    storeId = params.targetStoreId;
+    const memberSnapshot = await transaction.get(database.collection(STORE_MEMBERS_COLLECTION).doc(storeId + "_" + params.claimantUid));
+    const accountSnapshot = await transaction.get(database.collection(STORE_ACCOUNTS_COLLECTION).doc(storeId));
+    const profileRef = database.collection(STORE_PROFILES_COLLECTION).doc(storeId);
+    const profileSnapshot = await transaction.get(profileRef);
+
+    if (!isEligibleTargetStore(
+      memberSnapshot.exists ? memberSnapshot.data() : null,
+      accountSnapshot.exists ? accountSnapshot.data() : null,
+      params.claimantUid,
+      storeId
+    )) {
+      return { status: 409, reason: "target_store_not_allowed" };
+    }
+
+    // 既存の自店舗：店主がまだ入れていない項目だけを運営掲載の内容で埋める(入力済みは上書きしない)。
+    if (profileSnapshot.exists) {
+      const fill = buildEmptyFieldFill(profileSnapshot.data() || {}, copiedFields);
+
+      if (Object.keys(fill).length > 0) {
+        transaction.set(profileRef, Object.assign({}, fill, { updatedAt: FieldValue.serverTimestamp() }), { merge: true });
+      }
+    }
+  } else {
+    storeId = params.newStoreRef.id;
+    const memberRef = database.collection(STORE_MEMBERS_COLLECTION).doc(storeId + "_" + params.claimantUid);
+    const profileRef = database.collection(STORE_PROFILES_COLLECTION).doc(storeId);
+    const existing = await Promise.all([transaction.get(params.newStoreRef), transaction.get(memberRef), transaction.get(profileRef)]);
+
+    if (existing.some(function(snapshot) { return snapshot.exists; })) {
+      return { status: 500, reason: "store_id_collision" };
+    }
+
+    // Phase 2Aと同じ形の管理情報(tokenHashは作らない)。所在地は掲載の座標を使う。
+    transaction.set(params.newStoreRef, Object.assign({
+      storeName: typeof listing.shopName === "string" ? listing.shopName : "",
+      enabled: true,
+      createdByType: "listingClaim",
+      createdByUid: params.claimantUid,
+      registrationStatus: "active",
+      reviewFlags: [],
+      duplicateCandidates: [],
+      sourceSubmissionId: params.submissionId,
+      sourceClaimId: params.claimId,
+      locationUpdatedAt: FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
+    }, params.newStoreLocation.fields));
+
+    transaction.set(memberRef, {
+      storeId: storeId,
+      uid: params.claimantUid,
+      role: "owner",
+      status: "active",
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
+    });
+
+    // STEP 42-D｜店舗情報の下書きに、運営掲載の文章・営業時間・カテゴリ等を写す(写真は transaction の後で複製)。
+    transaction.set(profileRef, {
+      storeId: storeId,
+      status: "draft",
+      storeName: typeof listing.shopName === "string" ? listing.shopName : "",
+      categoryCode: copiedFields.categoryCode,
+      description: copiedFields.description,
+      businessHours: copiedFields.businessHours,
+      paymentMethodCodes: copiedFields.paymentMethodCodes,
+      featureCodes: copiedFields.featureCodes,
+      copiedFromSubmissionId: copiedFields.copiedFromSubmissionId,
+      sourceLanguage: "ja",
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
+    });
+  }
+
+  const now = Date.now();
+  const history = existingLink && Array.isArray(existingLink.history) ? existingLink.history.slice() : [];
+  history.push({ event: "linked", storeId: storeId, claimId: params.claimId, byUid: params.decidedByUid, atMillis: now, reason: params.reason, method: params.verificationMethod });
+
+  transaction.set(linkRef, {
+    submissionId: params.submissionId,
+    storeId: storeId,
+    status: "active",
+    claimId: params.claimId,
+    verificationMethod: params.verificationMethod,
+    verificationChannel: params.verificationChannel,
+    linkedAt: FieldValue.serverTimestamp(),
+    linkedByUid: params.decidedByUid,
+    revokedAt: null,
+    revokedByUid: "",
+    revokeReason: "",
+    history: history,
+    updatedAt: FieldValue.serverTimestamp()
+  });
+
+  return { status: 200, storeId: storeId, listing: listing };
 }
 
 // mode: adminStoreListingClaimReview
@@ -687,7 +878,6 @@ export async function handleAdminStoreListingClaimReview(request, response, deps
     }
 
     const submissionRef = database.collection(SUBMISSIONS_COLLECTION).doc(preClaimData.submissionId);
-    const linkRef = database.collection(LINKS_COLLECTION).doc(preClaimData.submissionId);
 
     // 新しい店舗を作る場合の所在地は、外部APIのためtransactionの前に準備する。
     let newStoreLocation = null;
@@ -713,8 +903,6 @@ export async function handleAdminStoreListingClaimReview(request, response, deps
 
     await database.runTransaction(async function(transaction) {
       const claimSnapshot = await transaction.get(claimRef);
-      const linkSnapshot = await transaction.get(linkRef);
-      const submissionSnapshot = await transaction.get(submissionRef);
       const claim = claimSnapshot.exists ? claimSnapshot.data() || {} : null;
 
       if (!claim) {
@@ -727,104 +915,24 @@ export async function handleAdminStoreListingClaimReview(request, response, deps
         return;
       }
 
-      // 「1つの無料掲載に有効な紐付けは1つ」。既存の有効な紐付けは、Adminが明示的に
-      // 解除するまで別の申請からは奪えない(同時承認でも片方しか通らない)。
-      const existingLink = linkSnapshot.exists ? linkSnapshot.data() || {} : null;
-
-      if (isActiveLink(existingLink)) {
-        outcome = { status: 409, reason: "listing_already_linked" };
-        return;
-      }
-
-      if (!submissionSnapshot.exists || !isClaimableListing(submissionSnapshot.data())) {
-        outcome = { status: 409, reason: "listing_not_claimable" };
-        return;
-      }
-
-      const listing = submissionSnapshot.data();
-      let storeId;
-
-      if (claim.targetType === "existing_store") {
-        storeId = claim.targetStoreId;
-        const memberSnapshot = await transaction.get(database.collection(STORE_MEMBERS_COLLECTION).doc(storeId + "_" + claim.claimantUid));
-        const accountSnapshot = await transaction.get(database.collection(STORE_ACCOUNTS_COLLECTION).doc(storeId));
-
-        if (!isEligibleTargetStore(
-          memberSnapshot.exists ? memberSnapshot.data() : null,
-          accountSnapshot.exists ? accountSnapshot.data() : null,
-          claim.claimantUid,
-          storeId
-        )) {
-          outcome = { status: 409, reason: "target_store_not_allowed" };
-          return;
-        }
-      } else {
-        storeId = newStoreRef.id;
-        const memberRef = database.collection(STORE_MEMBERS_COLLECTION).doc(storeId + "_" + claim.claimantUid);
-        const profileRef = database.collection(STORE_PROFILES_COLLECTION).doc(storeId);
-        const existing = await Promise.all([transaction.get(newStoreRef), transaction.get(memberRef), transaction.get(profileRef)]);
-
-        if (existing.some(function(snapshot) { return snapshot.exists; })) {
-          outcome = { status: 500, reason: "store_id_collision" };
-          return;
-        }
-
-        // Phase 2Aと同じ形の管理情報(tokenHashは作らない)。所在地は掲載の座標を使う。
-        transaction.set(newStoreRef, Object.assign({
-          storeName: typeof listing.shopName === "string" ? listing.shopName : "",
-          enabled: true,
-          createdByType: "listingClaim",
-          createdByUid: claim.claimantUid,
-          registrationStatus: "active",
-          reviewFlags: [],
-          duplicateCandidates: [],
-          sourceSubmissionId: claim.submissionId,
-          sourceClaimId: claimId,
-          locationUpdatedAt: FieldValue.serverTimestamp(),
-          createdAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp()
-        }, newStoreLocation.fields));
-
-        transaction.set(memberRef, {
-          storeId: storeId,
-          uid: claim.claimantUid,
-          role: "owner",
-          status: "active",
-          createdAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp()
-        });
-
-        // 常設情報は最低限の下書きだけ(無料掲載の紹介文・写真はコピーしない)。
-        transaction.set(profileRef, {
-          storeId: storeId,
-          status: "draft",
-          storeName: typeof listing.shopName === "string" ? listing.shopName : "",
-          categoryCode: LISTING_CATEGORY_TO_CODE[listing.category] || "other",
-          sourceLanguage: "ja",
-          createdAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp()
-        });
-      }
-
-      const now = Date.now();
-      const history = existingLink && Array.isArray(existingLink.history) ? existingLink.history.slice() : [];
-      history.push({ event: "linked", storeId: storeId, claimId: claimId, byUid: adminUid, atMillis: now, reason: reason });
-
-      transaction.set(linkRef, {
-        submissionId: claim.submissionId,
-        storeId: storeId,
-        status: "active",
+      const linked = await linkListingInTransaction(transaction, database, {
         claimId: claimId,
+        submissionId: claim.submissionId,
+        targetType: claim.targetType,
+        targetStoreId: claim.targetStoreId,
+        claimantUid: claim.claimantUid,
+        newStoreRef: newStoreRef,
+        newStoreLocation: newStoreLocation,
+        decidedByUid: adminUid,
         verificationMethod: "operator_review",
         verificationChannel: verificationChannel,
-        linkedAt: FieldValue.serverTimestamp(),
-        linkedByUid: adminUid,
-        revokedAt: null,
-        revokedByUid: "",
-        revokeReason: "",
-        history: history,
-        updatedAt: FieldValue.serverTimestamp()
+        reason: reason
       });
+
+      if (linked.status !== 200) {
+        outcome = linked;
+        return;
+      }
 
       transaction.update(claimRef, {
         status: "approved",
@@ -833,16 +941,19 @@ export async function handleAdminStoreListingClaimReview(request, response, deps
         decisionReason: reason,
         verificationChannel: verificationChannel,
         verificationNote: verificationNote,
-        resultStoreId: storeId,
+        resultStoreId: linked.storeId,
         updatedAt: FieldValue.serverTimestamp()
       });
 
-      outcome = { status: 200, storeId: storeId };
+      outcome = { status: 200, storeId: linked.storeId, listing: linked.listing, targetType: claim.targetType };
     });
 
     if (outcome.status !== 200) {
       return sendError(response, outcome.status, outcome.reason);
     }
+
+    // STEP 42-D｜写真の複製(代表の承認まで止める。失敗しても承認は成立したまま)。
+    await copyListingPhotosToProfile(database, outcome.storeId, outcome.listing, deps);
 
     return response.status(200).json({ success: true, status: "approved", storeId: outcome.storeId });
   } catch (error) {

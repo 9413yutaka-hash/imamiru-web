@@ -270,6 +270,12 @@
 
     .store-status.active, .claim-status.active { background: #e5f7ef; color: #0f6b44; }
     .store-status.pending_review, .claim-status.pending_review { background: #fff4e5; color: #8a4b00; }
+    /* STEP 42-D｜登録の手順(アカウント → メール確認 → カード → 登録・引き継ぎ) */
+    .onboarding-steps { list-style: none; margin: 0 0 12px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; font-size: 13.5px; }
+    .onboarding-steps li { padding: 3px 0; }
+    .onboarding-steps li.done::before { content: "✓ "; color: #1e7e34; font-weight: 900; }
+    .onboarding-steps li.todo::before { content: "○ "; color: #8a4b00; font-weight: 900; }
+    .onboarding-steps li.current { font-weight: 800; }
     .store-status.rejected, .store-status.suspended, .claim-status.rejected { background: #fdecee; color: #a3212d; }
 
     .store-preview {
@@ -430,6 +436,12 @@
 
       <div class="store-section" id="storeSection" hidden>
         <h3 data-i18n="store_account_stores_heading">あなたの店舗・施設</h3>
+        <!-- STEP 42-D｜登録・引き継ぎの前にカード登録が必要(1アカウント1枚)。表示は textContent だけ。 -->
+        <ol class="onboarding-steps" id="onboardingSteps"></ol>
+        <p class="message info show" id="cardGateNotice" hidden>
+          <span id="cardGateText"></span>
+          <a href="#billingSection" id="cardGateLink" data-i18n="store_card_gate_link">カードを登録する ↓</a>
+        </p>
         <p class="note" id="storeListEmpty" hidden data-i18n="store_account_stores_empty"></p>
         <ul class="store-list" id="storeList"></ul>
         <div id="storeMessage" class="message" role="status" aria-live="polite"></div>
@@ -525,6 +537,10 @@
             <div class="claim-card-meta" id="claimListingAddress"></div>
           </div>
           <p class="message info show" id="claimLinkedNotice" hidden data-i18n="store_claim_linked_notice"></p>
+          <p class="message info show" id="claimCardGateNotice" hidden>
+            <span id="claimCardGateText"></span>
+            <a href="#billingSection" id="claimCardGateLink" data-i18n="store_card_gate_link">カードを登録する ↓</a>
+          </p>
           <p class="note" style="margin: 10px 0;" data-i18n="store_claim_process_note"></p>
 
           <form id="claimForm" novalidate>
@@ -799,7 +815,14 @@
         country_mismatch: "store_account_store_err_country_mismatch",
         geocoding_unavailable: "store_account_store_err_geocoding",
         already_registered: "store_account_store_err_already_registered",
-        rate_limited: "store_account_store_err_rate_limited"
+        rate_limited: "store_account_store_err_rate_limited",
+        // STEP 42-D｜カード登録が必要(1アカウント1枚)。
+        card_required: "store_card_gate_needed",
+        card_invalid: "store_card_gate_needed",
+        card_account_mismatch: "store_card_gate_needed",
+        card_retiring: "store_card_gate_needed",
+        card_expired: "store_card_gate_expired",
+        card_billing_unavailable: "store_card_gate_unavailable"
       };
       const STORE_FIELD_ERROR_KEYS = {
         storeName: "store_account_store_err_name",
@@ -1024,6 +1047,7 @@
             renderStoreList();
             // 今だけ投稿 決済 STEP 31｜お支払い方法の表示可否を確かめる(失敗しても他の表示には影響しない)。
             loadBillingStatuses().catch(function () {});
+            renderOnboardingSteps();
             // 今だけ投稿 決済 STEP 38-B｜ご請求の履歴(失敗しても他の表示には影響しない)。
             loadInvoiceHistories().catch(function () {});
           });
@@ -1279,6 +1303,7 @@
         // サーバー(storeBillingStatus)が available:true を返した時だけ表示する(本番サイト・キー未設定では出さない)。
         section.hidden = !(billingStatus && billingStatus.available === true);
         if (section.hidden) {
+          renderRegistrationGate();
           return;
         }
         const status = billingStatus || {};
@@ -1300,8 +1325,96 @@
         );
         document.getElementById("billingStartButton").hidden = !document.getElementById("billingForm").hidden;
         updateBillingSubmitButton();
+        renderRegistrationGate();
         if (billingLastMessage) {
           showBillingMessage(billingLastMessage.key, billingLastMessage.type);
+        }
+      }
+
+      // ===== STEP 42-D｜カード登録 → 店舗の登録・引き継ぎ =====
+      // 登録・引き継ぎはカード登録済みのアカウントだけ(サーバーも確かめる)。カード登録後は元の作業へ戻す。
+      const AFTER_CARD_STORAGE_KEY = "machinauAfterCardIntent";
+
+      function accountCardReady() {
+        return !!(billingStatus && billingStatus.available === true && billingStatus.card && billingStatus.card.last4);
+      }
+
+      function cardGateMessageKey() {
+        return billingStatus && billingStatus.available === true ? "store_card_gate_needed" : "store_card_gate_unavailable";
+      }
+
+      function renderOnboardingSteps() {
+        const list = document.getElementById("onboardingSteps");
+        if (!list) {
+          return;
+        }
+        const ready = accountCardReady();
+        const steps = [
+          { key: "store_steps_account", done: true },
+          { key: "store_steps_email", done: true },
+          { key: "store_steps_card", done: ready },
+          { key: "store_steps_register", done: myStores.length > 0 }
+        ];
+        let currentMarked = false;
+        list.textContent = "";
+        steps.forEach(function (step) {
+          const item = document.createElement("li");
+          const isCurrent = !step.done && !currentMarked;
+          if (isCurrent) {
+            currentMarked = true;
+          }
+          item.className = (step.done ? "done" : "todo") + (isCurrent ? " current" : "");
+          item.textContent = t(step.key);
+          list.appendChild(item);
+        });
+      }
+
+      function renderRegistrationGate() {
+        const ready = accountCardReady();
+        renderOnboardingSteps();
+        document.getElementById("cardGateNotice").hidden = ready;
+        document.getElementById("cardGateText").textContent = ready ? "" : t(cardGateMessageKey());
+        document.getElementById("cardGateLink").hidden = !(billingStatus && billingStatus.available === true);
+        document.getElementById("openStoreFormButton").disabled = !ready;
+        const claimGate = document.getElementById("claimCardGateNotice");
+        if (claimGate) {
+          claimGate.hidden = ready;
+          document.getElementById("claimCardGateText").textContent = ready ? "" : t(cardGateMessageKey());
+          document.getElementById("claimCardGateLink").hidden = !(billingStatus && billingStatus.available === true);
+        }
+        const claimButton = document.getElementById("claimSubmitButton");
+        if (claimButton) {
+          claimButton.disabled = !ready || !!(claimPreview && claimPreview.linkState === "linked");
+        }
+      }
+
+      function rememberAfterCardIntent(intent) {
+        try {
+          sessionStorage.setItem(AFTER_CARD_STORAGE_KEY, intent);
+        } catch (error) {
+          // 保存できなくても、カード登録はそのまま続けられる。
+        }
+      }
+
+      // カード登録が終わったら、元の作業(引き継ぎ・新規登録)へ戻す。
+      function resumeAfterCardRegistered() {
+        renderRegistrationGate();
+        let intent = "";
+        try {
+          intent = sessionStorage.getItem(AFTER_CARD_STORAGE_KEY) || "";
+          sessionStorage.removeItem(AFTER_CARD_STORAGE_KEY);
+        } catch (error) {
+          intent = "";
+        }
+        if (CLAIM_SUBMISSION_ID !== "") {
+          const claimSection = document.getElementById("claimSection");
+          if (claimSection && typeof claimSection.scrollIntoView === "function") {
+            claimSection.scrollIntoView({ block: "start", behavior: "smooth" });
+          }
+          return;
+        }
+        if (intent === "register") {
+          openStoreForm();
         }
       }
 
@@ -1386,6 +1499,7 @@
             billingStatus = Object.assign({}, billingStatus, { card: result.card });
             closeBillingForm();
             showBillingMessage("store_billing_saved", "success");
+            resumeAfterCardRegistered();
           } else if (result.status === "requires_action") {
             showBillingMessage("store_billing_err_requires_action", "error");
           } else if (result.status === "processing") {
@@ -1413,7 +1527,8 @@
         } catch (error) {
           // 保存できなくても、リダイレクトの無いカード登録は続けられる。
         }
-        const returnUrl = window.location.origin + window.location.pathname + "?billingAccount=1";
+        const returnUrl = window.location.origin + window.location.pathname + "?billingAccount=1" +
+          (CLAIM_SUBMISSION_ID !== "" ? "&claim=" + encodeURIComponent(CLAIM_SUBMISSION_ID) : "");
         billingStripe.confirmSetup({
           elements: billingElements,
           redirect: "if_required",
@@ -1456,7 +1571,7 @@
           consentVersion = "";
         }
         try {
-          window.history.replaceState(null, "", window.location.pathname);
+          window.history.replaceState(null, "", window.location.pathname + (CLAIM_SUBMISSION_ID !== "" ? "?claim=" + encodeURIComponent(CLAIM_SUBMISSION_ID) : ""));
         } catch (error) {
           // URLを戻せなくても確定処理は続ける。
         }
@@ -1479,7 +1594,16 @@
         rate_limited: "store_account_store_err_rate_limited",
         email_not_verified: "store_account_store_err_verify",
         login_required: "store_account_store_err_login",
-        store_account_required: "store_account_store_err_login"
+        store_account_required: "store_account_store_err_login",
+        // STEP 42-D｜自動の引き継ぎ
+        listing_already_linked: "store_claim_err_already_linked",
+        listing_not_claimable: "store_claim_err_listing_not_found",
+        card_required: "store_card_gate_needed",
+        card_invalid: "store_card_gate_needed",
+        card_account_mismatch: "store_card_gate_needed",
+        card_retiring: "store_card_gate_needed",
+        card_expired: "store_card_gate_expired",
+        card_billing_unavailable: "store_card_gate_unavailable"
       };
       let claimPreview = null;
       let claimPreviewLoadedForUid = "";
@@ -1538,6 +1662,7 @@
         document.getElementById("claimListingName").textContent = listing.shopName || "";
         document.getElementById("claimListingAddress").textContent = listing.address || "";
         document.getElementById("claimLinkedNotice").hidden = claimPreview.linkState !== "linked";
+        renderRegistrationGate();
         const select = document.getElementById("claimTargetStoreSelect");
         const selected = select.value;
         select.textContent = "";
@@ -1683,9 +1808,11 @@
           .then(function (response) {
             const result = response.result || {};
             if (response.status === 200 && result.success) {
-              showClaimCode(result.claimCode);
-              showClaimMessage("store_claim_sent", "success");
-              return loadMyClaims();
+              // STEP 42-D｜運営の承認なしで、その場で引き継ぎが完了する。
+              document.getElementById("claimFormArea").hidden = true;
+              showClaimMessage("store_claim_completed", "success");
+              storesLoadedForUid = "";
+              return Promise.all([loadMyClaims(), loadMyStores()]);
             }
             if (result.reason === "invalid_input" && result.field === "publicReferenceUrl") {
               return showClaimMessage("store_claim_err_url", "error", result.field);
@@ -2254,6 +2381,13 @@
           }
         });
         document.getElementById("openStoreFormButton").addEventListener("click", openStoreForm);
+        // STEP 42-D｜カード登録へ進む時、登録後に戻る作業を覚えておく。
+        document.getElementById("cardGateLink").addEventListener("click", function () {
+          rememberAfterCardIntent("register");
+        });
+        document.getElementById("claimCardGateLink").addEventListener("click", function () {
+          rememberAfterCardIntent("claim");
+        });
         document.getElementById("storeFormCancelButton").addEventListener("click", function () {
           clearStoreMessage();
           closeStoreForm();

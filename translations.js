@@ -3406,18 +3406,18 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_claim_heading: {
-    ja: "オーナー申請（マチナウに掲載中のお店の引き継ぎ）",
-    en: "Owner request (take over a shop already listed on Machinau)"
+    ja: "このお店を管理する（マチナウに掲載中のお店の引き継ぎ）",
+    en: "Manage this business (take over a listing on Machinau)"
   },
 
   store_claim_linked_notice: {
-    ja: "このお店は、すでに別の店舗アカウントに引き継がれています。申請はできますが、マチナウ運営が慎重に確認します。",
-    en: "This shop has already been taken over by another business account. You can still send a request, and Machinau will review it carefully."
+    ja: "このお店は、すでに別の店舗アカウントが管理しているため、引き継げません。ご不明な点はマチナウ運営へお問い合わせください。",
+    en: "This listing is already managed by another store account, so it cannot be taken over. Please contact Machinau if you have questions."
   },
 
   store_claim_process_note: {
-    ja: "申請後、マチナウ運営が、お店の公式サイト・公式SNS・地図サービスなどに公開されている連絡先へ連絡して確認します。その際に下の「申請コード」をお伝えしますので、お店として申請したことをお答えください。",
-    en: "After you send the request, Machinau will contact the shop through contact details published on its official website, official social media or map listings. We will mention your request code, so please confirm that the shop sent the request."
+    ja: "クレジットカードを登録済みのアカウントなら、マチナウ運営の確認なしで、すぐに引き継ぎが完了します。掲載中の紹介文・営業時間などは、あなたの店舗情報（下書き）に引き継がれます。旅行者への表示は、店舗情報を公開するまで変わりません。",
+    en: "If your account has a registered credit card, the takeover completes right away without a review by Machinau. The listing's description, hours, etc. are copied into your store profile draft. What travelers see does not change until you publish your store profile."
   },
 
   store_claim_target_label: {
@@ -3456,8 +3456,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_claim_url_hint: {
-    ja: "運営が公式の連絡先を探す手がかりにします。本人確認は、運営が自分で見つけた公式の連絡先で行います。",
-    en: "This helps us find the official contact details. We verify using official contact details we find ourselves."
+    ja: "お店の公式サイト・公式SNSがあれば入力してください（記録として残します）。",
+    en: "Enter your official website or social account if you have one (kept as a record)."
   },
 
   store_claim_note_label: {
@@ -3471,8 +3471,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_claim_submit: {
-    ja: "オーナー申請を送る",
-    en: "Send owner request"
+    ja: "このお店を引き継ぐ",
+    en: "Take over this listing"
   },
 
   store_claim_code_title: {
@@ -3558,6 +3558,62 @@ const MACHINAU_TRANSLATIONS = {
   store_claim_pending_exists_info: {
     ja: "このお店へのオーナー申請は、すでに運営確認中です。",
     en: "Your owner request for this shop is already under review."
+  },
+
+  // STEP 42-D｜カード登録 → 店舗の登録・引き継ぎ
+  store_claim_completed: {
+    ja: "引き継ぎが完了しました。お店の情報は「あなたの店舗・施設」から編集・公開できます。",
+    en: "The takeover is complete. You can edit and publish the store information from \"Your shops & venues\"."
+  },
+
+  store_claim_err_already_linked: {
+    ja: "このお店は、すでに別の店舗アカウントが管理しているため、引き継げません。",
+    en: "This listing is already managed by another store account and cannot be taken over."
+  },
+
+  store_card_gate_needed: {
+    ja: "お店の登録・引き継ぎの前に、クレジットカードの登録が必要です（1つのアカウントに1枚、すべての店舗で共通）。",
+    en: "Please register a credit card before registering or taking over a store (one card per account, shared by all your stores)."
+  },
+
+  store_card_gate_expired: {
+    ja: "登録しているクレジットカードの有効期限が切れています。カードを変更してから、もう一度お試しください。",
+    en: "Your registered card has expired. Please change the card and try again."
+  },
+
+  store_card_gate_unavailable: {
+    ja: "現在、カードの登録を受け付けていないため、お店の登録・引き継ぎはできません。",
+    en: "Store registration and takeover are not available because card registration is currently unavailable."
+  },
+
+  store_card_gate_link: {
+    ja: "カードを登録する ↓",
+    en: "Register a card ↓"
+  },
+
+  store_steps_account: {
+    ja: "① アカウントを作成",
+    en: "1. Create an account"
+  },
+
+  store_steps_email: {
+    ja: "② メールアドレスを確認",
+    en: "2. Verify your email"
+  },
+
+  store_steps_card: {
+    ja: "③ クレジットカードを登録（1アカウント1枚）",
+    en: "3. Register a credit card (one per account)"
+  },
+
+  store_steps_register: {
+    ja: "④ お店を登録、またはマチナウに掲載中のお店を引き継ぐ",
+    en: "4. Register a store, or take over a listing on Machinau"
+  },
+
+  modal_claim_link: {
+    ja: "このお店の方へ：お店の情報を管理する →",
+    en: "Own this business? Manage this listing →"
   },
 
   store_claim_err_listing_not_found: {

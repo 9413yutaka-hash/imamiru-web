@@ -49,6 +49,10 @@ node --import ./tests/mockfa/register.mjs     tests/admin-billing-close-trial-ui
 node --import ./tests/mockfa-occ/register.mjs tests/store-billing-invoices-test.mjs
 node --import ./tests/mockfa/register.mjs     tests/store-invoice-history-ui-test.mjs   # Chrome を使う
 
+# カード登録が条件の店舗の新規登録・運営掲載の自動引き継ぎ(STEP 42-D：運営の承認なし・文章等の引き継ぎ・写真の複製は承認まで停止)
+node --import ./tests/mockfa-occ/register.mjs tests/store-card-registration-test.mjs
+node --import ./tests/mockfa-occ/register.mjs tests/store-card-registration-ui-test.mjs   # Chrome を使う
+
 # 既存の回帰(サーバー)
 for f in imadake-store-login-test imadake-safety-test imadake-translation-test imadake-nearby-test route-test; do
   node --import ./tests/mockfa/register.mjs tests/$f.mjs

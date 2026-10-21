@@ -124,6 +124,7 @@ import {
 
 // 今だけ投稿 決済 STEP 35-A｜カード登録必須の判定(課金対象になる今だけ投稿の作成時だけ使う)。
 import {
+  checkAccountBillingCard,
   checkImadakeBillingCard,
   checkImadakeBillingCardInTransaction
 } from "./_lib/imadake-card-requirement.js";
@@ -30411,8 +30412,75 @@ function buildStoreSelfServiceDeps() {
     // Phase 2C｜店舗写真の実体削除(店舗写真フォルダーの画像だけ)。
     destroyStorePhotoImages: destroyStorePhotoImages,
     // オーナー化 MVP-1｜申請コードの生成(暗号学的乱数)。
-    randomInt: randomInt
+    randomInt: randomInt,
+    // STEP 42-D｜店舗の新規登録・引き継ぎの条件(このアカウントのカード、1アカウント1枚)。Firestoreを読むだけ。
+    checkAccountBillingCard: function(database, uid) {
+      return checkAccountBillingCard(database, uid, { env: process.env });
+    },
+    // STEP 42-D｜引き継ぎ時の運営掲載の写真の複製(listing-profile-copy.js の LISTING_PHOTO_COPY_ENABLED が
+    // true の時だけ呼ばれる。代表の承認があるまで false＝Cloudinary へは書き込まない)。
+    copyListingPhotoToStore: copyListingPhotoToStore
   };
+}
+
+// STEP 42-D｜運営掲載の写真(マチナウの Cloudinary の画像だけ)を、店舗の写真フォルダーへサーバー側で複製する。
+// 戻り値 { url, publicId }。失敗は例外。外部の URL・他のアカウントの画像は受け付けない。
+async function copyListingPhotoToStore(
+  sourceUrl,
+  storeId
+) {
+  if (
+    typeof sourceUrl !== "string" ||
+    !sourceUrl.startsWith("https://res.cloudinary.com/" + CLOUDINARY_CLOUD_NAME + "/image/upload/")
+  ) {
+    throw new Error("listing photo url not allowed");
+  }
+
+  const cloudinaryApiKey =
+    process.env.CLOUDINARY_API_KEY;
+
+  const cloudinaryApiSecret =
+    process.env.CLOUDINARY_API_SECRET;
+
+  if (!cloudinaryApiKey || !cloudinaryApiSecret) {
+    throw new Error("cloudinary credentials missing");
+  }
+
+  const timestampSeconds =
+    Math.floor(Date.now() / 1000);
+
+  const paramsToSign = {
+    folder: buildStorePhotoFolder(storeId),
+    timestamp: timestampSeconds
+  };
+
+  const formBody =
+    new URLSearchParams({
+      file: sourceUrl,
+      folder: paramsToSign.folder,
+      timestamp: String(timestampSeconds),
+      api_key: cloudinaryApiKey,
+      signature: buildCloudinaryUploadSignature(paramsToSign, cloudinaryApiSecret)
+    });
+
+  const uploadResponse =
+    await fetch(
+      "https://api.cloudinary.com/v1_1/" + CLOUDINARY_CLOUD_NAME + "/image/upload",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: formBody.toString()
+      }
+    );
+
+  const data =
+    await uploadResponse.json().catch(function() { return null; });
+
+  if (!uploadResponse.ok || !data || typeof data.secure_url !== "string" || typeof data.public_id !== "string") {
+    throw new Error("cloudinary copy failed: " + uploadResponse.status);
+  }
+
+  return { url: data.secure_url, publicId: data.public_id };
 }
 
 // 今だけ投稿 決済 STEP 31｜店舗のカード登録へ渡す既存関数と、環境変数・fetchの参照。

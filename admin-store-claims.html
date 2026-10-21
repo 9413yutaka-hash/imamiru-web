@@ -332,7 +332,8 @@
       </div>
 
       <div class="panel">
-        <h2>最近の判断（承認・却下・取り下げ）</h2>
+        <h2>最近の引き継ぎ・判断（自動の引き継ぎ・承認・却下・取り下げ）</h2>
+        <p class="note">STEP 42-D：カード登録済みのアカウントからの引き継ぎは、運営の承認なしで自動で完了し、ここに履歴として表示されます（承認の操作は不要）。</p>
         <div id="decidedList"></div>
       </div>
     </section>
@@ -455,6 +456,7 @@
             (decided
               ? "<br>状態：<span class=\"status-pill\">" + escapeHtmlText(STATUS_LABELS[claim.status] || claim.status) + "</span>" +
                 (claim.decidedAtMillis ? "（" + escapeHtmlText(formatDate(claim.decidedAtMillis)) + "）" : "") +
+                (claim.verificationMethod === "auto_card_registered" ? "<br>引き継ぎ方法：自動（アカウント・メール確認・カード登録済み、運営の承認なし）" : "") +
                 (claim.verificationChannel ? "<br>確認に使った連絡先：" + escapeHtmlText(VERIFICATION_CHANNEL_LABELS[claim.verificationChannel] || claim.verificationChannel) : "") +
                 (claim.decisionReason ? "<br>理由：" + escapeHtmlText(claim.decisionReason) : "")
               : "") +

@@ -5822,6 +5822,29 @@ function openShopModal(
   modalMessage.innerHTML =
     modalText;
 
+  // STEP 42-D｜運営が掲載したお店(常設店舗広告)だけ、店主向けの「このお店を管理する」入口を出す。
+  // 引き継ぎの条件(アカウント・メール確認・カード登録)はサーバーが確かめる。
+  const modalClaimLink =
+    document.getElementById("modalClaimLink");
+
+  if (modalClaimLink) {
+    const claimable =
+      !isAdminPost &&
+      !isStoreProfileShop &&
+      selectedShop.isPermanentAd === true &&
+      selectedShop.authorType === "shopAd" &&
+      /^[A-Za-z0-9_-]{1,100}$/.test(String(selectedShop.firestoreId || ""));
+
+    modalClaimLink.style.display =
+      claimable ? "block" : "none";
+
+    if (claimable) {
+      modalClaimLink.href =
+        "store-account.html?claim=" +
+        encodeURIComponent(selectedShop.firestoreId);
+    }
+  }
+
   const modalMapUrl =
     createGoogleMapUrl(
       selectedShop.latitude,

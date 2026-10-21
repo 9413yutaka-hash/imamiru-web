@@ -105,6 +105,23 @@ function readMode(options) {
   return config.ok ? config.mode : null;
 }
 
+// STEP 42-D｜アカウントのカードが有効か(店舗の新規登録・引き継ぎの条件)。accountBilling/{uid} だけを読む。
+export async function checkAccountBillingCard(database, uid, options) {
+  const mode = readMode(options);
+
+  if (!mode) {
+    return { ok: false, reason: "card_billing_unavailable" };
+  }
+
+  if (typeof uid !== "string" || uid === "") {
+    return { ok: false, reason: "card_required" };
+  }
+
+  const snapshot = await database.collection(ACCOUNT_BILLING_COLLECTION).doc(uid).get();
+
+  return evaluateImadakeBillingCard(snapshot.exists ? snapshot.data() || {} : null, uid, mode, options && options.nowMillis);
+}
+
 // 投稿作成の前の確認(トランザクションの外)。
 export async function checkImadakeBillingCard(database, storeId, options) {
   const mode = readMode(options);
