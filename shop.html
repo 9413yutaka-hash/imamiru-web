@@ -15,7 +15,7 @@
 
   <meta
     name="description"
-    content="お店・施設の方へ。マチナウでは、お店・施設からも街の「今」を旅行者へ投稿できます。現在、マチナウへの店舗・施設からの投稿は無料です。"
+    content="お店・施設の方へ。店舗アカウントを作ると、お店・施設の登録と、旅行者へ街の「今」を伝える投稿をご自身で行えます。アカウントの作成と店舗情報の登録は無料です。"
   >
 
   <title>
@@ -33,12 +33,11 @@
     href="/favicon.png?v=2"
   >
 
-  <!-- 店舗・施設参加導線 Phase2｜まだマチナウに参加していないお店・施設向けの
-       参加前の案内ページ。申し込みはshop-apply.html(マチナウ内の申込み
-       フォーム)で受け付け、運営が確認後にadmin-shops.htmlで専用投稿URLを
-       発行する(このページから一般の
-       post.htmlへは誘導しない。一般の店舗投稿は閉じているため)。
-       既存利用店舗向けの編集・掲載終了の入口はページ下部に残す。 -->
+  <!-- 店舗・施設参加導線｜まだマチナウに参加していないお店・施設向けの案内ページ。
+       STEP 41-B：入口を店舗アカウント(store-account.html：アカウント作成→セルフ店舗登録→
+       店舗情報・今だけ投稿)へ切り替えた。旧方式の申込み(shop-apply.html→運営確認→
+       専用投稿URLの発行)への新規の案内はしない。このページから一般のpost.htmlへは誘導しない。
+       既存の専用URL利用店舗向けの編集・掲載終了の入口はページ下部に残す。 -->
 
   <style>
     :root {
@@ -340,6 +339,15 @@
       line-height: 1.7;
     }
 
+    /* STEP 41-B｜ログインへの文字リンク(押しやすい大きさ) */
+    .apply-note a {
+      display: inline-block;
+      margin-top: 4px;
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--blue);
+    }
+
     .existing-card {
       margin: 26px 0 18px;
       padding: 18px 18px;
@@ -477,12 +485,12 @@
       </h1>
 
       <p>
-        マチナウでは、お店・施設からも街の「今」を投稿できます。<br>
-        イベント、新商品、今日のお知らせ、営業時間の変更など、旅行者に知ってほしい情報を届けられます。
+        店舗アカウントを作ると、お店・施設の情報の登録と、旅行者へ「今」を伝える投稿を、ご自身で行えます。<br>
+        運営からの専用URLの受け取りは不要です。
       </p>
 
       <div class="free-badge">
-        現在、マチナウへの店舗・施設からの投稿は無料です。
+        店舗アカウントの作成と、お店・施設の情報の登録は無料です。
       </div>
 
       <div>
@@ -499,22 +507,28 @@
 
   <main>
 
+    <!-- STEP 41-B｜店舗向けの入口を新方式(店舗アカウント：store-account.html)へ切り替えた。
+         旧方式(無料投稿の申込み→運営が確認→専用URLを発行)への新規の案内は外した。
+         すでに専用URLを使っているお店の編集・終了(edit.html / end.html)は下の欄に残す。 -->
     <section class="guide-card">
       <span class="guide-card-icon">🏪</span>
 
       <h2>
-        マチナウでできること
+        店舗アカウントでできること
       </h2>
 
       <ul class="guide-list">
         <li>
-          お店・施設の名前で投稿でき、旅行者には「🏪 お店から」と表示されます。
+          お店・施設を登録できます。登録はご自身で行い、通常はすぐに完了します。
         </li>
         <li>
-          写真付きで投稿できます(写真なしでも投稿できます)。
+          お店・施設の情報（紹介文・写真・営業時間など）をご自身で作成・編集できます。
         </li>
         <li>
-          住所や現在地を入れると地図にも表示され、近くにいる旅行者に見つけてもらいやすくなります。
+          「今だけ投稿」で、今日のおすすめや空き状況など、今伝えたい情報を旅行者へ届けられます。
+        </li>
+        <li>
+          1つのアカウントで、複数のお店・施設を管理できます。
         </li>
       </ul>
 
@@ -523,54 +537,47 @@
       </p>
     </section>
 
-    <section class="guide-card">
-      <span class="guide-card-icon">📝</span>
+    <section
+      id="start"
+      class="guide-card"
+    >
+      <span class="guide-card-icon">🚀</span>
 
       <h2>
-        投稿できる内容
+        はじめ方
       </h2>
 
-      <ul class="guide-list">
+      <ol class="step-list">
         <li>
-          今日のお知らせ
+          メールアドレスとパスワードで、店舗アカウントを作ります。
         </li>
         <li>
-          イベント
+          届いた確認メールのリンクを開いて、メールアドレスを確認します。
         </li>
         <li>
-          おすすめ商品やメニュー
+          お店・施設の名前・住所などを入力して登録します（ご自身で登録でき、通常はすぐに完了します）。
         </li>
         <li>
-          営業時間などの案内
+          お店・施設の情報を整えたり、「今だけ投稿」をしたりできます。
         </li>
-        <li>
-          旅行者に知ってほしい情報
-        </li>
-      </ul>
+      </ol>
+
+      <div class="apply-area">
+        <a
+          class="apply-button"
+          href="store-account.html?view=signup"
+        >
+          店舗アカウントを作る →
+        </a>
+
+        <p class="apply-note">
+          すでにアカウントをお持ちの方は、<a href="store-account.html">ログインして店舗を管理する</a>
+        </p>
+      </div>
 
       <p class="soft-note">
-        タイトルと内容を自由に書いて投稿します。
+        同じ名前のお店がすぐ近くに登録済みの場合などは、運営が確認してから登録が完了することがあります。
       </p>
-    </section>
-
-    <section class="guide-card">
-      <span class="guide-card-icon">📷</span>
-
-      <h2>
-        写真と掲載時間
-      </h2>
-
-      <ul class="guide-list">
-        <li>
-          写真なしでも投稿できます。
-        </li>
-        <li>
-          写真は最大5枚まで。JPG・PNG・WEBPに対応し、1枚10MBまでです。
-        </li>
-        <li>
-          掲載時間は、投稿のたびに3時間・6時間・12時間・24時間から選べます。時間が過ぎると、自動的に表示されなくなります。
-        </li>
-      </ul>
     </section>
 
     <section class="guide-card">
@@ -593,55 +600,30 @@
       </p>
     </section>
 
-    <section
-      id="start"
-      class="guide-card"
-    >
-      <span class="guide-card-icon">🚀</span>
+    <section class="guide-card">
+      <span class="guide-card-icon">📍</span>
 
       <h2>
-        はじめ方
+        マチナウにすでに掲載されているお店の方へ
       </h2>
 
-      <ol class="step-list">
-        <li>
-          下のボタンから、無料投稿をお申し込みください。
-        </li>
-        <li>
-          マチナウ運営が、お店・施設を確認します。
-        </li>
-        <li>
-          あなたのお店・施設専用の投稿ページ(URL)を発行します。
-        </li>
-        <li>
-          専用の投稿ページと投稿ガイドをお渡しします。
-        </li>
-        <li>
-          以後は、その専用ページからご自身で投稿できます。
-        </li>
-      </ol>
+      <p>
+        マチナウ運営が掲載しているお店の情報を、お店ご自身の管理に切り替える仕組みは準備中です。
+        店舗アカウントを作ってお店を登録しても、運営が掲載している情報は自動では引き継がれません。
+      </p>
 
-      <div class="apply-area">
-        <a
-          class="apply-button"
-          href="shop-apply.html"
-        >
-          無料投稿を申し込む →
-        </a>
-
-        <p class="apply-note">
-          お申し込みフォームのページへ移動します。
-        </p>
-      </div>
+      <p class="soft-note">
+        掲載内容の修正や掲載の停止をご希望の場合は、<a href="contact.html">お問い合わせ</a>からご連絡ください。
+      </p>
     </section>
 
     <section class="existing-card">
       <h2>
-        すでにマチナウの専用投稿URLをお持ちの方へ
+        運営からの専用投稿URLをお持ちの方へ
       </h2>
 
       <p>
-        新しい投稿は、運営からお渡しした専用URLから行ってください。
+        これまでどおり、お渡しした専用URLから投稿できます。投稿の編集・掲載の終了は、下のボタンから行えます。
       </p>
 
       <div class="existing-links">
@@ -664,7 +646,7 @@
         class="existing-guide-link"
         href="shop-guide.html"
       >
-        投稿ガイドを見る
+        専用URLでの投稿ガイドを見る
       </a>
     </section>
 
