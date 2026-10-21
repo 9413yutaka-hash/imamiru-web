@@ -28,6 +28,33 @@ import {
 export const LISTING_PHOTO_COPY_ENABLED =
   false;
 
+// STEP 42-F｜写真の複製の Preview 実証(代表決定 2026-10-22)。true の間も、次をすべて満たす時だけ複製する：
+//   ・運営掲載に試験の印 previewTrial: "STEP42-F" がある(実証用に作った試験の掲載だけ)
+//   ・サーバーが Preview・対象ブランチ・machinau-preview に接続している(deps.isListingPhotoCopyTrialEnabled)
+// Productionでは常に複製しない。実証が終わったら false に戻す。
+export const LISTING_PHOTO_COPY_PREVIEW_TRIAL =
+  true;
+
+export const LISTING_PHOTO_COPY_PREVIEW_TRIAL_MARKER = "STEP42-F";
+
+// 複製してよいか(本番の有効化 LISTING_PHOTO_COPY_ENABLED、または上の Preview 実証の条件)。
+export function isListingPhotoCopyAllowed(listing, deps) {
+  if (LISTING_PHOTO_COPY_ENABLED === true) {
+    return true;
+  }
+
+  return (
+    LISTING_PHOTO_COPY_PREVIEW_TRIAL === true &&
+    Boolean(listing) &&
+    listing.previewTrial === LISTING_PHOTO_COPY_PREVIEW_TRIAL_MARKER &&
+    Boolean(deps) &&
+    typeof deps.isListingPhotoCopyTrialEnabled === "function" &&
+    deps.isListingPhotoCopyTrialEnabled() === true
+  );
+}
+
+const LISTING_PHOTO_COPY_CONCURRENCY = 5;
+
 const LISTING_PHOTO_URL_PATTERN =
   /^https:\/\/res\.cloudinary\.com\/cdhyctnp\/image\/upload\/[A-Za-z0-9_\-./,]+\.(jpg|jpeg|png|webp)$/i;
 
@@ -125,10 +152,10 @@ export function readListingPhotoSources(listing) {
 }
 
 // 運営掲載の写真を店舗の写真フォルダーへ複製し、店舗情報の写真がまだ無い時だけ保存する。
-// options.enabled が true の時だけ実行(既定は LISTING_PHOTO_COPY_ENABLED)。失敗しても引き継ぎは成功のまま。
+// options.enabled が true の時だけ実行(既定は isListingPhotoCopyAllowed)。失敗しても引き継ぎは成功のまま。
 // 戻り値 { status: "disabled" | "no_photos" | "skipped_existing" | "copied" | "failed", copied }
 export async function copyListingPhotosToProfile(database, storeId, listing, deps, options) {
-  const enabled = options && typeof options.enabled === "boolean" ? options.enabled : LISTING_PHOTO_COPY_ENABLED;
+  const enabled = options && typeof options.enabled === "boolean" ? options.enabled : isListingPhotoCopyAllowed(listing, deps);
 
   if (!enabled || !deps || typeof deps.copyListingPhotoToStore !== "function") {
     return { status: "disabled", copied: 0 };
@@ -148,20 +175,37 @@ export async function copyListingPhotosToProfile(database, storeId, listing, dep
     return { status: "skipped_existing", copied: 0 };
   }
 
-  const photos = [];
+  // 複製は同時に最大 LISTING_PHOTO_COPY_CONCURRENCY 件(サーバーの処理時間を短くする)。並び順は掲載の順のまま。
+  const results = new Array(sources.length).fill(null);
+  let nextIndex = 0;
 
-  for (const url of sources) {
-    try {
-      const copied = await deps.copyListingPhotoToStore(url, storeId);
+  async function copyNext() {
+    while (nextIndex < sources.length) {
+      const index = nextIndex;
+      nextIndex += 1;
 
-      if (copied && typeof copied.url === "string" && isStorePhotoPublicId(copied.publicId, storeId)) {
-        // 運営が掲載した画像の複製(運営掲載の時点で公開済み)。
-        photos.push({ url: copied.url, publicId: copied.publicId, moderationStatus: "passed", source: "listing" });
+      try {
+        const copied = await deps.copyListingPhotoToStore(sources[index], storeId);
+
+        if (copied && typeof copied.url === "string" && isStorePhotoPublicId(copied.publicId, storeId)) {
+          // 運営が掲載した画像の複製(運営掲載の時点で公開済み)。
+          results[index] = { url: copied.url, publicId: copied.publicId, moderationStatus: "passed", source: "listing" };
+        }
+      } catch (error) {
+        console.error("引き継ぎ：写真の複製エラー：", error && error.message);
       }
-    } catch (error) {
-      console.error("引き継ぎ：写真の複製エラー：", error && error.message);
     }
   }
+
+  const workers = [];
+
+  for (let count = 0; count < Math.min(LISTING_PHOTO_COPY_CONCURRENCY, sources.length); count += 1) {
+    workers.push(copyNext());
+  }
+
+  await Promise.all(workers);
+
+  const photos = results.filter(Boolean);
 
   if (photos.length === 0) {
     return { status: "failed", copied: 0 };

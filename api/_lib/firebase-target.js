@@ -231,3 +231,9 @@ export function isPreviewMonthlyCloseTrialEnabled(env, targets) {
 export function isPreviewStoreInvoiceHistoryEnabled(env, targets) {
   return isPreviewCvBillingTrialEnabled(env, targets);
 }
+
+// STEP 42-F｜運営掲載の写真の複製の Preview 実証(試験の印のある掲載だけ)を行ってよいか。条件は課金対象判定の試験と同じ
+// (Preview・対象ブランチ・machinau-preview)。Productionでは常に false。請求・締め・Stripeの実行には使わない。
+export function isPreviewListingPhotoCopyTrialEnabled(env, targets) {
+  return isPreviewCvBillingTrialEnabled(env, targets);
+}

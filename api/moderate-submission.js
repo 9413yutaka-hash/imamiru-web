@@ -2,7 +2,8 @@ import {
   assertFirebaseTarget,
   checkFirebaseTargetFromEnv,
   readFirebaseServiceAccountText,
-  isPreviewStoreInvoiceHistoryEnabled
+  isPreviewStoreInvoiceHistoryEnabled,
+  isPreviewListingPhotoCopyTrialEnabled
 } from "./_lib/firebase-target.js";
 
 import {
@@ -30422,7 +30423,11 @@ function buildStoreSelfServiceDeps() {
     },
     // STEP 42-D｜引き継ぎ時の運営掲載の写真の複製(listing-profile-copy.js の LISTING_PHOTO_COPY_ENABLED が
     // true の時だけ呼ばれる。代表の承認があるまで false＝Cloudinary へは書き込まない)。
-    copyListingPhotoToStore: copyListingPhotoToStore
+    copyListingPhotoToStore: copyListingPhotoToStore,
+    // STEP 42-F｜写真の複製の Preview 実証の環境の判定(Preview・対象ブランチ・machinau-preview の時だけ true)。
+    isListingPhotoCopyTrialEnabled: function() {
+      return isPreviewListingPhotoCopyTrialEnabled(process.env);
+    }
   };
 }
 

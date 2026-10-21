@@ -132,6 +132,27 @@ const pcPhotos = S.docs.get("storeProfiles/pc1").photos || [];
 t("C2 複製（モック）：マチナウの Cloudinary の画像だけ・最大10枚・店舗の写真フォルダー・photos に保存", on.status === "copied" && copies.length === 10 && !copies.some((u) => u.includes("evil")) && pcPhotos.length === 10 && pcPhotos.every((p) => p.publicId.startsWith("machinau_store_profiles/pc1/")), { on, n: pcPhotos.length });
 const again = await LC.copyListingPhotosToProfile(db, "pc1", many, mockDeps, { enabled: true });
 t("C3 店主の写真が既にある時は複製しない（上書きしない）", again.status === "skipped_existing" && copies.length === 10, again);
+// STEP 42-F｜Preview 実証の条件（試験の印 previewTrial: "STEP42-F" ＋ Preview・対象ブランチ・machinau-preview の判定）。
+const FT = await import(REPO_URL + "/api/_lib/firebase-target.js");
+const trialOn = { ...mockDeps, isListingPhotoCopyTrialEnabled: () => true };
+const trialOff = { ...mockDeps, isListingPhotoCopyTrialEnabled: () => false };
+const marked = { ...many, previewTrial: "STEP42-F" };
+t("C4 試験の印の無い掲載は、試験環境でも複製しない", LC.isListingPhotoCopyAllowed(many, trialOn) === false && LC.isListingPhotoCopyAllowed({ ...many, previewTrial: "STEP42-E" }, trialOn) === false);
+t("C5 試験の印があっても、環境の判定が false（Production など）なら複製しない", LC.isListingPhotoCopyAllowed(marked, trialOff) === false && LC.isListingPhotoCopyAllowed(marked, mockDeps) === false);
+S.docs.set("storeProfiles/pc2", { storeId: "pc2", status: "draft" });
+const before5 = copies.length;
+const offEnv = await LC.copyListingPhotosToProfile(db, "pc2", marked, trialOff);
+const onTrial = await LC.copyListingPhotosToProfile(db, "pc2", marked, trialOn);
+t("C6 試験の印＋試験環境の時だけ複製（最大10枚・店舗の写真フォルダー）", offEnv.status === "disabled" && onTrial.status === "copied" && copies.length - before5 === 10 && (S.docs.get("storeProfiles/pc2").photos || []).every((p) => p.publicId.startsWith("machinau_store_profiles/pc2/")), { offEnv, onTrial });
+const prodEnv = { VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main" };
+t("C7 環境の判定：Production・対象外のブランチ・ローカルでは false", FT.isPreviewListingPhotoCopyTrialEnabled(prodEnv) === false && FT.isPreviewListingPhotoCopyTrialEnabled({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "preview/other" }) === false && FT.isPreviewListingPhotoCopyTrialEnabled({}) === false);
+t("C8 本番の有効化 LISTING_PHOTO_COPY_ENABLED は false のまま", LC.LISTING_PHOTO_COPY_ENABLED === false);
+S.docs.set("storeProfiles/pc3", { storeId: "pc3", status: "draft" });
+let active = 0, peak = 0;
+const slowDeps = { copyListingPhotoToStore: async (url, storeId) => { active++; peak = Math.max(peak, active); const n = Number(url.split("/p").pop().split(".")[0]); await new Promise((r) => setTimeout(r, 30 - n * 2)); active--; if (n === 3) throw new Error("x"); return { url: "https://res.cloudinary.com/cdhyctnp/image/upload/v2/machinau_store_profiles/" + storeId + "/k" + n + ".jpg", publicId: "machinau_store_profiles/" + storeId + "/k" + n }; } };
+const conc = await LC.copyListingPhotosToProfile(db, "pc3", many, slowDeps, { enabled: true });
+const order = (S.docs.get("storeProfiles/pc3").photos || []).map((p) => p.publicId.split("/").pop());
+t("C9 複製は同時に最大5件・並び順は掲載の順・1枚の失敗で他は止まらない", conc.status === "copied" && conc.copied === 9 && peak === 5 && JSON.stringify(order) === JSON.stringify(["k0", "k1", "k2", "k4", "k5", "k6", "k7", "k8", "k9"]), { conc, peak, order });
 
 // ===================== D: operator approval path (kept) =====================
 S.docs.set("submissions/L4", { ...LISTING, shopName: "四号店" });
