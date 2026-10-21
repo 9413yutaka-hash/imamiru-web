@@ -1308,6 +1308,97 @@ function getBusinessClosedMessage(
   return "";
 }
 
+// STEP 40-A｜常設店舗広告の営業時間・定休日(admin-post.htmlで運営が入力、任意)。
+// 保存形式は businessStartTime / businessEndTime("HH:MM")・closedDays(mon..sun)・irregularClosed。
+// 不正な値・未設定は表示しない。
+const PERMANENT_AD_CLOSED_DAY_CODES =
+  ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+
+function readPermanentAdHoursForDisplay(
+  data
+) {
+  const readTime = function(value) {
+    const text = typeof value === "string" ? value.trim() : "";
+    return /^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(text) ? text : "";
+  };
+
+  let startTime = readTime(data.businessStartTime);
+  let endTime = readTime(data.businessEndTime);
+
+  if (startTime === "" || endTime === "" || startTime === endTime) {
+    startTime = "";
+    endTime = "";
+  }
+
+  const closedDays =
+    Array.isArray(data.closedDays)
+      ? PERMANENT_AD_CLOSED_DAY_CODES.filter(function(code) {
+          return data.closedDays.includes(code);
+        })
+      : [];
+
+  return {
+    startTime: startTime,
+    endTime: endTime,
+    closedDays: closedDays,
+    irregularClosed: data.irregularClosed === true
+  };
+}
+
+// 詳細に出す行(営業時間・定休日)。どちらも未設定なら空配列(何も表示しない)。
+function getPermanentAdHoursDisplayLines(
+  shop
+) {
+  const hours =
+    shop && shop.permanentAdHours;
+
+  if (!hours) {
+    return [];
+  }
+
+  const language =
+    getCurrentMachinauLanguage();
+
+  const lines =
+    [];
+
+  if (hours.startTime !== "" && hours.endTime !== "") {
+    lines.push(
+      getMachinauTranslation(
+        hours.endTime < hours.startTime
+          ? "shop_hours_range_overnight"
+          : "shop_hours_range",
+        language
+      )
+        .replace("{START}", hours.startTime)
+        .replace("{END}", hours.endTime)
+    );
+  }
+
+  const dayNames =
+    hours.closedDays.map(function(code) {
+      return getMachinauTranslation("shop_closed_day_" + code, language);
+    });
+
+  if (dayNames.length > 0 || hours.irregularClosed) {
+    const daysText =
+      dayNames.join(getMachinauTranslation("shop_closed_days_separator", language));
+
+    const value =
+      dayNames.length > 0 && hours.irregularClosed
+        ? getMachinauTranslation("shop_closed_days_with_irregular", language).replace("{DAYS}", daysText)
+        : dayNames.length > 0
+          ? daysText
+          : getMachinauTranslation("shop_closed_irregular", language);
+
+    lines.push(
+      getMachinauTranslation("shop_closed_days", language).replace("{DAYS}", value)
+    );
+  }
+
+  return lines;
+}
+
 function getBusinessHoursDisplayText(
   shop
 ) {
@@ -1939,17 +2030,29 @@ function convertSubmissionToShop(
       data.expiresAt ||
       null,
 
+    // STEP 40-A｜常設店舗広告(isPermanentAd:true)の営業時間は permanentAdHours だけに入れ、
+    // ここ(営業状態・閉店までの表示に使う項目)には入れない。カードの「掲載中」の表示は従来のまま
+    // 変えない(定休日・不定休を考えずに「営業中」と出さないため)。営業時間・定休日は詳細にだけ出す。
     businessStartTime:
+      data.isPermanentAd !== true &&
       typeof data.businessStartTime ===
       "string"
         ? data.businessStartTime.trim()
         : "",
 
     businessEndTime:
+      data.isPermanentAd !== true &&
       typeof data.businessEndTime ===
       "string"
         ? data.businessEndTime.trim()
         : "",
+
+    permanentAdHours:
+      data.isPermanentAd === true
+        ? readPermanentAdHoursForDisplay(
+            data
+          )
+        : null,
 
     isOpen24Hours:
       Boolean(
@@ -5772,6 +5875,24 @@ function openShopModal(
       escapeHtml(
         modalBusinessHoursDisplayText
       );
+  }
+
+  // STEP 40-A｜常設店舗広告の営業時間・定休日(未設定なら何も出さない)。
+  const modalPermanentAdHoursLines =
+    isAdminPost || isStoreProfileShop
+      ? []
+      : getPermanentAdHoursDisplayLines(
+          selectedShop
+        );
+
+  if (modalPermanentAdHoursLines.length > 0) {
+    modalText +=
+      "<br><br>" +
+      modalPermanentAdHoursLines
+        .map(function(line) {
+          return escapeHtml(line);
+        })
+        .join("<br>");
   }
 
   const modalExpiryDisplayText =

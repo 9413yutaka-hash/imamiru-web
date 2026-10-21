@@ -11,6 +11,11 @@ import {
   requireAdminOrEditor
 } from "./moderate-submission.js";
 
+// STEP 40-A｜常設店舗広告の営業時間・定休日(api/admin-submission-update.jsと同じ解析処理)。
+import {
+  readPermanentAdHours
+} from "./_lib/permanent-ad-hours.js";
+
 
 function readRequestBody(
   request
@@ -721,6 +726,12 @@ function validatePostFields(
         )
       : [];
 
+  // STEP 40-A｜営業時間・定休日は常設店舗広告のときだけ解析・保存する(通常の運営投稿では読まない)。
+  const permanentAdHours =
+    isPermanentAd
+      ? readPermanentAdHours(requestBody)
+      : null;
+
   return {
     title: title,
     category: category,
@@ -733,6 +744,7 @@ function validatePostFields(
     imageUrls: imageUrls,
     expiresAtDate: expiresAtDate,
     isPermanentAd: isPermanentAd,
+    permanentAdHours: permanentAdHours,
     shopName: shopName,
     authorType: authorType,
     sourceType: sourceType,
@@ -919,6 +931,16 @@ export default async function handler(
       // api/expire.jsの自動終了クエリの対象に一切含まれない)。
       submissionData.isPermanentAd =
         true;
+
+      // STEP 40-A｜営業時間(既存の businessStartTime / businessEndTime を再利用)・定休日・不定休。
+      submissionData.businessStartTime =
+        postFields.permanentAdHours.businessStartTime;
+      submissionData.businessEndTime =
+        postFields.permanentAdHours.businessEndTime;
+      submissionData.closedDays =
+        postFields.permanentAdHours.closedDays;
+      submissionData.irregularClosed =
+        postFields.permanentAdHours.irregularClosed;
     } else {
       submissionData.postType =
         "admin";

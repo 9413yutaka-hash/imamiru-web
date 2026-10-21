@@ -210,7 +210,24 @@ export default async function handler(
           data.postType || "",
 
         isPermanentAd:
-          data.isPermanentAd === true
+          data.isPermanentAd === true,
+
+        // STEP 40-A｜常設店舗広告の営業時間・定休日(編集画面の復元用)。この機能より前の投稿は未設定。
+        businessStartTime:
+          typeof data.businessStartTime === "string" ? data.businessStartTime : "",
+
+        businessEndTime:
+          typeof data.businessEndTime === "string" ? data.businessEndTime : "",
+
+        closedDays:
+          Array.isArray(
+            data.closedDays
+          )
+            ? data.closedDays
+            : [],
+
+        irregularClosed:
+          data.irregularClosed === true
       }
     });
   } catch (error) {
