@@ -85,12 +85,16 @@ try {
   t("EN UI + English chosen -> sourceLanguage en, category event", created().sourceLanguage === "en" && created().categoryCode === "event", created());
   await p.close();
 
-  // legacy token store also sends the chosen language
+  // STEP 43-B/43-D: the old store URL (token, method A) was removed. The page shows the invalid panel and calls no API;
+  // even if the hidden form is submitted by script, the token is never sent.
   be.current = null;
+  const beforeLegacy = be.reqs.length;
   p = await page("/imadake-post.html?store=LEG&token=secret", { login: false });
+  const legacyPanels = await p.ev("({ invalid: !document.getElementById('invalidPanel').hidden, store: !document.getElementById('storePanel').hidden })");
+  t("old token URL: invalid panel, no API calls on load", legacyPanels.invalid && !legacyPanels.store && be.reqs.length === beforeLegacy, legacyPanels);
   await p.ev("document.querySelector('input[name=sourceLanguage][value=en]').click(); true");
-  await submit(p, "Fresh bread");
-  t("legacy token store: sourceLanguage en sent with token", created().sourceLanguage === "en" && created().token === "secret");
+  await p.ev("document.querySelector('#categoryChips input[value=other]').click(); document.getElementById('headlineInput').value='Fresh bread'; document.getElementById('submitButton').click(); true"); await sleep(800);
+  t("old token URL: a forced submit never sends the token", be.reqs.slice(beforeLegacy).every((r) => !("token" in r)), be.reqs.slice(beforeLegacy).map((r) => r.mode));
   await p.close();
 
   be.current = null;

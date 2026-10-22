@@ -117,11 +117,11 @@ try {
   await a.goto("/admin-store-claims.html"); await a.waitFor("document.readyState === 'complete'"); await sleep(800);
   await a.ev(`(() => { document.getElementById("adminEmail").value = ${JSON.stringify(ADMIN)}; document.getElementById("adminPassword").value = "x"; document.getElementById("loginButton").click(); return true; })()`);
   await a.waitFor(`document.querySelectorAll("#linkList .claim-card").length === 1 && document.querySelectorAll("#decidedList .claim-card").length >= 1`, 20000); await sleep(800);
-  const view = await a.ev(`({ area: document.getElementById("adminArea").innerText, guide: document.getElementById("claimFlowGuide").innerText, links: document.getElementById("linkList").innerText, decided: document.getElementById("decidedList").innerText, pending: document.getElementById("pendingList").innerText })`);
+  const view = await a.ev(`({ area: document.getElementById("adminArea").innerText, guide: document.getElementById("claimFlowGuide").innerText, links: document.getElementById("linkList").innerText, decided: document.getElementById("decidedList").innerText, pendingList: !!document.getElementById("pendingList"), approveUi: document.querySelectorAll('[data-action="approve"], [data-action="reject"], .claim-channel').length })`);
   t("A1 旧方式の「本人確認の手順」（公式連絡先へ運営が連絡・確認OKの手順）を表示しない", !/本人確認の手順|運営が自分で連絡先を見つける|お店として承認しますか|公式連絡先の管理者から承認の回答/.test(view.area), view.area.slice(0, 500));
   t("A2 代わりの短い案内：アカウント作成・メール確認・カード登録で運営の承認なしに自動で紐付く・1掲載に有効な紐付けは1つ・解除できる（新しい確認の条件は書かない）", /アカウント作成・メール確認・クレジットカード登録/.test(view.guide) && /運営の承認なしで自動/.test(view.guide) && /有効な紐付けは1つ/.test(view.guide) && /解除できます/.test(view.guide) && !/電話|公式サイト|本人確認|審査/.test(view.guide), view.guide);
   t("A3 自動の引き継ぎの履歴を表示（掲載・申請コード・「引き継ぎ方法：自動」）", /引き継ぎ済みのカフェ/.test(view.decided) && /引き継ぎ方法：自動（アカウント・メール確認・カード登録済み、運営の承認なし）/.test(view.decided) && /申請コード/.test(view.decided), view.decided.slice(0, 400));
-  t("A4 有効な紐付けに L2（紐付け先の店舗）を表示・確認待ちの申請はなし", /L2/.test(view.links) && view.links.includes(winner) && /確認待ちのオーナー申請はありません/.test(view.pending), { links: view.links, pending: view.pending });
+  t("A4 有効な紐付けに L2（紐付け先の店舗）を表示・旧方式の確認待ちの一覧と承認・却下・連絡先の選択は無い（STEP 43-B）", /L2/.test(view.links) && view.links.includes(winner) && view.pendingList === false && view.approveUi === 0 && !/確認待ちのオーナー申請/.test(view.area), { links: view.links, pendingList: view.pendingList, approveUi: view.approveUi });
   await a.ev(`(() => { window.confirm = () => true; const card = document.querySelector('#linkList .claim-card[data-submission-id="L2"]'); card.querySelector(".link-revoke-reason").value = "試験：誤った紐付けの解除"; card.querySelector('button[data-action="revoke"]').click(); return true; })()`);
   await a.waitFor(`/紐付けを解除しました/.test(document.getElementById("linkMessage").textContent)`, 15000); await sleep(800);
   const afterRevoke = await a.ev(`document.getElementById("linkList").innerText`);
@@ -135,9 +135,9 @@ try {
   await m.goto("/admin.html"); await m.waitFor("document.readyState === 'complete'"); await sleep(800);
   await m.ev(`(() => { document.getElementById("adminEmail").value = ${JSON.stringify(ADMIN)}; document.getElementById("adminPassword").value = "x"; document.getElementById("loginButton").click(); return true; })()`);
   await m.waitFor(`!!document.querySelector('a.admin-menu-link[href="admin-store-claims.html"]') && document.querySelector('a.admin-menu-link[href="admin-store-claims.html"]').offsetParent !== null`, 20000); await sleep(1500);
-  const menu = await m.ev(`(() => { const l = document.querySelector('a.admin-menu-link[href="admin-store-claims.html"]'); return { note: l.querySelector(".admin-menu-link-note").textContent.trim(), title: l.querySelector(".admin-menu-link-title").textContent.replace(/\s+/g, " ").trim(), badge: document.getElementById("storeListingClaimPendingBadge").textContent.trim(), area: document.getElementById("adminArea").innerText }; })()`);
+  const menu = await m.ev(`(() => { const l = document.querySelector('a.admin-menu-link[href="admin-store-claims.html"]'); return { note: l.querySelector(".admin-menu-link-note").textContent.trim(), title: l.querySelector(".admin-menu-link-title").textContent.replace(/\s+/g, " ").trim(), badge: !!document.getElementById("storeListingClaimPendingBadge"), area: document.getElementById("adminArea").innerText }; })()`);
   t("M1 管理メニューの説明文は「店舗の自動引き継ぎ履歴の確認・紐付け解除」・旧文言（本人確認・公式連絡先・承認・却下）は出ない", menu.note === "店舗の自動引き継ぎ履歴の確認・紐付け解除" && !/本人確認|公式連絡先で確認/.test(menu.area), menu);
-  t("M2 リンクのタイトル・未対応件数の表示（管理者の権限で取得）は従来どおり", /オーナー申請（無料掲載の引き継ぎ）/.test(menu.title) && /^未対応 0件$/.test(menu.badge), menu);
+  t("M2 リンクのタイトルは従来どおり・旧方式の「未対応 ○件」は撤去（STEP 43-B）", /オーナー申請（無料掲載の引き継ぎ）/.test(menu.title) && !/未対応/.test(menu.title) && menu.badge === false, menu);
   await m.ev(`document.querySelector('a.admin-menu-link[href="admin-store-claims.html"]').click(), true`);
   await m.waitFor(`location.pathname === "/admin-store-claims.html" && document.readyState === "complete"`, 15000); await sleep(800);
   const landed = await m.ev(`({ path: location.pathname, h: document.querySelector("h1") ? document.querySelector("h1").textContent.trim() : "" })`);

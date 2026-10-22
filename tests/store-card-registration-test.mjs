@@ -124,7 +124,7 @@ const adminList = await call({ mode: "adminListStoreAccounts" }, "admin");
 const listed = ((adminList.body && adminList.body.storeAccounts) || []).find((x) => x.storeId === claimedId) || {};
 t("B14 運営の店舗一覧：引き継いだ店舗は createdByType listingClaim（運営登録の店舗と区別）", adminList.code === 200 && listed.createdByType === "listingClaim", { code: adminList.code, listed: listed.createdByType });
 const rot = await call({ mode: "adminRotateStoreToken", storeId: claimedId }, "admin");
-t("B15 引き継いだ店舗には旧店舗URL(token)を発行しない：409 self_registered_store・tokenHash なし", rot.code === 409 && rot.body.reason === "self_registered_store" && !S.docs.get("storeAccounts/" + claimedId).tokenHash, rot.body);
+t("B15 旧店舗URL(token)の再発行は撤去（STEP 43-B）：410 legacy_feature_removed・tokenHash なし", rot.code === 410 && rot.body.reason === "legacy_feature_removed" && !S.docs.get("storeAccounts/" + claimedId).tokenHash, rot.body);
 const loc = await call({ mode: "imadakeAdminStoreLocation", storeId: claimedId, address: "沖縄県那覇市泉崎1-1-1" }, "admin");
 t("B16 引き継いだ店舗の所在地は運営の画面から上書きしない：409 self_registered_store", loc.code === 409 && loc.body.reason === "self_registered_store", loc.body);
 
@@ -163,12 +163,18 @@ const conc = await LC.copyListingPhotosToProfile(db, "pc3", many, slowDeps, { en
 const order = (S.docs.get("storeProfiles/pc3").photos || []).map((p) => p.publicId.split("/").pop());
 t("C9 複製は同時に最大5件・並び順は掲載の順・1枚の失敗で他は止まらない", conc.status === "copied" && conc.copied === 9 && peak === 5 && JSON.stringify(order) === JSON.stringify(["k0", "k1", "k2", "k4", "k5", "k6", "k7", "k8", "k9"]), { conc, peak, order });
 
-// ===================== D: operator approval path (kept) =====================
+// ===================== D: old operator approval removed (STEP 43-B) =====================
 S.docs.set("submissions/L4", { ...LISTING, shopName: "四号店" });
 S.docs.set("storeListingClaims/legacy1", { submissionId: "L4", claimantUid: "u6", targetType: "new_store", targetStoreId: "", role: "owner", publicReferenceUrl: "", note: "", claimCode: "ABC234", status: "pending", verificationMethod: "operator_review", createdAt: Timestamp.fromMillis(Date.now()) });
+const writesBeforeD = S.writes.length;
 const ap = await call({ mode: "adminStoreListingClaimReview", claimId: "legacy1", decision: "approve", reason: "", verificationChannel: "official_website", verificationNote: "" }, "admin");
-const apProf = S.docs.get("storeProfiles/" + ap.body.storeId) || {};
-t("D1 運営の承認の処理（承認待ちの申請があった場合）も共通の紐付け処理で動き、文章等を写す", ap.code === 200 && ap.body.status === "approved" && S.docs.get("storeListingLinks/L4").verificationMethod === "operator_review" && apProf.description === LISTING.content && S.docs.get("storeListingClaims/legacy1").status === "approved", { ap: ap.body, apProf });
+t("D1 旧方式の運営の承認・却下は撤去：410 legacy_feature_removed・紐付けを作らない・申請の記録は消さない（そのまま）", ap.code === 410 && ap.body.reason === "legacy_feature_removed" && !S.docs.get("storeListingLinks/L4") && S.docs.get("storeListingClaims/legacy1").status === "pending" && S.writes.length === writesBeforeD, ap.body);
+const removed = [];
+for (const mode of ["adminCountPendingStoreListingClaims", "storeListingClaimWithdraw", "adminStoreRegistrationReview", "shopTokenValidate", "shopSubmissionCreate"]) {
+  const rr = await call({ mode, claimId: "legacy1", storeId: "x", decision: "approve" }, mode.startsWith("admin") ? "admin" : "u6");
+  removed.push([mode, rr.code, rr.body && rr.body.reason]);
+}
+t("D2 撤去した旧方式の mode はすべて 410（未対応件数・申請の取り下げ・セルフ登録の運営確認・店舗専用URLの確認／投稿）・書き込みなし", removed.every((x) => x[1] === 410 && x[2] === "legacy_feature_removed") && S.writes.length === writesBeforeD, removed);
 
 // ===================== Z: invariants =====================
 t("Z1 課金関連3フラグは false のまま・Stripe／Cloudinary への通信なし（地図の住所確認だけ模擬）", IM.IMADAKE_CV_BILLING_STARTED === false && MC.IMADAKE_MONTHLY_CLOSE_WRITES_ENABLED === false && CH.IMADAKE_MONTHLY_CHARGE_ENABLED === false && otherNetwork === 0 && geocodeCalls > 0);

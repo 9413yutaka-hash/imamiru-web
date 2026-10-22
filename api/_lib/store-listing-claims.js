@@ -61,13 +61,10 @@ const CLAIM_CREATE_COOLDOWN_MS = 30 * 1000;
 const CLAIM_PENDING_PER_USER_MAX = 10;
 const CLAIM_NOTE_MAX_LENGTH = 200;
 const DECISION_REASON_MAX_LENGTH = 300;
-const VERIFICATION_NOTE_MAX_LENGTH = 300;
 const ADMIN_LIST_DECIDED_LIMIT = 30;
 
 export const CLAIM_ROLES = ["owner", "manager"];
 export const CLAIM_TARGET_TYPES = ["new_store", "existing_store"];
-// 運営が本人確認に使った、申請者とは独立した公開連絡先の種類(記録用)。
-export const VERIFICATION_CHANNELS = ["official_website", "official_sns", "map_listing", "other_public_source"];
 
 // 紛らわしい文字(I/O/0/1)を除いた英数字。申請と運営の確認を照合するための番号。
 const CLAIM_CODE_CHARACTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -458,58 +455,6 @@ export async function handleStoreListingClaimMine(request, response, deps) {
   }
 }
 
-// mode: storeListingClaimWithdraw { claimId } — 自分の確認待ち申請だけ取り下げられる。
-export async function handleStoreListingClaimWithdraw(request, response, deps) {
-  try {
-    const actor = await requireVerifiedStoreUser(request, response, deps);
-
-    if (!actor) {
-      return;
-    }
-
-    const claimId = readId(deps.readRequestBody(request).claimId);
-
-    if (claimId === "") {
-      return sendError(response, 400, "invalid_input", { field: "claimId" });
-    }
-
-    const database = deps.getFirestore(deps.getFirebaseAdminApp());
-    const claimRef = database.collection(CLAIMS_COLLECTION).doc(claimId);
-    let outcome = null;
-
-    await database.runTransaction(async function(transaction) {
-      const snapshot = await transaction.get(claimRef);
-      const claim = snapshot.exists ? snapshot.data() || {} : null;
-
-      if (!claim || claim.claimantUid !== actor.uid) {
-        outcome = { status: 404, reason: "claim_not_found" };
-        return;
-      }
-
-      if (claim.status !== "pending") {
-        outcome = { status: 409, reason: "claim_not_pending" };
-        return;
-      }
-
-      transaction.update(claimRef, {
-        status: "withdrawn",
-        withdrawnAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp()
-      });
-      outcome = { status: 200 };
-    });
-
-    if (outcome.status !== 200) {
-      return sendError(response, outcome.status, outcome.reason);
-    }
-
-    return response.status(200).json({ success: true, status: "withdrawn" });
-  } catch (error) {
-    console.error("オーナー申請：取り下げエラー：", error && error.message);
-    return sendError(response, 500, "server_error");
-  }
-}
-
 
 // ===== 運営(Admin)側 =====
 
@@ -525,24 +470,6 @@ async function requireAdminActor(request, response, deps) {
   }
 
   return authResult;
-}
-
-// mode: adminCountPendingStoreListingClaims — 管理本部の「未対応 ○件」用。
-export async function handleAdminCountPendingStoreListingClaims(request, response, deps) {
-  try {
-    const authResult = await requireAdminActor(request, response, deps);
-
-    if (!authResult) {
-      return;
-    }
-
-    const snapshot = await authResult.database.collection(CLAIMS_COLLECTION).where("status", "==", "pending").get();
-
-    return response.status(200).json({ success: true, pendingCount: snapshot.docs.length });
-  } catch (error) {
-    console.error("オーナー申請：件数エラー：", error && error.message);
-    return response.status(500).json({ success: false, message: "未対応件数を取得できませんでした。" });
-  }
 }
 
 // mode: adminStoreListingClaimList — 確認待ちの申請(紐付け状況・同じ掲載への他の申請・
@@ -797,169 +724,6 @@ async function linkListingInTransaction(transaction, database, params) {
   });
 
   return { status: 200, storeId: storeId, listing: listing };
-}
-
-// mode: adminStoreListingClaimReview
-// { claimId, decision: "approve"|"reject", reason, verificationChannel?, verificationNote? }
-// 承認には、運営が申請者とは独立した公開連絡先で確認した記録(verificationChannel)が必須。
-export async function handleAdminStoreListingClaimReview(request, response, deps) {
-  try {
-    const authResult = await requireAdminActor(request, response, deps);
-
-    if (!authResult) {
-      return;
-    }
-
-    const body = deps.readRequestBody(request);
-    const claimId = readId(body.claimId);
-    const decision = body.decision;
-    const reason = readSingleLineText(body.reason, DECISION_REASON_MAX_LENGTH);
-    const verificationChannel = body.verificationChannel;
-    const verificationNote = readSingleLineText(body.verificationNote, VERIFICATION_NOTE_MAX_LENGTH);
-
-    if (claimId === "" || (decision !== "approve" && decision !== "reject") || reason === null || verificationNote === null) {
-      return sendError(response, 400, "invalid_input");
-    }
-
-    if (decision === "reject" && reason === "") {
-      return sendError(response, 400, "invalid_input", { field: "reason" });
-    }
-
-    if (decision === "approve" && !VERIFICATION_CHANNELS.includes(verificationChannel)) {
-      return sendError(response, 400, "invalid_input", { field: "verificationChannel" });
-    }
-
-    const database = authResult.database;
-    const adminUid = authResult.actor.uid;
-    const claimRef = database.collection(CLAIMS_COLLECTION).doc(claimId);
-
-    if (decision === "reject") {
-      let outcome = null;
-
-      await database.runTransaction(async function(transaction) {
-        const snapshot = await transaction.get(claimRef);
-
-        if (!snapshot.exists) {
-          outcome = { status: 404, reason: "claim_not_found" };
-          return;
-        }
-
-        if ((snapshot.data() || {}).status !== "pending") {
-          outcome = { status: 409, reason: "claim_not_pending" };
-          return;
-        }
-
-        transaction.update(claimRef, {
-          status: "rejected",
-          decidedAt: FieldValue.serverTimestamp(),
-          decidedByUid: adminUid,
-          decisionReason: reason,
-          updatedAt: FieldValue.serverTimestamp()
-        });
-        outcome = { status: 200 };
-      });
-
-      return outcome.status === 200
-        ? response.status(200).json({ success: true, status: "rejected" })
-        : sendError(response, outcome.status, outcome.reason);
-    }
-
-    // ----- 承認 -----
-    const preClaim = await claimRef.get();
-
-    if (!preClaim.exists) {
-      return sendError(response, 404, "claim_not_found");
-    }
-
-    const preClaimData = preClaim.data() || {};
-
-    if (preClaimData.status !== "pending") {
-      return sendError(response, 409, "claim_not_pending");
-    }
-
-    const submissionRef = database.collection(SUBMISSIONS_COLLECTION).doc(preClaimData.submissionId);
-
-    // 新しい店舗を作る場合の所在地は、外部APIのためtransactionの前に準備する。
-    let newStoreLocation = null;
-
-    if (preClaimData.targetType === "new_store") {
-      const listingBefore = await submissionRef.get();
-
-      if (!listingBefore.exists || !isClaimableListing(listingBefore.data())) {
-        return sendError(response, 409, "listing_not_claimable");
-      }
-
-      newStoreLocation = await buildNewStoreLocation(listingBefore.data(), deps);
-
-      if (!newStoreLocation.ok) {
-        return sendError(response, newStoreLocation.reason === "geocoding_unavailable" ? 503 : 400, newStoreLocation.reason);
-      }
-    }
-
-    const newStoreRef = preClaimData.targetType === "new_store"
-      ? database.collection(STORE_ACCOUNTS_COLLECTION).doc()
-      : null;
-    let outcome = null;
-
-    await database.runTransaction(async function(transaction) {
-      const claimSnapshot = await transaction.get(claimRef);
-      const claim = claimSnapshot.exists ? claimSnapshot.data() || {} : null;
-
-      if (!claim) {
-        outcome = { status: 404, reason: "claim_not_found" };
-        return;
-      }
-
-      if (claim.status !== "pending") {
-        outcome = { status: 409, reason: "claim_not_pending" };
-        return;
-      }
-
-      const linked = await linkListingInTransaction(transaction, database, {
-        claimId: claimId,
-        submissionId: claim.submissionId,
-        targetType: claim.targetType,
-        targetStoreId: claim.targetStoreId,
-        claimantUid: claim.claimantUid,
-        newStoreRef: newStoreRef,
-        newStoreLocation: newStoreLocation,
-        decidedByUid: adminUid,
-        verificationMethod: "operator_review",
-        verificationChannel: verificationChannel,
-        reason: reason
-      });
-
-      if (linked.status !== 200) {
-        outcome = linked;
-        return;
-      }
-
-      transaction.update(claimRef, {
-        status: "approved",
-        decidedAt: FieldValue.serverTimestamp(),
-        decidedByUid: adminUid,
-        decisionReason: reason,
-        verificationChannel: verificationChannel,
-        verificationNote: verificationNote,
-        resultStoreId: linked.storeId,
-        updatedAt: FieldValue.serverTimestamp()
-      });
-
-      outcome = { status: 200, storeId: linked.storeId, listing: linked.listing, targetType: claim.targetType };
-    });
-
-    if (outcome.status !== 200) {
-      return sendError(response, outcome.status, outcome.reason);
-    }
-
-    // STEP 42-D｜写真の複製(代表の承認まで止める。失敗しても承認は成立したまま)。
-    await copyListingPhotosToProfile(database, outcome.storeId, outcome.listing, deps);
-
-    return response.status(200).json({ success: true, status: "approved", storeId: outcome.storeId });
-  } catch (error) {
-    console.error("オーナー申請：承認・却下エラー：", error && error.message);
-    return sendError(response, 500, "server_error");
-  }
 }
 
 // mode: adminStoreListingLinkRevoke { submissionId, reason } — 有効な紐付けを解除する(Adminのみ)。

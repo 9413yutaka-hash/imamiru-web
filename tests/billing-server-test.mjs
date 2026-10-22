@@ -72,7 +72,7 @@ let st = await call("storeBillingStatus", {}, "owner"), cr = await call("storeBi
 t("1 キー未設定：状態はavailable:false（not_configured）・作成は503・Stripeを呼ばない", st.code === 200 && st.body.available === false && st.body.unavailableReason === "not_configured" && cr.code === 503 && cr.body.reason === "billing_unavailable" && ST.calls.length === 0, [st.body, cr.body]);
 setEnv({ ...TEST_ENV, VERCEL_ENV: "production" });
 st = await call("storeBillingStatus", {}, "owner"); cr = await call("storeBillingSetupIntentCreate", {}, "owner");
-t("2 Production（VERCEL_ENV=production）ではテストキーがあっても無効（disabled_in_production）・Stripeを呼ばない", st.body.available === false && st.body.unavailableReason === "disabled_in_production" && cr.code === 503 && ST.calls.length === 0, [st.body, cr.body]);
+t("2 Production（VERCEL_ENV=production）ではテストキーがあっても無効（STEP 43-B：本番カード登録のスイッチ false＝live_registration_disabled）・Stripeを呼ばない", st.body.available === false && st.body.unavailableReason === "live_registration_disabled" && cr.code === 503 && ST.calls.length === 0, [st.body, cr.body]);
 const mixes = [[{ ...TEST_ENV, STRIPE_MODE: "live" }, "mode_not_allowed"], [{ ...TEST_ENV, STRIPE_RESTRICTED_KEY: "sk_" + "live_FAKE0000" }, "key_mode_mismatch"], [{ ...TEST_ENV, STRIPE_RESTRICTED_KEY: "rk_" + "live_FAKE0000" }, "key_mode_mismatch"], [{ ...TEST_ENV, STRIPE_PUBLISHABLE_KEY: "pk_" + "live_FAKE0000" }, "key_mode_mismatch"], [{ ...TEST_ENV, STRIPE_MODE: "" }, "not_configured"]];
 const mixRes = [];
 for (const [env, reason] of mixes) { setEnv(env); const a = await call("storeBillingStatus", {}, "owner"); const b = await call("storeBillingSetupIntentCreate", {}, "owner"); mixRes.push([a.body.unavailableReason, b.code, reason]); }

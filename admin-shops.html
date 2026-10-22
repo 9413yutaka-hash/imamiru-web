@@ -315,28 +315,12 @@
           </div>
 
           <button id="createStoreButton" class="primary-button" type="submit">
-            店舗を登録して専用URLを発行する
+            店舗を登録する
           </button>
         </form>
 
         <div id="createStoreMessage" class="message-box" role="status" aria-live="polite"></div>
 
-        <div id="createStoreIssuedUrlBox" class="issued-url-box" style="display:none;">
-          <strong>
-            この専用URLは今だけ表示されます。必ずコピーして店舗へお渡しください。
-          </strong>
-
-          <div id="createStoreIssuedUrlText"></div>
-
-          <button
-            id="createStoreCopyButton"
-            type="button"
-            class="secondary-button"
-            style="margin-top:8px;"
-          >
-            URLをコピー
-          </button>
-        </div>
       </div>
 
       <div class="panel">
@@ -440,9 +424,6 @@
     const createStoreButton = document.getElementById("createStoreButton");
     const newStoreNameInput = document.getElementById("newStoreNameInput");
     const createStoreMessage = document.getElementById("createStoreMessage");
-    const createStoreIssuedUrlBox = document.getElementById("createStoreIssuedUrlBox");
-    const createStoreIssuedUrlText = document.getElementById("createStoreIssuedUrlText");
-    const createStoreCopyButton = document.getElementById("createStoreCopyButton");
 
     const storeSearchInput = document.getElementById("storeSearchInput");
     const storeListMessage = document.getElementById("storeListMessage");
@@ -463,25 +444,12 @@
       element.className = "message-box" + (type ? " " + type : "");
     }
 
-    // storeId + 生tokenから専用URLを組み立てる。post.html側の
-    // requestedStoreIdFromUrl/requestedStoreTokenFromUrlの読み取り方
-    // (mode=shop&store={storeId}&token={rawToken})とそのまま対応する。
-    function buildStoreSubmissionUrl(storeId, token) {
-      return (
-        "https://machinau.jp/post.html?mode=shop&store=" +
-        encodeURIComponent(storeId) +
-        "&token=" +
-        encodeURIComponent(token)
-      );
-    }
-
-    let lastCreatedStoreUrl = "";
+    // STEP 43-B｜旧方式の店舗専用URL(token)は発行しない(店舗の登録だけ)。
 
     createStoreForm.addEventListener("submit", async function(event) {
       event.preventDefault();
 
       showMessage(createStoreMessage, "", "");
-      createStoreIssuedUrlBox.style.display = "none";
 
       const storeName = newStoreNameInput.value.trim();
 
@@ -494,19 +462,9 @@
       createStoreButton.textContent = "登録しています…";
 
       try {
-        const responseData = await callShopsApi("adminCreateStoreAccount", {
+        await callShopsApi("adminCreateStoreAccount", {
           storeName: storeName
         });
-
-        const issuedUrl = buildStoreSubmissionUrl(
-          responseData.storeId,
-          responseData.token
-        );
-
-        lastCreatedStoreUrl = issuedUrl;
-
-        createStoreIssuedUrlText.textContent = issuedUrl;
-        createStoreIssuedUrlBox.style.display = "";
 
         newStoreNameInput.value = "";
 
@@ -518,26 +476,7 @@
         showMessage(createStoreMessage, error.message || "登録に失敗しました。", "error");
       } finally {
         createStoreButton.disabled = false;
-        createStoreButton.textContent = "店舗を登録して専用URLを発行する";
-      }
-    });
-
-    createStoreCopyButton.addEventListener("click", async function() {
-      if (!lastCreatedStoreUrl) {
-        return;
-      }
-
-      try {
-        await navigator.clipboard.writeText(lastCreatedStoreUrl);
-
-        const originalText = createStoreCopyButton.textContent;
-        createStoreCopyButton.textContent = "コピーしました";
-
-        window.setTimeout(function() {
-          createStoreCopyButton.textContent = originalText;
-        }, 1500);
-      } catch (error) {
-        console.error("URLのコピーに失敗しました：", error);
+        createStoreButton.textContent = "店舗を登録する";
       }
     });
 
@@ -753,11 +692,6 @@
                   '</div>'
                 : '') +
               '<div class="store-row-actions">' +
-                (isSelfRegistered && registrationStatus === "pending_review"
-                  ? '<button type="button" class="primary-button" data-action="review-approve">確認OK（利用可能にする）</button>' +
-                    '<button type="button" class="danger-button" data-action="review-reject">登録を却下する</button>'
-                  : '') +
-                (isSelfRegistered ? '' : '<button type="button" class="secondary-button" data-action="rotate">token再発行</button>') +
                 '<button type="button" class="secondary-button" data-action="rename">店舗名を編集</button>' +
                 '<button type="button" class="secondary-button" data-action="history">投稿履歴を見る</button>' +
                 (isSelfRegistered ? '' : '<button type="button" class="secondary-button" data-action="location">所在地を登録・変更</button>') +
@@ -786,10 +720,6 @@
                 '</div>' +
                 '<div class="store-location-preview" style="margin-top:8px; font-size:13px; line-height:1.7;"></div>' +
                 '<p style="margin:8px 0 0; font-size:12px; color:var(--subtext);">「位置を確認」で地図上の場所を確かめてから登録してください。登録後の新しい今だけ投稿から反映されます（過去の投稿は変わりません）。</p>' +
-              '</div>' +
-              '<div class="issued-url-box store-issued-url" style="display:none;">' +
-                '<strong>この専用URLは今だけ表示されます。必ずコピーして店舗へお渡しください。</strong>' +
-                '<div class="store-issued-url-text"></div>' +
               '</div>' +
               '<div class="issued-url-box store-history-box" style="display:none;">' +
                 '<div class="store-history-message"></div>' +
@@ -854,39 +784,7 @@
       actionButton.disabled = true;
 
       try {
-        if (action === "review-approve" || action === "review-reject") {
-          const approve = action === "review-approve";
-
-          if (!window.confirm(approve
-            ? "この店舗の登録を確認OKにして、利用可能にしますか？"
-            : "この店舗の登録を却下しますか？（店舗は利用できなくなります）")) {
-            return;
-          }
-
-          await callShopsApi("adminStoreRegistrationReview", {
-            storeId: storeId,
-            decision: approve ? "approve" : "reject"
-          });
-
-          await loadStoreAccounts();
-        } else if (action === "rotate") {
-          const responseData = await callShopsApi("adminRotateStoreToken", {
-            storeId: storeId
-          });
-
-          const issuedUrl = buildStoreSubmissionUrl(
-            responseData.storeId,
-            responseData.token
-          );
-
-          const issuedUrlBox = storeRow.querySelector(".store-issued-url");
-          const issuedUrlText = storeRow.querySelector(".store-issued-url-text");
-
-          if (issuedUrlBox && issuedUrlText) {
-            issuedUrlText.textContent = issuedUrl;
-            issuedUrlBox.style.display = "";
-          }
-        } else if (action === "toggle") {
+        if (action === "toggle") {
           const isCurrentlyEnabled =
             storeRow.querySelector(".status-badge").classList.contains("enabled");
 

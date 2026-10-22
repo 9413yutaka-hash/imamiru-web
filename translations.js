@@ -4097,13 +4097,13 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   imadake_post_invalid_url: {
-    ja: "この店舗投稿URLは無効です。マチナウ運営からお渡しした店舗専用URLから開いてください。",
-    en: "This shop posting URL is not valid. Please open the shop URL provided by Machinau."
+    ja: "このURLでは今だけ投稿を開けません。店舗アカウントにログインして、店舗の「今だけ投稿」から開いてください。",
+    en: "This link can't open Just for Now posting. Please sign in to your store account and open Just for Now from your store."
   },
 
   imadake_post_invalid_url_hint: {
-    ja: "ページを再読み込みした場合も、もう一度店舗専用URLから開き直してください。",
-    en: "If you reloaded this page, please open it again from your shop URL."
+    ja: "旧方式の店舗専用URLは終了しました。",
+    en: "The old shop URLs are no longer available."
   },
 
   imadake_post_login_required: {
@@ -4628,8 +4628,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   imadake_post_error_invalid_url: {
-    ja: "この店舗投稿URLは無効です。マチナウ運営からお渡しした店舗専用URLから開き直してください。",
-    en: "This shop posting URL is not valid. Please open the page again from the shop URL provided by Machinau."
+    ja: "このURLでは今だけ投稿を開けません。店舗アカウントにログインして、店舗の「今だけ投稿」から開いてください。",
+    en: "This link can't open Just for Now posting. Please sign in to your store account and open Just for Now from your store."
   },
 
   imadake_post_error_field: {

@@ -133,10 +133,10 @@ try {
   t("not logged in: login-required panel, report hidden, no API calls", await p.ev("!document.getElementById('loginRequiredPanel').hidden && document.getElementById('reportPanel').hidden") && be.reqs.length === before2);
   await finish(p, "logged out");
 
-  // legacy token store
+  // old token URL (STEP 43-B: method A removed) — no report, no API call
+  const beforeLegacy = be.reqs.length;
   p = await page("/imadake-post.html?store=LEG&token=secret", { login: null });
-  ps = await postsShown(p); const rl = be.reqs.filter((r) => r.mode === "imadakeStoreCvReport").at(-1);
-  t("legacy token store: report via storeId+token, its own post L only", JSON.stringify(ps.map((x) => x.id)) === JSON.stringify(["L"]) && rl.token === "set" && rl.storeId === "LEG", { ps, rl });
+  t("old token URL: invalid panel, report hidden, no API calls", await p.ev("!document.getElementById('invalidPanel').hidden && document.getElementById('reportPanel').hidden") && be.reqs.length === beforeLegacy, be.reqs.slice(beforeLegacy));
   await finish(p, "legacy");
 
   // API errors

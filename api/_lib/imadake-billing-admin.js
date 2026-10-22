@@ -24,7 +24,7 @@ import {
 } from "./imadake-cv.js";
 
 import {
-  readStripeBillingConfig
+  readStripeChargeConfig
 } from "./store-billing.js";
 
 const INVOICES_COLLECTION =
@@ -756,7 +756,7 @@ export async function inspectImadakeInvoice(database, deps, invoiceId, nowMs) {
     verdict: "incomplete"
   };
 
-  const config = readStripeBillingConfig(deps.env);
+  const config = readStripeChargeConfig(deps.env);
 
   if (!config.ok) {
     findings.push(finding("stripe_unavailable_" + config.reason, "incomplete"));
@@ -1075,7 +1075,7 @@ export async function handleImadakeBillingInspect(request, response, deps) {
 // 請求書もPaymentIntentも作らない。Firestoreには触れない。PaymentIntentの中身は返さない(件数だけ)。
 // Stripeの設定が無効(Production・キー未設定・本番キー等)なら接続しない。
 export async function checkStripeReadConnection(deps, nowMs) {
-  const config = readStripeBillingConfig(deps.env);
+  const config = readStripeChargeConfig(deps.env);
   const base = { ok: true, checkedAtMs: nowMs, connected: false, testMode: null, mode: "", httpStatus: null, sampleCount: null };
 
   if (!config.ok) {

@@ -1719,14 +1719,6 @@
           note.className = "claim-card-note";
           note.textContent = t("store_claim_status_note_" + statusCode);
           item.appendChild(note);
-          if (statusCode === "pending") {
-            const withdraw = document.createElement("button");
-            withdraw.type = "button";
-            withdraw.className = "secondary-button claim-withdraw";
-            withdraw.setAttribute("data-claim-withdraw", claim.claimId);
-            withdraw.textContent = t("store_claim_withdraw");
-            item.appendChild(withdraw);
-          }
           list.appendChild(item);
         });
         document.getElementById("claimMineEmpty").hidden = myClaims.length > 0;
@@ -1828,32 +1820,6 @@
           .finally(function () {
             claimBusy = false;
             button.disabled = false;
-          });
-      }
-
-      function handleClaimWithdraw(claimId) {
-        if (claimBusy || !window.confirm(t("store_claim_withdraw_confirm"))) {
-          return;
-        }
-        claimBusy = true;
-        callStoreApi({ mode: "storeListingClaimWithdraw", claimId: claimId })
-          .then(function (response) {
-            if (response.status === 200 && response.result && response.result.success) {
-              showClaimMessage("store_claim_withdrawn", "success");
-              if (claimPreview && claimPreview.pendingClaim && claimPreview.pendingClaim.claimId === claimId) {
-                claimPreview.pendingClaim = null;
-                document.getElementById("claimCodeBox").hidden = true;
-                document.getElementById("claimFormArea").hidden = false;
-              }
-              return loadMyClaims();
-            }
-            showClaimMessage("store_account_err_generic", "error", (response.result && response.result.reason) || "http_" + response.status);
-          })
-          .catch(function () {
-            showClaimMessage("store_account_err_network", "error");
-          })
-          .finally(function () {
-            claimBusy = false;
           });
       }
 
@@ -2373,12 +2339,6 @@
         document.getElementById("claimForm").addEventListener("submit", handleClaimSubmit);
         document.querySelectorAll('input[name="claimTarget"]').forEach(function (radio) {
           radio.addEventListener("change", updateClaimTargetSelect);
-        });
-        document.getElementById("claimMineList").addEventListener("click", function (event) {
-          const button = event.target.closest("[data-claim-withdraw]");
-          if (button) {
-            handleClaimWithdraw(button.getAttribute("data-claim-withdraw"));
-          }
         });
         document.getElementById("openStoreFormButton").addEventListener("click", openStoreForm);
         // STEP 42-D｜カード登録へ進む時、登録後に戻る作業を覚えておく。

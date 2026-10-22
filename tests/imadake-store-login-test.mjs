@@ -1,4 +1,5 @@
-// Store-login connection for imadake create/status/end (method A token, method B logged-in store owner).
+// Store-login connection for imadake create/status/end (method B logged-in store owner).
+// STEP 43-B: method A (old store URL + token) was removed; a token is always refused with 410 (no fallback to login).
 import { REPO_ROOT } from "./_paths.mjs";
 import { pathToFileURL } from "node:url";
 const REPO = REPO_ROOT + "";
@@ -82,24 +83,19 @@ async function op(m, d, kind, body, token) {
 }
 const quiet = async (fn) => { const e = console.error; console.error = () => {}; try { return await fn(); } finally { console.error = e; } };
 
-// ---------- 1. method A (token store) unchanged ----------
+// ---------- 1. method A (old store URL + token) removed (STEP 43-B) ----------
 {
   const m = makeDb(); seedAll(m); const d = deps(m);
-  let r = await op(m, d, "status", { storeId: "legacy1", token: "secret" });
-  t("1 token store: status 200 with store name and location", r.code === 200 && r.body.success && r.body.storeName === "旧URL店" && r.body.location, r.body);
-  r = await quiet(() => op(m, d, "create", { storeId: "legacy1", token: "secret" }));
-  const postId = r.body.postId || (r.body.post && r.body.post.postId);
-  t("1 token store: create 200 (published after moderation)", r.code === 200 && r.body.success && d.calls.moderation > 0, r.body);
-  const p = postId && m.get("imadakePosts", postId);
-  t("1 token store: post stored for legacy1 with official location", p && p.storeId === "legacy1" && p.storeNameSnapshot === "旧URL店" && p.locationSource === "storeAccount", p && { storeId: p.storeId, name: p.storeNameSnapshot });
-  t("[CV STEP3] new post: cvBillingEnabled decided by server = false (billing not started)", p && p.cvBillingEnabled === false, p && p.cvBillingEnabled);
-  r = await op(m, d, "end", { storeId: "legacy1", token: "secret", postId });
-  t("1 token store: end 200", r.code === 200 && r.body.success, r.body);
-  r = await op(m, d, "status", { storeId: "legacy1", token: "wrong" });
-  t("1 token store: wrong token -> 403 'この店舗投稿URLは無効です。'", r.code === 403 && r.body.message === "この店舗投稿URLは無効です。");
-  const dNoLogin = deps(m, { noLoginDeps: true });
-  r = await op(m, dNoLogin, "status", { storeId: "legacy1", token: "secret" });
-  t("1 token path works even without login deps (no dependency on new code)", r.code === 200);
+  const before = m.writeLog.length;
+  const rs = await op(m, d, "status", { storeId: "legacy1", token: "secret" });
+  const rc = await quiet(() => op(m, d, "create", { storeId: "legacy1", token: "secret" }));
+  const re = await op(m, d, "end", { storeId: "legacy1", token: "secret", postId: "x" });
+  t("1 token (old store URL): status/create/end all 410, nothing written, no moderation", rs.code === 410 && rc.code === 410 && re.code === 410 && m.writeLog.length === before && d.calls.moderation === 0, { s: rs.code, c: rc.code, e: re.code });
+  t("1 token: clear message pointing to the store account", /旧方式の店舗専用URLは終了しました/.test(rs.body.message) && /店舗アカウント/.test(rs.body.message), rs.body);
+  const wrong = await op(m, d, "status", { storeId: "legacy1", token: "wrong" });
+  t("1 token: the token is not checked any more (wrong token -> same 410)", wrong.code === 410);
+  const noLogin = await op(m, deps(m, { noLoginDeps: true }), "status", { storeId: "legacy1", token: "secret" });
+  t("1 token: refused even without login deps", noLogin.code === 410);
 }
 // ---------- 2. method B owner: status / create / end ----------
 let selfPostId;
@@ -111,6 +107,7 @@ let selfPostId;
   selfPostId = r.body.postId || (r.body.post && r.body.post.postId);
   const p = selfPostId && m.get("imadakePosts", selfPostId);
   t("2 owner: create 200; post belongs to self1 with server-side name/location", r.code === 200 && p && p.storeId === "self1" && p.storeNameSnapshot === "セルフ店1" && p.latitude === 26.22 && p.status === "published", { code: r.code, body: r.body });
+  t("[CV STEP3] new post: cvBillingEnabled decided by server = false (billing not started)", p && p.cvBillingEnabled === false, p && p.cvBillingEnabled);
   t("2 owner: one active post per store kept (second create -> 409 active_post_exists)", (await quiet(() => op(m, d, "create", { storeId: "self1" }, "u1tok"))).body.reason === "active_post_exists");
   r = await op(m, d, "status", { storeId: "self1" }, "u1tok");
   t("2 owner: status shows the current post", r.body.currentPost && r.body.currentPost.postId === selfPostId, r.body.currentPost);
@@ -157,11 +154,11 @@ let selfPostId;
 {
   const m = makeDb(); seedAll(m); const d = deps(m);
   let r = await op(m, d, "status", { storeId: "self1", token: "wrong" }, "u1tok");
-  t("10 wrong token + valid owner login -> 403 (no fallback to login)", r.code === 403 && r.body.message === "この店舗投稿URLは無効です。");
+  t("10 any token + valid owner login -> 410 (no fallback to login)", r.code === 410);
   r = await op(m, d, "status", { storeId: "legacy1", token: "secret" }, "u2tok");
-  t("10 valid token + someone's login -> token path (legacy store)", r.code === 200 && r.body.storeName === "旧URL店");
+  t("10 old store token + someone's login -> 410 (old store not reachable)", r.code === 410);
   r = await op(m, d, "status", { storeId: "self1", token: "secret" }, "u1tok");
-  t("10 legacy token sent with self1 storeId -> 403 (token not valid for that store)", r.code === 403);
+  t("10 old token sent with self1 storeId -> 410", r.code === 410);
   r = await op(m, d, "status", { storeId: "self1", token: "   " }, "u1tok");
   t("10 blank token treated as no token -> login path", r.code === 200 && r.body.storeName === "セルフ店1");
 }
@@ -205,11 +202,11 @@ let selfPostId;
 }
 {
   const m = makeDb(); seedAll(m); const d = deps(m);
-  const r = await quiet(() => op(m, d, "create", { storeId: "legacy1", token: "secret", cvBillingEnabled: true, billable: true }));
+  const r = await quiet(() => op(m, d, "create", { storeId: "self1", cvBillingEnabled: true, billable: true }, "u1tok"));
   const id = r.body.postId || (r.body.post && r.body.post.postId);
   const p = id && m.get("imadakePosts", id);
   t("[CV STEP3] client-sent cvBillingEnabled:true ignored -> stored false", r.code === 200 && p && p.cvBillingEnabled === false, p && p.cvBillingEnabled);
-  await op(m, d, "end", { storeId: "legacy1", token: "secret", postId: id });
+  await op(m, d, "end", { storeId: "self1", postId: id }, "u1tok");
   t("[CV STEP3] ending a post does not change cvBillingEnabled", m.get("imadakePosts", id).status === "ended" && m.get("imadakePosts", id).cvBillingEnabled === false);
 }
 console.log(`\nTOTAL ${pass + fail}  PASS ${pass}  FAIL ${fail}`);

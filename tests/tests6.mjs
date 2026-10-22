@@ -86,15 +86,16 @@ try {
   t("3 server 401: login-required panel", (await panels(p)).login);
   await p.close();
 
-  // 4. token mode unchanged
+  // 4. old token URL (method A) removed (STEP 43-B): no server call, invalid panel pointing to the store account
   ({ p, calls } = await openImadake("?store=legacy1&token=secret", null, { status: { body: { success: true, storeName: "旧URL店", location: { prefecture: "沖縄県", city: "那覇市" }, currentPost: null } } }));
   pn = await panels(p);
-  const st4 = calls.find((c) => c.mode === "imadakeStoreStatus"); const h4 = await p.ev("window.__authHeaders");
-  t("4 token URL: status sends storeId+token, no Authorization; token scrubbed from address bar", pn.store && pn.storeName === "旧URL店" && st4.body.token === "secret" && st4.body.storeId === "legacy1" && h4[0].auth === "" && !(await p.ev("location.search")).includes("token"), { body: st4 && st4.body, h4, search: await p.ev("location.search") });
-  t("4 token URL: named store app not used", (await p.ev("window.__storeAuthCalls || 0")) === 0);
+  const invalidText4 = await p.ev("document.getElementById('invalidPanel').innerText");
+  t("4 old token URL: invalid panel, no API call, token scrubbed from address bar", pn.invalid && !pn.store && calls.length === 0 && !(await p.ev("location.search")).includes("token"), { pn, calls: calls.map((c) => c.mode), search: await p.ev("location.search") });
+  t("4 old token URL: message points to the store account login (not to an operator URL)", /店舗アカウントにログイン/.test(invalidText4) && !/お渡しした店舗専用URL/.test(invalidText4), invalidText4);
+  t("4 old token URL: named store app not used", (await p.ev("window.__storeAuthCalls || 0")) === 0);
   await p.close();
   ({ p, calls } = await openImadake("?store=legacy1&token=bad", null, { status: { status: 403, body: { success: false, message: "この店舗投稿URLは無効です。" } } }));
-  t("4 token URL invalid: existing invalid panel (unchanged)", (await panels(p)).invalid);
+  t("4 old token URL (bad token): same invalid panel, no API call", (await panels(p)).invalid && calls.length === 0);
   await p.close();
   ({ p, calls } = await openImadake("", { uid: "u1", token: "x" }, { status: okStatus }));
   t("4 no store param: invalid panel, no API call", (await panels(p)).invalid && calls.length === 0);

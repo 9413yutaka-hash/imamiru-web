@@ -115,12 +115,13 @@ const dayOf = (p, d) => p.days.find((x) => x.date === d);
   t("missing storeId: 403", r.code === 403);
   r = await report(m, { storeId: "S1/../S2" }, "owner-u1");
   t("malformed storeId: 403", r.code === 403);
+  // STEP 43-B: the old store URL (token) was removed. A token is refused with 410 and no CV data is returned.
   r = await report(m, { storeId: "LEG", token: "secret" }, null);
-  t("legacy token store with valid token: 200, its own posts only", r.code === 200 && r.body.storeId === "LEG" && JSON.stringify(r.body.posts.map((p) => p.postId)) === JSON.stringify(["L"]) && r.body.totals.validCvCount === 1, r.body);
+  t("old store token (was valid): 410, no CV data", r.code === 410 && !r.body.posts, r.body);
   r = await report(m, { storeId: "LEG", token: "wrong" }, null);
-  t("legacy token wrong: 403", r.code === 403 && !r.body.posts);
-  r = await report(m, { storeId: "S1", token: "secret" }, null);
-  t("legacy token for another store id: 403", r.code === 403);
+  t("old store token wrong: 410, no CV data", r.code === 410 && !r.body.posts);
+  r = await report(m, { storeId: "S1", token: "secret" }, "owner-u1");
+  t("token + valid owner login: 410 (no fallback to login)", r.code === 410 && !r.body.posts);
   t("auth failures read no CV data and wrote nothing", m.writeLog.length === 0);
 }
 // failures / edge cases

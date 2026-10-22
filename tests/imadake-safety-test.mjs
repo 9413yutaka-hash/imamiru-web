@@ -15,15 +15,15 @@ const { IM, makeDb, seedAll, deps, op, quiet } = H;
 let pass = 0, fail = 0;
 const t = (name, ok, detail = "") => { ok ? pass++ : fail++; console.log(`${ok ? "PASS" : "FAIL"} ${name}${!ok && detail !== "" ? " :: " + JSON.stringify(detail).slice(0, 500) : ""}`); };
 
-// one create on a fresh store (legacy token store "旧URL店") with the REAL shared keyword function
+// one create on a fresh store with the REAL shared keyword function.
+// STEP 43-B: the old token store (method A) was removed; posts are created by the logged-in owner of "self1" (method B).
 async function create(fields, o = {}) {
   const m = makeDb(); seedAll(m);
-  if (o.storeName) { const a = m.get("storeAccounts", "legacy1"); a.storeName = o.storeName; m.seed("storeAccounts", "legacy1", a); }
+  if (o.storeName) { const a = m.get("storeAccounts", "self1"); a.storeName = o.storeName; m.seed("storeAccounts", "self1", a); }
   const d = deps(m, { flagged: !!o.flagged });
   d.matchesSafetyCriticalKeywords = M.matchesSafetyCriticalKeywords;
-  d.validateStoreToken = async (db, storeId, token) => (storeId === "legacy1" && token === "secret" ? { valid: true, storeId: "legacy1", storeName: o.storeName || "旧URL店" } : { valid: false });
   if (o.moderationError) d.callOpenAiModeration = async () => { throw new Error("openai down"); };
-  const r = await quiet(() => op(m, d, "create", { storeId: "legacy1", token: "secret", ...fields }));
+  const r = await quiet(() => op(m, d, "create", { storeId: "self1", ...fields }, "u1tok"));
   const id = r.body && (r.body.postId || (r.body.post && r.body.post.postId));
   return { code: r.code, status: r.body && r.body.status, body: r.body, post: id ? m.get("imadakePosts", id) : null, posts: [...m.store.keys()].filter((k) => k.startsWith("imadakePosts/")).length };
 }

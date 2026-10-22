@@ -86,8 +86,7 @@ import {
 import {
   handleStoreRegistrationPreview,
   handleStoreSelfRegister,
-  handleStoreMyStores,
-  handleAdminStoreRegistrationReview
+  handleStoreMyStores
 } from "./_lib/store-self-service.js";
 
 // 正式店舗参加基盤 Phase 2B｜店舗自身による常設店舗情報の編集。実処理はapi/_lib/store-profile.js。
@@ -107,10 +106,7 @@ import {
   handleStoreListingClaimPreview,
   handleStoreListingClaimCreate,
   handleStoreListingClaimMine,
-  handleStoreListingClaimWithdraw,
-  handleAdminCountPendingStoreListingClaims,
   handleAdminStoreListingClaimList,
-  handleAdminStoreListingClaimReview,
   handleAdminStoreListingLinkRevoke
 } from "./_lib/store-listing-claims.js";
 
@@ -439,66 +435,26 @@ function isGeneralPublicShopSubmissionCurrentlyEnabled() {
 //   enabled: boolean    — falseにした瞬間、次の呼び出しから即座に拒否
 //   createdAt / updatedAt
 //
-// token検証(validateStoreToken())は、shopTokenValidate・cloudinarySignature
-// (shop経路)・shopSubmissionCreateの3箇所すべてから共通で呼ばれる1つの
-// 関数に集約し、同じロジックを複製しない(本部指示)。
+// STEP 43-B(代表決定 2026-10-22)｜店舗専用URL(token)の方式は撤去した(token の発行・検証・token 経由の
+// 投稿／写真の署名／今だけ投稿の方式A)。過去の tokenHash のデータは消さない(使わない)。
 const STORE_ACCOUNTS_COLLECTION =
   "storeAccounts";
 
-// 既存のcreateEndCodeHash()/hashesMatch()(SHA-256＋timingSafeEqualによる
-// タイミング攻撃耐性のある定数時間比較)をそのまま再利用する。店舗token専用の
-// 別ハッシュ関数は作らない(本部指示：ロジックを複製しない)。
-
-// admin-shops.html(店舗登録・token再発行)から呼ばれた時だけ生成する。
-// crypto.getRandomValues()(Web Crypto、クライアント側のendCode生成)と
-// 同じ考え方をNode標準のcrypto.randomBytes()で行う(暗号学的乱数)。
-// URLのクエリパラメータへそのまま載せられるよう、base64url(記号
-// "+","/","="を含まない)でエンコードする。
-function generateStoreToken() {
-  return randomBytes(24)
-    .toString("base64url");
-}
-
-// 既存post.html側のpublicationNumber(8桁数字)生成と同じ考え方・同じ桁数を
-// サーバー側で再現する(crypto.randomIntによる暗号学的乱数)。重複チェックは
-// 既存仕様(post.html側も重複チェックを行っていない)をそのまま踏襲し、
-// 新しい照合処理は追加しない(本部指示：過剰設計禁止)。
-function generateShopSubmissionPublicationNumber() {
-  return String(
-    randomInt(100000000)
-  ).padStart(
-    8,
-    "0"
-  );
-}
-
-// 既存post.html側のendCode(12文字、紛らわしい文字(I/O/0/1等)を除いた
-// 32文字の英数字)生成と同じアルゴリズムをサーバー側で再現する。
-const SHOP_SUBMISSION_END_CODE_CHARACTERS =
-  "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-
-function generateShopSubmissionEndCode() {
-  const characters =
-    [];
-
-  for (
-    let index = 0;
-    index < 12;
-    index += 1
-  ) {
-    characters.push(
-      SHOP_SUBMISSION_END_CODE_CHARACTERS[
-        randomInt(
-          SHOP_SUBMISSION_END_CODE_CHARACTERS.length
-        )
-      ]
-    );
-  }
-
-  return characters.join(
-    ""
-  );
-}
+// STEP 43-B(代表決定 2026-10-22)｜撤去した旧方式の mode(POST で受け取ると 410)。
+//   店舗専用URL(token)：shopTokenValidate・shopSubmissionCreate・adminRotateStoreToken
+//   オーナー申請の運営承認：adminStoreListingClaimReview・adminCountPendingStoreListingClaims・storeListingClaimWithdraw
+//   セルフ登録の運営確認：adminStoreRegistrationReview
+// 運営の店舗登録(adminCreateStoreAccount、tokenなし)・店舗一覧・有効化／無効化・店舗名の編集・所在地、
+// 引き継ぎの履歴・紐付け解除(adminStoreListingClaimList・adminStoreListingLinkRevoke)は残す。
+const REMOVED_LEGACY_MODES = Object.freeze([
+  "shopTokenValidate",
+  "shopSubmissionCreate",
+  "adminRotateStoreToken",
+  "adminStoreListingClaimReview",
+  "adminCountPendingStoreListingClaims",
+  "storeListingClaimWithdraw",
+  "adminStoreRegistrationReview"
+]);
 
 // api/admin-post.jsのFIELD_MAX_LENGTHSと同じ上限値を踏襲する(複製管理、
 // 既存のALLOWED_COLUMN_CATEGORIES等と同じ方針)。shopNameは含めない
@@ -512,628 +468,6 @@ const SHOP_SUBMISSION_FIELD_MAX_LENGTHS =
     websiteUrl: 300,
     businessTime: 40
   };
-
-// api/admin-post.jsのALLOWED_PAYMENT_METHOD_VALUESと同じ3値(複製管理)。
-const SHOP_SUBMISSION_ALLOWED_PAYMENT_METHOD_VALUES =
-  [
-    "cash",
-    "card",
-    "qr"
-  ];
-
-// token検証の共通処理。shopTokenValidate・cloudinarySignature(shop経路)・
-// shopSubmissionCreateのすべてがこの1関数だけを呼ぶ(ロジックを複製しない、
-// 本部指示)。失敗理由(店舗が存在しない／無効化されている／token不一致)は
-// 呼び出し元へは一切区別して返さない(本部指示：存在有無等を外部に漏らさない)。
-async function validateStoreToken(
-  database,
-  storeId,
-  token
-) {
-  const safeStoreId =
-    typeof storeId === "string"
-      ? storeId.trim()
-      : "";
-
-  const safeToken =
-    typeof token === "string"
-      ? token.trim()
-      : "";
-
-  if (
-    safeStoreId === "" ||
-    safeToken === ""
-  ) {
-    return {
-      valid: false
-    };
-  }
-
-  const storeAccountSnapshot =
-    await database
-      .collection(STORE_ACCOUNTS_COLLECTION)
-      .doc(safeStoreId)
-      .get();
-
-  if (!storeAccountSnapshot.exists) {
-    return {
-      valid: false
-    };
-  }
-
-  const storeAccountData =
-    storeAccountSnapshot.data() ||
-    {};
-
-  if (storeAccountData.enabled !== true) {
-    return {
-      valid: false
-    };
-  }
-
-  const computedTokenHash =
-    createEndCodeHash(
-      safeToken
-    );
-
-  if (
-    !hashesMatch(
-      computedTokenHash,
-      typeof storeAccountData.tokenHash === "string"
-        ? storeAccountData.tokenHash
-        : ""
-    )
-  ) {
-    return {
-      valid: false
-    };
-  }
-
-  return {
-    valid: true,
-    storeId: safeStoreId,
-
-    storeName:
-      typeof storeAccountData.storeName === "string"
-        ? storeAccountData.storeName
-        : ""
-  };
-}
-
-// post.htmlが専用URLを開いた直後に呼ぶ、UX用の事前確認(本番の投稿権限
-// 判定はshopSubmissionCreate側で改めて必ず行う、この結果だけを最終的な
-// 投稿権限として信用しない)。公開機能(旅行者向け)と同じ認証方式
-// (有効なFirebase IDトークンがあれば誰でも可、匿名認証も許可)を採用する。
-async function handleShopTokenValidateRequest(
-  request,
-  response
-) {
-  try {
-    const idToken =
-      readBearerToken(
-        request
-      );
-
-    if (idToken === "") {
-      return response.status(401).json({
-        success: false,
-        message: "認証情報がありません。"
-      });
-    }
-
-    const app =
-      getFirebaseAdminApp();
-
-    try {
-      await getAuth(app)
-        .verifyIdToken(
-          idToken
-        );
-    } catch (verifyError) {
-      return response.status(401).json({
-        success: false,
-        message: "認証情報が正しくありません。"
-      });
-    }
-
-    const database =
-      getFirestore(app);
-
-    const requestBody =
-      readRequestBody(
-        request
-      );
-
-    const validationResult =
-      await validateStoreToken(
-        database,
-        requestBody.storeId,
-        requestBody.token
-      );
-
-    if (!validationResult.valid) {
-      return response.status(200).json({
-        success: true,
-        valid: false
-      });
-    }
-
-    return response.status(200).json({
-      success: true,
-      valid: true,
-      storeName: validationResult.storeName
-    });
-  } catch (error) {
-    console.error(
-      "店舗token検証：処理エラー：",
-      error
-    );
-
-    return response.status(500).json({
-      success: false,
-      message: "店舗投稿URLの確認中にエラーが発生しました。"
-    });
-  }
-}
-
-// クライアントが自由入力してよいフィールドだけを取り出し、サニタイズする。
-// shopName・submissionType・status・publisherType相当・authorType・
-// sourceTrust・storeIdに対応する店舗情報はここでは一切扱わない
-// (呼び出し元のhandleShopSubmissionCreateRequest()がすべてサーバー側で
-// 確定する)。
-function sanitizeShopSubmissionFormData(
-  requestBody
-) {
-  const title =
-    sanitizeRegionEditorialText(
-      requestBody.title,
-      SHOP_SUBMISSION_FIELD_MAX_LENGTHS.title
-    );
-
-  const content =
-    sanitizeRegionEditorialText(
-      requestBody.content,
-      SHOP_SUBMISSION_FIELD_MAX_LENGTHS.content
-    );
-
-  const category =
-    typeof requestBody.category === "string"
-      ? requestBody.category.trim()
-      : "";
-
-  const address =
-    sanitizeRegionEditorialText(
-      requestBody.address,
-      SHOP_SUBMISSION_FIELD_MAX_LENGTHS.address
-    );
-
-  const websiteUrl =
-    sanitizeRegionEditorialText(
-      requestBody.websiteUrl,
-      SHOP_SUBMISSION_FIELD_MAX_LENGTHS.websiteUrl
-    );
-
-  const businessStartTime =
-    sanitizeRegionEditorialText(
-      requestBody.businessStartTime,
-      SHOP_SUBMISSION_FIELD_MAX_LENGTHS.businessTime
-    );
-
-  const businessEndTime =
-    sanitizeRegionEditorialText(
-      requestBody.businessEndTime,
-      SHOP_SUBMISSION_FIELD_MAX_LENGTHS.businessTime
-    );
-
-  const isOpen24Hours =
-    requestBody.isOpen24Hours === true;
-
-  const takeout =
-    requestBody.takeout === true;
-
-  const paymentMethods =
-    Array.isArray(requestBody.paymentMethods)
-      ? requestBody.paymentMethods.filter(
-          function(value) {
-            return SHOP_SUBMISSION_ALLOWED_PAYMENT_METHOD_VALUES.includes(
-              value
-            );
-          }
-        )
-      : [];
-
-  const latitude =
-    getValidatedCoordinateOrNull(
-      requestBody.latitude,
-      -90,
-      90
-    );
-
-  const longitude =
-    getValidatedCoordinateOrNull(
-      requestBody.longitude,
-      -180,
-      180
-    );
-
-  const durationHoursValue =
-    typeof requestBody.durationHours === "number" &&
-    Number.isFinite(requestBody.durationHours) &&
-    requestBody.durationHours > 0
-      ? requestBody.durationHours
-      : null;
-
-  const imageUrls =
-    Array.isArray(requestBody.imageUrls)
-      ? requestBody.imageUrls.filter(
-          function(value) {
-            return (
-              typeof value === "string" &&
-              value.trim() !== ""
-            );
-          }
-        )
-      : [];
-
-  const imagePublicIds =
-    Array.isArray(requestBody.imagePublicIds)
-      ? requestBody.imagePublicIds.filter(
-          function(value) {
-            return typeof value === "string";
-          }
-        )
-      : [];
-
-  return {
-    title: title,
-    content: content,
-    category: category,
-    address: address,
-    websiteUrl: websiteUrl,
-    businessStartTime: businessStartTime,
-    businessEndTime: businessEndTime,
-    isOpen24Hours: isOpen24Hours,
-    takeout: takeout,
-    paymentMethods: paymentMethods,
-    latitude: latitude,
-    longitude: longitude,
-    durationHours: durationHoursValue,
-    imageUrls: imageUrls,
-    imagePublicIds: imagePublicIds
-  };
-}
-
-// 検証済み店舗token経由のshop投稿を、Admin SDKで直接作成する。post.htmlの
-// database.collection("submissions").add()(クライアント直接書き込み)は
-// この経路では一切使わない。既存のModeration関数群(buildModerationInput/
-// callOpenAiModeration/matchesSafetyCriticalKeywords/classifyModerationError/
-// buildReviewReason/AI_REVIEW_VERSION、いずれもexport済みの独立関数)を
-// そのまま同一リクエスト内で呼び出し、2回目のHTTPリクエスト
-// (既存streetのtriggerSubmissionModeration()相当)を発生させない。
-// 既存の「一般公開shop 403」(既定のno-mode投稿審査ブロック内)には一切
-// 触れない：この経路で作られたsubmissionは、そもそもあの旧トリガー
-// エンドポイントを呼ばないため、自然に別経路のまま共存する。
-async function handleShopSubmissionCreateRequest(
-  request,
-  response
-) {
-  try {
-    const idToken =
-      readBearerToken(
-        request
-      );
-
-    if (idToken === "") {
-      return response.status(401).json({
-        success: false,
-        message: "認証情報がありません。"
-      });
-    }
-
-    const app =
-      getFirebaseAdminApp();
-
-    try {
-      await getAuth(app)
-        .verifyIdToken(
-          idToken
-        );
-    } catch (verifyError) {
-      return response.status(401).json({
-        success: false,
-        message: "認証情報が正しくありません。"
-      });
-    }
-
-    const database =
-      getFirestore(app);
-
-    const requestBody =
-      readRequestBody(
-        request
-      );
-
-    const validationResult =
-      await validateStoreToken(
-        database,
-        requestBody.storeId,
-        requestBody.token
-      );
-
-    if (!validationResult.valid) {
-      return response.status(403).json({
-        success: false,
-        message: "この店舗投稿URLは無効です。"
-      });
-    }
-
-    const formData =
-      sanitizeShopSubmissionFormData(
-        requestBody
-      );
-
-    if (
-      formData.title === "" ||
-      formData.content === "" ||
-      formData.category === "" ||
-      formData.durationHours === null
-    ) {
-      return response.status(400).json({
-        success: false,
-        message: "入力内容を確認してください。"
-      });
-    }
-
-    const publicationNumber =
-      generateShopSubmissionPublicationNumber();
-
-    const endCode =
-      generateShopSubmissionEndCode();
-
-    const endCodeHash =
-      createEndCodeHash(
-        endCode
-      );
-
-    const expiresAtDate =
-      new Date(
-        Date.now() +
-        formData.durationHours *
-          60 *
-          60 *
-          1000
-      );
-
-    // server確定フィールド：shopName(storeAccounts.storeNameで固定)、
-    // storeId(token検証済みの値)、submissionType("shop"固定)、status
-    // (この後のModeration結果で確定)。authorType/sourceTrustは今回も
-    // 追加しない(既存意味を壊さないため未設定のまま維持)。publisherType
-    // (発信元表示Phase1)は、この関数がtoken検証成功後にしか到達しない
-    // ためリテラル固定で追加する。requestBody.publisherType等、
-    // クライアント由来の値は一切参照・信用しない(本部指示)。
-    const submissionData =
-      {
-        publisherType:
-          "verified_shop",
-
-        shopName:
-          validationResult.storeName,
-
-        storeId:
-          validationResult.storeId,
-
-        title:
-          formData.title,
-
-        category:
-          formData.category,
-
-        durationHours:
-          formData.durationHours,
-
-        expiresAt:
-          Timestamp.fromDate(
-            expiresAtDate
-          ),
-
-        content:
-          formData.content,
-
-        address:
-          formData.address,
-
-        latitude:
-          formData.latitude,
-
-        longitude:
-          formData.longitude,
-
-        websiteUrl:
-          formData.websiteUrl,
-
-        businessStartTime:
-          formData.businessStartTime,
-
-        businessEndTime:
-          formData.businessEndTime,
-
-        isOpen24Hours:
-          formData.isOpen24Hours,
-
-        takeout:
-          formData.takeout,
-
-        paymentMethods:
-          formData.paymentMethods,
-
-        imageUrls:
-          formData.imageUrls,
-
-        imagePublicIds:
-          formData.imagePublicIds,
-
-        submissionType:
-          "shop",
-
-        status:
-          "pending",
-
-        publicationNumber:
-          publicationNumber,
-
-        endCodeHash:
-          endCodeHash,
-
-        createdAt:
-          FieldValue.serverTimestamp(),
-
-        updatedAt:
-          FieldValue.serverTimestamp(),
-
-        source:
-          "web",
-
-        version:
-          "1.2"
-      };
-
-    const submissionDocumentReference =
-      await database
-        .collection("submissions")
-        .add(
-          submissionData
-        );
-
-    // 既存の既定(no-mode)投稿審査ブロックと全く同じ判定順序
-    // (Moderation→安全性キーワード→自動承認)を、同一リクエスト内で
-    // そのまま踏襲する。新しいModeration判定は作らない(本部指示)。
-    let responseStatus =
-      "pending";
-
-    try {
-      const inputItems =
-        buildModerationInput(
-          submissionData
-        );
-
-      const moderationResults =
-        await callOpenAiModeration(
-          inputItems
-        );
-
-      const allSafe =
-        moderationResults.every(
-          function(result) {
-            return (
-              result &&
-              result.flagged === false
-            );
-          }
-        );
-
-      const isSafetyCriticalContent =
-        matchesSafetyCriticalKeywords(
-          submissionData
-        );
-
-      if (
-        allSafe &&
-        !isSafetyCriticalContent
-      ) {
-        await submissionDocumentReference.update(
-          {
-            status: "approved",
-
-            aiReviewStatus:
-              "SAFE",
-
-            aiReviewedAt:
-              FieldValue.serverTimestamp(),
-
-            aiReviewVersion:
-              AI_REVIEW_VERSION
-          }
-        );
-
-        responseStatus =
-          "approved";
-      } else {
-        const reasonText =
-          allSafe && isSafetyCriticalContent
-            ? "安全・災害・交通に関する情報の可能性があるため、内容を人間が確認します。"
-            : buildReviewReason(
-                moderationResults
-              );
-
-        await submissionDocumentReference.update(
-          {
-            aiReviewStatus:
-              "REVIEW",
-
-            aiReviewReason:
-              reasonText,
-
-            aiReviewedAt:
-              FieldValue.serverTimestamp(),
-
-            aiReviewVersion:
-              AI_REVIEW_VERSION
-          }
-        );
-      }
-    } catch (moderationError) {
-      const reasonText =
-        classifyModerationError(
-          moderationError
-        );
-
-      await submissionDocumentReference.update(
-        {
-          aiReviewStatus:
-            "ERROR",
-
-          aiReviewReason:
-            reasonText,
-
-          aiReviewedAt:
-            FieldValue.serverTimestamp(),
-
-          aiReviewVersion:
-            AI_REVIEW_VERSION
-        }
-      ).catch(
-        function(updateError) {
-          console.error(
-            "店舗投稿：AI審査エラー状態の保存にも失敗：",
-            updateError
-          );
-        }
-      );
-
-      console.error(
-        "店舗投稿：AI自動審査エラー：",
-        moderationError
-      );
-    }
-
-    return response.status(200).json({
-      success: true,
-      status: responseStatus,
-      publicationNumber: publicationNumber,
-      endCode: endCode
-    });
-  } catch (error) {
-    console.error(
-      "店舗投稿：処理エラー：",
-      error
-    );
-
-    return response.status(500).json({
-      success: false,
-      message: "投稿の送信中にエラーが発生しました。時間をおいて、もう一度お試しください。"
-    });
-  }
-}
 
 // ---- admin-shops.html向け管理API(既存requireAdmin()をそのまま再利用) ----
 
@@ -1175,14 +509,7 @@ async function handleAdminCreateStoreAccountRequest(
       });
     }
 
-    const rawToken =
-      generateStoreToken();
-
-    const tokenHash =
-      createEndCodeHash(
-        rawToken
-      );
-
+    // STEP 43-B｜旧方式の店舗専用URL(token)は発行しない(店舗の登録だけ。tokenHash は作らない)。
     const storeAccountRef =
       database
         .collection(STORE_ACCOUNTS_COLLECTION)
@@ -1191,7 +518,6 @@ async function handleAdminCreateStoreAccountRequest(
     await storeAccountRef.set(
       {
         storeName: storeName,
-        tokenHash: tokenHash,
         enabled: true,
 
         createdAt:
@@ -1204,8 +530,7 @@ async function handleAdminCreateStoreAccountRequest(
 
     return response.status(200).json({
       success: true,
-      storeId: storeAccountRef.id,
-      token: rawToken
+      storeId: storeAccountRef.id
     });
   } catch (error) {
     console.error(
@@ -1321,106 +646,6 @@ async function handleAdminListStoreAccountsRequest(
     return response.status(500).json({
       success: false,
       message: "店舗一覧の取得中にエラーが発生しました。"
-    });
-  }
-}
-
-async function handleAdminRotateStoreTokenRequest(
-  request,
-  response
-) {
-  try {
-    const authResult =
-      await requireAdmin(
-        request
-      );
-
-    if (!authResult.ok) {
-      return response.status(authResult.status).json({
-        success: false,
-        message: authResult.message
-      });
-    }
-
-    const database =
-      authResult.database;
-
-    const requestBody =
-      readRequestBody(
-        request
-      );
-
-    const storeId =
-      typeof requestBody.storeId === "string"
-        ? requestBody.storeId.trim()
-        : "";
-
-    if (storeId === "") {
-      return response.status(400).json({
-        success: false,
-        message: "storeIdを指定してください。"
-      });
-    }
-
-    const storeAccountRef =
-      database
-        .collection(STORE_ACCOUNTS_COLLECTION)
-        .doc(storeId);
-
-    const storeAccountSnapshot =
-      await storeAccountRef.get();
-
-    if (!storeAccountSnapshot.exists) {
-      return response.status(404).json({
-        success: false,
-        message: "対象の店舗が見つかりませんでした。"
-      });
-    }
-
-    // Phase 2A｜セルフ登録店舗にはtokenを発行しない(旧店舗URL方式は運営登録店舗だけ)。
-    // STEP 42-F｜運営掲載の引き継ぎで作られた店舗(listingClaim)も店主が管理するため発行しない。
-    if (
-      (storeAccountSnapshot.data() || {}).createdByType === "storeUser" ||
-      (storeAccountSnapshot.data() || {}).createdByType === "listingClaim"
-    ) {
-      return response.status(409).json({
-        success: false,
-        reason: "self_registered_store",
-        message: "セルフ登録の店舗には店舗専用URLを発行しません。"
-      });
-    }
-
-    const rawToken =
-      generateStoreToken();
-
-    const tokenHash =
-      createEndCodeHash(
-        rawToken
-      );
-
-    await storeAccountRef.update(
-      {
-        tokenHash: tokenHash,
-
-        updatedAt:
-          FieldValue.serverTimestamp()
-      }
-    );
-
-    return response.status(200).json({
-      success: true,
-      storeId: storeId,
-      token: rawToken
-    });
-  } catch (error) {
-    console.error(
-      "店舗token再発行：処理エラー：",
-      error
-    );
-
-    return response.status(500).json({
-      success: false,
-      message: "店舗tokenの再発行中にエラーが発生しました。"
     });
   }
 }
@@ -21591,12 +20816,8 @@ async function handleCloudinarySignatureRequest(
       });
     }
 
-    // 店舗専用投稿URL Phase2｜storeId/tokenが送られてきた場合だけ、
-    // 署名発行前に店舗tokenを再検証する(検証済み店舗経路専用の防御)。
-    // street(および一般公開時のstreet/shop共通利用)は、storeId/tokenを
-    // 送らないため従来どおり無条件で署名を取得できる(挙動を一切変えない)。
-    // 検証ロジックはshopTokenValidate/shopSubmissionCreateと共通の
-    // validateStoreToken()をそのまま呼ぶ(複製しない)。
+    // STEP 43-B｜旧方式の店舗専用URL(storeId/token)経由の写真の署名は撤去した。storeId/tokenが
+    // 送られてきた時は署名を出さない(street等、storeId/tokenを送らない利用は従来どおり)。
     const requestBody =
       readRequestBody(
         request
@@ -21616,22 +20837,11 @@ async function handleCloudinarySignatureRequest(
       requestedStoreId !== "" ||
       requestedStoreToken !== ""
     ) {
-      const database =
-        getFirestore(app);
-
-      const validationResult =
-        await validateStoreToken(
-          database,
-          requestedStoreId,
-          requestedStoreToken
-        );
-
-      if (!validationResult.valid) {
-        return response.status(403).json({
-          success: false,
-          message: "この店舗投稿URLは無効です。"
-        });
-      }
+      return response.status(410).json({
+        success: false,
+        reason: "legacy_feature_removed",
+        message: "この機能は終了しました。店舗アカウントからご利用ください。"
+      });
     }
 
     const cloudinaryApiKey =
@@ -30552,7 +29762,6 @@ function buildImadakeDeps() {
     getFirebaseAdminApp: getFirebaseAdminApp,
     getFirestore: getFirestore,
     readRequestBody: readRequestBody,
-    validateStoreToken: validateStoreToken,
     claimRateLimit: claimRateLimit,
     hashRateLimitStore: function(storeId) {
       return computeRateLimitIdentifier(
@@ -30813,31 +30022,23 @@ export default async function handler(
       request
     );
 
+  // STEP 43-B(代表決定 2026-10-22)｜撤去した旧方式の mode。他の処理へ流れないよう、ここで 410 を返す
+  // (Firestore は読み書きしない。過去のデータはそのまま残る)。
+  if (
+    typeof requestBody.mode === "string" &&
+    REMOVED_LEGACY_MODES.includes(requestBody.mode)
+  ) {
+    return response.status(410).json({
+      success: false,
+      reason: "legacy_feature_removed",
+      message: "この機能は終了しました。店舗アカウントからご利用ください。"
+    });
+  }
+
   if (
     requestBody.mode === "cloudinarySignature"
   ) {
     return handleCloudinarySignatureRequest(
-      request,
-      response
-    );
-  }
-
-  // 店舗専用投稿URL Phase2(1店舗MVP)｜公開機能(旅行者/店舗向け)のため
-  // 管理者/Editor限定にしない(cityInfoGet等と同じ匿名認証方式)。
-  // 既存モードのいずれにも一切触れない。
-  if (
-    requestBody.mode === "shopTokenValidate"
-  ) {
-    return handleShopTokenValidateRequest(
-      request,
-      response
-    );
-  }
-
-  if (
-    requestBody.mode === "shopSubmissionCreate"
-  ) {
-    return handleShopSubmissionCreateRequest(
       request,
       response
     );
@@ -31058,10 +30259,7 @@ export default async function handler(
       storeListingClaimPreview: handleStoreListingClaimPreview,
       storeListingClaimCreate: handleStoreListingClaimCreate,
       storeListingClaimMine: handleStoreListingClaimMine,
-      storeListingClaimWithdraw: handleStoreListingClaimWithdraw,
-      adminCountPendingStoreListingClaims: handleAdminCountPendingStoreListingClaims,
       adminStoreListingClaimList: handleAdminStoreListingClaimList,
-      adminStoreListingClaimReview: handleAdminStoreListingClaimReview,
       adminStoreListingLinkRevoke: handleAdminStoreListingLinkRevoke
     };
 
@@ -31073,16 +30271,6 @@ export default async function handler(
     )
   ) {
     return storeListingClaimHandlers[requestBody.mode](
-      request,
-      response,
-      buildStoreSelfServiceDeps()
-    );
-  }
-
-  if (
-    requestBody.mode === "adminStoreRegistrationReview"
-  ) {
-    return handleAdminStoreRegistrationReview(
       request,
       response,
       buildStoreSelfServiceDeps()
@@ -31104,15 +30292,6 @@ export default async function handler(
     requestBody.mode === "adminListStoreAccounts"
   ) {
     return handleAdminListStoreAccountsRequest(
-      request,
-      response
-    );
-  }
-
-  if (
-    requestBody.mode === "adminRotateStoreToken"
-  ) {
-    return handleAdminRotateStoreTokenRequest(
       request,
       response
     );

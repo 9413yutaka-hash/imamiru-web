@@ -100,14 +100,19 @@ try {
   t("EN end: confirm dialog in English, result message in English, form back", (await p.ev("window.__confirms.at(-1)")) === "End your live post? (Travelers will no longer see it.)" && (await p.ev("document.getElementById('formMessage').textContent")) === "Your post has ended. You can create a new post.");
   await p.close();
 
-  // ---- pending + withdraw in Japanese (legacy token store) ----
-  be.current = null;
+  // ---- old token URL (STEP 43-B: method A removed) ----
+  const beforeLegacy = be.reqs.length;
   p = await page("/imadake-post.html?store=LEG&token=secret", { login: false });
-  t("legacy token store: page works (status via token)", await p.ev("!document.getElementById('storePanel').hidden && !document.getElementById('postForm').hidden") && be.reqs.filter((r) => r.mode === "imadakeStoreStatus").at(-1).token === "secret");
+  t("old token URL: invalid panel, no API calls", await p.ev("!document.getElementById('invalidPanel').hidden && document.getElementById('storePanel').hidden") && be.reqs.length === beforeLegacy);
+  await p.close();
+  // ---- pending + withdraw in Japanese (logged-in store) ----
+  be.current = null;
+  p = await page("/imadake-post.html?store=S1");
+  t("logged-in store: page works", await p.ev("!document.getElementById('storePanel').hidden && !document.getElementById('postForm').hidden"));
   await p.ev("document.querySelector('#categoryChips input[value=other]').click(); document.getElementById('headlineInput').value='審査になる見出し'; document.getElementById('submitButton').click(); true");
   await p.waitFor("document.getElementById('postForm').hidden === true", 8000); await sleep(150);
   cur = await p.ev("({status: document.getElementById('currentStatusLabel').textContent, msg: document.getElementById('currentMessage').textContent, withdraw: document.getElementById('withdrawButton').textContent})");
-  t("JA pending result (token store): 運営確認中 + pending message", cur.status === "運営確認中（まだ公開されていません）" && cur.msg.startsWith("内容を運営が確認しています。") && cur.withdraw === "投稿を取り下げる", cur);
+  t("JA pending result (logged-in store): 運営確認中 + pending message", cur.status === "運営確認中（まだ公開されていません）" && cur.msg.startsWith("内容を運営が確認しています。") && cur.withdraw === "投稿を取り下げる", cur);
   await p.ev("document.getElementById('withdrawButton').click(); true"); await p.waitFor("document.getElementById('postForm').hidden === false", 8000); await sleep(150);
   t("JA withdraw: confirm + result in Japanese", (await p.ev("window.__confirms.at(-1)")) === "確認中の投稿を取り下げますか？（公開されません）" && (await p.ev("document.getElementById('formMessage').textContent")) === "確認中の投稿を取り下げました。新しく投稿できます。");
   await p.close();

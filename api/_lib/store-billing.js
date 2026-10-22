@@ -7,10 +7,18 @@
 // このファイルは請求をしない(お金は動かない)。月次の締め・請求・返金は別の工程。
 //
 // 安全装置(どれか1つでも満たさなければ、カード登録の機能そのものを止める)
-//   ・環境変数 STRIPE_MODE が "test"(本番モードはこの工程では使わない)
-//   ・サーバーのキー(STRIPE_RESTRICTED_KEY)が rk_test_／sk_test_、公開可能キー
-//     (STRIPE_PUBLISHABLE_KEY)が pk_test_ で始まる(テストと本番の取り違えを防ぐ)
-//   ・Productionのデプロイ(VERCEL_ENV=production)では動かさない(本番サイトでは無効)
+// STEP 43-B(代表決定 2026-10-22)：カード登録用と請求用で Stripe の設定の読み取りを分ける。
+//   カード登録(readStripeCardSetupConfig)：
+//     ・Production(VERCEL_ENV=production)では次の4条件がすべてそろった時だけ本番モード(live)：
+//       ①コードのスイッチ STORE_CARD_REGISTRATION_LIVE_ENABLED が true(既定 false)
+//       ②環境変数 STRIPE_MODE が "live"
+//       ③サーバーのキー(STRIPE_RESTRICTED_KEY)が制限付きの本番キー rk_live_(権限の広い sk_live_ は拒否)
+//       ④公開可能キー(STRIPE_PUBLISHABLE_KEY)が pk_live_
+//     ・Production以外はテストモードだけ(STRIPE_MODE "test"、rk_test_／sk_test_、pk_test_)
+//     ・呼べる Stripe の操作は、顧客の作成・SetupIntent の作成と照会・PaymentMethod の照会と取り外しだけ
+//       (CARD_SETUP_STRIPE_OPERATIONS。支払い(PaymentIntent)は呼べない)
+//   請求(readStripeChargeConfig、今だけ投稿の月次請求・請求の確認画面)：
+//     ・Productionでは常に無効(本番の課金開始の承認まで)。テストモードだけ
 //   ・キーが未設定なら止める
 // キーの値はログ・応答・Firestoreに一切出さない。Stripeの応答本文もログに出さない。
 //
@@ -19,7 +27,7 @@
 //     test: { customerId, paymentMethodId, card: { brand, last4, expMonth, expYear }, cardVersion,
 //             detachPendingPaymentMethods: [ 置き換え前のカード(取り外し待ち) ], lastDetachResult,
 //             pendingSetupIntentId, consentVersion, consentAt, updatedAt, updatedByUid }
-//     live: (本番用。この工程では作らない)
+//     live: (本番用。test と同じ形。本番のカード登録が4条件で有効な時だけ作られる)
 //   PreviewとProductionは同じFirestoreなので、テスト用と本番用は必ず別の項目に分ける。
 //   カード番号・セキュリティコードは受け取らない・保存しない(Stripeが直接受け取る)。
 //
@@ -125,30 +133,47 @@ function sendError(response, status, reason, extra) {
   );
 }
 
-// 環境変数からStripeの設定を読み、安全条件をすべて確かめる。キーの値は返り値の
-// serverKey/publishableKeyだけに入れ、呼び出し元はログに出さない。
-export function readStripeBillingConfig(env) {
-  const source = env || {};
-  const mode = typeof source.STRIPE_MODE === "string" ? source.STRIPE_MODE.trim() : "";
-  const serverKey =
-    typeof source.STRIPE_RESTRICTED_KEY === "string" ? source.STRIPE_RESTRICTED_KEY.trim() : "";
-  const publishableKey =
-    typeof source.STRIPE_PUBLISHABLE_KEY === "string" ? source.STRIPE_PUBLISHABLE_KEY.trim() : "";
+// STEP 43-B｜本番のカード登録のスイッチ(4条件の①)。代表の承認まで false。
+// true にしても、今だけ投稿の請求(readStripeChargeConfig)は有効にならない。
+export const STORE_CARD_REGISTRATION_LIVE_ENABLED =
+  false;
 
-  if (source.VERCEL_ENV === "production") {
-    return { ok: false, reason: "disabled_in_production" };
-  }
+// STEP 43-B｜カード登録で呼んでよい Stripe の操作(方法とパス)。これ以外(支払いの作成など)は送らない。
+// 本番の制限付きキーに必要な権限：Customers(書き込み)・SetupIntents(書き込み)・PaymentMethods(書き込み：照会と取り外し)。
+export const CARD_SETUP_STRIPE_OPERATIONS = Object.freeze([
+  { method: "POST", path: /^\/customers$/ },
+  { method: "POST", path: /^\/setup_intents$/ },
+  { method: "GET", path: /^\/setup_intents\/seti_[A-Za-z0-9]{1,100}$/ },
+  { method: "GET", path: /^\/payment_methods\/pm_[A-Za-z0-9_]{1,100}$/ },
+  { method: "POST", path: /^\/payment_methods\/pm_[A-Za-z0-9_]{1,100}\/detach$/ }
+]);
 
-  if (mode === "" || serverKey === "" || publishableKey === "") {
+export function isCardSetupStripeOperation(method, path) {
+  return CARD_SETUP_STRIPE_OPERATIONS.some(function(operation) {
+    return operation.method === method && operation.path.test(String(path || ""));
+  });
+}
+
+function readStripeEnvValues(source) {
+  return {
+    mode: typeof source.STRIPE_MODE === "string" ? source.STRIPE_MODE.trim() : "",
+    serverKey: typeof source.STRIPE_RESTRICTED_KEY === "string" ? source.STRIPE_RESTRICTED_KEY.trim() : "",
+    publishableKey: typeof source.STRIPE_PUBLISHABLE_KEY === "string" ? source.STRIPE_PUBLISHABLE_KEY.trim() : ""
+  };
+}
+
+// テストモードだけの確認(Production以外のカード登録・請求の両方で使う)。
+function readStripeTestOnlyConfig(values, purpose) {
+  if (values.mode === "" || values.serverKey === "" || values.publishableKey === "") {
     return { ok: false, reason: "not_configured" };
   }
 
-  if (!ALLOWED_STRIPE_MODES.includes(mode)) {
+  if (!ALLOWED_STRIPE_MODES.includes(values.mode)) {
     return { ok: false, reason: "mode_not_allowed" };
   }
 
-  const serverKeyIsTest = serverKey.startsWith("rk_test_") || serverKey.startsWith("sk_test_");
-  const publishableKeyIsTest = publishableKey.startsWith("pk_test_");
+  const serverKeyIsTest = values.serverKey.startsWith("rk_test_") || values.serverKey.startsWith("sk_test_");
+  const publishableKeyIsTest = values.publishableKey.startsWith("pk_test_");
 
   if (!serverKeyIsTest || !publishableKeyIsTest) {
     return { ok: false, reason: "key_mode_mismatch" };
@@ -156,10 +181,69 @@ export function readStripeBillingConfig(env) {
 
   return {
     ok: true,
-    mode: mode,
-    serverKey: serverKey,
-    publishableKey: publishableKey
+    purpose: purpose,
+    mode: values.mode,
+    serverKey: values.serverKey,
+    publishableKey: values.publishableKey
   };
+}
+
+// STEP 43-B｜カード登録用の設定。Production では4条件(上の説明)がすべてそろった時だけ live。
+// options.liveEnabled は試験でスイッチの値を差し替えるためだけの引数(省略時はコードのスイッチ)。
+// 本番のサーバーの部品(buildStoreBillingDeps)は cardSetupConfigOptions を渡さない(リクエストからは指定できない)。
+// キーの値は返り値の serverKey/publishableKey だけに入れ、呼び出し元はログに出さない。
+export function readStripeCardSetupConfig(env, options) {
+  const source = env || {};
+  const values = readStripeEnvValues(source);
+
+  if (source.VERCEL_ENV !== "production") {
+    return readStripeTestOnlyConfig(values, "card_setup");
+  }
+
+  const liveEnabled =
+    options && typeof options.liveEnabled === "boolean"
+      ? options.liveEnabled
+      : STORE_CARD_REGISTRATION_LIVE_ENABLED;
+
+  if (liveEnabled !== true) {
+    return { ok: false, reason: "live_registration_disabled" };
+  }
+
+  if (values.mode === "" || values.serverKey === "" || values.publishableKey === "") {
+    return { ok: false, reason: "not_configured" };
+  }
+
+  if (values.mode !== "live") {
+    return { ok: false, reason: "mode_not_allowed" };
+  }
+
+  if (!values.serverKey.startsWith("rk_live_")) {
+    return { ok: false, reason: "server_key_not_restricted_live" };
+  }
+
+  if (!values.publishableKey.startsWith("pk_live_")) {
+    return { ok: false, reason: "key_mode_mismatch" };
+  }
+
+  return {
+    ok: true,
+    purpose: "card_setup",
+    mode: "live",
+    serverKey: values.serverKey,
+    publishableKey: values.publishableKey
+  };
+}
+
+// 請求用(今だけ投稿の月次請求・請求の確認画面)の設定。Productionでは常に無効、テストモードだけ。
+// 本番カード登録のスイッチ・本番キーがあっても、ここは有効にならない(本番の課金開始は別の承認・別の変更)。
+export function readStripeChargeConfig(env) {
+  const source = env || {};
+
+  if (source.VERCEL_ENV === "production") {
+    return { ok: false, reason: "disabled_in_production" };
+  }
+
+  return readStripeTestOnlyConfig(readStripeEnvValues(source), "charge");
 }
 
 // application/x-www-form-urlencoded(Stripeの形式)。値はstringかnumberだけ。
@@ -179,7 +263,12 @@ function encodeStripeForm(params) {
 
 // Stripe APIを呼ぶ。失敗しても例外は投げず { ok:false, status, type, code } を返す
 // (キー・応答本文はどこにも出さない)。
+// STEP 43-B｜カード登録用の設定(purpose "card_setup")で、許可した操作(CARD_SETUP_STRIPE_OPERATIONS)だけを送る。
 async function callStripe(config, deps, method, path, params, idempotencyKey, timeoutMs) {
+  if (!config || config.purpose !== "card_setup" || !isCardSetupStripeOperation(method, path)) {
+    return { ok: false, status: 0, type: "stripe_operation_not_allowed", code: "" };
+  }
+
   const abortController = new AbortController();
   const timeoutId = setTimeout(function() {
     abortController.abort();
@@ -357,7 +446,7 @@ export async function handleStoreBillingStatus(request, response, deps) {
       return;
     }
 
-    const config = readStripeBillingConfig(deps.env);
+    const config = readStripeCardSetupConfig(deps.env, deps.cardSetupConfigOptions);
 
     if (!config.ok) {
       return response.status(200).json({
@@ -853,7 +942,7 @@ export async function handleStoreBillingSetupIntentCreate(request, response, dep
       return;
     }
 
-    const config = readStripeBillingConfig(deps.env);
+    const config = readStripeCardSetupConfig(deps.env, deps.cardSetupConfigOptions);
 
     if (!config.ok) {
       return sendError(response, 503, "billing_unavailable", { unavailableReason: config.reason });
@@ -970,7 +1059,7 @@ export async function handleStoreBillingSetupConfirm(request, response, deps) {
       return;
     }
 
-    const config = readStripeBillingConfig(deps.env);
+    const config = readStripeCardSetupConfig(deps.env, deps.cardSetupConfigOptions);
 
     if (!config.ok) {
       return sendError(response, 503, "billing_unavailable", { unavailableReason: config.reason });

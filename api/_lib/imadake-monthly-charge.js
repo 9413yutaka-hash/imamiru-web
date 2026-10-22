@@ -35,7 +35,7 @@
 //
 // 実行の許可：IMADAKE_MONTHLY_CHARGE_ENABLED(この工程の新しいフラグ、false)と
 // 課金開始フラグ IMADAKE_CV_BILLING_STARTED(false)の両方が true で、Stripeの設定がテスト用
-// (store-billing.js の readStripeBillingConfig：テストキーのみ・Productionでは無効)のときだけ。
+// (store-billing.js の readStripeChargeConfig：テストキーのみ・Productionでは無効)のときだけ。
 // 既定は試算(dryRun)：読むだけで書き込まず、Stripeにも接続しない。
 // キーの値・Stripeの応答本文はログ・応答・Firestoreに出さない(状態・コード・IDだけ)。
 // このファイルはVercel Functionではない(api/moderate-submission.js の mode から呼ばれる)。
@@ -51,7 +51,7 @@ import {
 
 import {
   ACCOUNT_BILLING_COLLECTION,
-  readStripeBillingConfig,
+  readStripeChargeConfig,
   resolveStoreBillingAccount
 } from "./store-billing.js";
 
@@ -144,6 +144,11 @@ function encodeForm(params) {
 // Stripe API を呼ぶ。例外は投げず、{ ok, status, data?, error? } を返す。
 // error は { type, code, declineCode, paymentIntent? }(応答本文そのものは返さない)。status 0 は通信失敗・時間切れ。
 async function stripeRequest(config, deps, method, path, params, idempotencyKey) {
+  // STEP 43-B｜請求用の設定(purpose "charge")でだけ送る。カード登録用の設定・キーでは請求しない。
+  if (!config || config.purpose !== "charge") {
+    return { ok: false, status: 0, error: { type: "stripe_operation_not_allowed", code: "", declineCode: "" } };
+  }
+
   const abortController = new AbortController();
   const timeoutId = setTimeout(function() {
     abortController.abort();
@@ -766,7 +771,8 @@ export async function runImadakeMonthlyCharge(database, deps, options) {
 
   const dryRun = options.dryRun !== false;
   const gates = options.gates || {};
-  const config = readStripeBillingConfig(deps.env);
+  // STEP 43-B｜請求用の設定(Productionでは常に無効)。カード登録用の設定・本番カード登録のスイッチは使わない。
+  const config = readStripeChargeConfig(deps.env);
 
   if (!dryRun) {
     if (gates.chargeEnabled !== true || gates.billingStarted !== true) {

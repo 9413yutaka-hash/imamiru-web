@@ -32,7 +32,7 @@
 
 import {
   ACCOUNT_BILLING_COLLECTION,
-  readStripeBillingConfig,
+  readStripeCardSetupConfig,
   resolveStoreBillingAccount
 } from "./store-billing.js";
 
@@ -101,7 +101,8 @@ export function evaluateImadakeBillingCard(billingData, uid, mode, nowMillis) {
 }
 
 function readMode(options) {
-  const config = readStripeBillingConfig((options && options.env) || process.env);
+  // STEP 43-B｜カードの保存先(test／live)はカード登録用の設定で決める(請求用の設定とは別)。
+  const config = readStripeCardSetupConfig((options && options.env) || process.env, options);
   return config.ok ? config.mode : null;
 }
 

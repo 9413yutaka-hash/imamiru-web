@@ -947,8 +947,8 @@ function toMillis(
 // --------------------------------------------------------------------------
 // 正式店舗アカウント接続｜今だけ投稿の店舗本人の確認(作成・状態取得・終了の3経路で共通)
 // --------------------------------------------------------------------------
-// 方式A(既存の店舗専用URL)：tokenが送られてきた時は、従来どおりvalidateStoreToken()
-//   だけで確かめる。tokenが誤っていても方式Bへは切り替えない(取り違え防止)。
+// 方式A(旧方式の店舗専用URL＋token)：STEP 43-B(代表決定 2026-10-22)で撤去した。tokenが送られてきた時は
+//   常に 410 で断る(方式Bへは切り替えない＝取り違え防止。token の照合はしない)。
 // 方式B(セルフ登録した正式店舗)：tokenが無い時だけ、AuthorizationヘッダーのFirebase
 //   IDトークンを既存のresolveStoreUserActor()(passwordログインのみ)で確かめ、
 //   メール確認済みであること、既存のcheckStoreProfileEditor()でstoreMembersの有効な
@@ -968,25 +968,12 @@ export async function verifyImadakeStoreActor(
       : "";
 
   if (token !== "") {
-    const tokenValidation =
-      await deps.validateStoreToken(
-        database,
-        requestBody.storeId,
-        requestBody.token
-      );
-
-    return tokenValidation.valid
-      ? {
-          valid: true,
-          storeId: tokenValidation.storeId,
-          storeName: tokenValidation.storeName,
-          method: "storeToken"
-        }
-      : {
-          valid: false,
-          status: 403,
-          message: "この店舗投稿URLは無効です。"
-        };
+    return {
+      valid: false,
+      status: 410,
+      reason: "legacy_feature_removed",
+      message: "旧方式の店舗専用URLは終了しました。店舗アカウントにログインしてご利用ください。"
+    };
   }
 
   const storeId =
