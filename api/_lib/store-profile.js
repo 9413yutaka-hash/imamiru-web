@@ -1335,6 +1335,11 @@ export async function handleStoreProfileUnpublish(request, response, deps) {
 // suppressedListingIds：有効な紐付け(storeListingLinks)があり、紐付け先の正式店舗を
 // 今回返している場合だけ、その運営無料掲載の submission ID を入れる。画面側で同じ店舗が
 // 2枚並ばないようにするための情報(STEP 3では画面からはまだ使わない)。
+//
+// claimedListingIds(STEP 42-G)：有効な紐付け(storeListingLinks status active)がある運営無料掲載の
+// submission ID すべて(紐付け先の店舗が公開前でも入れる)。旅行者向け詳細の「このお店の方へ」の入口を、
+// 引き継ぎ済みの掲載で出さないために使う。掲載IDだけで、紐付け先の店舗ID・店主・申請・カードの情報は返さない。
+// 引き継ぎの可否はこれまでどおりサーバー(引き継ぎの処理)が決める(画面の表示は根拠にしない)。
 
 export const PUBLIC_STORE_ID_PREFIX = "sp_";
 export const PUBLIC_STORE_LISTING_TYPE = "store_profile";
@@ -1442,6 +1447,7 @@ export async function handlePublicStoreProfilesList(request, response, deps) {
 
     // storeId → 有効に紐付いている運営無料掲載のsubmission ID(文書ID)
     const linkedListingIdsByStore = new Map();
+    const claimedListingIds = new Set();
 
     snapshots[1].docs.forEach(function(documentSnapshot) {
       const link = documentSnapshot.data() || {};
@@ -1449,6 +1455,8 @@ export async function handlePublicStoreProfilesList(request, response, deps) {
       if (link.status !== "active" || typeof link.storeId !== "string" || link.storeId === "") {
         return;
       }
+
+      claimedListingIds.add(documentSnapshot.id);
 
       if (!linkedListingIdsByStore.has(link.storeId)) {
         linkedListingIdsByStore.set(link.storeId, []);
@@ -1507,7 +1515,8 @@ export async function handlePublicStoreProfilesList(request, response, deps) {
     return response.status(200).json({
       success: true,
       stores: stores,
-      suppressedListingIds: Array.from(suppressedListingIds).sort()
+      suppressedListingIds: Array.from(suppressedListingIds).sort(),
+      claimedListingIds: Array.from(claimedListingIds).sort()
     });
   } catch (error) {
     console.error("旅行者向け店舗一覧：取得エラー：", error && error.message);
