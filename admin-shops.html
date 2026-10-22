@@ -11,7 +11,7 @@
   <meta name="robots" content="noindex, nofollow">
 
   <title>
-    店舗専用投稿URL管理｜マチナウ運営
+    店舗の登録・管理｜マチナウ運営
   </title>
 
   <style>
@@ -240,7 +240,7 @@
     </div>
 
     <h1>
-      店舗専用投稿URL管理
+      店舗の登録・管理
     </h1>
 
     <a href="admin.html">
@@ -682,7 +682,7 @@
               '</div>' +
               (isSelfRegistered
                 ? '<div class="store-self-line" style="margin:4px 0 0; font-size:12.5px; color:var(--subtext);">' +
-                    (storeAccount.createdByType === "listingClaim" ? '<strong>運営掲載を店主が引き継ぎ</strong>（専用URLなし）｜状態：' : '<strong>店舗が自分で登録</strong>（専用URLなし）｜状態：') +
+                    (storeAccount.createdByType === "listingClaim" ? '<strong>運営掲載を店主が引き継ぎ</strong>｜状態：' : '<strong>店舗が自分で登録</strong>｜状態：') +
                     escapeHtmlText(SELF_REGISTRATION_STATUS_LABELS[registrationStatus] || registrationStatus) +
                     ((storeAccount.reviewFlags || []).length > 0
                       ? '｜記録：' + escapeHtmlText(storeAccount.reviewFlags.map(function(flag) {

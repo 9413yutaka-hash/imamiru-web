@@ -149,6 +149,17 @@ const claimLinkJa = (read("translations.js").match(/modal_claim_link:\s*\{\s*ja:
 t("24a shop.html：旧専用URL方式の案内（専用投稿URL・edit.html・end.html・shop-guide.html への導線）が無い", !/専用投稿URL|これまでどおり、お渡しした専用URL|href="edit\.html"|href="end\.html"|href="shop-guide\.html"/.test(shopVisible));
 t("24b shop.html：店主の導線は既存の店舗アカウント（作成 store-account.html?view=signup・ログイン store-account.html）と、掲載中のお店の詳細の入口（TOP と同じ文言）", /href="store-account\.html\?view=signup"/.test(shopVisible) && /href="store-account\.html"/.test(shopVisible) && claimLinkJa !== "" && shopVisible.includes(claimLinkJa.replace(/\s*→$/, "")), claimLinkJa);
 t("24c shop.html：はじめ方にクレジットカードの登録があり、旧方式の運営確認・「準備中」の案内が無い", /クレジットカードを登録します/.test(shopVisible) && !/運営が確認してから登録が完了/.test(shopVisible) && !/仕組みは準備中/.test(shopVisible) && !/自動では引き継がれません/.test(shopVisible));
+// STEP 43-G①｜管理画面（admin.html・admin-shops.html）の文言
+const visibleOf = (p) => read(p).replace(/<!--[\s\S]*?-->/g, "").replace(/<style[\s\S]*?<\/style>/g, "").split(/\r?\n/).map((l) => l.replace(/^\s*\/\/.*$/, "")).join("\n");
+const adminVisible = visibleOf("admin.html");
+const shopsLink = (adminVisible.match(/href="admin-shops\.html"[\s\S]*?admin-menu-link-note">([^<]*)</) || [])[1] || "";
+t("32a admin.html：管理メニュー「店舗・施設を管理する」の説明は「店舗の登録・管理」・旧文言「店舗登録・専用投稿URLの発行」が無い", shopsLink === "店舗の登録・管理" && !/専用投稿URLの発行/.test(adminVisible), shopsLink);
+const shopsVisible = visibleOf("admin-shops.html");
+t("32b admin-shops.html：タイトル・見出しは「店舗の登録・管理」・「店舗専用投稿URL管理」「（専用URLなし）」が無い", /<title>\s*店舗の登録・管理｜マチナウ運営\s*<\/title>/.test(shopsVisible) && /<h1>\s*店舗の登録・管理\s*<\/h1>/.test(shopsVisible) && !/店舗専用投稿URL管理|（専用URLなし）/.test(shopsVisible));
+const scope = ["admin.html", "admin-shops.html", "admin-store-claims.html", "admin-billing.html"];
+const oldWords = scope.filter((p) => /専用投稿URL|専用URLを発行|URLの発行|token再発行|本人確認の手順|公式連絡先で確認/.test(visibleOf(p)));
+t("32c 管理画面（メニュー・店舗・引き継ぎ・請求確認）に旧方式が使えると誤認させる表示が無い", oldWords.length === 0, oldWords);
+
 // STEP 43-D｜shop-guide.html：旧専用URLの説明書 → 店舗アカウントの利用案内（正式な流れ・既存の導線だけ）
 const guideVisible = read("shop-guide.html").replace(/<!--[\s\S]*?-->/g, "").replace(/<style[\s\S]*?<\/style>/g, "");
 const flow = ["店舗アカウントを作る", "メールアドレスを確認する", "クレジットカードを登録する", "お店・施設を登録する、または引き継ぐ", "お店の情報を管理する"];
@@ -209,6 +220,9 @@ try {
   const v = await a.ev(`({ area: document.getElementById("adminArea").innerText, button: document.getElementById("createStoreButton").textContent.trim(), rotate: document.querySelectorAll('[data-action="rotate"], [data-action="review-approve"], [data-action="review-reject"], .store-issued-url, #createStoreIssuedUrlBox').length, list: document.getElementById("storeList").innerText })`);
   t("24 admin-shops：運営の店舗登録は画面から使える（「店舗を登録する」）・専用URLの表示／token再発行／運営確認の承認・却下は無い", v.button === "店舗を登録する" && /画面から登録した店/.test(v.list) && v.rotate === 0 && !/専用URL|token再発行|確認OK（利用可能にする）/.test(v.area), { button: v.button, rotate: v.rotate });
   t("25 admin-shops：JSエラーなし", a.log.errors.length === 0, a.log.errors);
+  // STEP 43-G①｜管理画面の文言：旧専用URL方式が今も使えると誤認させる表示を残さない
+  const head = await a.ev(`({ title: document.title.trim(), h1: document.querySelector("h1").textContent.trim(), body: document.body.innerText })`);
+  t("31 admin-shops：タイトル・見出しは「店舗の登録・管理」・画面全体に「専用URL／専用投稿URL」の表示が無い", /^店舗の登録・管理/.test(head.title) && head.h1 === "店舗の登録・管理" && !/専用URL|専用投稿URL|token再発行/.test(head.body), { title: head.title, h1: head.h1 });
   await a.close();
 
   apiCalls.length = 0;
