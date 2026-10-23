@@ -400,6 +400,7 @@
           <div class="field">
             <span class="field-label" data-i18n="store_custom_menu_label">メニュー・商品紹介</span>
             <p class="hint" style="margin: 0 0 8px;" id="customMenuHint"></p>
+            <p class="photo-count" id="customPhotoCount"></p>
             <div id="customMenuList"></div>
             <input type="file" id="customPhotoInput" accept="image/jpeg,image/png,image/webp" hidden>
             <button type="button" class="small-button" id="customMenuAddButton" data-i18n="store_custom_menu_add">＋ 商品を追加</button>
@@ -1647,7 +1648,8 @@
             image.src = item.photo.kind === "saved" ? item.photo.url : item.photo.previewUrl;
             photoRow.appendChild(image);
           }
-          photoRow.appendChild(customButton("photo", index, item.photo ? "store_custom_menu_photo_change" : "store_custom_menu_photo_add", locked));
+          // 写真の無い商品への追加は、店舗全体の写真の合計が上限に達していたら押せない(差し替えはできる)。
+          photoRow.appendChild(customButton("photo", index, item.photo ? "store_custom_menu_photo_change" : "store_custom_menu_photo_add", locked || (!item.photo && countCustomPhotos() >= (limits.menuPhotosMax || 5))));
           if (item.photo) {
             photoRow.appendChild(customButton("photo-remove", index, "store_custom_menu_photo_remove", locked));
           }
@@ -1664,6 +1666,13 @@
           list.appendChild(card);
         });
         document.getElementById("customMenuAddButton").disabled = locked || customItems.length >= (limits.menuItemsMax || 20);
+        document.getElementById("customPhotoCount").textContent = t("store_custom_menu_photo_count")
+          .replace("{n}", countCustomPhotos())
+          .replace("{max}", limits.menuPhotosMax || 5);
+      }
+
+      function countCustomPhotos() {
+        return customItems.filter(function (item) { return !!item.photo; }).length;
       }
 
       function renderCustomLinks() {
@@ -1734,7 +1743,7 @@
         story.disabled = locked;
         document.getElementById("customForm").hidden = false;
         document.getElementById("customStoryHint").textContent = t("store_custom_story_hint").replace("{max}", limits.storyMaxLength || 2000);
-        document.getElementById("customMenuHint").textContent = t("store_custom_menu_hint").replace("{max}", limits.menuItemsMax || 20);
+        document.getElementById("customMenuHint").textContent = t("store_custom_menu_hint").replace("{max}", limits.menuItemsMax || 20).replace("{photos}", limits.menuPhotosMax || 5);
         document.getElementById("customLinksHint").textContent = t("store_custom_links_hint").replace("{max}", limits.linksMax || 5);
         const saveButton = document.getElementById("customSaveButton");
         saveButton.disabled = locked;
@@ -1789,6 +1798,9 @@
         }
         const target = customItems[index];
         const previous = target.photo;
+        if (!previous && countCustomPhotos() >= (customLimits().menuPhotosMax || 5)) {
+          return showCustomMessage("store_custom_err_photo_max", "error", "", { max: customLimits().menuPhotosMax || 5 });
+        }
         if (previous && previous.kind === "local" && previous.previewUrl) {
           URL.revokeObjectURL(previous.previewUrl);
         }
@@ -1904,6 +1916,7 @@
           "menuItems.description": ["store_custom_err_description", { item: item, max: limits.menuDescriptionMaxLength }],
           "menuItems.priceText": ["store_custom_err_price", { item: item, max: limits.menuPriceMaxLength }],
           "menuItems.photo": ["store_custom_err_photo", { item: item }],
+          menuPhotos: ["store_custom_err_photo_max", { max: limits.menuPhotosMax }],
           links: ["store_custom_err_link", { n: position, max: limits.linkLabelMaxLength }],
           story: ["store_custom_err_story", { max: limits.storyMaxLength }]
         };

@@ -9,13 +9,14 @@ process.env.OPENAI_API_KEY = "sk-" + "fake-openai-for-tests"; process.env.CLOUDI
 const pw = (uid, email, verified = true) => ({ uid, email, email_verified: verified, firebase: { sign_in_provider: "password" } });
 globalThis.__MOCK_TOKENS = { u1: pw("u1", "a@example.com"), u2: pw("u2", "b@example.com"), unverified: pw("u1", "a@example.com", false) };
 const S = globalThis.__MOCK_DB = { docs: new Map(), writes: [], failAddFor: null, seq: 0 };
-let otherNetwork = 0, moderationCalls = 0;
+let otherNetwork = 0, moderationCalls = 0, imageModerationCalls = 0;
 const destroyed = [];
 globalThis.fetch = async (url, opts = {}) => {
   const u = new URL(String(url));
   if (u.hostname === "api.openai.com") {
     moderationCalls++;
     const body = String(opts.body || "");
+    if (/image_url/.test(body)) imageModerationCalls++;
     const input = JSON.parse(body || "{}").input;
     const n = Array.isArray(input) ? input.length : 1;
     const flagged = /FLAGME|flagimg/.test(body);
@@ -217,6 +218,59 @@ const sig3 = await call({ mode: "cloudinarySignature", purpose: "storeCustomMenu
 t("C3 他の店舗の店主：商品写真の署名は 404", sig3.code === 404, sig3.body);
 const sig4 = await call({ mode: "cloudinarySignature", purpose: "storeProfilePhoto", storeId: "S2" }, "u2");
 t("C4 無料の店舗写真の署名はこれまでどおり（契約不要・…/S2）", sig4.code === 200 && sig4.body.folder === "machinau_store_profiles/S2", sig4.body);
+
+// ===================== shop-wide photo limit (代表決定：商品写真は店舗全体で最大5枚) =====================
+const rev = () => S.docs.get("storeCustomProfiles/S1").revision;
+const items = (n, photos) => Array.from({ length: n }, (_, i) => ({ name: "商品" + (i + 1), photo: i < photos ? menuPhoto("S1", "p" + (i + 1)) : null }));
+const lim = await call({ mode: "storeCustomProfileGet", storeId: "S1" }, "u1");
+t("L0 上限：商品20件・商品写真は店舗全体で5枚（応答の limits）", lim.body.limits.menuItemsMax === 20 && lim.body.limits.menuPhotosMax === 5 && lim.body.limits.storyMaxLength === 2000 && lim.body.limits.linksMax === 5, lim.body.limits);
+destroyed.length = 0; clearRate();
+r = await call(GOOD({ expectedRevision: rev(), menuItems: items(20, 5) }), "u1");
+let doc = S.docs.get("storeCustomProfiles/S1");
+t("L1 商品20件・写真5枚（15件は写真なし）：保存できる", r.code === 200 && doc.menuItems.length === 20 && doc.menuItems.filter((x) => x.photo).length === 5 && doc.menuItems[19].photo === null, r.body);
+const fivePhotos = JSON.stringify(doc.menuItems.map((x) => x.photo && x.photo.publicId));
+clearRate(); let beforeL2 = snap("storeCustomProfiles/S1");
+r = await call(GOOD({ expectedRevision: rev(), menuItems: items(20, 6) }), "u1");
+t("L2 写真6枚目：400 invalid_input（field menuPhotos）・保存しない（画面に関係なくサーバーで拒否）", r.code === 400 && r.body.reason === "invalid_input" && r.body.field === "menuPhotos" && snap("storeCustomProfiles/S1") === beforeL2, r.body);
+clearRate(); beforeL2 = snap("storeCustomProfiles/S1");
+r = await call(GOOD({ expectedRevision: rev(), menuItems: items(6, 6) }), "u1");
+t("L3 商品6件すべてに写真（合計6枚）：400 menuPhotos", r.code === 400 && r.body.field === "menuPhotos" && snap("storeCustomProfiles/S1") === beforeL2, r.body);
+destroyed.length = 0; imageModerationCalls = 0; clearRate();
+const reordered = items(20, 5).reverse();
+r = await call(GOOD({ expectedRevision: rev(), menuItems: reordered }), "u1");
+doc = S.docs.get("storeCustomProfiles/S1");
+t("L4 商品の並べ替え：順番どおりに保存・写真は商品についたまま・写真の削除も写真の Moderation もなし（文章は順番が変わるため再確認）", r.code === 200 && doc.menuItems[0].name === "商品20" && doc.menuItems[19].name === "商品1" && doc.menuItems[19].photo.publicId === "machinau_store_profiles/S1/menu/p1" && destroyed.length === 0 && imageModerationCalls === 0, { destroyed, imageModerationCalls });
+destroyed.length = 0; imageModerationCalls = 0; clearRate();
+const swapped = items(20, 5); swapped[0].photo = menuPhoto("S1", "p1new");
+r = await call(GOOD({ expectedRevision: rev(), menuItems: swapped }), "u1");
+doc = S.docs.get("storeCustomProfiles/S1");
+t("L5 写真の差し替え：新しい写真だけ確認・古い写真だけ削除・合計5枚のまま", r.code === 200 && doc.menuItems[0].photo.publicId === "machinau_store_profiles/S1/menu/p1new" && JSON.stringify(destroyed) === '["machinau_store_profiles/S1/menu/p1"]' && imageModerationCalls === 1 && doc.menuItems.filter((x) => x.photo).length === 5, { destroyed, imageModerationCalls });
+destroyed.length = 0; clearRate();
+const removed = items(20, 5); removed[2].photo = null; removed[0].photo = menuPhoto("S1", "p1new");
+r = await call(GOOD({ expectedRevision: rev(), menuItems: removed }), "u1");
+doc = S.docs.get("storeCustomProfiles/S1");
+t("L6 写真の削除：外した写真だけ削除・商品は残る（写真なしで表示できる）", r.code === 200 && JSON.stringify(destroyed) === '["machinau_store_profiles/S1/menu/p3"]' && doc.menuItems[2].name === "商品3" && doc.menuItems[2].photo === null && doc.menuItems.filter((x) => x.photo).length === 4, destroyed);
+pl = await publicList();
+const pub20 = pl.body.stores.find((s) => s.id === "sp_S1").custom;
+t("L7 旅行者向け：20件すべて表示・写真のある商品は4件・写真の無い商品は photoUrl 空", pub20.menuItems.length === 20 && pub20.menuItems.filter((x) => x.photoUrl !== "").length === 4 && pub20.menuItems[2].photoUrl === "", pub20.menuItems.slice(0, 3));
+// Free profile 10 photos: separate count, unaffected by the 5 menu photos
+const tenFree = Array.from({ length: 10 }, (_, i) => ({ url: CLD + "v1/machinau_store_profiles/S1/free" + i + ".webp", publicId: "machinau_store_profiles/S1/free" + i, moderationStatus: "passed" }));
+S.docs.set("storeProfiles/S1", { ...S.docs.get("storeProfiles/S1"), photos: tenFree });
+const customBeforeFree = snap("storeCustomProfiles/S1");
+destroyed.length = 0; clearRate();
+const freeRev = S.docs.get("storeProfiles/S1").revision;
+const free10 = await call({ mode: "storeProfileUpdate", storeId: "S1", expectedRevision: freeRev, categoryCode: "cafe_sweets", description: "無料の紹介文", businessHours: null, phone: "", websiteUrl: "", reservationUrl: "https://reserve.example.com/", socialLinks: [{ type: "instagram", url: "https://www.instagram.com/free_sns" }], paymentMethodCodes: [], photos: tenFree.map((x) => ({ url: x.url, publicId: x.publicId })) }, "u1");
+const freeDoc = S.docs.get("storeProfiles/S1");
+t("L8 無料の写真10枚は従来どおり保存できる（商品写真の5枚とは別に数える）・有料の内容は変わらない", free10.code === 200 && freeDoc.photos.length === 10 && snap("storeCustomProfiles/S1") === customBeforeFree && destroyed.length === 0, free10.body);
+t("L9 無料の予約ページ・SNS欄は従来どおり保存される（削除・有料移行なし）", freeDoc.reservationUrl === "https://reserve.example.com/" && freeDoc.socialLinks.length === 1, { r: freeDoc.reservationUrl, s: freeDoc.socialLinks });
+clearRate();
+const free11 = await call({ mode: "storeProfileUpdate", storeId: "S1", expectedRevision: freeDoc.revision, categoryCode: "cafe_sweets", description: "無料の紹介文", businessHours: null, phone: "", websiteUrl: "", reservationUrl: "", socialLinks: [], paymentMethodCodes: [], photos: tenFree.concat([tenFree[0]]).map((x, i) => ({ url: CLD + "v1/machinau_store_profiles/S1/x" + i + ".webp", publicId: "machinau_store_profiles/S1/x" + i })) }, "u1");
+t("L10 無料の写真11枚は従来どおり拒否（無料の上限10枚は変更なし）", free11.code === 400 && free11.body.field === "photos", free11.body);
+clearRate();
+const freeWithMenu = await call({ mode: "storeProfileUpdate", storeId: "S1", expectedRevision: freeDoc.revision, categoryCode: "cafe_sweets", description: "無料の紹介文", businessHours: null, phone: "", websiteUrl: "", reservationUrl: "", socialLinks: [], paymentMethodCodes: [], photos: [{ url: CLD + "v1700000000/machinau_store_profiles/S1/menu/p2.webp", publicId: "machinau_store_profiles/S1/menu/p2" }] }, "u1");
+t("L11 商品写真を無料の写真へ流用できない（400 photos）", freeWithMenu.code === 400 && freeWithMenu.body.field === "photos", freeWithMenu.body);
+v = await bad({ expectedRevision: rev(), menuItems: [{ name: "A", photo: menuPhoto("S2", "p1") }] }, "menuItems.photo");
+t("L12 他店の商品写真の流用：400（上限の判定より前に拒否）", v === true || (v && v.field === "menuItems.photo"), v);
 
 t("Z1 想定外の通信なし（OpenAI・Cloudinary の削除は模擬）", otherNetwork === 0, otherNetwork);
 console.log(`TOTAL ${pass + fail}  PASS ${pass}  FAIL ${fail}`);

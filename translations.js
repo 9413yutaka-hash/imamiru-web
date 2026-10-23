@@ -3206,8 +3206,18 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_custom_menu_hint: {
-    ja: "最大{max}件。商品名は必須、価格と説明は任意です（空欄の項目は表示しません）。写真は1商品に1枚です。",
-    en: "Up to {max} items. A name is required; price and description are optional (empty fields are not shown). One photo per item."
+    ja: "最大{max}件。商品名は必須、価格と説明は任意です（空欄の項目は表示しません）。写真は1商品に1枚、お店全体で{photos}枚までです（写真の無い商品も登録できます）。",
+    en: "Up to {max} items. A name is required; price and description are optional (empty fields are not shown). One photo per item, up to {photos} photos for the whole shop (items without a photo are fine)."
+  },
+
+  store_custom_menu_photo_count: {
+    ja: "商品写真 {n} / {max}枚",
+    en: "Item photos {n} / {max}"
+  },
+
+  store_custom_err_photo_max: {
+    ja: "商品写真はお店全体で{max}枚までです。ほかの商品の写真を外してから追加してください。",
+    en: "You can add up to {max} item photos for the whole shop. Remove a photo from another item first."
   },
 
   store_custom_menu_add: {

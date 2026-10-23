@@ -51,10 +51,11 @@ async function api(url, method, log, postData, headers) {
   } finally { console.error = e; }
 }
 const uploads = [];
+let uploadSeq = 0;
 const urlMock = async (url, method, postData) => {
   if (!/api\.cloudinary\.com\/v1_1\/[^/]+\/image\/upload/.test(url)) return null;
   const folder = (String(postData).match(/name="folder"\r\n\r\n([^\r]+)/) || [])[1] || "";
-  const id = "img" + (uploads.length + 1);
+  const id = "img" + (++uploadSeq);
   uploads.push(folder);
   return { body: { secure_url: "https://res.cloudinary.com/cdhyctnp/image/upload/v1700000001/" + folder + "/" + id + ".webp", public_id: folder + "/" + id } };
 };
@@ -151,6 +152,34 @@ try {
   const enText = await p.ev(`document.getElementById("customSection").innerText`);
   t("E11 英語：見出し・案内・項目名が英語（保存済みの内容は読み込み済み）", /Monthly ¥100 customization/.test(enText) && /Your plan is active/.test(v.note) && /Item 1/.test(enText) && v.items === 2 && !/商品名|契約中/.test(enText), enText.slice(0, 400));
   await p.close();
+
+  // ===== editor: shop-wide 5 photo limit =====
+  p = await openEditor("ja");
+  const addPhoto = (i) => p.ev(`(async () => {
+    document.querySelector('[data-custom-action="photo"][data-custom-index="${i}"]').click();
+    const canvas = document.createElement("canvas"); canvas.width = 20; canvas.height = 20; canvas.getContext("2d").fillRect(0, 0, 20, 20);
+    const blob = await new Promise((r) => canvas.toBlob(r, "image/png"));
+    const dt = new DataTransfer(); dt.items.add(new File([blob], "p.png", { type: "image/png" }));
+    const input = document.getElementById("customPhotoInput"); input.files = dt.files; input.dispatchEvent(new Event("change"));
+    return true;
+  })()`);
+  await p.ev(`(() => { const set = (el, value) => { el.value = value; el.dispatchEvent(new Event("input", { bubbles: true })); }; for (let i = 0; i < 4; i++) document.getElementById("customMenuAddButton").click(); for (let i = 2; i < 6; i++) set(document.getElementById("custom-name-" + i), "追加の商品" + i); return true; })()`);
+  for (const i of [1, 2, 3, 4]) { await addPhoto(i); await p.waitFor(`document.querySelectorAll("#customMenuList .custom-item-photo img").length >= ${i + 1}`, 10000); }
+  await sleep(500);
+  const cap = await p.ev(`({ count: document.getElementById("customPhotoCount").textContent, sixthDisabled: document.querySelector('[data-custom-action="photo"][data-custom-index="5"]').disabled, changeEnabled: !document.querySelector('[data-custom-action="photo"][data-custom-index="0"]').disabled, imgs: document.querySelectorAll("#customMenuList .custom-item-photo img").length })`);
+  t("E12 写真5枚：「商品写真 5 / 5枚」・写真の無い6件目は「写真を選ぶ」を押せない・登録済みの写真の差し替えはできる", cap.count === "商品写真 5 / 5枚" && cap.sixthDisabled === true && cap.changeEnabled === true && cap.imgs === 5, cap);
+  uploads.length = 0;
+  await p.ev(`document.getElementById("customSaveButton").click(), true`);
+  const savedWait = await p.waitFor(`/保存しました/.test(document.getElementById("customMessage").textContent)`, 20000); await sleep(300);
+  const saved5 = S.docs.get("storeCustomProfiles/S1");
+  t("E13 6商品・写真5枚で保存（写真の無い商品も保存）・新しい4枚だけアップロード", savedWait >= 0 && saved5.menuItems.length === 6 && saved5.menuItems.filter((x) => x.photo).length === 5 && saved5.menuItems[5].photo === null && uploads.length === 4, { n: saved5.menuItems.length, uploads: uploads.length });
+  await p.ev(`document.querySelector('[data-custom-action="photo-remove"][data-custom-index="1"]').click(), true`);
+  const afterRemove = await p.ev(`({ count: document.getElementById("customPhotoCount").textContent, sixthDisabled: document.querySelector('[data-custom-action="photo"][data-custom-index="5"]').disabled })`);
+  t("E14 1枚外すと「4 / 5枚」・6件目に写真を追加できる", afterRemove.count === "商品写真 4 / 5枚" && afterRemove.sixthDisabled === false, afterRemove);
+  t("E15 JSエラーなし（写真の上限）", p.log.errors.length === 0, p.log.errors);
+  await p.close();
+  // restore the content the traveler checks below expect (2 items, 1 photo)
+  S.docs.set("storeCustomProfiles/S1", saved);
 
   // ===== traveler detail =====
   const openTop = async (lang = "ja", w = 390) => {

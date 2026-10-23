@@ -51,10 +51,13 @@ const STORE_RATE_LIMITS_COLLECTION = "storeRegistrationRateLimits";
 
 const STORE_CUSTOM_UPDATE_COOLDOWN_MS = 3 * 1000;
 
-// 上限は STEP 44-A の推奨値(代表の最終承認待ち)。変える時はここだけを直す
+// 上限は代表決定(2026-10-24 STEP 44-A 最終調整)。変える時はここだけを直す
 // (画面は storeCustomProfileGet の応答の limits から上限を受け取る)。
+// 商品写真は1商品1枚まで、店舗全体の合計で menuPhotosMax 枚まで(写真の無い商品も登録できる)。
+// 無料の店舗写真(最大10枚、storeProfiles.photos)とは別に数える。
 export const STORE_CUSTOM_LIMITS = {
   menuItemsMax: 20,
+  menuPhotosMax: 5,
   menuNameMaxLength: 40,
   menuDescriptionMaxLength: 300,
   menuPriceMaxLength: 20,
@@ -230,6 +233,11 @@ export function validateStoreCustomProfileInput(body, storeId) {
 
   if (story === null) {
     return { ok: false, field: "story" };
+  }
+
+  // 商品写真の合計枚数(店舗全体)。画面の制御に関係なく、サーバーで必ず確認する。
+  if (seenPhotoIds.size > limits.menuPhotosMax) {
+    return { ok: false, field: "menuPhotos" };
   }
 
   return { ok: true, fields: { menuItems: menuItems, links: links, story: story } };
