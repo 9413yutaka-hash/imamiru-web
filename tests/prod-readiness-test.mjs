@@ -103,11 +103,19 @@ const allowedOnly = ST.calls.every((c) => SB.isCardSetupStripeOperation(c.method
 t("11 カード登録で Stripe に送ったのは許可した操作だけ・キーは rk_live_・支払い（PaymentIntent）・返金は一度も送らない", ST.calls.length > 0 && allowedOnly && ST.calls.every((c) => c.auth === "Bearer " + RK_LIVE) && !ST.calls.some((c) => /payment_intents|refunds|charges|invoices/.test(c.path)), ST.calls.map((c) => c.method + " " + c.path));
 
 // ===================== 3. charging is separate and stays off =====================
-t("12 請求用の設定は Production では常に無効（本番カード登録の4条件がそろっていても）・Preview の test だけ", SB.readStripeChargeConfig(PROD_LIVE).ok === false && SB.readStripeChargeConfig(PROD_LIVE).reason === "disabled_in_production" && SB.readStripeChargeConfig(PREVIEW_TEST).ok === true && SB.readStripeChargeConfig(PREVIEW_TEST).purpose === "charge");
+const RK_CHARGE_TEST = "rk_" + "test_FAKECHARGEKEYONLY00000001";
+const PREVIEW_CHARGE = { ...PREVIEW_TEST, STRIPE_CHARGE_RESTRICTED_KEY: RK_CHARGE_TEST };
+t("12 請求用の設定は Production では常に無効（本番カード登録の4条件・請求用キーがそろっていても）・Preview は請求用キーがある時だけ test", SB.readStripeChargeConfig({ ...PROD_LIVE, STRIPE_CHARGE_RESTRICTED_KEY: RK_LIVE }).ok === false && SB.readStripeChargeConfig({ ...PROD_LIVE, STRIPE_CHARGE_RESTRICTED_KEY: RK_LIVE }).reason === "disabled_in_production" && SB.readStripeChargeConfig(PREVIEW_CHARGE).ok === true && SB.readStripeChargeConfig(PREVIEW_CHARGE).purpose === "charge" && SB.readStripeChargeConfig(PREVIEW_CHARGE).serverKey === RK_CHARGE_TEST);
+// STEP 43-M｜請求用キーの分離：カード登録用のキーへ切り替えない・未設定なら止まる
+t("12a 請求用キー（STRIPE_CHARGE_RESTRICTED_KEY）が未設定なら、カード登録用のキーがあっても請求の設定は無効（charge_key_not_configured）", SB.CHARGE_KEY_ENV_NAME === "STRIPE_CHARGE_RESTRICTED_KEY" && SB.CARD_SETUP_KEY_ENV_NAME === "STRIPE_RESTRICTED_KEY" && SB.readStripeChargeConfig(PREVIEW_TEST).ok === false && SB.readStripeChargeConfig(PREVIEW_TEST).reason === "charge_key_not_configured" && SB.readStripeChargeConfig({ ...PREVIEW_TEST, STRIPE_CHARGE_RESTRICTED_KEY: "  " }).reason === "charge_key_not_configured");
+t("12b カード登録の設定は請求用キーを使わない（カード登録用のキーだけ）・請求用キーだけでは使えない", SB.readStripeCardSetupConfig(PREVIEW_CHARGE).serverKey === RK_TEST && SB.readStripeCardSetupConfig({ ...PREVIEW_CHARGE, STRIPE_RESTRICTED_KEY: "" }).ok === false);
 const before = ST.calls.length;
 const charge = await quiet(() => CH.runImadakeMonthlyCharge(db, { env: PROD_LIVE, fetch: stripeFetch, cardSetupConfigOptions: { liveEnabled: true } }, { month: "2026-10", dryRun: false, gates: { chargeEnabled: true, billingStarted: true } }));
 t("13 請求の処理はカード登録用のキー・設定を使えない：フラグを仮に true にしても Production では stripe_unavailable（Stripe へ送らない）", charge.ok === false && charge.reason === "stripe_unavailable" && charge.unavailableReason === "disabled_in_production" && ST.calls.length === before, charge);
 const gated = await quiet(() => CH.runImadakeMonthlyCharge(db, { env: PREVIEW_TEST, fetch: stripeFetch }, { month: "2026-10", dryRun: false, gates: CH.readImadakeMonthlyChargeGates() }));
+const beforeNoChargeKey = ST.calls.length;
+const noChargeKey = await quiet(() => CH.runImadakeMonthlyCharge(db, { env: PREVIEW_TEST, fetch: stripeFetch }, { month: "2026-10", dryRun: false, gates: { chargeEnabled: true, billingStarted: true } }));
+t("14a 請求用キーが未設定なら、フラグを仮に true にしても月次請求は止まる（stripe_unavailable／charge_key_not_configured）・Stripe へ送らない", noChargeKey.ok === false && noChargeKey.reason === "stripe_unavailable" && noChargeKey.unavailableReason === "charge_key_not_configured" && ST.calls.length === beforeNoChargeKey, noChargeKey);
 t("14 課金関連3フラグは false のまま（請求の実行は charge_disabled）・写真の複製も false", IM.IMADAKE_CV_BILLING_STARTED === false && MC.IMADAKE_MONTHLY_CLOSE_WRITES_ENABLED === false && CH.IMADAKE_MONTHLY_CHARGE_ENABLED === false && LC.LISTING_PHOTO_COPY_ENABLED === false && gated.ok === false && gated.reason === "charge_disabled", gated);
 t("15 カード登録で請求は発生しない（請求書・日別課金の記録を作らない）", ![...S.docs.keys()].some((k) => k.startsWith("imadakeMonthlyInvoices/") || k.startsWith("imadakePostDailyCharges/")));
 

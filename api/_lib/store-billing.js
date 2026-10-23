@@ -19,6 +19,8 @@
 //       (CARD_SETUP_STRIPE_OPERATIONS。支払い(PaymentIntent)は呼べない)
 //   請求(readStripeChargeConfig、今だけ投稿の月次請求・請求の確認画面)：
 //     ・Productionでは常に無効(本番の課金開始の承認まで)。テストモードだけ
+//     ・STEP 43-M(代表承認 2026-10-23)：請求は専用の環境変数 STRIPE_CHARGE_RESTRICTED_KEY のキーだけを使う。
+//       未設定なら請求は止まる(charge_key_not_configured)。カード登録用の STRIPE_RESTRICTED_KEY へは切り替えない。
 //   ・キーが未設定なら止める
 // キーの値はログ・応答・Firestoreに一切出さない。Stripeの応答本文もログに出さない。
 //
@@ -154,10 +156,16 @@ export function isCardSetupStripeOperation(method, path) {
   });
 }
 
-function readStripeEnvValues(source) {
+// STEP 43-M｜カード登録用と請求用のサーバーキーの環境変数(別々。互いに切り替えない)。
+export const CARD_SETUP_KEY_ENV_NAME = "STRIPE_RESTRICTED_KEY";
+export const CHARGE_KEY_ENV_NAME = "STRIPE_CHARGE_RESTRICTED_KEY";
+
+function readStripeEnvValues(source, keyEnvName) {
+  const name = keyEnvName || CARD_SETUP_KEY_ENV_NAME;
+
   return {
     mode: typeof source.STRIPE_MODE === "string" ? source.STRIPE_MODE.trim() : "",
-    serverKey: typeof source.STRIPE_RESTRICTED_KEY === "string" ? source.STRIPE_RESTRICTED_KEY.trim() : "",
+    serverKey: typeof source[name] === "string" ? source[name].trim() : "",
     publishableKey: typeof source.STRIPE_PUBLISHABLE_KEY === "string" ? source.STRIPE_PUBLISHABLE_KEY.trim() : ""
   };
 }
@@ -194,7 +202,7 @@ function readStripeTestOnlyConfig(values, purpose) {
 // キーの値は返り値の serverKey/publishableKey だけに入れ、呼び出し元はログに出さない。
 export function readStripeCardSetupConfig(env, options) {
   const source = env || {};
-  const values = readStripeEnvValues(source);
+  const values = readStripeEnvValues(source, CARD_SETUP_KEY_ENV_NAME);
 
   if (source.VERCEL_ENV !== "production") {
     return readStripeTestOnlyConfig(values, "card_setup");
@@ -236,6 +244,8 @@ export function readStripeCardSetupConfig(env, options) {
 
 // 請求用(今だけ投稿の月次請求・請求の確認画面)の設定。Productionでは常に無効、テストモードだけ。
 // 本番カード登録のスイッチ・本番キーがあっても、ここは有効にならない(本番の課金開始は別の承認・別の変更)。
+// STEP 43-M｜キーは請求専用の STRIPE_CHARGE_RESTRICTED_KEY だけ。未設定なら charge_key_not_configured で止まる
+// (カード登録用の STRIPE_RESTRICTED_KEY があっても使わない)。
 export function readStripeChargeConfig(env) {
   const source = env || {};
 
@@ -243,7 +253,13 @@ export function readStripeChargeConfig(env) {
     return { ok: false, reason: "disabled_in_production" };
   }
 
-  return readStripeTestOnlyConfig(readStripeEnvValues(source), "charge");
+  const values = readStripeEnvValues(source, CHARGE_KEY_ENV_NAME);
+
+  if (values.serverKey === "") {
+    return { ok: false, reason: "charge_key_not_configured" };
+  }
+
+  return readStripeTestOnlyConfig(values, "charge");
 }
 
 // application/x-www-form-urlencoded(Stripeの形式)。値はstringかnumberだけ。

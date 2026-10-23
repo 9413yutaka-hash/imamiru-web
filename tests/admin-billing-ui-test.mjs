@@ -12,7 +12,7 @@ const tok = (email) => b64({ alg: "RS256" }) + "." + b64({ user_id: "a", sub: "a
 const pw = (uid, email) => ({ uid, email, email_verified: true, firebase: { sign_in_provider: "password" } });
 globalThis.__MOCK_TOKENS = { [tok(ADMIN)]: pw("adm1", ADMIN) };
 const S = globalThis.__MOCK_DB = { docs: new Map(), writes: [], failAddFor: null, seq: 0 };
-Object.assign(process.env, { STRIPE_MODE: "test", STRIPE_RESTRICTED_KEY: "rk_" + "test_FAKEKEYFORLOCALTESTS0001", STRIPE_PUBLISHABLE_KEY: "pk_" + "test_FAKEPUBLISHABLEFORTESTS01", VERCEL_ENV: "preview" });
+Object.assign(process.env, { STRIPE_MODE: "test", STRIPE_RESTRICTED_KEY: "rk_" + "test_FAKECARDSETUPKEYONLY0001", STRIPE_CHARGE_RESTRICTED_KEY: "rk_" + "test_FAKEKEYFORLOCALTESTS0001", STRIPE_PUBLISHABLE_KEY: "pk_" + "test_FAKEPUBLISHABLEFORTESTS01", VERCEL_ENV: "preview" });
 // Stripe stub for the read-only inspect (GET only expected). stripeCalls counts every call, nonGet counts anything else.
 let stripeCalls = 0, nonGet = 0; const SP = { pis: new Map(), listFail: false, check: "ok" };
 const realFetch = globalThis.fetch;

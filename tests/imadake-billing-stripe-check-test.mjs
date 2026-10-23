@@ -4,7 +4,7 @@
 import { REPO_URL } from "./_paths.mjs";
 process.env.FIREBASE_SERVICE_ACCOUNT_KEY = "{}"; process.env.RATE_LIMIT_HMAC_SECRET = "fake"; process.env.ADMIN_EMAIL = "admin@example.com";
 const FAKE_SERVER_KEY = "rk_" + "test_FAKEKEYFORLOCALTESTS0001", FAKE_PK = "pk_" + "test_FAKEPUBLISHABLEFORTESTS01";
-const ENV = { STRIPE_MODE: "test", STRIPE_RESTRICTED_KEY: FAKE_SERVER_KEY, STRIPE_PUBLISHABLE_KEY: FAKE_PK, VERCEL_ENV: "preview" };
+const ENV = { STRIPE_MODE: "test", STRIPE_RESTRICTED_KEY: "rk_" + "test_FAKECARDSETUPKEYONLY0001", STRIPE_CHARGE_RESTRICTED_KEY: FAKE_SERVER_KEY, STRIPE_PUBLISHABLE_KEY: FAKE_PK, VERCEL_ENV: "preview" };
 const pw = (uid, email) => ({ uid, email, email_verified: true, firebase: { sign_in_provider: "password" } });
 globalThis.__MOCK_TOKENS = { admin: pw("adm1", "admin@example.com"), user: pw("u1", "owner@example.com") };
 const S = globalThis.__MOCK_DB = { docs: new Map(), writes: [], failAddFor: null, seq: 0 };
@@ -90,12 +90,12 @@ const before = ST.calls.length;
 const gates = {
   production: (await check("list1", { ...deps, env: { ...ENV, VERCEL_ENV: "production" } })),
   liveMode: (await check("list1", { ...deps, env: { ...ENV, STRIPE_MODE: "live" } })),
-  liveKey: (await check("list1", { ...deps, env: { ...ENV, STRIPE_RESTRICTED_KEY: "rk_" + "live_FAKE0000000000000001" } })),
-  noKey: (await check("list1", { ...deps, env: { ...ENV, STRIPE_RESTRICTED_KEY: "" } }))
+  liveKey: (await check("list1", { ...deps, env: { ...ENV, STRIPE_CHARGE_RESTRICTED_KEY: "rk_" + "live_FAKE0000000000000001" } })),
+  noKey: (await check("list1", { ...deps, env: { ...ENV, STRIPE_CHARGE_RESTRICTED_KEY: "" } }))
 };
 t("C8 Production では無効（stripe_disabled・disabled_in_production）・Stripeに接続しない", gates.production.status === "stripe_disabled" && gates.production.configReason === "disabled_in_production" && gates.production.connected === false, gates.production);
-t("C8b STRIPE_MODE が test 以外・本番用キー・キーなし → stripe_disabled（mode_not_allowed / key_mode_mismatch / not_configured）",
-  gates.liveMode.configReason === "mode_not_allowed" && gates.liveKey.configReason === "key_mode_mismatch" && gates.noKey.configReason === "not_configured" && [gates.liveMode, gates.liveKey, gates.noKey].every((g) => g.status === "stripe_disabled" && !g.connected), gates);
+t("C8b STRIPE_MODE が test 以外・本番用キー・請求用キーなし → stripe_disabled（mode_not_allowed / key_mode_mismatch / charge_key_not_configured：STEP 43-M）",
+  gates.liveMode.configReason === "mode_not_allowed" && gates.liveKey.configReason === "key_mode_mismatch" && gates.noKey.configReason === "charge_key_not_configured" && [gates.liveMode, gates.liveKey, gates.noKey].every((g) => g.status === "stripe_disabled" && !g.connected), gates);
 t("C8c 設定が無効なときは Stripe への呼び出しゼロ", ST.calls.length === before, ST.calls.length - before);
 t("C8d 無効時の応答にもキーを含めない", !leaks(gates), gates);
 
