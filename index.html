@@ -1252,6 +1252,23 @@
       }, true);
     })();
   </script>
+  <style>
+    /* STEP 44-A｜正式店舗の詳細の有料の内容(月額100円カスタマイズ)専用の最小CSS。style.cssは変更しない。
+       modal-message の white-space: pre-line を、改行を残したい文章だけに限る。 */
+    .shop-custom { white-space: normal; margin-top: 16px; display: grid; gap: 14px; }
+    .shop-custom-section { border-top: 1px solid #dbe9f1; padding-top: 12px; }
+    .shop-custom-heading { margin: 0 0 8px; font-size: 14.5px; font-weight: 800; color: #071a33; }
+    .shop-custom-text { margin: 0; white-space: pre-line; overflow-wrap: anywhere; }
+    .shop-custom-menu { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+    .shop-custom-menu-item { display: grid; gap: 10px; align-items: start; background: #ffffff; border-radius: 12px; padding: 10px; }
+    .shop-custom-menu-item.has-photo { grid-template-columns: 88px minmax(0, 1fr); }
+    .shop-custom-menu-photo { display: block; width: 88px; height: 88px; object-fit: cover; border-radius: 10px; background: #e8f1f6; }
+    .shop-custom-menu-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+    .shop-custom-menu-name { font-weight: 800; color: #15233a; overflow-wrap: anywhere; }
+    .shop-custom-menu-price { flex-shrink: 0; font-weight: 800; color: #0788c9; }
+    .shop-custom-links { display: flex; flex-wrap: wrap; gap: 8px; }
+    .shop-custom-link { display: inline-flex; align-items: center; min-height: 40px; padding: 6px 14px; border-radius: 999px; background: #ffffff; border: 1px solid #cfe3ee; color: #0788c9; font-weight: 800; font-size: 13.5px; text-decoration: none; overflow-wrap: anywhere; }
+  </style>
 </head>
 
 <body>

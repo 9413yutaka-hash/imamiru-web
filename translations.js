@@ -3159,6 +3159,272 @@ const MACHINAU_TRANSLATIONS = {
     en: "Choose the languages your staff can speak with customers."
   },
 
+  // STEP 44-A｜月額100円カスタマイズ(店主の編集画面 store_custom_*・旅行者の詳細 shop_custom_*)。
+  store_custom_heading: {
+    ja: "月額100円カスタマイズ",
+    en: "Monthly ¥100 customization"
+  },
+
+  store_custom_intro: {
+    ja: "無料の店舗情報に加えて、メニュー・商品紹介、追加リンク、お店のこだわり・ストーリーを旅行者に紹介できます。無料の店舗情報（紹介文・写真10枚・営業時間など）はこれまでどおり無料です。",
+    en: "In addition to your free shop information, you can show travelers your menu and products, extra links, and your shop's story. Your free shop information (description, 10 photos, hours, etc.) stays free."
+  },
+
+  store_custom_plan_active: {
+    ja: "契約中です。{date}まで、保存した内容を旅行者に表示します。",
+    en: "Your plan is active. Saved content is shown to travelers until {date}."
+  },
+
+  store_custom_plan_none: {
+    ja: "このお店は月額100円カスタマイズを契約していません。申し込みの受付は準備中です。",
+    en: "This shop does not have the monthly ¥100 customization. Sign-up is being prepared."
+  },
+
+  store_custom_plan_kept: {
+    ja: "保存済みの内容は削除されていません。契約中だけ旅行者に表示されます。",
+    en: "Your saved content has not been deleted. It is shown to travelers only while the plan is active."
+  },
+
+  store_custom_not_editable: {
+    ja: "この店舗は現在編集できません。",
+    en: "This shop cannot be edited right now."
+  },
+
+  store_custom_story_label: {
+    ja: "お店のこだわり・ストーリー",
+    en: "Our story"
+  },
+
+  store_custom_story_hint: {
+    ja: "お店の歴史・こだわり・大切にしていることなどを紹介できます（{max}字まで）。",
+    en: "Share your shop's history, what you care about, and what makes you special (up to {max} characters)."
+  },
+
+  store_custom_menu_label: {
+    ja: "メニュー・商品紹介",
+    en: "Menu and products"
+  },
+
+  store_custom_menu_hint: {
+    ja: "最大{max}件。商品名は必須、価格と説明は任意です（空欄の項目は表示しません）。写真は1商品に1枚です。",
+    en: "Up to {max} items. A name is required; price and description are optional (empty fields are not shown). One photo per item."
+  },
+
+  store_custom_menu_add: {
+    ja: "＋ 商品を追加",
+    en: "+ Add an item"
+  },
+
+  store_custom_menu_item_title: {
+    ja: "商品 {n}",
+    en: "Item {n}"
+  },
+
+  store_custom_menu_name: {
+    ja: "商品名",
+    en: "Name"
+  },
+
+  store_custom_menu_price: {
+    ja: "価格（任意）",
+    en: "Price (optional)"
+  },
+
+  store_custom_menu_price_placeholder: {
+    ja: "例：¥650",
+    en: "e.g. ¥650"
+  },
+
+  store_custom_menu_description: {
+    ja: "説明（任意）",
+    en: "Description (optional)"
+  },
+
+  store_custom_menu_photo_add: {
+    ja: "写真を選ぶ",
+    en: "Choose a photo"
+  },
+
+  store_custom_menu_photo_change: {
+    ja: "写真を変える",
+    en: "Change photo"
+  },
+
+  store_custom_menu_photo_remove: {
+    ja: "写真を外す",
+    en: "Remove photo"
+  },
+
+  store_custom_menu_up: {
+    ja: "↑ 上へ",
+    en: "↑ Up"
+  },
+
+  store_custom_menu_down: {
+    ja: "↓ 下へ",
+    en: "↓ Down"
+  },
+
+  store_custom_menu_remove: {
+    ja: "この商品を削除",
+    en: "Delete this item"
+  },
+
+  store_custom_links_label: {
+    ja: "追加リンク（SNS・予約先など）",
+    en: "Extra links (social media, booking, etc.)"
+  },
+
+  store_custom_links_hint: {
+    ja: "最大{max}件。https:// で始まるURLだけ登録できます。表示名は任意です（空欄なら種類の名前を表示）。",
+    en: "Up to {max} links. Only URLs starting with https:// can be added. The label is optional (the link type is shown if empty)."
+  },
+
+  store_custom_links_add: {
+    ja: "＋ リンクを追加",
+    en: "+ Add a link"
+  },
+
+  store_custom_link_label_placeholder: {
+    ja: "表示名（任意）",
+    en: "Label (optional)"
+  },
+
+  store_custom_link_remove: {
+    ja: "削除",
+    en: "Remove"
+  },
+
+  store_custom_link_type_instagram: {
+    ja: "Instagram",
+    en: "Instagram"
+  },
+
+  store_custom_link_type_website: {
+    ja: "公式サイト",
+    en: "Official website"
+  },
+
+  store_custom_link_type_reservation: {
+    ja: "予約ページ",
+    en: "Booking"
+  },
+
+  store_custom_link_type_x: {
+    ja: "X",
+    en: "X"
+  },
+
+  store_custom_link_type_facebook: {
+    ja: "Facebook",
+    en: "Facebook"
+  },
+
+  store_custom_link_type_tiktok: {
+    ja: "TikTok",
+    en: "TikTok"
+  },
+
+  store_custom_link_type_youtube: {
+    ja: "YouTube",
+    en: "YouTube"
+  },
+
+  store_custom_link_type_line: {
+    ja: "LINE",
+    en: "LINE"
+  },
+
+  store_custom_link_type_other: {
+    ja: "その他のリンク",
+    en: "Other link"
+  },
+
+  store_custom_save_button: {
+    ja: "カスタマイズを保存する",
+    en: "Save customization"
+  },
+
+  store_custom_saving_button: {
+    ja: "保存しています…",
+    en: "Saving…"
+  },
+
+  store_custom_saved: {
+    ja: "保存しました。",
+    en: "Saved."
+  },
+
+  store_custom_err_plan: {
+    ja: "月額100円カスタマイズの契約が無いため保存できません。",
+    en: "You cannot save because this shop does not have the monthly ¥100 customization."
+  },
+
+  store_custom_err_menu: {
+    ja: "メニュー・商品の内容を確認してください。",
+    en: "Please check your menu items."
+  },
+
+  store_custom_err_name: {
+    ja: "{item}：商品名を入力してください（{max}字まで・改行なし）。",
+    en: "{item}: enter a name (up to {max} characters, single line)."
+  },
+
+  store_custom_err_description: {
+    ja: "{item}：説明が長すぎます（{max}字まで）。",
+    en: "{item}: the description is too long (up to {max} characters)."
+  },
+
+  store_custom_err_price: {
+    ja: "{item}：価格が長すぎます（{max}字まで・改行なし）。",
+    en: "{item}: the price is too long (up to {max} characters, single line)."
+  },
+
+  store_custom_err_photo: {
+    ja: "{item}：写真をもう一度選んでください。",
+    en: "{item}: please choose the photo again."
+  },
+
+  store_custom_err_link: {
+    ja: "リンク{n}：https:// で始まる正しいURLを入力してください（表示名は{max}字まで）。",
+    en: "Link {n}: enter a valid URL starting with https:// (label up to {max} characters)."
+  },
+
+  store_custom_err_story: {
+    ja: "ストーリーが長すぎるか、使えない文字が含まれています（{max}字まで）。",
+    en: "The story is too long or contains characters that cannot be used (up to {max} characters)."
+  },
+
+  store_custom_err_content: {
+    ja: "掲載できない可能性がある表現が含まれているため、保存できませんでした。内容を見直してください。",
+    en: "Your text could not be saved because it may contain content we cannot publish. Please review it."
+  },
+
+  store_custom_err_photo_content: {
+    ja: "掲載できない可能性がある写真が含まれているため、保存できませんでした。写真を見直してください。",
+    en: "A photo could not be saved because it may contain content we cannot publish. Please review your photos."
+  },
+
+  store_custom_load_error: {
+    ja: "月額100円カスタマイズの情報を読み込めませんでした。時間をおいて再読み込みしてください。",
+    en: "Could not load the customization information. Please reload later."
+  },
+
+  shop_custom_story_heading: {
+    ja: "お店のこだわり・ストーリー",
+    en: "Our story"
+  },
+
+  shop_custom_menu_heading: {
+    ja: "メニュー・商品",
+    en: "Menu and products"
+  },
+
+  shop_custom_links_heading: {
+    ja: "リンク",
+    en: "Links"
+  },
+
   store_profile_photos_heading: {
     ja: "写真",
     en: "Photos"

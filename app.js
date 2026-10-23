@@ -3291,8 +3291,139 @@ function buildStoreProfileListShop(store) {
     }),
     // 並び順(新しい順)だけに使う。カードには表示しない。無い・壊れている場合は0扱い(最後)。
     createdAt: typeof store.publishedAt === "string" ? store.publishedAt : null,
+    // STEP 44-A｜月額100円カスタマイズの有料の内容(サーバーが利用権限を確認した店舗だけに付く)。
+    // 詳細表示だけに使う。一覧カード・地図・お気に入り・並び順・15kmの判定には使わない。
+    custom: readStoreProfileCustom(store.custom),
     distanceKm: null
   };
+}
+
+// STEP 44-A｜有料の内容を、表示してよい形だけに整える(無い・壊れている時は null)。
+// 写真はマチナウのCloudinaryの画像だけ、リンクは https だけ(サーバーと同じ条件を画面でも重ねる)。
+const STORE_PROFILE_CUSTOM_LINK_TYPES = [
+  "instagram",
+  "website",
+  "reservation",
+  "x",
+  "facebook",
+  "tiktok",
+  "youtube",
+  "line",
+  "other"
+];
+
+const STORE_PROFILE_CUSTOM_PHOTO_PREFIX =
+  "https://res.cloudinary.com/cdhyctnp/image/upload/";
+
+function readStoreProfileCustom(custom) {
+  if (!custom || typeof custom !== "object") {
+    return null;
+  }
+
+  const readText = function(value) {
+    return typeof value === "string" ? value.trim() : "";
+  };
+
+  const menuItems = (Array.isArray(custom.menuItems) ? custom.menuItems : [])
+    .map(function(item) {
+      const photoUrl = item ? readText(item.photoUrl) : "";
+
+      return {
+        name: item ? readText(item.name) : "",
+        description: item ? readText(item.description) : "",
+        priceText: item ? readText(item.priceText) : "",
+        photoUrl: photoUrl.indexOf(STORE_PROFILE_CUSTOM_PHOTO_PREFIX) === 0 ? photoUrl : ""
+      };
+    })
+    .filter(function(item) { return item.name !== ""; });
+
+  const links = (Array.isArray(custom.links) ? custom.links : [])
+    .map(function(link) {
+      return {
+        type: link && STORE_PROFILE_CUSTOM_LINK_TYPES.includes(link.type) ? link.type : "",
+        label: link ? readText(link.label) : "",
+        url: link ? readText(link.url) : ""
+      };
+    })
+    .filter(function(link) {
+      return link.type !== "" && /^https:\/\/[^\s]+$/.test(link.url);
+    });
+
+  const story = readText(custom.story);
+
+  if (menuItems.length === 0 && links.length === 0 && story === "") {
+    return null;
+  }
+
+  return { menuItems: menuItems, links: links, story: story };
+}
+
+// 詳細表示の有料の内容(HTML)。登録の無い欄は見出しも出さない。文字はすべてエスケープする。
+// modal-message は white-space: pre-line のため、タグの間に改行を入れない。
+function buildStoreProfileCustomHtml(custom, language) {
+  if (!custom) {
+    return "";
+  }
+
+  const parts = [];
+
+  if (custom.story !== "") {
+    parts.push(
+      '<section class="shop-custom-section">' +
+        '<h3 class="shop-custom-heading">' + escapeHtml(getMachinauTranslation("shop_custom_story_heading", language)) + "</h3>" +
+        '<p class="shop-custom-text">' + escapeHtml(custom.story) + "</p>" +
+      "</section>"
+    );
+  }
+
+  if (custom.menuItems.length > 0) {
+    parts.push(
+      '<section class="shop-custom-section">' +
+        '<h3 class="shop-custom-heading">' + escapeHtml(getMachinauTranslation("shop_custom_menu_heading", language)) + "</h3>" +
+        '<ul class="shop-custom-menu">' +
+        custom.menuItems.map(function(item) {
+          return (
+            '<li class="shop-custom-menu-item' + (item.photoUrl !== "" ? " has-photo" : "") + '">' +
+              (item.photoUrl !== ""
+                ? '<img class="shop-custom-menu-photo" src="' + escapeHtml(item.photoUrl) + '" alt="" loading="lazy">'
+                : "") +
+              '<div class="shop-custom-menu-body">' +
+                '<div class="shop-custom-menu-head">' +
+                  '<span class="shop-custom-menu-name">' + escapeHtml(item.name) + "</span>" +
+                  (item.priceText !== "" ? '<span class="shop-custom-menu-price">' + escapeHtml(item.priceText) + "</span>" : "") +
+                "</div>" +
+                (item.description !== "" ? '<p class="shop-custom-text">' + escapeHtml(item.description) + "</p>" : "") +
+              "</div>" +
+            "</li>"
+          );
+        }).join("") +
+        "</ul>" +
+      "</section>"
+    );
+  }
+
+  if (custom.links.length > 0) {
+    parts.push(
+      '<section class="shop-custom-section">' +
+        '<h3 class="shop-custom-heading">' + escapeHtml(getMachinauTranslation("shop_custom_links_heading", language)) + "</h3>" +
+        '<div class="shop-custom-links">' +
+        custom.links.map(function(link) {
+          const label = link.label !== ""
+            ? link.label
+            : getMachinauTranslation("store_custom_link_type_" + link.type, language);
+
+          return (
+            '<a class="shop-custom-link" href="' + escapeHtml(link.url) + '" target="_blank" rel="noopener noreferrer nofollow">' +
+              escapeHtml(label) +
+            "</a>"
+          );
+        }).join("") +
+        "</div>" +
+      "</section>"
+    );
+  }
+
+  return parts.length > 0 ? '<div class="shop-custom">' + parts.join("") + "</div>" : "";
 }
 
 // 地域検索：正式店舗は住所の文字列ではなく、整理済みの都道府県・市区町村で完全一致させる
@@ -5947,6 +6078,15 @@ function openShopModal(
       "<br><br>" +
       escapeHtml(
         modalBusinessClosedMessage
+      );
+  }
+
+  // STEP 44-A｜正式店舗の有料の内容(ストーリー・メニュー・追加リンク)。無い店舗は何も足さない。
+  if (isStoreProfileShop) {
+    modalText +=
+      buildStoreProfileCustomHtml(
+        selectedShop.custom,
+        modalCurrentLanguage
       );
   }
 

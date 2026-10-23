@@ -288,7 +288,7 @@ function countCharacters(text) {
 }
 
 // 改行(複数行)を許す文章。上限超過・改行とタブ以外の制御文字はnull(=不正)。
-function readMultilineText(value, maxLength) {
+export function readMultilineText(value, maxLength) {
   if (value !== undefined && value !== null && typeof value !== "string") {
     return null;
   }
@@ -305,7 +305,7 @@ function readMultilineText(value, maxLength) {
   return text;
 }
 
-function readSingleLineText(value, maxLength) {
+export function readSingleLineText(value, maxLength) {
   const text = readMultilineText(value, maxLength);
 
   return text === null || text.includes("\n") ? null : text;
@@ -546,7 +546,7 @@ function readStoreId(body) {
     : "";
 }
 
-function isActiveOwner(memberData, uid, storeId) {
+export function isActiveOwner(memberData, uid, storeId) {
   return (
     !!memberData &&
     memberData.uid === uid &&
@@ -556,7 +556,7 @@ function isActiveOwner(memberData, uid, storeId) {
   );
 }
 
-function isEditableStore(accountData) {
+export function isEditableStore(accountData) {
   return (
     !!accountData &&
     accountData.registrationStatus === "active" &&
@@ -1429,6 +1429,8 @@ function buildPublicStoreProfile(storeId, account, profile, linkedListingIds) {
     paymentMethodCodes: readPublicCodes(profile.paymentMethodCodes, STORE_PAYMENT_METHOD_CODES),
     featureCodes: readPublicCodes(profile.featureCodes, STORE_FEATURE_CODES),
     publishedAt: readPublicIsoDate(profile.publishedAt),
+    // STEP 44-A｜月額100円カスタマイズの有料の内容は、一覧の取得の最後に利用権限がある店舗だけ
+    // custom として付ける(store-custom-profile.js の buildPublicStoreCustomProfile の許可リスト)。
     // Phase 2D STEP 4C-2｜この正式店舗に有効(active)に紐付いている運営無料掲載のsubmission ID。
     // suppressedListingIdsと同じ判定から作る(この店舗を返す時だけ、その店舗の分だけ)。
     // 無料掲載時代のお気に入りを正式店舗へ引き継ぐための別名(alias)にだけ使う。
@@ -1505,6 +1507,27 @@ export async function handlePublicStoreProfilesList(request, response, deps) {
         console.error("旅行者向け店舗一覧：店舗の読み取りを飛ばしました：", storeId, storeError && storeError.message);
       }
     });
+
+    // STEP 44-A｜月額100円カスタマイズの有料の内容(利用権限がある店舗だけ)。読み取りに失敗しても、
+    // 無料の店舗情報の一覧はこれまでどおり返す(有料の内容を付けないだけ)。
+    if (typeof deps.readPublicStoreCustomProfiles === "function" && stores.length > 0) {
+      try {
+        const customByStore = await deps.readPublicStoreCustomProfiles(
+          database,
+          stores.map(function(store) { return store.id.slice(PUBLIC_STORE_ID_PREFIX.length); })
+        );
+
+        stores.forEach(function(store) {
+          const custom = customByStore.get(store.id.slice(PUBLIC_STORE_ID_PREFIX.length));
+
+          if (custom) {
+            store.custom = custom;
+          }
+        });
+      } catch (customError) {
+        console.error("旅行者向け店舗一覧：カスタマイズの読み取りエラー：", customError && customError.message);
+      }
+    }
 
     stores.sort(function(a, b) { return a.id < b.id ? -1 : a.id > b.id ? 1 : 0; });
 

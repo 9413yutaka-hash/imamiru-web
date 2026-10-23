@@ -101,6 +101,16 @@ import {
   isStorePhotoPublicId
 } from "./_lib/store-profile.js";
 
+// STEP 44-A｜月額100円・店舗カスタマイズプランの有料プロフィール。実処理はapi/_lib/store-custom-profile.js。
+import {
+  handleStoreCustomProfileGet,
+  handleStoreCustomProfileUpdate,
+  readPublicStoreCustomProfiles,
+  checkStoreCustomEditor,
+  buildStoreMenuPhotoFolder,
+  isStoreMenuPhotoPublicId
+} from "./_lib/store-custom-profile.js";
+
 // 運営無料掲載 → 店舗オーナー化 MVP-1。実処理はapi/_lib/store-listing-claims.js。
 import {
   handleStoreListingClaimPreview,
@@ -20562,14 +20572,28 @@ async function handleStoreProfilePhotoSignatureRequest(
       });
     }
 
+    // STEP 44-A｜商品写真(storeCustomMenuPhoto)は、無料の店舗写真の条件に加えて
+    // 月額100円カスタマイズの利用権限があることを確認し、商品写真のフォルダーの署名を出す。
+    const isMenuPhoto =
+      requestBody.purpose === "storeCustomMenuPhoto";
+
     const editorCheck =
-      await checkStoreProfileEditor(
-        getFirestore(
-          getFirebaseAdminApp()
-        ),
-        storeId,
-        actorResult.actor.uid
-      );
+      isMenuPhoto
+        ? await checkStoreCustomEditor(
+            getFirestore(
+              getFirebaseAdminApp()
+            ),
+            storeId,
+            actorResult.actor.uid,
+            Date.now()
+          )
+        : await checkStoreProfileEditor(
+            getFirestore(
+              getFirebaseAdminApp()
+            ),
+            storeId,
+            actorResult.actor.uid
+          );
 
     if (!editorCheck.ok) {
       return response.status(editorCheck.status).json({
@@ -20604,9 +20628,13 @@ async function handleStoreProfilePhotoSignatureRequest(
       );
 
     const folder =
-      buildStorePhotoFolder(
-        storeId
-      );
+      isMenuPhoto
+        ? buildStoreMenuPhotoFolder(
+            storeId
+          )
+        : buildStorePhotoFolder(
+            storeId
+          );
 
     const signature =
       buildCloudinaryUploadSignature(
@@ -20663,6 +20691,11 @@ async function destroyStorePhotoImages(
 
         if (
           !isStorePhotoPublicId(
+            publicId,
+            storeIdInPath
+          ) &&
+          // STEP 44-A｜商品写真(machinau_store_profiles/{storeId}/menu/…)も店舗写真フォルダーの画像として扱う。
+          !isStoreMenuPhotoPublicId(
             publicId,
             storeIdInPath
           )
@@ -20778,7 +20811,8 @@ async function handleCloudinarySignatureRequest(
 ) {
   // Phase 2C｜店舗写真用の署名だけ別処理へ分ける(これ以外の呼び出しは従来どおり)。
   if (
-    readRequestBody(request).purpose === "storeProfilePhoto"
+    readRequestBody(request).purpose === "storeProfilePhoto" ||
+    readRequestBody(request).purpose === "storeCustomMenuPhoto"
   ) {
     return handleStoreProfilePhotoSignatureRequest(
       request,
@@ -29640,6 +29674,10 @@ function buildStoreSelfServiceDeps() {
     // STEP 42-F｜写真の複製の Preview 実証の環境の判定(Preview・対象ブランチ・machinau-preview の時だけ true)。
     isListingPhotoCopyTrialEnabled: function() {
       return isPreviewListingPhotoCopyTrialEnabled(process.env);
+    },
+    // STEP 44-A｜旅行者向け一覧に付ける、月額100円カスタマイズの有料の内容(利用権限がある店舗だけ)。
+    readPublicStoreCustomProfiles: function(database, storeIds) {
+      return readPublicStoreCustomProfiles(database, storeIds, Date.now());
     }
   };
 }
@@ -30225,6 +30263,27 @@ export default async function handler(
     requestBody.mode === "storeProfileUpdate"
   ) {
     return handleStoreProfileUpdate(
+      request,
+      response,
+      buildStoreSelfServiceDeps()
+    );
+  }
+
+  // STEP 44-A｜月額100円カスタマイズの有料プロフィール(owner本人のみ、保存は利用権限がある時だけ)。
+  if (
+    requestBody.mode === "storeCustomProfileGet"
+  ) {
+    return handleStoreCustomProfileGet(
+      request,
+      response,
+      buildStoreSelfServiceDeps()
+    );
+  }
+
+  if (
+    requestBody.mode === "storeCustomProfileUpdate"
+  ) {
+    return handleStoreCustomProfileUpdate(
       request,
       response,
       buildStoreSelfServiceDeps()
