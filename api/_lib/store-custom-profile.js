@@ -149,17 +149,13 @@ export function readStoreCustomPlanState(planData, uid, nowMillis) {
     return "other_holder";
   }
 
-  // STEP 44-C③｜本番の暦月契約の未払い(猶予中は利用可・停止中は利用不可)。
-  if (isMonthlyPlan(planData) && planData.status === "suspended") {
-    return "suspended";
+  // STEP 44-C④｜未払いは契約の状態と別(paymentStatus)。停止中(suspended)は有料の内容を使えないため期限の判定と分ける。
+  if (isMonthlyPlan(planData) && planData.paymentStatus === "suspended" && planData.status !== "ended") {
+    return planData.status === "canceling" && millisOf(planData.accessUntil) <= nowMillis ? "expired" : planData.status === "canceling" ? "canceling" : "active";
   }
 
   if (!hasStoreCustomPlanAccess(planData, nowMillis)) {
     return "expired";
-  }
-
-  if (isMonthlyPlan(planData) && planData.status === "past_due") {
-    return "past_due";
   }
 
   return planData.status === "canceling" ? "canceling" : "active";
@@ -172,6 +168,7 @@ function buildPlanResponse(planData, uid, nowMillis) {
 
   return {
     access: hasStoreCustomPlanAccess(planData, nowMillis) && isStoreCustomPlanHolder(planData, uid),
+    // 契約の期間内か(停止中でも、解約・支払いのために契約の期間を表示する)。
     state: state,
     status: typeof data.status === "string" ? data.status : "none",
     // 別のアカウントの契約の日時は見せない(状態だけ)。
@@ -180,7 +177,9 @@ function buildPlanResponse(planData, uid, nowMillis) {
     canceledAtMillis: mine ? millisOf(data.canceledAt) : 0,
     periodKind: mine && typeof data.periodKind === "string" ? data.periodKind : "",
     // STEP 44-C③｜Preview で作った試験用の契約か(画面に「実際には請求されません」を出す)。
-    createdInPreview: mine && data.createdInPreview === true
+    createdInPreview: mine && data.createdInPreview === true,
+    // STEP 44-C④｜支払いの状態(契約の状態とは別)：current・past_due(未払い・猶予中)・suspended(未払いで停止)。
+    paymentStatus: mine && (data.paymentStatus === "past_due" || data.paymentStatus === "suspended") ? data.paymentStatus : "current"
   };
 }
 
@@ -1064,8 +1063,9 @@ export async function handleStoreCustomPlanSubscribe(request, response, deps) {
       const inPeriod = hasStoreCustomPlanAccess(planData, nowMillis);
       const mine = isStoreCustomPlanHolder(planData, actor.uid);
 
-      // STEP 44-C③｜未払い(猶予中・停止中)の自分の契約がある間は、新しい申込を受け付けない(支払いの完了で再開する)。
-      if (mine && isMonthlyPlan(planData) && (planData.status === "past_due" || planData.status === "suspended")) {
+      // STEP 44-C③/④｜未払い(猶予中・停止中)の自分の契約がある間は、新しい申込・解約の取り消しを受け付けない
+      // (支払いの完了で再開する)。
+      if (mine && isMonthlyPlan(planData) && (planData.paymentStatus === "past_due" || planData.paymentStatus === "suspended")) {
         outcome = { status: 409, reason: "plan_unpaid" };
         return;
       }
@@ -1130,7 +1130,7 @@ export async function handleStoreCustomPlanSubscribe(request, response, deps) {
           typeof planData.ownerUid === "string" &&
           planData.ownerUid !== "" &&
           millisOf(planData.subscribedAt) < jstMonthStartMillis(monthKey) &&
-          planData.status !== "suspended" &&
+          planData.paymentStatus !== "suspended" &&
           planData.status !== "ended" &&
           (planData.status !== "canceling" || millisOf(planData.accessUntil) > jstMonthStartMillis(monthKey));
 
@@ -1230,8 +1230,12 @@ export async function handleStoreCustomPlanCancel(request, response, deps) {
       }
 
       const planData = snapshots[1].exists ? snapshots[1].data() || {} : null;
+      // 未払いで停止中(有料の内容は使えない)でも、契約の期間内なら解約できる(STEP 44-C④)。
+      const inContract = isMonthlyPlan(planData) && planData.paymentStatus === "suspended"
+        ? hasStoreCustomPlanAccess(Object.assign({}, planData, { paymentStatus: "current" }), nowMillis)
+        : hasStoreCustomPlanAccess(planData, nowMillis);
 
-      if (!hasStoreCustomPlanAccess(planData, nowMillis) || !isStoreCustomPlanHolder(planData, actor.uid)) {
+      if (!inContract || !isStoreCustomPlanHolder(planData, actor.uid)) {
         outcome = { status: 409, reason: "plan_not_active" };
         return;
       }
@@ -1241,11 +1245,8 @@ export async function handleStoreCustomPlanCancel(request, response, deps) {
         return;
       }
 
-      // STEP 44-C③｜未払い(猶予中)の暦月契約の解約は、支払いの処理(次工程)と合わせて決めるため、今は受け付けない。
-      if (planData.status === "past_due") {
-        outcome = { status: 409, reason: "plan_unpaid" };
-        return;
-      }
+      // STEP 44-C④｜未払い中でも解約は受け付ける(本部提案・代表承認)。既に発生した料金(請求台帳)は消さず・減らさず、
+      // 翌月以降は発生しない。未払い(paymentStatus)は契約の状態と別に残る。
 
       // 本番の暦月契約：解約月の月末(翌月1日 0:00 JST)まで利用でき、今月の料金(100円)は残る(無ければ記録する)。
       // Preview 試験の契約：利用期限は変えない(STEP 44-B のまま)。
@@ -1328,9 +1329,13 @@ export async function handleAdminStoreCustomPlanList(request, response, deps) {
         storeId: plan.storeId,
         storeName: typeof account.storeName === "string" ? account.storeName : "",
         state:
-          isMonthlyPlan(plan.data) && (plan.data.status === "suspended" || plan.data.status === "ended" || plan.data.status === "past_due")
-            ? plan.data.status
-            : !inPeriod ? "expired" : plan.data.status === "canceling" ? "canceling" : "active",
+          isMonthlyPlan(plan.data) && plan.data.status === "ended"
+            ? "ended"
+            : isMonthlyPlan(plan.data) && plan.data.paymentStatus === "suspended" && plan.data.status !== "canceling"
+              ? "active"
+              : !inPeriod ? "expired" : plan.data.status === "canceling" ? "canceling" : "active",
+        // STEP 44-C④｜支払いの状態(契約の状態とは別)。
+        paymentStatus: plan.data.paymentStatus === "past_due" || plan.data.paymentStatus === "suspended" ? plan.data.paymentStatus : "current",
         holderIsActiveOwner: holderActive,
         periodKind: typeof plan.data.periodKind === "string" ? plan.data.periodKind : "",
         subscribedAtMillis: millisOf(plan.data.subscribedAt),

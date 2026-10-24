@@ -141,9 +141,11 @@ function encodeForm(params) {
   return form.toString();
 }
 
+// STEP 44-C④｜以下の Stripe の呼び出し・結果の判定・照合の部品は、月額100円カスタマイズの請求
+// (store-custom-plan-charge.js)からも使う(export を付けただけで、動作は変えていない)。
 // Stripe API を呼ぶ。例外は投げず、{ ok, status, data?, error? } を返す。
 // error は { type, code, declineCode, paymentIntent? }(応答本文そのものは返さない)。status 0 は通信失敗・時間切れ。
-async function stripeRequest(config, deps, method, path, params, idempotencyKey) {
+export async function stripeRequest(config, deps, method, path, params, idempotencyKey) {
   // STEP 43-B｜請求用の設定(purpose "charge")でだけ送る。カード登録用の設定・キーでは請求しない。
   if (!config || config.purpose !== "charge") {
     return { ok: false, status: 0, error: { type: "stripe_operation_not_allowed", code: "", declineCode: "" } };
@@ -232,7 +234,7 @@ function checkInvoiceAmount(invoice) {
 
 // 請求先アカウントの支払い情報(accountBilling.{mode})が請求に使えるか。
 // STEP 42-C：ロックは請求書ごとのため、同じアカウントの別の請求書が請求中でも止めない。
-function checkBillingSection(section) {
+export function checkBillingSection(section) {
   if (typeof section.customerId !== "string" || !section.customerId.startsWith("cus_")) {
     return "no_customer";
   }
@@ -267,7 +269,7 @@ function matchesInvoice(pi, claim) {
 }
 
 // PaymentIntent の状態を請求書の状態へ。
-function resultFromPaymentIntent(pi, claim) {
+export function resultFromPaymentIntent(pi, claim) {
   if (!matchesInvoice(pi, claim)) {
     return { kind: "needs_review", reason: "payment_intent_mismatch", paymentIntentId: pi && typeof pi.id === "string" ? pi.id.slice(0, 120) : "" };
   }
@@ -303,7 +305,7 @@ function resultFromPaymentIntent(pi, claim) {
 }
 
 // 支払いの作成(または同じキーでの送り直し)の応答を、請求書の結果へ。
-function resultFromCreateResponse(response, claim) {
+export function resultFromCreateResponse(response, claim) {
   if (response.ok) {
     return resultFromPaymentIntent(response.data, claim);
   }
@@ -624,7 +626,7 @@ async function sendCreate(config, deps, claim) {
 
 // その顧客のPaymentIntent一覧から、この請求書(metadata.invoiceId)の支払いを集める。
 // 戻り値 { ok, complete, items }。通信失敗は ok:false、ページを読み切れない時は complete:false。
-async function listInvoicePaymentIntents(config, deps, claim) {
+export async function listInvoicePaymentIntents(config, deps, claim) {
   const items = [];
   let startingAfter = "";
 
@@ -665,7 +667,7 @@ async function listInvoicePaymentIntents(config, deps, claim) {
 
 // 見つかったこの請求書の支払いから結果を決める。成功が1件でもあればそれを採用(重ねて請求しない)。
 // それ以外で、今の試行番号の支払いがあればその状態。どちらでもなければ人の確認。
-function resultFromFoundPaymentIntents(items, claim) {
+export function resultFromFoundPaymentIntents(items, claim) {
   const succeeded = items.filter(function(pi) { return pi.status === "succeeded"; });
 
   if (succeeded.length > 1) {

@@ -3307,6 +3307,117 @@ const MACHINAU_TRANSLATIONS = {
     en: "This action is not available because there is an unpaid charge."
   },
 
+  // STEP 44-C④｜月額100円カスタマイズのご請求・未払い・本人認証(店舗アカウント画面)。
+  store_plan_pay_heading: {
+    ja: "月額100円カスタマイズのご請求",
+    en: "Monthly ¥100 customization charges"
+  },
+
+  store_plan_pay_intro: {
+    ja: "各月の100円（税込）は月末に締めて、翌月2日に登録のカードへ請求します。",
+    en: "Each month's ¥100 (tax included) is closed at month end and charged to your registered card on the 2nd of the next month."
+  },
+
+  store_plan_pay_unpaid_total: {
+    ja: "未払い：{amount}円",
+    en: "Unpaid: ¥{amount}"
+  },
+
+  store_plan_pay_line: {
+    ja: "{month}　{store}　{amount}円（税込）",
+    en: "{month}  {store}  ¥{amount} (tax incl.)"
+  },
+
+  store_plan_pay_test_badge: {
+    ja: "（試験用の請求）",
+    en: "(test charge)"
+  },
+
+  store_plan_pay_status_closed: {
+    ja: "請求予定（{date}）",
+    en: "Scheduled ({date})"
+  },
+
+  store_plan_pay_status_charging: {
+    ja: "請求の処理中です。",
+    en: "The charge is being processed."
+  },
+
+  store_plan_pay_status_processing: {
+    ja: "決済の処理中です。",
+    en: "The payment is processing."
+  },
+
+  store_plan_pay_status_requires_action: {
+    ja: "本人認証が必要です。下のボタンから認証して支払いを完了してください。",
+    en: "Authentication is required. Use the button below to authenticate and complete the payment."
+  },
+
+  store_plan_pay_status_payment_failed: {
+    ja: "お支払いができませんでした。",
+    en: "The payment could not be completed."
+  },
+
+  store_plan_pay_status_review: {
+    ja: "マチナウ運営が確認しています。",
+    en: "Machinau is reviewing this charge."
+  },
+
+  store_plan_pay_status_paid: {
+    ja: "お支払い済み（{date}）",
+    en: "Paid ({date})"
+  },
+
+  store_plan_pay_next_retry: {
+    ja: "次の自動の再請求：{date}",
+    en: "Next automatic retry: {date}"
+  },
+
+  store_plan_pay_suspend_at: {
+    ja: "{date}までにお支払いが確認できない場合、有料の内容の表示を停止します（データは残ります）。",
+    en: "If payment is not confirmed by {date}, the paid content will stop being shown (your data is kept)."
+  },
+
+  store_plan_pay_authenticate: {
+    ja: "本人認証をして支払う",
+    en: "Authenticate and pay"
+  },
+
+  store_plan_pay_pay_now: {
+    ja: "今すぐ支払う",
+    en: "Pay now"
+  },
+
+  store_plan_pay_processing: {
+    ja: "処理しています…",
+    en: "Processing…"
+  },
+
+  store_plan_pay_done: {
+    ja: "お支払いが完了しました。",
+    en: "Payment completed."
+  },
+
+  store_plan_pay_auth_incomplete: {
+    ja: "本人認証が完了していません。もう一度お試しください。",
+    en: "Authentication was not completed. Please try again."
+  },
+
+  store_plan_pay_failed: {
+    ja: "お支払いができませんでした。カードを確認してください。",
+    en: "The payment could not be completed. Please check your card."
+  },
+
+  store_plan_pay_error: {
+    ja: "お支払いの操作ができませんでした。時間をおいてもう一度お試しください。",
+    en: "The payment action could not be completed. Please try again later."
+  },
+
+  store_plan_pay_unavailable: {
+    ja: "現在、お支払いの操作は利用できません。",
+    en: "Payment actions are not available right now."
+  },
+
   store_custom_heading: {
     ja: "月額100円カスタマイズ",
     en: "Monthly ¥100 customization"

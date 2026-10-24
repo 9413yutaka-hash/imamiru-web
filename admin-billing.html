@@ -204,6 +204,25 @@
         <div id="customPlanList"></div>
       </div>
 
+      <!-- STEP 44-C④｜月額100円カスタマイズの月末締め・請求(運営のみ)。試算は読むだけ。実行はサーバーが許可した時だけ
+           (今は Preview 試験の経路＝Preview・machinau-preview・テストキー・試験用の請求書だけ。本番では必ず拒否)。 -->
+      <div class="panel" id="customPlanBillingPanel">
+        <h2>月額100円カスタマイズの締め・請求</h2>
+        <p class="note">締めは月が終わった後に、対象月（日本時間）の請求書を作ります。請求は請求予定日（翌月2日）以降の請求書、再試行の予定日を過ぎた支払い失敗、結果が分からない請求の照合を行います。結果が分からない請求は自動で送り直しません。実行はサーバーが許可した時だけです（本番では実行できません）。</p>
+        <div class="button-row">
+          <label>対象月 <input type="month" id="customPlanMonthInput"></label>
+        </div>
+        <div class="button-row">
+          <button id="customPlanCloseDryRunButton" class="secondary-button" type="button">締めの試算</button>
+          <button id="customPlanCloseExecuteButton" class="secondary-button" type="button">締めを実行（Preview 試験）</button>
+          <button id="customPlanChargeDryRunButton" class="secondary-button" type="button">請求の試算</button>
+          <button id="customPlanChargeExecuteButton" class="primary-button" type="button">テスト請求を実行（Preview 試験）</button>
+          <button id="customPlanInvoiceReloadButton" class="secondary-button" type="button">請求台帳を表示</button>
+        </div>
+        <div id="customPlanBillingMessage" class="message-box" role="status" aria-live="polite"></div>
+        <div id="customPlanBillingResult"></div>
+      </div>
+
     </section>
 
   </main>
@@ -1027,6 +1046,96 @@
     }
 
     document.getElementById("customPlanReloadButton").addEventListener("click", loadCustomPlans);
+
+    // STEP 44-C④｜月額100円カスタマイズの締め・請求(運営のみ)。
+    const CUSTOM_PLAN_INVOICE_STATUS_LABELS = { closed: "請求予定", charging: "請求中（結果不明を含む）", processing: "決済処理中", requires_action: "本人認証待ち", payment_failed: "支払い失敗", charge_error: "請求の不備（要確認）", needs_review: "人の確認待ち", paid: "支払い済み" };
+
+    function defaultCustomPlanMonth() {
+      const now = new Date(Date.now() + 9 * 3600000);
+      const previous = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+      return previous.getUTCFullYear() + "-" + String(previous.getUTCMonth() + 1).padStart(2, "0");
+    }
+
+    async function callCustomPlanAdmin(body) {
+      const idToken = await getAdminIdToken();
+      const response = await fetch("/api/moderate-submission", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + idToken },
+        body: JSON.stringify(body)
+      });
+      const data = await response.json().catch(function() { return null; });
+      return { status: response.status, data: data };
+    }
+
+    function renderCustomPlanInvoiceTable(invoices) {
+      const container = document.getElementById("customPlanBillingResult");
+      container.textContent = "";
+      const table = document.createElement("table");
+      table.className = "custom-plan-table";
+      const head = document.createElement("tr");
+      ["請求書", "状態", "請求予定日", "試行", "再試行", "次の再試行", "停止の予定", "結果不明", "予定・理由"].forEach(function(label) {
+        const th = document.createElement("th");
+        th.textContent = label;
+        head.appendChild(th);
+      });
+      table.appendChild(head);
+      invoices.forEach(function(invoice) {
+        const row = document.createElement("tr");
+        cell(row, invoice.invoiceId + (invoice.createdInPreview ? "（試験）" : ""));
+        cell(row, CUSTOM_PLAN_INVOICE_STATUS_LABELS[invoice.status] || invoice.status);
+        cell(row, invoice.chargeScheduledFor || "");
+        cell(row, invoice.chargeAttempt || 0);
+        cell(row, invoice.retryCount || 0);
+        cell(row, invoice.nextRetryAtMillis ? formatDate(invoice.nextRetryAtMillis) : "");
+        cell(row, invoice.suspendAtMillis ? formatDate(invoice.suspendAtMillis) : "");
+        cell(row, invoice.chargeOutcomeUnknown ? "はい" : "");
+        cell(row, [invoice.plan, invoice.planReason, invoice.outcome, invoice.reviewReason].filter(Boolean).join(" / "));
+        table.appendChild(row);
+      });
+      container.appendChild(table);
+    }
+
+    async function runCustomPlanBilling(kind, execute) {
+      const message = document.getElementById("customPlanBillingMessage");
+      const month = document.getElementById("customPlanMonthInput").value;
+      if (execute && !window.confirm(kind === "close" ? month + " の締めを実行します。よろしいですか？" : "テスト請求を実行します（Preview 試験・テストモードだけ）。よろしいですか？")) {
+        return;
+      }
+      showMessage(message, "処理しています…", "info");
+      try {
+        const body = kind === "close"
+          ? { mode: "adminStoreCustomPlanMonthlyClose", month: month, execute: execute === true }
+          : kind === "charge"
+            ? { mode: "adminStoreCustomPlanCharge", dryRun: execute !== true }
+            : { mode: "adminStoreCustomPlanInvoiceList" };
+        const result = await callCustomPlanAdmin(body);
+        const data = result.data || {};
+        if (result.status !== 200 || data.success !== true) {
+          showMessage(message, "実行できませんでした（" + (data.reason || data.message || ("HTTP " + result.status)) + "）。", "error");
+          return;
+        }
+        if (kind === "close") {
+          const created = (data.invoices && data.invoices.create) || 0;
+          showMessage(message, (data.executed ? "締めを実行しました。" : "締めの試算です（書き込みなし）。") + " 新しい請求書 " + created + " 件・" + ((data.invoices && data.invoices.amountJpy) || 0) + " 円、請求予定日 " + data.chargeScheduledFor + "。", "info");
+          return;
+        }
+        if (kind === "charge") {
+          showMessage(message, (data.dryRun ? "請求の試算です（Stripe に接続しません）。" : "テスト請求を実行しました。") + " 請求 " + data.totals.chargeCount + " 件・再試行 " + data.totals.retryCount + " 件・照合 " + data.totals.reconcileCount + " 件" + (data.executionAllowed ? "" : "（実行は許可されていません：" + data.executionBlockedReason + "）") + "。", "info");
+        } else {
+          showMessage(message, data.invoices.length + " 件・合計 " + data.totalAmountJpy + " 円。", "info");
+        }
+        renderCustomPlanInvoiceTable(data.invoices || []);
+      } catch (error) {
+        showMessage(message, "サーバーと通信できませんでした。", "error");
+      }
+    }
+
+    document.getElementById("customPlanMonthInput").value = defaultCustomPlanMonth();
+    document.getElementById("customPlanCloseDryRunButton").addEventListener("click", function() { runCustomPlanBilling("close", false); });
+    document.getElementById("customPlanCloseExecuteButton").addEventListener("click", function() { runCustomPlanBilling("close", true); });
+    document.getElementById("customPlanChargeDryRunButton").addEventListener("click", function() { runCustomPlanBilling("charge", false); });
+    document.getElementById("customPlanChargeExecuteButton").addEventListener("click", function() { runCustomPlanBilling("charge", true); });
+    document.getElementById("customPlanInvoiceReloadButton").addEventListener("click", function() { runCustomPlanBilling("list", false); });
 
     // 画面の切り替えは運営のメールアドレスで判定する(最終的な権限確認はサーバーの requireAdmin)。
     // 他のアカウントでログイン中でもログアウトはさせない。

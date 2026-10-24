@@ -143,19 +143,6 @@ t("O1 同じ月の所有者の変更（11/10 に u1 → u6、u6 が 11/15 に申
 NOW = jst(2026, 11, 20);
 r = await call(CANCEL("S5"), "u1");
 t("O2 S5 を11月に解約：11月末まで", r.code === 200 && ms(plan("S5").accessUntil) === jst(2026, 12, 1), r.body);
-// unpaid states (prepared structure; the automatic retry/suspend is the next step)
-S.docs.set("storeCustomPlans/S2", { ...plan("S2"), periodKind: "monthly", status: "suspended", accessUntil: null });
-const susp = await call({ mode: "storeCustomProfileGet", storeId: "S2" }, "u2");
-let pl = await publicList();
-const s2pub = pl.body.stores.find((s) => s.id === "sp_S2");
-t("U1 未払いで停止（suspended）：state suspended・編集不可・旅行者には有料の内容を出さない・無料プロフィールは掲載を続ける", susp.body.plan.state === "suspended" && susp.body.editable === false && s2pub && !("custom" in s2pub) && s2pub.description === "無料の紹介文S2", { plan: susp.body.plan, s2pub });
-r = await call(SUB("S2"), "u2");
-t("U2 停止中は新しい申込を受け付けない（409 plan_unpaid）", r.code === 409 && r.body.reason === "plan_unpaid", r.body);
-S.docs.set("storeCustomPlans/S2", { ...plan("S2"), status: "past_due" });
-const pd = await call({ mode: "storeCustomProfileGet", storeId: "S2" }, "u2");
-r = await call(CANCEL("S2"), "u2");
-t("U3 未払い・猶予中（past_due）：利用は続く（state past_due・編集可）・解約は支払いの処理（次工程）まで 409 plan_unpaid", pd.body.plan.state === "past_due" && pd.body.editable === true && r.code === 409 && r.body.reason === "plan_unpaid", { plan: pd.body.plan, cancel: r.body });
-S.docs.set("storeCustomPlans/S2", { ...plan("S2"), status: "canceling", periodKind: "monthly", accessUntil: Timestamp.fromMillis(jst(2026, 11, 1)) });
 
 // ===================== close November (concurrent) =====================
 NOW = jst(2026, 12, 1, 9, 0);
@@ -174,6 +161,27 @@ t("Y1 年末（12月）の締め：S1 の12月は新しい契約者 u6 に100円
 t("Y2 1月の開始：S1（u6）と試験店舗 S8 だけ（S8 は締めで除外される）", !!usage("S1", "2027-01") && usage("S1", "2027-01").holderUid === "u6" && JSON.stringify(docs("storeCustomPlanUsage").filter(([k]) => k.endsWith("_2027-01")).map(([k]) => k).sort()) === JSON.stringify(["storeCustomPlanUsage/S1_2027-01", "storeCustomPlanUsage/S8_2027-01"]) && !invoice("S8", "2026-12"));
 t("Y3 店舗ごとの請求の合計：S1 は10・11・12月で3件（各100円）・同じ店舗・同じ月は1件", ["2026-10", "2026-11", "2026-12"].every((m) => invoice("S1", m).amountJpy === 100) && docs("storeCustomPlanInvoices").filter(([k]) => k.startsWith("storeCustomPlanInvoices/S1_")).length === 3);
 
+// ===================== unpaid states (separate from the contract state) =====================
+NOW = jst(2027, 1, 10);
+seedStore("S11", "u9");
+r = await call(SUB("S11"), "u9");
+S.docs.set("storeCustomPlans/S11", { ...plan("S11"), paymentStatus: "suspended" });
+const susp = await call({ mode: "storeCustomProfileGet", storeId: "S11" }, "u9");
+let plU = await publicList();
+const s11pub = plU.body.stores.find((s) => s.id === "sp_S11");
+t("U1 未払いで停止（paymentStatus suspended、契約の状態とは別）：編集不可・旅行者には有料の内容を出さない・無料プロフィールは掲載を続ける", r.code === 200 && susp.body.plan.paymentStatus === "suspended" && susp.body.plan.state === "active" && susp.body.editable === false && s11pub && !("custom" in s11pub) && s11pub.description === "無料の紹介文S11", { plan: susp.body.plan, s11pub });
+r = await call(SUB("S11"), "u9");
+t("U2 停止中は新しい申込・解約の取り消しを受け付けない（409 plan_unpaid）", r.code === 409 && r.body.reason === "plan_unpaid", r.body);
+S.docs.set("storeCustomPlans/S11", { ...plan("S11"), paymentStatus: "past_due" });
+const pd = await call({ mode: "storeCustomProfileGet", storeId: "S11" }, "u9");
+const usageBeforeCancel = snapOf("storeCustomPlanUsage");
+r = await call(CANCEL("S11"), "u9");
+t("U3 未払い・猶予中（paymentStatus past_due）：利用は続く（編集可）・未払い中でも解約は受け付ける（契約は canceling、未払いはそのまま、今月の料金も残る）", pd.body.plan.paymentStatus === "past_due" && pd.body.editable === true && r.code === 200 && plan("S11").status === "canceling" && plan("S11").paymentStatus === "past_due" && snapOf("storeCustomPlanUsage") === usageBeforeCancel && !!usage("S11", "2027-01"), { plan: pd.body.plan, cancel: r.body });
+S.docs.set("storeCustomPlans/S11", { ...plan("S11"), paymentStatus: "suspended" });
+NOW += 60000;
+r = await call(CANCEL("S11"), "u9");
+t("U4 停止中に解約済みの契約をもう一度解約しても状態は変わらない（200 alreadyCanceled）", r.code === 200 && r.body.alreadyCanceled === true, r.body);
+
 // ===================== access to invoices =====================
 const l1 = await call({ mode: "storeCustomPlanInvoiceList" }, "u1");
 const l6 = await call({ mode: "storeCustomPlanInvoiceList" }, "u6");
@@ -190,8 +198,12 @@ t("V6 運営の請求台帳（10月）：4件・400円（読み取りだけ）",
 
 // ===================== charge is refused =====================
 const beforeCharge = snapOf("storeCustomPlanInvoices");
-r = await call({ mode: "adminStoreCustomPlanCharge" }, "admin");
-t("X1 請求の操作：フラグ false の間は 403 charge_disabled・Stripe へ通信しない・台帳は変わらない", r.code === 403 && r.body.reason === "charge_disabled" && otherNetwork === 0 && snapOf("storeCustomPlanInvoices") === beforeCharge, r.body);
+r = await call({ mode: "adminStoreCustomPlanCharge", dryRun: false }, "admin");
+t("X1 請求の実行：請求用キーが無い（この試験の環境）ので 403 stripe_unavailable・Stripe へ通信しない・台帳は変わらない（STEP 44-C④ で試算・実行に変更）", r.code === 403 && r.body.reason === "stripe_unavailable" && otherNetwork === 0 && snapOf("storeCustomPlanInvoices") === beforeCharge, r.body);
+process.env.VERCEL_ENV = "production";
+r = await call({ mode: "adminStoreCustomPlanCharge", dryRun: false }, "admin");
+process.env.VERCEL_ENV = "preview";
+t("X1b Production の環境では請求の実行は 403 charge_disabled", r.code === 403 && r.body.reason === "charge_disabled", r.body);
 r = await call({ mode: "adminStoreCustomPlanCharge" }, "u1");
 t("X2 店主のアカウントでは請求の操作を呼べない", r.code === 401 || r.code === 403, r.code);
 
@@ -204,8 +216,8 @@ const LC = await import(REPO_URL + "/api/_lib/listing-profile-copy.js");
 t("R1 既存の課金関連6フラグはすべて false", IM.IMADAKE_CV_BILLING_STARTED === false && MC.IMADAKE_MONTHLY_CHARGE_ENABLED === false && MCL.IMADAKE_MONTHLY_CLOSE_WRITES_ENABLED === false && SB.STORE_CARD_REGISTRATION_LIVE_ENABLED === false && LC.LISTING_PHOTO_COPY_ENABLED === false && LC.LISTING_PHOTO_COPY_PREVIEW_TRIAL === false);
 t("R2 今だけ投稿の台帳（請求書・日別の料金）は変わらない", snapOf("imadakeMonthlyInvoices") === IMADAKE_BEFORE && docs("imadakePostDailyCharges").length === 0);
 t("R3 storeBilling（廃止済み）を作らない・accountBilling（カード）を変えない", docs("storeBilling").length === 0 && ["u1", "u2", "u6"].every((u) => S.docs.get("accountBilling/" + u).test.paymentMethodId === "pm_" + u && !S.docs.get("accountBilling/" + u).test.billingLocks));
-pl = await publicList();
-t("R4 旅行者向けの一覧は従来どおり（6店舗の無料プロフィール）", pl.code === 200 && pl.body.stores.length === 6, pl.body.stores.map((s) => s.id));
+const pl = await publicList();
+t("R4 旅行者向けの一覧は従来どおり（7店舗の無料プロフィール）", pl.code === 200 && pl.body.stores.length === 7, pl.body.stores.map((s) => s.id));
 t("Z1 外部への通信なし", otherNetwork === 0, otherNetwork);
 console.log(`TOTAL ${pass + fail}  PASS ${pass}  FAIL ${fail}`);
 process.exit(fail ? 1 : 0);

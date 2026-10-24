@@ -118,10 +118,17 @@ import {
 // STEP 44-C③｜月額100円カスタマイズの後払い請求の基盤(月末締め・請求台帳。Stripe への請求はしない)。
 import {
   handleAdminStoreCustomPlanMonthlyClose,
-  handleAdminStoreCustomPlanCharge,
-  handleStoreCustomPlanInvoiceList,
   handleAdminStoreCustomPlanInvoiceList
 } from "./_lib/store-custom-plan-billing.js";
+
+// STEP 44-C④｜月額100円カスタマイズの請求(Stripe PaymentIntent)・未払い・本人認証。
+import {
+  handleAdminStoreCustomPlanChargeRun,
+  handleStoreCustomPlanInvoiceList,
+  handleStoreCustomPlanPaymentStart,
+  handleStoreCustomPlanPaymentConfirm,
+  handleStoreCustomPlanPayNow
+} from "./_lib/store-custom-plan-charge.js";
 
 // 運営無料掲載 → 店舗オーナー化 MVP-1。実処理はapi/_lib/store-listing-claims.js。
 import {
@@ -29694,6 +29701,12 @@ function buildStoreSelfServiceDeps() {
     // STEP 44-B｜月額100円カスタマイズの申込を受け付ける環境か(Preview試験の環境だけ true、Productionは常に false)。
     isStoreCustomPlanTrialEnabled: function() {
       return isPreviewStoreCustomPlanTrialEnabled(process.env);
+    },
+    // STEP 44-C④｜月額100円カスタマイズの請求(請求用の Stripe の設定を読む環境変数と、Stripe への通信)。
+    // ほかの店舗の処理はこの2つを使わない。
+    env: process.env,
+    fetch: function(url, options) {
+      return fetch(url, options);
     }
   };
 }
@@ -30315,9 +30328,13 @@ export default async function handler(
       // STEP 44-C③｜月末締め(運営のみ・既定は試算)、請求(フラグ false の間は必ず拒否・Stripe へ接続しない)、
       // 請求台帳の一覧(店主は自分が請求先の分だけ／運営は読み取り専用)。
       adminStoreCustomPlanMonthlyClose: handleAdminStoreCustomPlanMonthlyClose,
-      adminStoreCustomPlanCharge: handleAdminStoreCustomPlanCharge,
+      adminStoreCustomPlanCharge: handleAdminStoreCustomPlanChargeRun,
       storeCustomPlanInvoiceList: handleStoreCustomPlanInvoiceList,
-      adminStoreCustomPlanInvoiceList: handleAdminStoreCustomPlanInvoiceList
+      adminStoreCustomPlanInvoiceList: handleAdminStoreCustomPlanInvoiceList,
+      // STEP 44-C④｜店主の本人認証(既存の PaymentIntent を画面で完了)・確定(サーバーが Stripe に照会)・今すぐ支払う。
+      storeCustomPlanPaymentStart: handleStoreCustomPlanPaymentStart,
+      storeCustomPlanPaymentConfirm: handleStoreCustomPlanPaymentConfirm,
+      storeCustomPlanPayNow: handleStoreCustomPlanPayNow
     };
 
   if (

@@ -1604,10 +1604,6 @@
           note.textContent = t("store_custom_plan_monthly_active") + (plan.createdInPreview ? " " + t("store_custom_plan_monthly_trial_note") : "");
         } else if (plan.state === "canceling" && plan.periodKind === "monthly") {
           note.textContent = t("store_custom_plan_monthly_canceling").replace("{date}", formatCustomDate(plan.accessUntilMillis - 60000)) + (plan.createdInPreview ? " " + t("store_custom_plan_monthly_trial_note") : "");
-        } else if (plan.state === "past_due") {
-          note.textContent = t("store_custom_plan_past_due");
-        } else if (plan.state === "suspended") {
-          note.textContent = t("store_custom_plan_suspended");
         } else if (plan.state === "active") {
           note.textContent = t("store_custom_plan_active").replace("{date}", until);
         } else if (plan.state === "canceling") {
@@ -1618,6 +1614,12 @@
           note.textContent = t(plan.otherHolderActive ? "store_custom_plan_other_active" : "store_custom_plan_other_inactive") + kept;
         } else {
           note.textContent = t(plan.signupAvailable ? "store_custom_plan_none_signup" : "store_custom_plan_none") + kept;
+        }
+        // STEP 44-C④｜未払い(支払いの状態)は契約の状態と別に案内する。
+        if (plan.paymentStatus === "suspended") {
+          note.textContent = t("store_custom_plan_suspended") + " " + note.textContent;
+        } else if (plan.paymentStatus === "past_due") {
+          note.textContent = note.textContent + " " + t("store_custom_plan_past_due");
         }
         renderCustomPlanBox();
       }
@@ -1649,7 +1651,9 @@
         const canSubscribe =
           plan.signupAvailable === true &&
           plan.storeEditable === true &&
-          (plan.state === "none" || plan.state === "expired" || plan.state === "canceling" || (plan.state === "other_holder" && plan.otherHolderActive !== true));
+          (plan.state === "none" || plan.state === "expired" || plan.state === "canceling" || (plan.state === "other_holder" && plan.otherHolderActive !== true)) &&
+          // 未払いがある間は申込・解約の取り消しを受け付けない(サーバーも 409 plan_unpaid)。
+          (plan.paymentStatus || "current") === "current";
         const subscribe = document.getElementById("customSubscribeButton");
         subscribe.hidden = !canSubscribe;
         subscribe.textContent = t(plan.state === "canceling" ? "store_custom_plan_reactivate_button" : "store_custom_plan_subscribe_button");

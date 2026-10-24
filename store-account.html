@@ -315,6 +315,14 @@
     }
 
     [hidden] { display: none !important; }
+  
+    /* STEP 44-C④｜月額100円カスタマイズのご請求 */
+    .plan-pay-item { border: 1px solid #e2eaf1; border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; }
+    .plan-pay-item.unpaid { border-color: #f0c2c7; background: #fff7f8; }
+    .plan-pay-line { margin: 0 0 4px; font-weight: 800; }
+    .plan-pay-status { margin: 0 0 4px; }
+    .plan-pay-unpaid { margin: 0 0 8px; font-weight: 800; color: #a3212d; }
+    .plan-pay-action { margin-top: 8px; }
   </style>
 </head>
 <body>
@@ -522,6 +530,17 @@
         <div id="invoiceMessage" class="message" role="status" aria-live="polite"></div>
       </div>
 
+      <!-- STEP 44-C④｜月額100円カスタマイズのご請求(このアカウントが請求先の分だけ。所有者が変わった店舗の分も表示)。
+           本人認証は既存の支払い(PaymentIntent)を画面で完了し、結果はサーバー(storeCustomPlanPaymentConfirm)が
+           Stripe に照会して確定する(画面の表示だけで支払い済みにしない)。表示はすべて文字(textContent)。 -->
+      <div class="store-section" id="planPaymentSection" hidden>
+        <h3 data-i18n="store_plan_pay_heading">月額100円カスタマイズのご請求</h3>
+        <p class="hint" data-i18n="store_plan_pay_intro"></p>
+        <p class="plan-pay-unpaid" id="planPayUnpaidTotal" hidden></p>
+        <div id="planPayList"></div>
+        <div id="planPayMessage" class="message" role="status" aria-live="polite"></div>
+      </div>
+
       <!-- 運営無料掲載 → 店舗オーナー化 MVP-1｜マチナウ運営が掲載したお店を、本当のお店が
            自分の店舗として引き継ぐ申請。?claim={掲載ID} で開く(TOPからの入口はまだ無い)。
            本人確認は、マチナウ運営がお店の公式連絡先へ連絡して行う。申請者の電話番号・
@@ -697,6 +716,13 @@
         renderMyClaims();
         if (lastClaimMessage) {
           showClaimMessage(lastClaimMessage.key, lastClaimMessage.type, lastClaimMessage.code);
+        }
+        // STEP 44-C④｜月額100円カスタマイズのご請求の表示を言語に合わせる。
+        if (typeof renderPlanPaymentSection === "function") {
+          renderPlanPaymentSection();
+          if (planPayLastMessage) {
+            showPlanPayMessage(planPayLastMessage.key, planPayLastMessage.type);
+          }
         }
       }
 
@@ -1050,6 +1076,8 @@
             renderOnboardingSteps();
             // 今だけ投稿 決済 STEP 38-B｜ご請求の履歴(失敗しても他の表示には影響しない)。
             loadInvoiceHistories().catch(function () {});
+            // STEP 44-C④｜月額100円カスタマイズのご請求(このアカウントが請求先の分)。
+            loadPlanPayments();
           });
       }
 
@@ -1224,6 +1252,169 @@
         })).then(function () {
           renderInvoiceHistorySection();
         });
+      }
+
+      // ===== STEP 44-C④｜月額100円カスタマイズのご請求・未払い・本人認証 =====
+      let planPayData = null;
+      let planPayBusy = false;
+      let planPayLastMessage = null;
+      const PLAN_PAY_STATUS_KEYS = {
+        closed: "store_plan_pay_status_closed",
+        charging: "store_plan_pay_status_charging",
+        processing: "store_plan_pay_status_processing",
+        requires_action: "store_plan_pay_status_requires_action",
+        payment_failed: "store_plan_pay_status_payment_failed",
+        charge_error: "store_plan_pay_status_review",
+        needs_review: "store_plan_pay_status_review",
+        paid: "store_plan_pay_status_paid"
+      };
+
+      function formatPlanPayDate(millis) {
+        try {
+          return new Intl.DateTimeFormat(currentLanguage, { year: "numeric", month: "short", day: "numeric", timeZone: "Asia/Tokyo" }).format(new Date(millis));
+        } catch (error) {
+          return new Date(millis).toISOString().slice(0, 10);
+        }
+      }
+
+      function showPlanPayMessage(key, type) {
+        planPayLastMessage = key ? { key: key, type: type } : null;
+        const box = document.getElementById("planPayMessage");
+        box.textContent = key ? t(key) : "";
+        box.className = key ? "message show " + type : "message";
+      }
+
+      function addPlanPayText(parent, tag, text, className) {
+        const element = document.createElement(tag);
+        element.textContent = text;
+        if (className) {
+          element.className = className;
+        }
+        parent.appendChild(element);
+        return element;
+      }
+
+      function renderPlanPaymentSection() {
+        const section = document.getElementById("planPaymentSection");
+        const invoices = planPayData && Array.isArray(planPayData.invoices) ? planPayData.invoices : [];
+        section.hidden = invoices.length === 0;
+        if (invoices.length === 0) {
+          return;
+        }
+        const total = document.getElementById("planPayUnpaidTotal");
+        total.hidden = !(planPayData.unpaidTotalJpy > 0);
+        total.textContent = t("store_plan_pay_unpaid_total").replace("{amount}", String(planPayData.unpaidTotalJpy));
+        const list = document.getElementById("planPayList");
+        list.textContent = "";
+        invoices.forEach(function (invoice) {
+          const item = document.createElement("div");
+          item.className = "plan-pay-item" + (invoice.unpaid ? " unpaid" : "");
+          addPlanPayText(item, "p", t("store_plan_pay_line")
+            .replace("{month}", String(invoice.month || "").replace("-", "/"))
+            .replace("{store}", invoice.storeName || invoice.storeId)
+            .replace("{amount}", String(invoice.amountJpy)) + (invoice.createdInPreview ? " " + t("store_plan_pay_test_badge") : ""), "plan-pay-line");
+          const statusKey = PLAN_PAY_STATUS_KEYS[invoice.status] || "store_plan_pay_status_review";
+          addPlanPayText(item, "p", t(statusKey)
+            .replace("{date}", invoice.status === "paid" ? formatPlanPayDate(invoice.paidAtMillis) : String(invoice.chargeScheduledFor || "").replace(/-/g, "/")), "plan-pay-status");
+          if (invoice.status === "payment_failed" && invoice.nextRetryAtMillis > 0) {
+            addPlanPayText(item, "p", t("store_plan_pay_next_retry").replace("{date}", formatPlanPayDate(invoice.nextRetryAtMillis)), "hint");
+          }
+          if (invoice.unpaid && invoice.suspendAtMillis > 0) {
+            addPlanPayText(item, "p", t("store_plan_pay_suspend_at").replace("{date}", formatPlanPayDate(invoice.suspendAtMillis)), "hint");
+          }
+          if (invoice.requiresAction && planPayData.paymentsAvailable) {
+            const button = addPlanPayText(item, "button", t(planPayBusy ? "store_plan_pay_processing" : "store_plan_pay_authenticate"), "primary-button plan-pay-action");
+            button.type = "button";
+            button.disabled = planPayBusy;
+            button.setAttribute("data-plan-pay-action", "authenticate");
+            button.setAttribute("data-plan-pay-invoice", invoice.invoiceId);
+          } else if (invoice.canPayNow) {
+            const button = addPlanPayText(item, "button", t(planPayBusy ? "store_plan_pay_processing" : "store_plan_pay_pay_now"), "secondary-button plan-pay-action");
+            button.type = "button";
+            button.disabled = planPayBusy;
+            button.setAttribute("data-plan-pay-action", "pay_now");
+            button.setAttribute("data-plan-pay-invoice", invoice.invoiceId);
+          }
+          list.appendChild(item);
+        });
+      }
+
+      function loadPlanPayments() {
+        return callStoreApi({ mode: "storeCustomPlanInvoiceList" })
+          .then(function (response) {
+            planPayData = response.status === 200 && response.result && response.result.success ? response.result : null;
+            renderPlanPaymentSection();
+          })
+          .catch(function () {
+            planPayData = null;
+            renderPlanPaymentSection();
+          });
+      }
+
+      function finishPlanPayResult(status) {
+        if (status === "paid") {
+          showPlanPayMessage("store_plan_pay_done", "success");
+        } else if (status === "requires_action") {
+          showPlanPayMessage("store_plan_pay_auth_incomplete", "error");
+        } else if (status === "processing" || status === "charging") {
+          showPlanPayMessage("store_plan_pay_status_processing", "info");
+        } else {
+          showPlanPayMessage("store_plan_pay_failed", "error");
+        }
+      }
+
+      document.addEventListener("click", function (event) {
+        const button = event.target.closest && event.target.closest("[data-plan-pay-action]");
+        if (button) {
+          handlePlanPayAction(button.getAttribute("data-plan-pay-action"), button.getAttribute("data-plan-pay-invoice"));
+        }
+      });
+
+      async function handlePlanPayAction(action, invoiceId) {
+        if (planPayBusy) {
+          return;
+        }
+        planPayBusy = true;
+        showPlanPayMessage(null);
+        renderPlanPaymentSection();
+        try {
+          if (action === "pay_now") {
+            const response = await callStoreApi({ mode: "storeCustomPlanPayNow", invoiceId: invoiceId });
+            if (response.status === 200 && response.result && response.result.success) {
+              finishPlanPayResult(response.result.status);
+            } else {
+              showPlanPayMessage(response.status === 403 ? "store_plan_pay_unavailable" : "store_plan_pay_error", "error");
+            }
+          } else {
+            const start = await callStoreApi({ mode: "storeCustomPlanPaymentStart", invoiceId: invoiceId });
+            const started = start.result || {};
+            if (start.status !== 200 || !started.success) {
+              showPlanPayMessage(start.status === 403 ? "store_plan_pay_unavailable" : "store_plan_pay_error", "error");
+            } else {
+              if (!started.alreadySucceeded) {
+                try {
+                  const StripeConstructor = await loadStripeJs();
+                  const stripe = StripeConstructor(started.publishableKey);
+                  // 既存の支払いをこの画面で本人認証して完了する(新しい支払いは作らない)。結果はこの後サーバーが確かめる。
+                  await stripe.confirmCardPayment(started.clientSecret, started.paymentMethodId ? { payment_method: started.paymentMethodId } : undefined);
+                } catch (error) {
+                  // 画面での結果は使わない(サーバーの照会で決める)。
+                }
+              }
+              const confirmed = await callStoreApi({ mode: "storeCustomPlanPaymentConfirm", invoiceId: invoiceId });
+              if (confirmed.status === 200 && confirmed.result && confirmed.result.success) {
+                finishPlanPayResult(confirmed.result.status);
+              } else {
+                showPlanPayMessage("store_plan_pay_error", "error");
+              }
+            }
+          }
+        } catch (error) {
+          showPlanPayMessage("store_account_err_network", "error");
+        } finally {
+          planPayBusy = false;
+          await loadPlanPayments();
+        }
       }
 
       // ===== 今だけ投稿 決済 STEP 31｜お支払い方法(カード登録) =====

@@ -9,8 +9,9 @@
 // 契約の種類(storeCustomPlans.periodKind)：
 //   preview_trial … STEP 44-B の Preview 試験の契約(申込から暦の1か月、請求の対象外)。動作は変えない。
 //   monthly       … 本番の暦月契約。解約するまで毎月継続。解約するとその月の月末(翌月1日 0:00 JST)まで利用可。
-//                   status：active(契約中)・canceling(解約手続き済み・月末まで)・past_due(未払い・猶予中、利用可)・
-//                   suspended(未払いで停止、利用不可・データは保持)・ended(終了)。
+//                   status(契約の状態)：active(契約中)・canceling(解約手続き済み・月末まで)・ended(終了)。
+//                   STEP 44-C④｜未払いは契約の状態と別に paymentStatus(current・past_due＝猶予中で利用可・
+//                   suspended＝停止で利用不可、データは保持)で持つ(store-custom-plan-charge.js が更新する)。
 //
 // 利用月の記録 storeCustomPlanUsage/{storeId}_{YYYY-MM}(店舗・年月で1件)：その月に1日でも利用できた最初の
 //   契約者を記録する(申込・解約・解約の取り消し・前の月の締めでの翌月の開始・締め時の補完で作る)。あとから別の
@@ -30,10 +31,6 @@ import {
 import {
   randomUUID
 } from "node:crypto";
-
-import {
-  requireVerifiedStoreUser
-} from "./store-self-service.js";
 
 import {
   isActiveOwner,
@@ -143,7 +140,8 @@ export function isMonthlyPlan(planData) {
 }
 
 // 利用権限(期間・状態だけ。契約者が owner かどうかは呼び出し側で確かめる)。
-//   monthly：active・past_due は利用可(期限なし)、canceling は accessUntil(翌月1日 0:00 JST)まで、それ以外は不可。
+//   monthly：active は利用可(期限なし)、canceling は accessUntil(翌月1日 0:00 JST)まで、それ以外は不可。
+//            ただし支払いの状態が suspended(未払いで停止)の間は利用不可(STEP 44-C④)。
 //   preview_trial(と種類の無い古い形)：active・canceling で accessUntil が今より後の時だけ(STEP 44-A/B のまま)。
 export function evaluateStoreCustomPlanAccess(planData, nowMillis) {
   if (!planData) {
@@ -151,7 +149,11 @@ export function evaluateStoreCustomPlanAccess(planData, nowMillis) {
   }
 
   if (isMonthlyPlan(planData)) {
-    if (planData.status === "active" || planData.status === "past_due") {
+    if (planData.paymentStatus === "suspended") {
+      return false;
+    }
+
+    if (planData.status === "active") {
       return true;
     }
 
@@ -170,7 +172,7 @@ function monthlyPlanCoversMonthStart(planData, monthStartMillis) {
     return false;
   }
 
-  if (planData.status === "active" || planData.status === "past_due") {
+  if (planData.status === "active") {
     return true;
   }
 
@@ -245,7 +247,8 @@ async function ensureContinuationUsage(database, planDocument, monthKey, nowMill
   let result = "skipped";
 
   const decide = function(plan, member, account, usageExists) {
-    if (!monthlyPlanCoversMonthStart(plan, monthStart) || plan.status === "suspended") {
+    // 未払いで停止中(paymentStatus suspended)の契約には、新しい月の料金を作らない。
+    if (!monthlyPlanCoversMonthStart(plan, monthStart) || plan.paymentStatus === "suspended") {
       return "not_covered";
     }
 
@@ -518,21 +521,8 @@ export async function handleAdminStoreCustomPlanMonthlyClose(request, response, 
   }
 }
 
-// mode: adminStoreCustomPlanCharge (POST、運営のみ)
-// この工程では Stripe への請求を実装しない。フラグが false の間は必ず拒否し、Stripe に接続しない。
-export async function handleAdminStoreCustomPlanCharge(request, response, deps) {
-  const authResult = await deps.requireAdmin(request);
-
-  if (!authResult.ok) {
-    return response.status(authResult.status).json({ success: false, message: authResult.message });
-  }
-
-  if (STORE_CUSTOM_PLAN_CHARGE_ENABLED !== true) {
-    return sendError(response, 403, "charge_disabled");
-  }
-
-  return sendError(response, 501, "charge_not_implemented");
-}
+// STEP 44-C④｜請求(adminStoreCustomPlanCharge)と店主の請求一覧(storeCustomPlanInvoiceList)は
+// store-custom-plan-charge.js へ移した(支払いの状態・本人認証と合わせて扱うため)。
 
 function buildInvoiceSummary(documentSnapshot) {
   const data = documentSnapshot.data() || {};
@@ -548,33 +538,16 @@ function buildInvoiceSummary(documentSnapshot) {
     chargeScheduledFor: data.chargeScheduledFor || "",
     usageReason: data.usageReason || "",
     closedAtMillis: millisOf(data.closedAt),
+    // STEP 44-C④｜運営の確認用(決済失敗・結果不明・再試行の状況)。
+    chargeAttempt: Number.isInteger(data.chargeAttempt) ? data.chargeAttempt : 0,
+    retryCount: Number.isInteger(data.retryCount) ? data.retryCount : 0,
+    nextRetryAtMillis: millisOf(data.nextRetryAt),
+    suspendAtMillis: millisOf(data.suspendAt),
+    paidAtMillis: millisOf(data.paidAt),
+    chargeOutcomeUnknown: data.chargeOutcomeUnknown === true,
+    reviewReason: data.chargeReviewReason || data.chargeErrorReason || "",
     createdInPreview: data.createdInPreview === true
   };
-}
-
-// mode: storeCustomPlanInvoiceList (POST、メール確認済み店舗アカウント)
-// このアカウントが請求先の請求書だけを返す(店舗のメンバーでなくなった旧店主も、自分の分は見られる)。
-// 他のアカウント・他の店舗の請求書は返さない。カード・顧客・支払いの ID は返さない。
-export async function handleStoreCustomPlanInvoiceList(request, response, deps) {
-  try {
-    const actor = await requireVerifiedStoreUser(request, response, deps);
-
-    if (!actor) {
-      return;
-    }
-
-    const database = deps.getFirestore(deps.getFirebaseAdminApp());
-    const snapshot = await database.collection(STORE_CUSTOM_PLAN_INVOICES_COLLECTION).where("billingAccountUid", "==", actor.uid).get();
-    const invoices = snapshot.docs
-      .filter(function(documentSnapshot) { return (documentSnapshot.data() || {}).billingAccountUid === actor.uid; })
-      .map(buildInvoiceSummary)
-      .sort(function(a, b) { return a.month < b.month ? 1 : a.month > b.month ? -1 : 0; });
-
-    return response.status(200).json({ success: true, invoices: invoices });
-  } catch (error) {
-    console.error("店舗カスタマイズ：請求一覧エラー：", error && error.message);
-    return sendError(response, 500, "server_error");
-  }
 }
 
 // mode: adminStoreCustomPlanInvoiceList (POST、運営のみ、読み取り専用) { month?: "YYYY-MM" }
