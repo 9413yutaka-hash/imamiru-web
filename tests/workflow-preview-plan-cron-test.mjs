@@ -72,7 +72,7 @@ const writeStub = (name, body) => { const p = join(bin, name); writeFileSync(p, 
 writeStub("gh", `
 echo "gh $*" >> "$STUB_LOG"
 case "$*" in
-  *"/deployments?sha="*) printf '%s' "$MOCK_DEPLOYMENT_ID" ;;
+  *"/deployments?sha="*) printf '%s' "$MOCK_DEPLOYMENTS_JSON" ;;
   *"/statuses"*) printf '%s' "$MOCK_STATUS_JSON" ;;
   *) exit 1 ;;
 esac`);
@@ -92,7 +92,8 @@ const GOOD_URL = "https://imamiru-abc123xyz-9413yutaka-hashs-projects.vercel.app
 const baseEnv = {
   GH_TOKEN: "fake-token", REPO: "9413yutaka-hash/imamiru-web", RUN_SHA: SHA, WORKFLOW_SHA: SHA,
   WORKFLOW_REF: "9413yutaka-hash/imamiru-web/.github/workflows/main.yml@refs/heads/preview/stripe-card-setup",
-  MOCK_DEPLOYMENT_ID: "12345", MOCK_STATUS_JSON: JSON.stringify([{ state: "success", environment_url: GOOD_URL }]),
+  // Vercel's GitHub deployments carry the commit SHA in "ref" (confirmed on the real repository).
+  MOCK_DEPLOYMENTS_JSON: JSON.stringify([{ id: 12345, sha: SHA, ref: SHA, environment: "Preview" }]), MOCK_STATUS_JSON: JSON.stringify([{ state: "success", environment_url: GOOD_URL }]),
   MOCK_TARGET_JSON: JSON.stringify({ success: true, projectId: "machinau-preview", enforced: true }), MOCK_TARGET_FAIL: "0"
 };
 function runStep(index, env) {
@@ -105,12 +106,15 @@ function runStep(index, env) {
 const sentSecret = (r) => r.log.includes(SECRET);
 
 let r = runStep(0, baseEnv);
-t("S1 すべての確認を満たす：Preview の URL を出力（commit・接続先 machinau-preview を確認）", r.code === 0 && r.output.trim() === "url=" + GOOD_URL && /Verified Preview deployment/.test(r.stdout), r);
+t("S1 すべての確認を満たす：Preview の URL を出力（commit・接続先 machinau-preview を確認）", r.code === 0 && r.output.trim() === "url=" + GOOD_URL && /Verified Preview deployment/.test(r.stdout) && r.log.includes("/deployments/12345/statuses"), r);
 const stopCases = [
   ["S2 workflow のファイルが main の版（選んだブランチの版が使われていない）", { WORKFLOW_REF: "9413yutaka-hash/imamiru-web/.github/workflows/main.yml@refs/heads/main" }, false],
   ["S3 workflow のファイルの commit が実行の commit と違う", { WORKFLOW_SHA: "b".repeat(40) }, false],
   ["S4 workflow のファイルの commit が空", { WORKFLOW_SHA: "" }, false],
-  ["S5 この commit の Preview のデプロイが無い", { MOCK_DEPLOYMENT_ID: "" }, true],
+  ["S5 この commit の Preview のデプロイが無い（空の一覧）", { MOCK_DEPLOYMENTS_JSON: "[]" }, true],
+  ["S5b 一覧に別の commit のデプロイしか無い", { MOCK_DEPLOYMENTS_JSON: JSON.stringify([{ id: 9, sha: "c".repeat(40), ref: "c".repeat(40), environment: "Preview" }]) }, true],
+  ["S5c この commit のデプロイが Production の環境だけ", { MOCK_DEPLOYMENTS_JSON: JSON.stringify([{ id: 9, sha: SHA, ref: SHA, environment: "Production" }]) }, true],
+  ["S5d 実行の commit の形が不正", { RUN_SHA: "main", WORKFLOW_SHA: "main" }, false],
   ["S6 デプロイの状態が success ではない", { MOCK_STATUS_JSON: JSON.stringify([{ state: "failure", environment_url: GOOD_URL }]) }, true],
   ["S7 URL が本番（machinau.jp）", { MOCK_STATUS_JSON: JSON.stringify([{ state: "success", environment_url: "https://machinau.jp" }]) }, true],
   ["S8 URL が別のホスト（imamiru-web.vercel.app）", { MOCK_STATUS_JSON: JSON.stringify([{ state: "success", environment_url: "https://imamiru-web.vercel.app" }]) }, true],

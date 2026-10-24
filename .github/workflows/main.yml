@@ -43,7 +43,7 @@ jobs:
   # 「手動実行」かつ「ブランチ preview/stripe-card-setup を選んだ時」だけ動く。請求はしない（定期実行からの請求の許可は false）。
   # 合言葉は、次の確認をすべて満たした時だけ、確認した Preview の URL へだけ送る（machinau.jp 等の本番には送らない）：
   #   ①実行中の workflow のファイルが preview/stripe-card-setup のもので、その commit が実行の commit と同じ
-  #   ②その commit の Vercel の Preview のデプロイ（環境 Preview・ブランチ preview/stripe-card-setup）があり、状態が success
+  #   ②その commit の Vercel の Preview のデプロイ（環境 Preview・commit が一致。Vercel の記録の ref は commit）があり、状態が success
   #   ③URL が https://imamiru-…-9413yutaka-hashs-projects.vercel.app の形
   #   ④その URL の接続先の確認（mode=firebaseTarget）が machinau-preview・検査あり
   preview-plan-cron:
@@ -72,7 +72,11 @@ jobs:
           if [ -z "$WORKFLOW_SHA" ] || [ "$WORKFLOW_SHA" != "$RUN_SHA" ]; then
             echo "STOP: the workflow file version does not match the run commit"; exit 1
           fi
-          deployment_id="$(gh api "repos/$REPO/deployments?sha=$RUN_SHA&environment=Preview&per_page=20" --jq '[.[] | select(.ref == "preview/stripe-card-setup")][0].id // empty')"
+          if ! printf '%s' "$RUN_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "STOP: unexpected run commit"; exit 1
+          fi
+          deployments_json="$(gh api "repos/$REPO/deployments?sha=$RUN_SHA&environment=Preview&per_page=20")"
+          deployment_id="$(printf '%s' "$deployments_json" | RUN_SHA="$RUN_SHA" node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const a=JSON.parse(s);const d=Array.isArray(a)?a.find(x=>x&&x.sha===process.env.RUN_SHA&&x.environment==="Preview"):null;process.stdout.write(d&&Number.isInteger(d.id)?String(d.id):"")})')"
           if [ -z "$deployment_id" ]; then
             echo "STOP: no Preview deployment for this commit"; exit 1
           fi
