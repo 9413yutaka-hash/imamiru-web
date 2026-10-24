@@ -5345,6 +5345,10 @@ const SITEMAP_SHARED_CACHE_MAX_AGE_SECONDS =
 const SITEMAP_STALE_WHILE_REVALIDATE_SECONDS =
   600;
 
+// SEO(2026-10-24)｜sitemap を作れなかった時(503)に、読み直しまで待ってほしい秒数。
+const SITEMAP_RETRY_AFTER_SECONDS =
+  600;
+
 const COMMENT_NICKNAME_MAX_LENGTH =
   20;
 
@@ -23706,11 +23710,23 @@ function buildColumnArticleLanguageSwitchHtml(
 // (常にhttps://machinau.jp/column/{slug}.htmlを指す1本のcanonical)を
 // 大きく作り変えず、ja版は既存と同じURLのまま、追加のhreflang alternate
 // タグだけを新設する(大規模SEO改修はしない、本部指示)。
+// SEO(2026-10-24)｜languages を渡した時は、その言語だけを alternate に出す(翻訳がまだ無い言語版を
+// Google に案内しないため)。省略時は従来どおり対応言語すべて。x-default は常に原文(ja)。
 function buildColumnArticleHreflangLinksHtml(
-  slug
+  slug,
+  languages
 ) {
+  const alternateLanguages =
+    Array.isArray(languages) && languages.length > 0
+      ? REGION_TODAY_INFO_SUPPORTED_LANGUAGES.filter(
+          function(languageCode) {
+            return languages.includes(languageCode);
+          }
+        )
+      : REGION_TODAY_INFO_SUPPORTED_LANGUAGES;
+
   const alternateLinksHtml =
-    REGION_TODAY_INFO_SUPPORTED_LANGUAGES.map(
+    alternateLanguages.map(
       function(languageCode) {
         return (
           '<link rel="alternate" hreflang="' +
@@ -23787,6 +23803,61 @@ function getColumnArticleSummaryFromData(
     title: title,
     description: description
   };
+}
+
+// SEO(2026-10-24)｜保存済みの翻訳が今の原文に対して完成しているか(読むだけ。翻訳の生成・保存はしない)。
+// 見出し・説明(summary)と本文(content)の両方が status "ready" で、原文のハッシュが一致する時だけ true。
+function isColumnArticleTranslationReady(
+  data,
+  language
+) {
+  const translation =
+    data &&
+    data.translations &&
+    typeof data.translations === "object" &&
+    data.translations[language] &&
+    typeof data.translations[language] === "object"
+      ? data.translations[language]
+      : null;
+
+  if (!translation) {
+    return false;
+  }
+
+  const summarySource =
+    getColumnArticleSummaryFromData(
+      data
+    );
+
+  const summaryReady =
+    !summarySource ||
+    (
+      !!translation.summary &&
+      translation.summary.status === "ready" &&
+      translation.summary.sourceHash ===
+        computeColumnArticleSummaryHash(
+          summarySource.title,
+          summarySource.description
+        )
+    );
+
+  const content =
+    typeof data.content === "string"
+      ? data.content
+      : "";
+
+  const contentReady =
+    content === "" ||
+    (
+      !!translation.content &&
+      translation.content.status === "ready" &&
+      translation.content.sourceHash ===
+        computeShopMessageHash(
+          content
+        )
+    );
+
+  return summaryReady && contentReady;
 }
 
 function computeColumnArticleSummaryHash(
@@ -24926,7 +24997,8 @@ async function resolveColumnArticleSummaryTranslationSingle(
   if (claimResult.outcome === "ready") {
     return {
       title: claimResult.title,
-      description: claimResult.description
+      description: claimResult.description,
+      isFallbackToSource: false
     };
   }
 
@@ -24935,7 +25007,8 @@ async function resolveColumnArticleSummaryTranslationSingle(
     // いずれも、日本語原文をそのまま返す(既存表示を壊さない安全な挙動)。
     return {
       title: titleAndDescription.title,
-      description: titleAndDescription.description
+      description: titleAndDescription.description,
+      isFallbackToSource: true
     };
   }
 
@@ -24968,7 +25041,8 @@ async function resolveColumnArticleSummaryTranslationSingle(
 
     return {
       title: translatedItem.title,
-      description: translatedItem.description
+      description: translatedItem.description,
+      isFallbackToSource: false
     };
   } catch (translationError) {
     console.error(
@@ -24991,7 +25065,8 @@ async function resolveColumnArticleSummaryTranslationSingle(
 
     return {
       title: titleAndDescription.title,
-      description: titleAndDescription.description
+      description: titleAndDescription.description,
+      isFallbackToSource: true
     };
   }
 }
@@ -26281,10 +26356,14 @@ function buildColumnArticleHtml(
       language
     );
 
+  // SEO(2026-10-24)｜未翻訳の言語版(noindex)には hreflang を出さない。それ以外は翻訳が完成している言語だけ。
   const hreflangLinksHtml =
-    buildColumnArticleHreflangLinksHtml(
-      article.slug
-    );
+    article.robotsNoindex
+      ? ""
+      : buildColumnArticleHreflangLinksHtml(
+          article.slug,
+          article.hreflangLanguages
+        );
 
   // Ver1.8 Phase2(地域連動基盤)｜地域名は表示のためだけに使い、タイトル・
   // descriptionへは詰め込まない(不自然なSEO詰め込みを避ける指示のため)。
@@ -26372,6 +26451,7 @@ function buildColumnArticleHtml(
   <meta name="theme-color" content="#0788c9">
   <meta name="description" content="${escapedDescription}">
   <title>${escapedTitle}${escapedTitleSuffix}</title>
+  ${article.robotsNoindex ? '<meta name="robots" content="noindex">' : ""}
   <link rel="canonical" href="${canonicalUrl}">
   ${hreflangLinksHtml}
   <link rel="icon" type="image/png" href="/favicon.png?v=2">
@@ -27132,6 +27212,10 @@ async function handleRenderColumnArticleRequest(
     let contentTranslationFallback =
       false;
 
+    // SEO(2026-10-24)｜見出し・説明の翻訳が原文のままか(翻訳中・失敗)。
+    let summaryTranslationFallback =
+      false;
+
     if (language !== REGION_TODAY_INFO_SOURCE_LANGUAGE) {
       const titleAndDescription =
         getColumnArticleSummaryFromData(
@@ -27152,6 +27236,9 @@ async function handleRenderColumnArticleRequest(
 
         displayDescription =
           summaryDisplay.description;
+
+        summaryTranslationFallback =
+          summaryDisplay.isFallbackToSource === true;
       }
 
       if (originalContent !== "") {
@@ -27193,6 +27280,32 @@ async function handleRenderColumnArticleRequest(
           description: displayDescription,
           content: displayContent,
           contentTranslationFallback: contentTranslationFallback,
+
+          // SEO(2026-10-24)｜翻訳がまだ無い(原文のまま表示している)言語版は Google に登録させない。
+          // 表示・翻訳の生成は従来どおり。
+          robotsNoindex:
+            language !== REGION_TODAY_INFO_SOURCE_LANGUAGE &&
+            (summaryTranslationFallback || contentTranslationFallback),
+
+          // SEO(2026-10-24)｜hreflang に出す言語：原文(ja)と、翻訳が完成している言語だけ
+          // (この表示で翻訳が完成した言語を含む)。
+          hreflangLanguages:
+            REGION_TODAY_INFO_SUPPORTED_LANGUAGES.filter(
+              function(languageCode) {
+                return (
+                  languageCode === REGION_TODAY_INFO_SOURCE_LANGUAGE ||
+                  (
+                    languageCode === language &&
+                    !summaryTranslationFallback &&
+                    !contentTranslationFallback
+                  ) ||
+                  isColumnArticleTranslationReady(
+                    data,
+                    languageCode
+                  )
+                );
+              }
+            ),
 
           regionCountryLabel:
             getCountryDisplayLabel(
@@ -27646,9 +27759,30 @@ async function handleRenderSitemapRequest(
         }
       );
     } catch (articlesError) {
+      // SEO(2026-10-24)｜記事を読めない時は、記事を欠いた sitemap を正常(200)として返さない。
+      // 503(一時的に利用不可)を返し、CDN に保存させず(no-store)、Google に後で読み直してもらう。
       console.error(
-        "sitemap生成時の読み物一覧取得に失敗しました(固定URLのみで生成を継続)：",
+        "sitemap生成時の読み物一覧取得に失敗しました(503を返します)：",
         articlesError
+      );
+
+      response.setHeader(
+        "Content-Type",
+        "text/plain; charset=utf-8"
+      );
+
+      response.setHeader(
+        "Cache-Control",
+        "no-store"
+      );
+
+      response.setHeader(
+        "Retry-After",
+        String(SITEMAP_RETRY_AFTER_SECONDS)
+      );
+
+      return response.status(503).send(
+        "sitemap temporarily unavailable"
       );
     }
 
@@ -27706,13 +27840,24 @@ async function handleRenderSitemapRequest(
       error
     );
 
+    // SEO(2026-10-24)｜空の sitemap を返さず、503・保存なしで後の読み直しを促す。
     response.setHeader(
       "Content-Type",
-      "application/xml; charset=utf-8"
+      "text/plain; charset=utf-8"
     );
 
-    return response.status(500).send(
-      '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>\n'
+    response.setHeader(
+      "Cache-Control",
+      "no-store"
+    );
+
+    response.setHeader(
+      "Retry-After",
+      String(SITEMAP_RETRY_AFTER_SECONDS)
+    );
+
+    return response.status(503).send(
+      "sitemap temporarily unavailable"
     );
   }
 }
