@@ -88,7 +88,7 @@ function seedStore(id, uid, name, lat) {
 }
 seedStore("S1", "u1", "海辺のカフェ", 26.21);
 seedStore("S2", "u9", "となりの食堂", 26.22);
-const setPlan = (status, until) => S.docs.set("storeCustomPlans/S1", { storeId: "S1", status, accessUntil: until });
+const setPlan = (status, until) => S.docs.set("storeCustomPlans/S1", { storeId: "S1", status, accessUntil: until, ownerUid: "u1" });
 
 const server = await serve(REPO_ROOT + "", 8874);
 const browser = await launchChrome();

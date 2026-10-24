@@ -237,3 +237,9 @@ export function isPreviewStoreInvoiceHistoryEnabled(env, targets) {
 export function isPreviewListingPhotoCopyTrialEnabled(env, targets) {
   return isPreviewCvBillingTrialEnabled(env, targets);
 }
+
+// STEP 44-B｜月額100円カスタマイズの申込(Preview試験の仮の契約、Stripe の請求なし)を受け付けてよいか。
+// 条件は課金対象判定の試験と同じ(Preview・対象ブランチ・machinau-preview)。Productionでは常に false。
+export function isPreviewStoreCustomPlanTrialEnabled(env, targets) {
+  return isPreviewCvBillingTrialEnabled(env, targets);
+}

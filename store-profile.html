@@ -222,6 +222,8 @@
     .custom-link-row .custom-link-url { grid-column: 1 / -1; }
     .custom-link-row .custom-link-remove { grid-column: 1 / -1; justify-self: end; }
     .custom-link-row select, .custom-link-row input { min-height: 42px; }
+    .custom-plan-box { margin: 0 0 16px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+    .custom-plan-box .hint { margin: 0 0 8px; }
 
     [hidden] { display: none !important; }
 
@@ -390,6 +392,16 @@
         <h2 data-i18n="store_custom_heading">月額100円カスタマイズ</h2>
         <p class="hint" style="margin: 0 0 10px;" data-i18n="store_custom_intro"></p>
         <p class="message info show" id="customPlanNote"></p>
+        <!-- STEP 44-B｜月額100円プランの申込・解約。条件(owner・メール確認・カード・編集可能・有効な契約なし)は
+             すべてサーバーが確認する。ボタンの表示は目安だけ。 -->
+        <div class="custom-plan-box" id="customPlanBox" hidden>
+          <p class="hint" id="customPlanDates"></p>
+          <p class="hint" id="customPlanTrialNote" hidden data-i18n="store_custom_plan_trial_note"></p>
+          <p class="hint" id="customPlanCardNote" hidden><span data-i18n="store_custom_plan_card_required"></span> <a href="store-account.html" data-i18n="store_custom_plan_card_link"></a></p>
+          <div id="customPlanMessage" class="message" role="status" aria-live="polite"></div>
+          <button type="button" class="primary-button" id="customSubscribeButton" hidden></button>
+          <button type="button" class="secondary-button" id="customCancelButton" hidden data-i18n="store_custom_plan_cancel_button">解約する</button>
+        </div>
         <form id="customForm" novalidate>
           <div class="field">
             <label for="customStoryInput" data-i18n="store_custom_story_label">お店のこだわり・ストーリー</label>
@@ -1487,6 +1499,8 @@
       let customPhotoTarget = -1;
       let customPhotoPreparation = Promise.resolve();
       let lastCustomMessage = null;
+      let lastPlanMessage = null;
+      let planBusy = false;
 
       function customLimits() {
         return (customLoaded && customLoaded.limits) || {};
@@ -1518,7 +1532,7 @@
 
       function formatCustomDate(millis) {
         try {
-          return new Intl.DateTimeFormat(currentLanguage, { year: "numeric", month: "long", day: "numeric" }).format(new Date(millis));
+          return new Intl.DateTimeFormat(currentLanguage, { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Tokyo", timeZoneName: "short" }).format(new Date(millis));
         } catch (error) {
           return new Date(millis).toISOString().slice(0, 10);
         }
@@ -1580,14 +1594,134 @@
           return;
         }
         note.hidden = false;
-        if (plan.access) {
-          note.textContent = customEditable
-            ? t("store_custom_plan_active").replace("{date}", formatCustomDate(plan.accessUntilMillis))
-            : t("store_custom_not_editable");
+        const until = formatCustomDate(plan.accessUntilMillis);
+        const hasContent = customItems.length > 0 || customLinks.length > 0 || document.getElementById("customStoryInput").value.trim() !== "";
+        const kept = hasContent ? " " + t("store_custom_plan_kept") : "";
+        if (plan.access && !customEditable) {
+          note.textContent = t("store_custom_not_editable");
+        } else if (plan.state === "active") {
+          note.textContent = t("store_custom_plan_active").replace("{date}", until);
+        } else if (plan.state === "canceling") {
+          note.textContent = t("store_custom_plan_canceling").replace("{date}", until);
+        } else if (plan.state === "expired") {
+          note.textContent = t("store_custom_plan_expired").replace("{date}", until) + kept;
+        } else if (plan.state === "other_holder") {
+          note.textContent = t(plan.otherHolderActive ? "store_custom_plan_other_active" : "store_custom_plan_other_inactive") + kept;
+        } else {
+          note.textContent = t(plan.signupAvailable ? "store_custom_plan_none_signup" : "store_custom_plan_none") + kept;
+        }
+        renderCustomPlanBox();
+      }
+
+      // STEP 44-B｜申込・解約のボタンと日時。
+      function renderCustomPlanBox() {
+        const plan = customLoaded && customLoaded.plan;
+        const box = document.getElementById("customPlanBox");
+        if (!plan) {
+          box.hidden = true;
           return;
         }
-        const hasContent = customItems.length > 0 || customLinks.length > 0 || document.getElementById("customStoryInput").value.trim() !== "";
-        note.textContent = t("store_custom_plan_none") + (hasContent ? " " + t("store_custom_plan_kept") : "");
+        const mine = plan.state === "active" || plan.state === "canceling" || plan.state === "expired";
+        const dates = [];
+        if (mine && plan.subscribedAtMillis > 0) {
+          dates.push(t("store_custom_plan_dates_subscribed").replace("{date}", formatCustomDate(plan.subscribedAtMillis)));
+        }
+        if (mine && plan.accessUntilMillis > 0) {
+          dates.push(t("store_custom_plan_dates_until").replace("{date}", formatCustomDate(plan.accessUntilMillis)));
+        }
+        if (mine && plan.canceledAtMillis > 0 && plan.state !== "active") {
+          dates.push(t("store_custom_plan_dates_canceled").replace("{date}", formatCustomDate(plan.canceledAtMillis)));
+        }
+        const datesElement = document.getElementById("customPlanDates");
+        datesElement.textContent = dates.join(" ／ ");
+        datesElement.hidden = dates.length === 0;
+        const canSubscribe =
+          plan.signupAvailable === true &&
+          plan.storeEditable === true &&
+          (plan.state === "none" || plan.state === "expired" || plan.state === "canceling" || (plan.state === "other_holder" && plan.otherHolderActive !== true));
+        const subscribe = document.getElementById("customSubscribeButton");
+        subscribe.hidden = !canSubscribe;
+        subscribe.textContent = t(plan.state === "canceling" ? "store_custom_plan_reactivate_button" : "store_custom_plan_subscribe_button");
+        subscribe.disabled = planBusy || plan.cardRegistered !== true;
+        document.getElementById("customPlanCardNote").hidden = !canSubscribe || plan.cardRegistered === true;
+        document.getElementById("customPlanTrialNote").hidden = !canSubscribe;
+        const cancel = document.getElementById("customCancelButton");
+        cancel.hidden = plan.state !== "active";
+        cancel.disabled = planBusy;
+        box.hidden = subscribe.hidden && cancel.hidden && datesElement.hidden && !lastPlanMessage;
+      }
+
+      function showPlanMessage(key, type, code, replacements) {
+        const box = document.getElementById("customPlanMessage");
+        let text = t(key);
+        Object.keys(replacements || {}).forEach(function (name) {
+          text = text.split("{" + name + "}").join(String(replacements[name]));
+        });
+        box.textContent = text;
+        if (code) {
+          const codeElement = document.createElement("span");
+          codeElement.className = "error-code";
+          codeElement.textContent = "(" + code + ")";
+          box.appendChild(codeElement);
+        }
+        box.className = "message show " + type;
+        lastPlanMessage = { key: key, type: type, code: code || "", replacements: replacements || null };
+        document.getElementById("customPlanBox").hidden = false;
+      }
+
+      // 契約の状態だけを読み直す(編集中の未保存の内容は消さない)。
+      function refreshCustomPlan() {
+        return callApi({ mode: "storeCustomProfileGet", storeId: storeId }).then(function (response) {
+          if (!(response.status === 200 && response.result && response.result.success)) {
+            return;
+          }
+          if (customDirty) {
+            customLoaded = Object.assign({}, customLoaded, { plan: response.result.plan, editable: response.result.editable });
+            customEditable = response.result.editable === true;
+            renderCustom();
+          } else {
+            applyCustomLoaded(response.result);
+          }
+        });
+      }
+
+      const PLAN_ERROR_KEYS = {
+        card_required: "store_custom_plan_err_card",
+        already_subscribed: "store_custom_plan_err_already",
+        plan_signup_unavailable: "store_custom_plan_err_unavailable",
+        plan_not_active: "store_custom_plan_err_not_active",
+        store_not_editable: "store_custom_not_editable",
+        rate_limited: "store_account_store_err_rate_limited"
+      };
+
+      async function handlePlanAction(mode) {
+        if (planBusy) {
+          return;
+        }
+        if (mode === "storeCustomPlanCancel" && !window.confirm(t("store_custom_plan_cancel_confirm"))) {
+          return;
+        }
+        planBusy = true;
+        renderCustomPlanBox();
+        try {
+          const response = await callApi({ mode: mode, storeId: storeId });
+          const result = response.result || {};
+          if (response.status === 200 && result.success) {
+            const date = formatCustomDate(result.accessUntilMillis);
+            const key = mode === "storeCustomPlanCancel"
+              ? (result.alreadyCanceled ? "store_custom_plan_already_canceled" : "store_custom_plan_canceled")
+              : (result.result === "reactivated" ? "store_custom_plan_reactivated" : "store_custom_plan_subscribed");
+            showPlanMessage(key, "success", "", { date: date });
+          } else {
+            showPlanMessage(PLAN_ERROR_KEYS[result.reason] || "store_account_err_generic", "error", result.reason || "http_" + response.status);
+          }
+          await refreshCustomPlan();
+        } catch (error) {
+          showPlanMessage("store_account_err_network", "error");
+        } finally {
+          planBusy = false;
+          renderCustomPlanBox();
+        }
       }
 
       function customButton(action, index, labelKey, disabled) {
@@ -2039,6 +2173,12 @@
           clearCustomMessage();
           loadCustom();
         });
+        document.getElementById("customSubscribeButton").addEventListener("click", function () {
+          handlePlanAction("storeCustomPlanSubscribe");
+        });
+        document.getElementById("customCancelButton").addEventListener("click", function () {
+          handlePlanAction("storeCustomPlanCancel");
+        });
       }
 
       // ===== 言語 =====
@@ -2094,6 +2234,9 @@
         renderCustom();
         if (lastCustomMessage) {
           showCustomMessage(lastCustomMessage.key, lastCustomMessage.type, lastCustomMessage.code, lastCustomMessage.replacements);
+        }
+        if (lastPlanMessage) {
+          showPlanMessage(lastPlanMessage.key, lastPlanMessage.type, lastPlanMessage.code, lastPlanMessage.replacements);
         }
       }
 

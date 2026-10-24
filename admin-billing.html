@@ -68,6 +68,8 @@
     .message-box.info { background: var(--sky); color: var(--navy); }
 
     #adminArea { display: none; }
+    .custom-plan-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; display: block; overflow-x: auto; }
+    .custom-plan-table th, .custom-plan-table td { border-bottom: 1px solid #e2eaf1; padding: 6px 8px; text-align: left; white-space: nowrap; }
     #adminArea.visible { display: block; }
 
     .overall { padding: 14px 16px; border-radius: 12px; font-size: 15px; font-weight: 700; line-height: 1.6; }
@@ -189,6 +191,17 @@
             <button id="closeExecuteButton" class="primary-button" type="button" disabled>10月分の月末締めを実行する（Preview）</button>
           </div>
         </div>
+      </div>
+
+      <!-- STEP 44-B｜月額100円カスタマイズの契約一覧（読み取り専用）。契約状態はこの画面から変更できない。 -->
+      <div class="panel" id="customPlanPanel">
+        <h2>月額100円カスタマイズの契約（読み取り専用）</h2>
+        <p class="note">店舗の月額100円カスタマイズの契約の状態です。この画面は確認専用で、契約の変更・解約・請求はできません。「試験」はPreview試験の仮の契約（Stripeの請求なし）です。</p>
+        <div class="button-row">
+          <button id="customPlanReloadButton" class="secondary-button" type="button">契約一覧を読み込み直す</button>
+        </div>
+        <div id="customPlanMessage" class="message-box" role="status" aria-live="polite"></div>
+        <div id="customPlanList"></div>
       </div>
 
     </section>
@@ -960,6 +973,61 @@
       }
     });
 
+    // STEP 44-B｜月額100円カスタマイズの契約一覧(運営のみ・読み取り専用)。
+    const CUSTOM_PLAN_STATE_LABELS = { active: "契約中", canceling: "解約手続き済み（期限まで利用可）", expired: "利用期限の終了" };
+
+    async function loadCustomPlans() {
+      const list = document.getElementById("customPlanList");
+      const message = document.getElementById("customPlanMessage");
+      list.textContent = "";
+      showMessage(message, "読み込んでいます…", "info");
+      let response;
+      try {
+        const idToken = await getAdminIdToken();
+        response = await fetch("/api/moderate-submission", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": "Bearer " + idToken },
+          body: JSON.stringify({ mode: "adminStoreCustomPlanList" })
+        });
+      } catch (error) {
+        showMessage(message, "サーバーと通信できませんでした。", "error");
+        return;
+      }
+      const data = await response.json().catch(function() { return null; });
+      if (!response.ok || !data || data.success !== true) {
+        showMessage(message, (data && data.message) || "契約一覧を取得できませんでした。", "error");
+        return;
+      }
+      if (data.plans.length === 0) {
+        showMessage(message, "契約はまだありません。", "info");
+        return;
+      }
+      showMessage(message, data.plans.length + "件の契約があります。", "info");
+      const table = document.createElement("table");
+      table.className = "custom-plan-table";
+      const head = document.createElement("tr");
+      ["店舗", "状態", "申込日時", "利用期限", "解約日時", "種類", "契約者が今のowner"].forEach(function(label) {
+        const th = document.createElement("th");
+        th.textContent = label;
+        head.appendChild(th);
+      });
+      table.appendChild(head);
+      data.plans.forEach(function(plan) {
+        const row = document.createElement("tr");
+        cell(row, (plan.storeName || "（店名なし）") + " / " + plan.storeId);
+        cell(row, CUSTOM_PLAN_STATE_LABELS[plan.state] || plan.state);
+        cell(row, plan.subscribedAtMillis ? formatDate(plan.subscribedAtMillis) : "");
+        cell(row, plan.accessUntilMillis ? formatDate(plan.accessUntilMillis) : "");
+        cell(row, plan.canceledAtMillis ? formatDate(plan.canceledAtMillis) : "");
+        cell(row, plan.periodKind === "preview_trial" ? "試験" : plan.periodKind);
+        cell(row, plan.holderIsActiveOwner ? "はい" : "いいえ（所有者の変更など）");
+        table.appendChild(row);
+      });
+      list.appendChild(table);
+    }
+
+    document.getElementById("customPlanReloadButton").addEventListener("click", loadCustomPlans);
+
     // 画面の切り替えは運営のメールアドレスで判定する(最終的な権限確認はサーバーの requireAdmin)。
     // 他のアカウントでログイン中でもログアウトはさせない。
     firebase.auth().onAuthStateChanged(function(user) {
@@ -968,6 +1036,7 @@
         adminArea.classList.add("visible");
         closeTrialPanel.hidden = !isPreviewFirebaseTarget();
         restart();
+        loadCustomPlans();
         return;
       }
 

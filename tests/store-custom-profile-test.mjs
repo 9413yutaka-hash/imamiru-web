@@ -58,7 +58,7 @@ seedStore("S1", "u1", "海辺のカフェ", 26.21);
 seedStore("S2", "u2", "となりの食堂", 26.22);
 const FREE_S1 = snap("storeProfiles/S1");
 const future = () => Timestamp.fromMillis(Date.now() + 30 * 86400000);
-const setPlan = (id, status, until) => S.docs.set("storeCustomPlans/" + id, { storeId: id, status, accessUntil: until });
+const setPlan = (id, status, until) => S.docs.set("storeCustomPlans/" + id, { storeId: id, status, accessUntil: until, ownerUid: id === "S1" ? "u1" : "u2" });
 const menuPhoto = (id, key) => ({ url: CLD + "v1700000000/machinau_store_profiles/" + id + "/menu/" + key + ".webp", publicId: "machinau_store_profiles/" + id + "/menu/" + key });
 const GOOD = (extra = {}) => ({
   mode: "storeCustomProfileUpdate", storeId: "S1", expectedRevision: 0,
@@ -93,7 +93,7 @@ t("A7 利用期限が過ぎた契約（active でも accessUntil が過去）：
 setPlan("S1", "canceled", future());
 clearRate(); r = await call(GOOD(), "u1");
 t("A8 解約済み（canceled）：期限が先でも 403 plan_required", r.code === 403 && r.body.reason === "plan_required", r.body);
-S.docs.set("storeCustomPlans/S1", { storeId: "S1", status: "active" });
+S.docs.set("storeCustomPlans/S1", { storeId: "S1", status: "active", ownerUid: "u1" });
 clearRate(); r = await call(GOOD(), "u1");
 t("A9 利用期限の無い契約（無期限は作らない）：403 plan_required", r.code === 403 && r.body.reason === "plan_required", r.body);
 t("A10 判定関数：active/canceling かつ期限が先の時だけ true", CP.hasStoreCustomPlanAccess({ status: "active", accessUntil: future() }, Date.now()) && CP.hasStoreCustomPlanAccess({ status: "canceling", accessUntil: future() }, Date.now()) && !CP.hasStoreCustomPlanAccess({ status: "past_due", accessUntil: future() }, Date.now()) && !CP.hasStoreCustomPlanAccess(null, Date.now()));

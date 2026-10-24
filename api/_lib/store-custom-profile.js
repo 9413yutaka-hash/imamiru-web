@@ -7,8 +7,8 @@
 //
 // データは無料の storeProfiles とは別の文書に分ける：
 //   storeCustomProfiles/{storeId}  有料の内容(メニュー・追加リンク・ストーリー)
-//   storeCustomPlans/{storeId}     契約状態(利用権限)。STEP 44-B でサーバーだけが書く。
-//                                  44-A ではどこからも書かない(読むだけ)。
+//   storeCustomPlans/{storeId}     契約状態(利用権限)。STEP 44-B の申込・解約(サーバー)だけが書く。
+//   storeCustomPlanEvents/{id}     申込・解約・再開・置き換えの履歴(サーバーだけが書く、消さない)。
 // どちらも Firestore Rules に許可の指定が無い＝ブラウザからは読み書きできない
 // (全体を許可する指定が無いことは確認済み)。契約状態を画面から書き換えることはできない。
 //
@@ -16,14 +16,15 @@
 //   ・ログイン済み・メール確認済みの店舗アカウント
 //   ・storeMembers/{storeId}_{uid} が role:"owner" かつ status:"active"
 //   ・storeAccounts/{storeId} が registrationStatus:"active" かつ enabled:true
-//   ・storeCustomPlans/{storeId} の利用権限が有効(hasStoreCustomPlanAccess)
+//   ・storeCustomPlans/{storeId} の利用権限が有効(hasStoreCustomPlanAccess)で、契約者本人(ownerUid)であること
 // 利用権限が無い(未契約・期限切れ)店舗の有料の内容は、削除せずに保存したまま
 // 旅行者には返さない(再契約すればそのまま表示に戻る)。
 // 無料の storeProfiles・storeAccounts・submissions・今だけ投稿には一切書き込まない。
 // このファイルはVercel Functionではない(api/moderate-submission.jsから呼ばれる)。
 
 import {
-  FieldValue
+  FieldValue,
+  Timestamp
 } from "firebase-admin/firestore";
 
 import {
@@ -46,6 +47,9 @@ const STORE_ACCOUNTS_COLLECTION = "storeAccounts";
 const STORE_MEMBERS_COLLECTION = "storeMembers";
 export const STORE_CUSTOM_PROFILES_COLLECTION = "storeCustomProfiles";
 export const STORE_CUSTOM_PLANS_COLLECTION = "storeCustomPlans";
+export const STORE_CUSTOM_PLAN_EVENTS_COLLECTION = "storeCustomPlanEvents";
+// STEP 44-B｜Preview試験の契約の印(本番の請求と結び付いた契約と区別する)。
+export const STORE_CUSTOM_PLAN_PERIOD_PREVIEW_TRIAL = "preview_trial";
 // 無料の店舗情報と同じ連打防止用collectionを使う(新しいRulesを増やさない)。
 const STORE_RATE_LIMITS_COLLECTION = "storeRegistrationRateLimits";
 
@@ -116,14 +120,70 @@ export function hasStoreCustomPlanAccess(planData, nowMillis) {
   );
 }
 
-function buildPlanResponse(planData, nowMillis) {
+// STEP 44-B｜契約はそれを申し込んだアカウント(ownerUid＝カードの登録先)に結び付く。
+// 有料の欄を編集できるのは、契約が有効で、かつ契約者本人(ownerUid)の時だけ。
+// 旅行者への表示は、契約が有効で、かつ契約者が今もその店舗の有効な owner の時だけ
+// (所有者が変わったら、旧店主の契約は新しい owner に引き継がれず、表示もしない)。
+export function isStoreCustomPlanHolder(planData, uid) {
+  return !!planData && typeof planData.ownerUid === "string" && planData.ownerUid !== "" && planData.ownerUid === uid;
+}
+
+// 画面に出す契約の状態。none(契約なし)・active(契約中)・canceling(解約手続き済み・期限まで利用可)・
+// expired(利用期限の終了)・other_holder(別のアカウントの契約)。
+export function readStoreCustomPlanState(planData, uid, nowMillis) {
+  if (!planData || typeof planData.status !== "string") {
+    return "none";
+  }
+
+  if (!isStoreCustomPlanHolder(planData, uid)) {
+    return "other_holder";
+  }
+
+  if (!hasStoreCustomPlanAccess(planData, nowMillis)) {
+    return "expired";
+  }
+
+  return planData.status === "canceling" ? "canceling" : "active";
+}
+
+function buildPlanResponse(planData, uid, nowMillis) {
   const data = planData || {};
+  const state = readStoreCustomPlanState(planData, uid, nowMillis);
+  const mine = state !== "other_holder";
 
   return {
-    access: hasStoreCustomPlanAccess(planData, nowMillis),
+    access: hasStoreCustomPlanAccess(planData, nowMillis) && isStoreCustomPlanHolder(planData, uid),
+    state: state,
     status: typeof data.status === "string" ? data.status : "none",
-    accessUntilMillis: millisOf(data.accessUntil)
+    // 別のアカウントの契約の日時は見せない(状態だけ)。
+    accessUntilMillis: mine ? millisOf(data.accessUntil) : 0,
+    subscribedAtMillis: mine ? millisOf(data.subscribedAt) : 0,
+    canceledAtMillis: mine ? millisOf(data.canceledAt) : 0,
+    periodKind: mine && typeof data.periodKind === "string" ? data.periodKind : ""
   };
+}
+
+// ===== STEP 44-B｜Preview試験専用の仮の利用期限 =====
+// 申込時刻から暦の上で1か月後の同じ時刻(日本時間の暦で数える)。翌月にその日が無い時は、
+// 翌月の末日に丸める(例：1月31日 → 2月28日／うるう年は29日、3月31日 → 4月30日)。
+// 本番の請求日・更新日・日割り・税込区分の決定ではない(代表決定 2026-10-24)。
+const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+export function addOneCalendarMonthJst(millis) {
+  const local = new Date(millis + JST_OFFSET_MS);
+  const year = local.getUTCFullYear();
+  const nextMonth = local.getUTCMonth() + 1;
+  const lastDayOfNextMonth = new Date(Date.UTC(year, nextMonth + 1, 0)).getUTCDate();
+
+  return Date.UTC(
+    year,
+    nextMonth,
+    Math.min(local.getUTCDate(), lastDayOfNextMonth),
+    local.getUTCHours(),
+    local.getUTCMinutes(),
+    local.getUTCSeconds(),
+    local.getUTCMilliseconds()
+  ) - JST_OFFSET_MS;
 }
 
 // 店舗の外のページへのリンクは https だけ(javascript:・data:・http: 等は保存しない)。
@@ -411,7 +471,9 @@ export async function checkStoreCustomEditor(database, storeId, uid, nowMillis) 
     return { ok: false, status: 403, reason: "store_not_editable" };
   }
 
-  if (!hasStoreCustomPlanAccess(snapshots[2].exists ? snapshots[2].data() : null, nowMillis)) {
+  const plan = snapshots[2].exists ? snapshots[2].data() : null;
+
+  if (!hasStoreCustomPlanAccess(plan, nowMillis) || !isStoreCustomPlanHolder(plan, uid)) {
     return { ok: false, status: 403, reason: "plan_required" };
   }
 
@@ -448,13 +510,37 @@ export async function handleStoreCustomProfileGet(request, response, deps) {
       return sendError(response, 404, "store_not_found");
     }
 
-    const plan = buildPlanResponse(snapshots[2].exists ? snapshots[2].data() : null, readNowMillis(deps));
+    const planData = snapshots[2].exists ? snapshots[2].data() : null;
+    const plan = buildPlanResponse(planData, actor.uid, readNowMillis(deps));
+    const storeEditable = isEditableStore(snapshots[1].data());
+
+    // STEP 44-B｜申込の可否の目安(画面の表示用。申込の時にサーバーがすべて確認し直す)。
+    plan.signupAvailable = typeof deps.isStoreCustomPlanTrialEnabled === "function" && deps.isStoreCustomPlanTrialEnabled() === true;
+    plan.storeEditable = storeEditable;
+
+    if (plan.signupAvailable && typeof deps.checkAccountBillingCard === "function") {
+      const card = await deps.checkAccountBillingCard(database, actor.uid);
+      plan.cardRegistered = !!card && card.ok === true;
+    } else {
+      plan.cardRegistered = false;
+    }
+
+    if (plan.state === "other_holder") {
+      // 別のアカウントの契約が今も有効か(契約者が有効な owner で、期限内)。有効なら新しい申込はできない。
+      const holderSnapshot = await database.collection(STORE_MEMBERS_COLLECTION).doc(storeId + "_" + planData.ownerUid).get();
+      plan.otherHolderActive =
+        hasStoreCustomPlanAccess(planData, readNowMillis(deps)) &&
+        holderSnapshot.exists &&
+        isActiveOwner(holderSnapshot.data(), planData.ownerUid, storeId);
+    } else {
+      plan.otherHolderActive = false;
+    }
 
     return response.status(200).json({
       success: true,
       storeId: storeId,
       plan: plan,
-      editable: isEditableStore(snapshots[1].data()) && plan.access,
+      editable: storeEditable && plan.access,
       custom: buildCustomResponse(snapshots[3].exists ? snapshots[3].data() : null),
       limits: STORE_CUSTOM_LIMITS,
       linkTypes: STORE_CUSTOM_LINK_TYPES
@@ -515,7 +601,9 @@ export async function handleStoreCustomProfileUpdate(request, response, deps) {
       return sendError(response, 403, "store_not_editable");
     }
 
-    if (!hasStoreCustomPlanAccess(preSnapshots[2].exists ? preSnapshots[2].data() : null, readNowMillis(deps))) {
+    const planBefore = preSnapshots[2].exists ? preSnapshots[2].data() : null;
+
+    if (!hasStoreCustomPlanAccess(planBefore, readNowMillis(deps)) || !isStoreCustomPlanHolder(planBefore, actor.uid)) {
       return sendError(response, 403, "plan_required");
     }
 
@@ -639,7 +727,9 @@ export async function handleStoreCustomProfileUpdate(request, response, deps) {
         return;
       }
 
-      if (!hasStoreCustomPlanAccess(snapshots[2].exists ? snapshots[2].data() : null, readNowMillis(deps))) {
+      const planNow = snapshots[2].exists ? snapshots[2].data() : null;
+
+      if (!hasStoreCustomPlanAccess(planNow, readNowMillis(deps)) || !isStoreCustomPlanHolder(planNow, actor.uid)) {
         outcome = { status: 403, reason: "plan_required" };
         return;
       }
@@ -774,17 +864,27 @@ export async function readPublicStoreCustomProfiles(database, storeIds, nowMilli
   planSnapshots.forEach(function(snapshot, index) {
     const plan = snapshot.exists ? snapshot.data() : null;
 
-    if (hasStoreCustomPlanAccess(plan, nowMillis)) {
+    if (hasStoreCustomPlanAccess(plan, nowMillis) && typeof plan.ownerUid === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(plan.ownerUid)) {
       entitled.push({ storeId: storeIds[index], plan: plan });
     }
   });
 
+  // STEP 44-B｜契約者が今もその店舗の有効な owner の時だけ表示する(所有者が変わったら旧店主の契約では表示しない)。
+  const holderSnapshots = await Promise.all(entitled.map(function(entry) {
+    return database.collection(STORE_MEMBERS_COLLECTION).doc(entry.storeId + "_" + entry.plan.ownerUid).get();
+  }));
   const customSnapshots = await Promise.all(entitled.map(function(entry) {
     return database.collection(STORE_CUSTOM_PROFILES_COLLECTION).doc(entry.storeId).get();
   }));
 
   customSnapshots.forEach(function(snapshot, index) {
     try {
+      const holder = holderSnapshots[index];
+
+      if (!holder.exists || !isActiveOwner(holder.data(), entitled[index].plan.ownerUid, entitled[index].storeId)) {
+        return;
+      }
+
       const custom = buildPublicStoreCustomProfile(
         entitled[index].storeId,
         entitled[index].plan,
@@ -801,4 +901,311 @@ export async function readPublicStoreCustomProfiles(database, storeIds, nowMilli
   });
 
   return result;
+}
+
+// ===== STEP 44-B｜月額100円プランの申込・解約(Preview試験)・運営の契約一覧 =====
+// 契約状態は storeCustomPlans/{storeId} の1文書。履歴は storeCustomPlanEvents に追記だけする。
+// Stripe には一切接続しない(請求は 44-C)。申込は Preview試験の環境(Preview・対象ブランチ・
+// machinau-preview)の時だけ受け付ける(deps.isStoreCustomPlanTrialEnabled。Production では常に受け付けない)。
+
+const STORE_CUSTOM_PLAN_COOLDOWN_MS = 3 * 1000;
+
+function snapshotPlanForHistory(planData) {
+  const data = planData || {};
+
+  return {
+    status: typeof data.status === "string" ? data.status : "",
+    ownerUid: typeof data.ownerUid === "string" ? data.ownerUid : "",
+    periodKind: typeof data.periodKind === "string" ? data.periodKind : "",
+    subscribedAtMillis: millisOf(data.subscribedAt),
+    accessUntilMillis: millisOf(data.accessUntil),
+    canceledAtMillis: millisOf(data.canceledAt)
+  };
+}
+
+function writePlanEvent(transaction, database, storeId, uid, event, nowMillis, detail) {
+  const eventRef = database
+    .collection(STORE_CUSTOM_PLAN_EVENTS_COLLECTION)
+    .doc(storeId + "_" + nowMillis + "_" + event);
+
+  transaction.set(eventRef, Object.assign({
+    storeId: storeId,
+    uid: uid,
+    event: event,
+    at: Timestamp.fromMillis(nowMillis),
+    createdAt: FieldValue.serverTimestamp()
+  }, detail || {}));
+}
+
+// mode: storeCustomPlanSubscribe (POST、メール確認済み店舗アカウントの owner)
+// 条件：Preview試験の環境・自店の有効な owner・店舗が編集可能・このアカウントにカード登録済み・
+// 有効な契約が無い。解約手続き済み(期限内)の自分の契約は、申込で「解約の取り消し」になる(期限は変えない)。
+// それ以外(契約なし・期限切れ・前の owner の契約)は新しい契約(申込時刻から暦の1か月後まで)を作り、
+// 前の契約は履歴(superseded)に残す。旧店主の契約を新しい owner へ引き継ぐことはしない。
+export async function handleStoreCustomPlanSubscribe(request, response, deps) {
+  try {
+    const actor = await requireVerifiedStoreUser(request, response, deps);
+
+    if (!actor) {
+      return;
+    }
+
+    const storeId = readStoreId(deps.readRequestBody(request));
+
+    if (storeId === "") {
+      return sendError(response, 400, "invalid_input", { field: "storeId" });
+    }
+
+    if (typeof deps.isStoreCustomPlanTrialEnabled !== "function" || deps.isStoreCustomPlanTrialEnabled() !== true) {
+      return sendError(response, 403, "plan_signup_unavailable");
+    }
+
+    const database = deps.getFirestore(deps.getFirebaseAdminApp());
+    const memberRef = database.collection(STORE_MEMBERS_COLLECTION).doc(storeId + "_" + actor.uid);
+    const accountRef = database.collection(STORE_ACCOUNTS_COLLECTION).doc(storeId);
+    const planRef = database.collection(STORE_CUSTOM_PLANS_COLLECTION).doc(storeId);
+    const preSnapshots = await Promise.all([memberRef.get(), accountRef.get()]);
+
+    if (!preSnapshots[0].exists || !isActiveOwner(preSnapshots[0].data(), actor.uid, storeId) || !preSnapshots[1].exists) {
+      return sendError(response, 404, "store_not_found");
+    }
+
+    if (!isEditableStore(preSnapshots[1].data())) {
+      return sendError(response, 403, "store_not_editable");
+    }
+
+    const card = typeof deps.checkAccountBillingCard === "function"
+      ? await deps.checkAccountBillingCard(database, actor.uid)
+      : { ok: false, reason: "card_required" };
+
+    if (!card || card.ok !== true) {
+      return sendError(response, 403, "card_required", { cardReason: card && card.reason ? card.reason : "card_required" });
+    }
+
+    const allowed = await deps.claimRateLimit(
+      database,
+      STORE_RATE_LIMITS_COLLECTION,
+      deps.computeRateLimitIdentifier("storeCustomPlan", actor.uid),
+      STORE_CUSTOM_PLAN_COOLDOWN_MS
+    );
+
+    if (!allowed) {
+      return sendError(response, 429, "rate_limited");
+    }
+
+    const nowMillis = readNowMillis(deps);
+    let outcome = null;
+
+    await database.runTransaction(async function(transaction) {
+      const snapshots = await Promise.all([
+        transaction.get(memberRef),
+        transaction.get(accountRef),
+        transaction.get(planRef)
+      ]);
+      const planData = snapshots[2].exists ? snapshots[2].data() || {} : null;
+      let holderActive = false;
+
+      if (planData && typeof planData.ownerUid === "string" && planData.ownerUid !== "" && planData.ownerUid !== actor.uid) {
+        const holderSnapshot = await transaction.get(
+          database.collection(STORE_MEMBERS_COLLECTION).doc(storeId + "_" + planData.ownerUid)
+        );
+        holderActive = holderSnapshot.exists && isActiveOwner(holderSnapshot.data(), planData.ownerUid, storeId);
+      }
+
+      if (!snapshots[0].exists || !isActiveOwner(snapshots[0].data(), actor.uid, storeId) || !snapshots[1].exists) {
+        outcome = { status: 404, reason: "store_not_found" };
+        return;
+      }
+
+      if (!isEditableStore(snapshots[1].data())) {
+        outcome = { status: 403, reason: "store_not_editable" };
+        return;
+      }
+
+      const inPeriod = hasStoreCustomPlanAccess(planData, nowMillis);
+      const mine = isStoreCustomPlanHolder(planData, actor.uid);
+
+      if (inPeriod && mine && planData.status === "canceling") {
+        transaction.update(planRef, {
+          status: "active",
+          canceledAt: null,
+          reactivatedAt: Timestamp.fromMillis(nowMillis),
+          updatedAt: FieldValue.serverTimestamp(),
+          revision: (Number.isInteger(planData.revision) ? planData.revision : 0) + 1
+        });
+        writePlanEvent(transaction, database, storeId, actor.uid, "reactivated", nowMillis, {
+          accessUntil: planData.accessUntil
+        });
+        outcome = { status: 200, result: "reactivated", accessUntilMillis: millisOf(planData.accessUntil) };
+        return;
+      }
+
+      if (inPeriod && (mine || holderActive)) {
+        outcome = { status: 409, reason: "already_subscribed" };
+        return;
+      }
+
+      const accessUntilMillis = addOneCalendarMonthJst(nowMillis);
+
+      if (planData) {
+        writePlanEvent(transaction, database, storeId, actor.uid, "superseded", nowMillis, {
+          previous: snapshotPlanForHistory(planData)
+        });
+      }
+
+      transaction.set(planRef, {
+        storeId: storeId,
+        status: "active",
+        ownerUid: actor.uid,
+        billingAccountUid: actor.uid,
+        periodKind: STORE_CUSTOM_PLAN_PERIOD_PREVIEW_TRIAL,
+        subscribedAt: Timestamp.fromMillis(nowMillis),
+        accessUntil: Timestamp.fromMillis(accessUntilMillis),
+        canceledAt: null,
+        updatedAt: FieldValue.serverTimestamp(),
+        revision: (planData && Number.isInteger(planData.revision) ? planData.revision : 0) + 1
+      });
+      writePlanEvent(transaction, database, storeId, actor.uid, "subscribed", nowMillis, {
+        periodKind: STORE_CUSTOM_PLAN_PERIOD_PREVIEW_TRIAL,
+        accessUntil: Timestamp.fromMillis(accessUntilMillis)
+      });
+      outcome = { status: 200, result: "subscribed", accessUntilMillis: accessUntilMillis };
+    });
+
+    if (outcome.status !== 200) {
+      return sendError(response, outcome.status, outcome.reason);
+    }
+
+    return response.status(200).json({
+      success: true,
+      result: outcome.result,
+      accessUntilMillis: outcome.accessUntilMillis
+    });
+  } catch (error) {
+    console.error("店舗カスタマイズ：申込エラー：", error && error.message);
+    return sendError(response, 500, "server_error");
+  }
+}
+
+// mode: storeCustomPlanCancel (POST、メール確認済み店舗アカウントの owner・契約者本人)
+// 契約中(期限内)の契約を「解約手続き済み」にする。利用期限は変えない(期限までは利用できる)。
+// すでに解約手続き済みなら何も変えずに成功を返す(連打・二重解約で状態を壊さない)。
+// 店舗が停止中でも、契約者本人なら解約できる。有料の内容・写真は消さない。
+export async function handleStoreCustomPlanCancel(request, response, deps) {
+  try {
+    const actor = await requireVerifiedStoreUser(request, response, deps);
+
+    if (!actor) {
+      return;
+    }
+
+    const storeId = readStoreId(deps.readRequestBody(request));
+
+    if (storeId === "") {
+      return sendError(response, 400, "invalid_input", { field: "storeId" });
+    }
+
+    const database = deps.getFirestore(deps.getFirebaseAdminApp());
+    const memberRef = database.collection(STORE_MEMBERS_COLLECTION).doc(storeId + "_" + actor.uid);
+    const planRef = database.collection(STORE_CUSTOM_PLANS_COLLECTION).doc(storeId);
+    const nowMillis = readNowMillis(deps);
+    let outcome = null;
+
+    await database.runTransaction(async function(transaction) {
+      const snapshots = await Promise.all([transaction.get(memberRef), transaction.get(planRef)]);
+
+      if (!snapshots[0].exists || !isActiveOwner(snapshots[0].data(), actor.uid, storeId)) {
+        outcome = { status: 404, reason: "store_not_found" };
+        return;
+      }
+
+      const planData = snapshots[1].exists ? snapshots[1].data() || {} : null;
+
+      if (!hasStoreCustomPlanAccess(planData, nowMillis) || !isStoreCustomPlanHolder(planData, actor.uid)) {
+        outcome = { status: 409, reason: "plan_not_active" };
+        return;
+      }
+
+      if (planData.status === "canceling") {
+        outcome = { status: 200, alreadyCanceled: true, accessUntilMillis: millisOf(planData.accessUntil) };
+        return;
+      }
+
+      transaction.update(planRef, {
+        status: "canceling",
+        canceledAt: Timestamp.fromMillis(nowMillis),
+        updatedAt: FieldValue.serverTimestamp(),
+        revision: (Number.isInteger(planData.revision) ? planData.revision : 0) + 1
+      });
+      writePlanEvent(transaction, database, storeId, actor.uid, "canceled", nowMillis, {
+        accessUntil: planData.accessUntil
+      });
+      outcome = { status: 200, alreadyCanceled: false, accessUntilMillis: millisOf(planData.accessUntil) };
+    });
+
+    if (outcome.status !== 200) {
+      return sendError(response, outcome.status, outcome.reason);
+    }
+
+    return response.status(200).json({
+      success: true,
+      alreadyCanceled: outcome.alreadyCanceled,
+      accessUntilMillis: outcome.accessUntilMillis
+    });
+  } catch (error) {
+    console.error("店舗カスタマイズ：解約エラー：", error && error.message);
+    return sendError(response, 500, "server_error");
+  }
+}
+
+// mode: adminStoreCustomPlanList (POST、運営のみ、読み取り専用)
+// 契約の一覧(店舗・状態・申込日時・利用期限・解約日時)。契約状態を書き換える機能は無い。
+export async function handleAdminStoreCustomPlanList(request, response, deps) {
+  try {
+    const authResult = await deps.requireAdmin(request);
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({ success: false, message: authResult.message });
+    }
+
+    const database = authResult.database || deps.getFirestore(deps.getFirebaseAdminApp());
+    const nowMillis = readNowMillis(deps);
+    const planSnapshot = await database.collection(STORE_CUSTOM_PLANS_COLLECTION).get();
+    const plans = planSnapshot.docs.map(function(documentSnapshot) {
+      return { storeId: documentSnapshot.id, data: documentSnapshot.data() || {} };
+    });
+    const related = await Promise.all(plans.map(function(plan) {
+      const ownerUid = typeof plan.data.ownerUid === "string" && plan.data.ownerUid !== "" ? plan.data.ownerUid : "_";
+
+      return Promise.all([
+        database.collection(STORE_ACCOUNTS_COLLECTION).doc(plan.storeId).get(),
+        database.collection(STORE_MEMBERS_COLLECTION).doc(plan.storeId + "_" + ownerUid).get()
+      ]);
+    }));
+
+    const items = plans.map(function(plan, index) {
+      const account = related[index][0].exists ? related[index][0].data() || {} : {};
+      const holder = related[index][1];
+      const holderActive = holder.exists && isActiveOwner(holder.data(), plan.data.ownerUid, plan.storeId);
+      const inPeriod = hasStoreCustomPlanAccess(plan.data, nowMillis);
+
+      return {
+        storeId: plan.storeId,
+        storeName: typeof account.storeName === "string" ? account.storeName : "",
+        state: !inPeriod ? "expired" : plan.data.status === "canceling" ? "canceling" : "active",
+        holderIsActiveOwner: holderActive,
+        periodKind: typeof plan.data.periodKind === "string" ? plan.data.periodKind : "",
+        subscribedAtMillis: millisOf(plan.data.subscribedAt),
+        accessUntilMillis: millisOf(plan.data.accessUntil),
+        canceledAtMillis: millisOf(plan.data.canceledAt)
+      };
+    });
+
+    items.sort(function(a, b) { return b.subscribedAtMillis - a.subscribedAtMillis; });
+
+    return response.status(200).json({ success: true, plans: items });
+  } catch (error) {
+    console.error("店舗カスタマイズ：契約一覧エラー：", error && error.message);
+    return response.status(500).json({ success: false, message: "契約一覧を取得できませんでした。" });
+  }
 }

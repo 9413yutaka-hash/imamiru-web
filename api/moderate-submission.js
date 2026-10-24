@@ -3,7 +3,8 @@ import {
   checkFirebaseTargetFromEnv,
   readFirebaseServiceAccountText,
   isPreviewStoreInvoiceHistoryEnabled,
-  isPreviewListingPhotoCopyTrialEnabled
+  isPreviewListingPhotoCopyTrialEnabled,
+  isPreviewStoreCustomPlanTrialEnabled
 } from "./_lib/firebase-target.js";
 
 import {
@@ -105,6 +106,9 @@ import {
 import {
   handleStoreCustomProfileGet,
   handleStoreCustomProfileUpdate,
+  handleStoreCustomPlanSubscribe,
+  handleStoreCustomPlanCancel,
+  handleAdminStoreCustomPlanList,
   readPublicStoreCustomProfiles,
   checkStoreCustomEditor,
   buildStoreMenuPhotoFolder,
@@ -29678,6 +29682,10 @@ function buildStoreSelfServiceDeps() {
     // STEP 44-A｜旅行者向け一覧に付ける、月額100円カスタマイズの有料の内容(利用権限がある店舗だけ)。
     readPublicStoreCustomProfiles: function(database, storeIds) {
       return readPublicStoreCustomProfiles(database, storeIds, Date.now());
+    },
+    // STEP 44-B｜月額100円カスタマイズの申込を受け付ける環境か(Preview試験の環境だけ true、Productionは常に false)。
+    isStoreCustomPlanTrialEnabled: function() {
+      return isPreviewStoreCustomPlanTrialEnabled(process.env);
     }
   };
 }
@@ -30284,6 +30292,28 @@ export default async function handler(
     requestBody.mode === "storeCustomProfileUpdate"
   ) {
     return handleStoreCustomProfileUpdate(
+      request,
+      response,
+      buildStoreSelfServiceDeps()
+    );
+  }
+
+  // STEP 44-B｜月額100円プランの申込・解約(owner本人、Stripeの請求なし)と運営の契約一覧(読み取り専用)。
+  const storeCustomPlanHandlers =
+    {
+      storeCustomPlanSubscribe: handleStoreCustomPlanSubscribe,
+      storeCustomPlanCancel: handleStoreCustomPlanCancel,
+      adminStoreCustomPlanList: handleAdminStoreCustomPlanList
+    };
+
+  if (
+    typeof requestBody.mode === "string" &&
+    Object.prototype.hasOwnProperty.call(
+      storeCustomPlanHandlers,
+      requestBody.mode
+    )
+  ) {
+    return storeCustomPlanHandlers[requestBody.mode](
       request,
       response,
       buildStoreSelfServiceDeps()

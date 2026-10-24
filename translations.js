@@ -3160,6 +3160,122 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   // STEP 44-A｜月額100円カスタマイズ(店主の編集画面 store_custom_*・旅行者の詳細 shop_custom_*)。
+  // STEP 44-B｜月額100円プランの申込・解約(店主の編集画面)。
+  store_custom_plan_none_signup: {
+    ja: "未契約です。申し込むと、メニュー・商品紹介、追加リンク、お店のこだわり・ストーリーを編集して旅行者に紹介できます。",
+    en: "Not subscribed. Subscribe to edit your menu and products, extra links and story, and show them to travelers."
+  },
+
+  store_custom_plan_canceling: {
+    ja: "解約手続き済みです。{date}までは利用でき、その後は有料の内容を旅行者に表示しません（データは残ります）。",
+    en: "Cancellation requested. You can use the plan until {date}; after that, the paid content is no longer shown to travelers (your data is kept)."
+  },
+
+  store_custom_plan_expired: {
+    ja: "利用期限（{date}）が終了しました。有料の内容は旅行者に表示されていません。",
+    en: "The plan ended on {date}. The paid content is not shown to travelers."
+  },
+
+  store_custom_plan_other_active: {
+    ja: "このお店の月額100円プランは、別のアカウントが契約しています。このアカウントでは有料の欄を編集できません。",
+    en: "This shop's monthly ¥100 plan belongs to another account. This account cannot edit the paid sections."
+  },
+
+  store_custom_plan_other_inactive: {
+    ja: "以前の契約は、このアカウントには引き継がれません。利用するには、このアカウントで新しく申し込んでください。",
+    en: "The previous plan is not transferred to this account. To use the plan, subscribe with this account."
+  },
+
+  store_custom_plan_dates_subscribed: {
+    ja: "申込：{date}",
+    en: "Subscribed: {date}"
+  },
+
+  store_custom_plan_dates_until: {
+    ja: "利用期限：{date}",
+    en: "Available until: {date}"
+  },
+
+  store_custom_plan_dates_canceled: {
+    ja: "解約手続き：{date}",
+    en: "Cancellation requested: {date}"
+  },
+
+  store_custom_plan_trial_note: {
+    ja: "現在は試験運用中です。申し込んでも料金は請求されません。利用期限は申込から1か月です（試験用の仮の期限）。",
+    en: "This is a trial. You will not be charged. The plan is available for one month from sign-up (a temporary trial period)."
+  },
+
+  store_custom_plan_card_required: {
+    ja: "申し込むには、お支払い方法（クレジットカード）の登録が必要です。",
+    en: "A registered payment method (credit card) is required to subscribe."
+  },
+
+  store_custom_plan_card_link: {
+    ja: "カードを登録する →",
+    en: "Register a card →"
+  },
+
+  store_custom_plan_subscribe_button: {
+    ja: "月額100円プランを申し込む",
+    en: "Subscribe to the monthly ¥100 plan"
+  },
+
+  store_custom_plan_reactivate_button: {
+    ja: "解約を取り消して続ける",
+    en: "Undo cancellation and continue"
+  },
+
+  store_custom_plan_cancel_button: {
+    ja: "解約する",
+    en: "Cancel the plan"
+  },
+
+  store_custom_plan_cancel_confirm: {
+    ja: "月額100円プランを解約しますか？利用期限までは使えます。期限後は有料の内容を旅行者に表示しません（データは残ります）。",
+    en: "Cancel the monthly ¥100 plan? You can use it until the end date. After that, the paid content is not shown to travelers (your data is kept)."
+  },
+
+  store_custom_plan_subscribed: {
+    ja: "申し込みました。{date}まで利用できます。",
+    en: "Subscribed. Available until {date}."
+  },
+
+  store_custom_plan_reactivated: {
+    ja: "解約を取り消しました。{date}まで利用できます。",
+    en: "Cancellation undone. Available until {date}."
+  },
+
+  store_custom_plan_canceled: {
+    ja: "解約手続きをしました。{date}までは利用できます。",
+    en: "Cancellation requested. You can use the plan until {date}."
+  },
+
+  store_custom_plan_already_canceled: {
+    ja: "すでに解約手続き済みです（{date}まで利用できます）。",
+    en: "Cancellation was already requested (available until {date})."
+  },
+
+  store_custom_plan_err_card: {
+    ja: "申し込むには、お支払い方法（クレジットカード）の登録が必要です。",
+    en: "A registered payment method (credit card) is required to subscribe."
+  },
+
+  store_custom_plan_err_already: {
+    ja: "このお店はすでに月額100円プランを契約しています。",
+    en: "This shop already has the monthly ¥100 plan."
+  },
+
+  store_custom_plan_err_unavailable: {
+    ja: "月額100円プランの申し込みは、現在受け付けていません。",
+    en: "Sign-up for the monthly ¥100 plan is not available right now."
+  },
+
+  store_custom_plan_err_not_active: {
+    ja: "解約できる契約がありません。",
+    en: "There is no active plan to cancel."
+  },
+
   store_custom_heading: {
     ja: "月額100円カスタマイズ",
     en: "Monthly ¥100 customization"
