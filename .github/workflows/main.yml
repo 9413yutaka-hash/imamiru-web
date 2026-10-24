@@ -8,6 +8,10 @@ on:
 jobs:
   expire:
     runs-on: ubuntu-latest
+    # STEP 44-C⑥（Preview 系列のこのファイルだけの条件）｜本番の掲載期限の処理は「定期実行」か「main での手動実行」の時だけ。
+    # 定期実行は GitHub の仕様で常に main のこのファイルを使う（main のファイルは変更していない）ため、本番の30分ごとの処理は変わらない。
+    # Preview のブランチを選んだ手動実行では、本番の掲載期限の処理を呼ばない。
+    if: github.event_name == 'schedule' || github.ref == 'refs/heads/main'
 
     steps:
       - name: Call expire API
@@ -34,3 +38,74 @@ jobs:
             -H "Content-Type: application/json" \
             -H "X-Machinau-Cron-Secret: ${{ secrets.AI_COLLECT_CRON_SECRET }}" \
             -d '{"priorityTier":"NORMAL"}'
+
+  # STEP 44-C⑥｜月額100円カスタマイズの定期実行の入口（C⑤）を Preview で1回だけ手動実行する（代表の「Run workflow」用）。
+  # 「手動実行」かつ「ブランチ preview/stripe-card-setup を選んだ時」だけ動く。請求はしない（定期実行からの請求の許可は false）。
+  # 合言葉は、次の確認をすべて満たした時だけ、確認した Preview の URL へだけ送る（machinau.jp 等の本番には送らない）：
+  #   ①実行中の workflow のファイルが preview/stripe-card-setup のもので、その commit が実行の commit と同じ
+  #   ②その commit の Vercel の Preview のデプロイ（環境 Preview・ブランチ preview/stripe-card-setup）があり、状態が success
+  #   ③URL が https://imamiru-…-9413yutaka-hashs-projects.vercel.app の形
+  #   ④その URL の接続先の確認（mode=firebaseTarget）が machinau-preview・検査あり
+  preview-plan-cron:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/preview/stripe-card-setup'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      deployments: read
+
+    steps:
+      - name: Verify the workflow version and find the Preview deployment
+        id: target
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          WORKFLOW_REF: ${{ github.workflow_ref }}
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+          RUN_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          case "$WORKFLOW_REF" in
+            *"/.github/workflows/main.yml@refs/heads/preview/stripe-card-setup") ;;
+            *) echo "STOP: this run does not use the preview/stripe-card-setup workflow file"; exit 1 ;;
+          esac
+          if [ -z "$WORKFLOW_SHA" ] || [ "$WORKFLOW_SHA" != "$RUN_SHA" ]; then
+            echo "STOP: the workflow file version does not match the run commit"; exit 1
+          fi
+          deployment_id="$(gh api "repos/$REPO/deployments?sha=$RUN_SHA&environment=Preview&per_page=20" --jq '[.[] | select(.ref == "preview/stripe-card-setup")][0].id // empty')"
+          if [ -z "$deployment_id" ]; then
+            echo "STOP: no Preview deployment for this commit"; exit 1
+          fi
+          status_json="$(gh api "repos/$REPO/deployments/$deployment_id/statuses?per_page=1")"
+          state="$(printf '%s' "$status_json" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const a=JSON.parse(s);process.stdout.write(Array.isArray(a)&&a[0]&&typeof a[0].state==="string"?a[0].state:"")})')"
+          url="$(printf '%s' "$status_json" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const a=JSON.parse(s);process.stdout.write(Array.isArray(a)&&a[0]&&typeof a[0].environment_url==="string"?a[0].environment_url:"")})')"
+          if [ "$state" != "success" ]; then
+            echo "STOP: the Preview deployment for this commit is not successful ($state)"; exit 1
+          fi
+          if ! printf '%s' "$url" | grep -Eq '^https://imamiru-[a-z0-9]+-9413yutaka-hashs-projects\.vercel\.app$'; then
+            echo "STOP: unexpected deployment URL"; exit 1
+          fi
+          target_json="$(curl -fsS --max-time 30 "$url/api/moderate-submission?mode=firebaseTarget")"
+          if ! printf '%s' "$target_json" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const t=JSON.parse(s);process.exit(t&&t.success===true&&t.projectId==="machinau-preview"&&t.enforced===true?0:1)})'; then
+            echo "STOP: the deployment is not connected to machinau-preview"; exit 1
+          fi
+          echo "Verified Preview deployment: $url (commit $RUN_SHA, Firebase machinau-preview)"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Run the monthly plan scheduled entry on Preview (close, dunning, charge planning only)
+        env:
+          CRON_SECRET: ${{ secrets.AI_COLLECT_CRON_SECRET }}
+          PREVIEW_URL: ${{ steps.target.outputs.url }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CRON_SECRET:-}" ] || [ -z "${PREVIEW_URL:-}" ]; then
+            echo "STOP: missing secret or verified URL"; exit 1
+          fi
+          code="$(curl -sS -o response.json -w '%{http_code}' --max-time 60 -X POST "$PREVIEW_URL/api/moderate-submission" \
+            -H "Content-Type: application/json" \
+            -H "X-Machinau-Cron-Secret: $CRON_SECRET" \
+            -d '{"mode":"storeCustomPlanCron"}')"
+          echo "HTTP $code"
+          node -e 'const r=JSON.parse(require("fs").readFileSync("response.json","utf8"));const s=r.steps||{};const c=s.charges||{};console.log(JSON.stringify({success:r.success,reason:r.reason,status:r.status,jstDate:r.jstDate,closeMonth:r.closeMonth,errors:r.errors,close:s.close,dunning:s.dunning,charges:{status:c.status,executed:c.executed,blockedReason:c.blockedReason,totals:c.totals}},null,2))' || echo "(response was not JSON)"
+          rm -f response.json
+          [ "$code" = "200" ]
