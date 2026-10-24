@@ -559,6 +559,54 @@ export async function refreshStoreCustomPlanPaymentStatus(database, storeId, now
   });
 }
 
+// STEP 44-C⑤｜未払い(支払い失敗・本人認証待ち)がある店舗の支払いの状態を更新する(14日を過ぎたら停止、
+// すべて支払われていれば再開)。Stripe には接続しない。定期実行から毎日呼ぶ。deadlineMillis を過ぎたら途中で止め、
+// 残りは次の実行で行う(状態の更新は何度行っても同じ結果)。
+export async function applyStoreCustomPlanDunning(database, nowMillis, deadlineMillis) {
+  const storeIds = new Set();
+
+  for (const status of STORE_CUSTOM_PLAN_OWNER_UNPAID_STATUSES) {
+    const snapshot = await database.collection(STORE_CUSTOM_PLAN_INVOICES_COLLECTION).where("status", "==", status).get();
+
+    snapshot.docs.forEach(function(documentSnapshot) {
+      const storeId = (documentSnapshot.data() || {}).storeId;
+
+      if (typeof storeId === "string" && storeId !== "") {
+        storeIds.add(storeId);
+      }
+    });
+  }
+
+  // 支払いの状態が未払い(猶予中・停止中)の契約も対象にする(別の経路で支払われた後の再開を取りこぼさない)。
+  for (const paymentStatus of ["past_due", "suspended"]) {
+    const plans = await database.collection(STORE_CUSTOM_PLANS_COLLECTION).where("paymentStatus", "==", paymentStatus).get();
+
+    plans.docs.forEach(function(documentSnapshot) {
+      storeIds.add(documentSnapshot.id);
+    });
+  }
+
+  const result = { storeCount: storeIds.size, checked: 0, changed: 0, suspended: 0, resumed: 0, deferred: 0 };
+
+  for (const storeId of storeIds) {
+    if (deadlineMillis && Date.now() > deadlineMillis) {
+      result.deferred = storeIds.size - result.checked;
+      break;
+    }
+
+    const refreshed = await refreshStoreCustomPlanPaymentStatus(database, storeId, nowMillis);
+    result.checked += 1;
+
+    if (refreshed.changed) {
+      result.changed += 1;
+      result.suspended += refreshed.paymentStatus === "suspended" ? 1 : 0;
+      result.resumed += refreshed.paymentStatus === "current" ? 1 : 0;
+    }
+  }
+
+  return result;
+}
+
 // ===== 運営：請求の実行(試算・実行) =====
 
 function describePlanInvoice(ledgerId, invoice) {

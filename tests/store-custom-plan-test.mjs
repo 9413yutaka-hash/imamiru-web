@@ -178,7 +178,7 @@ const oldPlan = plan("S1");
 clearRate(); r = await call(SUB("S1"), "u6");
 const p6 = plan("S1");
 const sup6 = events("S1").filter((e) => e.event === "superseded").find((e) => e.previous.ownerUid === "u1" && e.uid === "u6");
-t("O6 新しい owner の申込：自分のカードの新しい契約（契約者・請求先 u6）・旧店主の契約は履歴に残す（自動で引き継がない）", r.code === 200 && r.body.result === "subscribed" && p6.ownerUid === "u6" && p6.billingAccountUid === "u6" && ms(p6.subscribedAt) !== ms(oldPlan.subscribedAt) && !!sup6, { p6, sup6 });
+t("O6 新しい owner の申込：自分のカードの新しい契約（契約者・請求先 u6）・旧店主の契約は履歴に残す（自動で引き継がない）", r.code === 200 && r.body.result === "subscribed" && p6.ownerUid === "u6" && p6.billingAccountUid === "u6" && p6.revision > oldPlan.revision && !!sup6, { p6, sup6 });
 g = await call(GET("S4"), s4Other);
 clearRate(); r = await call(SUB("S4"), s4Other);
 const r2 = await call(UPDATE("S4", 0, "共同 owner"), s4Other);

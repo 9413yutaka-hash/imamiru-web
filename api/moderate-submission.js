@@ -130,6 +130,11 @@ import {
   handleStoreCustomPlanPayNow
 } from "./_lib/store-custom-plan-charge.js";
 
+// STEP 44-C⑤｜月額100円カスタマイズの定期実行の入口(合言葉 X-Machinau-Cron-Secret で認証、運営のログイン不要)。
+import {
+  handleStoreCustomPlanCron
+} from "./_lib/store-custom-plan-cron.js";
+
 // 運営無料掲載 → 店舗オーナー化 MVP-1。実処理はapi/_lib/store-listing-claims.js。
 import {
   handleStoreListingClaimPreview,
@@ -30479,7 +30484,9 @@ export default async function handler(
       // STEP 44-C④｜店主の本人認証(既存の PaymentIntent を画面で完了)・確定(サーバーが Stripe に照会)・今すぐ支払う。
       storeCustomPlanPaymentStart: handleStoreCustomPlanPaymentStart,
       storeCustomPlanPaymentConfirm: handleStoreCustomPlanPaymentConfirm,
-      storeCustomPlanPayNow: handleStoreCustomPlanPayNow
+      storeCustomPlanPayNow: handleStoreCustomPlanPayNow,
+      // STEP 44-C⑤｜定期実行(前月の締め・未払いの判定・請求の対象の判定。定期実行からの請求は許可フラグ false の間は試算だけ)。
+      storeCustomPlanCron: handleStoreCustomPlanCron
     };
 
   if (
