@@ -35,6 +35,19 @@ import {
   requireVerifiedStoreUser
 } from "./store-self-service.js";
 
+// STEP 44-C③｜契約の暦月モデル・利用月の記録(月末締めの元データ)。
+import {
+  STORE_CUSTOM_PLAN_PERIOD_MONTHLY,
+  STORE_CUSTOM_PLAN_MONTHLY_SIGNUP_ENABLED,
+  evaluateStoreCustomPlanAccess,
+  isMonthlyPlan,
+  jstMonthKey,
+  jstMonthStartMillis,
+  nextMonthKey,
+  storeCustomPlanUsageRef,
+  writeStoreCustomPlanUsage
+} from "./store-custom-plan-billing.js";
+
 import {
   STORE_PHOTO_FOLDER_ROOT,
   readMultilineText,
@@ -110,14 +123,11 @@ function millisOf(value) {
   return value && typeof value.toMillis === "function" ? value.toMillis() : 0;
 }
 
-// 利用権限：契約状態が active / canceling で、利用期限(accessUntil)が今より後の時だけ true。
-// 利用期限の無い契約は権限なし(期限を決めずに無期限で使える状態を作らない)。
+// 利用権限(期間・状態)。Preview 試験の契約：active / canceling で、利用期限(accessUntil)が今より後の時だけ true
+// (利用期限の無い試験の契約は権限なし)。STEP 44-C③ の本番の暦月契約(periodKind monthly)：active・past_due は
+// 利用可、canceling は月末(accessUntil)まで、suspended・ended は不可。判定は store-custom-plan-billing.js にまとめる。
 export function hasStoreCustomPlanAccess(planData, nowMillis) {
-  return (
-    !!planData &&
-    STORE_CUSTOM_PLAN_ACCESS_STATUSES.includes(planData.status) &&
-    millisOf(planData.accessUntil) > nowMillis
-  );
+  return evaluateStoreCustomPlanAccess(planData, nowMillis);
 }
 
 // STEP 44-B｜契約はそれを申し込んだアカウント(ownerUid＝カードの登録先)に結び付く。
@@ -139,8 +149,17 @@ export function readStoreCustomPlanState(planData, uid, nowMillis) {
     return "other_holder";
   }
 
+  // STEP 44-C③｜本番の暦月契約の未払い(猶予中は利用可・停止中は利用不可)。
+  if (isMonthlyPlan(planData) && planData.status === "suspended") {
+    return "suspended";
+  }
+
   if (!hasStoreCustomPlanAccess(planData, nowMillis)) {
     return "expired";
+  }
+
+  if (isMonthlyPlan(planData) && planData.status === "past_due") {
+    return "past_due";
   }
 
   return planData.status === "canceling" ? "canceling" : "active";
@@ -159,7 +178,9 @@ function buildPlanResponse(planData, uid, nowMillis) {
     accessUntilMillis: mine ? millisOf(data.accessUntil) : 0,
     subscribedAtMillis: mine ? millisOf(data.subscribedAt) : 0,
     canceledAtMillis: mine ? millisOf(data.canceledAt) : 0,
-    periodKind: mine && typeof data.periodKind === "string" ? data.periodKind : ""
+    periodKind: mine && typeof data.periodKind === "string" ? data.periodKind : "",
+    // STEP 44-C③｜Preview で作った試験用の契約か(画面に「実際には請求されません」を出す)。
+    createdInPreview: mine && data.createdInPreview === true
   };
 }
 
@@ -956,9 +977,23 @@ export async function handleStoreCustomPlanSubscribe(request, response, deps) {
       return sendError(response, 400, "invalid_input", { field: "storeId" });
     }
 
-    if (typeof deps.isStoreCustomPlanTrialEnabled !== "function" || deps.isStoreCustomPlanTrialEnabled() !== true) {
+    // STEP 44-C③｜契約の種類：本番の申込の受付(STORE_CUSTOM_PLAN_MONTHLY_SIGNUP_ENABLED、false)が有効なら本番の暦月契約。
+    // それ以外は Preview 試験の環境の時だけ受け付け、既定は STEP 44-B の試験の契約(申込から暦の1か月・請求の対象外)、
+    // contractModel "monthly" を指定した時だけ試験用の暦月契約(createdInPreview。請求台帳の試験用)。Production では受け付けない。
+    const monthlySignupEnabled =
+      STORE_CUSTOM_PLAN_MONTHLY_SIGNUP_ENABLED === true ||
+      (typeof deps.isStoreCustomPlanMonthlySignupEnabled === "function" && deps.isStoreCustomPlanMonthlySignupEnabled() === true);
+    const trialEnvironment = typeof deps.isStoreCustomPlanTrialEnabled === "function" && deps.isStoreCustomPlanTrialEnabled() === true;
+    const requestedModel = deps.readRequestBody(request).contractModel;
+
+    if (!monthlySignupEnabled && !trialEnvironment) {
       return sendError(response, 403, "plan_signup_unavailable");
     }
+
+    const contractModel = monthlySignupEnabled || requestedModel === STORE_CUSTOM_PLAN_PERIOD_MONTHLY
+      ? STORE_CUSTOM_PLAN_PERIOD_MONTHLY
+      : STORE_CUSTOM_PLAN_PERIOD_PREVIEW_TRIAL;
+    const createdInPreview = !monthlySignupEnabled;
 
     const database = deps.getFirestore(deps.getFirebaseAdminApp());
     const memberRef = database.collection(STORE_MEMBERS_COLLECTION).doc(storeId + "_" + actor.uid);
@@ -994,15 +1029,19 @@ export async function handleStoreCustomPlanSubscribe(request, response, deps) {
     }
 
     const nowMillis = readNowMillis(deps);
+    const monthKey = jstMonthKey(nowMillis);
+    const usageRef = storeCustomPlanUsageRef(database, storeId, monthKey);
     let outcome = null;
 
     await database.runTransaction(async function(transaction) {
       const snapshots = await Promise.all([
         transaction.get(memberRef),
         transaction.get(accountRef),
-        transaction.get(planRef)
+        transaction.get(planRef),
+        transaction.get(usageRef)
       ]);
       const planData = snapshots[2].exists ? snapshots[2].data() || {} : null;
+      const usageSnapshot = snapshots[3];
       let holderActive = false;
 
       if (planData && typeof planData.ownerUid === "string" && planData.ownerUid !== "" && planData.ownerUid !== actor.uid) {
@@ -1025,18 +1064,46 @@ export async function handleStoreCustomPlanSubscribe(request, response, deps) {
       const inPeriod = hasStoreCustomPlanAccess(planData, nowMillis);
       const mine = isStoreCustomPlanHolder(planData, actor.uid);
 
-      if (inPeriod && mine && planData.status === "canceling") {
-        transaction.update(planRef, {
+      // STEP 44-C③｜未払い(猶予中・停止中)の自分の契約がある間は、新しい申込を受け付けない(支払いの完了で再開する)。
+      if (mine && isMonthlyPlan(planData) && (planData.status === "past_due" || planData.status === "suspended")) {
+        outcome = { status: 409, reason: "plan_unpaid" };
+        return;
+      }
+
+      // 既存の契約と同じ種類の時だけ「解約の取り消し」(試験の契約と本番の暦月契約は混ぜない)。
+      if (inPeriod && mine && planData.status === "canceling" && (isMonthlyPlan(planData) === (contractModel === STORE_CUSTOM_PLAN_PERIOD_MONTHLY))) {
+        const reactivated = {
           status: "active",
           canceledAt: null,
           reactivatedAt: Timestamp.fromMillis(nowMillis),
           updatedAt: FieldValue.serverTimestamp(),
           revision: (Number.isInteger(planData.revision) ? planData.revision : 0) + 1
-        });
+        };
+
+        if (isMonthlyPlan(planData)) {
+          // 暦月契約は解約の取り消しで期限が無くなる(毎月継続)。今月の料金は既に記録済みなら増やさない。
+          reactivated.accessUntil = null;
+          writeStoreCustomPlanUsage(transaction, usageRef, usageSnapshot, {
+            storeId: storeId,
+            month: monthKey,
+            holderUid: actor.uid,
+            reason: "reactivated",
+            atMillis: nowMillis,
+            contractSubscribedAt: planData.subscribedAt || null,
+            createdInPreview: planData.createdInPreview === true
+          });
+        }
+
+        transaction.update(planRef, reactivated);
         writePlanEvent(transaction, database, storeId, actor.uid, "reactivated", nowMillis, {
           accessUntil: planData.accessUntil
         });
-        outcome = { status: 200, result: "reactivated", accessUntilMillis: millisOf(planData.accessUntil) };
+        outcome = {
+          status: 200,
+          result: "reactivated",
+          accessUntilMillis: isMonthlyPlan(planData) ? 0 : millisOf(planData.accessUntil),
+          periodKind: isMonthlyPlan(planData) ? STORE_CUSTOM_PLAN_PERIOD_MONTHLY : STORE_CUSTOM_PLAN_PERIOD_PREVIEW_TRIAL
+        };
         return;
       }
 
@@ -1045,7 +1112,9 @@ export async function handleStoreCustomPlanSubscribe(request, response, deps) {
         return;
       }
 
-      const accessUntilMillis = addOneCalendarMonthJst(nowMillis);
+      const monthly = contractModel === STORE_CUSTOM_PLAN_PERIOD_MONTHLY;
+      // Preview 試験の契約は申込から暦の1か月。本番の暦月契約は期限なし(解約するまで毎月継続)。
+      const accessUntilMillis = monthly ? 0 : addOneCalendarMonthJst(nowMillis);
 
       if (planData) {
         writePlanEvent(transaction, database, storeId, actor.uid, "superseded", nowMillis, {
@@ -1053,23 +1122,61 @@ export async function handleStoreCustomPlanSubscribe(request, response, deps) {
         });
       }
 
+      if (monthly) {
+        // 今月の料金は、今月の初めから利用できた前の暦月契約があればその契約者(旧店主)に、無ければ申込んだ本人に
+        // 結び付ける(店舗・年月で1件。同じ月に何度申込・解約・再申込しても100円が上限)。
+        const previousCoversMonth =
+          isMonthlyPlan(planData) &&
+          typeof planData.ownerUid === "string" &&
+          planData.ownerUid !== "" &&
+          millisOf(planData.subscribedAt) < jstMonthStartMillis(monthKey) &&
+          planData.status !== "suspended" &&
+          planData.status !== "ended" &&
+          (planData.status !== "canceling" || millisOf(planData.accessUntil) > jstMonthStartMillis(monthKey));
+
+        // 記録が既にあれば、申込んだ本人を「同じ月の後の契約者」として残すだけ(料金は増やさない)。
+        writeStoreCustomPlanUsage(transaction, usageRef, usageSnapshot, usageSnapshot.exists
+          ? { holderUid: actor.uid }
+          : previousCoversMonth
+          ? {
+              storeId: storeId,
+              month: monthKey,
+              holderUid: planData.ownerUid,
+              laterHolderUids: planData.ownerUid !== actor.uid ? [actor.uid] : [],
+              reason: "continued",
+              atMillis: jstMonthStartMillis(monthKey),
+              contractSubscribedAt: planData.subscribedAt || null,
+              createdInPreview: planData.createdInPreview === true
+            }
+          : {
+              storeId: storeId,
+              month: monthKey,
+              holderUid: actor.uid,
+              reason: "subscribed",
+              atMillis: nowMillis,
+              contractSubscribedAt: Timestamp.fromMillis(nowMillis),
+              createdInPreview: createdInPreview
+            });
+      }
+
       transaction.set(planRef, {
         storeId: storeId,
         status: "active",
         ownerUid: actor.uid,
         billingAccountUid: actor.uid,
-        periodKind: STORE_CUSTOM_PLAN_PERIOD_PREVIEW_TRIAL,
+        periodKind: contractModel,
+        createdInPreview: createdInPreview,
         subscribedAt: Timestamp.fromMillis(nowMillis),
-        accessUntil: Timestamp.fromMillis(accessUntilMillis),
+        accessUntil: monthly ? null : Timestamp.fromMillis(accessUntilMillis),
         canceledAt: null,
         updatedAt: FieldValue.serverTimestamp(),
         revision: (planData && Number.isInteger(planData.revision) ? planData.revision : 0) + 1
       });
       writePlanEvent(transaction, database, storeId, actor.uid, "subscribed", nowMillis, {
-        periodKind: STORE_CUSTOM_PLAN_PERIOD_PREVIEW_TRIAL,
-        accessUntil: Timestamp.fromMillis(accessUntilMillis)
+        periodKind: contractModel,
+        accessUntil: monthly ? null : Timestamp.fromMillis(accessUntilMillis)
       });
-      outcome = { status: 200, result: "subscribed", accessUntilMillis: accessUntilMillis };
+      outcome = { status: 200, result: "subscribed", accessUntilMillis: accessUntilMillis, periodKind: contractModel };
     });
 
     if (outcome.status !== 200) {
@@ -1079,7 +1186,8 @@ export async function handleStoreCustomPlanSubscribe(request, response, deps) {
     return response.status(200).json({
       success: true,
       result: outcome.result,
-      accessUntilMillis: outcome.accessUntilMillis
+      accessUntilMillis: outcome.accessUntilMillis,
+      periodKind: outcome.periodKind || ""
     });
   } catch (error) {
     console.error("店舗カスタマイズ：申込エラー：", error && error.message);
@@ -1109,10 +1217,12 @@ export async function handleStoreCustomPlanCancel(request, response, deps) {
     const memberRef = database.collection(STORE_MEMBERS_COLLECTION).doc(storeId + "_" + actor.uid);
     const planRef = database.collection(STORE_CUSTOM_PLANS_COLLECTION).doc(storeId);
     const nowMillis = readNowMillis(deps);
+    const monthKey = jstMonthKey(nowMillis);
+    const usageRef = storeCustomPlanUsageRef(database, storeId, monthKey);
     let outcome = null;
 
     await database.runTransaction(async function(transaction) {
-      const snapshots = await Promise.all([transaction.get(memberRef), transaction.get(planRef)]);
+      const snapshots = await Promise.all([transaction.get(memberRef), transaction.get(planRef), transaction.get(usageRef)]);
 
       if (!snapshots[0].exists || !isActiveOwner(snapshots[0].data(), actor.uid, storeId)) {
         outcome = { status: 404, reason: "store_not_found" };
@@ -1131,16 +1241,41 @@ export async function handleStoreCustomPlanCancel(request, response, deps) {
         return;
       }
 
+      // STEP 44-C③｜未払い(猶予中)の暦月契約の解約は、支払いの処理(次工程)と合わせて決めるため、今は受け付けない。
+      if (planData.status === "past_due") {
+        outcome = { status: 409, reason: "plan_unpaid" };
+        return;
+      }
+
+      // 本番の暦月契約：解約月の月末(翌月1日 0:00 JST)まで利用でき、今月の料金(100円)は残る(無ければ記録する)。
+      // Preview 試験の契約：利用期限は変えない(STEP 44-B のまま)。
+      const monthly = isMonthlyPlan(planData);
+      const accessUntil = monthly ? Timestamp.fromMillis(jstMonthStartMillis(nextMonthKey(monthKey))) : planData.accessUntil;
+
+      if (monthly) {
+        writeStoreCustomPlanUsage(transaction, usageRef, snapshots[2], {
+          storeId: storeId,
+          month: monthKey,
+          holderUid: actor.uid,
+          reason: "continued",
+          // 前の月から継続していれば今月の初めから、今月の申込ならその時から利用している。
+          atMillis: Math.max(jstMonthStartMillis(monthKey), millisOf(planData.subscribedAt)),
+          contractSubscribedAt: planData.subscribedAt || null,
+          createdInPreview: planData.createdInPreview === true
+        });
+      }
+
       transaction.update(planRef, {
         status: "canceling",
         canceledAt: Timestamp.fromMillis(nowMillis),
+        accessUntil: accessUntil,
         updatedAt: FieldValue.serverTimestamp(),
         revision: (Number.isInteger(planData.revision) ? planData.revision : 0) + 1
       });
       writePlanEvent(transaction, database, storeId, actor.uid, "canceled", nowMillis, {
-        accessUntil: planData.accessUntil
+        accessUntil: accessUntil
       });
-      outcome = { status: 200, alreadyCanceled: false, accessUntilMillis: millisOf(planData.accessUntil) };
+      outcome = { status: 200, alreadyCanceled: false, accessUntilMillis: millisOf(accessUntil) };
     });
 
     if (outcome.status !== 200) {
@@ -1192,7 +1327,10 @@ export async function handleAdminStoreCustomPlanList(request, response, deps) {
       return {
         storeId: plan.storeId,
         storeName: typeof account.storeName === "string" ? account.storeName : "",
-        state: !inPeriod ? "expired" : plan.data.status === "canceling" ? "canceling" : "active",
+        state:
+          isMonthlyPlan(plan.data) && (plan.data.status === "suspended" || plan.data.status === "ended" || plan.data.status === "past_due")
+            ? plan.data.status
+            : !inPeriod ? "expired" : plan.data.status === "canceling" ? "canceling" : "active",
         holderIsActiveOwner: holderActive,
         periodKind: typeof plan.data.periodKind === "string" ? plan.data.periodKind : "",
         subscribedAtMillis: millisOf(plan.data.subscribedAt),

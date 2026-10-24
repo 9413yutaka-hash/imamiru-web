@@ -3276,6 +3276,37 @@ const MACHINAU_TRANSLATIONS = {
     en: "There is no active plan to cancel."
   },
 
+  // STEP 44-C③｜本番の暦月契約・未払いの表示(店主の編集画面)。
+  store_custom_plan_monthly_active: {
+    ja: "契約中です（解約するまで毎月継続します）。各月の100円（税込）は月末に締めて、翌月2日に請求します。",
+    en: "Your plan is active and renews monthly until you cancel. Each month's ¥100 (tax included) is closed at month end and charged on the 2nd of the next month."
+  },
+
+  store_custom_plan_monthly_canceling: {
+    ja: "解約手続き済みです。{date}（今月末）まで利用でき、翌月からは料金が発生しません。今月分の100円は請求されます。",
+    en: "Cancellation requested. You can use the plan until {date} (end of this month); no charges from next month. This month's ¥100 is still charged."
+  },
+
+  store_custom_plan_monthly_trial_note: {
+    ja: "（試験用の契約のため、実際には請求されません）",
+    en: "(This is a trial contract; you will not actually be charged.)"
+  },
+
+  store_custom_plan_past_due: {
+    ja: "お支払いが確認できていない料金があります。お支払いが完了しないまま一定期間が過ぎると、有料の内容の表示を停止します（データは残ります）。",
+    en: "There is an unpaid charge. If it remains unpaid for a certain period, the paid content will stop being shown (your data is kept)."
+  },
+
+  store_custom_plan_suspended: {
+    ja: "未払いのため、有料の内容の表示を停止しています（データは残っています）。お支払いが完了すると再開できます。",
+    en: "The paid content is stopped because of an unpaid charge (your data is kept). It can resume once the payment is completed."
+  },
+
+  store_custom_plan_err_unpaid: {
+    ja: "お支払いが確認できていない料金があるため、この操作はできません。",
+    en: "This action is not available because there is an unpaid charge."
+  },
+
   store_custom_heading: {
     ja: "月額100円カスタマイズ",
     en: "Monthly ¥100 customization"

@@ -115,6 +115,14 @@ import {
   isStoreMenuPhotoPublicId
 } from "./_lib/store-custom-profile.js";
 
+// STEP 44-C③｜月額100円カスタマイズの後払い請求の基盤(月末締め・請求台帳。Stripe への請求はしない)。
+import {
+  handleAdminStoreCustomPlanMonthlyClose,
+  handleAdminStoreCustomPlanCharge,
+  handleStoreCustomPlanInvoiceList,
+  handleAdminStoreCustomPlanInvoiceList
+} from "./_lib/store-custom-plan-billing.js";
+
 // 運営無料掲載 → 店舗オーナー化 MVP-1。実処理はapi/_lib/store-listing-claims.js。
 import {
   handleStoreListingClaimPreview,
@@ -30303,7 +30311,13 @@ export default async function handler(
     {
       storeCustomPlanSubscribe: handleStoreCustomPlanSubscribe,
       storeCustomPlanCancel: handleStoreCustomPlanCancel,
-      adminStoreCustomPlanList: handleAdminStoreCustomPlanList
+      adminStoreCustomPlanList: handleAdminStoreCustomPlanList,
+      // STEP 44-C③｜月末締め(運営のみ・既定は試算)、請求(フラグ false の間は必ず拒否・Stripe へ接続しない)、
+      // 請求台帳の一覧(店主は自分が請求先の分だけ／運営は読み取り専用)。
+      adminStoreCustomPlanMonthlyClose: handleAdminStoreCustomPlanMonthlyClose,
+      adminStoreCustomPlanCharge: handleAdminStoreCustomPlanCharge,
+      storeCustomPlanInvoiceList: handleStoreCustomPlanInvoiceList,
+      adminStoreCustomPlanInvoiceList: handleAdminStoreCustomPlanInvoiceList
     };
 
   if (

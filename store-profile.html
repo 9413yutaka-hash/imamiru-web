@@ -1599,6 +1599,15 @@
         const kept = hasContent ? " " + t("store_custom_plan_kept") : "";
         if (plan.access && !customEditable) {
           note.textContent = t("store_custom_not_editable");
+        } else if (plan.state === "active" && plan.periodKind === "monthly") {
+          // STEP 44-C③｜本番の暦月契約(解約するまで毎月継続・月末締め・翌月2日請求)。
+          note.textContent = t("store_custom_plan_monthly_active") + (plan.createdInPreview ? " " + t("store_custom_plan_monthly_trial_note") : "");
+        } else if (plan.state === "canceling" && plan.periodKind === "monthly") {
+          note.textContent = t("store_custom_plan_monthly_canceling").replace("{date}", formatCustomDate(plan.accessUntilMillis - 60000)) + (plan.createdInPreview ? " " + t("store_custom_plan_monthly_trial_note") : "");
+        } else if (plan.state === "past_due") {
+          note.textContent = t("store_custom_plan_past_due");
+        } else if (plan.state === "suspended") {
+          note.textContent = t("store_custom_plan_suspended");
         } else if (plan.state === "active") {
           note.textContent = t("store_custom_plan_active").replace("{date}", until);
         } else if (plan.state === "canceling") {
@@ -1621,13 +1630,15 @@
           box.hidden = true;
           return;
         }
-        const mine = plan.state === "active" || plan.state === "canceling" || plan.state === "expired";
+        const mine = plan.state === "active" || plan.state === "canceling" || plan.state === "expired" || plan.state === "past_due" || plan.state === "suspended";
         const dates = [];
         if (mine && plan.subscribedAtMillis > 0) {
           dates.push(t("store_custom_plan_dates_subscribed").replace("{date}", formatCustomDate(plan.subscribedAtMillis)));
         }
         if (mine && plan.accessUntilMillis > 0) {
-          dates.push(t("store_custom_plan_dates_until").replace("{date}", formatCustomDate(plan.accessUntilMillis)));
+          // 暦月契約の期限は翌月1日 0:00(日本時間)なので、表示は月末の 23:59 にする。
+          const untilMillis = plan.periodKind === "monthly" ? plan.accessUntilMillis - 60000 : plan.accessUntilMillis;
+          dates.push(t("store_custom_plan_dates_until").replace("{date}", formatCustomDate(untilMillis)));
         }
         if (mine && plan.canceledAtMillis > 0 && plan.state !== "active") {
           dates.push(t("store_custom_plan_dates_canceled").replace("{date}", formatCustomDate(plan.canceledAtMillis)));
@@ -1690,6 +1701,7 @@
         already_subscribed: "store_custom_plan_err_already",
         plan_signup_unavailable: "store_custom_plan_err_unavailable",
         plan_not_active: "store_custom_plan_err_not_active",
+        plan_unpaid: "store_custom_plan_err_unpaid",
         store_not_editable: "store_custom_not_editable",
         rate_limited: "store_account_store_err_rate_limited"
       };

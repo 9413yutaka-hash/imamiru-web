@@ -610,6 +610,14 @@ function isDetachAllowedNow(section, protection) {
 const MONTHLY_INVOICES_COLLECTION =
   "imadakeMonthlyInvoices";
 
+// STEP 44-C③｜月額100円カスタマイズの請求台帳(今だけ投稿とは別)。請求書IDは今だけ投稿と同じ形
+// ({storeId}_{YYYY-MM})のため、請求ロック(billingLocks)のキーには種類を表す前置きを付けて区別する。
+export const STORE_CUSTOM_PLAN_INVOICES_COLLECTION =
+  "storeCustomPlanInvoices";
+
+export const STORE_CUSTOM_PLAN_LOCK_PREFIX =
+  "storeCustomPlan:";
+
 // 請求書の状態のうち、カードを取り外してよいと分かっているもの(支払いを作っていない、または支払い済み)。
 // これ以外(請求中・処理中・本人認証待ち・人の確認待ち・支払い失敗・知らない状態)は、使ったカードを守る。
 const INVOICE_STATUSES_RELEASING_CARD =
@@ -624,17 +632,23 @@ async function readInvoiceProtectedPaymentMethods(database, customerId) {
   }
 
   try {
-    const snapshot = await database
-      .collection(MONTHLY_INVOICES_COLLECTION)
-      .where("chargeCustomerId", "==", customerId)
-      .get();
+    // STEP 44-C③｜今だけ投稿の請求書に加えて、月額100円カスタマイズの請求台帳も同じ規則で確かめる
+    // (どちらかを読めなければ取り外しを止める)。月額プランの請求書は、ロックのキーと同じ前置き付きの ID で数える。
+    const snapshots = await Promise.all([
+      database.collection(MONTHLY_INVOICES_COLLECTION).where("chargeCustomerId", "==", customerId).get(),
+      database.collection(STORE_CUSTOM_PLAN_INVOICES_COLLECTION).where("chargeCustomerId", "==", customerId).get()
+    ]);
 
     const protectedIds = new Set();
     const unresolvedInvoiceIds = new Set();
     let unknownCard = false;
 
-    snapshot.docs.forEach(function(doc) {
-      const invoice = doc.data() || {};
+    const entries = snapshots[0].docs
+      .map(function(doc) { return { id: doc.id, doc: doc }; })
+      .concat(snapshots[1].docs.map(function(doc) { return { id: STORE_CUSTOM_PLAN_LOCK_PREFIX + doc.id, doc: doc }; }));
+
+    entries.forEach(function(entry) {
+      const invoice = entry.doc.data() || {};
       const usedId = typeof invoice.chargePaymentMethodId === "string" ? invoice.chargePaymentMethodId : "";
       const releasing = INVOICE_STATUSES_RELEASING_CARD.includes(invoice.status) && invoice.chargeOutcomeUnknown !== true;
 
@@ -642,7 +656,7 @@ async function readInvoiceProtectedPaymentMethods(database, customerId) {
         return;
       }
 
-      unresolvedInvoiceIds.add(doc.id);
+      unresolvedInvoiceIds.add(entry.id);
 
       if (STRIPE_PAYMENT_METHOD_ID_PATTERN.test(usedId)) {
         protectedIds.add(usedId);

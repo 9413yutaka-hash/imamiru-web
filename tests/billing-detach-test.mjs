@@ -344,6 +344,31 @@ t("G2 別のアカウント（別の顧客）の請求書は、このアカウ�
 // D17 invariants
 const stored = JSON.stringify([...S.docs.entries()].filter(([k]) => k.startsWith("accountBilling/")));
 t("D17 秘密情報・カード番号はログにも保存にも出ない", !logs.join("\n").includes(FAKE_SERVER_KEY) && !stored.includes(FAKE_SERVER_KEY) && !stored.includes("4242424242424242"));
+// ===== STEP 44-C③: the monthly customization plan ledger (storeCustomPlanInvoices) also protects the card it charges =====
+// Plan invoice IDs have the same shape as imadake invoice IDs ({storeId}_{YYYY-MM}); plan locks use the "storeCustomPlan:" prefix.
+for (const n of [71, 72, 73, 74, 75]) addStore(n);
+const planInvoiceOf = (n, month, status, pm, extra = {}) => S.docs.set("storeCustomPlanInvoices/s" + n + "_" + month, { storeId: "s" + n, month, status, amountJpy: 100, currency: "JPY", taxIncluded: true, billingAccountUid: "u" + n, chargeCustomerId: "cus_seed" + n, chargePaymentMethodId: pm, ...extra });
+seed(71, "pm_inuse71", [ent("pm_y71")]);
+planInvoiceOf(71, "2027-12", "charging", "pm_inuse71"); lockOn(71, "storeCustomPlan:s71_2027-12");
+const r71 = await register(71);
+t("P1 月額プランの請求中（ロックあり）：請求に使っているカードは取り外さず、ほかの旧カードは取り外す・新しいカードが正式な請求先", r71.f.code === 200 && posts("pm_inuse71") === 0 && posts("pm_y71") === 1 && q(71).some((e) => e.paymentMethodId === "pm_inuse71" && e.state === "pending") && sec(71).paymentMethodId === r71.pm && r71.pm !== "pm_inuse71", { q: q(71), cur: sec(71).paymentMethodId });
+seed(72, "pm_inuse72", [ent("pm_y72")]);
+invoiceOf(72, "2027-12", "paid", "pm_inuse72");
+planInvoiceOf(72, "2027-12", "charging", "pm_inuse72"); lockOn(72, "storeCustomPlan:s72_2027-12");
+await register(72);
+t("P2 同じ形の ID（s72_2027-12）でも、今だけ投稿の請求書が支払い済みなだけでは月額プランの請求中のカードを取り外さない", posts("pm_inuse72") === 0 && posts("pm_y72") === 1, q(72));
+seed(73, "pm_used73", [ent("pm_old73")]);
+planInvoiceOf(73, "2027-12", "paid", "pm_old73");
+await register(73);
+t("P3 月額プランの請求が支払い済みなら、そのカードは取り外せる", posts("pm_old73") === 1, q(73));
+seed(74, "pm_cur74", [ent("pm_old74")], { billingLocks: { "storeCustomPlan:s74_unknown": { attempt: 1, sinceMs: 1 } } });
+const r74 = await register(74);
+t("P4 確かめられない月額プランのロックがある間は、旧カードを取り外さずに保留（カードの変更そのものはできる）", r74.f.code === 200 && posts("pm_old74") === 0 && posts("pm_cur74") === 0 && q(74).every((e) => e.state === "pending"), q(74));
+seed(75, "pm_cur75", [ent("pm_old75")]);
+planInvoiceOf(75, "2027-12", "payment_failed", "pm_old75");
+await register(75);
+t("P5 月額プランの支払い失敗（未解決）が使ったカードは、ロックが無くても取り外さない", posts("pm_old75") === 0 && posts("pm_cur75") === 1, q(75));
+
 const touched = [...new Set(S.writes.map((w) => w.split("/")[0]))].sort();
 t("D17b 書き込み先は accountBilling と連打防止だけ", JSON.stringify(touched) === JSON.stringify(["accountBilling", "storeBillingRateLimits"]), touched);
 t("D17c Stripeへの呼び出しは許可した種類だけ（顧客作成・SetupIntent作成/照会・カード照会・取り外し）", ST.calls.every((x) => /^(POST \/v1\/customers|POST \/v1\/setup_intents|GET \/v1\/setup_intents\/seti_d\d+|GET \/v1\/payment_methods\/pm_[A-Za-z0-9_]+|POST \/v1\/payment_methods\/pm_[A-Za-z0-9_]+\/detach)$/.test(x)), [...new Set(ST.calls.map((x) => x.replace(/pm_[A-Za-z0-9_]+/, "pm_*").replace(/seti_d\d+/, "seti_*")))]);
