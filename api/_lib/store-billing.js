@@ -11,6 +11,8 @@
 //   カード登録(readStripeCardSetupConfig)：
 //     ・Production(VERCEL_ENV=production)では次の4条件がすべてそろった時だけ本番モード(live)：
 //       ①コードのスイッチ STORE_CARD_REGISTRATION_LIVE_ENABLED が true(既定 false)
+//         STEP 43-N C案(代表決定 2026-10-25)：スイッチが false の間も、代表のアカウント(先行テスト)だけは①を満たす扱い
+//         (isStoreCardLiveTrialToken。カード登録の3つの操作だけ。②〜④は同じ)
 //       ②環境変数 STRIPE_MODE が "live"
 //       ③サーバーのキー(STRIPE_RESTRICTED_KEY)が制限付きの本番キー rk_live_(権限の広い sk_live_ は拒否)
 //       ④公開可能キー(STRIPE_PUBLISHABLE_KEY)が pk_live_
@@ -140,6 +142,47 @@ function sendError(response, status, reason, extra) {
 export const STORE_CARD_REGISTRATION_LIVE_ENABLED =
   false;
 
+// STEP 43-N C案(代表決定 2026-10-25)｜本番のカード登録の先行テスト。一般公開(上のスイッチを true)の前に、
+// 代表のアカウントだけが本番モードのカード登録・変更(状態・開始・確定の3つ)を使える。②〜④(STRIPE_MODE live・
+// rk_live_・pk_live_)は同じ。店舗の新規登録・引き継ぎ・今だけ投稿のカード確認(checkAccountBillingCard 等)には使わない
+// (一般公開まで、代表を含めて本番では使えない)。一般公開の後、または先行テストをやめる時は false にする。
+export const STORE_CARD_LIVE_ADMIN_TRIAL_ENABLED =
+  true;
+
+// STEP 43-N C案｜先行テストのアカウント(代表)か。サーバーで検証した ID トークンだけで判定する。
+// 代表の特定は管理画面と同じ環境変数 ADMIN_EMAIL(コードにメールアドレス・uid を書かない)。条件：
+// ADMIN_EMAIL が設定済み・トークンのメールが一致(大文字小文字は区別しない)・メール確認済み・パスワードでのログイン。
+// 結果は真偽値だけを使い、メールアドレスは応答・ログ・Firestore に出さない。
+export function isStoreCardLiveTrialToken(decodedToken, env) {
+  const source = env || {};
+  const adminEmail = typeof source.ADMIN_EMAIL === "string" ? source.ADMIN_EMAIL.trim().toLowerCase() : "";
+
+  if (adminEmail === "" || !decodedToken || typeof decodedToken !== "object") {
+    return false;
+  }
+
+  const email = typeof decodedToken.email === "string" ? decodedToken.email.trim().toLowerCase() : "";
+  const provider = decodedToken.firebase && typeof decodedToken.firebase.sign_in_provider === "string"
+    ? decodedToken.firebase.sign_in_provider
+    : "";
+
+  return email !== "" && email === adminEmail && decodedToken.email_verified === true && provider === "password";
+}
+
+// STEP 43-N C案｜店舗の新規登録・引き継ぎを一般に開いているか(旅行者向けの入口の表示に使う)。
+// Production ではスイッチが true の時だけ。Production 以外は従来どおり(テストモード)。可否の判定はサーバーの各処理が行う。
+export function isStoreOnboardingOpen(env) {
+  const source = env || {};
+  return source.VERCEL_ENV !== "production" || STORE_CARD_REGISTRATION_LIVE_ENABLED === true;
+}
+
+// カード登録の3つの操作に渡す設定の引数。先行テストの可否はサーバーで検証したログイン(actor)だけから決める。
+function cardSetupOptionsFor(deps, actor) {
+  return Object.assign({}, deps.cardSetupConfigOptions || {}, {
+    liveTrialAccount: Boolean(actor) && actor.cardLiveTrial === true
+  });
+}
+
 // STEP 43-B｜カード登録で呼んでよい Stripe の操作(方法とパス)。これ以外(支払いの作成など)は送らない。
 // 本番の制限付きキーに必要な権限：Customers(書き込み)・SetupIntents(書き込み)・PaymentMethods(書き込み：照会と取り外し)。
 export const CARD_SETUP_STRIPE_OPERATIONS = Object.freeze([
@@ -198,6 +241,8 @@ function readStripeTestOnlyConfig(values, purpose) {
 
 // STEP 43-B｜カード登録用の設定。Production では4条件(上の説明)がすべてそろった時だけ live。
 // options.liveEnabled は試験でスイッチの値を差し替えるためだけの引数(省略時はコードのスイッチ)。
+// STEP 43-N C案｜options.liveTrialAccount(サーバーで検証した先行テストのアカウントの時だけ true。cardSetupOptionsFor)と
+// 先行テストのスイッチ(options.liveTrialEnabled は試験用、省略時は STORE_CARD_LIVE_ADMIN_TRIAL_ENABLED)がそろえば①を満たす。
 // 本番のサーバーの部品(buildStoreBillingDeps)は cardSetupConfigOptions を渡さない(リクエストからは指定できない)。
 // キーの値は返り値の serverKey/publishableKey だけに入れ、呼び出し元はログに出さない。
 export function readStripeCardSetupConfig(env, options) {
@@ -213,7 +258,13 @@ export function readStripeCardSetupConfig(env, options) {
       ? options.liveEnabled
       : STORE_CARD_REGISTRATION_LIVE_ENABLED;
 
-  if (liveEnabled !== true) {
+  const liveTrialEnabled =
+    options && typeof options.liveTrialEnabled === "boolean"
+      ? options.liveTrialEnabled
+      : STORE_CARD_LIVE_ADMIN_TRIAL_ENABLED;
+  const liveTrialAccount = liveTrialEnabled === true && Boolean(options) && options.liveTrialAccount === true;
+
+  if (liveEnabled !== true && !liveTrialAccount) {
     return { ok: false, reason: "live_registration_disabled" };
   }
 
@@ -462,7 +513,7 @@ export async function handleStoreBillingStatus(request, response, deps) {
       return;
     }
 
-    const config = readStripeCardSetupConfig(deps.env, deps.cardSetupConfigOptions);
+    const config = readStripeCardSetupConfig(deps.env, cardSetupOptionsFor(deps, actor));
 
     if (!config.ok) {
       return response.status(200).json({
@@ -958,7 +1009,7 @@ export async function handleStoreBillingSetupIntentCreate(request, response, dep
       return;
     }
 
-    const config = readStripeCardSetupConfig(deps.env, deps.cardSetupConfigOptions);
+    const config = readStripeCardSetupConfig(deps.env, cardSetupOptionsFor(deps, actor));
 
     if (!config.ok) {
       return sendError(response, 503, "billing_unavailable", { unavailableReason: config.reason });
@@ -1075,7 +1126,7 @@ export async function handleStoreBillingSetupConfirm(request, response, deps) {
       return;
     }
 
-    const config = readStripeCardSetupConfig(deps.env, deps.cardSetupConfigOptions);
+    const config = readStripeCardSetupConfig(deps.env, cardSetupOptionsFor(deps, actor));
 
     if (!config.ok) {
       return sendError(response, 503, "billing_unavailable", { unavailableReason: config.reason });

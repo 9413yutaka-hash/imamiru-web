@@ -28,6 +28,10 @@ import {
   requireVerifiedStoreUser
 } from "./store-self-service.js";
 
+import {
+  isStoreOnboardingOpen
+} from "./store-billing.js";
+
 const STORE_ACCOUNTS_COLLECTION = "storeAccounts";
 const STORE_MEMBERS_COLLECTION = "storeMembers";
 const STORE_PROFILES_COLLECTION = "storeProfiles";
@@ -1340,6 +1344,9 @@ export async function handleStoreProfileUnpublish(request, response, deps) {
 // submission ID すべて(紐付け先の店舗が公開前でも入れる)。旅行者向け詳細の「このお店の方へ」の入口を、
 // 引き継ぎ済みの掲載で出さないために使う。掲載IDだけで、紐付け先の店舗ID・店主・申請・カードの情報は返さない。
 // 引き継ぎの可否はこれまでどおりサーバー(引き継ぎの処理)が決める(画面の表示は根拠にしない)。
+//
+// listingClaimOpen(STEP 43-N C案)：店舗の新規登録・引き継ぎを一般に開いているか(isStoreOnboardingOpen)。
+// 本番カード登録の先行テストの間(Production・スイッチ false)は false で、旅行者向け詳細の入口を出さない。
 
 export const PUBLIC_STORE_ID_PREFIX = "sp_";
 export const PUBLIC_STORE_LISTING_TYPE = "store_profile";
@@ -1516,7 +1523,8 @@ export async function handlePublicStoreProfilesList(request, response, deps) {
       success: true,
       stores: stores,
       suppressedListingIds: Array.from(suppressedListingIds).sort(),
-      claimedListingIds: Array.from(claimedListingIds).sort()
+      claimedListingIds: Array.from(claimedListingIds).sort(),
+      listingClaimOpen: isStoreOnboardingOpen((deps && deps.env) || process.env)
     });
   } catch (error) {
     console.error("旅行者向け店舗一覧：取得エラー：", error && error.message);
