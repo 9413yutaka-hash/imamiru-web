@@ -2387,6 +2387,248 @@ const MACHINAU_TRANSLATIONS = {
     en: "Lodging"
   },
 
+  // 今だけ投稿 決済 STEP 31｜お支払い方法(カード登録、store-account.html)。
+  store_billing_heading: {
+    ja: "お支払い方法",
+    en: "Payment method"
+  },
+
+  store_billing_test_badge: {
+    ja: "テスト環境",
+    en: "Test mode"
+  },
+
+  store_billing_intro: {
+    ja: "今だけ投稿の利用料金（有効な閲覧があった「投稿×1日」ごとに100円・税込、月末締め・翌月まとめてカード請求）に使うカードを登録します。カードは1つのアカウントに1枚で、このアカウントで管理するすべてのお店・施設に共通です。現在、請求は行っていません。カード番号は決済会社（Stripe）が直接受け取り、マチナウには保存されません。",
+    en: "Register the card used for Just for Now fees (¥100 incl. tax per post per day with at least one valid view, billed together monthly). One card per account, shared by all the shops and venues you manage with this account. No charges are being made at this time. Your card number goes directly to our payment provider (Stripe) and is not stored by Machinau."
+  },
+
+  store_billing_store_label: {
+    ja: "事業者",
+    en: "Business"
+  },
+
+  store_billing_card_registered: {
+    ja: "登録済みのカード",
+    en: "Registered card"
+  },
+
+  store_billing_card_none: {
+    ja: "カードはまだ登録されていません。",
+    en: "No card registered yet."
+  },
+
+  store_billing_start_button: {
+    ja: "カードを登録する",
+    en: "Register a card"
+  },
+
+  store_billing_change_button: {
+    ja: "カードを変更する",
+    en: "Change card"
+  },
+
+  store_billing_consent: {
+    ja: "このカードを、今だけ投稿の利用料金（月末締め・翌月まとめて請求）の支払いに使うことに同意します。",
+    en: "I agree that this card will be used to pay Just for Now fees (billed monthly)."
+  },
+
+  store_billing_submit_button: {
+    ja: "このカードを登録する",
+    en: "Register this card"
+  },
+
+  store_billing_cancel_button: {
+    ja: "やめる",
+    en: "Cancel"
+  },
+
+  store_billing_loading: {
+    ja: "カードの入力欄を準備しています…",
+    en: "Preparing the card form…"
+  },
+
+  store_billing_confirming: {
+    ja: "カードを確認しています…",
+    en: "Checking your card…"
+  },
+
+  store_billing_saved: {
+    ja: "カードを登録しました。",
+    en: "Your card has been registered."
+  },
+
+  store_billing_processing: {
+    ja: "カードの確認中です。しばらくしてから、もう一度開いてください。",
+    en: "Your card is still being checked. Please reopen this page in a moment."
+  },
+
+  store_billing_err_consent: {
+    ja: "カードを使うことへの同意にチェックしてください。",
+    en: "Please check the box to agree to how your card will be used."
+  },
+
+  store_billing_err_requires_action: {
+    ja: "カード会社の認証が完了していません。もう一度お試しください。",
+    en: "Your card issuer's authentication was not completed. Please try again."
+  },
+
+  store_billing_err_failed: {
+    ja: "このカードは登録できませんでした。別のカードでお試しください。",
+    en: "This card could not be registered. Please try another card."
+  },
+
+  store_billing_err_rate_limited: {
+    ja: "少し時間をおいて、もう一度お試しください。",
+    en: "Please wait a moment and try again."
+  },
+
+  store_billing_err_unavailable: {
+    ja: "現在、カード登録はご利用いただけません。",
+    en: "Card registration is not available right now."
+  },
+
+  store_billing_err_stripe: {
+    ja: "決済会社との通信に失敗しました。時間をおいて、もう一度お試しください。",
+    en: "We couldn't reach the payment provider. Please try again later."
+  },
+
+  store_billing_err_retry: {
+    ja: "登録の手続きをやり直してください。",
+    en: "Please start the registration again."
+  },
+
+  store_billing_err_generic: {
+    ja: "カードを登録できませんでした。時間をおいて、もう一度お試しください。",
+    en: "We couldn't register your card. Please try again later."
+  },
+
+  // 今だけ投稿 決済 STEP 38-B｜ご請求の履歴(store-account.html、読み取りだけ)。
+  store_invoice_heading: {
+    ja: "ご請求の履歴",
+    en: "Billing history"
+  },
+
+  store_invoice_intro: {
+    ja: "今だけ投稿のご利用料金（有効な閲覧があった「投稿×1日」ごとに100円・税込）です。月末に締めて金額を確定し、翌月にまとめて登録カードへご請求します。直近12か月分を表示します。",
+    en: "Fees for Just for Now posts (¥100 incl. tax per post per day with at least one valid view). Amounts are confirmed at month-end and charged together to your registered card the following month. Shows the last 12 months."
+  },
+
+  store_invoice_estimate_heading: {
+    ja: "見込み（未確定）",
+    en: "Estimate (not confirmed)"
+  },
+
+  store_invoice_estimate_line: {
+    ja: "{month}：{count}件・{amount}（見込み）",
+    en: "{month}: {count} item(s), {amount} (estimate)"
+  },
+
+  store_invoice_estimate_none: {
+    ja: "未確定の見込みはありません。",
+    en: "No pending estimate."
+  },
+
+  store_invoice_estimate_note: {
+    ja: "見込みは月末の締めの後に確定します。確定したご請求額とは別で、合計していません。",
+    en: "Estimates are confirmed after the month-end close. They are separate from confirmed charges and not added to them."
+  },
+
+  store_invoice_confirmed_heading: {
+    ja: "確定したご請求",
+    en: "Confirmed charges"
+  },
+
+  store_invoice_none: {
+    ja: "確定した請求はまだありません。",
+    en: "There are no confirmed charges yet."
+  },
+
+  store_invoice_month_format: {
+    ja: "{year}年{month}月",
+    en: "{year}/{month}"
+  },
+
+  store_invoice_month_label: {
+    ja: "{month}分",
+    en: "{month}"
+  },
+
+  store_invoice_yen_format: {
+    ja: "{amount}円",
+    en: "¥{amount}"
+  },
+
+  store_invoice_amount_line: {
+    ja: "ご請求額：{amount}（税込）・{count}件",
+    en: "Amount: {amount} (incl. tax), {count} item(s)"
+  },
+
+  store_invoice_closed_at: {
+    ja: "確定日：{date}",
+    en: "Confirmed on: {date}"
+  },
+
+  store_invoice_paid_at: {
+    ja: "お支払い日：{date}",
+    en: "Paid on: {date}"
+  },
+
+  store_invoice_line_no_headline: {
+    ja: "（見出しなし）",
+    en: "(no headline)"
+  },
+
+  store_invoice_lines_truncated: {
+    ja: "明細が多いため、一部だけを表示しています。",
+    en: "Only part of the details is shown because there are many items."
+  },
+
+  store_invoice_aggregating_note: {
+    ja: "月末の締めの集計中です。金額は確定後に表示します。",
+    en: "The month-end close is in progress. The amount will be shown once confirmed."
+  },
+
+  store_invoice_status_aggregating: {
+    ja: "集計処理中",
+    en: "Calculating"
+  },
+
+  store_invoice_status_confirmed_unbilled: {
+    ja: "確定済み・カードへのご請求前",
+    en: "Confirmed, not yet charged"
+  },
+
+  store_invoice_status_processing: {
+    ja: "ご請求の処理中",
+    en: "Charge in progress"
+  },
+
+  store_invoice_status_paid: {
+    ja: "お支払い済み",
+    en: "Paid"
+  },
+
+  store_invoice_status_payment_failed: {
+    ja: "カードでのお支払いができませんでした（カードの確認をお願いします）",
+    en: "The card payment failed (please check your card)"
+  },
+
+  store_invoice_status_requires_action: {
+    ja: "カードの本人確認が必要です。運営からご連絡します",
+    en: "Card authentication is required. We will contact you."
+  },
+
+  store_invoice_status_under_review: {
+    ja: "確認中（運営が確認しています）",
+    en: "Under review by Machinau"
+  },
+
+  store_invoice_err_load: {
+    ja: "ご請求の履歴を読み込めませんでした。時間をおいて、もう一度お試しください。",
+    en: "We couldn't load your billing history. Please try again later."
+  },
+
   store_account_category_other: {
     ja: "その他",
     en: "Other"
@@ -3198,18 +3440,18 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_claim_heading: {
-    ja: "オーナー申請（マチナウに掲載中のお店の引き継ぎ）",
-    en: "Owner request (take over a shop already listed on Machinau)"
+    ja: "このお店を管理する（マチナウに掲載中のお店の引き継ぎ）",
+    en: "Manage this business (take over a listing on Machinau)"
   },
 
   store_claim_linked_notice: {
-    ja: "このお店は、すでに別の店舗アカウントに引き継がれています。申請はできますが、マチナウ運営が慎重に確認します。",
-    en: "This shop has already been taken over by another business account. You can still send a request, and Machinau will review it carefully."
+    ja: "このお店は、すでに別の店舗アカウントが管理しているため、引き継げません。ご不明な点はマチナウ運営へお問い合わせください。",
+    en: "This listing is already managed by another store account, so it cannot be taken over. Please contact Machinau if you have questions."
   },
 
   store_claim_process_note: {
-    ja: "申請後、マチナウ運営が、お店の公式サイト・公式SNS・地図サービスなどに公開されている連絡先へ連絡して確認します。その際に下の「申請コード」をお伝えしますので、お店として申請したことをお答えください。",
-    en: "After you send the request, Machinau will contact the shop through contact details published on its official website, official social media or map listings. We will mention your request code, so please confirm that the shop sent the request."
+    ja: "クレジットカードを登録済みのアカウントなら、マチナウ運営の確認なしで、すぐに引き継ぎが完了します。掲載中の紹介文・営業時間などは、あなたの店舗情報（下書き）に引き継がれます。旅行者への表示は、店舗情報を公開するまで変わりません。",
+    en: "If your account has a registered credit card, the takeover completes right away without a review by Machinau. The listing's description, hours, etc. are copied into your store profile draft. What travelers see does not change until you publish your store profile."
   },
 
   store_claim_target_label: {
@@ -3248,8 +3490,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_claim_url_hint: {
-    ja: "運営が公式の連絡先を探す手がかりにします。本人確認は、運営が自分で見つけた公式の連絡先で行います。",
-    en: "This helps us find the official contact details. We verify using official contact details we find ourselves."
+    ja: "お店の公式サイト・公式SNSがあれば入力してください（記録として残します）。",
+    en: "Enter your official website or social account if you have one (kept as a record)."
   },
 
   store_claim_note_label: {
@@ -3263,8 +3505,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_claim_submit: {
-    ja: "オーナー申請を送る",
-    en: "Send owner request"
+    ja: "このお店を引き継ぐ",
+    en: "Take over this listing"
   },
 
   store_claim_code_title: {
@@ -3350,6 +3592,62 @@ const MACHINAU_TRANSLATIONS = {
   store_claim_pending_exists_info: {
     ja: "このお店へのオーナー申請は、すでに運営確認中です。",
     en: "Your owner request for this shop is already under review."
+  },
+
+  // STEP 42-D｜カード登録 → 店舗の登録・引き継ぎ
+  store_claim_completed: {
+    ja: "引き継ぎが完了しました。お店の情報は「あなたの店舗・施設」から編集・公開できます。",
+    en: "The takeover is complete. You can edit and publish the store information from \"Your shops & venues\"."
+  },
+
+  store_claim_err_already_linked: {
+    ja: "このお店は、すでに別の店舗アカウントが管理しているため、引き継げません。",
+    en: "This listing is already managed by another store account and cannot be taken over."
+  },
+
+  store_card_gate_needed: {
+    ja: "お店の登録・引き継ぎの前に、クレジットカードの登録が必要です（1つのアカウントに1枚、すべての店舗で共通）。",
+    en: "Please register a credit card before registering or taking over a store (one card per account, shared by all your stores)."
+  },
+
+  store_card_gate_expired: {
+    ja: "登録しているクレジットカードの有効期限が切れています。カードを変更してから、もう一度お試しください。",
+    en: "Your registered card has expired. Please change the card and try again."
+  },
+
+  store_card_gate_unavailable: {
+    ja: "現在、カードの登録を受け付けていないため、お店の登録・引き継ぎはできません。",
+    en: "Store registration and takeover are not available because card registration is currently unavailable."
+  },
+
+  store_card_gate_link: {
+    ja: "カードを登録する ↓",
+    en: "Register a card ↓"
+  },
+
+  store_steps_account: {
+    ja: "① アカウントを作成",
+    en: "1. Create an account"
+  },
+
+  store_steps_email: {
+    ja: "② メールアドレスを確認",
+    en: "2. Verify your email"
+  },
+
+  store_steps_card: {
+    ja: "③ クレジットカードを登録（1アカウント1枚）",
+    en: "3. Register a credit card (one per account)"
+  },
+
+  store_steps_register: {
+    ja: "④ お店を登録、またはマチナウに掲載中のお店を引き継ぐ",
+    en: "4. Register a store, or take over a listing on Machinau"
+  },
+
+  modal_claim_link: {
+    ja: "このお店の方へ：お店の情報を管理する →",
+    en: "Own this business? Manage this listing →"
   },
 
   store_claim_err_listing_not_found: {
@@ -3799,13 +4097,13 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   imadake_post_invalid_url: {
-    ja: "この店舗投稿URLは無効です。マチナウ運営からお渡しした店舗専用URLから開いてください。",
-    en: "This shop posting URL is not valid. Please open the shop URL provided by Machinau."
+    ja: "このURLでは今だけ投稿を開けません。店舗アカウントにログインして、店舗の「今だけ投稿」から開いてください。",
+    en: "This link can't open Just for Now posting. Please sign in to your store account and open Just for Now from your store."
   },
 
   imadake_post_invalid_url_hint: {
-    ja: "ページを再読み込みした場合も、もう一度店舗専用URLから開き直してください。",
-    en: "If you reloaded this page, please open it again from your shop URL."
+    ja: "旧方式の店舗専用URLは終了しました。",
+    en: "The old shop URLs are no longer available."
   },
 
   imadake_post_login_required: {
@@ -3841,6 +4139,27 @@ const MACHINAU_TRANSLATIONS = {
   imadake_post_location_unregistered: {
     ja: "未登録",
     en: "Not registered"
+  },
+
+  // 決済 STEP 35-A｜今だけ投稿のカード登録必須
+  imadake_post_error_card_required: {
+    ja: "今だけ投稿の利用には、クレジットカードの登録が必要です。店舗アカウント画面でカードを登録してから、もう一度お試しください。",
+    en: "A credit card is required to use Just for Now posts. Please register a card on your shop account page and try again."
+  },
+
+  imadake_post_error_card_expired: {
+    ja: "登録しているクレジットカードの有効期限が切れています。店舗アカウント画面でカードを変更してから、もう一度お試しください。",
+    en: "Your registered credit card has expired. Please update your card on your shop account page and try again."
+  },
+
+  imadake_post_error_card_unavailable: {
+    ja: "ただいまカードの登録状態を確認できません。少し時間をおいてから、もう一度お試しください。",
+    en: "We can't check your card status right now. Please wait a moment and try again."
+  },
+
+  imadake_post_card_setup_link: {
+    ja: "店舗アカウント画面でカードを登録する",
+    en: "Register a card on your shop account page"
   },
 
   imadake_post_no_location: {
@@ -4309,8 +4628,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   imadake_post_error_invalid_url: {
-    ja: "この店舗投稿URLは無効です。マチナウ運営からお渡しした店舗専用URLから開き直してください。",
-    en: "This shop posting URL is not valid. Please open the page again from the shop URL provided by Machinau."
+    ja: "このURLでは今だけ投稿を開けません。店舗アカウントにログインして、店舗の「今だけ投稿」から開いてください。",
+    en: "This link can't open Just for Now posting. Please sign in to your store account and open Just for Now from your store."
   },
 
   imadake_post_error_field: {

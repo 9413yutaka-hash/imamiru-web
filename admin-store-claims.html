@@ -307,21 +307,17 @@
 
     <section id="adminArea">
 
-      <!-- 運営無料掲載 → 店舗オーナー化 MVP-1｜店舗からのオーナー申請を、運営が
-           申請者とは独立した店舗の公式連絡先で確認して、承認・却下する。
-           承認すると storeListingLinks/{submissionId} が作られ、店舗がその掲載の正式な owner になる。
-           旅行者向けの表示は変わらない(運営無料掲載はそのまま)。 -->
+      <!-- STEP 42-G｜運営掲載の引き継ぎは、アカウント作成・メール確認・カード登録を済ませた店舗アカウントから
+           自動で完了する(運営の個別承認・追加の本人確認なし、代表決定 2026-10-21)。この画面は履歴の確認と、
+           誤った紐付けの解除に使う。旧方式の「本人確認の手順」の案内は撤去した。 -->
       <div class="panel">
-        <h2>確認待ちのオーナー申請</h2>
-        <div class="claim-checklist">
-          <strong>本人確認の手順（必ずこの順で）</strong><br>
-          ① 申請者が書いた連絡先や URL を、本人確認の根拠にしない。<br>
-          ② お店の公式サイト・公式SNS・地図サービスの店舗情報など、申請者とは別の公開情報から、運営が自分で連絡先を見つける。<br>
-          ③ その連絡先へ運営から連絡し、「マチナウでオーナー申請（申請コード）がありましたが、お店として承認しますか」と確認する。<br>
-          ④ お店の公式連絡先の管理者から承認の回答を得た場合だけ「確認OK」にする。申請コードは照合用の番号で、それ自体は本人の証明ではない。
+        <h2>店舗の引き継ぎ</h2>
+        <div class="claim-checklist" id="claimFlowGuide">
+          <strong>引き継ぎの仕組み</strong><br>
+          アカウント作成・メール確認・クレジットカード登録を済ませた店舗アカウントが運営掲載の店舗を引き継ぐと、運営の承認なしで自動で紐付きます。1つの掲載に有効な紐付けは1つだけで、すでに紐付いている掲載は引き継げません。<br>
+          運営は下の「有効な紐付け」「最近の引き継ぎ・判断」で履歴を確認し、誤った紐付けは理由を入力して解除できます。
         </div>
         <div id="pendingMessage" class="message-box" role="status" aria-live="polite"></div>
-        <div id="pendingList"></div>
       </div>
 
       <div class="panel">
@@ -332,7 +328,8 @@
       </div>
 
       <div class="panel">
-        <h2>最近の判断（承認・却下・取り下げ）</h2>
+        <h2>最近の引き継ぎ・判断（自動の引き継ぎ・承認・却下・取り下げ）</h2>
+        <p class="note">STEP 42-D：カード登録済みのアカウントからの引き継ぎは、運営の承認なしで自動で完了し、ここに履歴として表示されます（承認の操作は不要）。</p>
         <div id="decidedList"></div>
       </div>
     </section>
@@ -455,30 +452,14 @@
             (decided
               ? "<br>状態：<span class=\"status-pill\">" + escapeHtmlText(STATUS_LABELS[claim.status] || claim.status) + "</span>" +
                 (claim.decidedAtMillis ? "（" + escapeHtmlText(formatDate(claim.decidedAtMillis)) + "）" : "") +
+                (claim.verificationMethod === "auto_card_registered" ? "<br>引き継ぎ方法：自動（アカウント・メール確認・カード登録済み、運営の承認なし）" : "") +
                 (claim.verificationChannel ? "<br>確認に使った連絡先：" + escapeHtmlText(VERIFICATION_CHANNEL_LABELS[claim.verificationChannel] || claim.verificationChannel) : "") +
                 (claim.decisionReason ? "<br>理由：" + escapeHtmlText(claim.decisionReason) : "")
               : "") +
           "</div>" +
           warnings.map(function(text) { return '<div class="claim-warning">' + text + "</div>"; }).join("");
 
-      if (!decided) {
-        html +=
-          '<div class="claim-actions">' +
-            '<label>確認に使った、申請者とは独立した公開連絡先（承認時は必須）' +
-              '<select class="claim-channel"><option value="">選んでください</option>' +
-                Object.keys(VERIFICATION_CHANNEL_LABELS).map(function(key) {
-                  return '<option value="' + key + '">' + VERIFICATION_CHANNEL_LABELS[key] + "</option>";
-                }).join("") +
-              "</select></label>" +
-            '<label>確認の記録（どの連絡先に、いつ連絡したか等。300文字まで）<input type="text" class="claim-verification-note" maxlength="300"></label>' +
-            '<label>判断の理由（却下時は必須。300文字まで）<input type="text" class="claim-reason" maxlength="300"></label>' +
-            '<div class="row">' +
-              '<button type="button" class="primary-button" data-action="approve">確認OK（承認して紐付ける）</button>' +
-              '<button type="button" class="danger-button" data-action="reject">却下する</button>' +
-            "</div>" +
-          "</div>";
-      }
-
+      // STEP 43-B｜旧方式の承認・却下の操作(確認に使った連絡先の選択を含む)は撤去した。履歴の表示だけ。
       return html + "</div>";
     }
 
@@ -487,9 +468,6 @@
 
       try {
         const data = await callClaimsApi("adminStoreListingClaimList", {});
-        document.getElementById("pendingList").innerHTML = data.pending.length
-          ? data.pending.map(function(claim) { return renderClaimCard(claim, false); }).join("")
-          : '<p class="empty-state">確認待ちのオーナー申請はありません。</p>';
         document.getElementById("decidedList").innerHTML = data.decided.length
           ? data.decided.map(function(claim) { return renderClaimCard(claim, true); }).join("")
           : '<p class="empty-state">まだありません。</p>';
@@ -510,48 +488,6 @@
         showMessage(document.getElementById("pendingMessage"), error.message || "読み込めませんでした。", "error");
       }
     }
-
-    document.getElementById("pendingList").addEventListener("click", async function(event) {
-      const button = event.target.closest("button[data-action]");
-      if (!button) return;
-      const card = button.closest(".claim-card");
-      const action = button.getAttribute("data-action");
-      const channel = card.querySelector(".claim-channel").value;
-      const verificationNote = card.querySelector(".claim-verification-note").value.trim();
-      const reason = card.querySelector(".claim-reason").value.trim();
-      const message = document.getElementById("pendingMessage");
-
-      if (action === "approve" && !channel) {
-        return showMessage(message, "承認するには、確認に使った公開連絡先の種類を選んでください。", "error");
-      }
-
-      if (action === "reject" && !reason) {
-        return showMessage(message, "却下するには理由を入力してください。", "error");
-      }
-
-      if (!window.confirm(action === "approve"
-        ? "お店の公式連絡先の管理者から、この申請の承認の回答を得ましたか？\n承認すると、この掲載がこの店舗に紐付きます。"
-        : "この申請を却下しますか？")) {
-        return;
-      }
-
-      button.disabled = true;
-
-      try {
-        await callClaimsApi("adminStoreListingClaimReview", {
-          claimId: card.getAttribute("data-claim-id"),
-          decision: action,
-          verificationChannel: channel,
-          verificationNote: verificationNote,
-          reason: reason
-        });
-        showMessage(message, action === "approve" ? "承認して紐付けました。" : "却下しました。", "success");
-        await loadClaims();
-      } catch (error) {
-        showMessage(message, REASON_MESSAGES[error.reason] || error.message || "処理に失敗しました。", "error");
-        button.disabled = false;
-      }
-    });
 
     document.getElementById("linkList").addEventListener("click", async function(event) {
       const button = event.target.closest("button[data-action=revoke]");

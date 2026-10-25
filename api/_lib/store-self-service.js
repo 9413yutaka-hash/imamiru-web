@@ -59,8 +59,8 @@ const STORE_SOURCE_LANGUAGES = ["ja", "en"];
 const STORE_REGISTRATION_PREVIEW_COOLDOWN_MS = 3 * 1000;
 const STORE_REGISTRATION_COOLDOWN_MS = 30 * 1000;
 
-// 「異常な連続登録」の目安：同じユーザーが24時間以内にこの件数を超えて登録したら、
-// 以後の登録は運営確認(pending_review)へ回す(登録自体は受け付ける)。
+// 「異常な連続登録」の目安：同じユーザーが24時間以内にこの件数を超えて登録したら、記録(reviewFlags)に残す。
+// STEP 42-D(代表決定)：運営確認(pending_review)へは回さない。登録はカード登録済みなら即時に有効。
 const STORE_RAPID_REGISTRATION_WINDOW_MS = 24 * 60 * 60 * 1000;
 const STORE_RAPID_REGISTRATION_LIMIT = 3;
 
@@ -615,6 +615,16 @@ export async function handleStoreSelfRegister(request, response, deps) {
     }
 
     const database = deps.getFirestore(deps.getFirebaseAdminApp());
+
+    // STEP 42-D｜新規登録の条件：このアカウントにクレジットカードが登録済み(有効)であること(1アカウント1枚)。
+    const card = typeof deps.checkAccountBillingCard === "function"
+      ? await deps.checkAccountBillingCard(database, actor.uid)
+      : { ok: false, reason: "card_billing_unavailable" };
+
+    if (!card || card.ok !== true) {
+      return sendError(response, 409, card && typeof card.reason === "string" && card.reason !== "" ? card.reason : "card_billing_unavailable");
+    }
+
     const allowed = await deps.claimRateLimit(
       database,
       STORE_REGISTRATION_RATE_LIMITS_COLLECTION,
@@ -646,6 +656,7 @@ export async function handleStoreSelfRegister(request, response, deps) {
       return sendError(response, 409, "already_registered");
     }
 
+    // STEP 42-D｜重複の候補・短時間の大量登録は記録(reviewFlags・duplicateCandidates)として残し、運営の承認待ちにはしない。
     const reviewFlags = [];
 
     if (duplicates.length > 0) {
@@ -658,7 +669,7 @@ export async function handleStoreSelfRegister(request, response, deps) {
       reviewFlags.push("rapid_registrations");
     }
 
-    const registrationStatus = reviewFlags.length > 0 ? "pending_review" : "active";
+    const registrationStatus = "active";
     const storeRef = database.collection(STORE_ACCOUNTS_COLLECTION).doc();
     const storeId = storeRef.id;
     const memberRef = database.collection(STORE_MEMBERS_COLLECTION).doc(storeId + "_" + actor.uid);
@@ -809,79 +820,3 @@ export async function handleStoreMyStores(request, response, deps) {
   }
 }
 
-
-// mode: adminStoreRegistrationReview (POST、admin専用)
-// { storeId, decision: "approve" | "reject", reason }。運営確認待ち(pending_review)
-// のセルフ登録店舗だけが対象。approve → active、reject → rejected(enabled:false)。
-export async function handleAdminStoreRegistrationReview(request, response, deps) {
-  try {
-    const authResult = await deps.requireAdmin(request);
-
-    if (!authResult || !authResult.ok) {
-      return response.status((authResult && authResult.status) || 403).json({
-        success: false,
-        message: (authResult && authResult.message) || "管理者権限が必要です。"
-      });
-    }
-
-    const body = deps.readRequestBody(request);
-    const storeId = readTrimmedString(body.storeId);
-    const decision = body.decision;
-    const reason = readSingleLineText(body.reason, STORE_REVIEW_REASON_MAX_LENGTH);
-
-    if (
-      storeId === "" ||
-      storeId.length > 100 ||
-      (decision !== "approve" && decision !== "reject") ||
-      reason === null
-    ) {
-      return sendError(response, 400, "invalid_input");
-    }
-
-    const database = authResult.database;
-    const storeRef = database.collection(STORE_ACCOUNTS_COLLECTION).doc(storeId);
-    let outcome = null;
-
-    await database.runTransaction(async function(transaction) {
-      const snapshot = await transaction.get(storeRef);
-
-      if (!snapshot.exists) {
-        outcome = { status: 404, reason: "not_found" };
-        return;
-      }
-
-      const data = snapshot.data() || {};
-
-      if (data.createdByType !== "storeUser" || data.registrationStatus !== "pending_review") {
-        outcome = { status: 409, reason: "not_pending_review" };
-        return;
-      }
-
-      const nextStatus = decision === "approve" ? "active" : "rejected";
-
-      transaction.update(storeRef, {
-        registrationStatus: nextStatus,
-        enabled: decision === "approve",
-        reviewedAt: FieldValue.serverTimestamp(),
-        reviewedByUid: authResult.actor.uid,
-        reviewDecision: decision,
-        reviewReason: reason,
-        updatedAt: FieldValue.serverTimestamp()
-      });
-
-      outcome = { status: 200, registrationStatus: nextStatus };
-    });
-
-    if (outcome.status !== 200) {
-      return sendError(response, outcome.status, outcome.reason);
-    }
-
-    return response.status(200).json({
-      success: true,
-      registrationStatus: outcome.registrationStatus
-    });
-  } catch (error) {
-    console.error("セルフ店舗登録：運営確認エラー：", error && error.message);
-    return sendError(response, 500, "server_error");
-  }
-}

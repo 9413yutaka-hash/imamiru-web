@@ -1218,7 +1218,7 @@
             href="admin-shops.html"
           >
             <span class="admin-menu-link-title">店舗・施設を管理する</span>
-            <span class="admin-menu-link-note">店舗登録・専用投稿URLの発行</span>
+            <span class="admin-menu-link-note">店舗の登録・管理</span>
           </a>
 
           <!-- 店舗・施設申込み Phase1｜shop-apply.htmlからの申込みを確認する。
@@ -1238,19 +1238,17 @@
           </a>
 
           <!-- 運営無料掲載 → 店舗オーナー化 MVP-1｜店舗からのオーナー申請の確認・承認・却下・紐付け解除。
-          未対応件数はログイン後にloadStoreListingClaimPendingCount()が表示する。 -->
+          STEP 42-G｜引き継ぎはカード登録済みのアカウントから自動で完了する(代表決定 2026-10-21)ため、説明文を
+          「店舗の自動引き継ぎ履歴の確認・紐付け解除」へ修正(代表決定 2026-10-22)。リンク・権限は変更なし。
+          STEP 43-B｜旧方式の運営承認を撤去したため、「未対応 ○件」の表示を撤去した(代表決定 2026-10-22)。 -->
           <a
             class="admin-menu-link"
             href="admin-store-claims.html"
           >
             <span class="admin-menu-link-title">
               オーナー申請（無料掲載の引き継ぎ）
-              <span
-                id="storeListingClaimPendingBadge"
-                class="admin-count-badge"
-              >未対応 -件</span>
             </span>
-            <span class="admin-menu-link-note">店舗の本人確認（公式連絡先で確認）と承認・却下・紐付け解除</span>
+            <span class="admin-menu-link-note">店舗の自動引き継ぎ履歴の確認・紐付け解除</span>
           </a>
 
           <!-- 今だけ投稿 STEP 3.5｜安全重大語等で自動公開しなかった今だけ投稿の審査。 -->
@@ -1260,6 +1258,15 @@
           >
             <span class="admin-menu-link-title">今だけ投稿 審査待ち</span>
             <span class="admin-menu-link-note">自動で公開しなかった今だけ投稿の承認・却下</span>
+          </a>
+
+          <!-- 今だけ投稿 決済 STEP 32-D⑥｜月次請求の運営確認(読み取り専用)。 -->
+          <a
+            class="admin-menu-link"
+            href="admin-billing.html"
+          >
+            <span class="admin-menu-link-title">今だけ投稿 請求確認</span>
+            <span class="admin-menu-link-note">月次請求で対応が必要なものの確認（確認専用・操作なし）</span>
           </a>
         </section>
 
@@ -3367,60 +3374,6 @@
       }
     }
 
-    // 運営無料掲載 → 店舗オーナー化 MVP-1｜管理メニューの「オーナー申請 未対応 ○件」
-    // (mode:"adminCountPendingStoreListingClaims"、代表(Admin)専用)。
-    // 取得に失敗しても他の管理機能には影響させない。
-    async function loadStoreListingClaimPendingCount() {
-      const pendingBadge =
-        document.getElementById("storeListingClaimPendingBadge");
-      try {
-        const currentUser =
-          firebase.auth().currentUser;
-        if (!currentUser || !pendingBadge) {
-          return;
-        }
-        const idToken =
-          await currentUser.getIdToken();
-        const response =
-          await fetch(
-            "/api/moderate-submission",
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "Authorization": "Bearer " + idToken
-              },
-              body: JSON.stringify({
-                mode: "adminCountPendingStoreListingClaims"
-              })
-            }
-          );
-        const responseData =
-          await response.json();
-        if (
-          !response.ok ||
-          !responseData ||
-          responseData.success !== true ||
-          typeof responseData.pendingCount !== "number"
-        ) {
-          throw new Error("未対応件数を取得できませんでした。");
-        }
-        pendingBadge.textContent =
-          "未対応 " + responseData.pendingCount + "件";
-        pendingBadge.classList.toggle(
-          "has-pending",
-          responseData.pendingCount > 0
-        );
-      } catch (error) {
-        console.error(
-          "オーナー申請の未対応件数を取得できませんでした",
-          error
-        );
-        pendingBadge.textContent =
-          "未対応 件数取得エラー";
-      }
-    }
-
     // 店舗・施設申込み Phase1｜管理メニューの「未対応 ○件」と、未対応がある
     // ときだけ出す上部のお知らせを更新する(mode:"adminCountPendingShopApplications"、
     // 代表(Admin)専用)。取得に失敗しても他の管理機能には影響させない。
@@ -3961,7 +3914,6 @@
               " でログインしています。";
 
             loadShopApplicationPendingCount();
-            loadStoreListingClaimPendingCount();
 
             await loadSubmissions();
 

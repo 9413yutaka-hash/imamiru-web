@@ -20,6 +20,10 @@
 // ==========================================================================
 
 import {
+  isPreviewCvBillingTrialEnabled
+} from "./firebase-target.js";
+
+import {
   FieldValue,
   Timestamp
 } from "firebase-admin/firestore";
@@ -943,8 +947,8 @@ function toMillis(
 // --------------------------------------------------------------------------
 // 正式店舗アカウント接続｜今だけ投稿の店舗本人の確認(作成・状態取得・終了の3経路で共通)
 // --------------------------------------------------------------------------
-// 方式A(既存の店舗専用URL)：tokenが送られてきた時は、従来どおりvalidateStoreToken()
-//   だけで確かめる。tokenが誤っていても方式Bへは切り替えない(取り違え防止)。
+// 方式A(旧方式の店舗専用URL＋token)：STEP 43-B(代表決定 2026-10-22)で撤去した。tokenが送られてきた時は
+//   常に 410 で断る(方式Bへは切り替えない＝取り違え防止。token の照合はしない)。
 // 方式B(セルフ登録した正式店舗)：tokenが無い時だけ、AuthorizationヘッダーのFirebase
 //   IDトークンを既存のresolveStoreUserActor()(passwordログインのみ)で確かめ、
 //   メール確認済みであること、既存のcheckStoreProfileEditor()でstoreMembersの有効な
@@ -964,25 +968,12 @@ export async function verifyImadakeStoreActor(
       : "";
 
   if (token !== "") {
-    const tokenValidation =
-      await deps.validateStoreToken(
-        database,
-        requestBody.storeId,
-        requestBody.token
-      );
-
-    return tokenValidation.valid
-      ? {
-          valid: true,
-          storeId: tokenValidation.storeId,
-          storeName: tokenValidation.storeName,
-          method: "storeToken"
-        }
-      : {
-          valid: false,
-          status: 403,
-          message: "この店舗投稿URLは無効です。"
-        };
+    return {
+      valid: false,
+      status: 410,
+      reason: "legacy_feature_removed",
+      message: "旧方式の店舗専用URLは終了しました。店舗アカウントにログインしてご利用ください。"
+    };
   }
 
   const storeId =
@@ -1190,11 +1181,21 @@ const EMPTY_ACTIVE_SLOT_FIELDS = {
 export const IMADAKE_CV_BILLING_STARTED =
   false;
 
+// STEP 34-A｜Preview専用の課金対象判定：対象ブランチのPreviewで、サーバーのFirebase接続先が
+// Preview専用プロジェクト(machinau-preview)だと確認できた時だけ、課金開始前でも新規投稿を課金対象にする
+// (試験用)。Productionでは常に従来どおり IMADAKE_CV_BILLING_STARTED だけで決まる。
+// この判定は投稿の課金対象の印だけに使い、月末締め・月次請求・Stripeの実行には使わない。
+// テスト事業者(isTestAccount)は、どちらの場合も課金対象にしない。
 export async function decideImadakeCvBillingForNewPost(
   database,
-  storeId
+  storeId,
+  env
 ) {
-  if (!IMADAKE_CV_BILLING_STARTED) {
+  const billingActive =
+    IMADAKE_CV_BILLING_STARTED ||
+    isPreviewCvBillingTrialEnabled(env || process.env);
+
+  if (!billingActive) {
     return false;
   }
 
@@ -1210,6 +1211,19 @@ export async function decideImadakeCvBillingForNewPost(
       : null;
 
   return !!account && account.isTestAccount !== true;
+}
+
+// STEP 35-A｜カード登録必須の理由コード → サーバーの応答の文(画面は理由コードから日英の文を出す)。
+function buildImadakeCardRequirementMessage(reason) {
+  if (reason === "card_expired") {
+    return "登録しているクレジットカードの有効期限が切れています。店舗アカウント画面でカードを変更してください。";
+  }
+
+  if (reason === "card_billing_unavailable") {
+    return "ただいまカードの登録状態を確認できません。少し時間をおいてから、もう一度お試しください。";
+  }
+
+  return "今だけ投稿の利用には、クレジットカードの登録が必要です。店舗アカウント画面でカードを登録してください。";
 }
 
 // ---------------------------------------------------------------------------
@@ -1282,6 +1296,35 @@ export async function handleImadakePostCreate(
         reason: "location_not_registered",
         message: "店舗の掲載場所がまだ登録されていません。運営へお問い合わせください。"
       });
+    }
+
+    // 収益化 STEP 3｜課金対象かどうかは作成時にサーバーで決めて固定する(Productionでは現在常にfalse)。
+    // STEP 35-A｜回数制限・投稿枠より前に決め、課金対象になる投稿はカード登録(店舗の請求先アカウントの accountBilling、STEP 42-C)を必須にする
+    // (未登録・不整合・期限切れ等は保存せず409。課金対象でない投稿・Productionの現行動作は変えない)。
+    const cvBillingEnabled =
+      await decideImadakeCvBillingForNewPost(
+        database,
+        storeId
+      );
+
+    if (cvBillingEnabled === true) {
+      const cardCheck =
+        typeof deps.checkImadakeBillingCard === "function"
+          ? await deps.checkImadakeBillingCard(database, storeId)
+          : { ok: false, reason: "card_billing_unavailable" };
+
+      if (!cardCheck || cardCheck.ok !== true) {
+        const cardReason =
+          cardCheck && typeof cardCheck.reason === "string" && cardCheck.reason !== ""
+            ? cardCheck.reason
+            : "card_billing_unavailable";
+
+        return response.status(409).json({
+          success: false,
+          reason: cardReason,
+          message: buildImadakeCardRequirementMessage(cardReason)
+        });
+      }
     }
 
     // 連打対策(店舗ごとに一定間隔)。
@@ -1374,13 +1417,6 @@ export async function handleImadakePostCreate(
         officialLocation.prefecture
       );
 
-    // 収益化 STEP 3｜課金対象かどうかは作成時にサーバーで決めて固定する(現在は常にfalse)。
-    const cvBillingEnabled =
-      await decideImadakeCvBillingForNewPost(
-        database,
-        storeId
-      );
-
     const result =
       await database.runTransaction(
         async function(transaction) {
@@ -1394,6 +1430,24 @@ export async function handleImadakePostCreate(
               storeId,
               nowMillis
             );
+
+          // STEP 35-A｜確認の後・保存までの間のカード変更・取り外しとの競合を防ぐため、保存の
+          // トランザクションの中でもカードを確かめる(読み取りは書き込みより前)。
+          if (cvBillingEnabled === true) {
+            const cardInTransaction =
+              typeof deps.checkImadakeBillingCardInTransaction === "function"
+                ? await deps.checkImadakeBillingCardInTransaction(transaction, database, storeId)
+                : { ok: false, reason: "card_billing_unavailable" };
+
+            if (!cardInTransaction || cardInTransaction.ok !== true) {
+              return {
+                conflict:
+                  cardInTransaction && typeof cardInTransaction.reason === "string" && cardInTransaction.reason !== ""
+                    ? cardInTransaction.reason
+                    : "card_billing_unavailable"
+              };
+            }
+          }
 
           // 並行リクエスト・二重タップでも、ここで必ず1件に絞られる。
           if (safety.decision === "published" && state.hasActive) {
@@ -1533,9 +1587,11 @@ export async function handleImadakePostCreate(
         success: false,
         reason: result.conflict,
         message:
-          result.conflict === "pending_post_exists"
-            ? "確認中の今だけ投稿があります。確認が終わるまでお待ちください。"
-            : "掲載中の今だけ投稿があります。終了してから新しく投稿できます。"
+          String(result.conflict).startsWith("card_")
+            ? buildImadakeCardRequirementMessage(result.conflict)
+            : result.conflict === "pending_post_exists"
+              ? "確認中の今だけ投稿があります。確認が終わるまでお待ちください。"
+              : "掲載中の今だけ投稿があります。終了してから新しく投稿できます。"
       });
     }
 
@@ -2972,7 +3028,10 @@ export async function handleImadakeAdminStoreLocation(
 
     // 正式店舗参加基盤 Phase 2A｜セルフ登録店舗の所在地は、店舗が選んだ国で
     // 確定済み。日本固定のこの運営用Geocodingでは上書きしない。
-    if ((storeSnapshot.data() || {}).createdByType === "storeUser") {
+    // STEP 42-F｜運営掲載の引き継ぎで作られた店舗(listingClaim)も店主が管理する店舗のため同じ扱い。
+    const storeCreatedByType = (storeSnapshot.data() || {}).createdByType;
+
+    if (storeCreatedByType === "storeUser" || storeCreatedByType === "listingClaim") {
       return response.status(409).json({
         success: false,
         reason: "self_registered_store",

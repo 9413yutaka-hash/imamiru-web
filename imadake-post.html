@@ -274,8 +274,8 @@
     </div>
 
     <div id="invalidPanel" class="panel" hidden>
-      <p class="notice" data-i18n="imadake_post_invalid_url">この店舗投稿URLは無効です。マチナウ運営からお渡しした店舗専用URLから開いてください。</p>
-      <p class="hint" data-i18n="imadake_post_invalid_url_hint">ページを再読み込みした場合も、もう一度店舗専用URLから開き直してください。</p>
+      <p class="notice" data-i18n="imadake_post_invalid_url">このURLでは今だけ投稿を開けません。店舗アカウントにログインして、店舗の「今だけ投稿」から開いてください。</p>
+      <p class="hint" data-i18n="imadake_post_invalid_url_hint">旧方式の店舗専用URLは終了しました。</p>
     </div>
 
     <!-- 正式店舗アカウント接続｜店舗アカウント画面の「今だけ投稿」(tokenなし)から開いた時の案内。 -->
@@ -421,6 +421,8 @@
 
       <button id="submitButton" class="primary-button" type="submit" data-i18n="imadake_post_submit">今だけ投稿を届ける</button>
       <div id="formMessage" class="message-box" role="status" aria-live="polite"></div>
+      <!-- 決済 STEP 35-A｜カード登録が必要な時だけ、店舗アカウント画面のお支払い方法へ案内する。 -->
+      <p id="cardSetupGuide" hidden><a href="store-account.html#billingSection" data-i18n="imadake_post_card_setup_link">店舗アカウント画面でカードを登録する</a></p>
     </form>
 
     <!-- 収益化 STEP 4-B｜成果レポート(店舗本人だけ。POST imadakeStoreCvReport、読み取りのみ)。
@@ -666,7 +668,7 @@
     const CLOUDINARY_CLOUD_NAME = "cdhyctnp";
     const CLOUDINARY_UPLOAD_PRESET = "machinau_signed_upload";
 
-    // 店舗専用URLのstoreId/tokenは、このページのJS変数(メモリ)にだけ保持し、
+    // STEP 43-D｜token は旧方式の店舗専用URLかどうかの判定にだけ使う(サーバーへは送らない)。
     // アドレスバーからはtokenを消す(post.htmlと同じ考え方)。画面・ログには出さない。
     const params = new URLSearchParams(window.location.search);
     const storeId = (params.get("store") || "").trim();
@@ -762,16 +764,13 @@
         headers.Authorization = "Bearer " + authToken;
       }
 
-      // 店舗専用URL：従来どおりstoreIdとtokenを送る。
-      // ログインした正式店舗：tokenは送らない(サーバーがstoreIdとログインを照合する)。
-      // 写真の署名(cloudinarySignature)は、ログインした正式店舗ではstoreId・tokenを送らない
-      // (送ると店舗token用の確認になるため。IDトークンの確認は従来どおり行われる)。
+      // ログインした正式店舗(方式B)：tokenは送らない(サーバーがstoreIdとログインを照合する)。
+      // 写真の署名(cloudinarySignature)は storeId を送らない(IDトークンの確認は従来どおり行われる)。
+      // STEP 43-D｜旧方式の店舗専用URL(token、方式A)で送る形は撤去した(そのURLでは起動時に無効の案内を出し、APIを呼ばない)。
       const baseBody =
-        !isStoreLoginMode
-          ? { mode: mode, storeId: storeId, token: storeToken }
-          : mode === "cloudinarySignature"
-            ? { mode: mode }
-            : { mode: mode, storeId: storeId };
+        mode === "cloudinarySignature"
+          ? { mode: mode }
+          : { mode: mode, storeId: storeId };
 
       const response = await fetch("/api/moderate-submission", {
         method: "POST",
@@ -1253,6 +1252,19 @@
         return [{ key: "imadake_post_no_location" }];
       }
 
+      // 決済 STEP 35-A｜課金対象の今だけ投稿はカード登録が必須(サーバーが店舗の請求先アカウントのカードを確認)。
+      if (data.reason === "card_expired") {
+        return [{ key: "imadake_post_error_card_expired" }];
+      }
+
+      if (data.reason === "card_billing_unavailable") {
+        return [{ key: "imadake_post_error_card_unavailable" }];
+      }
+
+      if (typeof data.reason === "string" && data.reason.indexOf("card_") === 0) {
+        return [{ key: "imadake_post_error_card_required" }];
+      }
+
       if (data.reason === "safety_check_unavailable") {
         return [{ key: "imadake_post_error_safety_unavailable" }];
       }
@@ -1371,6 +1383,14 @@
           // 店舗が選んだ原文言語(画面の表示言語は使わない)。
           sourceLanguage: getSelectedSourceLanguage()
         });
+
+        // 決済 STEP 35-A｜カード登録が必要な理由の時だけ、カード登録への案内を出す。
+        const cardGuide = $("cardSetupGuide");
+
+        if (cardGuide) {
+          const cardReason = result.data && typeof result.data.reason === "string" ? result.data.reason : "";
+          cardGuide.hidden = !(cardReason.indexOf("card_") === 0 && cardReason !== "card_billing_unavailable");
+        }
 
         if (!result.ok || result.data.success !== true) {
           showMessageParts(formMessage, messagePartsForError(result), "error");
@@ -1765,11 +1785,10 @@
       loadingPanel.hidden = true;
       invalidPanel.hidden = false;
     } else if (!isStoreLoginMode) {
-      // 店舗専用URL(token付き)：従来どおり。
-      loadStoreStatus().catch(function() {
-        loadingPanel.hidden = true;
-        invalidPanel.hidden = false;
-      });
+      // STEP 43-B(代表決定 2026-10-22)｜旧方式の店舗専用URL(token付き、方式A)は撤去した。
+      // サーバーへは問い合わせず、無効なURLの案内を出す(ログインした店主の方式Bは下のとおり)。
+      loadingPanel.hidden = true;
+      invalidPanel.hidden = false;
     } else {
       // 正式店舗アカウント接続｜店舗アカウント画面のログイン状態で開く。未ログインなら案内する。
       waitForStoreLoginUser()

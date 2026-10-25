@@ -2230,95 +2230,13 @@
     let cloudinaryAnonymousAuthPromise =
       null;
 
-    // 店舗専用投稿URL Phase2(1店舗MVP)｜?mode=shop&store={storeId}&
-    // token={rawToken}で開かれた場合だけの検証済み経路。一般公開の
-    // isGeneralPublicShopSubmissionCurrentlyEnabled()とは独立した、
-    // 別の入口として共存する(一般公開判定自体は変更しない)。
-    // tokenはlocalStorage/sessionStorage/cookieへは一切保存せず、
-    // このページのJS変数(メモリ)にだけ保持する(代表指示)。
-    let verifiedStoreId =
-      "";
-
-    let verifiedStoreToken =
-      "";
-
-    let verifiedStoreName =
-      "";
-
-    function isVerifiedShopSubmission() {
-      return (
-        verifiedStoreId !== "" &&
-        verifiedStoreToken !== ""
-      );
-    }
-
-    // shopTokenValidate・shopSubmissionCreate・(shop経路の)
-    // cloudinarySignatureはいずれも既存getAnonymousIdTokenForImageUpload()
-    // (single-flight、既存の匿名認証をそのまま再利用)で得たIDトークンを
-    // 使う。新しい認証方式は作らない。
-    async function validateShopTokenWithServer(
-      storeId,
-      token
-    ) {
-      const idToken =
-        await getAnonymousIdTokenForImageUpload();
-
-      const response =
-        await fetch(
-          "/api/moderate-submission",
-          {
-            method: "POST",
-
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": "Bearer " + idToken
-            },
-
-            body: JSON.stringify({
-              mode: "shopTokenValidate",
-              storeId: storeId,
-              token: token
-            })
-          }
-        );
-
-      let responseData =
-        null;
-
-      try {
-        responseData =
-          await response.json();
-      } catch (jsonError) {
-        console.error(
-          "店舗専用URL検証エラー(応答解析)：",
-          jsonError
-        );
-
-        return { valid: false };
-      }
-
-      if (
-        !response.ok ||
-        !responseData ||
-        responseData.success !== true
-      ) {
-        return { valid: false };
-      }
-
-      return {
-        valid: responseData.valid === true,
-
-        storeName:
-          typeof responseData.storeName === "string"
-            ? responseData.storeName
-            : ""
-      };
-    }
+    // STEP 43-D｜旧方式の店舗専用URL(?mode=shop&store&token)の検証済み経路(店舗名の固定表示・token付きの送信)は撤去した。
+    // そのURLで開かれた時は、下の attemptVerifiedShopEntry() が終了の案内を出し、アドレスバーから token を消すだけ。
 
     function showShopUrlInvalidNotice() {
       if (postModeShopUnavailableNotice) {
         postModeShopUnavailableNotice.textContent =
-          "この店舗投稿URLは無効です。";
+          "この店舗投稿URLは終了しました。店舗アカウント（店舗・施設の方へ）からご利用ください。";
 
         postModeShopUnavailableNotice.style.display =
           "";
@@ -2337,79 +2255,8 @@
       rawToken
     ) {
       try {
-        const validationResult =
-          await validateShopTokenWithServer(
-            storeId,
-            rawToken
-          );
-
-        if (validationResult.valid) {
-          verifiedStoreId =
-            storeId;
-
-          verifiedStoreToken =
-            rawToken;
-
-          verifiedStoreName =
-            validationResult.storeName;
-
-          applyPostMode(
-            "shop"
-          );
-
-          if (shopNameInput) {
-            shopNameInput.value =
-              verifiedStoreName;
-
-            shopNameInput.readOnly =
-              true;
-          }
-
-          // 今だけ投稿 STEP 4A｜通常の店舗投稿はそのまま、別画面の今だけ投稿への
-          // 入口を出す(tokenは押した時にだけURLへ入れ、移動先でアドレスバーから消す)。
-          const imadakeShopEntry =
-            document.getElementById(
-              "imadakeShopEntry"
-            );
-
-          const imadakeShopEntryButton =
-            document.getElementById(
-              "imadakeShopEntryButton"
-            );
-
-          if (
-            imadakeShopEntry &&
-            imadakeShopEntryButton
-          ) {
-            imadakeShopEntry.style.display =
-              "";
-
-            imadakeShopEntryButton.addEventListener(
-              "click",
-              function() {
-                window.location.href =
-                  "imadake-post.html?store=" +
-                  encodeURIComponent(
-                    verifiedStoreId
-                  ) +
-                  "&token=" +
-                  encodeURIComponent(
-                    verifiedStoreToken
-                  );
-              }
-            );
-          }
-        } else {
-          showShopUrlInvalidNotice();
-        }
-      } catch (error) {
-        console.error(
-          "店舗専用URL検証エラー：",
-          error,
-          error && error.code,
-          error && error.message
-        );
-
+        // STEP 43-B(代表決定 2026-10-22)｜旧方式の店舗専用URL(token)は撤去した。サーバーへは問い合わせず、
+        // 終了の案内だけを出す(アドレスバーからtokenを消す処理は従来どおり)。
         showShopUrlInvalidNotice();
       } finally {
         try {
@@ -2532,10 +2379,7 @@
       submissionForm.style.display =
         "";
 
-      // 店舗専用投稿URL Phase2｜「選び直す」は既定で表示する(street/一般shop
-      // 選択画面の既存挙動)。認証済み店舗専用URL経由の場合だけ、下のshop分岐
-      // 内でnoneにする(新しいstateは増やさず、既存のisVerifiedShopSubmission()
-      // /verifiedStoreNameをそのまま使う)。
+      // 「選び直す」は表示する(street/一般shop選択画面の既存挙動)。
       postModeReselectButton.style.display =
         "";
 
@@ -2570,26 +2414,9 @@
         contentLabelText.textContent =
           CONTENT_LABEL_TEXT_STREET;
       } else {
-        // 店舗専用投稿URL Phase2｜token検証済み(isVerifiedShopSubmission())の
-        // 場合だけ、正式店舗名(verifiedStoreName、handleShopTokenValidateRequest
-        // がstoreAccounts.storeNameから返した値)を使った固定表示にし、
-        // 「選び直す」(street/一般shopへの切り替え導線)を隠す。一般公開の
-        // shop選択(postModeShopButton経由、現在は準備中で到達しない)は
-        // 従来通りの文言・「選び直す」表示のまま変更しない。
-        if (
-          isVerifiedShopSubmission()
-        ) {
-          postModeSelectedLabel.textContent =
-            "🏪 " +
-            verifiedStoreName +
-            "からのお知らせ";
-
-          postModeReselectButton.style.display =
-            "none";
-        } else {
-          postModeSelectedLabel.textContent =
-            "選択中：🏪 お店・施設からのお知らせ";
-        }
+        // 一般公開の shop 選択(postModeShopButton経由、現在は準備中で到達しない)の表示。
+        postModeSelectedLabel.textContent =
+          "選択中：🏪 お店・施設からのお知らせ";
 
         titleFormGroup.style.display =
           "";
@@ -3549,21 +3376,11 @@
               "Content-Type": "application/json",
               "Authorization": "Bearer " + idToken
             },
-            // 店舗専用投稿URL Phase2｜検証済み店舗経路の場合だけstoreId/
-            // tokenを同送し、サーバー側で署名発行前にもう一度token検証
-            // させる(validateStoreToken()の共通ロジックをそのまま再利用、
-            // 複製しない)。street等の一般利用時は従来どおり無条件で
-            // 署名を取得する(挙動を変えない)。
+            // STEP 43-B｜旧方式の店舗専用URL(token)経由の署名は撤去した。street等の一般利用と同じ形だけを送る。
             body: JSON.stringify(
-              isVerifiedShopSubmission()
-                ? {
-                    mode: "cloudinarySignature",
-                    storeId: verifiedStoreId,
-                    token: verifiedStoreToken
-                  }
-                : {
-                    mode: "cloudinarySignature"
-                  }
+              {
+                mode: "cloudinarySignature"
+              }
             )
           }
         );
@@ -4325,64 +4142,6 @@ function requestCurrentLocationForPost() {
       );
     }
 
-    // 店舗専用投稿URL Phase2｜検証済み店舗経路専用。Firestoreへは
-    // クライアントから直接書き込まず(database.collection("submissions").
-    // add()は使わない)、既存Function内の新規mode(shopSubmissionCreate)へ
-    // 委譲する。サーバーがtokenを再検証した上でAdmin SDKにより作成する。
-    async function createShopSubmissionViaServer(
-      fields
-    ) {
-      const idToken =
-        await getAnonymousIdTokenForImageUpload();
-
-      const response =
-        await fetch(
-          "/api/moderate-submission",
-          {
-            method: "POST",
-
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": "Bearer " + idToken
-            },
-
-            body: JSON.stringify(
-              Object.assign(
-                { mode: "shopSubmissionCreate" },
-                fields
-              )
-            )
-          }
-        );
-
-      let responseData =
-        null;
-
-      try {
-        responseData =
-          await response.json();
-      } catch (jsonError) {
-        throw new Error(
-          "投稿に失敗しました。もう一度お試しください。"
-        );
-      }
-
-      if (
-        !response.ok ||
-        !responseData ||
-        responseData.success !== true
-      ) {
-        throw new Error(
-          responseData &&
-          responseData.message
-            ? responseData.message
-            : "投稿に失敗しました。もう一度お試しください。"
-        );
-      }
-
-      return responseData;
-    }
-
     async function submitAdvertisement(
       event
     ) {
@@ -4404,15 +4163,10 @@ function requestCurrentLocationForPost() {
         // 上のpostMode選択画面の表示制御と同じ判定関数を再利用する
         // (判定基準を1箇所に保つ)。shopフォーム自体・validateForm()・
         // 保存処理は無変更。
-        // 店舗専用投稿URL Phase2｜isVerifiedShopSubmission()が真の場合
-        // (専用URLのstoreId/tokenがshopTokenValidateで検証済み)だけ、
-        // 一般公開停止とは独立にshop送信を許可する(サーバー側
-        // shopSubmissionCreateが最終的にもう一度token検証するため、
-        // ここでの許可はUXのショートカットに過ぎない)。
+        // STEP 43-B／43-D｜旧方式の店舗専用URL(token)の経路は撤去したため、shop送信は一般公開の判定だけで止まる。
         if (
           currentPostMode !== "street" &&
-          !isGeneralPublicShopSubmissionCurrentlyEnabled() &&
-          !isVerifiedShopSubmission()
+          !isGeneralPublicShopSubmissionCurrentlyEnabled()
         ) {
           throw new Error(
             "店舗・施設からの投稿は現在準備中です。「街で見つけた！」からの投稿はご利用いただけます。"
@@ -4596,64 +4350,7 @@ function requestCurrentLocationForPost() {
       geocodedCoordinates.longitude;
   }
 
-        // 店舗専用投稿URL Phase2｜検証済み店舗経路はここで分岐し、
-        // Firestoreへの直接書き込み・publicationNumber/endCodeの
-        // クライアント生成(上でstreet用に既に計算済みだが、この経路では
-        // 使わない)を一切行わない。shopName・storeId・submissionType・
-        // status・publicationNumber・endCode・endCodeHashはすべて
-        // サーバー(shopSubmissionCreate)が確定する。
-        if (isVerifiedShopSubmission()) {
-          const shopSubmissionResult =
-            await createShopSubmissionViaServer(
-              {
-                storeId: verifiedStoreId,
-                token: verifiedStoreToken,
-
-                title:
-                  titleInput.value.trim(),
-
-                category:
-                  categoryInput.value,
-
-                durationHours: durationHours,
-
-                content:
-                  contentInput.value.trim(),
-
-                address:
-                  addressInput.value.trim(),
-
-                latitude: finalLatitude,
-                longitude: finalLongitude,
-
-                websiteUrl:
-                  websiteUrlInput.value.trim(),
-
-                businessStartTime:
-                  businessStartTimeInput.value.trim(),
-
-                businessEndTime:
-                  businessEndTimeInput.value.trim(),
-
-                isOpen24Hours:
-                  isOpen24HoursInput.checked,
-
-                takeout:
-                  takeoutInput.checked,
-
-                paymentMethods: paymentMethods,
-                imageUrls: imageUrls,
-                imagePublicIds: imagePublicIds
-              }
-            );
-
-          finishSuccessfulSubmission(
-            shopSubmissionResult.publicationNumber,
-            shopSubmissionResult.endCode
-          );
-
-          return;
-        }
+        // STEP 43-B(代表決定 2026-10-22)｜旧方式の店舗専用URL(token)経由の店舗投稿は撤去した(サーバー側の受付も終了)。
 
         const submissionData = {
           shopName:

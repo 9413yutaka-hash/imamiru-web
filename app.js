@@ -21,6 +21,8 @@ let lastRenderedShopCardIds = [];
 // APIから取得できた正式店舗(生データ)と、一覧から外す無料掲載ID。失敗時は必ず空。
 let storeProfileListStores = [];
 let storeProfileSuppressedListingIds = new Set();
+// STEP 42-G｜引き継ぎ済み(有効な紐付けあり)の運営掲載ID。詳細の「このお店の方へ」の入口を出さないためだけに使う。
+let storeProfileClaimedListingIds = new Set();
 let storeProfileListFetchSequence = 0;
 // 無料掲載が一度でも一覧に表示されたか(読み込み中の表示を正式店舗の到着で上書きしないため)。
 let hasAppliedSubmissionsForStoreProfiles = false;
@@ -3092,6 +3094,7 @@ const STORE_PROFILE_CATEGORY_TO_INTERNAL = {
 function resetStoreProfileListState() {
   storeProfileListStores = [];
   storeProfileSuppressedListingIds = new Set();
+  storeProfileClaimedListingIds = new Set();
 }
 
 async function loadStoreProfilesForShopList() {
@@ -3110,6 +3113,7 @@ async function loadStoreProfilesForShopList() {
 
   let nextStores = [];
   let nextSuppressedIds = [];
+  let nextClaimedIds = [];
 
   try {
     const response =
@@ -3131,6 +3135,11 @@ async function loadStoreProfilesForShopList() {
       nextSuppressedIds = data.suppressedListingIds.filter(function(id) {
         return typeof id === "string" && id !== "";
       });
+      nextClaimedIds = Array.isArray(data.claimedListingIds)
+        ? data.claimedListingIds.filter(function(id) {
+            return typeof id === "string" && id !== "";
+          })
+        : [];
     }
   } catch (error) {
     console.warn("正式店舗の一覧を取得できませんでした(無料掲載はそのまま表示します)：", error && error.name);
@@ -3147,6 +3156,7 @@ async function loadStoreProfilesForShopList() {
 
   storeProfileListStores = nextStores;
   storeProfileSuppressedListingIds = new Set(nextSuppressedIds);
+  storeProfileClaimedListingIds = new Set(nextClaimedIds);
 
   if (hasAppliedSubmissionsForStoreProfiles) {
     renderShops();
@@ -5942,6 +5952,32 @@ function openShopModal(
 
   modalMessage.innerHTML =
     modalText;
+
+  // STEP 42-D｜運営が掲載したお店(常設店舗広告)だけ、店主向けの「このお店を管理する」入口を出す。
+  // 引き継ぎの条件(アカウント・メール確認・カード登録)はサーバーが確かめる。
+  // STEP 42-G｜サーバーの紐付け状態(publicStoreProfiles の claimedListingIds)で引き継ぎ済みの掲載には出さない。
+  // 表示を消すだけで、引き継ぎの可否はサーバーが決める(二重引き継ぎは 409 listing_already_linked のまま)。
+  const modalClaimLink =
+    document.getElementById("modalClaimLink");
+
+  if (modalClaimLink) {
+    const claimable =
+      !isAdminPost &&
+      !isStoreProfileShop &&
+      selectedShop.isPermanentAd === true &&
+      selectedShop.authorType === "shopAd" &&
+      /^[A-Za-z0-9_-]{1,100}$/.test(String(selectedShop.firestoreId || "")) &&
+      !storeProfileClaimedListingIds.has(String(selectedShop.firestoreId || ""));
+
+    modalClaimLink.style.display =
+      claimable ? "block" : "none";
+
+    if (claimable) {
+      modalClaimLink.href =
+        "store-account.html?claim=" +
+        encodeURIComponent(selectedShop.firestoreId);
+    }
+  }
 
   const modalMapUrl =
     createGoogleMapUrl(
