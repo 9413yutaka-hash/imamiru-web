@@ -1161,6 +1161,12 @@ const MACHINAU_TRANSLATIONS = {
     en: "Contact & Feedback"
   },
 
+  // STEP 43-N｜特定商取引法に基づく表記(tokushoho.html。ページは日本語のみ)。
+  footer_tokushoho_link: {
+    ja: "特定商取引法に基づく表記",
+    en: "Legal Notice (Specified Commercial Transactions Act, Japanese)"
+  },
+
   // 投稿玄関Phase1｜旧footer_shop_entry_link/footer_general_post_entry_link
   // (post.htmlへの別々の2導線)を、contribute.htmlへの1つの導線へ統一。
   footer_contribute_link: {
@@ -2399,8 +2405,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_billing_intro: {
-    ja: "今だけ投稿の利用料金（有効な閲覧があった「投稿×1日」ごとに100円・税込、月末締め・翌月まとめてカード請求）に使うカードを登録します。カードは1つのアカウントに1枚で、このアカウントで管理するすべてのお店・施設に共通です。現在、請求は行っていません。カード番号は決済会社（Stripe）が直接受け取り、マチナウには保存されません。",
-    en: "Register the card used for Just for Now fees (¥100 incl. tax per post per day with at least one valid view, billed together monthly). One card per account, shared by all the shops and venues you manage with this account. No charges are being made at this time. Your card number goes directly to our payment provider (Stripe) and is not stored by Machinau."
+    ja: "今だけ投稿の利用料金（有効な閲覧があった「投稿×1日」ごとに100円・税込、月末締め・翌月まとめてカード請求）に使うカードを登録します。カードは1つのアカウントに1枚で、このアカウントで管理するすべてのお店・施設に共通です。お店・施設の登録と引き継ぎにも、カードの登録が必要です。カードを登録しただけでは料金は発生しません。現在、請求は行っていません。カード番号は決済会社（Stripe）が直接受け取り、マチナウには保存されません（保存するのは、カードのブランド・下4桁・有効期限だけです）。",
+    en: "Register the card used for Just for Now fees (¥100 incl. tax per post per day with at least one valid view, billed together monthly). One card per account, shared by all the shops and venues you manage with this account. A card is also required to register or take over a shop or venue. Registering a card does not by itself incur any fee. No charges are being made at this time. Your card number goes directly to our payment provider (Stripe) and is not stored by Machinau (we keep only the card brand, last 4 digits and expiry date)."
   },
 
   store_billing_store_label: {
@@ -2429,13 +2435,34 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_billing_consent: {
-    ja: "このカードを、今だけ投稿の利用料金（月末締め・翌月まとめて請求）の支払いに使うことに同意します。",
-    en: "I agree that this card will be used to pay Just for Now fees (billed monthly)."
+    ja: "利用規約（料金・お支払いの条項を含みます）に同意し、このカードを今だけ投稿の利用料金（月末締め・翌月まとめて請求）の支払いに使うことに同意します。",
+    en: "I agree to the Terms of Service (including the fees and payment terms) and that this card will be used to pay Just for Now fees (billed monthly)."
   },
 
   store_billing_submit_button: {
     ja: "このカードを登録する",
     en: "Register this card"
+  },
+
+  // STEP 43-N｜カード登録の欄から、料金・お支払いの表記(利用規約・特定商取引法に基づく表記)へのリンク。
+  store_billing_legal_prefix: {
+    ja: "料金・お支払いについて：",
+    en: "About fees and payment: "
+  },
+
+  store_billing_legal_terms_link: {
+    ja: "利用規約",
+    en: "Terms of Service"
+  },
+
+  store_billing_legal_and: {
+    ja: "・",
+    en: " / "
+  },
+
+  store_billing_legal_tokushoho_link: {
+    ja: "特定商取引法に基づく表記",
+    en: "Legal Notice (Japanese)"
   },
 
   store_billing_cancel_button: {
