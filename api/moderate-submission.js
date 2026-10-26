@@ -185,7 +185,7 @@ function getFirebaseAdminApp() {
     return getApps()[0];
   }
 
-  // Preview専用Firebaseの対象ブランチでは FIREBASE_SERVICE_ACCOUNT_KEY_PREVIEW だけを読む(無ければ止める)。
+  // Preview(ブランチに関係なく)では FIREBASE_SERVICE_ACCOUNT_KEY_PREVIEW だけを読む(無ければ止める。STEP 45-B)。
   const serviceAccountText =
     readFirebaseServiceAccountText(process.env);
 
@@ -207,7 +207,7 @@ function getFirebaseAdminApp() {
     );
   }
 
-  // Preview専用Firebaseの対象ブランチでは、接続先が期待値と一致する時だけ初期化する(不一致・未設定は止める)。
+  // Production は chikashoku-app、Preview は machinau-preview の時だけ初期化する(不一致・未設定は止める。STEP 45-B)。
   assertFirebaseTarget(process.env, serviceAccount);
 
   return initializeApp({
