@@ -23,6 +23,9 @@ let storeProfileListStores = [];
 let storeProfileSuppressedListingIds = new Set();
 // STEP 42-G｜引き継ぎ済み(有効な紐付けあり)の運営掲載ID。詳細の「このお店の方へ」の入口を出さないためだけに使う。
 let storeProfileClaimedListingIds = new Set();
+// STEP 43-N C案｜店舗の新規登録・引き継ぎが一般に開いているか(publicStoreProfiles の listingClaimOpen)。
+// 取得できない・値が無い時は開いていない扱い(入口を出さない)。
+let storeListingClaimOpen = false;
 let storeProfileListFetchSequence = 0;
 // 無料掲載が一度でも一覧に表示されたか(読み込み中の表示を正式店舗の到着で上書きしないため)。
 let hasAppliedSubmissionsForStoreProfiles = false;
@@ -3095,6 +3098,7 @@ function resetStoreProfileListState() {
   storeProfileListStores = [];
   storeProfileSuppressedListingIds = new Set();
   storeProfileClaimedListingIds = new Set();
+  storeListingClaimOpen = false;
 }
 
 async function loadStoreProfilesForShopList() {
@@ -3114,6 +3118,7 @@ async function loadStoreProfilesForShopList() {
   let nextStores = [];
   let nextSuppressedIds = [];
   let nextClaimedIds = [];
+  let nextClaimOpen = false;
 
   try {
     const response =
@@ -3140,6 +3145,7 @@ async function loadStoreProfilesForShopList() {
             return typeof id === "string" && id !== "";
           })
         : [];
+      nextClaimOpen = data.listingClaimOpen === true;
     }
   } catch (error) {
     console.warn("正式店舗の一覧を取得できませんでした(無料掲載はそのまま表示します)：", error && error.name);
@@ -3157,6 +3163,7 @@ async function loadStoreProfilesForShopList() {
   storeProfileListStores = nextStores;
   storeProfileSuppressedListingIds = new Set(nextSuppressedIds);
   storeProfileClaimedListingIds = new Set(nextClaimedIds);
+  storeListingClaimOpen = nextClaimOpen;
 
   if (hasAppliedSubmissionsForStoreProfiles) {
     renderShops();
@@ -6097,6 +6104,7 @@ function openShopModal(
   // 引き継ぎの条件(アカウント・メール確認・カード登録)はサーバーが確かめる。
   // STEP 42-G｜サーバーの紐付け状態(publicStoreProfiles の claimedListingIds)で引き継ぎ済みの掲載には出さない。
   // 表示を消すだけで、引き継ぎの可否はサーバーが決める(二重引き継ぎは 409 listing_already_linked のまま)。
+  // STEP 43-N C案｜一般に開いていない間(本番カード登録の先行テスト中)は出さない(storeListingClaimOpen)。
   const modalClaimLink =
     document.getElementById("modalClaimLink");
 
@@ -6107,7 +6115,8 @@ function openShopModal(
       selectedShop.isPermanentAd === true &&
       selectedShop.authorType === "shopAd" &&
       /^[A-Za-z0-9_-]{1,100}$/.test(String(selectedShop.firestoreId || "")) &&
-      !storeProfileClaimedListingIds.has(String(selectedShop.firestoreId || ""));
+      !storeProfileClaimedListingIds.has(String(selectedShop.firestoreId || "")) &&
+      storeListingClaimOpen === true;
 
     modalClaimLink.style.display =
       claimable ? "block" : "none";

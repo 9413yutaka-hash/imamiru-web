@@ -65,7 +65,7 @@ async function call(mode, body, token) {
   try { await handler({ method: "POST", headers: { "content-type": "application/json", "x-forwarded-for": "198.51.100." + (++ip % 250), authorization: "Bearer " + token }, body: { mode, ...body }, query: {} }, r); } finally { console.error = e; }
   return r;
 }
-const CONSENT = "2026-10-16";
+const CONSENT = "2026-10-25";
 const resetRate = () => { for (const k of [...S.docs.keys()]) if (k.startsWith("storeBillingRateLimits/")) S.docs.delete(k); };
 // STEP 42-C｜カードはアカウント単位(店舗 sN の owner は uN)。
 const sec = (n) => ((S.docs.get("accountBilling/u" + n) || {}).test) || {};

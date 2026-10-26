@@ -108,9 +108,16 @@ try {
   apiState.profiles500 = true;
   p = await openTop("ja");
   e = await entry(p);
-  t("U5 店舗一覧の取得に失敗した時は入口を出す（引き継ぎ済みかはサーバーが判定し 409 で止める・掲載の表示は止めない）", e.L1.shown && e.L2.shown, e);
+  // STEP 43-N C案｜一般に開いているか(listingClaimOpen)が分からない時は入口を出さない(以前は出していた)。掲載の表示は止めない。
+  t("U5 店舗一覧の取得に失敗した時は入口を出さない（一般に開いているか分からないため）", e.L1.shown === false && e.L2.shown === false, e);
   await p.close();
   apiState.profiles500 = false;
+  process.env.VERCEL_ENV = "production";
+  p = await openTop("ja");
+  e = await entry(p);
+  t("U5b Production（本番カード登録の先行テスト中＝一般公開のスイッチ false）：まだ引き継がれていない掲載（L1）にも入口を出さない・JSエラーなし", e.L1.shown === false && e.L2.shown === false && p.log.errors.length === 0, { e, errors: p.log.errors });
+  await p.close();
+  process.env.VERCEL_ENV = "preview";
 
   // ---- admin-store-claims ----
   const a = await openPage(browser, { origin: ORIGIN, width: 1280, state: { apiPassthrough: true, apiMock: api, authMock } });

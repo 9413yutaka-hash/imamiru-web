@@ -150,7 +150,8 @@ import {
   handleStoreBillingStatus,
   handleStoreBillingSetupIntentCreate,
   handleStoreBillingSetupConfirm,
-  handleStoreBillingInvoices
+  handleStoreBillingInvoices,
+  isStoreCardLiveTrialToken
 } from "./_lib/store-billing.js";
 
 // 今だけ投稿 決済 STEP 35-A｜カード登録必須の判定(課金対象になる今だけ投稿の作成時だけ使う)。
@@ -22142,7 +22143,14 @@ async function resolveStoreUserActor(
       type: "storeUser",
       uid: decodedToken.uid,
       emailVerified:
-        decodedToken.email_verified === true
+        decodedToken.email_verified === true,
+      // STEP 43-N C案｜本番カード登録の先行テストのアカウント(代表)か。真偽値だけ(メールは持たない・返さない)。
+      // 使うのはカード登録の3つの操作だけ(store-billing.js)。店舗権限・Admin権限は何も付与しない。
+      cardLiveTrial:
+        isStoreCardLiveTrialToken(
+          decodedToken,
+          process.env
+        )
     }
   };
 }

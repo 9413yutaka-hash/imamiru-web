@@ -13,6 +13,8 @@ globalThis.__MOCK_TOKENS = { newOwner: pw("n1", "new@example.com"), claimer: pw(
 const S = globalThis.__MOCK_DB = { docs: new Map(), writes: [], failAddFor: null, seq: 0 };
 const LISTING = { title: "本日のおすすめ", shopName: "八重瀬の食堂", category: "グルメ", content: "地元の食材を使った定食の店です。", address: "沖縄県島尻郡八重瀬町", latitude: 26.15, longitude: 127.72, status: "approved", isPermanentAd: true, authorType: "shopAd", paymentMethods: ["cash"], takeout: false, imageUrls: [], createdAt: { toDate: () => new Date(Date.now() - 86400000), toMillis: () => Date.now() - 86400000 } };
 S.docs.set("submissions/L1", LISTING);
+// STEP 43-N C案｜TOP の入口の確認用(引き継がれない運営掲載。L1 は途中の U7 で引き継がれる)。
+S.docs.set("submissions/L9", { ...LISTING, shopName: "那覇の別の食堂", latitude: 26.21, longitude: 127.68 });
 S.docs.set("submissions/OPS", { ...LISTING, shopName: "運営のお知らせ", authorType: "admin", isPermanentAd: true });
 // ---- Stripe / geocoding stubs ----
 const ST = { seq: 0, intents: new Map(), calls: [] };
@@ -32,9 +34,11 @@ globalThis.fetch = async (url, opts = {}) => {
 const { default: handler } = await import(REPO_URL + "/api/moderate-submission.js?v=" + Date.now());
 async function api(url, method, log, postData, headers) {
   if (method === "GET") {
-    if (!/\/api\/moderate-submission(\?|$)/.test(url) || /mode=/.test(url)) return null;
+    // STEP 43-N C案｜TOP の入口は publicStoreProfiles の listingClaimOpen で出すため、この mode も実際の処理で答える。
+    const profiles = /mode=publicStoreProfiles/.test(url);
+    if (!/\/api\/moderate-submission(\?|$)/.test(url) || (/mode=/.test(url) && !profiles)) return null;
     const r = { code: 200, body: null, status(c) { this.code = c; return this; }, json(b) { this.body = b; return this; }, setHeader() {}, send(b) { this.body = b; return this; }, end() { return this; } };
-    await handler({ method: "GET", headers: {}, query: {} }, r);
+    await handler({ method: "GET", headers: {}, query: profiles ? { mode: "publicStoreProfiles" } : {} }, r);
     return { status: r.code, body: r.body };
   }
   const body = JSON.parse(postData || "{}");
@@ -107,8 +111,8 @@ try {
   // ---- TOP entry ----
   const top = await openPage(browser, { origin: ORIGIN, width: 390, mobile: true, state: { apiMock: api, articles: [] } });
   await top.goto("/"); await top.waitFor(`typeof shops !== "undefined" && shops.some((s) => s.firestoreId === "L1")`, 20000); await sleep(800);
-  const link = await top.ev(`(() => { const get = (id) => { openShopModal(id, "card"); const a = document.getElementById("modalClaimLink"); return { shown: getComputedStyle(a).display !== "none", href: a.getAttribute("href"), text: a.textContent.trim() }; }; return { listing: get("L1"), ops: get("OPS") }; })()`);
-  t("U9 TOPの運営掲載の詳細に「このお店の方へ：お店の情報を管理する」→ store-account.html?claim=L1（運営の常設店舗広告だけ）", link.listing.shown && link.listing.href === "store-account.html?claim=L1" && /お店の情報を管理する/.test(link.listing.text) && link.ops.shown === false, link);
+  const link = await top.ev(`(() => { const get = (id) => { openShopModal(id, "card"); const a = document.getElementById("modalClaimLink"); return { shown: getComputedStyle(a).display !== "none", href: a.getAttribute("href"), text: a.textContent.trim() }; }; return { listing: get("L9"), claimed: get("L1"), ops: get("OPS") }; })()`);
+  t("U9 TOPの運営掲載の詳細に「このお店の方へ：お店の情報を管理する」→ store-account.html?claim=L9（運営の常設店舗広告だけ・引き継ぎ済みの L1 には出さない）", link.listing.shown && link.listing.href === "store-account.html?claim=L9" && /お店の情報を管理する/.test(link.listing.text) && link.claimed.shown === false && link.ops.shown === false, link);
   t("U10 TOPでJSエラーなし・Firestoreへの直接の書き込みなし", top.log.errors.length === 0 && !top.log.blocked.includes("firestore-write"), top.log.errors);
   await top.close();
 } finally {

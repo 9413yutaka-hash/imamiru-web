@@ -100,7 +100,7 @@ const cr4 = await call("storeBillingSetupIntentCreate", {}, "owner");
 t("6c 保存前に途切れた再試行でも、冪等キーで同じStripe顧客になる（重複顧客なし）", cr4.code === 200 && billing().test.customerId === "cus_test1" && ST.customers.size === 1, { customers: ST.customers.size, b: billing() });
 
 // 7-15 confirm
-const CONSENT = "2026-10-16";
+const CONSENT = "2026-10-25";
 let cf = await call("storeBillingSetupConfirm", { setupIntentId: cr4.body.setupIntentId }, "owner");
 t("7 同意なしの登録確定は400（consent_required）", cf.code === 400 && cf.body.reason === "consent_required");
 cf = await call("storeBillingSetupConfirm", { setupIntentId: cr.body.setupIntentId, consentVersion: CONSENT }, "owner");
