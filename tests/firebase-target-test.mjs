@@ -1,5 +1,6 @@
 // STEP 32-D㉗: Preview専用Firebaseへの分離の安全対策。サーバーの接続先検査(api/_lib/firebase-target.js)と、
 // 8つのFunctionの初期化・REAL moderate-submission の配線、ブラウザの firebase.js の接続先の決め方を確かめる。
+// STEP 45-B: 接続先はブランチではなく環境で決める(Production＝chikashoku-app、Preview＝machinau-preview、本番の鍵へ切り替えない)。
 // firebase-admin は「初期化前の状態から始まる」模擬(tests/mockfa-target)。実際の鍵・ネットワークは使わない。
 // run: node --import ./tests/mockfa-target/register.mjs tests/firebase-target-test.mjs
 import { REPO_ROOT, REPO_URL } from "./_paths.mjs";
@@ -22,50 +23,73 @@ const FT = await import(REPO_URL + "/api/_lib/firebase-target.js");
 const BRANCH = "preview/stripe-card-setup";
 const PREVIEW_ID = "machinau-preview-test";
 const sa = (projectId) => ({ type: "service_account", project_id: projectId, private_key: "-----FAKE-PRIVATE-KEY-FOR-TESTS-----", client_email: "x@" + projectId + ".iam.example" });
-const TABLE = { [BRANCH]: PREVIEW_ID };
-
-// ---------------- S: server check (unit) ----------------
-let r = FT.checkFirebaseTarget({ VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main" }, sa("chikashoku-app"));
-t("S1 Production：検査しない（今までどおり）", r.ok && r.enforced === false, r);
-r = FT.checkFirebaseTarget({}, sa("chikashoku-app"));
-t("S1b ローカル（VERCEL_ENVなし）：検査しない", r.ok && r.enforced === false, r);
-r = FT.checkFirebaseTarget({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "preview/town-now-thread-backend" }, sa("chikashoku-app"));
-t("S2 表にないPreviewブランチ：検査しない（今までどおり本番のFirebase）", r.ok && r.enforced === false, r);
-r = FT.checkFirebaseTarget({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: BRANCH }, sa("chikashoku-app"), { [BRANCH]: "" });
-t("S3 対象ブランチ・期待値が未設定：止める（preview_project_not_set）", !r.ok && r.enforced && r.reason === "preview_project_not_set", r);
-t("S3b 現在の表：対象ブランチの期待値は machinau-preview・表は書き換え不可", FT.PREVIEW_FIREBASE_TARGETS[BRANCH] === "machinau-preview" && Object.isFrozen(FT.PREVIEW_FIREBASE_TARGETS));
-r = FT.checkFirebaseTarget({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: BRANCH }, sa("machinau-preview"));
-t("S3c 現在の表：対象ブランチで machinau-preview のサービスアカウントなら使ってよい", r.ok && r.enforced && r.projectId === "machinau-preview", r);
-r = FT.checkFirebaseTarget({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: BRANCH }, sa("chikashoku-app"));
-t("S3d 現在の表：対象ブランチなのに本番のサービスアカウント（Vercelの切り替え前）：止める", !r.ok && r.reason === "project_mismatch", r);
-r = FT.checkFirebaseTarget({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: BRANCH }, sa(PREVIEW_ID), TABLE);
-t("S4 対象ブランチ・接続先が期待値と一致：使ってよい", r.ok && r.enforced && r.projectId === PREVIEW_ID, r);
-r = FT.checkFirebaseTarget({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: BRANCH }, sa("chikashoku-app"), TABLE);
-t("S5 対象ブランチなのに本番のサービスアカウント（ブランチ専用の変数が効いていない）：止める", !r.ok && r.reason === "project_mismatch", r);
-r = FT.checkFirebaseTarget({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: BRANCH }, sa("someone-else-proj"), TABLE);
-t("S5b 別のプロジェクト：止める", !r.ok && r.reason === "project_mismatch", r);
-r = FT.checkFirebaseTarget({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: BRANCH }, null, TABLE);
-t("S6 サービスアカウントが無い・読めない：止める", !r.ok && r.reason === "service_account_unreadable", r);
-r = FT.checkFirebaseTarget({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: BRANCH }, sa("chikashoku-app"), { [BRANCH]: "chikashoku-app" });
-t("S7 期待値に本番のIDを書いてしまった：止める（preview_project_invalid）", !r.ok && r.reason === "preview_project_invalid", r);
-r = FT.checkFirebaseTarget({ VERCEL_ENV: "preview" }, sa(PREVIEW_ID), TABLE);
-t("S8 Previewでブランチ名が分からない：止める", !r.ok && r.reason === "preview_branch_unknown", r);
-let thrown = null; try { FT.assertFirebaseTarget({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: BRANCH }, sa("chikashoku-app")); } catch (e) { thrown = e; }
-t("S9 assertFirebaseTarget は止める時に FirebaseTargetError を投げ、鍵の中身を含めない", thrown && thrown.name === "FirebaseTargetError" && !/FAKE-PRIVATE|client_email/.test(String(thrown.message)), thrown && thrown.message);
-r = FT.checkFirebaseTargetFromEnv({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: BRANCH, FIREBASE_SERVICE_ACCOUNT_KEY_PREVIEW: "{not json" }, TABLE);
-t("S10 Preview専用の変数がJSONでない：止める", !r.ok && r.reason === "service_account_unreadable", r);
-
-// ---------------- K: which variable the key is read from (B案) ----------------
+const OTHER = "preview/town-now-thread-backend";
 const PV = "FIREBASE_SERVICE_ACCOUNT_KEY_PREVIEW";
 const KEYJ = (id) => JSON.stringify(sa(id));
-let thrownK = null;
-try { FT.readFirebaseServiceAccountText({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: BRANCH, FIREBASE_SERVICE_ACCOUNT_KEY: KEYJ("chikashoku-app") }); } catch (e) { thrownK = e; }
-t("K1 対象ブランチで Preview専用の変数が無い：本番用の変数へ切り替えず止める（preview_service_account_missing）", thrownK && thrownK.name === "FirebaseTargetError" && thrownK.reason === "preview_service_account_missing", thrownK && thrownK.reason);
-t("K2 対象ブランチでは Preview専用の変数だけを読む", FT.readFirebaseServiceAccountText({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: BRANCH, FIREBASE_SERVICE_ACCOUNT_KEY: KEYJ("chikashoku-app"), [PV]: KEYJ("machinau-preview") }) === KEYJ("machinau-preview"));
-t("K3 Production では Preview専用の変数があっても FIREBASE_SERVICE_ACCOUNT_KEY（今までどおり）", FT.readFirebaseServiceAccountText({ VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main", FIREBASE_SERVICE_ACCOUNT_KEY: KEYJ("chikashoku-app"), [PV]: KEYJ("machinau-preview") }) === KEYJ("chikashoku-app"));
-t("K4 ほかのPreviewブランチでは Preview専用の変数があっても FIREBASE_SERVICE_ACCOUNT_KEY", FT.readFirebaseServiceAccountText({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "preview/town-now-thread-backend", FIREBASE_SERVICE_ACCOUNT_KEY: KEYJ("chikashoku-app"), [PV]: KEYJ("machinau-preview") }) === KEYJ("chikashoku-app"));
-t("K5 対象外で FIREBASE_SERVICE_ACCOUNT_KEY が無い時は値なし（未設定の扱いは今までどおり呼び出し側）", FT.readFirebaseServiceAccountText({ VERCEL_ENV: "production" }) === undefined);
+
+// ---------------- S: server check (unit) — STEP 45-B：ブランチではなく環境で決める ----------------
+t("S0 定数：本番は chikashoku-app・Preview は machinau-preview（同じにならない）・ブランチの表は接続先に使わない", FT.PRODUCTION_FIREBASE_PROJECT_ID === "chikashoku-app" && FT.PREVIEW_FIREBASE_PROJECT_ID === "machinau-preview" && FT.PREVIEW_FIREBASE_PROJECT_ID !== FT.PRODUCTION_FIREBASE_PROJECT_ID && FT.PREVIEW_FIREBASE_TARGETS === undefined);
+let r = FT.checkFirebaseTarget({ VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main" }, sa("chikashoku-app"));
+t("S1 Production・本番のサービスアカウント：使ってよい（検査あり）", r.ok && r.enforced === true && r.expectedProjectId === "chikashoku-app" && r.projectId === "chikashoku-app", r);
+r = FT.checkFirebaseTarget({ VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main" }, sa("machinau-preview"));
+t("S1a Production に Preview のサービスアカウント：止める（project_mismatch）", !r.ok && r.enforced && r.reason === "project_mismatch", r);
+r = FT.checkFirebaseTarget({ VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main" }, sa("someone-else-proj"));
+t("S1c Production に別のプロジェクト：止める", !r.ok && r.reason === "project_mismatch", r);
+r = FT.checkFirebaseTarget({ VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main" }, null);
+t("S1d Production でサービスアカウントが読めない：止める", !r.ok && r.reason === "service_account_unreadable", r);
+r = FT.checkFirebaseTarget({}, sa("chikashoku-app"));
+t("S1b ローカル（VERCEL_ENVなし）：検査しない（今までどおり）", r.ok && r.enforced === false, r);
+r = FT.checkFirebaseTarget({ VERCEL_ENV: "development" }, sa("someone-else-proj"));
+t("S1e vercel dev（development）：検査しない（今までどおり）", r.ok && r.enforced === false, r);
+r = FT.checkFirebaseTarget({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: BRANCH }, sa("machinau-preview"));
+t("S3c Preview（preview/stripe-card-setup）で machinau-preview：使ってよい", r.ok && r.enforced && r.projectId === "machinau-preview" && r.expectedProjectId === "machinau-preview", r);
+r = FT.checkFirebaseTarget({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: OTHER }, sa("machinau-preview"));
+t("S2 Preview（ほかのブランチ）でも machinau-preview：使ってよい（ブランチに依存しない）", r.ok && r.enforced && r.projectId === "machinau-preview", r);
+r = FT.checkFirebaseTarget({ VERCEL_ENV: "preview" }, sa("machinau-preview"));
+t("S8 Preview でブランチ名が分からなくても machinau-preview なら使ってよい（判定にブランチを使わない）", r.ok && r.enforced, r);
+for (const branch of [BRANCH, OTHER, ""]) {
+  r = FT.checkFirebaseTarget({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: branch }, sa("chikashoku-app"));
+  if (!(!r.ok && r.enforced && r.reason === "project_mismatch")) t("S3d Preview に本番のサービスアカウント（" + (branch || "ブランチ不明") + "）", false, r);
+}
+t("S3d Preview に本番のサービスアカウント：どのブランチでも止める（project_mismatch）", true);
+r = FT.checkFirebaseTarget({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: OTHER }, sa("someone-else-proj"));
+t("S5b Preview に別のプロジェクト：止める", !r.ok && r.reason === "project_mismatch", r);
+r = FT.checkFirebaseTarget({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: OTHER }, null);
+t("S6 Preview でサービスアカウントが無い・読めない：止める", !r.ok && r.reason === "service_account_unreadable", r);
+let thrown = null; try { FT.assertFirebaseTarget({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: OTHER }, sa("chikashoku-app")); } catch (e) { thrown = e; }
+t("S9 assertFirebaseTarget は止める時に FirebaseTargetError を投げ、鍵の中身を含めない", thrown && thrown.name === "FirebaseTargetError" && thrown.reason === "project_mismatch" && !/FAKE-PRIVATE|client_email/.test(String(thrown.message)), thrown && thrown.message);
+thrown = null; try { FT.assertFirebaseTarget({ VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main" }, sa("machinau-preview")); } catch (e) { thrown = e; }
+t("S9b Production で別のプロジェクトなら assertFirebaseTarget も止める", thrown && thrown.name === "FirebaseTargetError" && thrown.reason === "project_mismatch", thrown && thrown.reason);
+r = FT.checkFirebaseTargetFromEnv({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: OTHER, [PV]: "{not json" });
+t("S10 Preview専用の変数がJSONでない：止める", !r.ok && r.reason === "service_account_unreadable", r);
+r = FT.checkFirebaseTargetFromEnv({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: OTHER, FIREBASE_SERVICE_ACCOUNT_KEY: KEYJ("chikashoku-app") });
+t("S11 環境変数だけの検査：Preview専用の変数が無ければ本番の変数があっても止める（preview_service_account_missing）", !r.ok && r.enforced && r.reason === "preview_service_account_missing" && r.projectId === "", r);
+r = FT.checkFirebaseTargetFromEnv({ VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main", FIREBASE_SERVICE_ACCOUNT_KEY: KEYJ("machinau-preview"), [PV]: KEYJ("machinau-preview") });
+t("S12 環境変数だけの検査：Production の変数に Preview の鍵：止める（project_mismatch）", !r.ok && r.reason === "project_mismatch", r);
+
+// ---------------- K: which variable the key is read from ----------------
+for (const branch of [BRANCH, OTHER, ""]) {
+  let thrownK = null;
+  try { FT.readFirebaseServiceAccountText({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: branch, FIREBASE_SERVICE_ACCOUNT_KEY: KEYJ("chikashoku-app") }); } catch (e) { thrownK = e; }
+  if (!(thrownK && thrownK.name === "FirebaseTargetError" && thrownK.reason === "preview_service_account_missing")) t("K1 " + (branch || "ブランチ不明"), false, thrownK && thrownK.reason);
+}
+t("K1 Preview で Preview専用の変数が無い：どのブランチでも本番用の変数へ切り替えず止める（preview_service_account_missing）", true);
+t("K2 Preview（preview/stripe-card-setup）では Preview専用の変数だけを読む", FT.readFirebaseServiceAccountText({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: BRANCH, FIREBASE_SERVICE_ACCOUNT_KEY: KEYJ("chikashoku-app"), [PV]: KEYJ("machinau-preview") }) === KEYJ("machinau-preview"));
+t("K3 Production では Preview専用の変数があっても FIREBASE_SERVICE_ACCOUNT_KEY", FT.readFirebaseServiceAccountText({ VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main", FIREBASE_SERVICE_ACCOUNT_KEY: KEYJ("chikashoku-app"), [PV]: KEYJ("machinau-preview") }) === KEYJ("chikashoku-app"));
+t("K4 Preview（ほかのブランチ）でも Preview専用の変数だけを読む（本番の変数は読まない）", FT.readFirebaseServiceAccountText({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: OTHER, FIREBASE_SERVICE_ACCOUNT_KEY: KEYJ("chikashoku-app"), [PV]: KEYJ("machinau-preview") }) === KEYJ("machinau-preview"));
+t("K5 Production で FIREBASE_SERVICE_ACCOUNT_KEY が無い時は値なし（未設定の扱いは今までどおり呼び出し側＝止まる）", FT.readFirebaseServiceAccountText({ VERCEL_ENV: "production" }) === undefined);
+t("K5b ローカルでは今までどおり FIREBASE_SERVICE_ACCOUNT_KEY（Preview専用の変数は読まない）", FT.readFirebaseServiceAccountText({ FIREBASE_SERVICE_ACCOUNT_KEY: KEYJ("chikashoku-app"), [PV]: KEYJ("machinau-preview") }) === KEYJ("chikashoku-app"));
 t("K6 変数名の定数は FIREBASE_SERVICE_ACCOUNT_KEY_PREVIEW", FT.PREVIEW_SERVICE_ACCOUNT_ENV_NAME === PV);
+t("K7 Preview の鍵の project_id を読める（Preview専用の変数から）", FT.readServiceAccountProjectId({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: OTHER, FIREBASE_SERVICE_ACCOUNT_KEY: KEYJ("chikashoku-app"), [PV]: KEYJ("machinau-preview") }) === "machinau-preview");
+
+// ---------------- T: Preview試験の機能の有効条件は変えない（ブランチの表のまま） ----------------
+const TRIALS = ["isPreviewCvBillingTrialEnabled", "isPreviewMonthlyCloseTrialEnabled", "isPreviewStoreInvoiceHistoryEnabled", "isPreviewListingPhotoCopyTrialEnabled"];
+const trialEnv = (env) => TRIALS.map((name) => FT[name](env));
+const PREVIEW_OK = { FIREBASE_SERVICE_ACCOUNT_KEY: KEYJ("chikashoku-app"), [PV]: KEYJ("machinau-preview") };
+t("T1 試験の機能：preview/stripe-card-setup・machinau-preview の時だけ有効（4つとも）", trialEnv({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: BRANCH, ...PREVIEW_OK }).every((v) => v === true), trialEnv({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: BRANCH, ...PREVIEW_OK }));
+t("T2 試験の機能：ほかのブランチは machinau-preview につながっていても無効（有効条件は今までどおりブランチの表）", trialEnv({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: OTHER, ...PREVIEW_OK }).every((v) => v === false));
+t("T3 試験の機能：Production・ローカル・Preview専用の変数なしでは無効", [trialEnv({ VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main", ...PREVIEW_OK }), trialEnv({ ...PREVIEW_OK }), trialEnv({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: BRANCH, FIREBASE_SERVICE_ACCOUNT_KEY: KEYJ("machinau-preview") })].flat().every((v) => v === false));
+t("T4 試験の機能のブランチの表は変えていない（preview/stripe-card-setup → machinau-preview だけ）", JSON.stringify(FT.PREVIEW_CV_BILLING_TRIAL_TARGETS) === JSON.stringify({ [BRANCH]: "machinau-preview" }) && Object.isFrozen(FT.PREVIEW_CV_BILLING_TRIAL_TARGETS));
 
 // ---------------- F: the 8 functions check before initializeApp (static) ----------------
 const FILES = ["moderate-submission", "expire", "edit-ad", "admin-source-bulk-create", "admin-source-collect", "admin-source-delete", "admin-source-list", "admin-source-save"];
@@ -121,21 +145,40 @@ t("H1d 切り替え後（Preview専用の変数＝machinau-preview、共通の�
 
 setEnv({ VERCEL_ENV: "preview", FIREBASE_SERVICE_ACCOUNT_KEY: KEY("chikashoku-app") });
 h = await post({ mode: "imadakeBillingOverview" }, "admin");
-t("H2 Previewでブランチ名が分からない：止める", h.code >= 500 && A.inits.length === 0 && A.collections === 0, { code: h.code, A });
+t("H2 Previewでブランチ名が分からず本番の変数しか無い：本番へ切り替えず止める", h.code >= 500 && A.inits.length === 0 && A.collections === 0, { code: h.code, A });
 
 setEnv({ VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main", FIREBASE_SERVICE_ACCOUNT_KEY: KEY("chikashoku-app"), [PV]: KEY("machinau-preview") });
 h = await post({ mode: "imadakeBillingOverview" }, "admin");
 t("H3 Production（Preview専用の変数があっても）：今までどおり本番で初期化して処理する（200）", h.code === 200 && h.body.success === true && A.inits.length === 1 && A.inits[0] === "chikashoku-app" && A.collections > 0, { code: h.code, A });
 
-setEnv({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "preview/town-now-thread-backend", FIREBASE_SERVICE_ACCOUNT_KEY: KEY("chikashoku-app"), [PV]: KEY("machinau-preview") });
+setEnv({ VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main", FIREBASE_SERVICE_ACCOUNT_KEY: KEY("machinau-preview") });
 h = await post({ mode: "imadakeBillingOverview" }, "admin");
-t("H4 ほかのPreviewブランチ（Preview専用の変数があっても）：今までどおり本番のFirebase（200）", h.code === 200 && A.inits.length === 1 && A.inits[0] === "chikashoku-app", { code: h.code, A });
+t("H3b Production の変数に本番以外の鍵（machinau-preview）：初期化もFirestoreも使わずに止める", h.code >= 500 && A.inits.length === 0 && A.collections === 0, { code: h.code, A });
+
+setEnv({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: OTHER, FIREBASE_SERVICE_ACCOUNT_KEY: KEY("chikashoku-app"), [PV]: KEY("machinau-preview") });
+h = await post({ mode: "imadakeBillingOverview" }, "admin");
+t("H4 ほかのPreviewブランチ：本番の変数があっても machinau-preview で初期化して処理する（200）", h.code === 200 && A.inits.length === 1 && A.inits[0] === "machinau-preview" && S.writes.length === 0, { code: h.code, A });
+
+setEnv({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: OTHER, FIREBASE_SERVICE_ACCOUNT_KEY: KEY("chikashoku-app") });
+h = await post({ mode: "imadakeBillingOverview" }, "admin");
+t("H4b ほかのPreviewブランチで Preview専用の変数が無い（本番の変数だけ）：本番へ切り替えず止める", h.code >= 500 && A.inits.length === 0 && A.collections === 0 && S.writes.length === 0, { code: h.code, A });
+h = await get({});
+t("H4c 同じ状態で公開一覧（ログイン不要のGET）も止まる", h.code >= 500 && A.inits.length === 0 && A.collections === 0, { code: h.code, A });
 
 // GET mode=firebaseTarget (browser declaration)
 setEnv({ VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main", FIREBASE_SERVICE_ACCOUNT_KEY: KEY("chikashoku-app"), [PV]: KEY("machinau-preview") });
 h = await get({ mode: "firebaseTarget" });
-t("H5 接続先の申告（Production）：200・本番のプロジェクトIDだけ・初期化しない", h.code === 200 && h.body.success === true && h.body.projectId === "chikashoku-app" && h.body.enforced === false && A.inits.length === 0 && A.firestore === 0, { code: h.code, body: h.body, A });
+t("H5 接続先の申告（Production）：200・本番のプロジェクトIDだけ・初期化しない", h.code === 200 && h.body.success === true && h.body.projectId === "chikashoku-app" && h.body.enforced === true && A.inits.length === 0 && A.firestore === 0, { code: h.code, body: h.body, A });
 t("H5b 申告に鍵の中身・メールアドレスを含めない", !/FAKE-PRIVATE|client_email|iam\.example|private_key/.test(JSON.stringify(h.body)), h.body);
+setEnv({ VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main", FIREBASE_SERVICE_ACCOUNT_KEY: KEY("machinau-preview") });
+h = await get({ mode: "firebaseTarget" });
+t("H5c 接続先の申告（Production の変数に本番以外の鍵）：503 project_mismatch", h.code === 503 && h.body.reason === "project_mismatch" && A.inits.length === 0, { code: h.code, body: h.body });
+setEnv({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: OTHER, FIREBASE_SERVICE_ACCOUNT_KEY: KEY("chikashoku-app") });
+h = await get({ mode: "firebaseTarget" });
+t("H6c 接続先の申告（ほかのPreviewブランチ・Preview専用の変数なし）：503 preview_service_account_missing（本番を申告しない）", h.code === 503 && h.body.reason === "preview_service_account_missing" && A.inits.length === 0, { code: h.code, body: h.body });
+setEnv({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: OTHER, FIREBASE_SERVICE_ACCOUNT_KEY: KEY("chikashoku-app"), [PV]: KEY("machinau-preview") });
+h = await get({ mode: "firebaseTarget" });
+t("H6d 接続先の申告（ほかのPreviewブランチ・machinau-preview）：200 projectId machinau-preview・検査あり", h.code === 200 && h.body.projectId === "machinau-preview" && h.body.enforced === true, { code: h.code, body: h.body });
 setEnv({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: BRANCH, FIREBASE_SERVICE_ACCOUNT_KEY: KEY("chikashoku-app") });
 h = await get({ mode: "firebaseTarget" });
 t("H6 接続先の申告（対象ブランチ・Preview専用の変数なし）：503 preview_service_account_missing", h.code === 503 && h.body.success === false && h.body.reason === "preview_service_account_missing" && A.inits.length === 0, { code: h.code, body: h.body });
