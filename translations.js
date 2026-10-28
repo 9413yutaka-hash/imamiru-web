@@ -4253,8 +4253,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_delete_effect_plan: {
-    ja: "月額100円カスタマイズは解約します（当月分はご請求します）。新しい今だけ投稿・有料のご利用はできなくなります。",
-    en: "The monthly customization plan is canceled (the current month is still billed). New \"Now only\" posts and paid features are no longer available."
+    ja: "新しい今だけ投稿・有料のご利用はできなくなります。ご契約中の有料のプランは解約します（その月の分はご請求します）。",
+    en: "New \"Now only\" posts and paid features are no longer available. Any paid plan you have is canceled (that month is still billed)."
   },
 
   store_delete_effect_card: {
@@ -4344,8 +4344,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_delete_withdraw_confirm_lead: {
-    ja: "退会の申し込みを取り消します。店舗・施設の情報は非公開のままです。終了した今だけ投稿・解約した月額100円カスタマイズは元に戻りません。退会の前のご請求は、これまでどおりお支払いが必要です。",
-    en: "This withdraws your closure request. Your business information stays private. Ended \"Now only\" posts and the canceled monthly customization plan are not restored. Charges from before the request still need to be paid."
+    ja: "退会の申し込みを取り消します。店舗・施設の情報は非公開のままです。終了した今だけ投稿・解約した有料のプランは元に戻りません。退会の前のご請求は、これまでどおりお支払いが必要です。",
+    en: "This withdraws your closure request. Your business information stays private. Ended \"Now only\" posts and canceled paid plans are not restored. Charges from before the request still need to be paid."
   },
 
   store_delete_withdraw_confirm_button: {
@@ -4369,8 +4369,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_delete_withdraw_guide_plan: {
-    ja: "月額100円カスタマイズは解約されています。続ける場合は、「常設店舗情報を編集する」の画面から申し込み直してください。",
-    en: "The monthly customization plan has been canceled. To continue, sign up again from the \"Edit shop profile\" page."
+    ja: "有料のプランをご契約だった場合は解約されています。続ける場合は、「常設店舗情報を編集する」の画面から申し込み直してください。",
+    en: "If you had a paid plan, it has been canceled. To continue, sign up again from the \"Edit shop profile\" page."
   },
 
   store_delete_withdraw_guide_billing: {
@@ -4399,13 +4399,13 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_delete_blocker_plan_unbilled: {
-    ja: "月額100円カスタマイズのまだご請求していない料金があります（月末に締め、翌月2日にご請求します）。",
-    en: "There are monthly customization fees not yet billed (closed at month end and billed on the 2nd of the following month)."
+    ja: "有料のプランのまだご請求していない料金があります（月末に締め、翌月2日にご請求します）。",
+    en: "There are paid plan fees not yet billed (closed at month end and billed on the 2nd of the following month)."
   },
 
   store_delete_blocker_plan_invoice: {
-    ja: "月額100円カスタマイズのご請求に、お支払いが済んでいないもの、または決済結果が確定していないものがあります。",
-    en: "A monthly customization charge is unpaid or its payment result is not yet confirmed."
+    ja: "有料のプランのご請求に、お支払いが済んでいないもの、または決済結果が確定していないものがあります。",
+    en: "A paid plan charge is unpaid or its payment result is not yet confirmed."
   },
 
   store_delete_blocker_billing_locked: {

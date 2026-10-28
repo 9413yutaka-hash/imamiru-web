@@ -84,7 +84,7 @@ try {
   await p.ev(`document.getElementById("deleteCheckButton").click(), true`);
   await p.waitFor(`!document.getElementById("deleteConfirmBox").hidden`, 8000);
   s = await state(p);
-  t("U2 確認画面：店舗・投稿・カードの件数と、削除すると起きること（7項目：月額プランの解約・写真の削除を含む）を表示・清算待ちの注意は出さない", s.summary.length === 3 && /1/.test(s.summary[0]) && /公開中 1/.test(s.summary[0]) && /1$/.test(s.summary[1]) && /あり/.test(s.summary[2]) && s.effects.length === 7 && s.effects.some((l) => /写真/.test(l)) && s.effects.some((l) => /月額100円/.test(l)) && !s.note && /アカウントを削除する/.test(s.confirmText) && s.checkHidden, s);
+  t("U2 確認画面：店舗・投稿・カードの件数と、削除すると起きること（7項目：有料のプランの解約・写真の削除を含む。未公開のプラン名は出さない）を表示・清算待ちの注意は出さない", s.summary.length === 3 && /1/.test(s.summary[0]) && /公開中 1/.test(s.summary[0]) && /1$/.test(s.summary[1]) && /あり/.test(s.summary[2]) && s.effects.length === 7 && s.effects.some((l) => /写真/.test(l)) && s.effects.some((l) => /有料のプラン/.test(l)) && !s.effects.some((l) => /月額100円|カスタマイズ/.test(l)) && !s.note && /アカウントを削除する/.test(s.confirmText) && s.checkHidden, s);
   t("U3 確認画面にカードの番号・Stripe の ID は出さない", !/4242|pm_|cus_/.test(JSON.stringify(s)), s);
   await p.ev(`document.getElementById("deleteCancelButton").click(), true`);
   s = await state(p);

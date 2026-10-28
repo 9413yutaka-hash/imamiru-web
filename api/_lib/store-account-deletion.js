@@ -35,6 +35,10 @@ import {
 } from "firebase-admin/firestore";
 
 import {
+  timingSafeEqual
+} from "node:crypto";
+
+import {
   ACCOUNT_DELETION_CANCELED_STATUS,
   ACCOUNT_DELETIONS_COLLECTION,
   accountDeletionRef,
@@ -43,7 +47,6 @@ import {
 
 import {
   ACCOUNT_BILLING_COLLECTION,
-  STORE_CUSTOM_PLAN_INVOICES_COLLECTION,
   cardSetupOptionsFor,
   readBillingLocks,
   readStripeCardSetupConfig,
@@ -67,23 +70,16 @@ import {
 } from "./imadake-monthly-close.js";
 
 import {
-  STORE_CUSTOM_PLAN_USAGE_COLLECTION
-} from "./store-custom-plan-billing.js";
-
-import {
-  STORE_CUSTOM_PROFILES_COLLECTION,
-  cancelStoreCustomPlan,
-  isStoreMenuPhotoPublicId
-} from "./store-custom-profile.js";
-
-import {
   LISTING_HIDDEN_BY_OWNER_ACCOUNT_DELETION,
   isStorePhotoPublicId
 } from "./store-profile.js";
 
-import {
-  storeCustomPlanCronSecretsMatch
-} from "./store-custom-plan-cron.js";
+// STEP 47-F｜月額100円カスタマイズ(STEP 44)のファイルは直接読み込まない(本番系列には無いため)。記録の名前だけを持ち、
+// 解約(cancelStoreCustomPlan)と商品写真の判定(isStoreMenuPhotoPublicId)は呼び出し側が依存として渡す(無ければ行わない)。
+// 月額プランの記録が無い環境では、判定の読み取りは空になるだけ(止める理由にならない)。
+const STORE_CUSTOM_PLAN_USAGE_COLLECTION = "storeCustomPlanUsage";
+const STORE_CUSTOM_PLAN_INVOICES_COLLECTION = "storeCustomPlanInvoices";
+const STORE_CUSTOM_PROFILES_COLLECTION = "storeCustomProfiles";
 
 const STORE_MEMBERS_COLLECTION = "storeMembers";
 const STORE_ACCOUNTS_COLLECTION = "storeAccounts";
@@ -143,6 +139,17 @@ const SWEEP_TIME_BUDGET_MS = 20 * 1000;
 const OPERATOR_ALERTS_COLLECTION = "operatorAlerts";
 // 最終削除の同じ段階が、この回数を超えて進まなければ「停止」として通知する。
 const STALL_ATTEMPTS = 3;
+
+// 定期実行の合言葉の比較(空は不一致、長さが違えば不一致、比較は timingSafeEqual。/api/expire と同じ考え方)。
+function cronSecretsMatch(provided, expected) {
+  if (typeof provided !== "string" || typeof expected !== "string" || provided === "" || expected === "") {
+    return false;
+  }
+
+  const providedBuffer = Buffer.from(provided, "utf8");
+  const expectedBuffer = Buffer.from(expected, "utf8");
+  return providedBuffer.length === expectedBuffer.length && timingSafeEqual(providedBuffer, expectedBuffer);
+}
 
 function sendError(response, status, reason, extra) {
   return response.status(status).json(Object.assign({ success: false, reason: reason }, extra || {}));
@@ -482,14 +489,18 @@ async function hideStores(database, storeIds, uid) {
 }
 
 // ②月額100円カスタマイズを解約する(当月分は請求に残る。翌月以降は発生しない)。契約が無い店舗は何もしない。
-async function cancelCustomPlans(database, storeIds, uid, nowMillis) {
+async function cancelCustomPlans(database, deps, storeIds, uid, nowMillis) {
+  if (typeof deps.cancelStoreCustomPlan !== "function") {
+    return;
+  }
+
   for (const storeId of storeIds) {
     // STEP 47-C ④｜本人が取り消した後は解約しない(取り消しとの競合)。
     if (!(await readAccountDeletion(database, uid))) {
       return;
     }
 
-    await cancelStoreCustomPlan(database, storeId, uid, nowMillis);
+    await deps.cancelStoreCustomPlan(database, storeId, uid, nowMillis);
   }
 }
 
@@ -516,7 +527,9 @@ async function deleteStorePhotosForDeletion(database, deps, storeIds) {
       .filter(function(publicId) { return isStorePhotoPublicId(publicId, storeId); });
     const menuIds = (custom && Array.isArray(custom.menuItems) ? custom.menuItems : [])
       .map(function(item) { return item && item.photo && item.photo.publicId; })
-      .filter(function(publicId) { return isStoreMenuPhotoPublicId(publicId, storeId); });
+      .filter(function(publicId) {
+        return typeof deps.isStoreMenuPhotoPublicId === "function" && deps.isStoreMenuPhotoPublicId(publicId, storeId);
+      });
     const targets = photoIds.concat(menuIds);
 
     if (targets.length === 0) {
@@ -910,7 +923,7 @@ export async function requestAccountDeletion(database, deps, actor) {
   ]));
 
   // ①②新規の有料利用を止める：月額プランを解約し、今だけ投稿の掲載を終え、店舗を非公開・無効にする(③の印も付ける)。
-  await cancelCustomPlans(database, storeIds, uid, readNowMillis(deps));
+  await cancelCustomPlans(database, deps, storeIds, uid, readNowMillis(deps));
   await hideStores(database, storeIds, uid);
   await writeDeletionRecord(deletionRef, { storeIds: storeIds });
 
@@ -1273,7 +1286,7 @@ export async function handleAccountDeletionSweep(request, response, deps) {
 
   const provided = request.headers && request.headers["x-machinau-cron-secret"];
 
-  if (!storeCustomPlanCronSecretsMatch(typeof provided === "string" ? provided : "", expected)) {
+  if (!cronSecretsMatch(typeof provided === "string" ? provided : "", expected)) {
     return response.status(401).json({ success: false, reason: "unauthorized" });
   }
 

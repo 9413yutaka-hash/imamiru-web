@@ -112,7 +112,9 @@ import {
   readPublicStoreCustomProfiles,
   checkStoreCustomEditor,
   buildStoreMenuPhotoFolder,
-  isStoreMenuPhotoPublicId
+  isStoreMenuPhotoPublicId,
+  // STEP 47-F｜店舗の退会の受付での解約(依存として渡す)。
+  cancelStoreCustomPlan
 } from "./_lib/store-custom-profile.js";
 
 // STEP 44-C③｜月額100円カスタマイズの後払い請求の基盤(月末締め・請求台帳。Stripe への請求はしない)。
@@ -29979,6 +29981,9 @@ function buildStoreAccountDeletionDeps() {
     },
     destroyStorePhotoImages: destroyStorePhotoImages,
     requireAdmin: requireAdmin,
+    // STEP 47-F｜月額100円カスタマイズ(STEP 44)がある系列だけ渡す：退会の受付での解約と、商品写真の削除の判定。
+    cancelStoreCustomPlan: cancelStoreCustomPlan,
+    isStoreMenuPhotoPublicId: isStoreMenuPhotoPublicId,
     // STEP 47-C ①｜ログインの無い処理(定期実行・運営の再開)で、削除の前に代表のアカウントかを確かめる
     // (ログインの登録メールが ADMIN_EMAIL か。真偽値だけを返す)。
     isAdminUid: async function(uid) {

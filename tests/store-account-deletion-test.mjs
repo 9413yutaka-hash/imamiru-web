@@ -60,6 +60,9 @@ globalThis.fetch = async (url, opts = {}) => {
 
 const { default: handler } = await import(REPO_URL + "/api/moderate-submission.js?v=" + Date.now());
 const SB = await import(REPO_URL + "/api/_lib/store-billing.js");
+// STEP 47-F｜月額100円カスタマイズ(STEP 44)が無い系列(本番系列 main)でも同じ試験を使う。月額プラン固有の確認だけ切り替える。
+const HAS_PLAN = (await import("node:fs")).existsSync(new URL("../api/_lib/store-custom-profile.js", import.meta.url));
+console.log("INFO 月額100円カスタマイズ(STEP 44)の系列: " + (HAS_PLAN ? "あり" : "なし（月額プラン固有の確認は、プランが無い時の動きを確かめる）"));
 const CR = await import(REPO_URL + "/api/_lib/imadake-card-requirement.js");
 
 let pass = 0, fail = 0; const logs = [];
@@ -200,6 +203,7 @@ t("H3 請求・取引の記録（請求書・料金台帳）は残る", doc("ima
 t("H4 カードの記録を待っている間（清算待ち）でもカードを外すのは清算の後だけ（ub2 のカードは残る）", doc("accountBilling/ub2").test.paymentMethodId === "pm_ub2card" && ST.pm.get("pm_ub2card").customer === "cus_ub2");
 
 // ---- I: monthly plan (decision 2) ----
+if (HAS_PLAN) {
 seedAccount("up1", ["sp1"]);
 put("storeCustomPlans/sp1", { storeId: "sp1", status: "active", ownerUid: "up1", billingAccountUid: "up1", periodKind: "monthly", createdInPreview: true, subscribedAt: Timestamp.fromMillis(Date.now() - 40 * 86400000), accessUntil: null, paymentStatus: "current", revision: 1 });
 r = await del("up1");
@@ -213,6 +217,11 @@ doc("storeCustomPlanInvoices/" + usageKey.split("/")[1]).status = "paid";
 resetRate();
 r = await del("up1");
 t("I3 当月分の支払いの後、本人の再操作でも最終削除できる（200 completed）", r.code === 200 && r.body.status === "completed" && deleted().includes("up1"), r.body);
+} else {
+seedAccount("up1", ["sp1"]);
+r = await del("up1");
+t("I0 月額プランの無い系列：月額プランの記録が無ければ清算待ちにならず、そのまま削除できる", r.code === 200 && r.body.status === "completed" && deleted().includes("up1"), r.body);
+}
 
 // ===================== C: immediate deletion when settled =====================
 r = await del("u1", {});
@@ -241,7 +250,7 @@ doc("storeProfiles/sph").photos.push({ url: CLD + "v1/" + photoId("other", "x") 
 put("storeCustomProfiles/sph", { storeId: "sph", menuItems: [{ name: "a", photo: { url: CLD + "v1/" + photoId("sph", "menu/m1") + ".webp", publicId: photoId("sph", "menu/m1") } }, { name: "b", photo: null }] });
 const cldP = CLD_CALLS.length;
 r = await del("uph");
-t("P1 写真：自店舗のフォルダーの画像（店舗写真・商品写真）だけを消す。運営掲載の元画像・他店舗の画像は消さない", r.code === 200 && JSON.stringify(CLD_CALLS.slice(cldP).sort()) === JSON.stringify([photoId("sph", "free1"), photoId("sph", "menu/m1")].sort()) && doc("storeProfiles/sph").photos.length === 2 && doc("storeCustomProfiles/sph").menuItems[0].photo === null, { calls: CLD_CALLS.slice(cldP), photos: doc("storeProfiles/sph").photos });
+t("P1 写真：自店舗のフォルダーの画像（店舗写真・商品写真）だけを消す。運営掲載の元画像・他店舗の画像は消さない", r.code === 200 && JSON.stringify(CLD_CALLS.slice(cldP).sort()) === JSON.stringify((HAS_PLAN ? [photoId("sph", "free1"), photoId("sph", "menu/m1")] : [photoId("sph", "free1")]).sort()) && doc("storeProfiles/sph").photos.length === 2 && (HAS_PLAN ? doc("storeCustomProfiles/sph").menuItems[0].photo === null : doc("storeCustomProfiles/sph").menuItems[0].photo !== null), { calls: CLD_CALLS.slice(cldP), photos: doc("storeProfiles/sph").photos });
 seedAccount("upf", ["spf"]);
 cldFail = true;
 r = await del("upf");
@@ -395,7 +404,7 @@ r = await cancel("un1");
 const evN = [...S.docs.keys()].filter((k) => k.startsWith("accountDeletionEvents/un1_"));
 t("N3 清算待ちの間は本人が取り消せる（200 canceled・履歴を残す）", r.code === 200 && r.body.status === "canceled" && doc("accountDeletions/un1").status === "canceled" && evN.length === 1, { r: r.body, ev: evN });
 t("N4 取り消し後：店舗の無効は戻すが、店舗情報は非公開のまま（自動で再公開しない）", doc("storeAccounts/sn1").enabled === true && doc("storeAccounts/sn1").disabledReason === "" && doc("storeProfiles/sn1").status === "draft", { a: doc("storeAccounts/sn1"), p: doc("storeProfiles/sn1").status });
-t("N5 取り消し後：終了した今だけ投稿は復活させない・月額プランは再契約しない（解約のまま）", doc("imadakePosts/pn1").status === "ended" && doc("storeCustomPlans/sn1").status === "canceling", { post: doc("imadakePosts/pn1").status, plan: doc("storeCustomPlans/sn1").status });
+t("N5 取り消し後：終了した今だけ投稿は復活させない・月額プランは再契約しない（解約のまま）", doc("imadakePosts/pn1").status === "ended" && doc("storeCustomPlans/sn1").status === (HAS_PLAN ? "canceling" : "active"), { post: doc("imadakePosts/pn1").status, plan: doc("storeCustomPlans/sn1").status });
 t("N6 取り消し後：退会の前の請求の義務は残る（未払いの請求書はそのまま）・カードとログインも残る", doc("imadakeMonthlyInvoices/sn1_2026-09").status === "payment_failed" && doc("accountBilling/un1").test.paymentMethodId === "pm_un1card" && !deleted().includes("un1"));
 t("N7 取り消し後：運営掲載は自動で再表示しない（非公開の印は残す）", doc("storeListingLinks/subn1").listingHiddenReason === "owner_account_deleted" && ((await publicBody()).suppressedListingIds || []).includes("subn1"));
 const chkN2 = await check("un1");
