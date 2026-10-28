@@ -96,6 +96,8 @@ jobs:
           echo "Verified Preview deployment: $url (commit $RUN_SHA, Firebase machinau-preview)"
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
+      # STEP 47-C｜同じ入口の最後の手順で、清算が済んだ店舗の退会を最終削除する。運営の対応が必要な異常を
+      # はじめて見つけた時は 500（operator_attention_required）になり、この実行は失敗として GitHub から通知のメールが届く。
       - name: Run the monthly plan scheduled entry on Preview (close, dunning, charge planning only)
         env:
           CRON_SECRET: ${{ secrets.AI_COLLECT_CRON_SECRET }}
@@ -110,6 +112,6 @@ jobs:
             -H "X-Machinau-Cron-Secret: $CRON_SECRET" \
             -d '{"mode":"storeCustomPlanCron"}')"
           echo "HTTP $code"
-          node -e 'const r=JSON.parse(require("fs").readFileSync("response.json","utf8"));const s=r.steps||{};const c=s.charges||{};console.log(JSON.stringify({success:r.success,reason:r.reason,status:r.status,jstDate:r.jstDate,closeMonth:r.closeMonth,errors:r.errors,close:s.close,dunning:s.dunning,charges:{status:c.status,executed:c.executed,blockedReason:c.blockedReason,totals:c.totals}},null,2))' || echo "(response was not JSON)"
+          node -e 'const r=JSON.parse(require("fs").readFileSync("response.json","utf8"));const s=r.steps||{};const c=s.charges||{};console.log(JSON.stringify({success:r.success,reason:r.reason,status:r.status,jstDate:r.jstDate,closeMonth:r.closeMonth,errors:r.errors,close:s.close,dunning:s.dunning,charges:{status:c.status,executed:c.executed,blockedReason:c.blockedReason,totals:c.totals},accountDeletion:s.accountDeletion?{status:s.accountDeletion.status,processed:s.accountDeletion.processed,deferred:s.accountDeletion.deferred,counts:s.accountDeletion.counts,operatorAttention:s.accountDeletion.operatorAttention}:undefined},null,2))' || echo "(response was not JSON)"
           rm -f response.json
           [ "$code" = "200" ]

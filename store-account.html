@@ -161,6 +161,11 @@
 
     .primary-button:disabled, .secondary-button:disabled { opacity: 0.55; cursor: default; }
 
+    /* STEP 47｜アカウントの削除 */
+    .delete-button { display: block; width: 100%; min-height: 48px; margin-top: 10px; padding: 12px; border-radius: 999px; border: 1px solid #b42318; background: #b42318; color: #fff; font-size: 15px; font-weight: 800; font-family: inherit; cursor: pointer; }
+    .delete-button:disabled { opacity: 0.55; cursor: default; }
+    .delete-list { margin: 8px 0; padding-left: 20px; font-size: 13.5px; line-height: 1.6; }
+
     .link-list { margin-top: 14px; display: grid; gap: 8px; font-size: 13.5px; }
 
     .link-button {
@@ -610,6 +615,35 @@
         <button type="button" class="secondary-button" id="resendButton" data-i18n="store_account_resend_button">確認メールを再送する</button>
       </div>
 
+      <!-- STEP 47 / 47-B｜アカウントの削除(ログイン中のアカウントに表示。メール未確認でも可)。判定と削除はサーバー
+           (storeAccountDeletionCheck・storeAccountDelete)が行う。未請求・未払いがあれば退会を受け付け、清算の後に削除する。
+           表示はすべて textContent。 -->
+      <div class="store-section" id="accountDeletionSection" hidden>
+        <h3 data-i18n="store_delete_heading">アカウントの削除</h3>
+        <p class="hint" data-i18n="store_delete_intro"></p>
+        <button type="button" class="secondary-button" id="deleteCheckButton" data-i18n="store_delete_check_button">アカウントの削除へ進む</button>
+        <div id="deleteConfirmBox" hidden>
+          <p class="hint" data-i18n="store_delete_confirm_lead"></p>
+          <ul class="delete-list" id="deleteSummaryList"></ul>
+          <p class="hint" data-i18n="store_delete_effects_lead"></p>
+          <ul class="delete-list" id="deleteEffectsList"></ul>
+          <p class="hint" id="deleteSettlementNote" data-i18n="store_delete_settlement_note" hidden></p>
+          <button type="button" class="delete-button" id="deleteConfirmButton" data-i18n="store_delete_confirm_button">アカウントを削除する</button>
+          <button type="button" class="secondary-button" id="deleteCancelButton" data-i18n="store_delete_cancel_button">やめる</button>
+        </div>
+        <div id="deleteMessage" class="message" role="status" aria-live="polite"></div>
+        <ul class="delete-list" id="deleteBlockerList" hidden></ul>
+        <button type="button" class="secondary-button" id="deleteResumeButton" data-i18n="store_delete_resume_button" hidden>手続きの状況を確認する</button>
+        <!-- STEP 47-C ④｜退会の取り消し(最終削除の開始前＝清算待ちの間だけ)。「取り消す」→確認→「取り消しを確定する」の2段階。 -->
+        <button type="button" class="secondary-button" id="deleteWithdrawButton" data-i18n="store_delete_withdraw_button" hidden>退会を取り消す</button>
+        <div id="deleteWithdrawConfirmBox" hidden>
+          <p class="hint" data-i18n="store_delete_withdraw_confirm_lead"></p>
+          <button type="button" class="primary-button" id="deleteWithdrawConfirmButton" data-i18n="store_delete_withdraw_confirm_button">取り消しを確定する</button>
+          <button type="button" class="secondary-button" id="deleteWithdrawBackButton" data-i18n="store_delete_cancel_button">やめる</button>
+        </div>
+        <ul class="delete-list" id="deleteWithdrawGuideList" hidden></ul>
+      </div>
+
       <button type="button" class="secondary-button" id="logoutButton" data-i18n="store_account_logout_button">ログアウトする</button>
     </section>
 
@@ -1046,6 +1080,8 @@
           loadMyStores();
         }
         renderClaimSection();
+        // STEP 47-B ⑧｜メール未確認のアカウントも本人が削除できる(紐付けの検査はサーバー)。
+        document.getElementById("accountDeletionSection").hidden = !user;
       }
 
       function loadMyStores() {
@@ -1097,6 +1133,250 @@
         invoiceHistoryByStore = {};
         invoiceHistoryFailed = false;
         renderInvoiceHistorySection();
+        resetDeletionView();
+      }
+
+      // ===== STEP 47｜アカウントの削除 =====
+      // ①「削除へ進む」でサーバーに削除できるかを確かめる(読むだけ) → ②削除できない時は理由を表示、できる時は
+      // 店舗・投稿・カードの件数と「削除すると起きること」を表示 → ③「アカウントを削除する」でサーバーが削除する。
+      // 削除が終わったらログアウトしてログイン画面に戻す。カードの番号・Stripe の ID は扱わない(サーバーも返さない)。
+      const DELETE_BLOCKER_KEYS = {
+        imadake_invoice_unsettled: "store_delete_blocker_imadake_invoice",
+        imadake_charges_unbilled: "store_delete_blocker_imadake_unbilled",
+        custom_plan_unbilled: "store_delete_blocker_plan_unbilled",
+        custom_plan_invoice_unsettled: "store_delete_blocker_plan_invoice",
+        billing_locked: "store_delete_blocker_billing_locked",
+        live_card_removal_unavailable: "store_delete_blocker_card_unavailable"
+      };
+      const DELETE_EFFECT_KEYS = [
+        "store_delete_effect_stores",
+        "store_delete_effect_posts",
+        "store_delete_effect_plan",
+        "store_delete_effect_card",
+        "store_delete_effect_photos",
+        "store_delete_effect_login",
+        "store_delete_effect_records"
+      ];
+
+      // STEP 47-B｜退会の手続き中の表示(状態はサーバーの accountDeletions/{uid}.status)。
+      function setDeleteConfirmLabel(key) {
+        const button = document.getElementById("deleteConfirmButton");
+        button.setAttribute("data-i18n", key);
+        button.textContent = t(key);
+      }
+
+      function showDeletionStatus(status, blockers) {
+        document.getElementById("deleteConfirmBox").hidden = true;
+        document.getElementById("deleteCheckButton").hidden = true;
+        document.getElementById("deleteWithdrawConfirmBox").hidden = true;
+        fillList("deleteWithdrawGuideList", []);
+        // STEP 47-C ④｜取り消せるのは最終削除の開始前(清算待ち)の間だけ(最終の判定はサーバー)。
+        document.getElementById("deleteWithdrawButton").hidden = status !== "awaiting_settlement";
+        if (status === "card_detach_failed" || status === "operator_protected") {
+          setDeleteMessage("store_delete_status_operator", "info");
+          fillList("deleteBlockerList", []);
+          document.getElementById("deleteResumeButton").hidden = true;
+          return;
+        }
+        setDeleteMessage(status === "awaiting_settlement" ? "store_delete_status_awaiting" : "store_delete_pending", "info");
+        fillList("deleteBlockerList", (Array.isArray(blockers) ? blockers : []).map(function (code) {
+          return t(DELETE_BLOCKER_KEYS[code] || "store_delete_blocker_other");
+        }));
+        document.getElementById("deleteResumeButton").hidden = false;
+      }
+
+      // STEP 47-C ④｜退会の取り消し。取り消した後に必要な操作(公開し直す・投稿し直す・申込み直す)を案内する。
+      const WITHDRAW_GUIDE_KEYS = [
+        "store_delete_withdraw_guide_profile",
+        "store_delete_withdraw_guide_posts",
+        "store_delete_withdraw_guide_plan",
+        "store_delete_withdraw_guide_billing"
+      ];
+
+      function handleWithdrawStart() {
+        document.getElementById("deleteWithdrawButton").hidden = true;
+        document.getElementById("deleteResumeButton").hidden = true;
+        document.getElementById("deleteWithdrawConfirmBox").hidden = false;
+      }
+
+      function handleWithdrawBack() {
+        document.getElementById("deleteWithdrawConfirmBox").hidden = true;
+        document.getElementById("deleteWithdrawButton").hidden = false;
+        document.getElementById("deleteResumeButton").hidden = false;
+      }
+
+      function handleWithdrawConfirm() {
+        if (busy) {
+          return;
+        }
+        const box = document.getElementById("accountDeletionSection");
+        setBusy(box, true);
+        callStoreApi({ mode: "storeAccountDeletionCancel", confirm: true })
+          .then(function (response) {
+            const result = response.result || {};
+            if (response.status === 200 && result.success === true && result.status === "canceled") {
+              resetDeletionView();
+              setDeleteMessage("store_delete_withdrawn", "success");
+              fillList("deleteWithdrawGuideList", WITHDRAW_GUIDE_KEYS.map(t));
+              // 店舗の「無効」を戻したため、店舗の一覧を読み直す(店舗情報は非公開のまま)。
+              storesLoadedForUid = "";
+              loadMyStores();
+              return;
+            }
+            document.getElementById("deleteWithdrawConfirmBox").hidden = true;
+            if (response.status === 409 && result.reason === "deletion_in_progress") {
+              showDeletionStatus(result.status || "finalizing", []);
+              document.getElementById("deleteWithdrawButton").hidden = true;
+              setDeleteMessage("store_delete_withdraw_too_late", "error");
+            } else if (response.status === 429) {
+              handleWithdrawBack();
+              setDeleteMessage("store_delete_err_rate_limited", "error");
+            } else {
+              handleWithdrawBack();
+              setDeleteMessage("store_delete_err_generic", "error");
+            }
+          })
+          .catch(function () {
+            handleWithdrawBack();
+            setDeleteMessage("store_account_err_network", "error");
+          })
+          .finally(function () {
+            setBusy(box, false);
+          });
+      }
+
+      function setDeleteMessage(key, type) {
+        const box = document.getElementById("deleteMessage");
+        box.textContent = key ? t(key) : "";
+        box.className = key ? "message show " + type : "message";
+      }
+
+      function fillList(listId, lines) {
+        const list = document.getElementById(listId);
+        list.textContent = "";
+        lines.forEach(function (line) {
+          const item = document.createElement("li");
+          item.textContent = line;
+          list.appendChild(item);
+        });
+        list.hidden = lines.length === 0;
+      }
+
+      function resetDeletionView() {
+        document.getElementById("deleteConfirmBox").hidden = true;
+        document.getElementById("deleteCheckButton").hidden = false;
+        document.getElementById("deleteResumeButton").hidden = true;
+        document.getElementById("deleteWithdrawButton").hidden = true;
+        document.getElementById("deleteWithdrawConfirmBox").hidden = true;
+        fillList("deleteWithdrawGuideList", []);
+        document.getElementById("deleteSettlementNote").hidden = true;
+        setDeleteConfirmLabel("store_delete_confirm_button");
+        fillList("deleteBlockerList", []);
+        setDeleteMessage("", "");
+      }
+
+      function showDeleteBlockers(blockers) {
+        const lines = (Array.isArray(blockers) ? blockers : []).map(function (code) {
+          return t(DELETE_BLOCKER_KEYS[code] || "store_delete_blocker_other");
+        });
+        setDeleteMessage("store_delete_blocked", "error");
+        fillList("deleteBlockerList", lines);
+      }
+
+      function handleDeleteCheck() {
+        if (busy) {
+          return;
+        }
+        resetDeletionView();
+        const box = document.getElementById("accountDeletionSection");
+        setBusy(box, true);
+        callStoreApi({ mode: "storeAccountDeletionCheck" })
+          .then(function (response) {
+            const result = response.result || {};
+            if (response.status === 403 && result.reason === "operator_account") {
+              setDeleteMessage("store_delete_err_operator", "error");
+              return;
+            }
+            if (response.status !== 200 || result.success !== true) {
+              setDeleteMessage("store_delete_err_generic", "error");
+              return;
+            }
+            if (result.deletionStatus && result.deletionStatus !== "completed") {
+              showDeletionStatus(result.deletionStatus, result.blockers);
+              return;
+            }
+            if (result.deletable !== true) {
+              showDeleteBlockers(result.blockers);
+              return;
+            }
+            const summary = result.summary || {};
+            const en = currentLanguage === "en";
+            const line = function (labelKey, value) {
+              return t(labelKey) + (en ? ": " : "：") + value;
+            };
+            fillList("deleteSummaryList", [
+              line("store_delete_summary_stores", (Number(summary.storeCount) || 0) + (en ? " (" : "（") + t("store_delete_summary_published") + " " + (Number(summary.publishedStoreCount) || 0) + (en ? ")" : "）")),
+              line("store_delete_summary_posts", String(Number(summary.activePostCount) || 0)),
+              line("store_delete_summary_card", t(summary.hasCard ? "store_delete_summary_card_yes" : "store_delete_summary_card_no"))
+            ]);
+            fillList("deleteEffectsList", DELETE_EFFECT_KEYS.map(t));
+            // 未請求・未払いがある：退会を受け付けて、清算の後に削除する(ボタンの文言も変える)。
+            document.getElementById("deleteSettlementNote").hidden = result.settlementRequired !== true;
+            setDeleteConfirmLabel(result.settlementRequired === true ? "store_delete_request_button" : "store_delete_confirm_button");
+            document.getElementById("deleteCheckButton").hidden = true;
+            document.getElementById("deleteConfirmBox").hidden = false;
+          })
+          .catch(function () {
+            setDeleteMessage("store_account_err_network", "error");
+          })
+          .finally(function () {
+            setBusy(box, false);
+          });
+      }
+
+      function handleDeleteConfirm() {
+        if (busy) {
+          return;
+        }
+        const box = document.getElementById("accountDeletionSection");
+        setBusy(box, true);
+        setDeleteMessage("store_delete_running", "info");
+        callStoreApi({ mode: "storeAccountDelete", confirm: true })
+          .then(function (response) {
+            const result = response.result || {};
+            if (response.status === 200 && result.success === true && result.status === "completed") {
+              cancelScheduledVerification();
+              resetStoreState();
+              return storeAuth.signOut()
+                .catch(function () {})
+                .then(function () {
+                  showView("login");
+                  showMessage("store_delete_done", "success");
+                });
+            }
+            document.getElementById("deleteConfirmBox").hidden = true;
+            document.getElementById("deleteCheckButton").hidden = false;
+            if (response.status === 202) {
+              showDeletionStatus(result.status, result.blockers);
+              if (result.status === "awaiting_settlement") {
+                setDeleteMessage("store_delete_accepted", "success");
+              }
+            } else if (response.status === 403 && result.reason === "operator_account") {
+              setDeleteMessage("store_delete_err_operator", "error");
+            } else if (response.status === 409 && result.reason === "not_deletable") {
+              showDeleteBlockers(result.blockers);
+            } else if (response.status === 429) {
+              setDeleteMessage("store_delete_err_rate_limited", "error");
+            } else {
+              setDeleteMessage("store_delete_err_generic", "error");
+            }
+          })
+          .catch(function () {
+            setDeleteMessage("store_account_err_network", "error");
+          })
+          .finally(function () {
+            setBusy(box, false);
+          });
       }
 
       // ===== 今だけ投稿 決済 STEP 38-B｜ご請求の履歴(読み取りだけ) =====
@@ -2529,6 +2809,13 @@
         document.getElementById("resendButton").addEventListener("click", handleResend);
         document.getElementById("refreshButton").addEventListener("click", handleRefresh);
         document.getElementById("logoutButton").addEventListener("click", handleLogout);
+        document.getElementById("deleteCheckButton").addEventListener("click", handleDeleteCheck);
+        document.getElementById("deleteConfirmButton").addEventListener("click", handleDeleteConfirm);
+        document.getElementById("deleteCancelButton").addEventListener("click", resetDeletionView);
+        document.getElementById("deleteResumeButton").addEventListener("click", handleDeleteConfirm);
+        document.getElementById("deleteWithdrawButton").addEventListener("click", handleWithdrawStart);
+        document.getElementById("deleteWithdrawBackButton").addEventListener("click", handleWithdrawBack);
+        document.getElementById("deleteWithdrawConfirmButton").addEventListener("click", handleWithdrawConfirm);
         document.getElementById("claimForm").addEventListener("submit", handleClaimSubmit);
         document.querySelectorAll('input[name="claimTarget"]').forEach(function (radio) {
           radio.addEventListener("change", updateClaimTargetSelect);

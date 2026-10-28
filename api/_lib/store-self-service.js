@@ -19,6 +19,10 @@
 // このファイルはVercel Functionではない(api/moderate-submission.jsから呼ばれる)。
 
 import {
+  readAccountDeletion
+} from "./account-deletion-state.js";
+
+import {
   FieldValue
 } from "firebase-admin/firestore";
 
@@ -616,6 +620,11 @@ export async function handleStoreSelfRegister(request, response, deps) {
 
     const database = deps.getFirestore(deps.getFirebaseAdminApp());
 
+    // STEP 47-B｜退会を受け付けたアカウントは、新しい店舗を登録できない(保存のトランザクションでも確かめる)。
+    if (await readAccountDeletion(database, actor.uid)) {
+      return sendError(response, 409, "account_deleting");
+    }
+
     // STEP 42-D｜新規登録の条件：このアカウントにクレジットカードが登録済み(有効)であること(1アカウント1枚)。
     const card = typeof deps.checkAccountBillingCard === "function"
       ? await deps.checkAccountBillingCard(database, actor.uid)
@@ -675,6 +684,8 @@ export async function handleStoreSelfRegister(request, response, deps) {
     const memberRef = database.collection(STORE_MEMBERS_COLLECTION).doc(storeId + "_" + actor.uid);
     const profileRef = database.collection(STORE_PROFILES_COLLECTION).doc(storeId);
 
+    let deletionStarted = false;
+
     await database.runTransaction(async function(transaction) {
       const existing = await Promise.all([
         transaction.get(storeRef),
@@ -684,6 +695,13 @@ export async function handleStoreSelfRegister(request, response, deps) {
 
       if (existing.some(function(snapshot) { return snapshot.exists; })) {
         throw new Error("store_id_collision");
+      }
+
+      // STEP 47-B｜退会の受付と同時の登録でも、店舗を作らない(退会の記録と同じトランザクションで確かめる)。
+      deletionStarted = Boolean(await readAccountDeletion(database, actor.uid, transaction));
+
+      if (deletionStarted) {
+        return;
       }
 
       // 管理情報。tokenHashは作らない(旧store token経路では操作できない)。
@@ -732,6 +750,10 @@ export async function handleStoreSelfRegister(request, response, deps) {
         updatedAt: FieldValue.serverTimestamp()
       });
     });
+
+    if (deletionStarted) {
+      return sendError(response, 409, "account_deleting");
+    }
 
     return response.status(200).json({
       success: true,

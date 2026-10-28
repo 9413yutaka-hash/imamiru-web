@@ -23,6 +23,8 @@ let storeProfileListStores = [];
 let storeProfileSuppressedListingIds = new Set();
 // STEP 42-G｜引き継ぎ済み(有効な紐付けあり)の運営掲載ID。詳細の「このお店の方へ」の入口を出さないためだけに使う。
 let storeProfileClaimedListingIds = new Set();
+// STEP 47-B ③｜店主の退会で非公開にした運営掲載ID(お気に入り表示でも出さない)。
+let storeProfileWithdrawnListingIds = new Set();
 // STEP 43-N C案｜店舗の新規登録・引き継ぎが一般に開いているか(publicStoreProfiles の listingClaimOpen)。
 // 取得できない・値が無い時は開いていない扱い(入口を出さない)。
 let storeListingClaimOpen = false;
@@ -3098,6 +3100,7 @@ function resetStoreProfileListState() {
   storeProfileListStores = [];
   storeProfileSuppressedListingIds = new Set();
   storeProfileClaimedListingIds = new Set();
+  storeProfileWithdrawnListingIds = new Set();
   storeListingClaimOpen = false;
 }
 
@@ -3119,6 +3122,7 @@ async function loadStoreProfilesForShopList() {
   let nextSuppressedIds = [];
   let nextClaimedIds = [];
   let nextClaimOpen = false;
+  let nextWithdrawnIds = [];
 
   try {
     const response =
@@ -3146,6 +3150,11 @@ async function loadStoreProfilesForShopList() {
           })
         : [];
       nextClaimOpen = data.listingClaimOpen === true;
+      nextWithdrawnIds = Array.isArray(data.withdrawnListingIds)
+        ? data.withdrawnListingIds.filter(function(id) {
+            return typeof id === "string" && id !== "";
+          })
+        : [];
     }
   } catch (error) {
     console.warn("正式店舗の一覧を取得できませんでした(無料掲載はそのまま表示します)：", error && error.name);
@@ -3163,6 +3172,7 @@ async function loadStoreProfilesForShopList() {
   storeProfileListStores = nextStores;
   storeProfileSuppressedListingIds = new Set(nextSuppressedIds);
   storeProfileClaimedListingIds = new Set(nextClaimedIds);
+  storeProfileWithdrawnListingIds = new Set(nextWithdrawnIds);
   storeListingClaimOpen = nextClaimOpen;
 
   if (hasAppliedSubmissionsForStoreProfiles) {
@@ -3466,7 +3476,8 @@ function getStoreProfileSuppressedIdsForCurrentView() {
     return storeProfileSuppressedListingIds;
   }
 
-  const aliased = new Set();
+  // STEP 47-B ③｜店主の退会で非公開にした掲載は、お気に入り表示でも外す。
+  const aliased = new Set(storeProfileWithdrawnListingIds);
 
   storeProfileListStores.map(buildStoreProfileListShop).forEach(function(shop) {
     (shop ? shop.linkedListingIds : []).forEach(function(id) {
@@ -4470,7 +4481,10 @@ function renderFavoriteList() {
 
     if (!replacement) {
       // 引き継ぎ先の正式店舗が確認できない時は、お気に入りの無料掲載を消さずに出す。
-      favoriteShops.push(shop);
+      // STEP 47-B ③｜ただし店主の退会で非公開にした掲載は出さない(運営の確認なしに自動で戻さない)。
+      if (!storeProfileWithdrawnListingIds.has(shop.firestoreId)) {
+        favoriteShops.push(shop);
+      }
       return;
     }
 

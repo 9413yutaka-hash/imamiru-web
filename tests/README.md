@@ -53,6 +53,11 @@ node --import ./tests/mockfa/register.mjs     tests/store-invoice-history-ui-tes
 node --import ./tests/mockfa-occ/register.mjs tests/store-card-registration-test.mjs
 node --import ./tests/mockfa-occ/register.mjs tests/store-card-registration-ui-test.mjs   # Chrome を使う
 
+# 店舗アカウントの退会(STEP 47・47-B・47-C：退会の受付→清算待ち→清算の後に自動で最終削除、取り消し、運営アカウントの保護、運営への異常の通知)
+# 毎日の定期実行の最後の手順としての最終削除は store-custom-plan-cron-test.mjs で確かめる
+node --import ./tests/mockfa-occ/register.mjs tests/store-account-deletion-test.mjs
+node --import ./tests/mockfa-occ/register.mjs tests/store-account-deletion-ui-test.mjs   # Chrome を使う
+
 # 既存の回帰(サーバー)
 for f in imadake-store-login-test imadake-safety-test imadake-translation-test imadake-nearby-test route-test; do
   node --import ./tests/mockfa/register.mjs tests/$f.mjs

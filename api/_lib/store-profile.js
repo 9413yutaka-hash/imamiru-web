@@ -1348,6 +1348,10 @@ export async function handleStoreProfileUnpublish(request, response, deps) {
 // listingClaimOpen(STEP 43-N C案)：店舗の新規登録・引き継ぎを一般に開いているか(isStoreOnboardingOpen)。
 // 本番カード登録の先行テストの間(Production・スイッチ false)は false で、旅行者向け詳細の入口を出さない。
 
+// STEP 47-B ③｜店主の退会で非公開にした運営掲載の紐付けの印(storeListingLinks.listingHiddenReason)。
+// suppressedListingIds には、紐付け先の店舗が公開されていなくても入れる。
+export const LISTING_HIDDEN_BY_OWNER_ACCOUNT_DELETION = "owner_account_deleted";
+
 export const PUBLIC_STORE_ID_PREFIX = "sp_";
 export const PUBLIC_STORE_LISTING_TYPE = "store_profile";
 
@@ -1457,6 +1461,7 @@ export async function handlePublicStoreProfilesList(request, response, deps) {
     // storeId → 有効に紐付いている運営無料掲載のsubmission ID(文書ID)
     const linkedListingIdsByStore = new Map();
     const claimedListingIds = new Set();
+    const withdrawnListingIds = new Set();
 
     snapshots[1].docs.forEach(function(documentSnapshot) {
       const link = documentSnapshot.data() || {};
@@ -1466,6 +1471,12 @@ export async function handlePublicStoreProfilesList(request, response, deps) {
       }
 
       claimedListingIds.add(documentSnapshot.id);
+
+      // STEP 47-B ③｜引き継いだ店主が退会した運営掲載は、紐付け先の店舗が公開されていなくても外す
+      // (運営の確認なしに無料掲載へ自動で戻さない。再掲載は運営が紐付けを解除した時)。
+      if (link.listingHiddenReason === LISTING_HIDDEN_BY_OWNER_ACCOUNT_DELETION) {
+        withdrawnListingIds.add(documentSnapshot.id);
+      }
 
       if (!linkedListingIdsByStore.has(link.storeId)) {
         linkedListingIdsByStore.set(link.storeId, []);
@@ -1538,6 +1549,10 @@ export async function handlePublicStoreProfilesList(request, response, deps) {
 
     stores.sort(function(a, b) { return a.id < b.id ? -1 : a.id > b.id ? 1 : 0; });
 
+    withdrawnListingIds.forEach(function(listingId) {
+      suppressedListingIds.add(listingId);
+    });
+
     // 成功時だけ、既存の公開submissions一覧と同じCDN共有キャッシュにする
     // (失敗時は呼び出し元で設定済みの no-store のまま)。
     response.setHeader("Cache-Control", deps.publicListCacheControl);
@@ -1547,6 +1562,8 @@ export async function handlePublicStoreProfilesList(request, response, deps) {
       stores: stores,
       suppressedListingIds: Array.from(suppressedListingIds).sort(),
       claimedListingIds: Array.from(claimedListingIds).sort(),
+      // STEP 47-B ③｜店主の退会で非公開にした運営掲載(お気に入り表示でも外すため、suppressedListingIds とは別にも返す)。
+      withdrawnListingIds: Array.from(withdrawnListingIds).sort(),
       listingClaimOpen: isStoreOnboardingOpen((deps && deps.env) || process.env)
     });
   } catch (error) {

@@ -41,6 +41,10 @@ import {
   validateImadakeUrl
 } from "./imadake.js";
 
+import {
+  readAccountDeletion
+} from "./account-deletion-state.js";
+
 // STEP 42-D｜運営掲載の情報を店主の店舗情報へ写す(写真の複製は代表の承認まで止める)。
 import {
   buildEmptyFieldFill,
@@ -353,6 +357,12 @@ export async function handleStoreListingClaimCreate(request, response, deps) {
     let outcome = null;
 
     await database.runTransaction(async function(transaction) {
+      // STEP 47-B｜退会の受付と同時の引き継ぎでも、店舗を作らない(退会の記録と同じトランザクションで確かめる)。
+      if (await readAccountDeletion(database, actor.uid, transaction)) {
+        outcome = { status: 409, reason: "account_deleting" };
+        return;
+      }
+
       const linked = await linkListingInTransaction(transaction, database, {
         claimId: claimRef.id,
         submissionId: submissionId,

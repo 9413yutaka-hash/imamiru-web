@@ -4186,6 +4186,253 @@ const MACHINAU_TRANSLATIONS = {
     en: "Register a card ↓"
   },
 
+  // STEP 47 / 47-B｜アカウントの削除(退会)。未請求・未払いがあれば退会を受け付け、ご請求とお支払いの後に削除する
+  store_delete_heading: {
+    ja: "アカウントの削除",
+    en: "Delete account"
+  },
+
+  store_delete_intro: {
+    ja: "この店舗・施設のアカウントと登録したクレジットカードを、ご自身で削除（退会）できます。まだご請求していない料金や、お支払いが済んでいないご請求がある場合は、退会を受け付けた後、翌月2日のご請求とお支払いが済んでから削除します。",
+    en: "You can delete (close) this business account and its registered credit card yourself. If there are fees not yet billed or charges not yet paid, we accept your request first and delete the account after the billing on the 2nd of the following month and its payment are complete."
+  },
+
+  store_delete_check_button: {
+    ja: "アカウントの削除へ進む",
+    en: "Continue to delete account"
+  },
+
+  store_delete_confirm_lead: {
+    ja: "このアカウントの現在の状況",
+    en: "Current status of this account"
+  },
+
+  store_delete_summary_stores: {
+    ja: "店舗・施設",
+    en: "Businesses"
+  },
+
+  store_delete_summary_published: {
+    ja: "公開中",
+    en: "published"
+  },
+
+  store_delete_summary_posts: {
+    ja: "掲載中・審査待ちの今だけ投稿",
+    en: "Live or pending \"Now only\" posts"
+  },
+
+  store_delete_summary_card: {
+    ja: "登録カード",
+    en: "Registered card"
+  },
+
+  store_delete_summary_card_yes: {
+    ja: "あり",
+    en: "Yes"
+  },
+
+  store_delete_summary_card_no: {
+    ja: "なし",
+    en: "None"
+  },
+
+  store_delete_effects_lead: {
+    ja: "削除すると、次のようになります。元に戻すことはできません。",
+    en: "Deleting the account will do the following. This cannot be undone."
+  },
+
+  store_delete_effect_stores: {
+    ja: "あなたの店舗・施設の情報は非公開になり、旅行者には表示されなくなります。",
+    en: "Your business information becomes private and is no longer shown to travelers."
+  },
+
+  store_delete_effect_posts: {
+    ja: "掲載中・審査待ちの今だけ投稿は掲載を終了します。",
+    en: "Live and pending \"Now only\" posts are ended."
+  },
+
+  store_delete_effect_plan: {
+    ja: "月額100円カスタマイズは解約します（当月分はご請求します）。新しい今だけ投稿・有料のご利用はできなくなります。",
+    en: "The monthly customization plan is canceled (the current month is still billed). New \"Now only\" posts and paid features are no longer available."
+  },
+
+  store_delete_effect_card: {
+    ja: "登録したクレジットカードを削除します（カード番号はマチナウでは保持していません）。",
+    en: "Your registered credit card is removed (Machinau does not keep card numbers)."
+  },
+
+  store_delete_effect_photos: {
+    ja: "店舗・施設の写真を削除します。",
+    en: "Photos of your business are deleted."
+  },
+
+  store_delete_effect_login: {
+    ja: "このアカウントではログインできなくなります。",
+    en: "You will no longer be able to log in with this account."
+  },
+
+  store_delete_effect_records: {
+    ja: "法令上必要な請求・取引の記録は保存します。",
+    en: "Billing and transaction records required by law are kept."
+  },
+
+  store_delete_confirm_button: {
+    ja: "アカウントを削除する",
+    en: "Delete account"
+  },
+
+  store_delete_cancel_button: {
+    ja: "やめる",
+    en: "Cancel"
+  },
+
+  store_delete_running: {
+    ja: "削除しています…",
+    en: "Deleting..."
+  },
+
+  store_delete_done: {
+    ja: "アカウントを削除しました。ご利用ありがとうございました。",
+    en: "Your account has been deleted. Thank you for using Machinau."
+  },
+
+  store_delete_pending: {
+    ja: "削除の手続きを進めています。登録カードの取り外しがまだ完了していないため、しばらくしてから「アカウントの削除へ進む」からもう一度お試しください。",
+    en: "Deletion is in progress. Removal of your registered card has not finished yet, so please try again later from \"Continue to delete account\"."
+  },
+
+  store_delete_settlement_note: {
+    ja: "まだご請求していない料金、またはお支払いが済んでいないご請求があります。退会を受け付けた時点で店舗・施設の情報は非公開になり、残りのご請求とお支払いが済んだ後に、アカウントとカードを削除します。それまではログインして、ご請求の確認とカードの変更ができます。",
+    en: "There are fees not yet billed or charges not yet paid. When we accept your request, your business information becomes private, and the account and card are deleted after the remaining charges are billed and paid. Until then you can log in to check charges and change your card."
+  },
+
+  store_delete_request_button: {
+    ja: "退会を申し込む（清算の後に削除）",
+    en: "Request closure (deleted after settlement)"
+  },
+
+  store_delete_accepted: {
+    ja: "退会を受け付けました。店舗・施設の情報は非公開にしました。残りのご請求とお支払いが済んだ後に、アカウントとカードを削除します。",
+    en: "Your request has been accepted. Your business information is now private. The account and card will be deleted after the remaining charges are billed and paid."
+  },
+
+  store_delete_status_awaiting: {
+    ja: "退会の手続き中です。残りのご請求とお支払いが済んだ後に、アカウントとカードを削除します。",
+    en: "Your account closure is in progress. The account and card will be deleted after the remaining charges are billed and paid."
+  },
+
+  store_delete_status_operator: {
+    ja: "登録カードの取り外しで問題が起きたため、運営が確認しています。確認が済み次第、削除の手続きを進めます。",
+    en: "A problem occurred while removing your registered card, and our team is looking into it. We will continue the deletion once it is resolved."
+  },
+
+  store_delete_resume_button: {
+    ja: "手続きの状況を確認する",
+    en: "Check the status"
+  },
+
+  store_delete_err_operator: {
+    ja: "運営のアカウントは、この画面からは削除できません。",
+    en: "Operator accounts cannot be deleted from this page."
+  },
+
+  // STEP 47-C ④｜退会の取り消し(最終削除の開始前だけ)
+  store_delete_withdraw_button: {
+    ja: "退会を取り消す",
+    en: "Withdraw closure request"
+  },
+
+  store_delete_withdraw_confirm_lead: {
+    ja: "退会の申し込みを取り消します。店舗・施設の情報は非公開のままです。終了した今だけ投稿・解約した月額100円カスタマイズは元に戻りません。退会の前のご請求は、これまでどおりお支払いが必要です。",
+    en: "This withdraws your closure request. Your business information stays private. Ended \"Now only\" posts and the canceled monthly customization plan are not restored. Charges from before the request still need to be paid."
+  },
+
+  store_delete_withdraw_confirm_button: {
+    ja: "取り消しを確定する",
+    en: "Confirm withdrawal"
+  },
+
+  store_delete_withdrawn: {
+    ja: "退会の申し込みを取り消しました。引き続きご利用いただくには、次の操作をお願いします。",
+    en: "Your closure request has been withdrawn. To continue using Machinau, please do the following."
+  },
+
+  store_delete_withdraw_guide_profile: {
+    ja: "店舗・施設の情報は非公開になっています。旅行者に表示するには、店舗の一覧の「常設店舗情報を編集する」から公開してください。",
+    en: "Your business information is private. To show it to travelers, publish it from \"Edit shop profile\" in your business list."
+  },
+
+  store_delete_withdraw_guide_posts: {
+    ja: "今だけ投稿は終了したままです。必要な場合は新しく投稿してください。",
+    en: "\"Now only\" posts remain ended. Create a new post if needed."
+  },
+
+  store_delete_withdraw_guide_plan: {
+    ja: "月額100円カスタマイズは解約されています。続ける場合は、「常設店舗情報を編集する」の画面から申し込み直してください。",
+    en: "The monthly customization plan has been canceled. To continue, sign up again from the \"Edit shop profile\" page."
+  },
+
+  store_delete_withdraw_guide_billing: {
+    ja: "退会の前に発生したご請求は、これまでどおりお支払いが必要です。",
+    en: "Charges incurred before the request still need to be paid as usual."
+  },
+
+  store_delete_withdraw_too_late: {
+    ja: "削除の手続きがすでに始まっているため、取り消せませんでした。",
+    en: "The deletion has already started, so the request could not be withdrawn."
+  },
+
+  store_delete_blocked: {
+    ja: "現在はアカウントを削除できません。次の点をご確認ください。",
+    en: "This account cannot be deleted right now. Please check the following."
+  },
+
+  store_delete_blocker_imadake_invoice: {
+    ja: "今だけ投稿のご請求に、お支払いが済んでいないもの、または決済結果が確定していないものがあります。",
+    en: "A \"Now only\" post charge is unpaid or its payment result is not yet confirmed."
+  },
+
+  store_delete_blocker_imadake_unbilled: {
+    ja: "今だけ投稿のまだご請求していない料金があります（月末に締め、翌月2日にご請求します）。",
+    en: "There are \"Now only\" post fees not yet billed (closed at month end and billed on the 2nd of the following month)."
+  },
+
+  store_delete_blocker_plan_unbilled: {
+    ja: "月額100円カスタマイズのまだご請求していない料金があります（月末に締め、翌月2日にご請求します）。",
+    en: "There are monthly customization fees not yet billed (closed at month end and billed on the 2nd of the following month)."
+  },
+
+  store_delete_blocker_plan_invoice: {
+    ja: "月額100円カスタマイズのご請求に、お支払いが済んでいないもの、または決済結果が確定していないものがあります。",
+    en: "A monthly customization charge is unpaid or its payment result is not yet confirmed."
+  },
+
+  store_delete_blocker_billing_locked: {
+    ja: "ご請求の処理中です。",
+    en: "A charge is being processed."
+  },
+
+  store_delete_blocker_card_unavailable: {
+    ja: "現在、登録カードを取り外す手続きができません。お問い合わせください。",
+    en: "Your registered card cannot be removed right now. Please contact us."
+  },
+
+  store_delete_blocker_other: {
+    ja: "削除できない理由があります。お問い合わせください。",
+    en: "The account cannot be deleted for another reason. Please contact us."
+  },
+
+  store_delete_err_generic: {
+    ja: "アカウントを削除できませんでした。時間をおいてもう一度お試しください。",
+    en: "The account could not be deleted. Please try again later."
+  },
+
+  store_delete_err_rate_limited: {
+    ja: "続けて操作されたため、少し時間をおいてからお試しください。",
+    en: "Too many attempts in a row. Please wait a moment and try again."
+  },
+
   store_steps_account: {
     ja: "① アカウントを作成",
     en: "1. Create an account"

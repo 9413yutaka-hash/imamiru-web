@@ -1162,7 +1162,8 @@ function buildSlotLocationFields(
   };
 }
 
-const EMPTY_ACTIVE_SLOT_FIELDS = {
+// STEP 47｜アカウントの削除で掲載を終える時も、同じ値で投稿枠を空にする(store-account-deletion.js)。
+export const EMPTY_ACTIVE_SLOT_FIELDS = {
   activePostId: "",
   activeExpiresAt: null,
   activeRegionKey: "",
@@ -1221,6 +1222,11 @@ function buildImadakeCardRequirementMessage(reason) {
 
   if (reason === "card_billing_unavailable") {
     return "ただいまカードの登録状態を確認できません。少し時間をおいてから、もう一度お試しください。";
+  }
+
+  // STEP 47-B｜退会を受け付けたアカウントの店舗は、新しい今だけ投稿を作れない。
+  if (reason === "card_account_deleting") {
+    return "退会の手続き中のため、新しい今だけ投稿はできません。";
   }
 
   return "今だけ投稿の利用には、クレジットカードの登録が必要です。店舗アカウント画面でカードを登録してください。";

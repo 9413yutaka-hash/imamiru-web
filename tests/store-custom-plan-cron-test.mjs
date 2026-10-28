@@ -140,6 +140,25 @@ t("F3 1日の失敗の後、12/3 の実行で11月の締めを取りこぼさず
 r = await CRON();
 t("F4 再実行しても11月の請求書は増えない", r.code === 200 && !r.body.steps.close.invoices.create && docs("storeCustomPlanInvoices").filter(([k]) => k.endsWith("_2026-11")).length === 2, r.body.steps.close.invoices);
 
+// ===================== STEP 47-C: account deletion as the last step of the daily run =====================
+NOW = jst(2026, 12, 4, 9);
+globalThis.__MOCK_TOKENS.ud1 = pw("ud1", "ud1@example.com"); globalThis.__MOCK_TOKENS.ud2 = pw("ud2", "ud2@example.com"); globalThis.__MOCK_TOKENS.ud3 = pw("ud3", "ud3@example.com");
+S.docs.set("accountDeletions/ud1", { uid: "ud1", status: "awaiting_settlement", blockers: ["custom_plan_unbilled"], storeIds: [] });
+S.docs.set("storeCustomPlanInvoices/SD2_2026-11", { storeId: "SD2", billingAccountUid: "ud2", status: "payment_failed" });
+S.docs.set("accountDeletions/ud2", { uid: "ud2", status: "awaiting_settlement", blockers: ["custom_plan_invoice_unsettled"], storeIds: [] });
+S.docs.set("storeCustomPlanInvoices/SD3_2026-11", { storeId: "SD3", billingAccountUid: "ud3", status: "processing" });
+S.docs.set("accountDeletions/ud3", { uid: "ud3", status: "awaiting_settlement", blockers: ["custom_plan_invoice_unsettled"], storeIds: [] });
+r = await CRON();
+const del47 = r.body.steps && r.body.steps.accountDeletion;
+t("G1 47-C：毎日の定期実行の最後（締め・未払いの判定・請求の後）に、清算が済んだ退会を自動で最終削除する", r.code === 200 && JSON.stringify(Object.keys(r.body.steps)) === JSON.stringify(["close", "dunning", "charges", "accountDeletion"]) && del47 && del47.counts.completed === 1 && S.docs.get("accountDeletions/ud1").status === "completed" && (globalThis.__MOCK_AUTH_DELETED || []).includes("ud1"), { steps: r.body.steps && Object.keys(r.body.steps), del47 });
+t("G2 47-C：未払い（payment_failed）・請求の処理中（processing）の退会は削除しない（清算待ちのまま・ログインは残る）", S.docs.get("accountDeletions/ud2").status === "awaiting_settlement" && S.docs.get("accountDeletions/ud3").status === "awaiting_settlement" && !(globalThis.__MOCK_AUTH_DELETED || []).some((u) => u === "ud2" || u === "ud3"), { ud2: S.docs.get("accountDeletions/ud2"), ud3: S.docs.get("accountDeletions/ud3") });
+t("G3 47-C：定期実行の応答・記録に uid・メールアドレスを含めない（件数だけ）", !/ud1|ud2|ud3|@example/.test(JSON.stringify(r.body)) && !/ud1|@example/.test(JSON.stringify(runs().find((x) => x.runId === r.body.runId))), del47);
+S.docs.set("accountDeletions/ud4", { uid: "ud4", status: "card_detach_failed", storeIds: [] });
+r = await CRON();
+t("G4 47-C：運営の対応が必要な異常（カードの取り外しで停止）を見つけた最初の実行は 500 operator_attention_required（定期実行の失敗のメールで知らせる）・種類と件数だけ", r.code === 500 && r.body.reason === "operator_attention_required" && r.body.steps.accountDeletion.operatorAttention.card_detach_failed === 1 && !/ud4/.test(JSON.stringify(r.body)), r.body.steps && r.body.steps.accountDeletion);
+r = await CRON();
+t("G5 47-C：同じ異常では二度と 500 にしない（重複の通知をしない）", r.code === 200 && Object.keys(r.body.steps.accountDeletion.operatorAttention).length === 0, r.body.steps && r.body.steps.accountDeletion);
+
 t("Z1 Stripe への通信は0回（定期実行からは請求しない）・Stripe 以外の通信なし", stripeCalls === 0 && otherNetwork === 0, { stripeCalls, otherNetwork });
 console.log(`TOTAL ${pass + fail}  PASS ${pass}  FAIL ${fail}`);
 process.exit(fail ? 1 : 0);

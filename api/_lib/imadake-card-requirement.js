@@ -27,8 +27,14 @@
 //   card_retiring             正式なカードが取り外し待ちに入っている
 //   card_expired              有効期限切れ
 //   card_billing_unavailable  Stripeの設定が無効・確認の部品が無い
+//   card_account_deleting     STEP 47-B｜そのアカウントの退会(セルフ削除)を受け付けた後(accountDeletions/{uid} がある)。
+//                             新しい店舗の登録・引き継ぎ・課金対象の今だけ投稿・月額プランの申込を受け付けない
 // このファイルはVercel Functionではない(api/moderate-submission.js から依存として渡す)。
 // ==========================================================================
+
+import {
+  readAccountDeletion
+} from "./account-deletion-state.js";
 
 import {
   ACCOUNT_BILLING_COLLECTION,
@@ -118,6 +124,10 @@ export async function checkAccountBillingCard(database, uid, options) {
     return { ok: false, reason: "card_required" };
   }
 
+  if (await readAccountDeletion(database, uid)) {
+    return { ok: false, reason: "card_account_deleting" };
+  }
+
   const snapshot = await database.collection(ACCOUNT_BILLING_COLLECTION).doc(uid).get();
 
   return evaluateImadakeBillingCard(snapshot.exists ? snapshot.data() || {} : null, uid, mode, options && options.nowMillis);
@@ -137,6 +147,10 @@ export async function checkImadakeBillingCard(database, storeId, options) {
     return { ok: false, reason: "card_billing_account_unresolved" };
   }
 
+  if (await readAccountDeletion(database, account.uid)) {
+    return { ok: false, reason: "card_account_deleting" };
+  }
+
   const snapshot = await database.collection(ACCOUNT_BILLING_COLLECTION).doc(account.uid).get();
 
   return evaluateImadakeBillingCard(snapshot.exists ? snapshot.data() || {} : null, account.uid, mode, options && options.nowMillis);
@@ -154,6 +168,11 @@ export async function checkImadakeBillingCardInTransaction(transaction, database
 
   if (!account.ok) {
     return { ok: false, reason: "card_billing_account_unresolved" };
+  }
+
+  // STEP 47-B｜退会の受付と同時の投稿でも、退会の記録と同じトランザクションで確かめる。
+  if (await readAccountDeletion(database, account.uid, transaction)) {
+    return { ok: false, reason: "card_account_deleting" };
   }
 
   const snapshot = await transaction.get(database.collection(ACCOUNT_BILLING_COLLECTION).doc(account.uid));

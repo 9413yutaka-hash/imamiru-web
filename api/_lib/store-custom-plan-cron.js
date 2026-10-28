@@ -9,6 +9,8 @@
 //      実行で同じ締めを行い直す＝取りこぼしを防ぐ。締めは店舗・年月で1件のため重複しない)。
 //   2. 未払いの判定(applyStoreCustomPlanDunning：初回失敗から14日を過ぎた未払いの店舗の有料機能を停止、
 //      支払い済みなら再開。Stripe には接続しない)。
+//   4. STEP 47-C｜店舗の退会の最終削除(runAccountDeletionSweep。清算が済んだ退会だけ)。運営の対応が必要な異常を
+//      はじめて見つけた時は 500(reason operator_attention_required)にして、定期実行の失敗のメールで知らせる。
 //   3. 請求・再試行・照合の対象の判定(runStoreCustomPlanCharges)。毎月2日以降に請求予定日を迎えた請求書、
 //      再試行の予定日を過ぎた支払い失敗、結果不明の照合。定期実行からの実行は STORE_CUSTOM_PLAN_CRON_CHARGES_ENABLED
 //      (false)が true で、かつ請求の許可(readStoreCustomPlanChargeGate)がある時だけ。false の間は試算(対象の判定と
@@ -183,6 +185,22 @@ export async function runStoreCustomPlanCron(database, deps, nowMillis) {
     }
   }
 
+  // 4. STEP 47-C ②｜店舗の退会の最終削除(締め・未払いの判定・請求の後に行う＝その日の請求の処理が先)。
+  //    最終削除は記録ごとに清算をもう一度確かめる(未払い・結果不明・請求中は削除しない)。本体は
+  //    store-account-deletion.js(依存として渡される。無ければ行わない)。
+  if (typeof deps.runAccountDeletionSweep === "function") {
+    if (Date.now() > deadline) {
+      steps.accountDeletion = { status: "deferred" };
+    } else {
+      try {
+        steps.accountDeletion = await deps.runAccountDeletionSweep(database);
+      } catch (error) {
+        steps.accountDeletion = { status: "failed", error: errorSummary(error) };
+        errors.push("accountDeletion");
+      }
+    }
+  }
+
   const deferred = Object.values(steps).some(function(step) { return step.status === "deferred" || step.status === "partial"; });
 
   return {
@@ -234,7 +252,16 @@ export async function handleStoreCustomPlanCron(request, response, deps) {
       environment: trial ? "preview_trial" : "production"
     }, result));
 
-    return response.status(result.status === "failed" ? 500 : 200).json(Object.assign({ success: result.status !== "failed", runId: runId }, result));
+    // STEP 47-C ③｜退会の最終削除で運営の対応が必要な異常を今回はじめて見つけた時も 500 にする
+    // (定期実行の仕組みの失敗のメールで運営に知らせる。同じ異常では二度と 500 にしない)。
+    const deletionStep = result.steps && result.steps.accountDeletion;
+    const attention = Boolean(deletionStep && deletionStep.operatorAttention && Object.keys(deletionStep.operatorAttention).length > 0);
+
+    return response.status(result.status === "failed" || attention ? 500 : 200).json(Object.assign(
+      { success: result.status !== "failed" && !attention, runId: runId },
+      attention ? { reason: "operator_attention_required" } : {},
+      result
+    ));
   } catch (error) {
     console.error("店舗カスタマイズ：定期実行エラー：", error && error.message);
     return response.status(500).json({ success: false, reason: "server_error" });

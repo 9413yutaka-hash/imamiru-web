@@ -154,6 +154,18 @@ import {
   isStoreCardLiveTrialToken
 } from "./_lib/store-billing.js";
 
+// STEP 47 / 47-B｜店舗アカウントの退会(セルフ削除。清算待ち→清算の後に削除)。実処理はapi/_lib/store-account-deletion.js。
+import {
+  handleAccountDeletionSweep,
+  handleAdminAccountDeletionList,
+  handleAdminAccountDeletionResume,
+  handleStoreAccountDeletionCancel,
+  handleStoreAccountDeletionCheck,
+  handleStoreAccountDelete,
+  isAccountDeletionSweepAllowed,
+  runAccountDeletionSweep
+} from "./_lib/store-account-deletion.js";
+
 // 今だけ投稿 決済 STEP 35-A｜カード登録必須の判定(課金対象になる今だけ投稿の作成時だけ使う)。
 import {
   checkAccountBillingCard,
@@ -22150,7 +22162,13 @@ async function resolveStoreUserActor(
         isStoreCardLiveTrialToken(
           decodedToken,
           process.env
-        )
+        ),
+      // STEP 47-B｜運営(代表＝ADMIN_EMAIL)のアカウントか。真偽値だけ。店舗画面からの退会(ログインの削除)を断るためだけに使う。
+      adminEmailAccount:
+        typeof process.env.ADMIN_EMAIL === "string" &&
+        process.env.ADMIN_EMAIL.trim() !== "" &&
+        String(decodedToken.email || "").trim().toLowerCase() ===
+          process.env.ADMIN_EMAIL.trim().toLowerCase()
     }
   };
 }
@@ -29952,6 +29970,30 @@ function buildStoreBillingDeps() {
   };
 }
 
+// STEP 47｜アカウントの削除：カードの取り外しはカード登録と同じ部品を使い、最後にログインを削除する。
+// STEP 47-B｜店舗写真の削除(既存の店舗写真と同じ Cloudinary の削除の部品)・運営の確認(requireAdmin)。
+function buildStoreAccountDeletionDeps() {
+  return Object.assign(buildStoreBillingDeps(), {
+    deleteAuthUser: function(uid) {
+      return getAuth(getFirebaseAdminApp()).deleteUser(uid);
+    },
+    destroyStorePhotoImages: destroyStorePhotoImages,
+    requireAdmin: requireAdmin,
+    // STEP 47-C ①｜ログインの無い処理(定期実行・運営の再開)で、削除の前に代表のアカウントかを確かめる
+    // (ログインの登録メールが ADMIN_EMAIL か。真偽値だけを返す)。
+    isAdminUid: async function(uid) {
+      const adminEmail = typeof process.env.ADMIN_EMAIL === "string" ? process.env.ADMIN_EMAIL.trim().toLowerCase() : "";
+
+      if (adminEmail === "") {
+        return false;
+      }
+
+      const user = await getAuth(getFirebaseAdminApp()).getUser(uid);
+      return String(user && user.email ? user.email : "").trim().toLowerCase() === adminEmail;
+    }
+  });
+}
+
 // 今だけ投稿 収益化 STEP 2｜CV記録に使う既存の部品(Firebase Adminの初期化・IDトークン検証・
 // リクエスト読み取り)を参照として渡す(既存関数自体は変更しない)。
 function buildImadakeCvDeps() {
@@ -30354,6 +30396,70 @@ export default async function handler(
     );
   }
 
+  // STEP 47 / 47-B｜店舗アカウントの退会(ログイン中の本人。メール未確認でも可。清算の後に削除)。
+  if (
+    requestBody.mode === "storeAccountDeletionCheck"
+  ) {
+    return handleStoreAccountDeletionCheck(
+      request,
+      response,
+      buildStoreAccountDeletionDeps()
+    );
+  }
+
+  if (
+    requestBody.mode === "storeAccountDelete"
+  ) {
+    return handleStoreAccountDelete(
+      request,
+      response,
+      buildStoreAccountDeletionDeps()
+    );
+  }
+
+  // STEP 47-B｜清算が済んだ退会を最終削除へ進める(合言葉で認証。定期実行への登録は代表の承認待ち)。
+  // STEP 47-C ④｜退会の取り消し(最終削除の開始前だけ・本人)。
+  if (
+    requestBody.mode === "storeAccountDeletionCancel"
+  ) {
+    return handleStoreAccountDeletionCancel(
+      request,
+      response,
+      buildStoreAccountDeletionDeps()
+    );
+  }
+
+  if (
+    requestBody.mode === "accountDeletionSweep"
+  ) {
+    return handleAccountDeletionSweep(
+      request,
+      response,
+      buildStoreAccountDeletionDeps()
+    );
+  }
+
+  // STEP 47-B ⑦⑩｜運営：完了していない退会の一覧(読み取り専用)・カードの取り外しで止まった退会の再開。
+  if (
+    requestBody.mode === "adminAccountDeletionList"
+  ) {
+    return handleAdminAccountDeletionList(
+      request,
+      response,
+      buildStoreAccountDeletionDeps()
+    );
+  }
+
+  if (
+    requestBody.mode === "adminAccountDeletionResume"
+  ) {
+    return handleAdminAccountDeletionResume(
+      request,
+      response,
+      buildStoreAccountDeletionDeps()
+    );
+  }
+
   // 今だけ投稿 決済 STEP 32-B｜月末締め(運営のみ、既定は試算＝書き込みなし)。
   // 今だけ投稿 決済 STEP 32-D⑤｜月次請求の運営確認一覧(運営のみ、読み取り専用)。
   if (
@@ -30504,10 +30610,21 @@ export default async function handler(
       requestBody.mode
     )
   ) {
+    const storeCustomPlanDeps =
+      buildStoreSelfServiceDeps();
+
+    // STEP 47-C ②｜毎日の定期実行の最後に、店舗の退会の最終削除を行う(締め・未払いの判定・請求の後)。
+    // STEP 47-D｜本番では、自動の最終削除の許可(false)が true になるまでこの手順を渡さない。
+    if (requestBody.mode === "storeCustomPlanCron" && isAccountDeletionSweepAllowed(process.env)) {
+      storeCustomPlanDeps.runAccountDeletionSweep = function(database) {
+        return runAccountDeletionSweep(database, buildStoreAccountDeletionDeps());
+      };
+    }
+
     return storeCustomPlanHandlers[requestBody.mode](
       request,
       response,
-      buildStoreSelfServiceDeps()
+      storeCustomPlanDeps
     );
   }
 
