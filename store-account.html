@@ -315,6 +315,14 @@
     }
 
     [hidden] { display: none !important; }
+    /* LEGAL-NOTICE-CSS:START｜STEP 47-H 規約改定の事前告知。施行日に告知と一緒に外す。 */
+    .legal-change-notice { border-color: #f1c27a; background: #fff8ec; }
+    .legal-change-notice-title { margin: 0 0 6px; font-weight: 900; font-size: 14px; color: var(--navy); }
+    .legal-change-notice ul { margin: 6px 0; padding-left: 1.3em; }
+    .legal-change-notice p + p { margin-top: 6px; }
+    .legal-change-notice-dates { font-weight: 700; }
+    /* LEGAL-NOTICE-CSS:END */
+
   </style>
 </head>
 <body>
@@ -334,6 +342,22 @@
     <div class="panel">
       <p class="note" data-i18n="store_account_phase_note"></p>
     </div>
+
+    <!-- LEGAL-NOTICE:START｜STEP 47-H 規約改定の事前告知。施行日に告知と一緒に外す。日付は translations.js の store_account_legal_notice_* と一致させる。 -->
+    <div class="panel legal-change-notice" data-legal-notice="step47" data-notice-start="2026-10-30" data-effective="2026-11-07">
+      <p class="legal-change-notice-title" data-i18n="store_account_legal_notice_title"></p>
+      <p class="note" data-i18n="store_account_legal_notice_lead"></p>
+      <ul class="note">
+        <li data-i18n="store_account_legal_notice_item1"></li>
+        <li data-i18n="store_account_legal_notice_item2"></li>
+        <li data-i18n="store_account_legal_notice_item3"></li>
+        <li data-i18n="store_account_legal_notice_item4"></li>
+        <li data-i18n="store_account_legal_notice_item5"></li>
+      </ul>
+      <p class="note legal-change-notice-dates" data-i18n="store_account_legal_notice_dates"></p>
+      <p class="note"><span data-i18n="store_account_legal_notice_link_prefix"></span><a href="terms.html" target="_blank" rel="noopener" data-i18n="store_account_agree_terms_link">利用規約</a><span data-i18n="store_account_legal_notice_link_and"></span><a href="privacy.html" target="_blank" rel="noopener" data-i18n="store_account_agree_privacy_link">プライバシーポリシー</a><span data-i18n="store_account_legal_notice_link_suffix"></span></p>
+    </div>
+    <!-- LEGAL-NOTICE:END -->
 
     <div id="globalMessage" class="message" role="status" aria-live="polite"></div>
 

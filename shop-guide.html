@@ -385,6 +385,31 @@
         grid-template-columns: 1fr;
       }
     }
+    /* LEGAL-NOTICE-CSS:START｜STEP 47-H 規約改定の事前告知。施行日に告知と一緒に外す。 */
+    .legal-change-notice {
+      margin: 0 0 16px;
+      padding: 16px 16px 14px;
+      border: 1px solid #f1c27a;
+      border-radius: 14px;
+      background: #fff8ec;
+      font-size: 13px;
+      line-height: 1.8;
+    }
+
+    .legal-change-notice-title {
+      margin: 0 0 8px;
+      font-weight: 900;
+      color: var(--navy);
+    }
+
+    .legal-change-notice p { margin: 0 0 8px; }
+    .legal-change-notice ul, .legal-change-notice ol { margin: 0 0 8px; padding-left: 1.4em; }
+    .legal-change-notice-dates { font-weight: 700; }
+    .legal-change-notice details { margin-top: 6px; }
+    .legal-change-notice summary { cursor: pointer; font-weight: 700; color: #0788c9; }
+    .legal-change-notice-sub { margin: 12px 0 4px !important; font-weight: 700; }
+    /* LEGAL-NOTICE-CSS:END */
+
   </style>
 </head>
 
@@ -445,6 +470,26 @@
   </section>
 
   <main>
+
+    <!-- LEGAL-NOTICE:START -->
+    <!-- STEP 47-H（代表決定 2026-10-29）｜利用規約・プライバシーポリシーの改定の事前告知（民法548条の4：効力発生日と変更の内容の周知）。
+         告知だけを先に掲載する。施行日までは、このページの本文（現行の版）がそのまま適用される。
+         施行日に、この告知を外し、改定後の条文を本文へ反映する。
+         日付の一致と告知期間（告知日の翌日から7日以上）は tests/legal-change-notice-test.mjs で確かめる。 -->
+    <section class="legal-change-notice" data-legal-notice="step47" data-notice-start="2026-10-30" data-effective="2026-11-07">
+      <p class="legal-change-notice-title">お知らせ：店舗アカウントの退会機能の追加と、利用規約・プライバシーポリシーの改定について</p>
+      <p>2026年11月7日から、お店・施設の方が、店舗アカウントの画面からご自身で店舗アカウントの退会（削除）を申し込めるようになります。あわせて同じ日に、利用規約とプライバシーポリシーを改定し、退会に関する内容を追加するとともに、利用規約の変更の手続き（12条）とプライバシーポリシーの変更の手続き（13）を改めます。</p>
+      <ul>
+        <li>退会を申し込むと、お店・施設の情報は非公開になり、掲載中の今だけ投稿は掲載を終了します。</li>
+        <li>未払いの利用料金がある場合は、お支払い（清算）が済んでから店舗アカウントを削除します。</li>
+        <li>削除が始まる前であれば、退会の申し込みを取り消せます。</li>
+        <li>削除の際は、登録したクレジットカード、お店・施設の写真、ログインの情報を削除します。法令上必要な請求・取引の記録と、退会の手続きの記録は、削除後も保存します。</li>
+        <li>2026年11月6日までは、現在の利用規約・プライバシーポリシーが適用されます。退会の機能は、施行日から利用できます。</li>
+      </ul>
+      <p class="legal-change-notice-dates">告知開始日：2026年10月30日<br>施行予定日：2026年11月7日</p>
+      <p>改定後の内容は、<a href="terms.html">利用規約</a>・<a href="privacy.html">プライバシーポリシー</a>のページでご確認いただけます。</p>
+    </section>
+    <!-- LEGAL-NOTICE:END -->
 
     <section class="guide-card">
       <span class="guide-card-icon">🚀</span>

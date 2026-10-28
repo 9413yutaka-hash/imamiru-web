@@ -1928,6 +1928,63 @@ const MACHINAU_TRANSLATIONS = {
     en: "An account for shops, facilities and event organizers."
   },
 
+  // LEGAL-NOTICE:START｜STEP 47-H 規約改定の事前告知(店舗アカウントの画面)。施行日に告知と一緒に外す。
+  store_account_legal_notice_title: {
+    ja: "お知らせ：店舗アカウントの退会機能の追加と、利用規約・プライバシーポリシーの改定について",
+    en: "Notice: Account closure and revised Terms of Service / Privacy Policy"
+  },
+
+  store_account_legal_notice_lead: {
+    ja: "2026年11月7日から、この画面でご自身で店舗アカウントの退会（削除）を申し込めるようになります。あわせて同じ日に、利用規約とプライバシーポリシーを改定し、退会に関する内容を追加するとともに、利用規約の変更の手続き（12条）とプライバシーポリシーの変更の手続き（13）を改めます。",
+    en: "From November 7, 2026, you will be able to request the closure (deletion) of your business account yourself on this page. On the same day, we will revise the Terms of Service and the Privacy Policy to add provisions on account closure, and revise the procedures for changing the Terms of Service (Article 12) and the Privacy Policy (Section 13)."
+  },
+
+  store_account_legal_notice_item1: {
+    ja: "退会を申し込むと、お店・施設の情報は非公開になり、掲載中の今だけ投稿は掲載を終了します。",
+    en: "Once you request closure, your business information becomes private and your live \"Now only\" posts end."
+  },
+
+  store_account_legal_notice_item2: {
+    ja: "未払いの利用料金がある場合は、お支払い（清算）が済んでから店舗アカウントを削除します。",
+    en: "If any fees are unpaid, the account is deleted only after they are settled."
+  },
+
+  store_account_legal_notice_item3: {
+    ja: "削除が始まる前であれば、退会の申し込みを取り消せます。",
+    en: "You can withdraw the request until the deletion starts."
+  },
+
+  store_account_legal_notice_item4: {
+    ja: "削除の際は、登録したクレジットカード、お店・施設の写真、ログインの情報を削除します。法令上必要な請求・取引の記録と、退会の手続きの記録は、削除後も保存します。",
+    en: "On deletion, your registered card, business photos and login details are deleted. Billing and transaction records required by law, and the record of the closure procedure, are kept after deletion."
+  },
+
+  store_account_legal_notice_item5: {
+    ja: "2026年11月6日までは、現在の利用規約・プライバシーポリシーが適用されます。退会の機能は、施行日から利用できます。",
+    en: "Until November 6, 2026, the current Terms of Service and Privacy Policy apply. The closure feature becomes available on the effective date."
+  },
+
+  store_account_legal_notice_dates: {
+    ja: "告知開始日：2026年10月30日／施行予定日：2026年11月7日",
+    en: "Notice posted: October 30, 2026 / Effective: November 7, 2026"
+  },
+
+  store_account_legal_notice_link_prefix: {
+    ja: "改定後の内容は、",
+    en: "See the revised text (in Japanese) on the "
+  },
+
+  store_account_legal_notice_link_and: {
+    ja: "・",
+    en: " and "
+  },
+
+  store_account_legal_notice_link_suffix: {
+    ja: "のページでご確認いただけます。",
+    en: " pages."
+  },
+  // LEGAL-NOTICE:END
+
   store_account_phase_note: {
     ja: "現在ご利用いただけるのは、アカウントの作成・ログインと、店舗・施設の登録です。常設店舗情報の編集や投稿などの機能は、準備ができ次第このアカウントからご利用いただけるようになります。",
     en: "For now, you can create an account, log in and register your shop or facility. Features such as editing your permanent shop information and posting will become available from this account once they are ready."
