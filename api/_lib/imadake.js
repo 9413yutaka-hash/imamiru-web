@@ -1876,6 +1876,50 @@ export function buildImadakePublicPost(
   };
 }
 
+// STEP 48-C｜課金対象の投稿の「続きを見る」の前の公開項目(許可リスト)。近くの一覧のカード
+// (buildImadakeCardPost)と同じ範囲：店名・見出し・本文の冒頭80文字・写真1枚・カテゴリー・在庫等の状態・
+// 掲載の期限と提供の期限・原文の言語・保存済みのカード訳。本文・住所・連絡先(actionTargets)・価格・
+// 支払い方法・イベントの詳細(categoryFields)・座標・地域・店舗IDは含めない。
+export function buildImadakePublicCardPreview(
+  postId,
+  post
+) {
+  const imageUrls =
+    Array.isArray(post.imageUrls)
+      ? post.imageUrls
+      : [];
+
+  const excerpt =
+    buildImadakeCardExcerpt(post.body);
+
+  return {
+    postId: postId,
+    storeName: post.storeNameSnapshot,
+    categoryCode: post.categoryCode,
+    headline: post.headline,
+    body: "",
+    excerpt: excerpt.excerpt,
+    excerptTruncated: excerpt.excerptTruncated,
+    sourceLanguage: post.sourceLanguage,
+    imageUrls: imageUrls.length > 0 ? [imageUrls[0]] : [],
+    liveState:
+      post.liveState
+        ? {
+            type: post.liveState.type,
+            status: post.liveState.status,
+            quantity:
+              typeof post.liveState.quantity === "number"
+                ? post.liveState.quantity
+                : null
+          }
+        : null,
+    availableUntil: post.availableUntil,
+    publishedAt: toIsoOrNull(post.publishedAt),
+    expiresAt: toIsoOrNull(post.expiresAt),
+    cardTranslations: readReadyImadakeCardTranslations(post)
+  };
+}
+
 export async function handleImadakePostGet(
   request,
   response,
@@ -1926,20 +1970,24 @@ export async function handleImadakePostGet(
     // 収益化 STEP 3｜課金対象の投稿は、この認証不要のGETでは本文を返さない(本文は
     // POST imadakeDetailOpenでCVを記録してから返す。CVを迂回して全文を得る経路を作らない)。
     // 課金対象外(既存投稿・現在の新規投稿)は従来どおり本文を返す。
+    // STEP 48-C｜課金対象の投稿は、「続きを見る」の前に公開してよい項目(公開カードと同じ範囲)だけを
+    // 返す(buildImadakePublicCardPreview)。住所・連絡先・価格・支払い方法・イベントの詳細・座標・
+    // 店舗ID・写真2枚目以降は、POST imadakeDetailOpen(CVの判定)を経た後にだけ返す。
     if (post.cvBillingEnabled === true) {
       return response.status(200).json({
         success: true,
         bodyProtected: true,
-        post: {
-          ...buildImadakePublicPost(snapshot.id, post),
-          body: ""
-        }
+        post: buildImadakePublicCardPreview(snapshot.id, post)
       });
     }
 
+    // STEP 48-B｜共有リンクの紹介の翻訳用に、保存済みのカード訳(近くの一覧と同じ値。AI翻訳は呼ばない)を加える。
     return response.status(200).json({
       success: true,
-      post: buildImadakePublicPost(snapshot.id, post)
+      post: {
+        ...buildImadakePublicPost(snapshot.id, post),
+        cardTranslations: readReadyImadakeCardTranslations(post)
+      }
     });
   } catch (error) {
     console.error("今だけ投稿の取得に失敗しました：", error);

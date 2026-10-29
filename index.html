@@ -2535,6 +2535,25 @@
           📍 Googleマップで場所を見る
         </a>
 
+        <!-- STEP 48｜シェア。無料店舗(運営掲載の常設店舗広告・店主が管理する正式店舗)の詳細だけに表示する
+             (app.js の openShopModal)。共有するURLは https://machinau.jp/share/shop/{ID} だけ(STEP 48-B)。 -->
+        <div
+          id="modalShareArea"
+          class="machinau-share"
+          style="display:none;"
+        >
+          <button
+            id="modalShareButton"
+            class="machinau-share-button"
+            type="button"
+            data-i18n="share_button"
+            onclick="shareMachinauItemFromButton(this)"
+          >
+            🔗 シェア
+          </button>
+          <div class="machinau-share-status" role="status" aria-live="polite"></div>
+        </div>
+
         <!-- STEP 42-D｜運営が掲載したお店の店主向けの入口(店舗アカウント → メール確認 → カード登録 → 引き継ぎ)。
              運営掲載(常設店舗広告)の詳細だけに表示する(app.js の openShopModal)。 -->
         <a
@@ -2773,6 +2792,26 @@
         </div>
       </div>
     </div>
+  </div>
+
+  <!-- STEP 48｜共有されたリンク(?shop=)の店舗・施設が今は掲載されていない時の案内(app.js の
+       showSharedLinkNotice)。画面の下に出し、閉じるか時間が経つと消える。 -->
+  <div
+    id="sharedLinkNotice"
+    class="shared-link-notice"
+    role="status"
+    aria-live="polite"
+    hidden
+  >
+    <p id="sharedLinkNoticeText" class="shared-link-notice-text"></p>
+    <button
+      type="button"
+      class="shared-link-notice-close"
+      data-i18n="share_notice_close"
+      onclick="hideSharedLinkNotice()"
+    >
+      閉じる
+    </button>
   </div>
 
   <!-- Firebase本体 -->

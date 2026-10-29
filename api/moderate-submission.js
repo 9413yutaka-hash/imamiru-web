@@ -137,6 +137,12 @@ import {
   handleStoreCustomPlanCron
 } from "./_lib/store-custom-plan-cron.js";
 
+// STEP 48-B｜共有リンクのプレビュー(OGP)のページ(/share/imadake/{ID}・/share/shop/{ID}、vercel.json の rewrite)。
+import {
+  handleRenderShareImadake,
+  handleRenderShareShop
+} from "./_lib/share-preview.js";
+
 // 運営無料掲載 → 店舗オーナー化 MVP-1。実処理はapi/_lib/store-listing-claims.js。
 import {
   handleStoreListingClaimPreview,
@@ -23483,6 +23489,27 @@ const COLUMN_ARTICLE_PAGE_UI_TEXT =
       en: "Couldn't update your saved reads. Saving may be unavailable in this browser (e.g. private browsing)."
     },
 
+    // STEP 48｜シェア(保存ボタンの下)。TOPの share_* (translations.js)と同じ文言。
+    shareButton: {
+      ja: "🔗 シェア",
+      en: "🔗 Share"
+    },
+
+    shareCopied: {
+      ja: "リンクをコピーしました。LINEやメールなどに貼り付けて送れます。",
+      en: "Link copied. Paste it into a message or email to send it."
+    },
+
+    shareCopyFailed: {
+      ja: "リンクをコピーできませんでした。下のリンクを長押し（または選択）してコピーしてください。",
+      en: "Couldn't copy the link. Press and hold (or select) the link below to copy it."
+    },
+
+    shareLinkLabel: {
+      ja: "共有するリンク",
+      en: "Link to share"
+    },
+
     // 読みもの回遊導線｜記事の後(コメント欄より前)に出す同カテゴリー記事と一覧への導線。
     relatedHeading: {
       ja: "もう少し、読んでみる？",
@@ -26375,6 +26402,22 @@ function buildColumnArticleHtml(
       .replace(/\u2028/g, "\\u2028")
       .replace(/\u2029/g, "\\u2029");
 
+  // STEP 48\uff5c\u30b7\u30a7\u30a2\u3002\u5171\u6709\u3059\u308bURL\u306f\u3053\u306e\u8a18\u4e8b\u306e\u6b63\u5f0f\u306aURL(canonical\uff1ahttps://machinau.jp/column/{slug}.html\u3001
+  // \u82f1\u8a9e\u7248\u306f ?lang=en)\u3060\u3051\u3002\u4f4d\u7f6e\u60c5\u5831\u30fb\u5229\u7528\u8005\u306eID\u306f\u542b\u3081\u306a\u3044\u3002
+  const articleShareConfigJson =
+    JSON.stringify({
+      url: canonicalUrl,
+      title: article.title,
+      text: {
+        copied: getColumnArticlePageText("shareCopied", language),
+        copyFailed: getColumnArticlePageText("shareCopyFailed", language),
+        linkLabel: getColumnArticlePageText("shareLinkLabel", language)
+      }
+    })
+      .replace(/</g, "\\u003c")
+      .replace(/\u2028/g, "\\u2028")
+      .replace(/\u2029/g, "\\u2029");
+
   const escapedTitleSuffix =
     escapeHtmlForRender(
       getColumnArticlePageText(
@@ -26570,6 +26613,25 @@ function buildColumnArticleHtml(
       background: #fff6e5; color: #7a4b00; font-size: 12px; line-height: 1.6;
     }
     @media (min-width: 700px) { .article-save-button { width: auto; } }
+    .article-share-section { margin: 12px 0 0; }
+    .article-share-button {
+      width: 100%; min-height: 48px; padding: 0 22px; border: 1.5px solid var(--blue); border-radius: 14px;
+      background: var(--white); color: var(--blue); font-size: 15px; font-weight: 800;
+      font-family: inherit; cursor: pointer;
+    }
+    .article-share-button:focus-visible { outline: 2px solid var(--navy); outline-offset: 2px; }
+    .article-share-status {
+      margin: 10px 0 0; padding: 8px 12px; border-radius: 10px;
+      background: #eef7fb; color: var(--navy); font-size: 12px; line-height: 1.6;
+    }
+    .article-share-status.is-error { background: #fff6e5; color: #7a4b00; }
+    .article-share-status p { margin: 0 0 6px; font-size: 12px; line-height: 1.6; color: inherit; }
+    .article-share-url-label { display: block; font-weight: 700; }
+    .article-share-url {
+      display: block; width: 100%; margin-top: 4px; padding: 8px 10px; border: 1px solid var(--border);
+      border-radius: 8px; background: var(--white); color: var(--text); font-size: 13px; font-family: inherit;
+    }
+    @media (min-width: 700px) { .article-share-button { width: auto; } }
     .article-language-switch {
       margin: 0 0 14px; font-size: 12px; text-align: right; color: var(--subtext);
     }
@@ -26722,6 +26784,11 @@ function buildColumnArticleHtml(
       <div class="article-save-section">
         <button id="articleSaveButton" class="article-save-button" type="button" aria-pressed="false" aria-label="${escapeHtmlForRender(getColumnArticlePageText("saveButtonAriaLabel", language))}" hidden>${escapeHtmlForRender(getColumnArticlePageText("saveButton", language))}</button>
         <p id="articleSaveNotice" class="article-save-notice" role="status" aria-live="polite" hidden></p>
+      </div>
+
+      <div class="article-share-section">
+        <button id="articleShareButton" class="article-share-button" type="button" hidden>${escapeHtmlForRender(getColumnArticlePageText("shareButton", language))}</button>
+        <div id="articleShareStatus" class="article-share-status" role="status" aria-live="polite" hidden></div>
       </div>
 
       <div class="cta-section">
@@ -26877,6 +26944,98 @@ function buildColumnArticleHtml(
     });
 
     loadComments();
+  </script>
+
+  <script>
+    // STEP 48｜シェア。Web Share API が使える環境ではそれを使い、使えない・失敗した時はリンクをコピーする。
+    // コピーもできない時は、リンクを出して手でコピーしてもらう。保存・コメントとは別のscript。GA4イベントは送らない。
+    (function () {
+      const config = ${articleShareConfigJson};
+      const shareButton = document.getElementById("articleShareButton");
+      const shareStatus = document.getElementById("articleShareStatus");
+      let sharing = false;
+
+      if (!shareButton || !shareStatus) {
+        return;
+      }
+
+      function showShareResult(result) {
+        shareStatus.className = "article-share-status" + (result === "failed" ? " is-error" : "");
+        shareStatus.textContent = "";
+
+        if (result === "copied") {
+          shareStatus.textContent = config.text.copied;
+          shareStatus.hidden = false;
+          return;
+        }
+
+        if (result === "failed") {
+          const message = document.createElement("p");
+          message.textContent = config.text.copyFailed;
+          const label = document.createElement("label");
+          label.className = "article-share-url-label";
+          label.textContent = config.text.linkLabel;
+          const input = document.createElement("input");
+          input.className = "article-share-url";
+          input.type = "text";
+          input.readOnly = true;
+          input.value = config.url;
+          input.addEventListener("focus", function () { input.select(); });
+          label.appendChild(input);
+          shareStatus.appendChild(message);
+          shareStatus.appendChild(label);
+          shareStatus.hidden = false;
+          try { input.focus(); input.select(); } catch (error) { /* 選べなくても、リンクは表示したまま。 */ }
+          return;
+        }
+
+        shareStatus.hidden = true;
+      }
+
+      shareButton.addEventListener("click", async function () {
+        if (sharing) {
+          return;
+        }
+
+        sharing = true;
+        showShareResult("");
+
+        try {
+          if (typeof navigator.share === "function") {
+            const shareData = { title: config.title, url: config.url };
+
+            try {
+              if (typeof navigator.canShare !== "function" || navigator.canShare(shareData)) {
+                await navigator.share(shareData);
+                return;
+              }
+            } catch (error) {
+              if (error && error.name === "AbortError") {
+                return;
+              }
+              // それ以外(許可されない等)はコピーへ。
+            }
+          }
+
+          let copied = false;
+
+          try {
+            if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+              await navigator.clipboard.writeText(config.url);
+              copied = true;
+            }
+          } catch (error) {
+            copied = false;
+          }
+
+          showShareResult(copied ? "copied" : "failed");
+        } finally {
+          sharing = false;
+        }
+      });
+
+      shareButton.hidden = false;
+    })();
   </script>
 
   <!-- 旅の保存箱｜保存の読み書き(TOPと共通)。静的ファイルで、Functionや通信は増えない。 -->
@@ -30143,6 +30302,28 @@ export default async function handler(
       return handleRenderColumnArticleRequest(
         request,
         response
+      );
+    }
+
+    // STEP 48-B｜共有リンクのプレビュー(OGP)。vercel.jsonのrewrite経由で/share/imadake/{ID}・
+    // /share/shop/{ID}がここへ届く(読み取りだけ。CV・料金台帳は記録しない)。
+    if (
+      request.query.mode === "renderShareImadake"
+    ) {
+      return handleRenderShareImadake(
+        request,
+        response,
+        { getFirebaseAdminApp: getFirebaseAdminApp, getFirestore: getFirestore }
+      );
+    }
+
+    if (
+      request.query.mode === "renderShareShop"
+    ) {
+      return handleRenderShareShop(
+        request,
+        response,
+        { getFirebaseAdminApp: getFirebaseAdminApp, getFirestore: getFirestore }
       );
     }
 
