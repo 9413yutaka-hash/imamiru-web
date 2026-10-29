@@ -1443,6 +1443,48 @@ function buildPublicStoreProfile(storeId, account, profile, linkedListingIds) {
   };
 }
 
+// STEP 48-B｜共有リンクのプレビュー(OGP)用に、1店舗だけを旅行者向け一覧と同じ条件で読む。
+// 一覧に出る店舗(status:"published" かつ公開条件をすべて満たす)だけを、一覧と同じ許可リストの形で返す。
+// それ以外(下書き・非公開・停止・条件不足・存在しない)は null。書き込みはしない。
+// 紐付けは一覧と同じ query(status == "active")を読み、この店舗の分だけ使う(新しい index は不要)。
+export async function readPublicStoreProfileForShare(database, storeId) {
+  if (typeof storeId !== "string" || !/^[A-Za-z0-9_-]{1,100}$/.test(storeId)) {
+    return null;
+  }
+
+  const snapshots = await Promise.all([
+    database.collection(STORE_PROFILES_COLLECTION).doc(storeId).get(),
+    database.collection(STORE_ACCOUNTS_COLLECTION).doc(storeId).get(),
+    database.collection(STORE_LISTING_LINKS_COLLECTION).where("status", "==", "active").get()
+  ]);
+  const profile = snapshots[0].exists ? snapshots[0].data() || {} : null;
+  const account = snapshots[1].exists ? snapshots[1].data() || {} : null;
+
+  if (!profile || !account || profile.status !== "published") {
+    return null;
+  }
+
+  const linkedListingIds = snapshots[2].docs
+    .filter(function(documentSnapshot) {
+      const link = documentSnapshot.data() || {};
+      return link.status === "active" && link.storeId === storeId;
+    })
+    .map(function(documentSnapshot) {
+      return documentSnapshot.id;
+    });
+
+  const missing = evaluateStorePublishConditions({
+    account: account,
+    profile: profile,
+    ownerActive: true,
+    resolvedListingIds: new Set(linkedListingIds)
+  });
+
+  return missing.length > 0
+    ? null
+    : buildPublicStoreProfile(storeId, account, profile, linkedListingIds);
+}
+
 export async function handlePublicStoreProfilesList(request, response, deps) {
   try {
     const database = deps.getFirestore(deps.getFirebaseAdminApp());

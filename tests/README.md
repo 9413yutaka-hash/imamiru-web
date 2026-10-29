@@ -35,6 +35,9 @@ node --import ./tests/mockfa-occ/register.mjs tests/admin-billing-ui-test.mjs   
 # Preview専用Firebaseへの分離の安全対策(STEP 32-D㉗：サーバーの接続先検査・firebase.jsの接続先の決め方)
 node --import ./tests/mockfa-target/register.mjs tests/firebase-target-test.mjs
 
+# シェア(STEP 48：今だけ投稿の詳細・無料店舗の詳細・読みものの記事。共有リンクで開いた時の公開条件・CVは変えない。Chrome を使う)
+node --import ./tests/mockfa/register.mjs tests/share-test.mjs
+
 # Preview専用の課金対象判定(STEP 34-A：machinau-preview に接続した対象ブランチのPreviewだけ、新規の今だけ投稿を課金対象にする)
 node --import ./tests/mockfa-occ/register.mjs tests/preview-billing-trial-test.mjs
 

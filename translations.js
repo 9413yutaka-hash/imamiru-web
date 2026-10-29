@@ -4747,6 +4747,38 @@ const MACHINAU_TRANSLATIONS = {
   imadake_report_format_day: {
     ja: "{month}/{day}",
     en: "{monthShort} {day}"
+  },
+
+  // STEP 48｜シェア(今だけ投稿の詳細・無料店舗の詳細)。共有するURLは https://machinau.jp の
+  // 投稿・店舗のIDだけ(位置情報・利用者のIDは含めない)。
+  share_button: {
+    ja: "🔗 シェア",
+    en: "🔗 Share"
+  },
+
+  share_copied: {
+    ja: "リンクをコピーしました。LINEやメールなどに貼り付けて送れます。",
+    en: "Link copied. Paste it into a message or email to send it."
+  },
+
+  share_copy_failed: {
+    ja: "リンクをコピーできませんでした。下のリンクを長押し（または選択）してコピーしてください。",
+    en: "Couldn't copy the link. Press and hold (or select) the link below to copy it."
+  },
+
+  share_link_label: {
+    ja: "共有するリンク",
+    en: "Link to share"
+  },
+
+  share_shop_unavailable: {
+    ja: "共有された店舗・施設の情報は、現在掲載されていません。",
+    en: "The shared place is not listed at the moment."
+  },
+
+  share_notice_close: {
+    ja: "閉じる",
+    en: "Close"
   }
 };
 
