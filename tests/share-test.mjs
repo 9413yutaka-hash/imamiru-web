@@ -172,7 +172,7 @@ async function api(url, method, log, postData, headers) {
   let body = {}; try { body = JSON.parse(postData || "{}"); } catch {}
   log.apiPosts = (log.apiPosts || []).concat([body.mode]);
   if (body.mode === "imadakeViewedPosts") { const auth = headers.Authorization || headers.authorization; const r = await post(body, auth ? { authorization: auth } : {}); return { status: r.code, body: r.body }; }
-  if (body.mode === "imadakeDetailOpen") { const auth = headers.Authorization || headers.authorization; const r = await post(body, auth ? { authorization: auth } : {}); return { status: r.code, body: r.body }; }
+  if (body.mode === "imadakeDetailOpen") { const auth = headers.Authorization || headers.authorization; const store = headers["X-Machinau-Store-Authorization"] || headers["x-machinau-store-authorization"]; const r = await post(body, { ...(auth ? { authorization: auth } : {}), ...(store ? { "x-machinau-store-authorization": store } : {}) }); return { status: r.code, body: r.body }; }
   return { body: { success: false, message: "not used in this test" } };
 }
 const langInit = (lang) => `try{ if (window.top===window) { localStorage.setItem("machinauLanguage", "${lang}"); } }catch(e){}`;
@@ -321,6 +321,51 @@ try {
   m = await modalState(p);
   t("A14f 英語・PC（課金対象）：保存済みのカード訳で見出し・紹介文を表示（自動翻訳の表示）・住所等なし・CVなし", m.state === "preview" && m.title === "Today-only lunch SHB" && /^A lunch you should know about today/.test(m.text) && m.text.endsWith("…") && /Auto-translated|translated/i.test(await p.ev(`document.getElementById("imadakeDetailBody").innerText`)) && !/松尾|098-000-0000/.test(await p.ev(`document.getElementById("imadakeDetailBody").innerHTML`)) && !S.docs.has("imadakeCvViews/SHB_D"), m);
   await shot(p, "imadake-preview-1280-en-translated", "#imadakeDetailModal .modal-card");
+  await p.close();
+
+  // ===== STEP 48-D：課金対象の投稿で CV の成立を確認できない時は、詳細を出さず再試行の表示 =====
+  const shbView = (uid) => S.docs.get("imadakeCvViews/SHB_" + uid);
+  const detailHtml = (p) => p.ev(`document.getElementById("imadakeDetailBody").innerHTML`);
+  const noDetails = (html) => !/松尾|098-000-0000|tel:0980000000|example\.com|1,000円|最後まで読めるのは詳細だけ/.test(html);
+  const readMore = async (p) => { await p.ev(`document.querySelector("#imadakeDetailBody .imadake-shared-read-more").click(); true`); await p.waitFor(`imadakeDetailState && imadakeDetailState.state !== "loading"`, 8000); await sleep(300); };
+  let cvBefore = chargeDoc().validCvCount;
+  p = await top("/?imadake=SHB", { uid: "E" });
+  await p.ev(`getAnonymousIdTokenForLocationCollection = async function(){ throw new Error("anonymous auth failed (simulated)"); }; true`);
+  const getsBefore = (p.log.apiGets || []).filter((g) => g === "imadakePostGet").length;
+  await readMore(p);
+  m = await modalState(p);
+  t("D1 旅行者のトークンを取得できない（匿名ログインの失敗）：「続きを見る」→ 再試行の表示・住所・電話・価格・全文を出さない（DOMにも無い）", m.state === "error" && m.retry && noDetails(await detailHtml(p)) && (p.log.apiPosts || []).includes("imadakeDetailOpen"), m);
+  t("D2 その時 CV・料金台帳は増えない・公開GETへ戻らない（本文は返らないため）", !shbView("E") && charges() === 1 && chargeDoc().validCvCount === cvBefore && (p.log.apiGets || []).filter((g) => g === "imadakePostGet").length === getsBefore, { views: views(), gets: p.log.apiGets });
+  await p.ev(`getAnonymousIdTokenForLocationCollection = async function(){ return "tok-E"; }; true`);
+  globalThis.__MOCK_TOKENS["tok-E"] = { uid: "E", firebase: { sign_in_provider: "anonymous" } };
+  await p.ev(`document.querySelector("#imadakeDetailBody .imadake-detail-retry").click(); true`);
+  await p.waitFor(`imadakeDetailState && imadakeDetailState.state === "ready"`, 8000); await sleep(300);
+  m = await modalState(p);
+  t("D3 「もう一度読み込む」でトークンを取得できた：初回の1CV・詳細を表示・当日の料金は100円のまま", m.state === "ready" && m.fullBodyInDom && /松尾/.test(await detailHtml(p)) && shbView("E") && shbView("E").counted === true && chargeDoc().validCvCount === cvBefore + 1 && chargeDoc().amountJpy === 100 && charges() === 1, chargeDoc());
+  await p.close();
+  cvBefore = chargeDoc().validCvCount;
+  globalThis.__MOCK_TOKENS["tok-F"] = { uid: "F", firebase: { sign_in_provider: "anonymous" } };
+  p = await top("/?imadake=SHB", { uid: "F" });
+  await p.ev(`getImadakeStoreOwnerIdToken = async function(){ return "expired-store-token"; }; true`);
+  await readMore(p);
+  m = await modalState(p);
+  t("D4 店舗のトークンを確認できない（期限切れ等）：再試行の表示・詳細を出さない・CV・料金なし（本人かもしれないため数えない）", m.state === "error" && m.retry && noDetails(await detailHtml(p)) && !shbView("F") && chargeDoc().validCvCount === cvBefore, m);
+  await p.close();
+  globalThis.__MOCK_TOKENS["tok-G"] = { uid: "G", firebase: { sign_in_provider: "anonymous" } };
+  globalThis.__MOCK_TOKENS["store-own-S1"] = { uid: "ownerS1", firebase: { sign_in_provider: "password" } };
+  S.docs.set("storeMembers/S1_ownerS1", { storeId: "S1", uid: "ownerS1", role: "owner", status: "active" });
+  p = await top("/?imadake=SHB", { uid: "G" });
+  await p.ev(`getImadakeStoreOwnerIdToken = async function(){ return "store-own-S1"; }; true`);
+  await readMore(p);
+  m = await modalState(p);
+  t("D5 確認できた店主本人（自分の投稿）：詳細を表示・CVは数えない（store_owner_view）・料金は増えない", m.state === "ready" && m.fullBodyInDom && shbView("G") && shbView("G").counted === false && shbView("G").excludedReason === "store_owner_view" && chargeDoc().validCvCount === cvBefore && charges() === 1, shbView("G"));
+  t("D6 STEP 48-D の画面：JSエラーなし", errorsOf(p).length === 0, errorsOf(p));
+  await p.close();
+  p = await top("/?imadake=SH1", { uid: "H" });
+  await p.ev(`getAnonymousIdTokenForLocationCollection = async function(){ throw new Error("anonymous auth failed (simulated)"); }; true`);
+  await readMore(p);
+  m = await modalState(p);
+  t("D7 課金対象外の投稿は今までどおり：トークンが無くても詳細を表示（CVは記録しない）", m.state === "ready" && m.fullBodyInDom && !S.docs.has("imadakeCvViews/SH1_H"), m);
   await p.close();
 
   for (const [id, label] of [["EXP", "掲載期限を過ぎた"], ["HID", "非公開（公開中でない）"], ["NOPE0000", "存在しない"]]) {

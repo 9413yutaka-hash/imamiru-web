@@ -21093,7 +21093,8 @@ function sendImadakeFirstViewAnalytics(
 
 // 詳細を取得する。POST imadakeDetailOpen(サーバーが初回閲覧＝CVを記録してから本文を返す。
 // 同じ旅行者の2回目以降・再試行はCVを増やさず本文を返す)。
-//   ・匿名ログインできない時はトークン無しで送る(サーバーは本文を返し、CVは記録しない)
+//   ・匿名ログインできない時はトークン無しで送る(CVは記録しない。課金対象の投稿はサーバーが
+//     詳細を返さず retryable を返すため、再試行の表示にする)
 //   ・店舗ログイン中なら店舗トークンも送る(本人の閲覧かどうかはサーバーが照合する)
 //   ・通信・サーバーの障害時だけ、従来のGET imadakePostGetへ戻る。課金対象の投稿は
 //     GETでは本文が返らない(bodyProtected)ため、本文を出さず再試行の表示にする
@@ -21195,6 +21196,12 @@ async function fetchImadakeDetailWithCv(
 
   if (response && response.status === 404) {
     return { postId: postId, state: "ended", post: null, viewedChanged: false };
+  }
+
+  // STEP 48-D｜課金対象の投稿でCVの成立を確認できなかった(サーバーが詳細を返さなかった)時は、
+  // 再試行の表示にする(GETでも本文は返らないため戻らない)。
+  if (responseData && responseData.retryable === true) {
+    return { postId: postId, state: "error", post: null, viewedChanged: false };
   }
 
   return fetchImadakeDetailFromPublicGet(postId);
