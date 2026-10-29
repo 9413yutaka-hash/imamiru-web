@@ -1,17 +1,30 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <!-- Google tag (gtag.js) -->
-  <script
-    async
-    src="https://www.googletagmanager.com/gtag/js?id=G-PGM7GNVQX8"
-  ></script>
+  <!-- Google tag (gtag.js)｜STEP 48-E(代表決定 B案)：本番のドメイン(machinau.jp・
+       imamiru-web.vercel.app)だけで読み込む。Preview・localhost では本番の GA4 を読み込まず、
+       gtag も定義しない(記事ページ・掲示板と同じ形。画面側の計測は typeof gtag で何もしない)。 -->
   <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
+    (function () {
+      if (location.hostname !== "machinau.jp" && location.hostname !== "imamiru-web.vercel.app") {
+        return;
+      }
 
-    gtag('config', 'G-PGM7GNVQX8');
+      window.dataLayer = window.dataLayer || [];
+
+      window.gtag = function () {
+        dataLayer.push(arguments);
+      };
+
+      gtag("js", new Date());
+      gtag("config", "G-PGM7GNVQX8");
+
+      const gaScript = document.createElement("script");
+      gaScript.async = true;
+      gaScript.src =
+        "https://www.googletagmanager.com/gtag/js?id=G-PGM7GNVQX8";
+      document.head.appendChild(gaScript);
+    })();
   </script>
 
   <meta charset="UTF-8">
