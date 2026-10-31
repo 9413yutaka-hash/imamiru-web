@@ -2872,12 +2872,74 @@ function updateShopsSectionRegionUi() {
   }
 }
 
+// STEP 49-A｜選択中の市区町村の街の発見(期限内)を新しい順に返す。座標の有無は
+// 問わず、距離は現在地と投稿の座標が両方ある時だけ計算する(無ければnull)。
+function getStreetDiscoveryItemsInSelectedRegion(
+  nowMilliseconds,
+  hasUserLocation
+) {
+  return shops
+    .filter(
+      function(shop) {
+        return (
+          shop.submissionType === "street" &&
+          getDateValue(
+            shop.expiresAt
+          ) > nowMilliseconds &&
+          isShopInSelectedShopRegion(
+            shop,
+            selectedShopRegion
+          )
+        );
+      }
+    )
+    .sort(
+      function(first, second) {
+        return (
+          getDateValue(
+            second.createdAt
+          ) -
+          getDateValue(
+            first.createdAt
+          )
+        );
+      }
+    )
+    .map(
+      function(shop) {
+        return {
+          shop: shop,
+          distanceKm:
+            hasUserLocation &&
+            Number.isFinite(
+              shop.latitude
+            ) &&
+            Number.isFinite(
+              shop.longitude
+            )
+              ? calculateDistance(
+                  userLatitude,
+                  userLongitude,
+                  shop.latitude,
+                  shop.longitude
+                )
+              : null
+        };
+      }
+    );
+}
+
 // 街の発見の分離｜street投稿(承認済み・期限内のものだけがshopsに入る)を、
 // 「マチナウ読みもの」直前の専用セクションへ出す。現在地が分かるまでは
 // 何も出さず(全国の投稿を無差別に並べない)、分かった後は座標があり
 // 現在地から15km以内(境界を含む)の投稿だけを近い順に並べる。店舗カテゴリ・
 // お気に入り(selectedCategory)には依存しない。店舗と誤解される表示
 // (掲載中・営業状態・お気に入り・店舗詳細モーダル)は付けない。
+// STEP 49-A｜地域から探すで市区町村を選んでいる間だけ、店舗カードと同じ
+// isShopInSelectedShopRegion()(住所の「都道府県＋市区町村」)で絞り、新しい順に
+// 並べる(現在地が無くても表示する。距離は現在地と座標がある時だけ添える)。
+// 住所で市区町村が判定できない投稿は推測で割り当てず対象外にする。
+// 市区町村を選んでいない間の現在地15kmの判定は従来のまま。
 function renderStreetDiscoverySection() {
   const section =
     document.getElementById(
@@ -2896,9 +2958,13 @@ function renderStreetDiscoverySection() {
     return;
   }
 
+  const hasUserLocation =
+    userLatitude !== null &&
+    userLongitude !== null;
+
   if (
-    userLatitude === null ||
-    userLongitude === null
+    !selectedShopRegion &&
+    !hasUserLocation
   ) {
     list.innerHTML =
       "";
@@ -2913,7 +2979,12 @@ function renderStreetDiscoverySection() {
     Date.now();
 
   const nearbyStreetItems =
-    shops
+    selectedShopRegion
+      ? getStreetDiscoveryItemsInSelectedRegion(
+          nowMilliseconds,
+          hasUserLocation
+        )
+      : shops
       .filter(
         function(shop) {
           return (
@@ -3013,11 +3084,17 @@ function renderStreetDiscoverySection() {
             );
           }
 
-          placeParts.push(
-            formatDistance(
+          if (
+            Number.isFinite(
               item.distanceKm
             )
-          );
+          ) {
+            placeParts.push(
+              formatDistance(
+                item.distanceKm
+              )
+            );
+          }
 
           return (
             '<article class="street-discovery-card">' +
