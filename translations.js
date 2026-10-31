@@ -337,8 +337,8 @@ const MACHINAU_TRANSLATIONS = {
   // TOP参加CTA内の店舗・施設向け第2導線(shop.htmlへ)。footer_shop_linkと同じ
   // 考え方の文言。shop.html自体は日本語のみ。
   contribute_cta_shop_link: {
-    ja: "お店・施設の方へ｜無料で情報を掲載できます →",
-    en: "For shops & venues | List your info for free →"
+    ja: "お店・施設の方へ｜店舗カード・今だけ投稿のご案内 →",
+    en: "For shops & venues | Store cards and Just for Now posts →"
   },
 
   category_all: {
@@ -1177,8 +1177,8 @@ const MACHINAU_TRANSLATIONS = {
   // 店舗・施設参加導線 Phase2｜フッターの店舗・施設向け入口(shop.htmlへ)。
   // shop.html自体は日本語のみ。
   footer_shop_link: {
-    ja: "お店・施設の方へ｜マチナウに無料で投稿できます",
-    en: "For shops & venues | Post on Machinau for free"
+    ja: "お店・施設の方へ｜店舗カード・今だけ投稿のご案内",
+    en: "For shops & venues | Store cards and Just for Now posts"
   },
 
   location_geolocation_unsupported: {
@@ -2405,8 +2405,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_billing_intro: {
-    ja: "今だけ投稿の利用料金（有効な閲覧があった「投稿×1日」ごとに100円・税込、月末締め・翌月まとめてカード請求）に使うカードを登録します。カードは1つのアカウントに1枚で、このアカウントで管理するすべてのお店・施設に共通です。お店・施設の登録と引き継ぎにも、カードの登録が必要です。カードを登録しただけでは料金は発生しません。現在、請求は行っていません。カード番号は決済会社（Stripe）が直接受け取り、マチナウには保存されません（保存するのは、カードのブランド・下4桁・有効期限だけです）。",
-    en: "Register the card used for Just for Now fees (¥100 incl. tax per post per day with at least one valid view, billed together monthly). One card per account, shared by all the shops and venues you manage with this account. A card is also required to register or take over a shop or venue. Registering a card does not by itself incur any fee. No charges are being made at this time. Your card number goes directly to our payment provider (Stripe) and is not stored by Machinau (we keep only the card brand, last 4 digits and expiry date)."
+    ja: "店舗カードの月額料金（1店舗・月額100円・税込）と、今だけ投稿の利用料金（有効な閲覧があった「投稿×1日」ごとに100円・税込）のお支払いに使うカードを登録します。どちらも月末締め・翌月2日にカードへ請求します（別々に請求します）。カードは1つのアカウントに1枚で、このアカウントで管理するすべてのお店・施設に共通です。お店・施設の登録と引き継ぎにも、カードの登録が必要です。カードを登録しただけでは料金は発生しません。現在、請求は行っていません。カード番号は決済会社（Stripe）が直接受け取り、マチナウには保存されません（保存するのは、カードのブランド・下4桁・有効期限だけです）。",
+    en: "Register the card used to pay the store card fee (¥100 per shop per month, tax included) and Just for Now fees (¥100 incl. tax per post per day with at least one valid view). Both are closed at month end and charged to the card on the 2nd of the next month (billed separately). One card per account, shared by all the shops and venues you manage with this account. A card is also required to register or take over a shop or venue. Registering a card does not by itself incur any fee. No charges are being made at this time. Your card number goes directly to our payment provider (Stripe) and is not stored by Machinau (we keep only the card brand, last 4 digits and expiry date)."
   },
 
   store_billing_store_label: {

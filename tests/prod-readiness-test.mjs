@@ -176,7 +176,8 @@ t("28a shop-guide.html：正式な流れ（アカウント作成→メール確�
 t("28b shop-guide.html：旧専用URL方式（お店専用の投稿ページ・URL の保管／再発行・掲載番号／終了番号・edit／end への導線）が無い", !/お店専用の投稿ページ|発行し直す|終了番号|掲載番号|href="edit\.html"|href="end\.html"/.test(guideVisible));
 const guideHrefs = [...guideVisible.matchAll(/href="([^"#]+)"/g)].map((m) => m[1]).filter((h) => !h.startsWith("/favicon"));
 t("28c shop-guide.html：リンクは既存のページだけ（存在しないURLを作らない）", guideHrefs.length > 0 && guideHrefs.every((h) => fs.existsSync(REPO_ROOT + "/" + h.split("?")[0])), guideHrefs);
-t("28d shop-guide.html：運営の個別承認・電話確認・書類提出などの新しい条件や、料金・規約の新しい記載を加えない（ラベルは実際の画面の文言）", !/電話|書類|審査|本人確認|100円|税込|手数料|特定商取引/.test(guideVisible) && /「カードを登録する」/.test(guideVisible) && /「店舗・施設を登録する」/.test(guideVisible) && /「このお店を引き継ぐ」/.test(guideVisible) && /「常設店舗情報を編集する」/.test(guideVisible) && /「旅行者に公開する」/.test(guideVisible));
+// STEP 51-B｜料金は正式な4商品の案内だけを載せる(店舗カードの作成・下書きは無料・公開は月額100円・今だけ投稿は契約不要)。
+t("28d shop-guide.html：運営の個別承認・電話確認・書類提出などの新しい条件を加えない・料金は正式な案内だけ（ラベルは実際の画面の文言）", !/電話|書類|審査|本人確認|手数料|特定商取引|500円/.test(guideVisible) && /店舗カードの作成・下書きは無料です。店舗カードを旅行者に公開するには月額100円（税込）の契約が必要です。今だけ投稿は店舗カードの契約が無くても使え/.test(guideVisible) && !/お店・施設の情報の登録は無料/.test(guideVisible) && /「カードを登録する」/.test(guideVisible) && /「店舗・施設を登録する」/.test(guideVisible) && /「このお店を引き継ぐ」/.test(guideVisible) && /「常設店舗情報を編集する」/.test(guideVisible) && /「旅行者に公開する」/.test(guideVisible));
 
 // STEP 43-D｜「街の声」の編集・掲載終了（edit.html／end.html の API、api/edit-ad.js）は維持
 {
