@@ -18,7 +18,7 @@ const SCHEDULE = { start: "2026-10-30", effective: "2026-11-07" };
 // STEP 52-D｜施行日の版(告知を外した版)の施行日。代表が決めるまで null(勝手に決めない)。null の間は L2 が必ず失敗し、
 // Production へ出せない状態であることを示す。決まったら "YYYY-MM-DD" にし、terms.html・privacy.html・tokushoho.html の
 // 最終更新日をその日に合わせる。
-const LAUNCH_EFFECTIVE = null;
+const LAUNCH_EFFECTIVE = "2026-11-01"; // STEP 52-H｜公開実行時の日本時間の日付
 // 告知の日を数えず、その翌日から7日間を告知期間とする（施行日は告知日の8日後以降）。
 const MIN_DAYS_FROM_POSTING_TO_EFFECTIVE = 8;
 // 告知を外した時に一致すべき、現行の版（main 5c8c597）の内容（改行は LF にそろえる）。

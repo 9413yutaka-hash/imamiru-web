@@ -2414,8 +2414,8 @@ const MACHINAU_TRANSLATIONS = {
     en: "The planned effective date in that notice (November 7, 2026) has been changed. The revised Terms of Service and Privacy Policy (account closure, the procedure for changing the terms, the addition of the store card monthly fee, etc.) apply from the effective date below. Until the day before the effective date, the Terms of Service and Privacy Policy before the revision apply. The revised text is as shown on each page."
   },
   store_account_legal_correction_date: {
-    ja: "施行日：公開時に確定",
-    en: "Effective date: to be set at publication"
+    ja: "施行日：2026年11月1日",
+    en: "Effective date: November 1, 2026"
   },
   store_account_legal_correction_contract: {
     ja: "既存の店舗アカウントの方に、店舗カードの月額料金が自動で発生することはありません。店舗カードの月額契約（1つのお店・施設につき月額100円・税込）は、施行日以降に店舗アカウントの画面で料金と条件を確認し、同意して申し込んだ場合にだけ成立します。契約の無い店舗カードは、施行日から旅行者に公開されません（保存した内容は消えません）。店舗アカウントの退会は、施行日からこの画面で申し込めます。",
