@@ -2410,8 +2410,16 @@ const MACHINAU_TRANSLATIONS = {
     en: "Correction to our notice of October 30, 2026 (account closure and revised Terms of Service / Privacy Policy)"
   },
   store_account_legal_correction_body: {
-    ja: "このお知らせでご案内した施行予定日（2026年11月7日）を変更し、店舗カードの月額料金（1つのお店・施設につき月額100円・税込）の追加などとあわせて、利用規約・プライバシーポリシーの最終更新日に改定しました。改定後の内容は、各ページの本文のとおりです。店舗アカウントの退会は、この画面から申し込めます。",
-    en: "The planned effective date in that notice (November 7, 2026) was changed. The Terms of Service and the Privacy Policy were revised, together with the addition of the store card monthly fee (¥100 per shop or venue per month, tax included), on the last-updated date shown on each page. The revised text is as shown on each page. You can request the closure of your business account on this page."
+    ja: "このお知らせでご案内した施行予定日（2026年11月7日）を変更しました。改定後の利用規約・プライバシーポリシー（店舗アカウントの退会、規約の変更の手続き、店舗カードの月額料金の追加など）は、下記の施行日から適用します。施行日の前日までは、改定前の利用規約・プライバシーポリシーが適用されます。改定後の内容は、各ページの本文のとおりです。",
+    en: "The planned effective date in that notice (November 7, 2026) has been changed. The revised Terms of Service and Privacy Policy (account closure, the procedure for changing the terms, the addition of the store card monthly fee, etc.) apply from the effective date below. Until the day before the effective date, the Terms of Service and Privacy Policy before the revision apply. The revised text is as shown on each page."
+  },
+  store_account_legal_correction_date: {
+    ja: "施行日：公開時に確定",
+    en: "Effective date: to be set at publication"
+  },
+  store_account_legal_correction_contract: {
+    ja: "既存の店舗アカウントの方に、店舗カードの月額料金が自動で発生することはありません。店舗カードの月額契約（1つのお店・施設につき月額100円・税込）は、施行日以降に店舗アカウントの画面で料金と条件を確認し、同意して申し込んだ場合にだけ成立します。契約の無い店舗カードは、施行日から旅行者に公開されません（保存した内容は消えません）。店舗アカウントの退会は、施行日からこの画面で申し込めます。",
+    en: "No store card monthly fee is charged automatically to existing business accounts. A store card monthly contract (¥100 per shop or venue per month, tax included) is made only when you check the fee and terms on the business account page and agree and apply on or after the effective date. Store cards without a contract are not shown to travelers from the effective date (your saved content is kept). From the effective date, you can request the closure of your business account on this page."
   },
 
   store_billing_intro: {

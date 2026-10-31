@@ -128,8 +128,14 @@ if (HAS_NOTICE) {
   t("L0 施行日の版：告知はどこにも残っていない（4ページ・翻訳・CSS）", ![...PAGES, "translations.js"].some((f) => /LEGAL-NOTICE|legal-change-notice|store_account_legal_notice_/.test(FILES[f])));
   t("L1 施行日の版：退会の機能を含む・本番の自動削除は OFF", FEATURE_SHIPPED && /mode === "storeAccountDelete"|"storeAccountDelete"/.test(MS) && ACC.includes("accountDeletionSection") && flag("api/_lib/store-account-deletion.js", "ACCOUNT_DELETION_SWEEP_PRODUCTION_ENABLED") === "false");
   const T = FILES["terms.html"], P = FILES["privacy.html"];
-  t("L2 施行日（代表が決定）が設定され、利用規約・プライバシーポリシー・特商法の最終更新日が施行日（未決定の間は失敗＝Production へ出さない）",
-    LAUNCH_EFFECTIVE !== null && T.includes(`最終更新日：${ja(LAUNCH_EFFECTIVE)}`) && P.includes(`最終更新日：${ja(LAUNCH_EFFECTIVE)}`) && read("tokushoho.html").includes(`最終更新日：${ja(LAUNCH_EFFECTIVE)}`), { launchEffective: LAUNCH_EFFECTIVE });
+  // STEP 52-G｜施行日は公開時に確定する。訂正文の「施行日：公開時に確定」(4か所・日英)を実際の日付に置き換え、3ページの最終更新日も合わせる。
+  const enDate = (d) => { const [y, m, dd] = d.split("-").map(Number); return ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][m - 1] + " " + dd + ", " + y; };
+  const effOk = LAUNCH_EFFECTIVE !== null &&
+    T.includes(`最終更新日：${ja(LAUNCH_EFFECTIVE)}`) && P.includes(`最終更新日：${ja(LAUNCH_EFFECTIVE)}`) && read("tokushoho.html").includes(`最終更新日：${ja(LAUNCH_EFFECTIVE)}`) &&
+    ["terms.html", "privacy.html", "shop-guide.html"].every((f) => FILES[f].includes(`施行日：<span data-legal-effective>${ja(LAUNCH_EFFECTIVE)}</span>`)) &&
+    tr.store_account_legal_correction_date.ja === `施行日：${ja(LAUNCH_EFFECTIVE)}` && tr.store_account_legal_correction_date.en === `Effective date: ${enDate(LAUNCH_EFFECTIVE)}` &&
+    ![...PAGES, "translations.js"].some((f) => /公開時に確定|to be set at publication/.test(FILES[f]));
+  t("L2 施行日（代表が決定）が設定され、訂正文の施行日（4か所・日英）と、利用規約・プライバシーポリシー・特商法の最終更新日が施行日（未決定の間は失敗＝Production へ出さない）", effOk, { launchEffective: LAUNCH_EFFECTIVE });
   const olCount = (h2) => { const i = T.indexOf("<h2>" + h2); const s = T.slice(i, T.indexOf("</ol>", i)); return (s.match(/<li>/g) || []).length; };
   // STEP 51-B｜15条に「引き継いだ店舗カードの公開には月額契約が必要」(5項目め)を追加。
   t("L3 利用規約：12条は4項目・13条は11項目・14条は6項目・15条は5項目", olCount("12. ") === 4 && olCount("13. ") === 11 && olCount("14. ") === 6 && olCount("15. ") === 5, [olCount("12. "), olCount("13. "), olCount("14. "), olCount("15. ")]);
@@ -147,9 +153,13 @@ if (HAS_NOTICE) {
   const corr = PAGES.map((f) => { const m = FILES[f].match(/<!-- LEGAL-CORRECTION:START[\s\S]*?LEGAL-CORRECTION:END -->/); return { f, html: m ? m[0] : "" }; });
   const corrText = corr.map((c) => text(c.html.replace(/<!--[\s\S]*?-->/g, ""))).join(" ") + " " + tr.store_account_legal_correction_title.ja + " " + tr.store_account_legal_correction_body.ja;
   const datesInCorr = [...corrText.matchAll(/20\d\d年\d+月\d+日/g)].map((m) => m[0]);
-  t("L9 訂正文：4ページすべてにある・10月30日の告知と11月7日の予定の変更・店舗カード月額100円（税込）とあわせて最終更新日に改定・退会は画面から・新しい日付は書かない・英語あり（日本語が混ざらない）",
-    corr.every((c) => c.html.includes('data-legal-correction="step47"')) && /2026年10月30日/.test(corrText) && /施行予定日（2026年11月7日）を変更/.test(corrText) && /月額100円・税込/.test(corrText) && /最終更新日に改定しました/.test(corrText) && /退会/.test(corrText) && datesInCorr.every((d) => d === "2026年10月30日" || d === "2026年11月7日") &&
-    /November 7, 2026/.test(tr.store_account_legal_correction_body.en) && !/[\u3040-\u30ff\u4e00-\u9fff]/.test(tr.store_account_legal_correction_title.en + tr.store_account_legal_correction_body.en), { pages: corr.map((c) => c.f + ":" + (c.html ? "ok" : "missing")), datesInCorr });
+  const corrAll = corrText + " " + tr.store_account_legal_correction_date.ja + " " + tr.store_account_legal_correction_contract.ja;
+  const enAll = tr.store_account_legal_correction_title.en + tr.store_account_legal_correction_body.en + tr.store_account_legal_correction_date.en + tr.store_account_legal_correction_contract.en;
+  t("L9 訂正文：4ページすべて・11月7日の予定の変更・改定後は施行日から適用（前日までは改定前）・施行日は別の行（最終更新日と混同しない）・既存の利用者に料金は自動で発生しない・契約は同意して申し込んだ場合だけ・契約の無いカードは非公開・施行日以外の新しい日付は書かない・英語あり",
+    corr.every((c) => c.html.includes('data-legal-correction="step47"') && (c.f === "store-account.html" ? c.html.includes('data-i18n="store_account_legal_correction_date"') : c.html.includes("施行日：<span data-legal-effective>"))) && /2026年10月30日/.test(corrAll) && /施行予定日（2026年11月7日）を変更しました/.test(corrAll) && /下記の施行日から適用します/.test(corrAll) && /施行日の前日までは、改定前の利用規約・プライバシーポリシーが適用/.test(corrAll) && !/最終更新日に改定/.test(corrAll) &&
+    /自動で発生することはありません/.test(corrAll) && /同意して申し込んだ場合にだけ成立/.test(corrAll) && /契約の無い店舗カードは、施行日から旅行者に公開されません/.test(corrAll) &&
+    [...corrAll.matchAll(/20\d\d年\d+月\d+日/g)].map((m) => m[0]).every((d) => d === "2026年10月30日" || d === "2026年11月7日" || (LAUNCH_EFFECTIVE !== null && d === ja(LAUNCH_EFFECTIVE))) &&
+    /November 7, 2026/.test(enAll) && /charged automatically/.test(enAll) && !/[\u3040-\u30ff\u4e00-\u9fff]/.test(enAll), { pages: corr.map((c) => c.f + ":" + (c.html ? "ok" : "missing")), datesInCorr });
 }
 
 // ===================== B: browser =====================
