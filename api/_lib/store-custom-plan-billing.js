@@ -69,6 +69,10 @@ export const STORE_CUSTOM_PLAN_PERIOD_PREVIEW_TRIAL = "preview_trial";
 export const STORE_CUSTOM_PLAN_PERIOD_MONTHLY = "monthly";
 
 export const STORE_CUSTOM_PLAN_MONTHLY_FEE_JPY = 100;
+// STEP 50-B(代表決定 2026-10-31)｜店舗カード月額契約(税込100円／店舗・暦月、月末締め・翌月2日請求・
+// 日割りなし、今だけ投稿とは別の請求)への同意の版。カード登録の同意(STORE_BILLING_CONSENT_VERSION)とは別。
+// 同意の文面を変えた時は版を上げる(古い版の申込は受け付けない)。
+export const STORE_CARD_PLAN_CONSENT_VERSION = "store-card-monthly-2026-10-31";
 // 請求予定日(翌月の何日、日本時間)。
 export const STORE_CUSTOM_PLAN_CHARGE_DAY_OF_MONTH = 2;
 // 決済失敗(代表決定)：初回失敗の3日後・7日後に再試行、初回失敗から14日で有料機能を停止。

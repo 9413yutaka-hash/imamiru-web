@@ -55,7 +55,7 @@ seedStore("S2", "u2", "となりの食堂", 26.22);
 seedStore("S3", "u3", "カードなしの店", 26.23);
 seedStore("S4", "u4", "共同経営の店", 26.24); member("S4", "u5");
 ["u1", "u2", "u4", "u5", "u6"].forEach(card);
-const SUB = (storeId) => ({ mode: "storeCustomPlanSubscribe", storeId });
+const SUB = (storeId) => ({ mode: "storeCustomPlanSubscribe", storeId, planConsentVersion: "store-card-monthly-2026-10-31" });
 const CANCEL = (storeId) => ({ mode: "storeCustomPlanCancel", storeId });
 const GET = (storeId) => ({ mode: "storeCustomProfileGet", storeId });
 const UPDATE = (storeId, rev, story) => ({ mode: "storeCustomProfileUpdate", storeId, expectedRevision: rev, menuItems: [{ name: "ちんすこうラテ", priceText: "¥650" }], links: [], story });
@@ -97,7 +97,7 @@ S.docs.set("storeAccounts/S2", { ...S.docs.get("storeAccounts/S2"), enabled: tru
 
 // ===================== subscribe: success =====================
 let g = await call(GET("S1"), "u1");
-t("B0 申込前：state none・申込できる環境・カード登録済み・編集不可", g.body.plan.state === "none" && g.body.plan.signupAvailable === true && g.body.plan.cardRegistered === true && g.body.editable === false, g.body.plan);
+t("B0 申込前：state none・申込できる環境・カード登録済み・編集はできる（STEP 50-D）", g.body.plan.state === "none" && g.body.plan.signupAvailable === true && g.body.plan.cardRegistered === true && g.body.editable === true, g.body.plan);
 const before = Date.now(); clearRate(); r = await call(SUB("S1"), "u1"); const after = Date.now();
 let p1 = plan("S1");
 t("B1 申込：200 subscribed・active・契約者 u1・preview_trial・利用期限＝申込時刻の暦の1か月後", r.code === 200 && r.body.result === "subscribed" && p1.status === "active" && p1.ownerUid === "u1" && p1.billingAccountUid === "u1" && p1.periodKind === "preview_trial" && ms(p1.accessUntil) === CP.addOneCalendarMonthJst(ms(p1.subscribedAt)) && ms(p1.subscribedAt) >= before && ms(p1.subscribedAt) <= after && r.body.accessUntilMillis === ms(p1.accessUntil), { body: r.body, p1 });
@@ -144,14 +144,15 @@ t("C7 期限内の再申込＝解約の取り消し：reactivated・active・利
 clearRate(); await call(CANCEL("S1"), "u1");
 
 // ===================== expiry =====================
-const keptCustom = snap("storeCustomProfiles/S1");
 S.docs.set("storeCustomPlans/S1", { ...plan("S1"), accessUntil: Timestamp.fromMillis(Date.now() - 1000) });
 g = await call(GET("S1"), "u1");
-clearRate(); r = await call(UPDATE("S1", 2, "期限後は保存できない"), "u1");
+clearRate(); r = await call(UPDATE("S1", 2, "期限後も保存できる"), "u1");
+const keptCustom = S.docs.get("storeCustomProfiles/S1") || {};
 pl = await publicList();
 const s1pub = pl.body.stores.find((s) => s.id === "sp_S1");
-t("E1 利用期限の終了後：state expired・編集不可（403 plan_required）", g.body.plan.state === "expired" && g.body.editable === false && r.code === 403 && r.body.reason === "plan_required", { plan: g.body.plan, body: r.body });
-t("E2 利用期限の終了後：旅行者には有料の内容を出さない・無料プロフィールは掲載を続ける・データは残る", s1pub && !("custom" in s1pub) && s1pub.description === "無料の紹介文S1" && snap("storeCustomProfiles/S1") === keptCustom, s1pub);
+t("E1 利用期限の終了後：state expired・保存・編集はできる（STEP 50-D・revision 3）", g.body.plan.state === "expired" && g.body.editable === true && r.code === 200 && r.body.revision === 3, { plan: g.body.plan, body: r.body });
+// STEP 50-B(代表決定 2026-10-31)｜店舗カードは契約の利用権がある間だけ公開する(無料の店主管理は無い)。
+t("E2 利用期限の終了後：店舗カードを旅行者に出さない(STEP 50-B)・期限後に保存した内容も公開の一覧に出ない・データは残る", !s1pub && !JSON.stringify(pl.body).includes("期限後も保存できる") && keptCustom.story === "期限後も保存できる" && keptCustom.menuItems.length === 1, s1pub);
 clearRate(); r = await call(CANCEL("S1"), "u1");
 t("E3 期限切れの契約の解約：409 plan_not_active", r.code === 409 && r.body.reason === "plan_not_active", r.body);
 const expiredPlan = plan("S1");
@@ -160,16 +161,17 @@ p1 = plan("S1");
 const sup = events("S1").find((e) => e.event === "superseded");
 t("E4 期限切れの後の再申込：新しい契約（新しい利用期限）・前の契約は履歴（superseded）に残す", r.code === 200 && r.body.result === "subscribed" && p1.status === "active" && ms(p1.accessUntil) > Date.now() && !!sup && sup.previous.status === "canceling" && sup.previous.ownerUid === "u1" && sup.previous.accessUntilMillis === ms(expiredPlan.accessUntil), { body: r.body, sup });
 pl = await publicList();
-t("E5 再申込でデータがそのまま表示に戻る（商品・ストーリー）", (pl.body.stores.find((s) => s.id === "sp_S1").custom || {}).story === "解約後も期限までは編集できる", pl.body.stores.find((s) => s.id === "sp_S1"));
+t("E5 再申込で、契約の無い間に保存した内容がそのまま表示される（商品・ストーリー）", (pl.body.stores.find((s) => s.id === "sp_S1").custom || {}).story === "期限後も保存できる", pl.body.stores.find((s) => s.id === "sp_S1"));
 
 // ===================== ownership change =====================
 member("S1", "u1", "removed"); member("S1", "u6");
 pl = await publicList();
-t("O1 所有者の変更（u1 が owner でなくなり u6 が owner）：旧店主の契約では旅行者に表示しない", !("custom" in pl.body.stores.find((s) => s.id === "sp_S1")), pl.body.stores.find((s) => s.id === "sp_S1"));
+t("O1 所有者の変更（u1 が owner でなくなり u6 が owner）：旧店主の契約では店舗カードを旅行者に出さない(STEP 50-B)", !pl.body.stores.some((s) => s.id === "sp_S1"), pl.body.stores.map((s) => s.id));
 g = await call(GET("S1"), "u6");
-t("O2 新しい owner：state other_holder・旧契約は有効ではない（otherHolderActive false）・編集不可・旧契約の日時は見せない", g.body.plan.state === "other_holder" && g.body.plan.otherHolderActive === false && g.body.editable === false && g.body.plan.accessUntilMillis === 0 && g.body.plan.subscribedAtMillis === 0, g.body.plan);
-clearRate(); r = await call(UPDATE("S1", 2, "新しい owner"), "u6");
-t("O3 新しい owner は旧店主の契約で保存できない（403 plan_required）", r.code === 403 && r.body.reason === "plan_required", r.body);
+t("O2 新しい owner：state other_holder・旧契約は有効ではない（otherHolderActive false）・編集はできる（STEP 50-D）・旧契約の日時は見せない", g.body.plan.state === "other_holder" && g.body.plan.otherHolderActive === false && g.body.editable === true && g.body.plan.accessUntilMillis === 0 && g.body.plan.subscribedAtMillis === 0, g.body.plan);
+clearRate(); r = await call(UPDATE("S1", 3, "新しい owner"), "u6");
+pl = await publicList();
+t("O3 新しい owner は契約前でも保存できる（200）が、旧店主の契約では公開しない", r.code === 200 && r.body.revision === 4 && !pl.body.stores.some((s) => s.id === "sp_S1") && !JSON.stringify(pl.body).includes("新しい owner"), r.body);
 clearRate(); r = await call(CANCEL("S1"), "u6");
 t("O4 新しい owner は旧店主の契約を解約できない（409）", r.code === 409, r.body);
 clearRate(); r = await call(GET("S1"), "u1");
@@ -182,9 +184,10 @@ t("O6 新しい owner の申込：自分のカードの新しい契約（契約�
 g = await call(GET("S4"), s4Other);
 clearRate(); r = await call(SUB("S4"), s4Other);
 const r2 = await call(UPDATE("S4", 0, "共同 owner"), s4Other);
-t("O7 共同 owner（契約者ではない）：state other_holder・契約が有効なので申込は 409・有料の欄は保存できない", g.body.plan.state === "other_holder" && g.body.plan.otherHolderActive === true && r.code === 409 && r2.code === 403 && r2.body.reason === "plan_required", { plan: g.body.plan, sub: r.body, upd: r2.body });
+// STEP 50-D｜保存・編集の条件は「その店舗の有効な owner」だけ(契約の有無・契約者かどうかは問わない)。
+t("O7 共同 owner（契約者ではない）：state other_holder・契約が有効なので申込は 409・その店舗の owner なので保存はできる", g.body.plan.state === "other_holder" && g.body.plan.otherHolderActive === true && r.code === 409 && r2.code === 200, { plan: g.body.plan, sub: r.body, upd: r2.body });
 const sig = await call({ mode: "cloudinarySignature", purpose: "storeCustomMenuPhoto", storeId: "S4" }, s4Other);
-t("O8 共同 owner（契約者ではない）：商品写真の署名も 403 plan_required", sig.code === 403 && sig.body.reason === "plan_required", sig.body);
+t("O8 共同 owner（契約者ではない）：商品写真の署名は契約の確認で止めない（plan_required にならない）", sig.body.reason !== "plan_required" && sig.code !== 404, sig.body);
 
 // ===================== admin list =====================
 r = await call({ mode: "adminStoreCustomPlanList" }, "u1");

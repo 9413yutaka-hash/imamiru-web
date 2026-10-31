@@ -32,6 +32,11 @@ import {
   isStoreOnboardingOpen
 } from "./store-billing.js";
 
+// STEP 50-B｜店舗カードの公開条件(月額契約の利用権)。STEP 44 の判定をそのまま使う。
+import {
+  evaluateStoreCustomPlanAccess
+} from "./store-custom-plan-billing.js";
+
 const STORE_ACCOUNTS_COLLECTION = "storeAccounts";
 const STORE_MEMBERS_COLLECTION = "storeMembers";
 const STORE_PROFILES_COLLECTION = "storeProfiles";
@@ -659,8 +664,36 @@ export const STORE_PUBLISH_CONDITION_CODES = [
   "store_active",
   "location",
   "country",
-  "duplicates"
+  "duplicates",
+  // STEP 50-B(代表決定 2026-10-31)｜店主が管理する店舗カードは、月額100円の店舗カード契約の
+  // 利用権がある間だけ公開する(運営による無料掲載 submissions には適用しない)。
+  "plan"
 ];
+
+const STORE_CUSTOM_PLANS_COLLECTION = "storeCustomPlans";
+
+// STEP 50-B｜店舗カード契約(storeCustomPlans/{storeId})の利用権があり、契約者が今もその店舗の
+// 有効な owner の時だけ true。契約が無い・読めない時は true にしない(読み取りの失敗は呼び出し側へ投げる)。
+export async function readStoreCardPlanActive(database, storeId, nowMillis, transaction) {
+  const planRef = database.collection(STORE_CUSTOM_PLANS_COLLECTION).doc(storeId);
+  const planSnapshot = transaction ? await transaction.get(planRef) : await planRef.get();
+  const plan = planSnapshot.exists ? planSnapshot.data() || {} : null;
+
+  if (!plan || !evaluateStoreCustomPlanAccess(plan, nowMillis)) {
+    return false;
+  }
+
+  const holderUid = typeof plan.ownerUid === "string" ? plan.ownerUid : "";
+
+  if (holderUid === "") {
+    return false;
+  }
+
+  const holderRef = database.collection(STORE_MEMBERS_COLLECTION).doc(storeId + "_" + holderUid);
+  const holderSnapshot = transaction ? await transaction.get(holderRef) : await holderRef.get();
+
+  return holderSnapshot.exists && isActiveOwner(holderSnapshot.data(), holderUid, storeId);
+}
 
 // 公開条件の判定に使う紐付け(storeListingLinks)。重複候補のうち運営無料掲載
 // (source:"submissions")は、その無料掲載がこの店舗へ有効に紐付いていれば解決済みとする。
@@ -702,6 +735,7 @@ function hasValidCoordinates(account) {
 
 // 公開条件をすべて確認し、満たしていない条件codeの一覧を返す(空なら公開できる)。
 // ownerActive：操作する本人が有効なownerか(公開・非公開の操作時に確認する)。
+// planActive：店舗カード契約の利用権があるか(readStoreCardPlanActive の結果。渡されなければ未契約)。
 export function evaluateStorePublishConditions(input) {
   const account = input.account || {};
   const profile = input.profile || {};
@@ -726,7 +760,8 @@ export function evaluateStorePublishConditions(input) {
     country: STORE_PUBLISH_COUNTRY_CODES.includes(account.countryCode),
     duplicates: candidates.every(function(candidate) {
       return !!candidate && candidate.source === "submissions" && resolvedListingIds.has(candidate.id);
-    })
+    }),
+    plan: input.planActive === true
   };
 
   return STORE_PUBLISH_CONDITION_CODES.filter(function(code) {
@@ -752,11 +787,19 @@ function buildPublicationResponse(profile, missing) {
 
 async function readPublicationForOwner(database, storeId, account, profile) {
   const resolvedListingIds = await readResolvedDuplicateListingIds(database, storeId, account, null);
+  let planActive = false;
+
+  try {
+    planActive = await readStoreCardPlanActive(database, storeId, Date.now(), null);
+  } catch (planError) {
+    console.error("常設店舗の公開状態：契約の読み取りエラー：", planError && planError.message);
+  }
 
   return buildPublicationResponse(profile, evaluateStorePublishConditions({
     account: account,
     profile: profile,
     ownerActive: true,
+    planActive: planActive,
     resolvedListingIds: resolvedListingIds
   }));
 }
@@ -1127,6 +1170,7 @@ export async function handleStoreProfilePublish(request, response, deps) {
       account: accountBefore,
       profile: profileBefore,
       ownerActive: true,
+      planActive: await readStoreCardPlanActive(database, storeId, Date.now(), null),
       resolvedListingIds: await readResolvedDuplicateListingIds(database, storeId, accountBefore, null)
     });
 
@@ -1200,6 +1244,7 @@ export async function handleStoreProfilePublish(request, response, deps) {
         account: account,
         profile: profile,
         ownerActive: isActiveOwner(snapshots[0].data(), actor.uid, storeId),
+        planActive: await readStoreCardPlanActive(database, storeId, Date.now(), transaction),
         resolvedListingIds: await readResolvedDuplicateListingIds(database, storeId, account, transaction)
       });
 
@@ -1479,10 +1524,19 @@ export async function readPublicStoreProfileForShare(database, storeId) {
       return documentSnapshot.id;
     });
 
+  let planActive = false;
+
+  try {
+    planActive = await readStoreCardPlanActive(database, storeId, Date.now(), null);
+  } catch (planError) {
+    return null;
+  }
+
   const missing = evaluateStorePublishConditions({
     account: account,
     profile: profile,
     ownerActive: true,
+    planActive: planActive,
     resolvedListingIds: new Set(linkedListingIds)
   });
 
@@ -1531,6 +1585,15 @@ export async function handlePublicStoreProfilesList(request, response, deps) {
       return database.collection(STORE_ACCOUNTS_COLLECTION).doc(documentSnapshot.id).get();
     }));
 
+    // STEP 50-B｜店舗カード契約の利用権。読めなかった店舗は契約なしとして扱う(その店舗だけ返さない)。
+    const listNowMillis = Date.now();
+    const planActiveByIndex = await Promise.all(profileDocs.map(function(documentSnapshot) {
+      return readStoreCardPlanActive(database, documentSnapshot.id, listNowMillis, null).catch(function(planError) {
+        console.error("旅行者向け店舗一覧：契約の読み取りを飛ばしました：", documentSnapshot.id, planError && planError.message);
+        return false;
+      });
+    }));
+
     const stores = [];
     const suppressedListingIds = new Set();
 
@@ -1552,6 +1615,7 @@ export async function handlePublicStoreProfilesList(request, response, deps) {
           account: account,
           profile: profile,
           ownerActive: true,
+          planActive: planActiveByIndex[index] === true,
           resolvedListingIds: new Set(linkedListingIds)
         });
 

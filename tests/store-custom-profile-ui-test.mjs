@@ -103,11 +103,37 @@ try {
   // ===== editor: no plan =====
   let p = await openEditor("ja");
   let v = await editorView(p);
-  t("E1 未契約：「契約していません」の案内・保存ボタンなし・追加ボタンと入力は使えない", /契約していません/.test(v.note) && v.saveHidden && v.addMenuDisabled && v.addLinkDisabled && v.storyDisabled, v);
+  // STEP 50-D｜代表決定 B案：契約前でもメニュー・リンク・ストーリーを入力・保存・編集できる(公開だけが契約で決まる)。
+  t("E1 未契約：「契約していません」「非公開」の案内・保存ボタンあり・追加ボタンと入力が使える（STEP 50-D）", /月額契約をしていません/.test(v.note) && /非公開/.test(v.note) && !v.saveHidden && !v.addMenuDisabled && !v.addLinkDisabled && !v.storyDisabled, v);
   t("E2 未契約でも無料の店舗情報の編集はこれまでどおり使える（無料の保存ボタンは有効）", v.freeVisible && v.freeSaveDisabled === false, v);
-  t("E3 未契約の画面から保存の API を呼ばない", !posts.some((b) => b.mode === "storeCustomProfileUpdate"));
+  await p.ev(`(() => {
+    const set = (el, value) => { el.value = value; el.dispatchEvent(new Event("input", { bubbles: true })); };
+    set(document.getElementById("customStoryInput"), "契約前に書いたストーリー");
+    document.getElementById("customMenuAddButton").click();
+    set(document.getElementById("custom-name-0"), "契約前のメニュー");
+    document.getElementById("customLinkAddButton").click();
+    const row = document.querySelector("#customLinkRows .custom-link-row");
+    const select = row.querySelector("select"); select.value = "website"; select.dispatchEvent(new Event("change", { bubbles: true }));
+    set(row.querySelector(".custom-link-url"), "https://example.com/before");
+    document.getElementById("customSaveButton").click();
+    return true;
+  })()`);
+  await p.waitFor(`/保存しました/.test(document.getElementById("customMessage").textContent)`, 20000); await sleep(300);
+  let draft = S.docs.get("storeCustomProfiles/S1") || {};
+  t("E3 未契約：画面からメニュー・リンク・ストーリーを保存できる（契約は作らない）", draft.revision === 1 && draft.menuItems.length === 1 && draft.menuItems[0].name === "契約前のメニュー" && draft.links.length === 1 && draft.links[0].url === "https://example.com/before" && draft.story === "契約前に書いたストーリー" && !S.docs.has("storeCustomPlans/S1"), draft);
   t("E4 JSエラーなし（未契約）", p.log.errors.length === 0, p.log.errors);
   await p.close();
+  for (const k of [...S.docs.keys()]) if (k.startsWith("storeRateLimits/")) S.docs.delete(k);
+  p = await openEditor("ja");
+  const reopened = await p.ev(`({ story: document.getElementById("customStoryInput").value, menu: document.getElementById("custom-name-0") && document.getElementById("custom-name-0").value, link: (document.querySelector("#customLinkRows .custom-link-url") || {}).value })`);
+  await p.ev(`(() => { const el = document.getElementById("customStoryInput"); el.value = "契約前に書き直したストーリー"; el.dispatchEvent(new Event("input", { bubbles: true })); document.getElementById("customSaveButton").click(); return true; })()`);
+  await p.waitFor(`/保存しました/.test(document.getElementById("customMessage").textContent)`, 20000); await sleep(300);
+  draft = S.docs.get("storeCustomProfiles/S1") || {};
+  t("E3b 未契約：開き直すと保存済みの内容が表示され、再編集して保存できる（revision 2）", reopened.story === "契約前に書いたストーリー" && reopened.menu === "契約前のメニュー" && reopened.link === "https://example.com/before" && draft.revision === 2 && draft.story === "契約前に書き直したストーリー" && draft.menuItems.length === 1, { reopened, draft });
+  await p.close();
+  // 以降(契約中の編集)は「保存の無い状態」から始める前提なので、模擬データ(メモリー上)の保存内容と連続保存の制限だけを初期化する。
+  S.docs.delete("storeCustomProfiles/S1");
+  for (const k of [...S.docs.keys()]) if (k.startsWith("storeRateLimits/")) S.docs.delete(k);
 
   // ===== editor: active plan =====
   setPlan("active", Timestamp.fromMillis(Date.now() + 30 * 86400000));
@@ -150,7 +176,7 @@ try {
   p = await openEditor("en");
   v = await editorView(p);
   const enText = await p.ev(`document.getElementById("customSection").innerText`);
-  t("E11 英語：見出し・案内・項目名が英語（保存済みの内容は読み込み済み）", /Monthly ¥100 customization/.test(enText) && /Your plan is active/.test(v.note) && /Item 1/.test(enText) && v.items === 2 && !/商品名|契約中/.test(enText), enText.slice(0, 400));
+  t("E11 英語：見出し・案内・項目名が英語（保存済みの内容は読み込み済み）", enText.includes("Store card (¥100/month, tax included)") && /Your contract is active/.test(v.note) && /Item 1/.test(enText) && v.items === 2 && !/商品名|契約中/.test(enText), enText.slice(0, 400));
   await p.close();
 
   // ===== editor: shop-wide 5 photo limit =====
@@ -194,13 +220,14 @@ try {
   t("D2 商品写真は商品写真の URL だけ（1枚）・価格が空の商品は価格を出さない", d.imgs.length === 1 && /\/machinau_store_profiles\/S1\/menu\/img\d+\.webp$/.test(d.imgs[0]) && (d.html.match(/shop-custom-menu-price/g) || []).length === 1, d);
   t("D3 文字はエスケープ（商品名の <img onerror> は文字のまま・要素にならない）", d.imgs.length === 1 && d.text.includes("<img src=x onerror=alert(1)>本日のケーキ"), d.text);
   t("D4 リンクは https・新しいタブ・noopener noreferrer nofollow・表示名が空なら種類の名前（Instagram）", d.links.length === 1 && d.links[0].href === "https://www.instagram.com/example_cafe" && d.links[0].target === "_blank" && /noopener/.test(d.links[0].rel) && /noreferrer/.test(d.links[0].rel) && /nofollow/.test(d.links[0].rel) && d.links[0].text === "Instagram", d.links);
-  const d2 = await detail(q, "sp_S2");
-  t("D5 未契約の店舗の詳細：有料の欄・見出し・余白を出さない（無料の紹介文はそのまま）", !d2.has && /無料の紹介文/.test(d2.all), d2);
+  // STEP 50-B(代表決定 2026-10-31)｜未契約の店舗カードは一覧に出ないため、旅行者は詳細を開けない。
+  const listed = await q.ev(`storeProfileListStores.map((s) => s.id)`);
+  t("D5 未契約の店舗（S2）は正式店舗の一覧に出ない（STEP 50-B）", Array.isArray(listed) && !listed.includes("sp_S2"), listed);
   await detail(q, "sp_S1");
   const cards = await q.ev(`(() => { const inModal = document.getElementById("shopModal").innerHTML.includes("ちんすこうラテ"); const clone = document.body.cloneNode(true); clone.querySelector("#shopModal").remove(); return { inModal, outside: clone.innerHTML.includes("ちんすこうラテ") || clone.innerHTML.includes("shop-custom") }; })()`);
   t("D6 有料の内容は詳細の中だけ（詳細の外＝一覧カード等には出さない）", cards.inModal === true && cards.outside === false, cards);
   const order = await q.ev(`storeProfileListStores.map((s) => s.id).join(",")`);
-  t("D7 正式店舗の一覧の並び・件数は変わらない（有料店舗を優先しない）", order === "sp_S1,sp_S2", order);
+  t("D7 正式店舗の一覧は契約中の店舗だけ（STEP 50-B）", order === "sp_S1", order);
   t("D8 TOPでJSエラーなし", q.log.errors.filter((x) => !/RefererNotAllowed|Google Maps/.test(x)).length === 0, q.log.errors);
   await q.close();
   q = await openTop("en", 1280);

@@ -146,7 +146,7 @@ try {
   await p.goto("/store-account.html");
   await p.waitFor(`!document.getElementById("planPaymentSection").hidden && !!document.querySelector('[data-plan-pay-action="authenticate"]')`, 20000); await sleep(300);
   const en = await p.ev(`document.getElementById("planPaymentSection").innerText`);
-  t("E1 英語：見出し・状態・ボタンが英語", /Monthly ¥100 customization charges/.test(en) && /Authenticate and pay/.test(en) && !/本人認証|未払い/.test(en), en.slice(0, 300));
+  t("E1 英語：見出し・状態・ボタンが英語", en.includes("Store card (¥100/month) charges") && /Authenticate and pay/.test(en) && !/本人認証|未払い/.test(en), en.slice(0, 300));
   await p.ev(`document.querySelector('[data-plan-pay-action="authenticate"]').click(), true`);
   await p.waitFor(`/Authentication was not completed/.test(document.getElementById("planPayMessage").textContent)`, 15000);
   t("E2 画面で認証が完了しなかった：サーバーの照会のとおり requires_action のまま（画面の表示で支払い済みにしない）", S.docs.get("storeCustomPlanInvoices/Bf_2026-07").status === "requires_action", S.docs.get("storeCustomPlanInvoices/Bf_2026-07").status);

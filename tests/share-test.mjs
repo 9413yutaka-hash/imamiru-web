@@ -61,6 +61,9 @@ const storeProfile = (description, o = {}) => ({ status: "published", categoryCo
 const storeAccount = (name, o = {}) => ({ storeName: name, registrationStatus: "active", enabled: true, latitude: 26.214, longitude: 127.687, countryCode: "JP", prefecture: "沖縄県", city: "那覇市", locationFormattedAddress: "日本、〒900-0013 沖縄県那覇市牧志", ownerEmail: "owner-s9@example.com", ...o });
 S.docs.set("storeProfiles/S9", storeProfile("店主が書いた紹介です。"));
 S.docs.set("storeAccounts/S9", storeAccount("店主が管理するカフェ"));
+// STEP 50-B｜店舗カードは契約の利用権がある間だけ公開する(請求の対象外の試験の契約で前提を作る)。
+S.docs.set("storeMembers/S9_ownerS9", { storeId: "S9", uid: "ownerS9", role: "owner", status: "active" });
+S.docs.set("storeCustomPlans/S9", { storeId: "S9", status: "active", ownerUid: "ownerS9", periodKind: "preview_trial", createdInPreview: true, accessUntil: { toMillis: () => Date.now() + 20 * 86400000 } });
 S.docs.set("storeListingLinks/L2", { status: "active", storeId: "S9", claimId: "CLAIM-SECRET-1" });
 S.docs.set("storeProfiles/SDRAFT", storeProfile("下書きの紹介", { status: "draft" }));
 S.docs.set("storeAccounts/SDRAFT", storeAccount("下書きの店"));

@@ -94,16 +94,35 @@ const openEditor = async (uid, store, lang = "ja") => {
 };
 const view = (p) => p.ev(`({ note: document.getElementById("customPlanNote").textContent, dates: document.getElementById("customPlanDates").hidden ? "" : document.getElementById("customPlanDates").textContent, trial: !document.getElementById("customPlanTrialNote").hidden, card: !document.getElementById("customPlanCardNote").hidden, sub: document.getElementById("customSubscribeButton").hidden ? null : { text: document.getElementById("customSubscribeButton").textContent, disabled: document.getElementById("customSubscribeButton").disabled }, cancel: document.getElementById("customCancelButton").hidden ? null : document.getElementById("customCancelButton").textContent, msg: document.getElementById("customPlanMessage").textContent, storyDisabled: document.getElementById("customStoryInput").disabled, saveHidden: document.getElementById("customSaveButton").hidden })`);
 const click = (p, id) => p.ev(`document.getElementById("${id}").click(), true`);
+// STEP 50-C｜申込・解約の取り消しの前に、料金と条件への同意のチェックを入れる。
+const consent = (p) => p.ev(`(() => { const c = document.getElementById("customPlanConsentCheck"); c.checked = true; c.dispatchEvent(new Event("change", { bubbles: true })); return true; })()`);
+const terms = (p) => p.ev(`({ hidden: document.getElementById("customPlanTerms").hidden, text: document.getElementById("customPlanTerms").innerText, checked: document.getElementById("customPlanConsentCheck").checked })`);
+const planCond = (p) => p.ev(`(() => { const li = document.querySelector('#publishChecklist li[data-condition="plan"]'); return li ? { cls: li.className, text: li.innerText } : null; })()`);
+const SUB_JA = "店舗カードを申し込む（月額100円・税込）";
+const SUB_EN = "Subscribe to the store card (¥100/month, tax included)";
 try {
   let p = await openEditor("u1", "S1");
   let v = await view(p);
-  t("U1 未契約（カード登録済み）：案内・試験の注意・「月額100円プランを申し込む」（押せる）・解約ボタンなし・有料の欄は編集不可", /未契約です/.test(v.note) && v.trial && !v.card && v.sub && v.sub.text === "月額100円プランを申し込む" && v.sub.disabled === false && v.cancel === null && v.storyDisabled && v.saveHidden, v);
+  t("U1 未契約（カード登録済み）：非公開の案内・試験の注意・「店舗カードを申し込む（月額100円・税込）」（同意前は押せない）・解約ボタンなし・契約前でもメニュー等を編集できる（STEP 50-D）", /未契約です/.test(v.note) && /非公開/.test(v.note) && /下書きの保存・編集はできます/.test(v.note) && v.trial && !v.card && v.sub && v.sub.text === SUB_JA && v.sub.disabled === true && v.cancel === null && !v.storyDisabled && !v.saveHidden, v);
+  let tm = await terms(p);
+  t("C1 料金と条件：月額100円（税込）・新規作成と引き継ぎは同じ料金・基本情報とカスタマイズを含む・月末締め翌月2日請求・日割りなし・今だけ投稿とは別・解約月の月末まで", !tm.hidden && !tm.checked && /月額100円（税込）/.test(tm.text) && /新規作成・引き継ぎ/.test(tm.text) && /基本情報/.test(tm.text) && /メニュー/.test(tm.text) && /月末に締めて、翌月2日/.test(tm.text) && /日割りはありません/.test(tm.text) && /今だけ投稿の料金とは別/.test(tm.text) && /解約した月の月末まで/.test(tm.text) && /同意します/.test(tm.text), tm);
+  let pc = await planCond(p);
+  t("C2 公開の条件：未契約は「非公開（月額100円の申込が必要）」と表示", !!pc && pc.cls === "missing" && /非公開（月額100円の申込が必要）/.test(pc.text), pc);
+  t("C3 同意前は申込の API を呼ばない（ボタンを押せない）", !posts.some((b) => b.mode === "storeCustomPlanSubscribe"));
+  await consent(p);
+  v = await view(p);
+  t("C4 同意のチェックを入れると申込のボタンを押せる", v.sub && v.sub.disabled === false, v.sub);
   await click(p, "customSubscribeButton");
   await p.waitFor(`/申し込みました/.test(document.getElementById("customPlanMessage").textContent) && !document.getElementById("customStoryInput").disabled`, 15000); await sleep(300);
   v = await view(p);
   const plan1 = S.docs.get("storeCustomPlans/S1");
   t("U2 申込：「申し込みました。…まで利用できます」・契約中・申込と利用期限の表示・解約ボタン・有料の欄が編集できる", /申し込みました。.*まで利用できます/.test(v.msg) && /契約中です/.test(v.note) && /申込：/.test(v.dates) && /利用期限：/.test(v.dates) && v.cancel === "解約する" && v.sub === null && !v.storyDisabled && !v.saveHidden && plan1 && plan1.status === "active" && plan1.ownerUid === "u1", { v, plan1 });
   t("U3 申込の API は1回だけ（ボタンの連打防止・申込後はボタンを隠す）", posts.filter((b) => b.mode === "storeCustomPlanSubscribe").length === 1);
+  const subPost = posts.find((b) => b.mode === "storeCustomPlanSubscribe");
+  t("C5 申込は正式な同意の版（store-card-monthly-2026-10-31）を送る", !!subPost && subPost.planConsentVersion === "store-card-monthly-2026-10-31", subPost);
+  t("C6 同意の証跡が契約に保存されている", !!plan1 && !!plan1.consent && plan1.consent.version === "store-card-monthly-2026-10-31" && plan1.consent.feeJpy === 100, plan1 && plan1.consent);
+  pc = await planCond(p);
+  t("C7 契約の後は公開の条件の「月額契約」を満たす（公開の状態を読み直す）", !!pc && pc.cls === "met", pc);
   await p.ev(`(() => { const s = document.getElementById("customStoryInput"); s.value = "祖母が始めた喫茶店です。"; s.dispatchEvent(new Event("input", { bubbles: true })); document.getElementById("customSaveButton").click(); return true; })()`);
   await p.waitFor(`/保存しました/.test(document.getElementById("customMessage").textContent)`, 15000);
   t("U4 契約中に有料の欄を保存できる", (S.docs.get("storeCustomProfiles/S1") || {}).story === "祖母が始めた喫茶店です。");
@@ -111,6 +130,8 @@ try {
   await p.waitFor(`/解約手続きをしました/.test(document.getElementById("customPlanMessage").textContent)`, 15000); await sleep(300);
   v = await view(p);
   t("U5 解約：「解約手続きをしました。…までは利用できます」・解約手続き済みの案内と日時・「解約を取り消して続ける」・期限内なので編集できる", /解約手続きをしました/.test(v.msg) && /解約手続き済みです/.test(v.note) && /解約手続き：/.test(v.dates) && v.sub && v.sub.text === "解約を取り消して続ける" && v.cancel === null && !v.storyDisabled && S.docs.get("storeCustomPlans/S1").status === "canceling", v);
+  t("C8 解約の取り消しも同意が必要（チェックは申込ごとに外れる・押せない）", v.sub && v.sub.disabled === true && (await terms(p)).checked === false, v.sub);
+  await consent(p);
   await click(p, "customSubscribeButton");
   await p.waitFor(`/解約を取り消しました/.test(document.getElementById("customPlanMessage").textContent)`, 15000); await sleep(300);
   v = await view(p);
@@ -122,11 +143,16 @@ try {
   S.docs.set("storeCustomPlans/S1", { ...S.docs.get("storeCustomPlans/S1"), status: "canceling", canceledAt: Timestamp.fromMillis(Date.now() - 2000), accessUntil: Timestamp.fromMillis(Date.now() - 1000) });
   p = await openEditor("u1", "S1");
   v = await view(p);
-  t("U8 利用期限の終了後：「利用期限（…）が終了しました」・データは残っている案内・「申し込む」・編集不可", /が終了しました/.test(v.note) && /削除されていません/.test(v.note) && v.sub && v.sub.text === "月額100円プランを申し込む" && v.storyDisabled && v.saveHidden, v);
+  t("U8 利用期限の終了後：「利用期限（…）が終了しました」・データは残っている案内・「申し込む」・保存済みの内容を編集できる（STEP 50-D）", /が終了しました/.test(v.note) && /削除されていません/.test(v.note) && v.sub && v.sub.text === SUB_JA && !v.storyDisabled && !v.saveHidden, v);
   await p.close();
   p = await openEditor("u1", "S1", "en");
   v = await view(p);
-  t("U9 英語：期限切れの案内・ボタン・試験の注意が英語", /The plan ended on/.test(v.note) && v.sub && v.sub.text === "Subscribe to the monthly ¥100 plan" && v.trial && !/[ぁ-んァ-ン]/.test(v.note + v.sub.text), v);
+  t("U9 英語：期限切れの案内・ボタン・試験の注意が英語", /The contract ended on/.test(v.note) && v.sub && v.sub.text === SUB_EN && v.trial && !/[ぁ-んァ-ン]/.test(v.note + v.sub.text), v);
+  tm = await terms(p);
+  pc = await planCond(p);
+  t("C9 英語：料金と条件・同意・公開の条件が英語（日本語が混ざらない）", !tm.hidden && /¥100 per shop per month/.test(tm.text) && /2nd of the next month/.test(tm.text) && /no proration/.test(tm.text) && /Imadake/.test(tm.text) && /I have checked/.test(tm.text) && !!pc && /Not public/.test(pc.text) && !/[ぁ-んァ-ン一-龯]/.test(tm.text + pc.text), { tm, pc });
+  const overflow = await p.ev(`document.documentElement.scrollWidth <= window.innerWidth + 1`);
+  t("C10 英語・390px 幅でも横にはみ出さない", overflow === true);
   await p.close();
 
   // no card

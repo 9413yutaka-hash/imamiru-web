@@ -55,7 +55,7 @@ seedStore("S1", "u1"); seedStore("S2", "u2"); seedStore("S5", "u1"); seedStore("
 // an imadake invoice with the same ID shape, to prove the ledgers stay separate
 S.docs.set("imadakeMonthlyInvoices/S1_2026-10", { storeId: "S1", month: "2026-10", status: "closed", lineCount: 2, amountJpy: 200, currency: "JPY", taxIncluded: true });
 const IMADAKE_BEFORE = snapOf("imadakeMonthlyInvoices");
-const SUB = (storeId) => ({ mode: "storeCustomPlanSubscribe", storeId, contractModel: "monthly" });
+const SUB = (storeId) => ({ mode: "storeCustomPlanSubscribe", storeId, contractModel: "monthly", planConsentVersion: "store-card-monthly-2026-10-31" });
 const CANCEL = (storeId) => ({ mode: "storeCustomPlanCancel", storeId });
 const CLOSE = (month, execute) => ({ mode: "adminStoreCustomPlanMonthlyClose", month, ...(execute ? { execute: true } : {}) });
 
@@ -104,7 +104,7 @@ t("A10 S7（u7）・S8（試験店舗）も10月に申込", plan("S7").status ==
 const g = await call({ mode: "storeCustomProfileGet", storeId: "S1" }, "u1");
 t("A11 取得：暦月契約・期限なし・編集できる・Preview の試験用の契約", g.body.plan.state === "active" && g.body.plan.periodKind === "monthly" && g.body.plan.accessUntilMillis === 0 && g.body.plan.createdInPreview === true && g.body.editable === true, g.body.plan);
 NOW = jst(2026, 10, 20);
-r = await call({ mode: "storeCustomPlanSubscribe", storeId: "S9" }, "u9");
+r = await call({ mode: "storeCustomPlanSubscribe", storeId: "S9", planConsentVersion: "store-card-monthly-2026-10-31" }, "u9");
 t("A12 既定（contractModel の指定なし）は STEP 44-B の試験の契約（preview_trial・申込から暦の1か月・利用月の記録なし）", r.code === 200 && plan("S9").periodKind === "preview_trial" && ms(plan("S9").accessUntil) === CP.addOneCalendarMonthJst(NOW) && !usage("S9", "2026-10"), plan("S9"));
 
 // ===================== close October =====================
@@ -169,7 +169,8 @@ S.docs.set("storeCustomPlans/S11", { ...plan("S11"), paymentStatus: "suspended" 
 const susp = await call({ mode: "storeCustomProfileGet", storeId: "S11" }, "u9");
 let plU = await publicList();
 const s11pub = plU.body.stores.find((s) => s.id === "sp_S11");
-t("U1 未払いで停止（paymentStatus suspended、契約の状態とは別）：編集不可・旅行者には有料の内容を出さない・無料プロフィールは掲載を続ける", r.code === 200 && susp.body.plan.paymentStatus === "suspended" && susp.body.plan.state === "active" && susp.body.editable === false && s11pub && !("custom" in s11pub) && s11pub.description === "無料の紹介文S11", { plan: susp.body.plan, s11pub });
+// STEP 50-B(代表決定 2026-10-31)｜支払い停止で契約の利用権が無くなると、店舗カード自体を旅行者に出さない。
+t("U1 未払いで停止（paymentStatus suspended、契約の状態とは別）：利用権なし・保存・編集はできる(STEP 50-D)・店舗カードを旅行者に出さない(STEP 50-B)", r.code === 200 && susp.body.plan.paymentStatus === "suspended" && susp.body.plan.state === "active" && susp.body.plan.access === false && susp.body.editable === true && !s11pub, { plan: susp.body.plan, s11pub });
 r = await call(SUB("S11"), "u9");
 t("U2 停止中は新しい申込・解約の取り消しを受け付けない（409 plan_unpaid）", r.code === 409 && r.body.reason === "plan_unpaid", r.body);
 S.docs.set("storeCustomPlans/S11", { ...plan("S11"), paymentStatus: "past_due" });
@@ -217,7 +218,9 @@ t("R1 既存の課金関連6フラグはすべて false", IM.IMADAKE_CV_BILLING_
 t("R2 今だけ投稿の台帳（請求書・日別の料金）は変わらない", snapOf("imadakeMonthlyInvoices") === IMADAKE_BEFORE && docs("imadakePostDailyCharges").length === 0);
 t("R3 storeBilling（廃止済み）を作らない・accountBilling（カード）を変えない", docs("storeBilling").length === 0 && ["u1", "u2", "u6"].every((u) => S.docs.get("accountBilling/" + u).test.paymentMethodId === "pm_" + u && !S.docs.get("accountBilling/" + u).test.billingLocks));
 const pl = await publicList();
-t("R4 旅行者向けの一覧は従来どおり（7店舗の無料プロフィール）", pl.code === 200 && pl.body.stores.length === 7, pl.body.stores.map((s) => s.id));
+// STEP 50-B｜一覧に出るのは、契約の利用権がある店舗カードだけ(未契約・停止中の店舗カードは出さない)。
+const listedPlanOk = pl.body.stores.every((s) => { const p = S.docs.get("storeCustomPlans/" + s.id.slice(3)); return !!p && (p.status === "active" || p.status === "canceling") && p.paymentStatus !== "suspended"; });
+t("R4 旅行者向けの一覧は契約の利用権がある店舗カードだけ（STEP 50-B）", pl.code === 200 && pl.body.stores.length > 0 && listedPlanOk && !pl.body.stores.some((s) => s.id === "sp_S11"), pl.body.stores.map((s) => s.id));
 t("Z1 外部への通信なし", otherNetwork === 0, otherNetwork);
 console.log(`TOTAL ${pass + fail}  PASS ${pass}  FAIL ${fail}`);
 process.exit(fail ? 1 : 0);

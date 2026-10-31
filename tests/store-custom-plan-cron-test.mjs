@@ -56,7 +56,7 @@ function seedStore(id, uid) {
 }
 seedStore("S1", "u1"); seedStore("S2", "u2"); seedStore("S3", "u3"); seedStore("S4", "u4");
 ["u1", "u2", "u3", "u4"].forEach(card);
-const SUB = (storeId, token) => call({ mode: "storeCustomPlanSubscribe", storeId, contractModel: "monthly" }, { authorization: "Bearer " + token });
+const SUB = (storeId, token) => call({ mode: "storeCustomPlanSubscribe", storeId, contractModel: "monthly", planConsentVersion: "store-card-monthly-2026-10-31" }, { authorization: "Bearer " + token });
 
 // ===================== helpers / flags =====================
 t("H1 前月（日本時間）：12/1 0:05 JST（UTC 11/30 15:05）は 2026-11、11/30 23:55 JST は 2026-10、1/1 0:00 JST は 2026-12", CR.previousJstMonthKey(jst(2026, 12, 1, 0, 5)) === "2026-11" && CR.previousJstMonthKey(jst(2026, 11, 30, 23, 55)) === "2026-10" && CR.previousJstMonthKey(jst(2027, 1, 1)) === "2026-12" && CR.jstDateKey(jst(2026, 12, 1, 0, 5)) === "2026-12-01");

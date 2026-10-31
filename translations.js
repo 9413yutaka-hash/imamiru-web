@@ -2682,8 +2682,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_account_store_note_active: {
-    ja: "常設店舗情報を編集できます。まだ旅行者には表示されません。",
-    en: "You can edit your shop profile. It is not shown to travelers yet."
+    ja: "店舗カードを編集できます。旅行者への公開には、月額100円（税込）の申し込みが必要です。",
+    en: "You can edit your store card. To show it to travelers, a ¥100/month (tax included) subscription is required."
   },
 
   store_account_store_note_pending_review: {
@@ -2702,8 +2702,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_account_store_registered_active: {
-    ja: "店舗・施設を登録しました。",
-    en: "Your shop or facility has been registered."
+    ja: "店舗・施設を登録しました。「店舗カードの編集・申し込み」から月額100円（税込）を申し込むと、旅行者に公開できます。",
+    en: "Your shop or facility has been registered. Subscribe for ¥100/month (tax included) from \"Edit store card / subscribe\" to show it to travelers."
   },
 
   store_account_store_registered_pending: {
@@ -3097,8 +3097,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_profile_edit_link: {
-    ja: "常設店舗情報を編集する",
-    en: "Edit shop profile"
+    ja: "店舗カードの編集・申し込み",
+    en: "Edit store card / subscribe"
   },
 
   store_feature_parking: {
@@ -3189,28 +3189,28 @@ const MACHINAU_TRANSLATIONS = {
   // STEP 44-A｜月額100円カスタマイズ(店主の編集画面 store_custom_*・旅行者の詳細 shop_custom_*)。
   // STEP 44-B｜月額100円プランの申込・解約(店主の編集画面)。
   store_custom_plan_none_signup: {
-    ja: "未契約です。申し込むと、メニュー・商品紹介、追加リンク、お店のこだわり・ストーリーを編集して旅行者に紹介できます。",
-    en: "Not subscribed. Subscribe to edit your menu and products, extra links and story, and show them to travelers."
+    ja: "未契約です。店舗カードは旅行者に表示されていません（非公開）。下書きの保存・編集はできます。料金と条件を確認して申し込むと、公開できるようになります。",
+    en: "Not subscribed. Your store card is not shown to travelers (not public). You can still save and edit drafts. Check the fee and terms below and subscribe to make it public."
   },
 
   store_custom_plan_canceling: {
-    ja: "解約手続き済みです。{date}までは利用でき、その後は有料の内容を旅行者に表示しません（データは残ります）。",
-    en: "Cancellation requested. You can use the plan until {date}; after that, the paid content is no longer shown to travelers (your data is kept)."
+    ja: "解約手続き済みです。{date}までは利用でき、その後は店舗カードを旅行者に表示しません（データは残ります）。",
+    en: "Cancellation requested. You can use the store card until {date}; after that, it is no longer shown to travelers (your data is kept)."
   },
 
   store_custom_plan_expired: {
-    ja: "利用期限（{date}）が終了しました。有料の内容は旅行者に表示されていません。",
-    en: "The plan ended on {date}. The paid content is not shown to travelers."
+    ja: "利用期限（{date}）が終了しました。店舗カードは旅行者に表示されていません（非公開）。",
+    en: "The contract ended on {date}. Your store card is not shown to travelers (not public)."
   },
 
   store_custom_plan_other_active: {
-    ja: "このお店の月額100円プランは、別のアカウントが契約しています。このアカウントでは有料の欄を編集できません。",
-    en: "This shop's monthly ¥100 plan belongs to another account. This account cannot edit the paid sections."
+    ja: "このお店の店舗カードの月額契約は、別のアカウントが契約しています。この画面での保存・編集はできますが、このアカウントでは申し込めません。",
+    en: "This shop's store card contract belongs to another account. You can still save and edit here, but this account cannot subscribe."
   },
 
   store_custom_plan_other_inactive: {
-    ja: "以前の契約は、このアカウントには引き継がれません。利用するには、このアカウントで新しく申し込んでください。",
-    en: "The previous plan is not transferred to this account. To use the plan, subscribe with this account."
+    ja: "以前の契約は、このアカウントには引き継がれません。店舗カードを公開するには、このアカウントで新しく申し込んでください。",
+    en: "The previous contract is not transferred to this account. To make the store card public, subscribe with this account."
   },
 
   store_custom_plan_dates_subscribed: {
@@ -3244,8 +3244,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_custom_plan_subscribe_button: {
-    ja: "月額100円プランを申し込む",
-    en: "Subscribe to the monthly ¥100 plan"
+    ja: "店舗カードを申し込む（月額100円・税込）",
+    en: "Subscribe to the store card (¥100/month, tax included)"
   },
 
   store_custom_plan_reactivate_button: {
@@ -3259,8 +3259,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_custom_plan_cancel_confirm: {
-    ja: "月額100円プランを解約しますか？利用期限までは使えます。期限後は有料の内容を旅行者に表示しません（データは残ります）。",
-    en: "Cancel the monthly ¥100 plan? You can use it until the end date. After that, the paid content is not shown to travelers (your data is kept)."
+    ja: "店舗カードの月額契約を解約しますか？利用期限までは使えます。期限後は店舗カードを旅行者に表示しません（データは残ります）。",
+    en: "Cancel the store card contract? You can use it until the end date. After that, your store card is not shown to travelers (your data is kept)."
   },
 
   store_custom_plan_subscribed: {
@@ -3289,18 +3289,63 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_custom_plan_err_already: {
-    ja: "このお店はすでに月額100円プランを契約しています。",
-    en: "This shop already has the monthly ¥100 plan."
+    ja: "このお店はすでに店舗カードの月額契約をしています。",
+    en: "This shop already has a store card contract."
   },
 
   store_custom_plan_err_unavailable: {
-    ja: "月額100円プランの申し込みは、現在受け付けていません。",
-    en: "Sign-up for the monthly ¥100 plan is not available right now."
+    ja: "店舗カードの月額契約の申し込みは、現在受け付けていません。",
+    en: "Sign-up for the store card contract is not available right now."
   },
 
   store_custom_plan_err_not_active: {
     ja: "解約できる契約がありません。",
     en: "There is no active plan to cancel."
+  },
+
+  store_custom_plan_err_consent: {
+    ja: "料金と条件を確認し、同意のチェックを入れてから申し込んでください。",
+    en: "Please check the fee and terms and tick the consent box before subscribing."
+  },
+
+  store_card_plan_terms_heading: {
+    ja: "料金と条件（店舗カード）",
+    en: "Fee and terms (store card)"
+  },
+
+  store_card_plan_terms_fee: {
+    ja: "料金は1店舗につき月額100円（税込）です。店舗カードの新規作成・引き継ぎのどちらも同じ料金です。",
+    en: "The fee is ¥100 per shop per month (tax included), whether you create a new store card or take over a listing."
+  },
+
+  store_card_plan_terms_scope: {
+    ja: "基本情報（紹介文・写真・営業時間など）と、メニュー・商品紹介、追加リンク、お店のこだわり・ストーリーをすべて含みます。追加の料金はありません。",
+    en: "It includes the basic information (description, photos, hours, etc.) and your menu and products, extra links and story. There are no extra fees."
+  },
+
+  store_card_plan_terms_billing: {
+    ja: "毎月末に締めて、翌月2日に登録したクレジットカードへ請求します。",
+    en: "Each month is closed at month end and charged to your registered credit card on the 2nd of the next month."
+  },
+
+  store_card_plan_terms_proration: {
+    ja: "申し込んだ月・解約した月とも日割りはありません（その月の100円がかかります）。",
+    en: "There is no proration for the month you subscribe or cancel (¥100 is charged for that month)."
+  },
+
+  store_card_plan_terms_separate: {
+    ja: "今だけ投稿の料金とは別の料金・別の請求です。",
+    en: "This is a separate fee and a separate charge from Imadake posts."
+  },
+
+  store_card_plan_terms_cancel: {
+    ja: "いつでも解約でき、解約した月の月末まで利用できます。",
+    en: "You can cancel at any time and use the store card until the end of the month you cancel."
+  },
+
+  store_card_plan_consent_label: {
+    ja: "上の料金と条件を確認し、店舗カードの月額契約（月額100円・税込）に同意します。",
+    en: "I have checked the fee and terms above and agree to the store card contract (¥100/month, tax included)."
   },
 
   // STEP 44-C③｜本番の暦月契約・未払いの表示(店主の編集画面)。
@@ -3320,13 +3365,13 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_custom_plan_past_due: {
-    ja: "お支払いが確認できていない料金があります。お支払いが完了しないまま一定期間が過ぎると、有料の内容の表示を停止します（データは残ります）。",
-    en: "There is an unpaid charge. If it remains unpaid for a certain period, the paid content will stop being shown (your data is kept)."
+    ja: "お支払いが確認できていない料金があります。お支払いが完了しないまま一定期間が過ぎると、店舗カードの表示を停止します（データは残ります）。",
+    en: "There is an unpaid charge. If it remains unpaid for a certain period, your store card will stop being shown (your data is kept)."
   },
 
   store_custom_plan_suspended: {
-    ja: "未払いのため、有料の内容の表示を停止しています（データは残っています）。お支払いが完了すると再開できます。",
-    en: "The paid content is stopped because of an unpaid charge (your data is kept). It can resume once the payment is completed."
+    ja: "未払いのため、店舗カードの表示を停止しています（データは残っています）。お支払いが完了すると再開できます。",
+    en: "Your store card is not shown because of an unpaid charge (your data is kept). It can resume once the payment is completed."
   },
 
   store_custom_plan_err_unpaid: {
@@ -3336,8 +3381,8 @@ const MACHINAU_TRANSLATIONS = {
 
   // STEP 44-C④｜月額100円カスタマイズのご請求・未払い・本人認証(店舗アカウント画面)。
   store_plan_pay_heading: {
-    ja: "月額100円カスタマイズのご請求",
-    en: "Monthly ¥100 customization charges"
+    ja: "店舗カード（月額100円）のご請求",
+    en: "Store card (¥100/month) charges"
   },
 
   store_plan_pay_intro: {
@@ -3446,23 +3491,23 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_custom_heading: {
-    ja: "月額100円カスタマイズ",
-    en: "Monthly ¥100 customization"
+    ja: "店舗カード（月額100円・税込）",
+    en: "Store card (¥100/month, tax included)"
   },
 
   store_custom_intro: {
-    ja: "無料の店舗情報に加えて、メニュー・商品紹介、追加リンク、お店のこだわり・ストーリーを旅行者に紹介できます。無料の店舗情報（紹介文・写真10枚・営業時間など）はこれまでどおり無料です。",
-    en: "In addition to your free shop information, you can show travelers your menu and products, extra links, and your shop's story. Your free shop information (description, 10 photos, hours, etc.) stays free."
+    ja: "店主が作成・引き継ぎ・管理する店舗カードは、1店舗につき月額100円（税込）です。基本情報（紹介文・写真・営業時間など）と、メニュー・商品紹介、追加リンク、お店のこだわり・ストーリーをすべて含みます。契約が有効な間だけ、店舗カードを旅行者に公開できます。",
+    en: "A store card that you create, take over or manage costs ¥100 per shop per month (tax included). It includes the basic information (description, photos, hours, etc.) and your menu and products, extra links and story. Your store card can be shown to travelers only while the contract is active."
   },
 
   store_custom_plan_active: {
-    ja: "契約中です。{date}まで、保存した内容を旅行者に表示します。",
-    en: "Your plan is active. Saved content is shown to travelers until {date}."
+    ja: "契約中です。{date}まで、店舗カードを旅行者に公開できます。",
+    en: "Your contract is active. Your store card can be shown to travelers until {date}."
   },
 
   store_custom_plan_none: {
-    ja: "このお店は月額100円カスタマイズを契約していません。申し込みの受付は準備中です。",
-    en: "This shop does not have the monthly ¥100 customization. Sign-up is being prepared."
+    ja: "このお店は店舗カードの月額契約をしていません（非公開）。下書きの保存・編集はできます。申し込みの受付は準備中です。",
+    en: "This shop has no store card contract (not public). You can still save and edit drafts. Sign-up is being prepared."
   },
 
   store_custom_plan_kept: {
@@ -3636,8 +3681,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_custom_save_button: {
-    ja: "カスタマイズを保存する",
-    en: "Save customization"
+    ja: "メニュー・リンク・ストーリーを保存する",
+    en: "Save menu, links and story"
   },
 
   store_custom_saving_button: {
@@ -3651,8 +3696,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_custom_err_plan: {
-    ja: "月額100円カスタマイズの契約が無いため保存できません。",
-    en: "You cannot save because this shop does not have the monthly ¥100 customization."
+    ja: "店舗カードの月額契約が無いため、この欄は保存できません。",
+    en: "You cannot save this section because this shop has no store card contract."
   },
 
   store_custom_err_menu: {
@@ -3701,8 +3746,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_custom_load_error: {
-    ja: "月額100円カスタマイズの情報を読み込めませんでした。時間をおいて再読み込みしてください。",
-    en: "Could not load the customization information. Please reload later."
+    ja: "店舗カードの契約の情報を読み込めませんでした。時間をおいて再読み込みしてください。",
+    en: "Could not load the store card contract information. Please reload later."
   },
 
   shop_custom_story_heading: {
@@ -3900,6 +3945,11 @@ const MACHINAU_TRANSLATIONS = {
     en: "Possible duplicate listings are resolved"
   },
 
+  store_profile_publish_cond_plan: {
+    ja: "店舗カードの月額契約（100円・税込）が有効",
+    en: "The store card contract (¥100/month, tax included) is active"
+  },
+
   store_profile_publish_fix_photo: {
     ja: "「写真」に1枚以上追加して保存してください。",
     en: "Add at least one photo and save."
@@ -3938,6 +3988,11 @@ const MACHINAU_TRANSLATIONS = {
   store_profile_publish_fix_duplicates: {
     ja: "マチナウに掲載中の同じ店舗・施設がある可能性があります。運営へお問い合わせください。",
     en: "The same business may already be listed on Machinau. Please contact the Machinau team."
+  },
+
+  store_profile_publish_fix_plan: {
+    ja: "非公開（月額100円の申込が必要）です。下の「店舗カード（月額100円・税込）」から申し込んでください。",
+    en: "Not public (a ¥100/month subscription is required). Please subscribe in \"Store card (¥100/month, tax included)\" below."
   },
 
   store_profile_publish_save_first: {
@@ -4157,8 +4212,8 @@ const MACHINAU_TRANSLATIONS = {
 
   // STEP 42-D｜カード登録 → 店舗の登録・引き継ぎ
   store_claim_completed: {
-    ja: "引き継ぎが完了しました。お店の情報は「あなたの店舗・施設」から編集・公開できます。",
-    en: "The takeover is complete. You can edit and publish the store information from \"Your shops & venues\"."
+    ja: "引き継ぎが完了しました。「あなたの店舗・施設」の「店舗カードの編集・申し込み」から月額100円（税込）を申し込むと、旅行者に公開できます。契約するまでは、運営による無料掲載がそのまま表示されます。",
+    en: "The takeover is complete. Subscribe for ¥100/month (tax included) from \"Edit store card / subscribe\" in \"Your shops & venues\" to show your store card to travelers. Until then, the free listing by Machinau stays as it is."
   },
 
   store_claim_err_already_linked: {

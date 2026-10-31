@@ -163,10 +163,11 @@ NOW = jst(2026, 11, 16, 10, 0);
 r = await RUN();
 pl = await publicList();
 const bfPub = pl.body.stores.find((s) => s.id === "sp_Bf");
-t("S1 初回失敗から14日：paymentStatus suspended・有料の内容は非表示・データは保持・無料プロフィールは掲載を続ける", plan("Bf").paymentStatus === "suspended" && ms(plan("Bf").suspendedAt) === NOW && bfPub && !("custom" in bfPub) && bfPub.description === "無料の紹介文Bf" && !!S.docs.get("storeCustomProfiles/Bf") && plan("Bf").status === "active", { plan: plan("Bf"), bfPub });
+// STEP 50-B(代表決定 2026-10-31)｜停止中は店舗カード自体を旅行者に出さない(データは保持)。
+t("S1 初回失敗から14日：paymentStatus suspended・店舗カードを旅行者に出さない(STEP 50-B)・データは保持", plan("Bf").paymentStatus === "suspended" && ms(plan("Bf").suspendedAt) === NOW && !bfPub && !!S.docs.get("storeCustomProfiles/Bf") && plan("Bf").status === "active", { plan: plan("Bf"), bfPub });
 t("S2 本人認証待ちのまま14日の C3 も停止", plan("C3").paymentStatus === "suspended");
 let g = await call({ mode: "storeCustomProfileGet", storeId: "Bf" }, "u2");
-t("S3 停止中：店主の画面は編集不可（契約の状態は active のまま・支払いの状態は suspended）", g.body.editable === false && g.body.plan.state === "active" && g.body.plan.paymentStatus === "suspended", g.body.plan);
+t("S3 停止中：利用権なし・保存済みの内容の編集はできる（STEP 50-D）（契約の状態は active のまま・支払いの状態は suspended）", g.body.plan.access === false && g.body.editable === true && g.body.plan.state === "active" && g.body.plan.paymentStatus === "suspended", g.body.plan);
 
 // ===================== owner: invoice list / pay now / resume =====================
 let l = await call({ mode: "storeCustomPlanInvoiceList" }, "u2");

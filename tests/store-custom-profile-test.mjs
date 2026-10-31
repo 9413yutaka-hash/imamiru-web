@@ -82,20 +82,28 @@ t("A2 メール未確認：取得は 403 email_not_verified", r.code === 403 && 
 r = await call({ mode: "storeCustomProfileGet", storeId: "S1" }, "u2");
 t("A3 他の店舗の店主：404 store_not_found（存在の有無も出さない）", r.code === 404 && r.body.reason === "store_not_found", r.body);
 r = await call({ mode: "storeCustomProfileGet", storeId: "S1" }, "u1");
-t("A4 未契約の店主：取得は 200・利用権限なし（plan.access false・editable false）・上限と種類を返す", r.code === 200 && r.body.plan.access === false && r.body.plan.status === "none" && r.body.editable === false && r.body.limits.menuItemsMax === 20 && r.body.linkTypes.includes("reservation") && r.body.custom.revision === 0, r.body);
+t("A4 未契約の店主：取得は 200・利用権限なし（plan.access false）でも編集できる（editable true・STEP 50-D）・上限と種類を返す", r.code === 200 && r.body.plan.access === false && r.body.plan.status === "none" && r.body.editable === true && r.body.limits.menuItemsMax === 20 && r.body.linkTypes.includes("reservation") && r.body.custom.revision === 0, r.body);
 clearRate(); r = await call(GOOD(), "u1");
-t("A5 未契約の店主：保存は 403 plan_required・何も書き込まない", r.code === 403 && r.body.reason === "plan_required" && !S.docs.has("storeCustomProfiles/S1"), r.body);
-clearRate(); r = await call(GOOD({ storeId: "S1" }), "u2");
-t("A6 他の店舗の店主が S1 を保存：404・書き込みなし", r.code === 404 && !S.docs.has("storeCustomProfiles/S1"), r.body);
+// STEP 50-D｜代表決定 B案：契約前・期限切れ・解約後でも、店主はメニュー・リンク・ストーリーを保存・編集できる。
+let a5 = S.docs.get("storeCustomProfiles/S1") || {};
+t("A5 未契約の店主：保存は 200・メニュー2件・リンク2件・ストーリーを保存（STEP 50-D）", r.code === 200 && r.body.revision === 1 && a5.menuItems.length === 2 && a5.links.length === 2 && a5.story.startsWith("祖母") && !S.docs.has("storeCustomPlans/S1"), r.body);
+clearRate(); r = await call(GOOD({ expectedRevision: 1, story: "未契約のまま書き直したストーリー" }), "u1");
+a5 = S.docs.get("storeCustomProfiles/S1") || {};
+t("A5b 未契約の店主：再編集も 200・revision 2", r.code === 200 && r.body.revision === 2 && a5.story === "未契約のまま書き直したストーリー", r.body);
+const a5Snap = snap("storeCustomProfiles/S1");
+clearRate(); r = await call(GOOD({ storeId: "S1", expectedRevision: 2 }), "u2");
+t("A6 他の店舗の店主が S1 を保存：404・書き込みなし（未契約でも他人の店舗は編集できない）", r.code === 404 && snap("storeCustomProfiles/S1") === a5Snap, r.body);
 setPlan("S1", "active", Timestamp.fromMillis(Date.now() - 1000));
-clearRate(); r = await call(GOOD(), "u1");
-t("A7 利用期限が過ぎた契約（active でも accessUntil が過去）：403 plan_required", r.code === 403 && r.body.reason === "plan_required", r.body);
+clearRate(); r = await call(GOOD({ expectedRevision: 2 }), "u1");
+t("A7 利用期限が過ぎた契約（active でも accessUntil が過去）：保存は 200（公開は別に判定）", r.code === 200 && r.body.revision === 3, r.body);
 setPlan("S1", "canceled", future());
-clearRate(); r = await call(GOOD(), "u1");
-t("A8 解約済み（canceled）：期限が先でも 403 plan_required", r.code === 403 && r.body.reason === "plan_required", r.body);
+clearRate(); r = await call(GOOD({ expectedRevision: 3 }), "u1");
+t("A8 解約済み（canceled）：保存は 200", r.code === 200 && r.body.revision === 4, r.body);
 S.docs.set("storeCustomPlans/S1", { storeId: "S1", status: "active", ownerUid: "u1" });
-clearRate(); r = await call(GOOD(), "u1");
-t("A9 利用期限の無い契約（無期限は作らない）：403 plan_required", r.code === 403 && r.body.reason === "plan_required", r.body);
+clearRate(); r = await call(GOOD({ expectedRevision: 4 }), "u1");
+t("A9 利用期限の無い契約（無期限は作らない）：利用権限は無いが保存は 200", r.code === 200 && r.body.revision === 5 && !CP.hasStoreCustomPlanAccess(S.docs.get("storeCustomPlans/S1"), Date.now()), r.body);
+// 以降の B 節は「保存の無い状態から契約中に保存する」前提なので、模擬データ(メモリー上)の保存内容だけを初期化する。
+S.docs.delete("storeCustomProfiles/S1");
 t("A10 判定関数：active/canceling かつ期限が先の時だけ true", CP.hasStoreCustomPlanAccess({ status: "active", accessUntil: future() }, Date.now()) && CP.hasStoreCustomPlanAccess({ status: "canceling", accessUntil: future() }, Date.now()) && !CP.hasStoreCustomPlanAccess({ status: "past_due", accessUntil: future() }, Date.now()) && !CP.hasStoreCustomPlanAccess(null, Date.now()));
 
 // ===================== save with access =====================
@@ -175,8 +183,9 @@ const rawPublic = JSON.stringify(pl.body);
 t("T1 旅行者向け一覧：契約中の S1 に有料の内容（メニュー2件・リンク2件・ストーリー）", pl.code === 200 && s1 && s1.custom && s1.custom.menuItems.length === 2 && s1.custom.links.length === 2 && s1.custom.story.startsWith("祖母"), pl.body);
 t("T2 公開する項目は許可リストだけ（商品名・説明・価格・写真URL／リンクの種類・表示名・URL／ストーリー）", s1 && JSON.stringify(Object.keys(s1.custom.menuItems[0])) === '["name","description","priceText","photoUrl"]' && JSON.stringify(Object.keys(s1.custom.links[0])) === '["type","label","url"]' && s1.custom.menuItems[0].photoUrl.endsWith("/menu/latte.webp"), s1 && s1.custom);
 t("T3 応答に publicId・uid・Moderation の記録・契約状態を含まない", !/publicId|updatedByUid|moderat|accessUntil|storeCustomPlans|"u1"/.test(rawPublic), rawPublic.slice(0, 400));
-t("T4 未契約の S2 には custom が無い（無料の内容はこれまでどおり）", s2 && !("custom" in s2) && s2.description === "無料の紹介文", s2);
-t("T5 無料の一覧の他の項目は変わらない（並び順・suppressed/claimed・キャッシュ）", JSON.stringify(pl.body.stores.map((s) => s.id)) === '["sp_S1","sp_S2"]' && Array.isArray(pl.body.suppressedListingIds) && Array.isArray(pl.body.claimedListingIds) && /s-maxage=/.test(pl.headers["Cache-Control"] || ""), pl.body);
+// STEP 50-B(代表決定 2026-10-31)｜未契約の店舗カードは公開中(published)でも旅行者に出さない。
+t("T4 未契約の S2 は旅行者向けの一覧に出ない（STEP 50-B）", !s2, s2);
+t("T5 一覧の他の項目は変わらない（並び順・suppressed/claimed・キャッシュ。S2 は未契約で出ない）", JSON.stringify(pl.body.stores.map((s) => s.id)) === '["sp_S1"]' && Array.isArray(pl.body.suppressedListingIds) && Array.isArray(pl.body.claimedListingIds) && /s-maxage=/.test(pl.headers["Cache-Control"] || ""), pl.body);
 
 // S2 has content but no plan → hidden
 S.docs.set("storeCustomProfiles/S2", { storeId: "S2", revision: 1, menuItems: [{ name: "秘密の定食", description: "", priceText: "", photo: null }], links: [], story: "", moderationStatus: "passed", moderatedText: "秘密の定食" });
@@ -187,7 +196,7 @@ t("T6 有料の内容があっても契約が無い店舗には付けない（�
 setPlan("S1", "canceling", Timestamp.fromMillis(Date.now() - 1000));
 pl = await publicList();
 const keptData = S.docs.get("storeCustomProfiles/S1");
-t("T7 利用期限が過ぎたら表示しない・データは削除しない", !("custom" in pl.body.stores.find((s) => s.id === "sp_S1")) && keptData && keptData.menuItems.length === 2, pl.body.stores);
+t("T7 利用期限が過ぎたら店舗カードを表示しない（STEP 50-B）・データは削除しない", !pl.body.stores.some((s) => s.id === "sp_S1") && keptData && keptData.menuItems.length === 2, pl.body.stores);
 setPlan("S1", "active", future());
 pl = await publicList();
 t("T8 再契約（利用権限が戻る）でそのまま表示に戻る", !!pl.body.stores.find((s) => s.id === "sp_S1").custom);
@@ -211,7 +220,7 @@ t("T11 有料の内容が空なら null（画面に空の見出しを出さな�
 
 // ===================== Cloudinary signature =====================
 const sig1 = await call({ mode: "cloudinarySignature", purpose: "storeCustomMenuPhoto", storeId: "S2" }, "u2");
-t("C1 未契約の店舗：商品写真の署名は 403 plan_required", sig1.code === 403 && sig1.body.reason === "plan_required", sig1.body);
+t("C1 未契約の店舗：商品写真の署名も発行する（STEP 50-D・…/S2/menu）", sig1.code === 200 && sig1.body.folder === "machinau_store_profiles/S2/menu", sig1.body);
 const sig2 = await call({ mode: "cloudinarySignature", purpose: "storeCustomMenuPhoto", storeId: "S1" }, "u1");
 t("C2 契約中の店舗：商品写真の署名は商品写真のフォルダー（…/S1/menu）", sig2.code === 200 && sig2.body.folder === "machinau_store_profiles/S1/menu" && !JSON.stringify(sig2.body).includes("fake-cloudinary-secret"), sig2.body);
 const sig3 = await call({ mode: "cloudinarySignature", purpose: "storeCustomMenuPhoto", storeId: "S1" }, "u2");

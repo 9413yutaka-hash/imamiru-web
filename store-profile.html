@@ -224,6 +224,13 @@
     .custom-link-row select, .custom-link-row input { min-height: 42px; }
     .custom-plan-box { margin: 0 0 16px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
     .custom-plan-box .hint { margin: 0 0 8px; }
+    /* STEP 50-C｜店舗カードの料金と条件・同意 */
+    .plan-terms { margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; }
+    .plan-terms-heading { margin: 0 0 6px; font-weight: 700; }
+    .plan-terms-list { margin: 0 0 10px; padding-left: 1.2em; }
+    .plan-terms-list li { margin: 0 0 4px; overflow-wrap: anywhere; }
+    .plan-consent { display: flex; gap: 8px; align-items: flex-start; overflow-wrap: anywhere; }
+    .plan-consent input { margin-top: 3px; flex: none; }
 
     [hidden] { display: none !important; }
 
@@ -389,7 +396,7 @@
            無料の内容には触れない。保存・商品写真の署名・旅行者への表示は、すべてサーバーが
            契約状態(利用権限)で判定する(この画面のボタンの表示は根拠にしない)。 -->
       <section class="panel" id="customSection" hidden>
-        <h2 data-i18n="store_custom_heading">月額100円カスタマイズ</h2>
+        <h2 data-i18n="store_custom_heading">店舗カード（月額100円・税込）</h2>
         <p class="hint" style="margin: 0 0 10px;" data-i18n="store_custom_intro"></p>
         <p class="message info show" id="customPlanNote"></p>
         <!-- STEP 44-B｜月額100円プランの申込・解約。条件(owner・メール確認・カード・編集可能・有効な契約なし)は
@@ -398,6 +405,20 @@
           <p class="hint" id="customPlanDates"></p>
           <p class="hint" id="customPlanTrialNote" hidden data-i18n="store_custom_plan_trial_note"></p>
           <p class="hint" id="customPlanCardNote" hidden><span data-i18n="store_custom_plan_card_required"></span> <a href="store-account.html" data-i18n="store_custom_plan_card_link"></a></p>
+          <!-- STEP 50-C｜店舗カード月額100円(税込)の料金と条件。同意のチェックを入れた時だけ申込のボタンを押せる
+               (サーバーも同意の版 planConsentVersion が無い申込を受け付けない)。 -->
+          <div class="plan-terms" id="customPlanTerms" hidden>
+            <p class="plan-terms-heading" data-i18n="store_card_plan_terms_heading">料金と条件（店舗カード）</p>
+            <ul class="plan-terms-list">
+              <li data-i18n="store_card_plan_terms_fee"></li>
+              <li data-i18n="store_card_plan_terms_scope"></li>
+              <li data-i18n="store_card_plan_terms_billing"></li>
+              <li data-i18n="store_card_plan_terms_proration"></li>
+              <li data-i18n="store_card_plan_terms_separate"></li>
+              <li data-i18n="store_card_plan_terms_cancel"></li>
+            </ul>
+            <label class="plan-consent"><input type="checkbox" id="customPlanConsentCheck"> <span data-i18n="store_card_plan_consent_label"></span></label>
+          </div>
           <div id="customPlanMessage" class="message" role="status" aria-live="polite"></div>
           <button type="button" class="primary-button" id="customSubscribeButton" hidden></button>
           <button type="button" class="secondary-button" id="customCancelButton" hidden data-i18n="store_custom_plan_cancel_button">解約する</button>
@@ -1486,7 +1507,8 @@
 
       // ===== STEP 44-A｜月額100円カスタマイズ =====
       // ・無料の店舗情報とは別に読み込み・保存する(storeCustomProfileGet / storeCustomProfileUpdate)
-      // ・編集できるか(owner・登録状態・契約の利用権限)はサーバーが判定する。画面は応答の editable に従うだけ
+      // ・編集できるか(owner・登録状態)はサーバーが判定する。画面は応答の editable に従うだけ
+      //   (STEP 50-D｜契約前でも保存・編集できる。旅行者への公開だけが契約の有効性で決まる)
       // ・商品写真は保存時にまとめてアップロード(署名は purpose:"storeCustomMenuPhoto"、フォルダーはサーバーが決める)
       let customLoaded = null;  // storeCustomProfileGet の結果
       let customRevision = 0;
@@ -1657,7 +1679,10 @@
         const subscribe = document.getElementById("customSubscribeButton");
         subscribe.hidden = !canSubscribe;
         subscribe.textContent = t(plan.state === "canceling" ? "store_custom_plan_reactivate_button" : "store_custom_plan_subscribe_button");
-        subscribe.disabled = planBusy || plan.cardRegistered !== true;
+        const consentCheck = document.getElementById("customPlanConsentCheck");
+        document.getElementById("customPlanTerms").hidden = !canSubscribe;
+        consentCheck.disabled = planBusy || plan.cardRegistered !== true;
+        subscribe.disabled = planBusy || plan.cardRegistered !== true || consentCheck.checked !== true;
         document.getElementById("customPlanCardNote").hidden = !canSubscribe || plan.cardRegistered === true;
         document.getElementById("customPlanTrialNote").hidden = !canSubscribe;
         const cancel = document.getElementById("customCancelButton");
@@ -1684,6 +1709,16 @@
         document.getElementById("customPlanBox").hidden = false;
       }
 
+      // STEP 50-C｜公開の状態(公開条件の plan を含む)だけを読み直す(編集中の未保存の内容は消さない)。
+      function refreshPublication() {
+        return callApi({ mode: "storeProfileGet", storeId: storeId }).then(function (response) {
+          if (response.status === 200 && response.result && response.result.success && response.result.publication) {
+            publication = response.result.publication;
+            renderPublication();
+          }
+        }).catch(function () {});
+      }
+
       // 契約の状態だけを読み直す(編集中の未保存の内容は消さない)。
       function refreshCustomPlan() {
         return callApi({ mode: "storeCustomProfileGet", storeId: storeId }).then(function (response) {
@@ -1700,7 +1735,11 @@
         });
       }
 
+      // STEP 50-B/50-C｜店舗カード月額契約への同意の版(サーバーの STORE_CARD_PLAN_CONSENT_VERSION と同じ値)。
+      const STORE_CARD_PLAN_CONSENT_VERSION = "store-card-monthly-2026-10-31";
+
       const PLAN_ERROR_KEYS = {
+        plan_consent_required: "store_custom_plan_err_consent",
         card_required: "store_custom_plan_err_card",
         already_subscribed: "store_custom_plan_err_already",
         plan_signup_unavailable: "store_custom_plan_err_unavailable",
@@ -1720,9 +1759,19 @@
         planBusy = true;
         renderCustomPlanBox();
         try {
-          const response = await callApi({ mode: mode, storeId: storeId });
+          const request = { mode: mode, storeId: storeId };
+          if (mode === "storeCustomPlanSubscribe") {
+            if (document.getElementById("customPlanConsentCheck").checked !== true) {
+              showPlanMessage("store_custom_plan_err_consent", "error");
+              return;
+            }
+            request.planConsentVersion = STORE_CARD_PLAN_CONSENT_VERSION;
+          }
+          const response = await callApi(request);
           const result = response.result || {};
           if (response.status === 200 && result.success) {
+            // 同意は申込ごとに取り直す(次の申込で前のチェックを使い回さない)。
+            document.getElementById("customPlanConsentCheck").checked = false;
             const date = formatCustomDate(result.accessUntilMillis);
             const key = mode === "storeCustomPlanCancel"
               ? (result.alreadyCanceled ? "store_custom_plan_already_canceled" : "store_custom_plan_canceled")
@@ -1732,6 +1781,7 @@
             showPlanMessage(PLAN_ERROR_KEYS[result.reason] || "store_account_err_generic", "error", result.reason || "http_" + response.status);
           }
           await refreshCustomPlan();
+          await refreshPublication();
         } catch (error) {
           showPlanMessage("store_account_err_network", "error");
         } finally {
@@ -2191,6 +2241,10 @@
         });
         document.getElementById("customSubscribeButton").addEventListener("click", function () {
           handlePlanAction("storeCustomPlanSubscribe");
+        });
+        // STEP 50-C｜同意のチェックで申込のボタンの押せる・押せないを切り替える。
+        document.getElementById("customPlanConsentCheck").addEventListener("change", function () {
+          renderCustomPlanBox();
         });
         document.getElementById("customCancelButton").addEventListener("click", function () {
           handlePlanAction("storeCustomPlanCancel");

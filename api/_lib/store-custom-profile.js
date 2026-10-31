@@ -39,6 +39,8 @@ import {
 import {
   STORE_CUSTOM_PLAN_PERIOD_MONTHLY,
   STORE_CUSTOM_PLAN_MONTHLY_SIGNUP_ENABLED,
+  STORE_CUSTOM_PLAN_MONTHLY_FEE_JPY,
+  STORE_CARD_PLAN_CONSENT_VERSION,
   evaluateStoreCustomPlanAccess,
   isMonthlyPlan,
   jstMonthKey,
@@ -475,12 +477,12 @@ function readNowMillis(deps) {
   return typeof deps.now === "function" ? deps.now() : Date.now();
 }
 
-// 商品写真の署名発行の前に使う確認(owner・編集可能な店舗・利用権限あり)。
+// 商品写真の署名発行の前に使う確認(owner・編集可能な店舗)。
+// STEP 50-D｜契約前でも保存・編集できる(代表決定 B案)。旅行者への表示は契約の有効性で別に判定する。
 export async function checkStoreCustomEditor(database, storeId, uid, nowMillis) {
   const snapshots = await Promise.all([
     database.collection(STORE_MEMBERS_COLLECTION).doc(storeId + "_" + uid).get(),
-    database.collection(STORE_ACCOUNTS_COLLECTION).doc(storeId).get(),
-    database.collection(STORE_CUSTOM_PLANS_COLLECTION).doc(storeId).get()
+    database.collection(STORE_ACCOUNTS_COLLECTION).doc(storeId).get()
   ]);
 
   if (!snapshots[0].exists || !isActiveOwner(snapshots[0].data(), uid, storeId) || !snapshots[1].exists) {
@@ -491,18 +493,12 @@ export async function checkStoreCustomEditor(database, storeId, uid, nowMillis) 
     return { ok: false, status: 403, reason: "store_not_editable" };
   }
 
-  const plan = snapshots[2].exists ? snapshots[2].data() : null;
-
-  if (!hasStoreCustomPlanAccess(plan, nowMillis) || !isStoreCustomPlanHolder(plan, uid)) {
-    return { ok: false, status: 403, reason: "plan_required" };
-  }
-
   return { ok: true };
 }
 
 
 // mode: storeCustomProfileGet (POST、メール確認済み店舗アカウントの owner)
-// 有料の内容と契約状態を返す。未契約・期限切れでも、保存済みの内容は owner に見せる(編集は不可)。
+// 有料の内容と契約状態を返す。STEP 50-D｜未契約・期限切れでも、owner は保存・編集できる(公開は契約が有効な時だけ)。
 export async function handleStoreCustomProfileGet(request, response, deps) {
   try {
     const actor = await requireVerifiedStoreUser(request, response, deps);
@@ -560,7 +556,7 @@ export async function handleStoreCustomProfileGet(request, response, deps) {
       success: true,
       storeId: storeId,
       plan: plan,
-      editable: storeEditable && plan.access,
+      editable: storeEditable,
       custom: buildCustomResponse(snapshots[3].exists ? snapshots[3].data() : null),
       limits: STORE_CUSTOM_LIMITS,
       linkTypes: STORE_CUSTOM_LINK_TYPES
@@ -572,7 +568,7 @@ export async function handleStoreCustomProfileGet(request, response, deps) {
 }
 
 
-// mode: storeCustomProfileUpdate (POST、owner・編集可能な店舗・利用権限ありの時だけ)
+// mode: storeCustomProfileUpdate (POST、owner・編集可能な店舗の時だけ。STEP 50-D｜契約の有無は問わない)
 // { storeId, expectedRevision, menuItems, links, story }
 // 送られた内容で有料の内容をまるごと置き換える(並べ替え・削除も同じ操作)。
 // expectedRevisionが保存済みのrevisionと違う場合は上書きせず409(revision_conflict)。
@@ -605,11 +601,10 @@ export async function handleStoreCustomProfileUpdate(request, response, deps) {
     const database = deps.getFirestore(deps.getFirebaseAdminApp());
     const memberRef = database.collection(STORE_MEMBERS_COLLECTION).doc(storeId + "_" + actor.uid);
     const accountRef = database.collection(STORE_ACCOUNTS_COLLECTION).doc(storeId);
-    const planRef = database.collection(STORE_CUSTOM_PLANS_COLLECTION).doc(storeId);
     const customRef = database.collection(STORE_CUSTOM_PROFILES_COLLECTION).doc(storeId);
 
-    // Moderation(外部API)の前に、権限・編集可否・利用権限を確認しておく。
-    const preSnapshots = await Promise.all([memberRef.get(), accountRef.get(), planRef.get(), customRef.get()]);
+    // Moderation(外部API)の前に、権限・編集可否を確認しておく。
+    const preSnapshots = await Promise.all([memberRef.get(), accountRef.get(), customRef.get()]);
 
     if (!preSnapshots[0].exists || !isActiveOwner(preSnapshots[0].data(), actor.uid, storeId) || !preSnapshots[1].exists) {
       return sendError(response, 404, "store_not_found");
@@ -621,13 +616,7 @@ export async function handleStoreCustomProfileUpdate(request, response, deps) {
       return sendError(response, 403, "store_not_editable");
     }
 
-    const planBefore = preSnapshots[2].exists ? preSnapshots[2].data() : null;
-
-    if (!hasStoreCustomPlanAccess(planBefore, readNowMillis(deps)) || !isStoreCustomPlanHolder(planBefore, actor.uid)) {
-      return sendError(response, 403, "plan_required");
-    }
-
-    const customBefore = preSnapshots[3].exists ? preSnapshots[3].data() || {} : {};
+    const customBefore = preSnapshots[2].exists ? preSnapshots[2].data() || {} : {};
 
     if (readRevision(customBefore) !== body.expectedRevision) {
       return sendError(response, 409, "revision_conflict", { currentRevision: readRevision(customBefore) });
@@ -733,7 +722,6 @@ export async function handleStoreCustomProfileUpdate(request, response, deps) {
       const snapshots = await Promise.all([
         transaction.get(memberRef),
         transaction.get(accountRef),
-        transaction.get(planRef),
         transaction.get(customRef)
       ]);
 
@@ -747,14 +735,7 @@ export async function handleStoreCustomProfileUpdate(request, response, deps) {
         return;
       }
 
-      const planNow = snapshots[2].exists ? snapshots[2].data() : null;
-
-      if (!hasStoreCustomPlanAccess(planNow, readNowMillis(deps)) || !isStoreCustomPlanHolder(planNow, actor.uid)) {
-        outcome = { status: 403, reason: "plan_required" };
-        return;
-      }
-
-      const customData = snapshots[3].exists ? snapshots[3].data() || {} : {};
+      const customData = snapshots[2].exists ? snapshots[2].data() || {} : {};
       const currentRevision = readRevision(customData);
 
       if (currentRevision !== body.expectedRevision) {
@@ -976,6 +957,11 @@ export async function handleStoreCustomPlanSubscribe(request, response, deps) {
       return sendError(response, 400, "invalid_input", { field: "storeId" });
     }
 
+    // STEP 50-B｜店舗カード月額契約への明示の同意(現在の版)が無い申込は受け付けない(旧画面からの申込も含む)。
+    if (deps.readRequestBody(request).planConsentVersion !== STORE_CARD_PLAN_CONSENT_VERSION) {
+      return sendError(response, 400, "plan_consent_required", { consentVersion: STORE_CARD_PLAN_CONSENT_VERSION });
+    }
+
     // STEP 44-C③｜契約の種類：本番の申込の受付(STORE_CUSTOM_PLAN_MONTHLY_SIGNUP_ENABLED、false)が有効なら本番の暦月契約。
     // それ以外は Preview 試験の環境の時だけ受け付け、既定は STEP 44-B の試験の契約(申込から暦の1か月・請求の対象外)、
     // contractModel "monthly" を指定した時だけ試験用の暦月契約(createdInPreview。請求台帳の試験用)。Production では受け付けない。
@@ -1030,6 +1016,16 @@ export async function handleStoreCustomPlanSubscribe(request, response, deps) {
     const nowMillis = readNowMillis(deps);
     const monthKey = jstMonthKey(nowMillis);
     const usageRef = storeCustomPlanUsageRef(database, storeId, monthKey);
+    // STEP 50-B｜同意の証跡(契約の文書と契約の履歴の両方に残す。退会しても storeCustomPlans・
+    // storeCustomPlanEvents は削除の対象ではない)。
+    const consent = {
+      version: STORE_CARD_PLAN_CONSENT_VERSION,
+      consentedAt: Timestamp.fromMillis(nowMillis),
+      feeJpy: STORE_CUSTOM_PLAN_MONTHLY_FEE_JPY,
+      taxIncluded: true,
+      storeId: storeId,
+      uid: actor.uid
+    };
     let outcome = null;
 
     await database.runTransaction(async function(transaction) {
@@ -1076,6 +1072,7 @@ export async function handleStoreCustomPlanSubscribe(request, response, deps) {
           status: "active",
           canceledAt: null,
           reactivatedAt: Timestamp.fromMillis(nowMillis),
+          consent: consent,
           updatedAt: FieldValue.serverTimestamp(),
           revision: (Number.isInteger(planData.revision) ? planData.revision : 0) + 1
         };
@@ -1096,7 +1093,8 @@ export async function handleStoreCustomPlanSubscribe(request, response, deps) {
 
         transaction.update(planRef, reactivated);
         writePlanEvent(transaction, database, storeId, actor.uid, "reactivated", nowMillis, {
-          accessUntil: planData.accessUntil
+          accessUntil: planData.accessUntil,
+          consent: consent
         });
         outcome = {
           status: 200,
@@ -1169,12 +1167,14 @@ export async function handleStoreCustomPlanSubscribe(request, response, deps) {
         subscribedAt: Timestamp.fromMillis(nowMillis),
         accessUntil: monthly ? null : Timestamp.fromMillis(accessUntilMillis),
         canceledAt: null,
+        consent: consent,
         updatedAt: FieldValue.serverTimestamp(),
         revision: (planData && Number.isInteger(planData.revision) ? planData.revision : 0) + 1
       });
       writePlanEvent(transaction, database, storeId, actor.uid, "subscribed", nowMillis, {
         periodKind: contractModel,
-        accessUntil: monthly ? null : Timestamp.fromMillis(accessUntilMillis)
+        accessUntil: monthly ? null : Timestamp.fromMillis(accessUntilMillis),
+        consent: consent
       });
       outcome = { status: 200, result: "subscribed", accessUntilMillis: accessUntilMillis, periodKind: contractModel };
     });

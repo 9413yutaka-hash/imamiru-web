@@ -127,6 +127,8 @@ r = await check("u1");
 t("A3 確認：削除できる・清算待ちなし・公開中の店舗1・掲載中の投稿2・カードあり", r.code === 200 && r.body.deletable === true && r.body.settlementRequired === false && r.body.blockers.length === 0 && r.body.summary.storeCount === 1 && r.body.summary.publishedStoreCount === 1 && r.body.summary.activePostCount === 2 && r.body.summary.hasCard === true && r.body.deletionStatus === "", r.body);
 t("A4 確認は何も書き込まない", S.writes.length === writesBefore, S.writes.slice(writesBefore));
 t("A5 確認の応答にカードの番号・Stripe の ID・メールアドレスを含めない", !/pm_|cus_|4242|@example/.test(JSON.stringify(r.body)), r.body);
+// STEP 50-B｜店舗カードは契約の利用権がある間だけ一覧に出る(請求の対象外の試験の契約で前提を作る)。
+if (HAS_PLAN) put("storeCustomPlans/s1", { storeId: "s1", status: "active", ownerUid: "u1", periodKind: "preview_trial", createdInPreview: true, accessUntil: Timestamp.fromMillis(Date.now() + 20 * 86400000) });
 const listedBefore = await listedIds();
 t("A6 （前提）削除の前は、この店舗が旅行者向けの一覧に出ている", listedBefore.includes("sp_s1"), listedBefore);
 globalThis.__MOCK_TOKENS.adm = tok("adm", "admin@example.com");
@@ -276,6 +278,7 @@ t("P4 他にも有効な owner がいる店舗の写真は消さない（その�
 
 // ===================== L: operator listing taken over (decision 3) =====================
 seedAccount("ul1", ["sl1"]);
+if (HAS_PLAN) put("storeCustomPlans/sl1", { storeId: "sl1", status: "active", ownerUid: "ul1", periodKind: "preview_trial", createdInPreview: true, accessUntil: Timestamp.fromMillis(Date.now() + 20 * 86400000) });
 put("submissions/sub1", { shopName: "運営掲載の店", status: "approved" });
 put("storeListingLinks/sub1", { status: "active", storeId: "sl1", claimId: "c1" });
 let pb = await publicBody();
