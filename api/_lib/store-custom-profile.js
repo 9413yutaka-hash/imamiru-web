@@ -531,7 +531,11 @@ export async function handleStoreCustomProfileGet(request, response, deps) {
     const storeEditable = isEditableStore(snapshots[1].data());
 
     // STEP 44-B｜申込の可否の目安(画面の表示用。申込の時にサーバーがすべて確認し直す)。
-    plan.signupAvailable = typeof deps.isStoreCustomPlanTrialEnabled === "function" && deps.isStoreCustomPlanTrialEnabled() === true;
+    // STEP 52-A｜本番の申込の受付(申込の処理と同じ条件)も画面に反映する。
+    plan.signupAvailable =
+      STORE_CUSTOM_PLAN_MONTHLY_SIGNUP_ENABLED === true ||
+      (typeof deps.isStoreCustomPlanMonthlySignupEnabled === "function" && deps.isStoreCustomPlanMonthlySignupEnabled() === true) ||
+      (typeof deps.isStoreCustomPlanTrialEnabled === "function" && deps.isStoreCustomPlanTrialEnabled() === true);
     plan.storeEditable = storeEditable;
 
     if (plan.signupAvailable && typeof deps.checkAccountBillingCard === "function") {

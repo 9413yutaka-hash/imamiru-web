@@ -36,7 +36,8 @@ import {
   ACCOUNT_BILLING_COLLECTION,
   STORE_CUSTOM_PLAN_INVOICES_COLLECTION,
   STORE_CUSTOM_PLAN_LOCK_PREFIX,
-  readStripeChargeConfig
+  readStripeChargeConfig,
+  readStripeLiveChargeConfig
 } from "./store-billing.js";
 
 import {
@@ -101,10 +102,15 @@ function buildIdempotencyKey(mode, ledgerId, attempt) {
 
 // ===== 実行の許可 =====
 // { ok, config, previewTrialOnly } か { ok:false, reason }。
+// STEP 52-A｜Production(VERCEL_ENV=production)では本番の請求用の設定(readStripeLiveChargeConfig：rk_live_・pk_live_・
+// STRIPE_MODE live)を使う。Production 以外は今までどおりテストモードだけ。deps.chargeEnabledOverride は試験で
+// スイッチの値を差し替えるためだけ(本番のサーバーの部品は渡さない)。
 export function readStoreCustomPlanChargeGate(deps) {
-  const config = readStripeChargeConfig(deps && deps.env);
+  const production = !!deps && !!deps.env && deps.env.VERCEL_ENV === "production";
+  const config = production ? readStripeLiveChargeConfig(deps.env) : readStripeChargeConfig(deps && deps.env);
+  const chargeEnabled = deps && typeof deps.chargeEnabledOverride === "boolean" ? deps.chargeEnabledOverride : STORE_CUSTOM_PLAN_CHARGE_ENABLED;
 
-  if (STORE_CUSTOM_PLAN_CHARGE_ENABLED === true) {
+  if (chargeEnabled === true) {
     return config.ok ? { ok: true, config: config, previewTrialOnly: false } : { ok: false, reason: "stripe_unavailable", detail: config.reason };
   }
 
@@ -631,9 +637,14 @@ function describePlanInvoice(ledgerId, invoice) {
 
 // 1件の請求書に対して今行うこと：charge(締め後・請求予定日以降)・retry(再試行の予定日以降)・reconcile(請求中・
 // 処理中・本人認証待ち・人の確認待ちの照合)・skip。
-function planInvoiceAction(invoice, nowMs, previewTrialOnly) {
+function planInvoiceAction(invoice, nowMs, previewTrialOnly, liveMode) {
   if (previewTrialOnly && invoice.createdInPreview !== true) {
     return { plan: "skip", reason: "not_preview_trial_invoice" };
+  }
+
+  // STEP 52-A｜Preview の試験で作った請求書は、本番の請求(live)では請求しない。
+  if (liveMode && invoice.createdInPreview === true) {
+    return { plan: "skip", reason: "preview_invoice_in_live" };
   }
 
   if (invoice.status === "closed") {
@@ -680,7 +691,7 @@ export async function runStoreCustomPlanCharges(database, deps, options) {
     }
 
     const entry = describePlanInvoice(documentSnapshot.id, invoice);
-    const action = planInvoiceAction(invoice, nowMs, previewTrialOnly);
+    const action = planInvoiceAction(invoice, nowMs, previewTrialOnly, gate.ok && gate.config.mode === "live");
     entry.plan = action.plan;
     entry.planReason = action.reason;
 
@@ -921,7 +932,7 @@ export async function handleStoreCustomPlanPayNow(request, response, deps) {
       return sendError(response, 404, "invoice_not_found");
     }
 
-    if (invoice.status !== "payment_failed" || (gate.previewTrialOnly && invoice.createdInPreview !== true)) {
+    if (invoice.status !== "payment_failed" || (gate.previewTrialOnly && invoice.createdInPreview !== true) || (gate.config.mode === "live" && invoice.createdInPreview === true)) {
       return sendError(response, 409, "not_payable");
     }
 

@@ -326,6 +326,46 @@ export function readStripeChargeConfig(env) {
   return readStripeTestOnlyConfig(values, "charge");
 }
 
+// STEP 52-A｜店舗カード月額100円の本番の請求用の設定(store-custom-plan-charge.js だけが使う)。
+// Production(VERCEL_ENV=production)で、STRIPE_MODE "live"・請求専用キー(STRIPE_CHARGE_RESTRICTED_KEY)が
+// 制限付きの本番キー rk_live_(権限の広い sk_live_ は拒否)・公開可能キー pk_live_ がそろった時だけ ok。
+// Production 以外では使わない(Preview はテストモードの readStripeChargeConfig)。呼び出し元のスイッチ
+// (STORE_CUSTOM_PLAN_CHARGE_ENABLED、代表の課金開始の承認まで false)が true の時だけ呼ばれる。
+// 今だけ投稿の請求・運営の確認画面(readStripeChargeConfig)は、この関数があっても本番では無効のまま。
+export function readStripeLiveChargeConfig(env) {
+  const source = env || {};
+
+  if (source.VERCEL_ENV !== "production") {
+    return { ok: false, reason: "live_charge_production_only" };
+  }
+
+  const values = readStripeEnvValues(source, CHARGE_KEY_ENV_NAME);
+
+  if (values.serverKey === "") {
+    return { ok: false, reason: "charge_key_not_configured" };
+  }
+
+  if (values.mode !== "live" || values.publishableKey === "") {
+    return { ok: false, reason: "not_configured" };
+  }
+
+  if (!values.serverKey.startsWith("rk_live_")) {
+    return { ok: false, reason: "server_key_not_restricted_live" };
+  }
+
+  if (!values.publishableKey.startsWith("pk_live_")) {
+    return { ok: false, reason: "key_mode_mismatch" };
+  }
+
+  return {
+    ok: true,
+    purpose: "charge",
+    mode: "live",
+    serverKey: values.serverKey,
+    publishableKey: values.publishableKey
+  };
+}
+
 // application/x-www-form-urlencoded(Stripeの形式)。値はstringかnumberだけ。
 function encodeStripeForm(params) {
   const form = new URLSearchParams();
