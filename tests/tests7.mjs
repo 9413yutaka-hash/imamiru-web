@@ -183,7 +183,7 @@ try {
   await finish(p, "10b");
   p = await page("O3", { contextId: await ctx(), storeTok: "store-bad" });
   d = await openD(p, "P2");
-  t("10 unverifiable store token: body shown, NOT recorded (not claimed as excluded), button stays", d.text === BODY("P2") && !view("P2", "O3") && charge("P2").validCvCount === p2before + 1);
+  t("10 [STEP48-D] unverifiable store token on a billable post: error + retry, details not in DOM, NOT recorded (not claimed as excluded)", d.state === "error" && d.retry && !d.bodyInDom && d.text === "" && !view("P2", "O3") && charge("P2").validCvCount === p2before + 1, d);
   await closeD(p); c = await cards(p); t("10 unverifiable: card keeps 続きを見る", c.P2.button);
   await finish(p, "10c");
   // real store-token reader with no store login: returns "" and no store header
@@ -198,7 +198,10 @@ try {
   const v0 = be.m.count("imadakeCvViews");
   d = await openD(p, "P1");
   const ra = reqsOf("imadakeDetailOpen").at(-1);
-  t("11 anonymous auth failed: request without Authorization, body still shown", ra.auth === "" && d.text === BODY("P1"), { ra, d });
+  t("11 [STEP48-D] anonymous auth failed on a billable post: request without Authorization, error + retry, details not in DOM", ra.auth === "" && d.state === "error" && d.retry && !d.bodyInDom && d.text === "", { ra, d });
+  await closeD(p);
+  d = await openD(p, "LEG");
+  t("11 anonymous auth failed on a non-billable post: body still shown as before", reqsOf("imadakeDetailOpen").at(-1).auth === "" && d.text === BODY("LEG"), d);
   t("11 no CV / no charge change / no GA4", be.m.count("imadakeCvViews") === v0 && (await ga(p)).length === 0);
   await closeD(p); c = await cards(p); t("11 card keeps 続きを見る (not treated as viewed)", c.P1.button && !c.P1.viewed);
   await finish(p, "11");
@@ -208,7 +211,7 @@ try {
   be.m.failGets.add("storeAccounts");
   d = await openD(p, "P1"); await closeD(p);
   be.m.failGets.delete("storeAccounts");
-  t("12 Firestore read failure during checks: body shown, no CV, no charge", d.text === BODY("P1") && !view("P1", "F") && charge("P1", CV.computeImadakeCvDayKey(be.clock - 24 * H)).validCvCount === 3);
+  t("12 [STEP48-D] Firestore read failure during checks (billable): error + retry, details not in DOM, no CV, no charge", d.state === "error" && d.retry && !d.bodyInDom && !view("P1", "F") && charge("P1", CV.computeImadakeCvDayKey(be.clock - 24 * H)).validCvCount === 3);
   be.detail500 = true;
   const getsBefore = reqsOf("imadakePostGet").length;
   d = await openD(p, "LEG");

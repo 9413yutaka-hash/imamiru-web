@@ -82,7 +82,7 @@ function readBearerFromHeader(
 }
 
 // 旅行者(匿名認証)のuid。匿名ログインのトークンだけを旅行者として扱う。
-// 取得・検証できない時はnull(閲覧は妨げず、CV・料金は発生させない)。
+// 取得・検証できない時はnull(CV・料金は発生させない。課金対象の投稿は詳細も返さない＝STEP 48-D)。
 async function resolveTravelerUid(
   request,
   app,
@@ -323,11 +323,39 @@ async function recordImadakeCv(
   );
 }
 
+// STEP 48-D｜CVの成立を確認できない時の応答。課金対象の投稿(cvBillingEnabled)は詳細を公開せず、
+// 再試行できるエラーにする。課金対象外の投稿は従来どおり詳細を返す(CV・料金は発生させない)。
+function respondWithoutCv(
+  response,
+  postId,
+  post,
+  statusCode,
+  reason
+) {
+  if (post.cvBillingEnabled === true) {
+    return response.status(statusCode).json({
+      success: false,
+      retryable: true,
+      reason: reason,
+      message: "詳細を読み込めませんでした。もう一度お試しください。"
+    });
+  }
+
+  return response.status(200).json({
+    success: true,
+    post: buildImadakePublicPost(postId, post),
+    cv: { status: "not_recorded" }
+  });
+}
+
 // mode: imadakeDetailOpen (POST)
-//   入力 { postId }。Authorization：旅行者の匿名認証IDトークン(無い・不正でも本文は返す、CVは記録しない)。
+//   入力 { postId }。Authorization：旅行者の匿名認証IDトークン(無い・不正の時はCVを記録しない)。
 //        X-Machinau-Store-Authorization：任意。ログイン中の店舗アカウントのIDトークン(本人閲覧の除外用)。
 //   出力 { success, post: 公開用の詳細, cv: { status: "new"|"existing"|"not_recorded" } }
 //   公開中でない・期限切れ・存在しない投稿は404(既存のimadakePostGetと同じ)。
+//   STEP 48-D｜CVを記録できない時(旅行者トークン無し・不正、店舗の本人確認不能、読み取り・記録の失敗)：
+//   課金対象の投稿(cvBillingEnabled)は詳細を返さず { success:false, retryable:true } (respondWithoutCv)。
+//   課金対象外の投稿は従来どおり詳細を返す(cv.status "not_recorded")。
 export async function handleImadakeDetailOpen(
   request,
   response,
@@ -378,29 +406,22 @@ export async function handleImadakeDetailOpen(
       });
     }
 
-    // 2. 旅行者(匿名認証)。確認できない時は本文だけ返す(CV・料金は発生させない)。
+    // 2. 旅行者(匿名認証)。確認できない時はCV・料金を発生させない(課金対象の投稿は詳細も返さない)。
     const traveler =
       await resolveTravelerUid(request, app, deps);
 
     if (!traveler.uid) {
-      return response.status(200).json({
-        success: true,
-        post: buildImadakePublicPost(postId, post),
-        cv: { status: "not_recorded" }
-      });
+      return respondWithoutCv(response, postId, post, 401, traveler.reason);
     }
 
     // 3. 除外条件(店舗本人の閲覧・テスト事業者)。投稿の所有店舗はDB上のstoreIdを使う。
-    //    確認・読み取りに失敗した時は、誤って有効CV・料金を確定しないよう記録せず本文だけ返す。
+    //    確認・読み取りに失敗した時は、誤って有効CV・料金を確定しないよう記録しない
+    //    (課金対象の投稿は詳細も返さない)。
     const ownerCheck =
       await isStoreOwnerViewing(request, app, database, post.storeId, deps);
 
     if (ownerCheck.unverifiable) {
-      return response.status(200).json({
-        success: true,
-        post: buildImadakePublicPost(postId, post),
-        cv: { status: "not_recorded" }
-      });
+      return respondWithoutCv(response, postId, post, 401, "store_owner_unverifiable");
     }
 
     let storeAccount =
@@ -419,11 +440,7 @@ export async function handleImadakeDetailOpen(
     } catch (storeAccountError) {
       console.error("今だけ投稿の事業者情報の取得に失敗しました：", storeAccountError);
 
-      return response.status(200).json({
-        success: true,
-        post: buildImadakePublicPost(postId, post),
-        cv: { status: "not_recorded" }
-      });
+      return respondWithoutCv(response, postId, post, 503, "store_account_read_failed");
     }
 
     // 4. 初回CVと日次料金台帳をトランザクションで確定
@@ -442,15 +459,11 @@ export async function handleImadakeDetailOpen(
           }
         );
     } catch (recordError) {
-      // トランザクションは全部書くか何も書かないため、失敗時は何も記録されていない。
-      // 閲覧は妨げず、本文だけ返す(CV・料金は発生させない)。
+      // トランザクションは全部書くか何も書かないため、失敗時は何も記録されていない
+      // (書き込み済みで応答だけ失敗した場合も、再試行は既存の記録を見て"existing"になり重複しない)。
       console.error("今だけ投稿のCV記録に失敗しました：", recordError);
 
-      return response.status(200).json({
-        success: true,
-        post: buildImadakePublicPost(postId, post),
-        cv: { status: "not_recorded" }
-      });
+      return respondWithoutCv(response, postId, post, 503, "cv_record_failed");
     }
 
     if (result.status === "unavailable") {

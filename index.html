@@ -1,17 +1,30 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <!-- Google tag (gtag.js) -->
-  <script
-    async
-    src="https://www.googletagmanager.com/gtag/js?id=G-PGM7GNVQX8"
-  ></script>
+  <!-- Google tag (gtag.js)｜STEP 48-E(代表決定 B案)：本番のドメイン(machinau.jp・
+       imamiru-web.vercel.app)だけで読み込む。Preview・localhost では本番の GA4 を読み込まず、
+       gtag も定義しない(記事ページ・掲示板と同じ形。画面側の計測は typeof gtag で何もしない)。 -->
   <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
+    (function () {
+      if (location.hostname !== "machinau.jp" && location.hostname !== "imamiru-web.vercel.app") {
+        return;
+      }
 
-    gtag('config', 'G-PGM7GNVQX8');
+      window.dataLayer = window.dataLayer || [];
+
+      window.gtag = function () {
+        dataLayer.push(arguments);
+      };
+
+      gtag("js", new Date());
+      gtag("config", "G-PGM7GNVQX8");
+
+      const gaScript = document.createElement("script");
+      gaScript.async = true;
+      gaScript.src =
+        "https://www.googletagmanager.com/gtag/js?id=G-PGM7GNVQX8";
+      document.head.appendChild(gaScript);
+    })();
   </script>
 
   <meta charset="UTF-8">
@@ -1252,6 +1265,23 @@
       }, true);
     })();
   </script>
+  <style>
+    /* STEP 44-A｜正式店舗の詳細の有料の内容(月額100円カスタマイズ)専用の最小CSS。style.cssは変更しない。
+       modal-message の white-space: pre-line を、改行を残したい文章だけに限る。 */
+    .shop-custom { white-space: normal; margin-top: 16px; display: grid; gap: 14px; }
+    .shop-custom-section { border-top: 1px solid #dbe9f1; padding-top: 12px; }
+    .shop-custom-heading { margin: 0 0 8px; font-size: 14.5px; font-weight: 800; color: #071a33; }
+    .shop-custom-text { margin: 0; white-space: pre-line; overflow-wrap: anywhere; }
+    .shop-custom-menu { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+    .shop-custom-menu-item { display: grid; gap: 10px; align-items: start; background: #ffffff; border-radius: 12px; padding: 10px; }
+    .shop-custom-menu-item.has-photo { grid-template-columns: 88px minmax(0, 1fr); }
+    .shop-custom-menu-photo { display: block; width: 88px; height: 88px; object-fit: cover; border-radius: 10px; background: #e8f1f6; }
+    .shop-custom-menu-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+    .shop-custom-menu-name { font-weight: 800; color: #15233a; overflow-wrap: anywhere; }
+    .shop-custom-menu-price { flex-shrink: 0; font-weight: 800; color: #0788c9; }
+    .shop-custom-links { display: flex; flex-wrap: wrap; gap: 8px; }
+    .shop-custom-link { display: inline-flex; align-items: center; min-height: 40px; padding: 6px 14px; border-radius: 999px; background: #ffffff; border: 1px solid #cfe3ee; color: #0788c9; font-weight: 800; font-size: 13.5px; text-decoration: none; overflow-wrap: anywhere; }
+  </style>
 </head>
 
 <body>
@@ -2239,7 +2269,7 @@
         href="shop.html"
         data-i18n="contribute_cta_shop_link"
       >
-        お店・施設の方へ｜無料で情報を掲載できます →
+        お店・施設の方へ｜店舗カード・今だけ投稿のご案内 →
       </a>
 
     </section>
@@ -2394,7 +2424,7 @@
       <a href="contribute.html" data-i18n="footer_contribute_link">街の「今」を投稿する</a>
       <!-- 店舗・施設参加導線 Phase2｜旅行者向けTOPを邪魔しないよう、フッターの
            テキストリンクとしてだけ置く店舗・施設向けの入口。 -->
-      <a href="shop.html" data-i18n="footer_shop_link">お店・施設の方へ｜マチナウに無料で投稿できます</a>
+      <a href="shop.html" data-i18n="footer_shop_link">お店・施設の方へ｜店舗カード・今だけ投稿のご案内</a>
     </div>
 
     <div class="footer-data-credit" style="margin-top: 8px; font-size: 11px; opacity: 0.6;">
@@ -2517,6 +2547,25 @@
         >
           📍 Googleマップで場所を見る
         </a>
+
+        <!-- STEP 48｜シェア。無料店舗(運営掲載の常設店舗広告・店主が管理する正式店舗)の詳細だけに表示する
+             (app.js の openShopModal)。共有するURLは https://machinau.jp/share/shop/{ID} だけ(STEP 48-B)。 -->
+        <div
+          id="modalShareArea"
+          class="machinau-share"
+          style="display:none;"
+        >
+          <button
+            id="modalShareButton"
+            class="machinau-share-button"
+            type="button"
+            data-i18n="share_button"
+            onclick="shareMachinauItemFromButton(this)"
+          >
+            🔗 シェア
+          </button>
+          <div class="machinau-share-status" role="status" aria-live="polite"></div>
+        </div>
 
         <!-- STEP 42-D｜運営が掲載したお店の店主向けの入口(店舗アカウント → メール確認 → カード登録 → 引き継ぎ)。
              運営掲載(常設店舗広告)の詳細だけに表示する(app.js の openShopModal)。 -->
@@ -2756,6 +2805,26 @@
         </div>
       </div>
     </div>
+  </div>
+
+  <!-- STEP 48｜共有されたリンク(?shop=)の店舗・施設が今は掲載されていない時の案内(app.js の
+       showSharedLinkNotice)。画面の下に出し、閉じるか時間が経つと消える。 -->
+  <div
+    id="sharedLinkNotice"
+    class="shared-link-notice"
+    role="status"
+    aria-live="polite"
+    hidden
+  >
+    <p id="sharedLinkNoticeText" class="shared-link-notice-text"></p>
+    <button
+      type="button"
+      class="shared-link-notice-close"
+      data-i18n="share_notice_close"
+      onclick="hideSharedLinkNotice()"
+    >
+      閉じる
+    </button>
   </div>
 
   <!-- Firebase本体 -->

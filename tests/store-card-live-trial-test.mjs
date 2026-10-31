@@ -83,9 +83,9 @@ t("U3 メール未確認・パスワード以外のログイン（Google 等）�
 t("U4 ADMIN_EMAIL が未設定・空・空白だけなら誰も対象外（コードに代表のメール・uid は無い）",
   L(globalThis.__MOCK_TOKENS.admin, { ...PROD, ADMIN_EMAIL: undefined }) === false && L(globalThis.__MOCK_TOKENS.admin, { ...PROD, ADMIN_EMAIL: "" }) === false && L(globalThis.__MOCK_TOKENS.admin, { ...PROD, ADMIN_EMAIL: "   " }) === false && L({ ...globalThis.__MOCK_TOKENS.admin, email: "" }, { ...PROD, ADMIN_EMAIL: "" }) === false);
 const CFG = (o) => SB.readStripeCardSetupConfig(PROD, o);
-t("U5 Production・一般公開のスイッチ false：一般は live_registration_disabled、先行テストのアカウントだけ live",
-  CFG({}).reason === "live_registration_disabled" && CFG({ liveTrialAccount: false }).reason === "live_registration_disabled" && CFG({ liveTrialAccount: true }).ok === true && CFG({ liveTrialAccount: true }).mode === "live");
-t("U6 先行テストのスイッチを false にすると代表も使えない（先行テストの終了・停止）", CFG({ liveTrialAccount: true, liveTrialEnabled: false }).reason === "live_registration_disabled");
+t("U5 Production・一般公開（既定のスイッチ true）：一般も live・スイッチを false に戻すと一般は live_registration_disabled、先行テストのアカウントだけ live（STEP 52-F：本番のカード登録の一般公開）",
+  CFG({}).ok === true && CFG({}).mode === "live" && CFG({ liveTrialAccount: false }).ok === true && CFG({ liveEnabled: false }).reason === "live_registration_disabled" && CFG({ liveEnabled: false, liveTrialAccount: true }).ok === true && CFG({ liveEnabled: false, liveTrialAccount: true }).mode === "live");
+t("U6 先行テストのスイッチを false にすると代表も使えない（先行テストの終了・停止）", CFG({ liveEnabled: false, liveTrialAccount: true, liveTrialEnabled: false }).reason === "live_registration_disabled");
 t("U7 一般公開（スイッチ true）では全員が live（代表の判定は不要）", CFG({ liveEnabled: true }).ok === true && CFG({ liveEnabled: true, liveTrialEnabled: false }).mode === "live");
 t("U8 先行テストでも他の3条件は同じ：STRIPE_MODE test・sk_live_・pk_test_・キー未設定はすべて停止",
   SB.readStripeCardSetupConfig({ ...PROD, STRIPE_MODE: "test" }, { liveTrialAccount: true }).ok === false &&
@@ -95,36 +95,39 @@ t("U8 先行テストでも他の3条件は同じ：STRIPE_MODE test・sk_live_�
 t("U9 Production 以外では先行テストの印があってもテストモードだけ（本番キーは使わない）",
   SB.readStripeCardSetupConfig({ ...PROD, VERCEL_ENV: "preview" }, { liveTrialAccount: true }).ok === false &&
   SB.readStripeCardSetupConfig({ VERCEL_ENV: "preview", STRIPE_MODE: "test", STRIPE_RESTRICTED_KEY: FAKE_TEST_RK, STRIPE_PUBLISHABLE_KEY: FAKE_TEST_PK }, { liveTrialAccount: true }).mode === "test");
-t("U10 一般への公開（新規登録・引き継ぎの入口）：Production はスイッチ false の間は閉じる・Production 以外は従来どおり開く",
-  SB.isStoreOnboardingOpen(PROD) === false && SB.isStoreOnboardingOpen({ VERCEL_ENV: "preview" }) === true && SB.isStoreOnboardingOpen({}) === true);
-t("U11 スイッチの既定値：一般公開 false・先行テスト true", SB.STORE_CARD_REGISTRATION_LIVE_ENABLED === false && SB.STORE_CARD_LIVE_ADMIN_TRIAL_ENABLED === true);
+t("U10 一般への公開（新規登録・引き継ぎの入口）：Production も一般公開で開く・Production 以外は従来どおり開く（STEP 52-F：本番のカード登録の一般公開）",
+  SB.isStoreOnboardingOpen(PROD) === true && SB.isStoreOnboardingOpen({ VERCEL_ENV: "preview" }) === true && SB.isStoreOnboardingOpen({}) === true);
+t("U11 スイッチの既定値：一般公開 true・先行テスト true（STEP 52-F：本番のカード登録の一般公開）", SB.STORE_CARD_REGISTRATION_LIVE_ENABLED === true && SB.STORE_CARD_LIVE_ADMIN_TRIAL_ENABLED === true);
 t("U12 請求の設定は Production では常に無効（本番キー・請求用キーがあっても）", SB.readStripeChargeConfig({ ...PROD, STRIPE_CHARGE_RESTRICTED_KEY: FAKE_LIVE_RK }).reason === "disabled_in_production");
 
 // ===================== P: production server — only the representative =====================
 let r = await call("storeBillingStatus", {}, "owner");
-t("P1 一般の店主：カード登録の状態は available:false（live_registration_disabled）", r.code === 200 && r.body.available === false && r.body.unavailableReason === "live_registration_disabled" && r.body.card === null, r.body);
+t("P1 一般の店主：カード登録の状態は available:true・mode live・カード未登録（STEP 52-F：本番のカード登録の一般公開）", r.code === 200 && r.body.available === true && r.body.mode === "live" && r.body.card === null, r.body);
 let callsBefore = ST.calls.length;
 r = await start("owner");
-t("P2 一般の店主：カード登録の開始はサーバーで 503 billing_unavailable・Stripe に何も送らない・保存なし", r.code === 503 && r.body.reason === "billing_unavailable" && ST.calls.length === callsBefore && !billing("u1"), r.body);
+t("P2 一般の店主：カード登録の開始は 200・mode live・本番の公開キー・保存先は accountBilling/{本人}.live（STEP 52-F：本番のカード登録の一般公開）", r.code === 200 && r.body.mode === "live" && r.body.publishableKey === FAKE_LIVE_PK && !!billing("u1") && !!billing("u1").live && !billing("u1").test, r.body);
+callsBefore = ST.calls.length;
 r = await confirm("seti_forged123", "owner");
-t("P3 一般の店主：確定（偽の SetupIntent ID）も 503・Stripe に照会しない・保存なし", r.code === 503 && ST.calls.length === callsBefore && !billing("u1"), r.body);
+t("P3 一般の店主：確定（偽の SetupIntent ID）は 409 setup_intent_mismatch・Stripe に照会しない・カードは保存されない（STEP 52-F：本番のカード登録の一般公開）", r.code === 409 && r.body.reason === "setup_intent_mismatch" && ST.calls.length === callsBefore && !billing("u1").live.paymentMethodId, r.body);
 for (const [label, tk] of [["似たメール（後ろに別のドメイン）", "look1"], ["似たメール（前に文字）", "look2"], ["メールなし", "noEmail"]]) {
   r = await start(tk);
-  t("P4 " + label + "：一般と同じく 503・Stripe に送らない", r.code === 503 && ST.calls.length === callsBefore, r.body);
+  t("P4 " + label + "：一般と同じく 200・mode live（代表の判定は使わない）（STEP 52-F：本番のカード登録の一般公開）", r.code === 200 && r.body.mode === "live", r.body);
 }
 r = await call("storeBillingStatus", {}, null);
 const rBad = await call("storeBillingStatus", {}, "forged-token");
 t("P5 未ログインは 401 login_required・不正なトークンは 401", r.code === 401 && r.body.reason === "login_required" && rBad.code === 401, { r: r.body, bad: rBad.body });
+callsBefore = ST.calls.length;
 r = await start("adminUnverified");
 const rG = await start("adminGoogle");
 t("P6 代表のメールでも、メール未確認は 403 email_not_verified・Google 等のログインは 403（パスワードのログインだけ）", r.code === 403 && r.body.reason === "email_not_verified" && rG.code === 403 && ST.calls.length === callsBefore, { r: r.body, g: rG.body });
 r = await call("storeBillingStatus", {}, "owner", { "x-machinau-live-trial": "1" });
 const rBody = await call("storeBillingStatus", { liveTrialAccount: true, liveEnabled: true, cardLiveTrial: true }, "owner");
-t("P7 一般の店主がリクエストの見出し・本文で先行テストを名乗っても無効（判定はサーバーで検証したログインだけ）", r.body.available === false && rBody.body.available === false, { h: r.body, b: rBody.body });
+t("P7 一般の店主：見出し・本文の名乗りに関係なく、一般公開の live（判定はサーバーの設定だけ）（STEP 52-F：本番のカード登録の一般公開）", r.body.available === true && r.body.mode === "live" && rBody.body.available === true && rBody.body.mode === "live", { h: r.body, b: rBody.body });
 
 r = await call("storeBillingStatus", {}, "admin");
 t("P8 代表：カード登録の状態は available:true・mode live・カード未登録", r.code === 200 && r.body.available === true && r.body.mode === "live" && r.body.card === null, r.body);
 t("P9 応答に代表のメールアドレス・判定の印を出さない", !JSON.stringify(r.body).includes(ADMIN) && !JSON.stringify(r.body).includes("cardLiveTrial") && !JSON.stringify(r.body).includes("adm1"), r.body);
+callsBefore = ST.calls.length;
 const c1 = await start("admin", CARDS.visa);
 t("P10 代表：カード登録の開始は 200・mode live・本番の公開キー・Stripe の顧客の作成は live の印", c1.code === 200 && c1.body.mode === "live" && c1.body.publishableKey === FAKE_LIVE_PK && /^seti_/.test(c1.body.setupIntentId) && ST.calls.slice(callsBefore).join(",") === "POST /v1/customers,POST /v1/setup_intents" && ST.auth.slice(callsBefore).every((a) => a === "Bearer " + FAKE_LIVE_RK), { body: c1.body, calls: ST.calls.slice(callsBefore) });
 t("P11 保存先は accountBilling/{代表の uid}.live だけ（test の区画は作らない）", billing("adm1") && billing("adm1").live && billing("adm1").live.pendingSetupIntentId === c1.body.setupIntentId && !billing("adm1").test, billing("adm1"));
@@ -142,31 +145,33 @@ const live2 = billing("adm1").live;
 t("P15 二重処理：カード変更の確定を同時に2回送っても1回だけ反映（cardVersion 2・Mastercard 4444・旧カードは取り外し待ち）",
   [fa.code, fb.code].filter((c) => c === 200).length >= 1 && live2.cardVersion === 2 && live2.card.last4 === "4444" && (live2.detachPendingPaymentMethods || []).some((e) => e.paymentMethodId === "pm_" + c1.body.setupIntentId) && !(live2.detachPendingPaymentMethods || []).some((e) => e.paymentMethodId === live2.paymentMethodId), { fa: fa.body, fb: fb.body, live2 });
 const other = await confirm(s2.body.setupIntentId, "owner");
-t("P16 代表の SetupIntent を一般の店主が確定しようとしても 503（使えない）・代表のカードは変わらない", other.code === 503 && billing("adm1").live.cardVersion === 2, other.body);
+t("P16 代表の SetupIntent を一般の店主が確定しようとしても 409 setup_intent_mismatch・代表のカードは変わらない（STEP 52-F：本番のカード登録の一般公開）", other.code === 409 && other.body.reason === "setup_intent_mismatch" && billing("adm1").live.cardVersion === 2, other.body);
 t("P17 Stripe へ送ったのはカード登録の操作だけ（支払い PaymentIntent などは0件）・キーは本番の制限付きの偽キーだけ",
   ST.calls.every((c) => /^(POST \/v1\/customers|POST \/v1\/setup_intents|GET \/v1\/setup_intents\/seti_\w+|GET \/v1\/payment_methods\/pm_\w+|POST \/v1\/payment_methods\/pm_\w+\/detach)$/.test(c)) && ST.calls.every((c) => SB.isCardSetupStripeOperation(c.split(" ")[0], c.split(" ")[1].replace(/^\/v1/, ""))) && !ST.calls.some((c) => c.includes("payment_intents")), ST.calls);
 const st2 = await call("storeBillingStatus", {}, "admin");
 t("P18 代表の状態：live のカード（Mastercard 4444）を表示", st2.body.available === true && st2.body.mode === "live" && st2.body.card && st2.body.card.last4 === "4444", st2.body);
 
-// ===================== R: registration / takeover stay closed in production (everyone) =====================
+// ===================== R: registration / takeover need a valid live card in production (STEP 52-F) =====================
+// 模擬の Stripe のカードの ID(pm_seti_…)は本物の形(pm_ の後は英数字だけ)と違うため、代表のカードは card_invalid になる(模擬の都合)。
+// ここでは「入口は開いている(card_billing_unavailable ではない)・有効なカードが無ければ作られない」ことを確かめる。
 S.docs.set("submissions/L1", { shopName: "八重瀬の食堂", title: "x", content: "y", address: "沖縄県", latitude: 26.15, longitude: 127.72, status: "approved", isPermanentAd: true, authorType: "shopAd" });
 const REG = { storeName: "新しいカフェ", categoryCode: "gourmet", countryCode: "JP", address: "沖縄県島尻郡八重瀬町1-1", sourceLanguage: "ja" };
 const storesBefore = [...S.docs.keys()].filter((k) => k.startsWith("storeAccounts/")).length;
 resetRate(); r = await call("storeSelfRegister", REG, "owner");
-t("R1 一般の店主：店舗の新規登録はサーバーで 409 card_billing_unavailable・店舗は作られない", r.code === 409 && r.body.reason === "card_billing_unavailable", r.body);
+t("R1 一般の店主（カード未登録）：店舗の新規登録は card_required・店舗は作られない（STEP 52-F：本番のカード登録の一般公開）", r.code >= 400 && r.body.reason === "card_required", r.body);
 resetRate(); r = await call("storeSelfRegister", REG, "admin");
-t("R2 代表（本番のカード登録済み）でも、先行テスト中の新規登録は 409 card_billing_unavailable（一般公開まで使わない）", r.code === 409 && r.body.reason === "card_billing_unavailable", r.body);
+t("R2 代表：入口は開いている（card_billing_unavailable ではない）・カードの確認を通らなければ店舗は作られない（STEP 52-F：本番のカード登録の一般公開）", r.code >= 400 && r.body.reason !== "card_billing_unavailable" && /^card_/.test(r.body.reason), r.body);
 const CLAIM = { submissionId: "L1", targetType: "new_store", role: "owner", publicReferenceUrl: "", note: "" };
 resetRate(); r = await call("storeListingClaimCreate", CLAIM, "owner");
 const rA = await call("storeListingClaimCreate", CLAIM, "admin");
-t("R3 引き継ぎ：一般の店主・代表とも 409 card_billing_unavailable・紐付け・申請は作られない", r.code === 409 && r.body.reason === "card_billing_unavailable" && rA.code === 409 && rA.body.reason === "card_billing_unavailable" && !S.docs.get("storeListingLinks/L1") && ![...S.docs.keys()].some((k) => k.startsWith("storeListingClaims/")), { o: r.body, a: rA.body });
+t("R3 引き継ぎ：入口は開いている・カードの確認を通らなければ紐付け・申請は作られない（STEP 52-F：本番のカード登録の一般公開）", r.body.reason === "card_required" && rA.code >= 400 && /^card_/.test(rA.body.reason) && rA.body.reason !== "card_billing_unavailable" && !S.docs.get("storeListingLinks/L1") && ![...S.docs.keys()].some((k) => k.startsWith("storeListingClaims/")), { o: r.body, a: rA.body });
 t("R4 店舗・メンバーの文書は1件も増えない・Google の所在地確認も呼ばない", [...S.docs.keys()].filter((k) => k.startsWith("storeAccounts/")).length === storesBefore && ![...S.docs.keys()].some((k) => k.startsWith("storeMembers/")) && otherNetwork === 0, { otherNetwork });
 r = await call("storeUserStatus", {}, "admin");
 t("R5 店舗アカウントの状態の応答にも、代表の判定の印・メールアドレスを出さない", r.code === 200 && !JSON.stringify(r.body).includes("cardLiveTrial") && !JSON.stringify(r.body).includes(ADMIN), r.body);
 
 // ===================== V: traveler-facing entry =====================
 let pub = await getPublic();
-t("V1 Production（先行テスト中）：publicStoreProfiles は listingClaimOpen:false（TOP の「このお店を管理する」を出さない）", pub.code === 200 && pub.body.success === true && pub.body.listingClaimOpen === false && Array.isArray(pub.body.claimedListingIds), pub.body);
+t("V1 Production（一般公開）：publicStoreProfiles は listingClaimOpen:true（TOP の「このお店を管理する」を出す）（STEP 52-F：本番のカード登録の一般公開）", pub.code === 200 && pub.body.success === true && pub.body.listingClaimOpen === true && Array.isArray(pub.body.claimedListingIds), pub.body);
 setEnv({ VERCEL_ENV: "preview", STRIPE_MODE: "test", STRIPE_RESTRICTED_KEY: FAKE_TEST_RK, STRIPE_PUBLISHABLE_KEY: FAKE_TEST_PK, ADMIN_EMAIL: ADMIN });
 pub = await getPublic();
 t("V2 Production 以外：listingClaimOpen:true（従来どおり入口を出す）", pub.code === 200 && pub.body.listingClaimOpen === true, pub.body);
@@ -180,13 +185,17 @@ t("W1 Preview：代表・一般とも従来どおりテストモード（先行�
 setEnv(PROD);
 
 // ===================== F: flags and STEP 44 not mixed in =====================
-t("F1 課金・請求・写真の複製のフラグはすべて false", IM.IMADAKE_CV_BILLING_STARTED === false && MC.IMADAKE_MONTHLY_CLOSE_WRITES_ENABLED === false && CH.IMADAKE_MONTHLY_CHARGE_ENABLED === false && LC.LISTING_PHOTO_COPY_ENABLED === false && LC.LISTING_PHOTO_COPY_PREVIEW_TRIAL === false && SB.STORE_CARD_REGISTRATION_LIVE_ENABLED === false);
-const libFiles = readdirSync(join(REPO_DIR, "api", "_lib"));
-const scan = ["api/moderate-submission.js", "app.js", "index.html", "store-account.html", "store-profile.html", "translations.js", "admin-billing.html"].map((f) => existsSync(join(REPO_DIR, f)) ? readFileSync(join(REPO_DIR, f), "utf8") : "").join("\n");
-t("F2 STEP 44 のコードが無い（store-custom-* のファイル・月額プランの mode・コレクション名）",
-  !libFiles.some((f) => f.startsWith("store-custom-")) && !/storeCustomPlan|storeCustomProfile|STORE_CUSTOM_PLAN/.test(scan), libFiles.filter((f) => f.startsWith("store-custom-")));
+t("F1 課金・請求・写真の複製のフラグは false・本番のカード登録の一般公開だけ true（STEP 52-F：本番のカード登録の一般公開）", IM.IMADAKE_CV_BILLING_STARTED === false && MC.IMADAKE_MONTHLY_CLOSE_WRITES_ENABLED === false && CH.IMADAKE_MONTHLY_CHARGE_ENABLED === false && LC.LISTING_PHOTO_COPY_ENABLED === false && LC.LISTING_PHOTO_COPY_PREVIEW_TRIAL === false && SB.STORE_CARD_REGISTRATION_LIVE_ENABLED === true);
+// STEP 46｜本番系列(main)の F2・F3 は「STEP 44 のコードが無い」ことを確かめる(代表決定 2026-10-25：STEP 44 を本番へ混ぜない)。
+// Preview 系列は STEP 44 を持つため、ここでは「STEP 44 が本番で動かない」ことを確かめる。
+const CPB = await import(REPO_URL + "/api/_lib/store-custom-plan-billing.js");
+const CPC = await import(REPO_URL + "/api/_lib/store-custom-plan-cron.js");
+const FTG = await import(REPO_URL + "/api/_lib/firebase-target.js");
+t("F2 STEP 44 の本番用のスイッチ：本番の申込は true（申込受付の開始）・締めの書き込み・請求・定期実行の請求は false・本番の環境では試験用の申込は無効",
+  CPB.STORE_CUSTOM_PLAN_MONTHLY_SIGNUP_ENABLED === true && CPB.STORE_CUSTOM_PLAN_CLOSE_WRITES_ENABLED === false && CPB.STORE_CUSTOM_PLAN_CHARGE_ENABLED === false && CPC.STORE_CUSTOM_PLAN_CRON_CHARGES_ENABLED === false && FTG.isPreviewStoreCustomPlanTrialEnabled(PROD) === false);
 const wf = readFileSync(join(REPO_DIR, ".github", "workflows", "main.yml"), "utf8");
-t("F3 GitHub Actions は本番と同じ（Preview 用のジョブ preview-plan-cron が無い）", !wf.includes("preview-plan-cron") && !wf.includes("storeCustomPlanCron"), "");
+t("F3 （Preview 系列）Preview 用のジョブは preview/stripe-card-setup の手動実行だけ・本番の expire の条件は本番と同じ",
+  wf.includes("if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/preview/stripe-card-setup'") && wf.includes("if: github.event_name == 'schedule' || github.ref == 'refs/heads/main'"), "");
 t("F4 Function の数は11本のまま", readdirSync(join(REPO_DIR, "api")).filter((f) => f.endsWith(".js")).length === 11, readdirSync(join(REPO_DIR, "api")));
 t("F5 ログに鍵・代表のメールアドレスを出していない", !logs.some((l) => l.includes(FAKE_LIVE_RK) || l.includes(FAKE_LIVE_PK) || l.includes(ADMIN)), logs.slice(0, 5));
 

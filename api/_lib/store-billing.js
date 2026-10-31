@@ -67,10 +67,20 @@ import {
   computeImadakeCvDayKey
 } from "./imadake-cv.js";
 
+import {
+  ACCOUNT_DELETIONS_COLLECTION,
+  isCardChangeLockedByDeletion,
+  readAccountDeletion
+} from "./account-deletion-state.js";
+
 
 // STEP 42-C｜アカウント単位の支払い情報(1アカウント1枚のカード)。
 export const ACCOUNT_BILLING_COLLECTION =
   "accountBilling";
+
+// STEP 47｜店舗アカウントの退会(セルフ削除)の記録 accountDeletions/{uid} は account-deletion-state.js で扱う。
+// 退会の最終段階(finalizing 以降)は、このアカウントで新しいカードの登録・確定を受け付けない。
+export { ACCOUNT_DELETIONS_COLLECTION };
 
 const STORE_MEMBERS_COLLECTION =
   "storeMembers";
@@ -141,8 +151,9 @@ function sendError(response, status, reason, extra) {
 
 // STEP 43-B｜本番のカード登録のスイッチ(4条件の①)。代表の承認まで false。
 // true にしても、今だけ投稿の請求(readStripeChargeConfig)は有効にならない。
+// STEP 52-F｜店舗カード月額100円の申込受付の開始にあわせて true(代表の承認後に Production へ出す)。
 export const STORE_CARD_REGISTRATION_LIVE_ENABLED =
-  false;
+  true;
 
 // STEP 43-N C案(代表決定 2026-10-25)｜本番のカード登録の先行テスト。一般公開(上のスイッチを true)の前に、
 // 代表のアカウントだけが本番モードのカード登録・変更(状態・開始・確定の3つ)を使える。②〜④(STRIPE_MODE live・
@@ -179,7 +190,8 @@ export function isStoreOnboardingOpen(env) {
 }
 
 // カード登録の3つの操作に渡す設定の引数。先行テストの可否はサーバーで検証したログイン(actor)だけから決める。
-function cardSetupOptionsFor(deps, actor) {
+// STEP 47｜アカウントの削除(カードの取り外し)でも同じ設定を使う。
+export function cardSetupOptionsFor(deps, actor) {
   return Object.assign({}, deps.cardSetupConfigOptions || {}, {
     liveTrialAccount: Boolean(actor) && actor.cardLiveTrial === true
   });
@@ -313,6 +325,46 @@ export function readStripeChargeConfig(env) {
   }
 
   return readStripeTestOnlyConfig(values, "charge");
+}
+
+// STEP 52-A｜店舗カード月額100円の本番の請求用の設定(store-custom-plan-charge.js だけが使う)。
+// Production(VERCEL_ENV=production)で、STRIPE_MODE "live"・請求専用キー(STRIPE_CHARGE_RESTRICTED_KEY)が
+// 制限付きの本番キー rk_live_(権限の広い sk_live_ は拒否)・公開可能キー pk_live_ がそろった時だけ ok。
+// Production 以外では使わない(Preview はテストモードの readStripeChargeConfig)。呼び出し元のスイッチ
+// (STORE_CUSTOM_PLAN_CHARGE_ENABLED、代表の課金開始の承認まで false)が true の時だけ呼ばれる。
+// 今だけ投稿の請求・運営の確認画面(readStripeChargeConfig)は、この関数があっても本番では無効のまま。
+export function readStripeLiveChargeConfig(env) {
+  const source = env || {};
+
+  if (source.VERCEL_ENV !== "production") {
+    return { ok: false, reason: "live_charge_production_only" };
+  }
+
+  const values = readStripeEnvValues(source, CHARGE_KEY_ENV_NAME);
+
+  if (values.serverKey === "") {
+    return { ok: false, reason: "charge_key_not_configured" };
+  }
+
+  if (values.mode !== "live" || values.publishableKey === "") {
+    return { ok: false, reason: "not_configured" };
+  }
+
+  if (!values.serverKey.startsWith("rk_live_")) {
+    return { ok: false, reason: "server_key_not_restricted_live" };
+  }
+
+  if (!values.publishableKey.startsWith("pk_live_")) {
+    return { ok: false, reason: "key_mode_mismatch" };
+  }
+
+  return {
+    ok: true,
+    purpose: "charge",
+    mode: "live",
+    serverKey: values.serverKey,
+    publishableKey: values.publishableKey
+  };
 }
 
 // application/x-www-form-urlencoded(Stripeの形式)。値はstringかnumberだけ。
@@ -663,6 +715,14 @@ function isDetachAllowedNow(section, protection) {
 const MONTHLY_INVOICES_COLLECTION =
   "imadakeMonthlyInvoices";
 
+// STEP 44-C③｜月額100円カスタマイズの請求台帳(今だけ投稿とは別)。請求書IDは今だけ投稿と同じ形
+// ({storeId}_{YYYY-MM})のため、請求ロック(billingLocks)のキーには種類を表す前置きを付けて区別する。
+export const STORE_CUSTOM_PLAN_INVOICES_COLLECTION =
+  "storeCustomPlanInvoices";
+
+export const STORE_CUSTOM_PLAN_LOCK_PREFIX =
+  "storeCustomPlan:";
+
 // 請求書の状態のうち、カードを取り外してよいと分かっているもの(支払いを作っていない、または支払い済み)。
 // これ以外(請求中・処理中・本人認証待ち・人の確認待ち・支払い失敗・知らない状態)は、使ったカードを守る。
 const INVOICE_STATUSES_RELEASING_CARD =
@@ -677,17 +737,23 @@ async function readInvoiceProtectedPaymentMethods(database, customerId) {
   }
 
   try {
-    const snapshot = await database
-      .collection(MONTHLY_INVOICES_COLLECTION)
-      .where("chargeCustomerId", "==", customerId)
-      .get();
+    // STEP 44-C③｜今だけ投稿の請求書に加えて、月額100円カスタマイズの請求台帳も同じ規則で確かめる
+    // (どちらかを読めなければ取り外しを止める)。月額プランの請求書は、ロックのキーと同じ前置き付きの ID で数える。
+    const snapshots = await Promise.all([
+      database.collection(MONTHLY_INVOICES_COLLECTION).where("chargeCustomerId", "==", customerId).get(),
+      database.collection(STORE_CUSTOM_PLAN_INVOICES_COLLECTION).where("chargeCustomerId", "==", customerId).get()
+    ]);
 
     const protectedIds = new Set();
     const unresolvedInvoiceIds = new Set();
     let unknownCard = false;
 
-    snapshot.docs.forEach(function(doc) {
-      const invoice = doc.data() || {};
+    const entries = snapshots[0].docs
+      .map(function(doc) { return { id: doc.id, doc: doc }; })
+      .concat(snapshots[1].docs.map(function(doc) { return { id: STORE_CUSTOM_PLAN_LOCK_PREFIX + doc.id, doc: doc }; }));
+
+    entries.forEach(function(entry) {
+      const invoice = entry.doc.data() || {};
       const usedId = typeof invoice.chargePaymentMethodId === "string" ? invoice.chargePaymentMethodId : "";
       const releasing = INVOICE_STATUSES_RELEASING_CARD.includes(invoice.status) && invoice.chargeOutcomeUnknown !== true;
 
@@ -695,7 +761,7 @@ async function readInvoiceProtectedPaymentMethods(database, customerId) {
         return;
       }
 
-      unresolvedInvoiceIds.add(doc.id);
+      unresolvedInvoiceIds.add(entry.id);
 
       if (STRIPE_PAYMENT_METHOD_ID_PATTERN.test(usedId)) {
         protectedIds.add(usedId);
@@ -1017,6 +1083,12 @@ export async function handleStoreBillingSetupIntentCreate(request, response, dep
       return sendError(response, 503, "billing_unavailable", { unavailableReason: config.reason });
     }
 
+    // STEP 47｜退会の最終段階(finalizing 以降)は、新しいカードの登録を始めない(Stripe に何も作らない)。
+    // 退会を受け付けて清算を待つ間(awaiting_settlement)は、最後のお支払いのためにカードの変更を受け付ける。
+    if (isCardChangeLockedByDeletion(await readAccountDeletion(database, actor.uid))) {
+      return sendError(response, 409, "account_deleting");
+    }
+
     // 取り外し待ちが上限に達している間は、Stripeに何も作らずに止める(旧カードの記録を捨てない)。
     // 上限に達していたら、先に取り外しを最大2件試してから数え直す(回復の機会)。
     const uid = actor.uid;
@@ -1234,6 +1306,10 @@ export async function handleStoreBillingSetupConfirm(request, response, deps) {
     const outcome = await database.runTransaction(async function(transaction) {
       const current = await transaction.get(billingRef);
       const currentSection = readModeSection(current.exists ? current.data() : null, config.mode);
+      // STEP 47｜退会の記録と同じトランザクションで確かめる(最終段階でカードを外した後に、新しいカードを保存しない)。
+      if (isCardChangeLockedByDeletion(await readAccountDeletion(database, uid, transaction))) {
+        return "account_deleting";
+      }
 
       if (
         currentSection.customerId !== section.customerId ||
@@ -1305,6 +1381,160 @@ export async function handleStoreBillingSetupConfirm(request, response, deps) {
     console.error("店舗カード登録：登録確認エラー：", error && error.message);
     return sendError(response, 500, "server_error");
   }
+}
+
+// ---------------------------------------------------------------------------
+// STEP 47｜アカウントの削除：登録カードを外す(store-account-deletion.js から呼ばれる)
+// ---------------------------------------------------------------------------
+// ①(トランザクション)現在のカードの要約と ID を消し、カードを「取り外し待ち」へ移す(請求中のロックがあれば何もしない)。
+//    カード登録の設定(config)が使えるモードの区画だけを Stripe で取り外す。使えないモードの区画は、
+//    テストモード(test)なら手元の記録だけを消す(実際のカードではない)。本番(live)のカードがあるのに
+//    本番の設定が使えない時は、何も変えずに止める(実際のカードを残したまま記録だけ消さない)。
+// ②既存の取り外しの処理(照会→取り外し・冪等キー・再試行)で、取り外し待ちを処理する。
+// ③取り外し待ちに未完了(pending・detaching・failed)が残れば ok:false(削除は止まり、後で再実行できる)。
+//    blocked(Stripe に無い・別の顧客のカード)は、こちらのカードではないため残っていても完了とみなす。
+// 戻り値 { ok, reason, customerIds }。customerIds は請求・取引の照合のために削除の記録へ残す Stripe の顧客ID。
+const DELETION_UNFINISHED_DETACH_STATES =
+  ["pending", "detaching", "failed"];
+
+function isDeletionDetachExhausted(entry) {
+  return Boolean(entry) && (
+    entry.state === "failed" ||
+    (entry.state === "pending" && Number.isInteger(entry.attempts) && entry.attempts >= DETACH_MAX_ATTEMPTS)
+  );
+}
+
+export async function removeAccountCardsForDeletion(database, deps, uid, config) {
+  const billingRef = database.collection(ACCOUNT_BILLING_COLLECTION).doc(uid);
+  const usableMode = config && config.ok === true ? config.mode : "";
+
+  const prepared = await database.runTransaction(async function(transaction) {
+    const snapshot = await transaction.get(billingRef);
+
+    if (!snapshot.exists) {
+      return { ok: true, customerIds: {} };
+    }
+
+    const data = snapshot.data() || {};
+    const updates = {};
+    const customerIds = {};
+
+    for (const mode of ["test", "live"]) {
+      const section = readModeSection(data, mode);
+
+      if (Object.keys(section).length === 0) {
+        continue;
+      }
+
+      if (readBillingLocks(section).length > 0) {
+        return { ok: false, reason: "billing_locked" };
+      }
+
+      if (typeof section.customerId === "string" && section.customerId.startsWith("cus_")) {
+        customerIds[mode] = section.customerId;
+      }
+
+      const paymentMethodId = typeof section.paymentMethodId === "string" ? section.paymentMethodId : "";
+      const pending = readDetachPending(section);
+      const hasCard =
+        STRIPE_PAYMENT_METHOD_ID_PATTERN.test(paymentMethodId) ||
+        pending.some(function(entry) { return entry && DELETION_UNFINISHED_DETACH_STATES.includes(entry.state); });
+
+      if (mode !== usableMode && mode === "live" && hasCard) {
+        return { ok: false, reason: "live_card_removal_unavailable" };
+      }
+
+      const nextPending = mode === usableMode ? pending.slice() : [];
+
+      if (
+        mode === usableMode &&
+        STRIPE_PAYMENT_METHOD_ID_PATTERN.test(paymentMethodId) &&
+        !isDetachPending(pending, paymentMethodId)
+      ) {
+        nextPending.push({
+          paymentMethodId: paymentMethodId,
+          state: "pending",
+          queuedAtMs: currentTimeMs(deps),
+          queuedCardVersion: (Number.isInteger(section.cardVersion) ? section.cardVersion : 0) + 1,
+          attempts: 0,
+          queuedFor: "account_deletion"
+        });
+      }
+
+      updates[mode] = {
+        ...section,
+        paymentMethodId: "",
+        card: null,
+        pendingSetupIntentId: "",
+        setupStatus: "removed_for_account_deletion",
+        detachPendingPaymentMethods: nextPending,
+        cardRemovedForDeletionAt: FieldValue.serverTimestamp()
+      };
+    }
+
+    if (Object.keys(updates).length > 0) {
+      transaction.set(billingRef, updates, { merge: true });
+    }
+
+    return { ok: true, customerIds: customerIds };
+  });
+
+  if (!prepared.ok) {
+    return prepared;
+  }
+
+  if (usableMode === "") {
+    return prepared;
+  }
+
+  const before = await billingRef.get();
+  const queued = readDetachPending(readModeSection(before.exists ? before.data() : null, usableMode));
+
+  if (queued.length > 0) {
+    await processDetachPendingSafely(database, config, deps, uid, queued.length + 1);
+  }
+
+  const after = await billingRef.get();
+  const remaining = readDetachPending(readModeSection(after.exists ? after.data() : null, usableMode)).filter(function(entry) {
+    return entry && DELETION_UNFINISHED_DETACH_STATES.includes(entry.state);
+  });
+
+  if (remaining.length > 0) {
+    // 再試行の上限に達した(failed)カードがあれば、自動では先へ進めず運営の確認に回す(STEP 47-B ⑩)。
+    // 権限不足(401・403)は通常の取り外しでは間隔をあけて再試行し続けるが、退会では回数が上限に達したら同じく止める
+    // (無制限に再試行しない)。
+    const exhausted = remaining.some(isDeletionDetachExhausted);
+    return { ok: false, reason: exhausted ? "card_detach_failed" : "card_detach_pending", customerIds: prepared.customerIds };
+  }
+
+  return prepared;
+}
+
+// STEP 47-B ⑩｜運営の復旧の操作：取り外しの再試行が上限に達した(failed、または権限不足で回数が上限の)カードだけを、
+// 再試行できる状態(pending・回数0)に戻す。
+// 取り外したことにする・記録を消す・未払いの判定を変えることはしない(成功の偽装・強制解除の禁止)。戻した件数を返す。
+export async function resetFailedCardDetachForDeletion(database, uid, mode) {
+  const billingRef = database.collection(ACCOUNT_BILLING_COLLECTION).doc(uid);
+
+  return database.runTransaction(async function(transaction) {
+    const snapshot = await transaction.get(billingRef);
+    const section = readModeSection(snapshot.exists ? snapshot.data() : null, mode);
+    const list = readDetachPending(section);
+    let resetCount = 0;
+    const nextList = list.map(function(entry) {
+      if (isDeletionDetachExhausted(entry)) {
+        resetCount++;
+        return { ...entry, state: "pending", attempts: 0, nextRetryAtMs: 0, leaseId: "", leaseUntilMs: 0, resetByOperatorAtMs: Date.now() };
+      }
+      return entry;
+    });
+
+    if (resetCount > 0) {
+      transaction.set(billingRef, { [mode]: { ...section, detachPendingPaymentMethods: nextList } }, { merge: true });
+    }
+
+    return resetCount;
+  });
 }
 
 // ---------------------------------------------------------------------------

@@ -161,6 +161,11 @@
 
     .primary-button:disabled, .secondary-button:disabled { opacity: 0.55; cursor: default; }
 
+    /* STEP 47｜アカウントの削除 */
+    .delete-button { display: block; width: 100%; min-height: 48px; margin-top: 10px; padding: 12px; border-radius: 999px; border: 1px solid #b42318; background: #b42318; color: #fff; font-size: 15px; font-weight: 800; font-family: inherit; cursor: pointer; }
+    .delete-button:disabled { opacity: 0.55; cursor: default; }
+    .delete-list { margin: 8px 0; padding-left: 20px; font-size: 13.5px; line-height: 1.6; }
+
     .link-list { margin-top: 14px; display: grid; gap: 8px; font-size: 13.5px; }
 
     .link-button {
@@ -315,14 +320,18 @@
     }
 
     [hidden] { display: none !important; }
-    /* LEGAL-NOTICE-CSS:START｜STEP 47-H 規約改定の事前告知。施行日に告知と一緒に外す。 */
-    .legal-change-notice { border-color: #f1c27a; background: #fff8ec; }
-    .legal-change-notice-title { margin: 0 0 6px; font-weight: 900; font-size: 14px; color: var(--navy); }
-    .legal-change-notice ul { margin: 6px 0; padding-left: 1.3em; }
-    .legal-change-notice p + p { margin-top: 6px; }
-    .legal-change-notice-dates { font-weight: 700; }
-    /* LEGAL-NOTICE-CSS:END */
-
+  
+    /* STEP 44-C④｜月額100円カスタマイズのご請求 */
+    .plan-pay-item { border: 1px solid #e2eaf1; border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; }
+    .plan-pay-item.unpaid { border-color: #f0c2c7; background: #fff7f8; }
+    .plan-pay-line { margin: 0 0 4px; font-weight: 800; }
+    .plan-pay-status { margin: 0 0 4px; }
+    .plan-pay-unpaid { margin: 0 0 8px; font-weight: 800; color: #a3212d; }
+    .plan-pay-action { margin-top: 8px; }
+    /* LEGAL-CORRECTION-CSS｜STEP 52-F 10月30日の告知の訂正 */
+    .legal-correction { border: 1px solid #f1c27a; background: #fff8ec; border-radius: 12px; padding: 12px 14px; margin: 12px 0 18px; }
+    .legal-correction-title { margin: 0 0 6px; font-weight: 700; }
+    .legal-correction p { margin: 0 0 6px; overflow-wrap: anywhere; }
   </style>
 </head>
 <body>
@@ -343,21 +352,13 @@
       <p class="note" data-i18n="store_account_phase_note"></p>
     </div>
 
-    <!-- LEGAL-NOTICE:START｜STEP 47-H 規約改定の事前告知。施行日に告知と一緒に外す。日付は translations.js の store_account_legal_notice_* と一致させる。 -->
-    <div class="panel legal-change-notice" data-legal-notice="step47" data-notice-start="2026-10-30" data-effective="2026-11-07">
-      <p class="legal-change-notice-title" data-i18n="store_account_legal_notice_title"></p>
-      <p class="note" data-i18n="store_account_legal_notice_lead"></p>
-      <ul class="note">
-        <li data-i18n="store_account_legal_notice_item1"></li>
-        <li data-i18n="store_account_legal_notice_item2"></li>
-        <li data-i18n="store_account_legal_notice_item3"></li>
-        <li data-i18n="store_account_legal_notice_item4"></li>
-        <li data-i18n="store_account_legal_notice_item5"></li>
-      </ul>
-      <p class="note legal-change-notice-dates" data-i18n="store_account_legal_notice_dates"></p>
-      <p class="note"><span data-i18n="store_account_legal_notice_link_prefix"></span><a href="terms.html" target="_blank" rel="noopener" data-i18n="store_account_agree_terms_link">利用規約</a><span data-i18n="store_account_legal_notice_link_and"></span><a href="privacy.html" target="_blank" rel="noopener" data-i18n="store_account_agree_privacy_link">プライバシーポリシー</a><span data-i18n="store_account_legal_notice_link_suffix"></span></p>
+    <!-- LEGAL-CORRECTION:START｜STEP 52-F 2026年10月30日の告知（施行予定日 11月7日）の訂正。新しい日付は書かない。 -->
+    <div class="panel legal-correction" data-legal-correction="step47">
+      <p class="legal-correction-title" data-i18n="store_account_legal_correction_title"></p>
+      <p class="note" data-i18n="store_account_legal_correction_body"></p>
+      <p class="note"><a href="terms.html" target="_blank" rel="noopener" data-i18n="store_account_agree_terms_link">利用規約</a> ・ <a href="privacy.html" target="_blank" rel="noopener" data-i18n="store_account_agree_privacy_link">プライバシーポリシー</a></p>
     </div>
-    <!-- LEGAL-NOTICE:END -->
+    <!-- LEGAL-CORRECTION:END -->
 
     <div id="globalMessage" class="message" role="status" aria-live="polite"></div>
 
@@ -548,6 +549,17 @@
         <div id="invoiceMessage" class="message" role="status" aria-live="polite"></div>
       </div>
 
+      <!-- STEP 44-C④｜月額100円カスタマイズのご請求(このアカウントが請求先の分だけ。所有者が変わった店舗の分も表示)。
+           本人認証は既存の支払い(PaymentIntent)を画面で完了し、結果はサーバー(storeCustomPlanPaymentConfirm)が
+           Stripe に照会して確定する(画面の表示だけで支払い済みにしない)。表示はすべて文字(textContent)。 -->
+      <div class="store-section" id="planPaymentSection" hidden>
+        <h3 data-i18n="store_plan_pay_heading">店舗カード（月額100円）のご請求</h3>
+        <p class="hint" data-i18n="store_plan_pay_intro"></p>
+        <p class="plan-pay-unpaid" id="planPayUnpaidTotal" hidden></p>
+        <div id="planPayList"></div>
+        <div id="planPayMessage" class="message" role="status" aria-live="polite"></div>
+      </div>
+
       <!-- 運営無料掲載 → 店舗オーナー化 MVP-1｜マチナウ運営が掲載したお店を、本当のお店が
            自分の店舗として引き継ぐ申請。?claim={掲載ID} で開く(TOPからの入口はまだ無い)。
            本人確認は、マチナウ運営がお店の公式連絡先へ連絡して行う。申請者の電話番号・
@@ -613,6 +625,35 @@
         <p class="note" style="margin-bottom: 10px;" data-i18n="store_account_verify_spam_hint"></p>
         <button type="button" class="primary-button" id="refreshButton" data-i18n="store_account_refresh_button">確認が済んだら：状態を更新する</button>
         <button type="button" class="secondary-button" id="resendButton" data-i18n="store_account_resend_button">確認メールを再送する</button>
+      </div>
+
+      <!-- STEP 47 / 47-B｜アカウントの削除(ログイン中のアカウントに表示。メール未確認でも可)。判定と削除はサーバー
+           (storeAccountDeletionCheck・storeAccountDelete)が行う。未請求・未払いがあれば退会を受け付け、清算の後に削除する。
+           表示はすべて textContent。 -->
+      <div class="store-section" id="accountDeletionSection" hidden>
+        <h3 data-i18n="store_delete_heading">アカウントの削除</h3>
+        <p class="hint" data-i18n="store_delete_intro"></p>
+        <button type="button" class="secondary-button" id="deleteCheckButton" data-i18n="store_delete_check_button">アカウントの削除へ進む</button>
+        <div id="deleteConfirmBox" hidden>
+          <p class="hint" data-i18n="store_delete_confirm_lead"></p>
+          <ul class="delete-list" id="deleteSummaryList"></ul>
+          <p class="hint" data-i18n="store_delete_effects_lead"></p>
+          <ul class="delete-list" id="deleteEffectsList"></ul>
+          <p class="hint" id="deleteSettlementNote" data-i18n="store_delete_settlement_note" hidden></p>
+          <button type="button" class="delete-button" id="deleteConfirmButton" data-i18n="store_delete_confirm_button">アカウントを削除する</button>
+          <button type="button" class="secondary-button" id="deleteCancelButton" data-i18n="store_delete_cancel_button">やめる</button>
+        </div>
+        <div id="deleteMessage" class="message" role="status" aria-live="polite"></div>
+        <ul class="delete-list" id="deleteBlockerList" hidden></ul>
+        <button type="button" class="secondary-button" id="deleteResumeButton" data-i18n="store_delete_resume_button" hidden>手続きの状況を確認する</button>
+        <!-- STEP 47-C ④｜退会の取り消し(最終削除の開始前＝清算待ちの間だけ)。「取り消す」→確認→「取り消しを確定する」の2段階。 -->
+        <button type="button" class="secondary-button" id="deleteWithdrawButton" data-i18n="store_delete_withdraw_button" hidden>退会を取り消す</button>
+        <div id="deleteWithdrawConfirmBox" hidden>
+          <p class="hint" data-i18n="store_delete_withdraw_confirm_lead"></p>
+          <button type="button" class="primary-button" id="deleteWithdrawConfirmButton" data-i18n="store_delete_withdraw_confirm_button">取り消しを確定する</button>
+          <button type="button" class="secondary-button" id="deleteWithdrawBackButton" data-i18n="store_delete_cancel_button">やめる</button>
+        </div>
+        <ul class="delete-list" id="deleteWithdrawGuideList" hidden></ul>
       </div>
 
       <button type="button" class="secondary-button" id="logoutButton" data-i18n="store_account_logout_button">ログアウトする</button>
@@ -723,6 +764,13 @@
         renderMyClaims();
         if (lastClaimMessage) {
           showClaimMessage(lastClaimMessage.key, lastClaimMessage.type, lastClaimMessage.code);
+        }
+        // STEP 44-C④｜月額100円カスタマイズのご請求の表示を言語に合わせる。
+        if (typeof renderPlanPaymentSection === "function") {
+          renderPlanPaymentSection();
+          if (planPayLastMessage) {
+            showPlanPayMessage(planPayLastMessage.key, planPayLastMessage.type);
+          }
         }
       }
 
@@ -1044,6 +1092,8 @@
           loadMyStores();
         }
         renderClaimSection();
+        // STEP 47-B ⑧｜メール未確認のアカウントも本人が削除できる(紐付けの検査はサーバー)。
+        document.getElementById("accountDeletionSection").hidden = !user;
       }
 
       function loadMyStores() {
@@ -1076,6 +1126,8 @@
             renderOnboardingSteps();
             // 今だけ投稿 決済 STEP 38-B｜ご請求の履歴(失敗しても他の表示には影響しない)。
             loadInvoiceHistories().catch(function () {});
+            // STEP 44-C④｜月額100円カスタマイズのご請求(このアカウントが請求先の分)。
+            loadPlanPayments();
           });
       }
 
@@ -1093,6 +1145,250 @@
         invoiceHistoryByStore = {};
         invoiceHistoryFailed = false;
         renderInvoiceHistorySection();
+        resetDeletionView();
+      }
+
+      // ===== STEP 47｜アカウントの削除 =====
+      // ①「削除へ進む」でサーバーに削除できるかを確かめる(読むだけ) → ②削除できない時は理由を表示、できる時は
+      // 店舗・投稿・カードの件数と「削除すると起きること」を表示 → ③「アカウントを削除する」でサーバーが削除する。
+      // 削除が終わったらログアウトしてログイン画面に戻す。カードの番号・Stripe の ID は扱わない(サーバーも返さない)。
+      const DELETE_BLOCKER_KEYS = {
+        imadake_invoice_unsettled: "store_delete_blocker_imadake_invoice",
+        imadake_charges_unbilled: "store_delete_blocker_imadake_unbilled",
+        custom_plan_unbilled: "store_delete_blocker_plan_unbilled",
+        custom_plan_invoice_unsettled: "store_delete_blocker_plan_invoice",
+        billing_locked: "store_delete_blocker_billing_locked",
+        live_card_removal_unavailable: "store_delete_blocker_card_unavailable"
+      };
+      const DELETE_EFFECT_KEYS = [
+        "store_delete_effect_stores",
+        "store_delete_effect_posts",
+        "store_delete_effect_plan",
+        "store_delete_effect_card",
+        "store_delete_effect_photos",
+        "store_delete_effect_login",
+        "store_delete_effect_records"
+      ];
+
+      // STEP 47-B｜退会の手続き中の表示(状態はサーバーの accountDeletions/{uid}.status)。
+      function setDeleteConfirmLabel(key) {
+        const button = document.getElementById("deleteConfirmButton");
+        button.setAttribute("data-i18n", key);
+        button.textContent = t(key);
+      }
+
+      function showDeletionStatus(status, blockers) {
+        document.getElementById("deleteConfirmBox").hidden = true;
+        document.getElementById("deleteCheckButton").hidden = true;
+        document.getElementById("deleteWithdrawConfirmBox").hidden = true;
+        fillList("deleteWithdrawGuideList", []);
+        // STEP 47-C ④｜取り消せるのは最終削除の開始前(清算待ち)の間だけ(最終の判定はサーバー)。
+        document.getElementById("deleteWithdrawButton").hidden = status !== "awaiting_settlement";
+        if (status === "card_detach_failed" || status === "operator_protected") {
+          setDeleteMessage("store_delete_status_operator", "info");
+          fillList("deleteBlockerList", []);
+          document.getElementById("deleteResumeButton").hidden = true;
+          return;
+        }
+        setDeleteMessage(status === "awaiting_settlement" ? "store_delete_status_awaiting" : "store_delete_pending", "info");
+        fillList("deleteBlockerList", (Array.isArray(blockers) ? blockers : []).map(function (code) {
+          return t(DELETE_BLOCKER_KEYS[code] || "store_delete_blocker_other");
+        }));
+        document.getElementById("deleteResumeButton").hidden = false;
+      }
+
+      // STEP 47-C ④｜退会の取り消し。取り消した後に必要な操作(公開し直す・投稿し直す・申込み直す)を案内する。
+      const WITHDRAW_GUIDE_KEYS = [
+        "store_delete_withdraw_guide_profile",
+        "store_delete_withdraw_guide_posts",
+        "store_delete_withdraw_guide_plan",
+        "store_delete_withdraw_guide_billing"
+      ];
+
+      function handleWithdrawStart() {
+        document.getElementById("deleteWithdrawButton").hidden = true;
+        document.getElementById("deleteResumeButton").hidden = true;
+        document.getElementById("deleteWithdrawConfirmBox").hidden = false;
+      }
+
+      function handleWithdrawBack() {
+        document.getElementById("deleteWithdrawConfirmBox").hidden = true;
+        document.getElementById("deleteWithdrawButton").hidden = false;
+        document.getElementById("deleteResumeButton").hidden = false;
+      }
+
+      function handleWithdrawConfirm() {
+        if (busy) {
+          return;
+        }
+        const box = document.getElementById("accountDeletionSection");
+        setBusy(box, true);
+        callStoreApi({ mode: "storeAccountDeletionCancel", confirm: true })
+          .then(function (response) {
+            const result = response.result || {};
+            if (response.status === 200 && result.success === true && result.status === "canceled") {
+              resetDeletionView();
+              setDeleteMessage("store_delete_withdrawn", "success");
+              fillList("deleteWithdrawGuideList", WITHDRAW_GUIDE_KEYS.map(t));
+              // 店舗の「無効」を戻したため、店舗の一覧を読み直す(店舗情報は非公開のまま)。
+              storesLoadedForUid = "";
+              loadMyStores();
+              return;
+            }
+            document.getElementById("deleteWithdrawConfirmBox").hidden = true;
+            if (response.status === 409 && result.reason === "deletion_in_progress") {
+              showDeletionStatus(result.status || "finalizing", []);
+              document.getElementById("deleteWithdrawButton").hidden = true;
+              setDeleteMessage("store_delete_withdraw_too_late", "error");
+            } else if (response.status === 429) {
+              handleWithdrawBack();
+              setDeleteMessage("store_delete_err_rate_limited", "error");
+            } else {
+              handleWithdrawBack();
+              setDeleteMessage("store_delete_err_generic", "error");
+            }
+          })
+          .catch(function () {
+            handleWithdrawBack();
+            setDeleteMessage("store_account_err_network", "error");
+          })
+          .finally(function () {
+            setBusy(box, false);
+          });
+      }
+
+      function setDeleteMessage(key, type) {
+        const box = document.getElementById("deleteMessage");
+        box.textContent = key ? t(key) : "";
+        box.className = key ? "message show " + type : "message";
+      }
+
+      function fillList(listId, lines) {
+        const list = document.getElementById(listId);
+        list.textContent = "";
+        lines.forEach(function (line) {
+          const item = document.createElement("li");
+          item.textContent = line;
+          list.appendChild(item);
+        });
+        list.hidden = lines.length === 0;
+      }
+
+      function resetDeletionView() {
+        document.getElementById("deleteConfirmBox").hidden = true;
+        document.getElementById("deleteCheckButton").hidden = false;
+        document.getElementById("deleteResumeButton").hidden = true;
+        document.getElementById("deleteWithdrawButton").hidden = true;
+        document.getElementById("deleteWithdrawConfirmBox").hidden = true;
+        fillList("deleteWithdrawGuideList", []);
+        document.getElementById("deleteSettlementNote").hidden = true;
+        setDeleteConfirmLabel("store_delete_confirm_button");
+        fillList("deleteBlockerList", []);
+        setDeleteMessage("", "");
+      }
+
+      function showDeleteBlockers(blockers) {
+        const lines = (Array.isArray(blockers) ? blockers : []).map(function (code) {
+          return t(DELETE_BLOCKER_KEYS[code] || "store_delete_blocker_other");
+        });
+        setDeleteMessage("store_delete_blocked", "error");
+        fillList("deleteBlockerList", lines);
+      }
+
+      function handleDeleteCheck() {
+        if (busy) {
+          return;
+        }
+        resetDeletionView();
+        const box = document.getElementById("accountDeletionSection");
+        setBusy(box, true);
+        callStoreApi({ mode: "storeAccountDeletionCheck" })
+          .then(function (response) {
+            const result = response.result || {};
+            if (response.status === 403 && result.reason === "operator_account") {
+              setDeleteMessage("store_delete_err_operator", "error");
+              return;
+            }
+            if (response.status !== 200 || result.success !== true) {
+              setDeleteMessage("store_delete_err_generic", "error");
+              return;
+            }
+            if (result.deletionStatus && result.deletionStatus !== "completed") {
+              showDeletionStatus(result.deletionStatus, result.blockers);
+              return;
+            }
+            if (result.deletable !== true) {
+              showDeleteBlockers(result.blockers);
+              return;
+            }
+            const summary = result.summary || {};
+            const en = currentLanguage === "en";
+            const line = function (labelKey, value) {
+              return t(labelKey) + (en ? ": " : "：") + value;
+            };
+            fillList("deleteSummaryList", [
+              line("store_delete_summary_stores", (Number(summary.storeCount) || 0) + (en ? " (" : "（") + t("store_delete_summary_published") + " " + (Number(summary.publishedStoreCount) || 0) + (en ? ")" : "）")),
+              line("store_delete_summary_posts", String(Number(summary.activePostCount) || 0)),
+              line("store_delete_summary_card", t(summary.hasCard ? "store_delete_summary_card_yes" : "store_delete_summary_card_no"))
+            ]);
+            fillList("deleteEffectsList", DELETE_EFFECT_KEYS.map(t));
+            // 未請求・未払いがある：退会を受け付けて、清算の後に削除する(ボタンの文言も変える)。
+            document.getElementById("deleteSettlementNote").hidden = result.settlementRequired !== true;
+            setDeleteConfirmLabel(result.settlementRequired === true ? "store_delete_request_button" : "store_delete_confirm_button");
+            document.getElementById("deleteCheckButton").hidden = true;
+            document.getElementById("deleteConfirmBox").hidden = false;
+          })
+          .catch(function () {
+            setDeleteMessage("store_account_err_network", "error");
+          })
+          .finally(function () {
+            setBusy(box, false);
+          });
+      }
+
+      function handleDeleteConfirm() {
+        if (busy) {
+          return;
+        }
+        const box = document.getElementById("accountDeletionSection");
+        setBusy(box, true);
+        setDeleteMessage("store_delete_running", "info");
+        callStoreApi({ mode: "storeAccountDelete", confirm: true })
+          .then(function (response) {
+            const result = response.result || {};
+            if (response.status === 200 && result.success === true && result.status === "completed") {
+              cancelScheduledVerification();
+              resetStoreState();
+              return storeAuth.signOut()
+                .catch(function () {})
+                .then(function () {
+                  showView("login");
+                  showMessage("store_delete_done", "success");
+                });
+            }
+            document.getElementById("deleteConfirmBox").hidden = true;
+            document.getElementById("deleteCheckButton").hidden = false;
+            if (response.status === 202) {
+              showDeletionStatus(result.status, result.blockers);
+              if (result.status === "awaiting_settlement") {
+                setDeleteMessage("store_delete_accepted", "success");
+              }
+            } else if (response.status === 403 && result.reason === "operator_account") {
+              setDeleteMessage("store_delete_err_operator", "error");
+            } else if (response.status === 409 && result.reason === "not_deletable") {
+              showDeleteBlockers(result.blockers);
+            } else if (response.status === 429) {
+              setDeleteMessage("store_delete_err_rate_limited", "error");
+            } else {
+              setDeleteMessage("store_delete_err_generic", "error");
+            }
+          })
+          .catch(function () {
+            setDeleteMessage("store_account_err_network", "error");
+          })
+          .finally(function () {
+            setBusy(box, false);
+          });
       }
 
       // ===== 今だけ投稿 決済 STEP 38-B｜ご請求の履歴(読み取りだけ) =====
@@ -1250,6 +1546,169 @@
         })).then(function () {
           renderInvoiceHistorySection();
         });
+      }
+
+      // ===== STEP 44-C④｜月額100円カスタマイズのご請求・未払い・本人認証 =====
+      let planPayData = null;
+      let planPayBusy = false;
+      let planPayLastMessage = null;
+      const PLAN_PAY_STATUS_KEYS = {
+        closed: "store_plan_pay_status_closed",
+        charging: "store_plan_pay_status_charging",
+        processing: "store_plan_pay_status_processing",
+        requires_action: "store_plan_pay_status_requires_action",
+        payment_failed: "store_plan_pay_status_payment_failed",
+        charge_error: "store_plan_pay_status_review",
+        needs_review: "store_plan_pay_status_review",
+        paid: "store_plan_pay_status_paid"
+      };
+
+      function formatPlanPayDate(millis) {
+        try {
+          return new Intl.DateTimeFormat(currentLanguage, { year: "numeric", month: "short", day: "numeric", timeZone: "Asia/Tokyo" }).format(new Date(millis));
+        } catch (error) {
+          return new Date(millis).toISOString().slice(0, 10);
+        }
+      }
+
+      function showPlanPayMessage(key, type) {
+        planPayLastMessage = key ? { key: key, type: type } : null;
+        const box = document.getElementById("planPayMessage");
+        box.textContent = key ? t(key) : "";
+        box.className = key ? "message show " + type : "message";
+      }
+
+      function addPlanPayText(parent, tag, text, className) {
+        const element = document.createElement(tag);
+        element.textContent = text;
+        if (className) {
+          element.className = className;
+        }
+        parent.appendChild(element);
+        return element;
+      }
+
+      function renderPlanPaymentSection() {
+        const section = document.getElementById("planPaymentSection");
+        const invoices = planPayData && Array.isArray(planPayData.invoices) ? planPayData.invoices : [];
+        section.hidden = invoices.length === 0;
+        if (invoices.length === 0) {
+          return;
+        }
+        const total = document.getElementById("planPayUnpaidTotal");
+        total.hidden = !(planPayData.unpaidTotalJpy > 0);
+        total.textContent = t("store_plan_pay_unpaid_total").replace("{amount}", String(planPayData.unpaidTotalJpy));
+        const list = document.getElementById("planPayList");
+        list.textContent = "";
+        invoices.forEach(function (invoice) {
+          const item = document.createElement("div");
+          item.className = "plan-pay-item" + (invoice.unpaid ? " unpaid" : "");
+          addPlanPayText(item, "p", t("store_plan_pay_line")
+            .replace("{month}", String(invoice.month || "").replace("-", "/"))
+            .replace("{store}", invoice.storeName || invoice.storeId)
+            .replace("{amount}", String(invoice.amountJpy)) + (invoice.createdInPreview ? " " + t("store_plan_pay_test_badge") : ""), "plan-pay-line");
+          const statusKey = PLAN_PAY_STATUS_KEYS[invoice.status] || "store_plan_pay_status_review";
+          addPlanPayText(item, "p", t(statusKey)
+            .replace("{date}", invoice.status === "paid" ? formatPlanPayDate(invoice.paidAtMillis) : String(invoice.chargeScheduledFor || "").replace(/-/g, "/")), "plan-pay-status");
+          if (invoice.status === "payment_failed" && invoice.nextRetryAtMillis > 0) {
+            addPlanPayText(item, "p", t("store_plan_pay_next_retry").replace("{date}", formatPlanPayDate(invoice.nextRetryAtMillis)), "hint");
+          }
+          if (invoice.unpaid && invoice.suspendAtMillis > 0) {
+            addPlanPayText(item, "p", t("store_plan_pay_suspend_at").replace("{date}", formatPlanPayDate(invoice.suspendAtMillis)), "hint");
+          }
+          if (invoice.requiresAction && planPayData.paymentsAvailable) {
+            const button = addPlanPayText(item, "button", t(planPayBusy ? "store_plan_pay_processing" : "store_plan_pay_authenticate"), "primary-button plan-pay-action");
+            button.type = "button";
+            button.disabled = planPayBusy;
+            button.setAttribute("data-plan-pay-action", "authenticate");
+            button.setAttribute("data-plan-pay-invoice", invoice.invoiceId);
+          } else if (invoice.canPayNow) {
+            const button = addPlanPayText(item, "button", t(planPayBusy ? "store_plan_pay_processing" : "store_plan_pay_pay_now"), "secondary-button plan-pay-action");
+            button.type = "button";
+            button.disabled = planPayBusy;
+            button.setAttribute("data-plan-pay-action", "pay_now");
+            button.setAttribute("data-plan-pay-invoice", invoice.invoiceId);
+          }
+          list.appendChild(item);
+        });
+      }
+
+      function loadPlanPayments() {
+        return callStoreApi({ mode: "storeCustomPlanInvoiceList" })
+          .then(function (response) {
+            planPayData = response.status === 200 && response.result && response.result.success ? response.result : null;
+            renderPlanPaymentSection();
+          })
+          .catch(function () {
+            planPayData = null;
+            renderPlanPaymentSection();
+          });
+      }
+
+      function finishPlanPayResult(status) {
+        if (status === "paid") {
+          showPlanPayMessage("store_plan_pay_done", "success");
+        } else if (status === "requires_action") {
+          showPlanPayMessage("store_plan_pay_auth_incomplete", "error");
+        } else if (status === "processing" || status === "charging") {
+          showPlanPayMessage("store_plan_pay_status_processing", "info");
+        } else {
+          showPlanPayMessage("store_plan_pay_failed", "error");
+        }
+      }
+
+      document.addEventListener("click", function (event) {
+        const button = event.target.closest && event.target.closest("[data-plan-pay-action]");
+        if (button) {
+          handlePlanPayAction(button.getAttribute("data-plan-pay-action"), button.getAttribute("data-plan-pay-invoice"));
+        }
+      });
+
+      async function handlePlanPayAction(action, invoiceId) {
+        if (planPayBusy) {
+          return;
+        }
+        planPayBusy = true;
+        showPlanPayMessage(null);
+        renderPlanPaymentSection();
+        try {
+          if (action === "pay_now") {
+            const response = await callStoreApi({ mode: "storeCustomPlanPayNow", invoiceId: invoiceId });
+            if (response.status === 200 && response.result && response.result.success) {
+              finishPlanPayResult(response.result.status);
+            } else {
+              showPlanPayMessage(response.status === 403 ? "store_plan_pay_unavailable" : "store_plan_pay_error", "error");
+            }
+          } else {
+            const start = await callStoreApi({ mode: "storeCustomPlanPaymentStart", invoiceId: invoiceId });
+            const started = start.result || {};
+            if (start.status !== 200 || !started.success) {
+              showPlanPayMessage(start.status === 403 ? "store_plan_pay_unavailable" : "store_plan_pay_error", "error");
+            } else {
+              if (!started.alreadySucceeded) {
+                try {
+                  const StripeConstructor = await loadStripeJs();
+                  const stripe = StripeConstructor(started.publishableKey);
+                  // 既存の支払いをこの画面で本人認証して完了する(新しい支払いは作らない)。結果はこの後サーバーが確かめる。
+                  await stripe.confirmCardPayment(started.clientSecret, started.paymentMethodId ? { payment_method: started.paymentMethodId } : undefined);
+                } catch (error) {
+                  // 画面での結果は使わない(サーバーの照会で決める)。
+                }
+              }
+              const confirmed = await callStoreApi({ mode: "storeCustomPlanPaymentConfirm", invoiceId: invoiceId });
+              if (confirmed.status === 200 && confirmed.result && confirmed.result.success) {
+                finishPlanPayResult(confirmed.result.status);
+              } else {
+                showPlanPayMessage("store_plan_pay_error", "error");
+              }
+            }
+          }
+        } catch (error) {
+          showPlanPayMessage("store_account_err_network", "error");
+        } finally {
+          planPayBusy = false;
+          await loadPlanPayments();
+        }
       }
 
       // ===== 今だけ投稿 決済 STEP 31｜お支払い方法(カード登録) =====
@@ -2362,6 +2821,13 @@
         document.getElementById("resendButton").addEventListener("click", handleResend);
         document.getElementById("refreshButton").addEventListener("click", handleRefresh);
         document.getElementById("logoutButton").addEventListener("click", handleLogout);
+        document.getElementById("deleteCheckButton").addEventListener("click", handleDeleteCheck);
+        document.getElementById("deleteConfirmButton").addEventListener("click", handleDeleteConfirm);
+        document.getElementById("deleteCancelButton").addEventListener("click", resetDeletionView);
+        document.getElementById("deleteResumeButton").addEventListener("click", handleDeleteConfirm);
+        document.getElementById("deleteWithdrawButton").addEventListener("click", handleWithdrawStart);
+        document.getElementById("deleteWithdrawBackButton").addEventListener("click", handleWithdrawBack);
+        document.getElementById("deleteWithdrawConfirmButton").addEventListener("click", handleWithdrawConfirm);
         document.getElementById("claimForm").addEventListener("submit", handleClaimSubmit);
         document.querySelectorAll('input[name="claimTarget"]').forEach(function (radio) {
           radio.addEventListener("change", updateClaimTargetSelect);

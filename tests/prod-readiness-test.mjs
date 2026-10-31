@@ -69,7 +69,7 @@ const quiet = async (fn) => { const e = console.error; console.error = () => {};
 
 // ===================== 1. the 4 conditions =====================
 const cfg = (env, liveEnabled) => SB.readStripeCardSetupConfig(env, liveEnabled === undefined ? undefined : { liveEnabled });
-t("1 本番カード登録のスイッチは false（既定）・Production では4条件がそろっていても拒否（live_registration_disabled）", SB.STORE_CARD_REGISTRATION_LIVE_ENABLED === false && cfg(PROD_LIVE).ok === false && cfg(PROD_LIVE).reason === "live_registration_disabled");
+t("1 本番カード登録のスイッチは true（一般公開）・4条件で live・スイッチを false に戻すと拒否（live_registration_disabled）（STEP 52-F：本番のカード登録の一般公開）", SB.STORE_CARD_REGISTRATION_LIVE_ENABLED === true && cfg(PROD_LIVE).ok === true && cfg(PROD_LIVE).mode === "live" && cfg(PROD_LIVE, false).ok === false && cfg(PROD_LIVE, false).reason === "live_registration_disabled");
 t("2 Stripe のモードが不一致なら拒否（Production で STRIPE_MODE test／空）", cfg({ ...PROD_LIVE, STRIPE_MODE: "test" }, true).reason === "mode_not_allowed" && cfg({ ...PROD_LIVE, STRIPE_MODE: "" }, true).reason === "not_configured");
 t("3 不正なキーの種類は拒否：権限の広い sk_live_・テストのキー rk_test_／pk_test_・公開キーの取り違え", cfg({ ...PROD_LIVE, STRIPE_RESTRICTED_KEY: SK_LIVE }, true).reason === "server_key_not_restricted_live" && cfg({ ...PROD_LIVE, STRIPE_RESTRICTED_KEY: RK_TEST }, true).reason === "server_key_not_restricted_live" && cfg({ ...PROD_LIVE, STRIPE_PUBLISHABLE_KEY: PK_TEST }, true).reason === "key_mode_mismatch" && cfg({ ...PROD_LIVE, STRIPE_RESTRICTED_KEY: PK_LIVE }, true).reason === "server_key_not_restricted_live");
 const live = cfg(PROD_LIVE, true);
@@ -82,9 +82,9 @@ const actorFor = (uid) => async () => ({ ok: true, actor: { type: "storeUser", u
 const billingDeps = (uid, env, options) => ({ getFirebaseAdminApp: () => ({}), getFirestore: () => db, readRequestBody: (r) => r.body, resolveStoreUserActor: actorFor(uid), checkStoreProfileEditor: async () => ({ ok: false }), claimRateLimit: async () => true, computeRateLimitIdentifier: (a, b) => a + ":" + b, env, fetch: stripeFetch, cardSetupConfigOptions: options, isStoreInvoiceHistoryAvailable: () => false });
 async function billing(fn, uid, body, env, options) { const r = res(); await quiet(() => fn({ body: body || {}, headers: {} }, r, billingDeps(uid, env, options))); return r; }
 ST.calls.length = 0;
-let st = await billing(SB.handleStoreBillingStatus, "uL1", {}, PROD_LIVE, undefined);
-let si = await billing(SB.handleStoreBillingSetupIntentCreate, "uL1", {}, PROD_LIVE, undefined);
-t("6 Production・スイッチ false：カード登録は使えない（available false）・Stripe へ1回も送らない", st.body.available === false && st.body.unavailableReason === "live_registration_disabled" && si.code >= 400 && ST.calls.length === 0, { st: st.body, si: si.body });
+let st = await billing(SB.handleStoreBillingStatus, "uL1", {}, PROD_LIVE, { liveEnabled: false });
+let si = await billing(SB.handleStoreBillingSetupIntentCreate, "uL1", {}, PROD_LIVE, { liveEnabled: false });
+t("6 Production・スイッチを false に戻した時：カード登録は使えない（available false）・Stripe へ1回も送らない", st.body.available === false && st.body.unavailableReason === "live_registration_disabled" && si.code >= 400 && ST.calls.length === 0, { st: st.body, si: si.body });
 st = await billing(SB.handleStoreBillingStatus, "uL1", {}, PROD_LIVE, { liveEnabled: true });
 si = await billing(SB.handleStoreBillingSetupIntentCreate, "uL1", {}, PROD_LIVE, { liveEnabled: true });
 const conf = await billing(SB.handleStoreBillingSetupConfirm, "uL1", { setupIntentId: si.body.setupIntentId, consentVersion: SB.STORE_BILLING_CONSENT_VERSION }, PROD_LIVE, { liveEnabled: true });
@@ -97,8 +97,8 @@ const conf2 = await billing(SB.handleStoreBillingSetupConfirm, "uL1", { setupInt
 const acct2 = S.docs.get("accountBilling/uL1") || {};
 const detachCalls = ST.calls.filter((c) => /\/detach$/.test(c.path));
 t("9 カードの変更：新しいカードに置き換わり、旧カードは取り外し（detach）の対象になる", conf2.code === 200 && acct2.live.paymentMethodId !== firstPm && (detachCalls.some((c) => c.path.includes(firstPm)) || (acct2.live.detachPendingPaymentMethods || []).some((e) => e.paymentMethodId === firstPm)), { pm: acct2.live.paymentMethodId, firstPm, detach: detachCalls.map((c) => c.path), pending: acct2.live.detachPendingPaymentMethods });
-const cardChecks = await Promise.all([CR.checkAccountBillingCard(db, "uL1", { env: PROD_LIVE, liveEnabled: true }), CR.checkAccountBillingCard(db, "uL1", { env: PROD_LIVE })]);
-t("10 店舗の登録・引き継ぎの条件（アカウントのカード）：4条件の時は live の区画で有効・スイッチ false なら card_billing_unavailable", cardChecks[0].ok === true && cardChecks[1].ok === false && cardChecks[1].reason === "card_billing_unavailable", cardChecks);
+const cardChecks = await Promise.all([CR.checkAccountBillingCard(db, "uL1", { env: PROD_LIVE, liveEnabled: true }), CR.checkAccountBillingCard(db, "uL1", { env: PROD_LIVE, liveEnabled: false }), CR.checkAccountBillingCard(db, "uL1", { env: PROD_LIVE })]);
+t("10 店舗の登録・引き継ぎの条件（アカウントのカード）：4条件の時は live の区画で有効・スイッチを false に戻すと card_billing_unavailable・既定（一般公開）は有効（STEP 52-F：本番のカード登録の一般公開）", cardChecks[0].ok === true && cardChecks[1].ok === false && cardChecks[1].reason === "card_billing_unavailable" && cardChecks[2].ok === true, cardChecks);
 const allowedOnly = ST.calls.every((c) => SB.isCardSetupStripeOperation(c.method, c.path.replace(/^\/v1/, "")));
 t("11 カード登録で Stripe に送ったのは許可した操作だけ・キーは rk_live_・支払い（PaymentIntent）・返金は一度も送らない", ST.calls.length > 0 && allowedOnly && ST.calls.every((c) => c.auth === "Bearer " + RK_LIVE) && !ST.calls.some((c) => /payment_intents|refunds|charges|invoices/.test(c.path)), ST.calls.map((c) => c.method + " " + c.path));
 
@@ -176,7 +176,8 @@ t("28a shop-guide.html：正式な流れ（アカウント作成→メール確�
 t("28b shop-guide.html：旧専用URL方式（お店専用の投稿ページ・URL の保管／再発行・掲載番号／終了番号・edit／end への導線）が無い", !/お店専用の投稿ページ|発行し直す|終了番号|掲載番号|href="edit\.html"|href="end\.html"/.test(guideVisible));
 const guideHrefs = [...guideVisible.matchAll(/href="([^"#]+)"/g)].map((m) => m[1]).filter((h) => !h.startsWith("/favicon"));
 t("28c shop-guide.html：リンクは既存のページだけ（存在しないURLを作らない）", guideHrefs.length > 0 && guideHrefs.every((h) => fs.existsSync(REPO_ROOT + "/" + h.split("?")[0])), guideHrefs);
-t("28d shop-guide.html：運営の個別承認・電話確認・書類提出などの新しい条件や、料金・規約の新しい記載を加えない（ラベルは実際の画面の文言）", !/電話|書類|審査|本人確認|100円|税込|手数料|特定商取引/.test(guideVisible) && /「カードを登録する」/.test(guideVisible) && /「店舗・施設を登録する」/.test(guideVisible) && /「このお店を引き継ぐ」/.test(guideVisible) && /「常設店舗情報を編集する」/.test(guideVisible) && /「旅行者に公開する」/.test(guideVisible));
+// STEP 51-B｜料金は正式な4商品の案内だけを載せる(店舗カードの作成・下書きは無料・公開は月額100円・今だけ投稿は契約不要)。
+t("28d shop-guide.html：運営の個別承認・電話確認・書類提出などの新しい条件を加えない・料金は正式な案内だけ（ラベルは実際の画面の文言）", !/電話|書類|審査|本人確認|手数料|特定商取引|500円/.test(guideVisible) && /店舗カードの作成・下書きは無料です。店舗カードを旅行者に公開するには月額100円（税込）の契約が必要です。今だけ投稿は店舗カードの契約が無くても使え/.test(guideVisible) && !/お店・施設の情報の登録は無料/.test(guideVisible) && /「カードを登録する」/.test(guideVisible) && /「店舗・施設を登録する」/.test(guideVisible) && /「このお店を引き継ぐ」/.test(guideVisible) && /「常設店舗情報を編集する」/.test(guideVisible) && /「旅行者に公開する」/.test(guideVisible));
 
 // STEP 43-D｜「街の声」の編集・掲載終了（edit.html／end.html の API、api/edit-ad.js）は維持
 {

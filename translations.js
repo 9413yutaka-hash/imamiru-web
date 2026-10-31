@@ -337,8 +337,8 @@ const MACHINAU_TRANSLATIONS = {
   // TOP参加CTA内の店舗・施設向け第2導線(shop.htmlへ)。footer_shop_linkと同じ
   // 考え方の文言。shop.html自体は日本語のみ。
   contribute_cta_shop_link: {
-    ja: "お店・施設の方へ｜無料で情報を掲載できます →",
-    en: "For shops & venues | List your info for free →"
+    ja: "お店・施設の方へ｜店舗カード・今だけ投稿のご案内 →",
+    en: "For shops & venues | Store cards and Just for Now posts →"
   },
 
   category_all: {
@@ -1177,8 +1177,8 @@ const MACHINAU_TRANSLATIONS = {
   // 店舗・施設参加導線 Phase2｜フッターの店舗・施設向け入口(shop.htmlへ)。
   // shop.html自体は日本語のみ。
   footer_shop_link: {
-    ja: "お店・施設の方へ｜マチナウに無料で投稿できます",
-    en: "For shops & venues | Post on Machinau for free"
+    ja: "お店・施設の方へ｜店舗カード・今だけ投稿のご案内",
+    en: "For shops & venues | Store cards and Just for Now posts"
   },
 
   location_geolocation_unsupported: {
@@ -1928,63 +1928,6 @@ const MACHINAU_TRANSLATIONS = {
     en: "An account for shops, facilities and event organizers."
   },
 
-  // LEGAL-NOTICE:START｜STEP 47-H 規約改定の事前告知(店舗アカウントの画面)。施行日に告知と一緒に外す。
-  store_account_legal_notice_title: {
-    ja: "お知らせ：店舗アカウントの退会機能の追加と、利用規約・プライバシーポリシーの改定について",
-    en: "Notice: Account closure and revised Terms of Service / Privacy Policy"
-  },
-
-  store_account_legal_notice_lead: {
-    ja: "2026年11月7日から、この画面でご自身で店舗アカウントの退会（削除）を申し込めるようになります。あわせて同じ日に、利用規約とプライバシーポリシーを改定し、退会に関する内容を追加するとともに、利用規約の変更の手続き（12条）とプライバシーポリシーの変更の手続き（13）を改めます。",
-    en: "From November 7, 2026, you will be able to request the closure (deletion) of your business account yourself on this page. On the same day, we will revise the Terms of Service and the Privacy Policy to add provisions on account closure, and revise the procedures for changing the Terms of Service (Article 12) and the Privacy Policy (Section 13)."
-  },
-
-  store_account_legal_notice_item1: {
-    ja: "退会を申し込むと、お店・施設の情報は非公開になり、掲載中の今だけ投稿は掲載を終了します。",
-    en: "Once you request closure, your business information becomes private and your live \"Now only\" posts end."
-  },
-
-  store_account_legal_notice_item2: {
-    ja: "未払いの利用料金がある場合は、お支払い（清算）が済んでから店舗アカウントを削除します。",
-    en: "If any fees are unpaid, the account is deleted only after they are settled."
-  },
-
-  store_account_legal_notice_item3: {
-    ja: "削除が始まる前であれば、退会の申し込みを取り消せます。",
-    en: "You can withdraw the request until the deletion starts."
-  },
-
-  store_account_legal_notice_item4: {
-    ja: "削除の際は、登録したクレジットカード、お店・施設の写真、ログインの情報を削除します。法令上必要な請求・取引の記録と、退会の手続きの記録は、削除後も保存します。",
-    en: "On deletion, your registered card, business photos and login details are deleted. Billing and transaction records required by law, and the record of the closure procedure, are kept after deletion."
-  },
-
-  store_account_legal_notice_item5: {
-    ja: "2026年11月6日までは、現在の利用規約・プライバシーポリシーが適用されます。退会の機能は、施行日から利用できます。",
-    en: "Until November 6, 2026, the current Terms of Service and Privacy Policy apply. The closure feature becomes available on the effective date."
-  },
-
-  store_account_legal_notice_dates: {
-    ja: "告知開始日：2026年10月30日／施行予定日：2026年11月7日",
-    en: "Notice posted: October 30, 2026 / Effective: November 7, 2026"
-  },
-
-  store_account_legal_notice_link_prefix: {
-    ja: "改定後の内容は、",
-    en: "See the revised text (in Japanese) on the "
-  },
-
-  store_account_legal_notice_link_and: {
-    ja: "・",
-    en: " and "
-  },
-
-  store_account_legal_notice_link_suffix: {
-    ja: "のページでご確認いただけます。",
-    en: " pages."
-  },
-  // LEGAL-NOTICE:END
-
   store_account_phase_note: {
     ja: "現在ご利用いただけるのは、アカウントの作成・ログインと、店舗・施設の登録です。常設店舗情報の編集や投稿などの機能は、準備ができ次第このアカウントからご利用いただけるようになります。",
     en: "For now, you can create an account, log in and register your shop or facility. Features such as editing your permanent shop information and posting will become available from this account once they are ready."
@@ -2461,9 +2404,19 @@ const MACHINAU_TRANSLATIONS = {
     en: "Test mode"
   },
 
+  // LEGAL-CORRECTION｜STEP 52-F 2026年10月30日の告知（施行予定日 11月7日）の訂正(店舗アカウントの画面)。新しい日付は書かない。
+  store_account_legal_correction_title: {
+    ja: "お知らせ（訂正）：2026年10月30日の「店舗アカウントの退会機能の追加と、利用規約・プライバシーポリシーの改定」のお知らせについて",
+    en: "Correction to our notice of October 30, 2026 (account closure and revised Terms of Service / Privacy Policy)"
+  },
+  store_account_legal_correction_body: {
+    ja: "このお知らせでご案内した施行予定日（2026年11月7日）を変更し、店舗カードの月額料金（1つのお店・施設につき月額100円・税込）の追加などとあわせて、利用規約・プライバシーポリシーの最終更新日に改定しました。改定後の内容は、各ページの本文のとおりです。店舗アカウントの退会は、この画面から申し込めます。",
+    en: "The planned effective date in that notice (November 7, 2026) was changed. The Terms of Service and the Privacy Policy were revised, together with the addition of the store card monthly fee (¥100 per shop or venue per month, tax included), on the last-updated date shown on each page. The revised text is as shown on each page. You can request the closure of your business account on this page."
+  },
+
   store_billing_intro: {
-    ja: "今だけ投稿の利用料金（有効な閲覧があった「投稿×1日」ごとに100円・税込、月末締め・翌月まとめてカード請求）に使うカードを登録します。カードは1つのアカウントに1枚で、このアカウントで管理するすべてのお店・施設に共通です。お店・施設の登録と引き継ぎにも、カードの登録が必要です。カードを登録しただけでは料金は発生しません。現在、請求は行っていません。カード番号は決済会社（Stripe）が直接受け取り、マチナウには保存されません（保存するのは、カードのブランド・下4桁・有効期限だけです）。",
-    en: "Register the card used for Just for Now fees (¥100 incl. tax per post per day with at least one valid view, billed together monthly). One card per account, shared by all the shops and venues you manage with this account. A card is also required to register or take over a shop or venue. Registering a card does not by itself incur any fee. No charges are being made at this time. Your card number goes directly to our payment provider (Stripe) and is not stored by Machinau (we keep only the card brand, last 4 digits and expiry date)."
+    ja: "店舗カードの月額料金（1店舗・月額100円・税込）と、今だけ投稿の利用料金（有効な閲覧があった「投稿×1日」ごとに100円・税込）のお支払いに使うカードを登録します。どちらも月末締め・翌月2日にカードへ請求します（別々に請求します）。カードは1つのアカウントに1枚で、このアカウントで管理するすべてのお店・施設に共通です。お店・施設の登録と引き継ぎにも、カードの登録が必要です。カードを登録しただけでは料金は発生しません。現在、請求は行っていません。カード番号は決済会社（Stripe）が直接受け取り、マチナウには保存されません（保存するのは、カードのブランド・下4桁・有効期限だけです）。",
+    en: "Register the card used to pay the store card fee (¥100 per shop per month, tax included) and Just for Now fees (¥100 incl. tax per post per day with at least one valid view). Both are closed at month end and charged to the card on the 2nd of the next month (billed separately). One card per account, shared by all the shops and venues you manage with this account. A card is also required to register or take over a shop or venue. Registering a card does not by itself incur any fee. No charges are being made at this time. Your card number goes directly to our payment provider (Stripe) and is not stored by Machinau (we keep only the card brand, last 4 digits and expiry date)."
   },
 
   store_billing_store_label: {
@@ -2739,8 +2692,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_account_store_note_active: {
-    ja: "常設店舗情報を編集できます。まだ旅行者には表示されません。",
-    en: "You can edit your shop profile. It is not shown to travelers yet."
+    ja: "店舗カードを編集できます。旅行者への公開には、月額100円（税込）の申し込みが必要です。",
+    en: "You can edit your store card. To show it to travelers, a ¥100/month (tax included) subscription is required."
   },
 
   store_account_store_note_pending_review: {
@@ -2759,8 +2712,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_account_store_registered_active: {
-    ja: "店舗・施設を登録しました。",
-    en: "Your shop or facility has been registered."
+    ja: "店舗・施設を登録しました。「店舗カードの編集・申し込み」から月額100円（税込）を申し込むと、旅行者に公開できます。",
+    en: "Your shop or facility has been registered. Subscribe for ¥100/month (tax included) from \"Edit store card / subscribe\" to show it to travelers."
   },
 
   store_account_store_registered_pending: {
@@ -3154,8 +3107,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_profile_edit_link: {
-    ja: "常設店舗情報を編集する",
-    en: "Edit shop profile"
+    ja: "店舗カードの編集・申し込み",
+    en: "Edit store card / subscribe"
   },
 
   store_feature_parking: {
@@ -3241,6 +3194,585 @@ const MACHINAU_TRANSLATIONS = {
   store_profile_languages_hint: {
     ja: "お店・施設で対応できる言語を選んでください。",
     en: "Choose the languages your staff can speak with customers."
+  },
+
+  // STEP 44-A｜月額100円カスタマイズ(店主の編集画面 store_custom_*・旅行者の詳細 shop_custom_*)。
+  // STEP 44-B｜月額100円プランの申込・解約(店主の編集画面)。
+  store_custom_plan_none_signup: {
+    ja: "未契約です。店舗カードは旅行者に表示されていません（非公開）。下書きの保存・編集はできます。料金と条件を確認して申し込むと、公開できるようになります。",
+    en: "Not subscribed. Your store card is not shown to travelers (not public). You can still save and edit drafts. Check the fee and terms below and subscribe to make it public."
+  },
+
+  store_custom_plan_canceling: {
+    ja: "解約手続き済みです。{date}までは利用でき、その後は店舗カードを旅行者に表示しません（データは残ります）。",
+    en: "Cancellation requested. You can use the store card until {date}; after that, it is no longer shown to travelers (your data is kept)."
+  },
+
+  store_custom_plan_expired: {
+    ja: "利用期限（{date}）が終了しました。店舗カードは旅行者に表示されていません（非公開）。",
+    en: "The contract ended on {date}. Your store card is not shown to travelers (not public)."
+  },
+
+  store_custom_plan_other_active: {
+    ja: "このお店の店舗カードの月額契約は、別のアカウントが契約しています。この画面での保存・編集はできますが、このアカウントでは申し込めません。",
+    en: "This shop's store card contract belongs to another account. You can still save and edit here, but this account cannot subscribe."
+  },
+
+  store_custom_plan_other_inactive: {
+    ja: "以前の契約は、このアカウントには引き継がれません。店舗カードを公開するには、このアカウントで新しく申し込んでください。",
+    en: "The previous contract is not transferred to this account. To make the store card public, subscribe with this account."
+  },
+
+  store_custom_plan_dates_subscribed: {
+    ja: "申込：{date}",
+    en: "Subscribed: {date}"
+  },
+
+  store_custom_plan_dates_until: {
+    ja: "利用期限：{date}",
+    en: "Available until: {date}"
+  },
+
+  store_custom_plan_dates_canceled: {
+    ja: "解約手続き：{date}",
+    en: "Cancellation requested: {date}"
+  },
+
+  store_custom_plan_trial_note: {
+    ja: "現在は試験運用中です。申し込んでも料金は請求されません。利用期限は申込から1か月です（試験用の仮の期限）。",
+    en: "This is a trial. You will not be charged. The plan is available for one month from sign-up (a temporary trial period)."
+  },
+
+  store_custom_plan_card_required: {
+    ja: "申し込むには、お支払い方法（クレジットカード）の登録が必要です。",
+    en: "A registered payment method (credit card) is required to subscribe."
+  },
+
+  store_custom_plan_card_link: {
+    ja: "カードを登録する →",
+    en: "Register a card →"
+  },
+
+  store_custom_plan_subscribe_button: {
+    ja: "店舗カードを申し込む（月額100円・税込）",
+    en: "Subscribe to the store card (¥100/month, tax included)"
+  },
+
+  store_custom_plan_reactivate_button: {
+    ja: "解約を取り消して続ける",
+    en: "Undo cancellation and continue"
+  },
+
+  store_custom_plan_cancel_button: {
+    ja: "解約する",
+    en: "Cancel the plan"
+  },
+
+  store_custom_plan_cancel_confirm: {
+    ja: "店舗カードの月額契約を解約しますか？利用期限までは使えます。期限後は店舗カードを旅行者に表示しません（データは残ります）。",
+    en: "Cancel the store card contract? You can use it until the end date. After that, your store card is not shown to travelers (your data is kept)."
+  },
+
+  store_custom_plan_subscribed: {
+    ja: "申し込みました。{date}まで利用できます。",
+    en: "Subscribed. Available until {date}."
+  },
+
+  store_custom_plan_reactivated: {
+    ja: "解約を取り消しました。{date}まで利用できます。",
+    en: "Cancellation undone. Available until {date}."
+  },
+
+  store_custom_plan_canceled: {
+    ja: "解約手続きをしました。{date}までは利用できます。",
+    en: "Cancellation requested. You can use the plan until {date}."
+  },
+
+  store_custom_plan_already_canceled: {
+    ja: "すでに解約手続き済みです（{date}まで利用できます）。",
+    en: "Cancellation was already requested (available until {date})."
+  },
+
+  store_custom_plan_err_card: {
+    ja: "申し込むには、お支払い方法（クレジットカード）の登録が必要です。",
+    en: "A registered payment method (credit card) is required to subscribe."
+  },
+
+  store_custom_plan_err_already: {
+    ja: "このお店はすでに店舗カードの月額契約をしています。",
+    en: "This shop already has a store card contract."
+  },
+
+  store_custom_plan_err_unavailable: {
+    ja: "店舗カードの月額契約の申し込みは、現在受け付けていません。",
+    en: "Sign-up for the store card contract is not available right now."
+  },
+
+  store_custom_plan_err_not_active: {
+    ja: "解約できる契約がありません。",
+    en: "There is no active plan to cancel."
+  },
+
+  store_custom_plan_err_consent: {
+    ja: "料金と条件を確認し、同意のチェックを入れてから申し込んでください。",
+    en: "Please check the fee and terms and tick the consent box before subscribing."
+  },
+
+  store_card_plan_terms_heading: {
+    ja: "料金と条件（店舗カード）",
+    en: "Fee and terms (store card)"
+  },
+
+  store_card_plan_terms_fee: {
+    ja: "料金は1店舗につき月額100円（税込）です。店舗カードの新規作成・引き継ぎのどちらも同じ料金です。",
+    en: "The fee is ¥100 per shop per month (tax included), whether you create a new store card or take over a listing."
+  },
+
+  store_card_plan_terms_scope: {
+    ja: "基本情報（紹介文・写真・営業時間など）と、メニュー・商品紹介、追加リンク、お店のこだわり・ストーリーをすべて含みます。追加の料金はありません。",
+    en: "It includes the basic information (description, photos, hours, etc.) and your menu and products, extra links and story. There are no extra fees."
+  },
+
+  store_card_plan_terms_billing: {
+    ja: "毎月末に締めて、翌月2日に登録したクレジットカードへ請求します。",
+    en: "Each month is closed at month end and charged to your registered credit card on the 2nd of the next month."
+  },
+
+  store_card_plan_terms_proration: {
+    ja: "申し込んだ月・解約した月とも日割りはありません（その月の100円がかかります）。",
+    en: "There is no proration for the month you subscribe or cancel (¥100 is charged for that month)."
+  },
+
+  store_card_plan_terms_separate: {
+    ja: "今だけ投稿の料金とは別の料金・別の請求です。",
+    en: "This is a separate fee and a separate charge from Imadake posts."
+  },
+
+  store_card_plan_terms_cancel: {
+    ja: "いつでも解約でき、解約した月の月末まで利用できます。",
+    en: "You can cancel at any time and use the store card until the end of the month you cancel."
+  },
+
+  store_card_plan_consent_label: {
+    ja: "上の料金と条件を確認し、店舗カードの月額契約（月額100円・税込）に同意します。",
+    en: "I have checked the fee and terms above and agree to the store card contract (¥100/month, tax included)."
+  },
+
+  // STEP 44-C③｜本番の暦月契約・未払いの表示(店主の編集画面)。
+  store_custom_plan_monthly_active: {
+    ja: "契約中です（解約するまで毎月継続します）。各月の100円（税込）は月末に締めて、翌月2日に請求します。",
+    en: "Your plan is active and renews monthly until you cancel. Each month's ¥100 (tax included) is closed at month end and charged on the 2nd of the next month."
+  },
+
+  store_custom_plan_monthly_canceling: {
+    ja: "解約手続き済みです。{date}（今月末）まで利用でき、翌月からは料金が発生しません。今月分の100円は請求されます。",
+    en: "Cancellation requested. You can use the plan until {date} (end of this month); no charges from next month. This month's ¥100 is still charged."
+  },
+
+  store_custom_plan_monthly_trial_note: {
+    ja: "（試験用の契約のため、実際には請求されません）",
+    en: "(This is a trial contract; you will not actually be charged.)"
+  },
+
+  store_custom_plan_past_due: {
+    ja: "お支払いが確認できていない料金があります。お支払いが完了しないまま一定期間が過ぎると、店舗カードの表示を停止します（データは残ります）。",
+    en: "There is an unpaid charge. If it remains unpaid for a certain period, your store card will stop being shown (your data is kept)."
+  },
+
+  store_custom_plan_suspended: {
+    ja: "未払いのため、店舗カードの表示を停止しています（データは残っています）。お支払いが完了すると再開できます。",
+    en: "Your store card is not shown because of an unpaid charge (your data is kept). It can resume once the payment is completed."
+  },
+
+  store_custom_plan_err_unpaid: {
+    ja: "お支払いが確認できていない料金があるため、この操作はできません。",
+    en: "This action is not available because there is an unpaid charge."
+  },
+
+  // STEP 44-C④｜月額100円カスタマイズのご請求・未払い・本人認証(店舗アカウント画面)。
+  store_plan_pay_heading: {
+    ja: "店舗カード（月額100円）のご請求",
+    en: "Store card (¥100/month) charges"
+  },
+
+  store_plan_pay_intro: {
+    ja: "各月の100円（税込）は月末に締めて、翌月2日に登録のカードへ請求します。",
+    en: "Each month's ¥100 (tax included) is closed at month end and charged to your registered card on the 2nd of the next month."
+  },
+
+  store_plan_pay_unpaid_total: {
+    ja: "未払い：{amount}円",
+    en: "Unpaid: ¥{amount}"
+  },
+
+  store_plan_pay_line: {
+    ja: "{month}　{store}　{amount}円（税込）",
+    en: "{month}  {store}  ¥{amount} (tax incl.)"
+  },
+
+  store_plan_pay_test_badge: {
+    ja: "（試験用の請求）",
+    en: "(test charge)"
+  },
+
+  store_plan_pay_status_closed: {
+    ja: "請求予定（{date}）",
+    en: "Scheduled ({date})"
+  },
+
+  store_plan_pay_status_charging: {
+    ja: "請求の処理中です。",
+    en: "The charge is being processed."
+  },
+
+  store_plan_pay_status_processing: {
+    ja: "決済の処理中です。",
+    en: "The payment is processing."
+  },
+
+  store_plan_pay_status_requires_action: {
+    ja: "本人認証が必要です。下のボタンから認証して支払いを完了してください。",
+    en: "Authentication is required. Use the button below to authenticate and complete the payment."
+  },
+
+  store_plan_pay_status_payment_failed: {
+    ja: "お支払いができませんでした。",
+    en: "The payment could not be completed."
+  },
+
+  store_plan_pay_status_review: {
+    ja: "マチナウ運営が確認しています。",
+    en: "Machinau is reviewing this charge."
+  },
+
+  store_plan_pay_status_paid: {
+    ja: "お支払い済み（{date}）",
+    en: "Paid ({date})"
+  },
+
+  store_plan_pay_next_retry: {
+    ja: "次の自動の再請求：{date}",
+    en: "Next automatic retry: {date}"
+  },
+
+  store_plan_pay_suspend_at: {
+    ja: "{date}までにお支払いが確認できない場合、有料の内容の表示を停止します（データは残ります）。",
+    en: "If payment is not confirmed by {date}, the paid content will stop being shown (your data is kept)."
+  },
+
+  store_plan_pay_authenticate: {
+    ja: "本人認証をして支払う",
+    en: "Authenticate and pay"
+  },
+
+  store_plan_pay_pay_now: {
+    ja: "今すぐ支払う",
+    en: "Pay now"
+  },
+
+  store_plan_pay_processing: {
+    ja: "処理しています…",
+    en: "Processing…"
+  },
+
+  store_plan_pay_done: {
+    ja: "お支払いが完了しました。",
+    en: "Payment completed."
+  },
+
+  store_plan_pay_auth_incomplete: {
+    ja: "本人認証が完了していません。もう一度お試しください。",
+    en: "Authentication was not completed. Please try again."
+  },
+
+  store_plan_pay_failed: {
+    ja: "お支払いができませんでした。カードを確認してください。",
+    en: "The payment could not be completed. Please check your card."
+  },
+
+  store_plan_pay_error: {
+    ja: "お支払いの操作ができませんでした。時間をおいてもう一度お試しください。",
+    en: "The payment action could not be completed. Please try again later."
+  },
+
+  store_plan_pay_unavailable: {
+    ja: "現在、お支払いの操作は利用できません。",
+    en: "Payment actions are not available right now."
+  },
+
+  store_custom_heading: {
+    ja: "店舗カード（月額100円・税込）",
+    en: "Store card (¥100/month, tax included)"
+  },
+
+  store_custom_intro: {
+    ja: "店主が作成・引き継ぎ・管理する店舗カードは、1店舗につき月額100円（税込）です。基本情報（紹介文・写真・営業時間など）と、メニュー・商品紹介、追加リンク、お店のこだわり・ストーリーをすべて含みます。契約が有効な間だけ、店舗カードを旅行者に公開できます。",
+    en: "A store card that you create, take over or manage costs ¥100 per shop per month (tax included). It includes the basic information (description, photos, hours, etc.) and your menu and products, extra links and story. Your store card can be shown to travelers only while the contract is active."
+  },
+
+  store_custom_plan_active: {
+    ja: "契約中です。{date}まで、店舗カードを旅行者に公開できます。",
+    en: "Your contract is active. Your store card can be shown to travelers until {date}."
+  },
+
+  store_custom_plan_none: {
+    ja: "このお店は店舗カードの月額契約をしていません（非公開）。下書きの保存・編集はできます。申し込みの受付は準備中です。",
+    en: "This shop has no store card contract (not public). You can still save and edit drafts. Sign-up is being prepared."
+  },
+
+  store_custom_plan_kept: {
+    ja: "保存済みの内容は削除されていません。契約中だけ旅行者に表示されます。",
+    en: "Your saved content has not been deleted. It is shown to travelers only while the plan is active."
+  },
+
+  store_custom_not_editable: {
+    ja: "この店舗は現在編集できません。",
+    en: "This shop cannot be edited right now."
+  },
+
+  store_custom_story_label: {
+    ja: "お店のこだわり・ストーリー",
+    en: "Our story"
+  },
+
+  store_custom_story_hint: {
+    ja: "お店の歴史・こだわり・大切にしていることなどを紹介できます（{max}字まで）。",
+    en: "Share your shop's history, what you care about, and what makes you special (up to {max} characters)."
+  },
+
+  store_custom_menu_label: {
+    ja: "メニュー・商品紹介",
+    en: "Menu and products"
+  },
+
+  store_custom_menu_hint: {
+    ja: "最大{max}件。商品名は必須、価格と説明は任意です（空欄の項目は表示しません）。写真は1商品に1枚、お店全体で{photos}枚までです（写真の無い商品も登録できます）。",
+    en: "Up to {max} items. A name is required; price and description are optional (empty fields are not shown). One photo per item, up to {photos} photos for the whole shop (items without a photo are fine)."
+  },
+
+  store_custom_menu_photo_count: {
+    ja: "商品写真 {n} / {max}枚",
+    en: "Item photos {n} / {max}"
+  },
+
+  store_custom_err_photo_max: {
+    ja: "商品写真はお店全体で{max}枚までです。ほかの商品の写真を外してから追加してください。",
+    en: "You can add up to {max} item photos for the whole shop. Remove a photo from another item first."
+  },
+
+  store_custom_menu_add: {
+    ja: "＋ 商品を追加",
+    en: "+ Add an item"
+  },
+
+  store_custom_menu_item_title: {
+    ja: "商品 {n}",
+    en: "Item {n}"
+  },
+
+  store_custom_menu_name: {
+    ja: "商品名",
+    en: "Name"
+  },
+
+  store_custom_menu_price: {
+    ja: "価格（任意）",
+    en: "Price (optional)"
+  },
+
+  store_custom_menu_price_placeholder: {
+    ja: "例：¥650",
+    en: "e.g. ¥650"
+  },
+
+  store_custom_menu_description: {
+    ja: "説明（任意）",
+    en: "Description (optional)"
+  },
+
+  store_custom_menu_photo_add: {
+    ja: "写真を選ぶ",
+    en: "Choose a photo"
+  },
+
+  store_custom_menu_photo_change: {
+    ja: "写真を変える",
+    en: "Change photo"
+  },
+
+  store_custom_menu_photo_remove: {
+    ja: "写真を外す",
+    en: "Remove photo"
+  },
+
+  store_custom_menu_up: {
+    ja: "↑ 上へ",
+    en: "↑ Up"
+  },
+
+  store_custom_menu_down: {
+    ja: "↓ 下へ",
+    en: "↓ Down"
+  },
+
+  store_custom_menu_remove: {
+    ja: "この商品を削除",
+    en: "Delete this item"
+  },
+
+  store_custom_links_label: {
+    ja: "追加リンク（SNS・予約先など）",
+    en: "Extra links (social media, booking, etc.)"
+  },
+
+  store_custom_links_hint: {
+    ja: "最大{max}件。https:// で始まるURLだけ登録できます。表示名は任意です（空欄なら種類の名前を表示）。",
+    en: "Up to {max} links. Only URLs starting with https:// can be added. The label is optional (the link type is shown if empty)."
+  },
+
+  store_custom_links_add: {
+    ja: "＋ リンクを追加",
+    en: "+ Add a link"
+  },
+
+  store_custom_link_label_placeholder: {
+    ja: "表示名（任意）",
+    en: "Label (optional)"
+  },
+
+  store_custom_link_remove: {
+    ja: "削除",
+    en: "Remove"
+  },
+
+  store_custom_link_type_instagram: {
+    ja: "Instagram",
+    en: "Instagram"
+  },
+
+  store_custom_link_type_website: {
+    ja: "公式サイト",
+    en: "Official website"
+  },
+
+  store_custom_link_type_reservation: {
+    ja: "予約ページ",
+    en: "Booking"
+  },
+
+  store_custom_link_type_x: {
+    ja: "X",
+    en: "X"
+  },
+
+  store_custom_link_type_facebook: {
+    ja: "Facebook",
+    en: "Facebook"
+  },
+
+  store_custom_link_type_tiktok: {
+    ja: "TikTok",
+    en: "TikTok"
+  },
+
+  store_custom_link_type_youtube: {
+    ja: "YouTube",
+    en: "YouTube"
+  },
+
+  store_custom_link_type_line: {
+    ja: "LINE",
+    en: "LINE"
+  },
+
+  store_custom_link_type_other: {
+    ja: "その他のリンク",
+    en: "Other link"
+  },
+
+  store_custom_save_button: {
+    ja: "メニュー・リンク・ストーリーを保存する",
+    en: "Save menu, links and story"
+  },
+
+  store_custom_saving_button: {
+    ja: "保存しています…",
+    en: "Saving…"
+  },
+
+  store_custom_saved: {
+    ja: "保存しました。",
+    en: "Saved."
+  },
+
+  store_custom_err_plan: {
+    ja: "店舗カードの月額契約が無いため、この欄は保存できません。",
+    en: "You cannot save this section because this shop has no store card contract."
+  },
+
+  store_custom_err_menu: {
+    ja: "メニュー・商品の内容を確認してください。",
+    en: "Please check your menu items."
+  },
+
+  store_custom_err_name: {
+    ja: "{item}：商品名を入力してください（{max}字まで・改行なし）。",
+    en: "{item}: enter a name (up to {max} characters, single line)."
+  },
+
+  store_custom_err_description: {
+    ja: "{item}：説明が長すぎます（{max}字まで）。",
+    en: "{item}: the description is too long (up to {max} characters)."
+  },
+
+  store_custom_err_price: {
+    ja: "{item}：価格が長すぎます（{max}字まで・改行なし）。",
+    en: "{item}: the price is too long (up to {max} characters, single line)."
+  },
+
+  store_custom_err_photo: {
+    ja: "{item}：写真をもう一度選んでください。",
+    en: "{item}: please choose the photo again."
+  },
+
+  store_custom_err_link: {
+    ja: "リンク{n}：https:// で始まる正しいURLを入力してください（表示名は{max}字まで）。",
+    en: "Link {n}: enter a valid URL starting with https:// (label up to {max} characters)."
+  },
+
+  store_custom_err_story: {
+    ja: "ストーリーが長すぎるか、使えない文字が含まれています（{max}字まで）。",
+    en: "The story is too long or contains characters that cannot be used (up to {max} characters)."
+  },
+
+  store_custom_err_content: {
+    ja: "掲載できない可能性がある表現が含まれているため、保存できませんでした。内容を見直してください。",
+    en: "Your text could not be saved because it may contain content we cannot publish. Please review it."
+  },
+
+  store_custom_err_photo_content: {
+    ja: "掲載できない可能性がある写真が含まれているため、保存できませんでした。写真を見直してください。",
+    en: "A photo could not be saved because it may contain content we cannot publish. Please review your photos."
+  },
+
+  store_custom_load_error: {
+    ja: "店舗カードの契約の情報を読み込めませんでした。時間をおいて再読み込みしてください。",
+    en: "Could not load the store card contract information. Please reload later."
+  },
+
+  shop_custom_story_heading: {
+    ja: "お店のこだわり・ストーリー",
+    en: "Our story"
+  },
+
+  shop_custom_menu_heading: {
+    ja: "メニュー・商品",
+    en: "Menu and products"
+  },
+
+  shop_custom_links_heading: {
+    ja: "リンク",
+    en: "Links"
   },
 
   store_profile_photos_heading: {
@@ -3423,6 +3955,11 @@ const MACHINAU_TRANSLATIONS = {
     en: "Possible duplicate listings are resolved"
   },
 
+  store_profile_publish_cond_plan: {
+    ja: "店舗カードの月額契約（100円・税込）が有効",
+    en: "The store card contract (¥100/month, tax included) is active"
+  },
+
   store_profile_publish_fix_photo: {
     ja: "「写真」に1枚以上追加して保存してください。",
     en: "Add at least one photo and save."
@@ -3461,6 +3998,11 @@ const MACHINAU_TRANSLATIONS = {
   store_profile_publish_fix_duplicates: {
     ja: "マチナウに掲載中の同じ店舗・施設がある可能性があります。運営へお問い合わせください。",
     en: "The same business may already be listed on Machinau. Please contact the Machinau team."
+  },
+
+  store_profile_publish_fix_plan: {
+    ja: "非公開（月額100円の申込が必要）です。下の「店舗カード（月額100円・税込）」から申し込んでください。",
+    en: "Not public (a ¥100/month subscription is required). Please subscribe in \"Store card (¥100/month, tax included)\" below."
   },
 
   store_profile_publish_save_first: {
@@ -3680,8 +4222,8 @@ const MACHINAU_TRANSLATIONS = {
 
   // STEP 42-D｜カード登録 → 店舗の登録・引き継ぎ
   store_claim_completed: {
-    ja: "引き継ぎが完了しました。お店の情報は「あなたの店舗・施設」から編集・公開できます。",
-    en: "The takeover is complete. You can edit and publish the store information from \"Your shops & venues\"."
+    ja: "引き継ぎが完了しました。「あなたの店舗・施設」の「店舗カードの編集・申し込み」から月額100円（税込）を申し込むと、旅行者に公開できます。契約するまでは、運営による無料掲載がそのまま表示されます。",
+    en: "The takeover is complete. Subscribe for ¥100/month (tax included) from \"Edit store card / subscribe\" in \"Your shops & venues\" to show your store card to travelers. Until then, the free listing by Machinau stays as it is."
   },
 
   store_claim_err_already_linked: {
@@ -3707,6 +4249,253 @@ const MACHINAU_TRANSLATIONS = {
   store_card_gate_link: {
     ja: "カードを登録する ↓",
     en: "Register a card ↓"
+  },
+
+  // STEP 47 / 47-B｜アカウントの削除(退会)。未請求・未払いがあれば退会を受け付け、ご請求とお支払いの後に削除する
+  store_delete_heading: {
+    ja: "アカウントの削除",
+    en: "Delete account"
+  },
+
+  store_delete_intro: {
+    ja: "この店舗・施設のアカウントと登録したクレジットカードを、ご自身で削除（退会）できます。まだご請求していない料金や、お支払いが済んでいないご請求がある場合は、退会を受け付けた後、翌月2日のご請求とお支払いが済んでから削除します。",
+    en: "You can delete (close) this business account and its registered credit card yourself. If there are fees not yet billed or charges not yet paid, we accept your request first and delete the account after the billing on the 2nd of the following month and its payment are complete."
+  },
+
+  store_delete_check_button: {
+    ja: "アカウントの削除へ進む",
+    en: "Continue to delete account"
+  },
+
+  store_delete_confirm_lead: {
+    ja: "このアカウントの現在の状況",
+    en: "Current status of this account"
+  },
+
+  store_delete_summary_stores: {
+    ja: "店舗・施設",
+    en: "Businesses"
+  },
+
+  store_delete_summary_published: {
+    ja: "公開中",
+    en: "published"
+  },
+
+  store_delete_summary_posts: {
+    ja: "掲載中・審査待ちの今だけ投稿",
+    en: "Live or pending \"Now only\" posts"
+  },
+
+  store_delete_summary_card: {
+    ja: "登録カード",
+    en: "Registered card"
+  },
+
+  store_delete_summary_card_yes: {
+    ja: "あり",
+    en: "Yes"
+  },
+
+  store_delete_summary_card_no: {
+    ja: "なし",
+    en: "None"
+  },
+
+  store_delete_effects_lead: {
+    ja: "削除すると、次のようになります。元に戻すことはできません。",
+    en: "Deleting the account will do the following. This cannot be undone."
+  },
+
+  store_delete_effect_stores: {
+    ja: "あなたの店舗・施設の情報は非公開になり、旅行者には表示されなくなります。",
+    en: "Your business information becomes private and is no longer shown to travelers."
+  },
+
+  store_delete_effect_posts: {
+    ja: "掲載中・審査待ちの今だけ投稿は掲載を終了します。",
+    en: "Live and pending \"Now only\" posts are ended."
+  },
+
+  store_delete_effect_plan: {
+    ja: "新しい今だけ投稿・有料のご利用はできなくなります。ご契約中の有料のプランは解約します（その月の分はご請求します）。",
+    en: "New \"Now only\" posts and paid features are no longer available. Any paid plan you have is canceled (that month is still billed)."
+  },
+
+  store_delete_effect_card: {
+    ja: "登録したクレジットカードを削除します（カード番号はマチナウでは保持していません）。",
+    en: "Your registered credit card is removed (Machinau does not keep card numbers)."
+  },
+
+  store_delete_effect_photos: {
+    ja: "店舗・施設の写真を削除します。",
+    en: "Photos of your business are deleted."
+  },
+
+  store_delete_effect_login: {
+    ja: "このアカウントではログインできなくなります。",
+    en: "You will no longer be able to log in with this account."
+  },
+
+  store_delete_effect_records: {
+    ja: "法令上必要な請求・取引の記録は保存します。",
+    en: "Billing and transaction records required by law are kept."
+  },
+
+  store_delete_confirm_button: {
+    ja: "アカウントを削除する",
+    en: "Delete account"
+  },
+
+  store_delete_cancel_button: {
+    ja: "やめる",
+    en: "Cancel"
+  },
+
+  store_delete_running: {
+    ja: "削除しています…",
+    en: "Deleting..."
+  },
+
+  store_delete_done: {
+    ja: "アカウントを削除しました。ご利用ありがとうございました。",
+    en: "Your account has been deleted. Thank you for using Machinau."
+  },
+
+  store_delete_pending: {
+    ja: "削除の手続きを進めています。登録カードの取り外しがまだ完了していないため、しばらくしてから「アカウントの削除へ進む」からもう一度お試しください。",
+    en: "Deletion is in progress. Removal of your registered card has not finished yet, so please try again later from \"Continue to delete account\"."
+  },
+
+  store_delete_settlement_note: {
+    ja: "まだご請求していない料金、またはお支払いが済んでいないご請求があります。退会を受け付けた時点で店舗・施設の情報は非公開になり、残りのご請求とお支払いが済んだ後に、アカウントとカードを削除します。それまではログインして、ご請求の確認とカードの変更ができます。",
+    en: "There are fees not yet billed or charges not yet paid. When we accept your request, your business information becomes private, and the account and card are deleted after the remaining charges are billed and paid. Until then you can log in to check charges and change your card."
+  },
+
+  store_delete_request_button: {
+    ja: "退会を申し込む（清算の後に削除）",
+    en: "Request closure (deleted after settlement)"
+  },
+
+  store_delete_accepted: {
+    ja: "退会を受け付けました。店舗・施設の情報は非公開にしました。残りのご請求とお支払いが済んだ後に、アカウントとカードを削除します。",
+    en: "Your request has been accepted. Your business information is now private. The account and card will be deleted after the remaining charges are billed and paid."
+  },
+
+  store_delete_status_awaiting: {
+    ja: "退会の手続き中です。残りのご請求とお支払いが済んだ後に、アカウントとカードを削除します。",
+    en: "Your account closure is in progress. The account and card will be deleted after the remaining charges are billed and paid."
+  },
+
+  store_delete_status_operator: {
+    ja: "登録カードの取り外しで問題が起きたため、運営が確認しています。確認が済み次第、削除の手続きを進めます。",
+    en: "A problem occurred while removing your registered card, and our team is looking into it. We will continue the deletion once it is resolved."
+  },
+
+  store_delete_resume_button: {
+    ja: "手続きの状況を確認する",
+    en: "Check the status"
+  },
+
+  store_delete_err_operator: {
+    ja: "運営のアカウントは、この画面からは削除できません。",
+    en: "Operator accounts cannot be deleted from this page."
+  },
+
+  // STEP 47-C ④｜退会の取り消し(最終削除の開始前だけ)
+  store_delete_withdraw_button: {
+    ja: "退会を取り消す",
+    en: "Withdraw closure request"
+  },
+
+  store_delete_withdraw_confirm_lead: {
+    ja: "退会の申し込みを取り消します。店舗・施設の情報は非公開のままです。終了した今だけ投稿・解約した有料のプランは元に戻りません。退会の前のご請求は、これまでどおりお支払いが必要です。",
+    en: "This withdraws your closure request. Your business information stays private. Ended \"Now only\" posts and canceled paid plans are not restored. Charges from before the request still need to be paid."
+  },
+
+  store_delete_withdraw_confirm_button: {
+    ja: "取り消しを確定する",
+    en: "Confirm withdrawal"
+  },
+
+  store_delete_withdrawn: {
+    ja: "退会の申し込みを取り消しました。引き続きご利用いただくには、次の操作をお願いします。",
+    en: "Your closure request has been withdrawn. To continue using Machinau, please do the following."
+  },
+
+  store_delete_withdraw_guide_profile: {
+    ja: "店舗・施設の情報は非公開になっています。旅行者に表示するには、店舗の一覧の「常設店舗情報を編集する」から公開してください。",
+    en: "Your business information is private. To show it to travelers, publish it from \"Edit shop profile\" in your business list."
+  },
+
+  store_delete_withdraw_guide_posts: {
+    ja: "今だけ投稿は終了したままです。必要な場合は新しく投稿してください。",
+    en: "\"Now only\" posts remain ended. Create a new post if needed."
+  },
+
+  store_delete_withdraw_guide_plan: {
+    ja: "有料のプランをご契約だった場合は解約されています。続ける場合は、「常設店舗情報を編集する」の画面から申し込み直してください。",
+    en: "If you had a paid plan, it has been canceled. To continue, sign up again from the \"Edit shop profile\" page."
+  },
+
+  store_delete_withdraw_guide_billing: {
+    ja: "退会の前に発生したご請求は、これまでどおりお支払いが必要です。",
+    en: "Charges incurred before the request still need to be paid as usual."
+  },
+
+  store_delete_withdraw_too_late: {
+    ja: "削除の手続きがすでに始まっているため、取り消せませんでした。",
+    en: "The deletion has already started, so the request could not be withdrawn."
+  },
+
+  store_delete_blocked: {
+    ja: "現在はアカウントを削除できません。次の点をご確認ください。",
+    en: "This account cannot be deleted right now. Please check the following."
+  },
+
+  store_delete_blocker_imadake_invoice: {
+    ja: "今だけ投稿のご請求に、お支払いが済んでいないもの、または決済結果が確定していないものがあります。",
+    en: "A \"Now only\" post charge is unpaid or its payment result is not yet confirmed."
+  },
+
+  store_delete_blocker_imadake_unbilled: {
+    ja: "今だけ投稿のまだご請求していない料金があります（月末に締め、翌月2日にご請求します）。",
+    en: "There are \"Now only\" post fees not yet billed (closed at month end and billed on the 2nd of the following month)."
+  },
+
+  store_delete_blocker_plan_unbilled: {
+    ja: "有料のプランのまだご請求していない料金があります（月末に締め、翌月2日にご請求します）。",
+    en: "There are paid plan fees not yet billed (closed at month end and billed on the 2nd of the following month)."
+  },
+
+  store_delete_blocker_plan_invoice: {
+    ja: "有料のプランのご請求に、お支払いが済んでいないもの、または決済結果が確定していないものがあります。",
+    en: "A paid plan charge is unpaid or its payment result is not yet confirmed."
+  },
+
+  store_delete_blocker_billing_locked: {
+    ja: "ご請求の処理中です。",
+    en: "A charge is being processed."
+  },
+
+  store_delete_blocker_card_unavailable: {
+    ja: "現在、登録カードを取り外す手続きができません。お問い合わせください。",
+    en: "Your registered card cannot be removed right now. Please contact us."
+  },
+
+  store_delete_blocker_other: {
+    ja: "削除できない理由があります。お問い合わせください。",
+    en: "The account cannot be deleted for another reason. Please contact us."
+  },
+
+  store_delete_err_generic: {
+    ja: "アカウントを削除できませんでした。時間をおいてもう一度お試しください。",
+    en: "The account could not be deleted. Please try again later."
+  },
+
+  store_delete_err_rate_limited: {
+    ja: "続けて操作されたため、少し時間をおいてからお試しください。",
+    en: "Too many attempts in a row. Please wait a moment and try again."
   },
 
   store_steps_account: {
@@ -4804,6 +5593,38 @@ const MACHINAU_TRANSLATIONS = {
   imadake_report_format_day: {
     ja: "{month}/{day}",
     en: "{monthShort} {day}"
+  },
+
+  // STEP 48｜シェア(今だけ投稿の詳細・無料店舗の詳細)。共有するURLは https://machinau.jp の
+  // 投稿・店舗のIDだけ(位置情報・利用者のIDは含めない)。
+  share_button: {
+    ja: "🔗 シェア",
+    en: "🔗 Share"
+  },
+
+  share_copied: {
+    ja: "リンクをコピーしました。LINEやメールなどに貼り付けて送れます。",
+    en: "Link copied. Paste it into a message or email to send it."
+  },
+
+  share_copy_failed: {
+    ja: "リンクをコピーできませんでした。下のリンクを長押し（または選択）してコピーしてください。",
+    en: "Couldn't copy the link. Press and hold (or select) the link below to copy it."
+  },
+
+  share_link_label: {
+    ja: "共有するリンク",
+    en: "Link to share"
+  },
+
+  share_shop_unavailable: {
+    ja: "共有された店舗・施設の情報は、現在掲載されていません。",
+    en: "The shared place is not listed at the moment."
+  },
+
+  share_notice_close: {
+    ja: "閉じる",
+    en: "Close"
   }
 };
 

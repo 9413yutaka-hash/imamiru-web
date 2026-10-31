@@ -35,6 +35,12 @@ node --import ./tests/mockfa-occ/register.mjs tests/admin-billing-ui-test.mjs   
 # Preview専用Firebaseへの分離の安全対策(STEP 32-D㉗：サーバーの接続先検査・firebase.jsの接続先の決め方)
 node --import ./tests/mockfa-target/register.mjs tests/firebase-target-test.mjs
 
+# シェア(STEP 48：今だけ投稿の詳細・無料店舗の詳細・読みものの記事。共有リンクで開いた時の公開条件・CVは変えない。Chrome を使う)
+node --import ./tests/mockfa/register.mjs tests/share-test.mjs
+
+# Preview では本番の GA4 を読み込まない(STEP 48-E：index.html の計測タグは machinau.jp・imamiru-web.vercel.app だけ。Chrome を使う)
+node tests/preview-analytics-test.mjs
+
 # Preview専用の課金対象判定(STEP 34-A：machinau-preview に接続した対象ブランチのPreviewだけ、新規の今だけ投稿を課金対象にする)
 node --import ./tests/mockfa-occ/register.mjs tests/preview-billing-trial-test.mjs
 
@@ -52,6 +58,11 @@ node --import ./tests/mockfa/register.mjs     tests/store-invoice-history-ui-tes
 # カード登録が条件の店舗の新規登録・運営掲載の自動引き継ぎ(STEP 42-D：運営の承認なし・文章等の引き継ぎ・写真の複製は承認まで停止)
 node --import ./tests/mockfa-occ/register.mjs tests/store-card-registration-test.mjs
 node --import ./tests/mockfa-occ/register.mjs tests/store-card-registration-ui-test.mjs   # Chrome を使う
+
+# 店舗アカウントの退会(STEP 47・47-B・47-C：退会の受付→清算待ち→清算の後に自動で最終削除、取り消し、運営アカウントの保護、運営への異常の通知)
+# 毎日の定期実行の最後の手順としての最終削除は store-custom-plan-cron-test.mjs で確かめる
+node --import ./tests/mockfa-occ/register.mjs tests/store-account-deletion-test.mjs
+node --import ./tests/mockfa-occ/register.mjs tests/store-account-deletion-ui-test.mjs   # Chrome を使う
 
 # 既存の回帰(サーバー)
 for f in imadake-store-login-test imadake-safety-test imadake-translation-test imadake-nearby-test route-test; do

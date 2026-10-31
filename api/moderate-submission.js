@@ -3,7 +3,8 @@ import {
   checkFirebaseTargetFromEnv,
   readFirebaseServiceAccountText,
   isPreviewStoreInvoiceHistoryEnabled,
-  isPreviewListingPhotoCopyTrialEnabled
+  isPreviewListingPhotoCopyTrialEnabled,
+  isPreviewStoreCustomPlanTrialEnabled
 } from "./_lib/firebase-target.js";
 
 import {
@@ -101,6 +102,47 @@ import {
   isStorePhotoPublicId
 } from "./_lib/store-profile.js";
 
+// STEP 44-A｜月額100円・店舗カスタマイズプランの有料プロフィール。実処理はapi/_lib/store-custom-profile.js。
+import {
+  handleStoreCustomProfileGet,
+  handleStoreCustomProfileUpdate,
+  handleStoreCustomPlanSubscribe,
+  handleStoreCustomPlanCancel,
+  handleAdminStoreCustomPlanList,
+  readPublicStoreCustomProfiles,
+  checkStoreCustomEditor,
+  buildStoreMenuPhotoFolder,
+  isStoreMenuPhotoPublicId,
+  // STEP 47-F｜店舗の退会の受付での解約(依存として渡す)。
+  cancelStoreCustomPlan
+} from "./_lib/store-custom-profile.js";
+
+// STEP 44-C③｜月額100円カスタマイズの後払い請求の基盤(月末締め・請求台帳。Stripe への請求はしない)。
+import {
+  handleAdminStoreCustomPlanMonthlyClose,
+  handleAdminStoreCustomPlanInvoiceList
+} from "./_lib/store-custom-plan-billing.js";
+
+// STEP 44-C④｜月額100円カスタマイズの請求(Stripe PaymentIntent)・未払い・本人認証。
+import {
+  handleAdminStoreCustomPlanChargeRun,
+  handleStoreCustomPlanInvoiceList,
+  handleStoreCustomPlanPaymentStart,
+  handleStoreCustomPlanPaymentConfirm,
+  handleStoreCustomPlanPayNow
+} from "./_lib/store-custom-plan-charge.js";
+
+// STEP 44-C⑤｜月額100円カスタマイズの定期実行の入口(合言葉 X-Machinau-Cron-Secret で認証、運営のログイン不要)。
+import {
+  handleStoreCustomPlanCron
+} from "./_lib/store-custom-plan-cron.js";
+
+// STEP 48-B｜共有リンクのプレビュー(OGP)のページ(/share/imadake/{ID}・/share/shop/{ID}、vercel.json の rewrite)。
+import {
+  handleRenderShareImadake,
+  handleRenderShareShop
+} from "./_lib/share-preview.js";
+
 // 運営無料掲載 → 店舗オーナー化 MVP-1。実処理はapi/_lib/store-listing-claims.js。
 import {
   handleStoreListingClaimPreview,
@@ -119,6 +161,18 @@ import {
   handleStoreBillingInvoices,
   isStoreCardLiveTrialToken
 } from "./_lib/store-billing.js";
+
+// STEP 47 / 47-B｜店舗アカウントの退会(セルフ削除。清算待ち→清算の後に削除)。実処理はapi/_lib/store-account-deletion.js。
+import {
+  handleAccountDeletionSweep,
+  handleAdminAccountDeletionList,
+  handleAdminAccountDeletionResume,
+  handleStoreAccountDeletionCancel,
+  handleStoreAccountDeletionCheck,
+  handleStoreAccountDelete,
+  isAccountDeletionSweepAllowed,
+  runAccountDeletionSweep
+} from "./_lib/store-account-deletion.js";
 
 // 今だけ投稿 決済 STEP 35-A｜カード登録必須の判定(課金対象になる今だけ投稿の作成時だけ使う)。
 import {
@@ -20567,14 +20621,28 @@ async function handleStoreProfilePhotoSignatureRequest(
       });
     }
 
+    // STEP 44-A｜商品写真(storeCustomMenuPhoto)は、無料の店舗写真の条件に加えて
+    // 月額100円カスタマイズの利用権限があることを確認し、商品写真のフォルダーの署名を出す。
+    const isMenuPhoto =
+      requestBody.purpose === "storeCustomMenuPhoto";
+
     const editorCheck =
-      await checkStoreProfileEditor(
-        getFirestore(
-          getFirebaseAdminApp()
-        ),
-        storeId,
-        actorResult.actor.uid
-      );
+      isMenuPhoto
+        ? await checkStoreCustomEditor(
+            getFirestore(
+              getFirebaseAdminApp()
+            ),
+            storeId,
+            actorResult.actor.uid,
+            Date.now()
+          )
+        : await checkStoreProfileEditor(
+            getFirestore(
+              getFirebaseAdminApp()
+            ),
+            storeId,
+            actorResult.actor.uid
+          );
 
     if (!editorCheck.ok) {
       return response.status(editorCheck.status).json({
@@ -20609,9 +20677,13 @@ async function handleStoreProfilePhotoSignatureRequest(
       );
 
     const folder =
-      buildStorePhotoFolder(
-        storeId
-      );
+      isMenuPhoto
+        ? buildStoreMenuPhotoFolder(
+            storeId
+          )
+        : buildStorePhotoFolder(
+            storeId
+          );
 
     const signature =
       buildCloudinaryUploadSignature(
@@ -20668,6 +20740,11 @@ async function destroyStorePhotoImages(
 
         if (
           !isStorePhotoPublicId(
+            publicId,
+            storeIdInPath
+          ) &&
+          // STEP 44-A｜商品写真(machinau_store_profiles/{storeId}/menu/…)も店舗写真フォルダーの画像として扱う。
+          !isStoreMenuPhotoPublicId(
             publicId,
             storeIdInPath
           )
@@ -20783,7 +20860,8 @@ async function handleCloudinarySignatureRequest(
 ) {
   // Phase 2C｜店舗写真用の署名だけ別処理へ分ける(これ以外の呼び出しは従来どおり)。
   if (
-    readRequestBody(request).purpose === "storeProfilePhoto"
+    readRequestBody(request).purpose === "storeProfilePhoto" ||
+    readRequestBody(request).purpose === "storeCustomMenuPhoto"
   ) {
     return handleStoreProfilePhotoSignatureRequest(
       request,
@@ -22092,7 +22170,13 @@ async function resolveStoreUserActor(
         isStoreCardLiveTrialToken(
           decodedToken,
           process.env
-        )
+        ),
+      // STEP 47-B｜運営(代表＝ADMIN_EMAIL)のアカウントか。真偽値だけ。店舗画面からの退会(ログインの削除)を断るためだけに使う。
+      adminEmailAccount:
+        typeof process.env.ADMIN_EMAIL === "string" &&
+        process.env.ADMIN_EMAIL.trim() !== "" &&
+        String(decodedToken.email || "").trim().toLowerCase() ===
+          process.env.ADMIN_EMAIL.trim().toLowerCase()
     }
   };
 }
@@ -23403,6 +23487,27 @@ const COLUMN_ARTICLE_PAGE_UI_TEXT =
     saveFailed: {
       ja: "保存を変更できませんでした。このブラウザでは保存が使えない可能性があります（プライベートブラウズ等）。",
       en: "Couldn't update your saved reads. Saving may be unavailable in this browser (e.g. private browsing)."
+    },
+
+    // STEP 48｜シェア(保存ボタンの下)。TOPの share_* (translations.js)と同じ文言。
+    shareButton: {
+      ja: "🔗 シェア",
+      en: "🔗 Share"
+    },
+
+    shareCopied: {
+      ja: "リンクをコピーしました。LINEやメールなどに貼り付けて送れます。",
+      en: "Link copied. Paste it into a message or email to send it."
+    },
+
+    shareCopyFailed: {
+      ja: "リンクをコピーできませんでした。下のリンクを長押し（または選択）してコピーしてください。",
+      en: "Couldn't copy the link. Press and hold (or select) the link below to copy it."
+    },
+
+    shareLinkLabel: {
+      ja: "共有するリンク",
+      en: "Link to share"
     },
 
     // 読みもの回遊導線｜記事の後(コメント欄より前)に出す同カテゴリー記事と一覧への導線。
@@ -26297,6 +26402,22 @@ function buildColumnArticleHtml(
       .replace(/\u2028/g, "\\u2028")
       .replace(/\u2029/g, "\\u2029");
 
+  // STEP 48\uff5c\u30b7\u30a7\u30a2\u3002\u5171\u6709\u3059\u308bURL\u306f\u3053\u306e\u8a18\u4e8b\u306e\u6b63\u5f0f\u306aURL(canonical\uff1ahttps://machinau.jp/column/{slug}.html\u3001
+  // \u82f1\u8a9e\u7248\u306f ?lang=en)\u3060\u3051\u3002\u4f4d\u7f6e\u60c5\u5831\u30fb\u5229\u7528\u8005\u306eID\u306f\u542b\u3081\u306a\u3044\u3002
+  const articleShareConfigJson =
+    JSON.stringify({
+      url: canonicalUrl,
+      title: article.title,
+      text: {
+        copied: getColumnArticlePageText("shareCopied", language),
+        copyFailed: getColumnArticlePageText("shareCopyFailed", language),
+        linkLabel: getColumnArticlePageText("shareLinkLabel", language)
+      }
+    })
+      .replace(/</g, "\\u003c")
+      .replace(/\u2028/g, "\\u2028")
+      .replace(/\u2029/g, "\\u2029");
+
   const escapedTitleSuffix =
     escapeHtmlForRender(
       getColumnArticlePageText(
@@ -26492,6 +26613,25 @@ function buildColumnArticleHtml(
       background: #fff6e5; color: #7a4b00; font-size: 12px; line-height: 1.6;
     }
     @media (min-width: 700px) { .article-save-button { width: auto; } }
+    .article-share-section { margin: 12px 0 0; }
+    .article-share-button {
+      width: 100%; min-height: 48px; padding: 0 22px; border: 1.5px solid var(--blue); border-radius: 14px;
+      background: var(--white); color: var(--blue); font-size: 15px; font-weight: 800;
+      font-family: inherit; cursor: pointer;
+    }
+    .article-share-button:focus-visible { outline: 2px solid var(--navy); outline-offset: 2px; }
+    .article-share-status {
+      margin: 10px 0 0; padding: 8px 12px; border-radius: 10px;
+      background: #eef7fb; color: var(--navy); font-size: 12px; line-height: 1.6;
+    }
+    .article-share-status.is-error { background: #fff6e5; color: #7a4b00; }
+    .article-share-status p { margin: 0 0 6px; font-size: 12px; line-height: 1.6; color: inherit; }
+    .article-share-url-label { display: block; font-weight: 700; }
+    .article-share-url {
+      display: block; width: 100%; margin-top: 4px; padding: 8px 10px; border: 1px solid var(--border);
+      border-radius: 8px; background: var(--white); color: var(--text); font-size: 13px; font-family: inherit;
+    }
+    @media (min-width: 700px) { .article-share-button { width: auto; } }
     .article-language-switch {
       margin: 0 0 14px; font-size: 12px; text-align: right; color: var(--subtext);
     }
@@ -26644,6 +26784,11 @@ function buildColumnArticleHtml(
       <div class="article-save-section">
         <button id="articleSaveButton" class="article-save-button" type="button" aria-pressed="false" aria-label="${escapeHtmlForRender(getColumnArticlePageText("saveButtonAriaLabel", language))}" hidden>${escapeHtmlForRender(getColumnArticlePageText("saveButton", language))}</button>
         <p id="articleSaveNotice" class="article-save-notice" role="status" aria-live="polite" hidden></p>
+      </div>
+
+      <div class="article-share-section">
+        <button id="articleShareButton" class="article-share-button" type="button" hidden>${escapeHtmlForRender(getColumnArticlePageText("shareButton", language))}</button>
+        <div id="articleShareStatus" class="article-share-status" role="status" aria-live="polite" hidden></div>
       </div>
 
       <div class="cta-section">
@@ -26799,6 +26944,98 @@ function buildColumnArticleHtml(
     });
 
     loadComments();
+  </script>
+
+  <script>
+    // STEP 48｜シェア。Web Share API が使える環境ではそれを使い、使えない・失敗した時はリンクをコピーする。
+    // コピーもできない時は、リンクを出して手でコピーしてもらう。保存・コメントとは別のscript。GA4イベントは送らない。
+    (function () {
+      const config = ${articleShareConfigJson};
+      const shareButton = document.getElementById("articleShareButton");
+      const shareStatus = document.getElementById("articleShareStatus");
+      let sharing = false;
+
+      if (!shareButton || !shareStatus) {
+        return;
+      }
+
+      function showShareResult(result) {
+        shareStatus.className = "article-share-status" + (result === "failed" ? " is-error" : "");
+        shareStatus.textContent = "";
+
+        if (result === "copied") {
+          shareStatus.textContent = config.text.copied;
+          shareStatus.hidden = false;
+          return;
+        }
+
+        if (result === "failed") {
+          const message = document.createElement("p");
+          message.textContent = config.text.copyFailed;
+          const label = document.createElement("label");
+          label.className = "article-share-url-label";
+          label.textContent = config.text.linkLabel;
+          const input = document.createElement("input");
+          input.className = "article-share-url";
+          input.type = "text";
+          input.readOnly = true;
+          input.value = config.url;
+          input.addEventListener("focus", function () { input.select(); });
+          label.appendChild(input);
+          shareStatus.appendChild(message);
+          shareStatus.appendChild(label);
+          shareStatus.hidden = false;
+          try { input.focus(); input.select(); } catch (error) { /* 選べなくても、リンクは表示したまま。 */ }
+          return;
+        }
+
+        shareStatus.hidden = true;
+      }
+
+      shareButton.addEventListener("click", async function () {
+        if (sharing) {
+          return;
+        }
+
+        sharing = true;
+        showShareResult("");
+
+        try {
+          if (typeof navigator.share === "function") {
+            const shareData = { title: config.title, url: config.url };
+
+            try {
+              if (typeof navigator.canShare !== "function" || navigator.canShare(shareData)) {
+                await navigator.share(shareData);
+                return;
+              }
+            } catch (error) {
+              if (error && error.name === "AbortError") {
+                return;
+              }
+              // それ以外(許可されない等)はコピーへ。
+            }
+          }
+
+          let copied = false;
+
+          try {
+            if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+              await navigator.clipboard.writeText(config.url);
+              copied = true;
+            }
+          } catch (error) {
+            copied = false;
+          }
+
+          showShareResult(copied ? "copied" : "failed");
+        } finally {
+          sharing = false;
+        }
+      });
+
+      shareButton.hidden = false;
+    })();
   </script>
 
   <!-- 旅の保存箱｜保存の読み書き(TOPと共通)。静的ファイルで、Functionや通信は増えない。 -->
@@ -29793,6 +30030,20 @@ function buildStoreSelfServiceDeps() {
     // STEP 42-F｜写真の複製の Preview 実証の環境の判定(Preview・対象ブランチ・machinau-preview の時だけ true)。
     isListingPhotoCopyTrialEnabled: function() {
       return isPreviewListingPhotoCopyTrialEnabled(process.env);
+    },
+    // STEP 44-A｜旅行者向け一覧に付ける、月額100円カスタマイズの有料の内容(利用権限がある店舗だけ)。
+    readPublicStoreCustomProfiles: function(database, storeIds) {
+      return readPublicStoreCustomProfiles(database, storeIds, Date.now());
+    },
+    // STEP 44-B｜月額100円カスタマイズの申込を受け付ける環境か(Preview試験の環境だけ true、Productionは常に false)。
+    isStoreCustomPlanTrialEnabled: function() {
+      return isPreviewStoreCustomPlanTrialEnabled(process.env);
+    },
+    // STEP 44-C④｜月額100円カスタマイズの請求(請求用の Stripe の設定を読む環境変数と、Stripe への通信)。
+    // ほかの店舗の処理はこの2つを使わない。
+    env: process.env,
+    fetch: function(url, options) {
+      return fetch(url, options);
     }
   };
 }
@@ -29878,6 +30129,33 @@ function buildStoreBillingDeps() {
       return IMADAKE_CV_BILLING_STARTED === true || isPreviewStoreInvoiceHistoryEnabled(process.env);
     }
   };
+}
+
+// STEP 47｜アカウントの削除：カードの取り外しはカード登録と同じ部品を使い、最後にログインを削除する。
+// STEP 47-B｜店舗写真の削除(既存の店舗写真と同じ Cloudinary の削除の部品)・運営の確認(requireAdmin)。
+function buildStoreAccountDeletionDeps() {
+  return Object.assign(buildStoreBillingDeps(), {
+    deleteAuthUser: function(uid) {
+      return getAuth(getFirebaseAdminApp()).deleteUser(uid);
+    },
+    destroyStorePhotoImages: destroyStorePhotoImages,
+    requireAdmin: requireAdmin,
+    // STEP 47-F｜月額100円カスタマイズ(STEP 44)がある系列だけ渡す：退会の受付での解約と、商品写真の削除の判定。
+    cancelStoreCustomPlan: cancelStoreCustomPlan,
+    isStoreMenuPhotoPublicId: isStoreMenuPhotoPublicId,
+    // STEP 47-C ①｜ログインの無い処理(定期実行・運営の再開)で、削除の前に代表のアカウントかを確かめる
+    // (ログインの登録メールが ADMIN_EMAIL か。真偽値だけを返す)。
+    isAdminUid: async function(uid) {
+      const adminEmail = typeof process.env.ADMIN_EMAIL === "string" ? process.env.ADMIN_EMAIL.trim().toLowerCase() : "";
+
+      if (adminEmail === "") {
+        return false;
+      }
+
+      const user = await getAuth(getFirebaseAdminApp()).getUser(uid);
+      return String(user && user.email ? user.email : "").trim().toLowerCase() === adminEmail;
+    }
+  });
 }
 
 // 今だけ投稿 収益化 STEP 2｜CV記録に使う既存の部品(Firebase Adminの初期化・IDトークン検証・
@@ -30024,6 +30302,28 @@ export default async function handler(
       return handleRenderColumnArticleRequest(
         request,
         response
+      );
+    }
+
+    // STEP 48-B｜共有リンクのプレビュー(OGP)。vercel.jsonのrewrite経由で/share/imadake/{ID}・
+    // /share/shop/{ID}がここへ届く(読み取りだけ。CV・料金台帳は記録しない)。
+    if (
+      request.query.mode === "renderShareImadake"
+    ) {
+      return handleRenderShareImadake(
+        request,
+        response,
+        { getFirebaseAdminApp: getFirebaseAdminApp, getFirestore: getFirestore }
+      );
+    }
+
+    if (
+      request.query.mode === "renderShareShop"
+    ) {
+      return handleRenderShareShop(
+        request,
+        response,
+        { getFirebaseAdminApp: getFirebaseAdminApp, getFirestore: getFirestore }
       );
     }
 
@@ -30282,6 +30582,70 @@ export default async function handler(
     );
   }
 
+  // STEP 47 / 47-B｜店舗アカウントの退会(ログイン中の本人。メール未確認でも可。清算の後に削除)。
+  if (
+    requestBody.mode === "storeAccountDeletionCheck"
+  ) {
+    return handleStoreAccountDeletionCheck(
+      request,
+      response,
+      buildStoreAccountDeletionDeps()
+    );
+  }
+
+  if (
+    requestBody.mode === "storeAccountDelete"
+  ) {
+    return handleStoreAccountDelete(
+      request,
+      response,
+      buildStoreAccountDeletionDeps()
+    );
+  }
+
+  // STEP 47-B｜清算が済んだ退会を最終削除へ進める(合言葉で認証。定期実行への登録は代表の承認待ち)。
+  // STEP 47-C ④｜退会の取り消し(最終削除の開始前だけ・本人)。
+  if (
+    requestBody.mode === "storeAccountDeletionCancel"
+  ) {
+    return handleStoreAccountDeletionCancel(
+      request,
+      response,
+      buildStoreAccountDeletionDeps()
+    );
+  }
+
+  if (
+    requestBody.mode === "accountDeletionSweep"
+  ) {
+    return handleAccountDeletionSweep(
+      request,
+      response,
+      buildStoreAccountDeletionDeps()
+    );
+  }
+
+  // STEP 47-B ⑦⑩｜運営：完了していない退会の一覧(読み取り専用)・カードの取り外しで止まった退会の再開。
+  if (
+    requestBody.mode === "adminAccountDeletionList"
+  ) {
+    return handleAdminAccountDeletionList(
+      request,
+      response,
+      buildStoreAccountDeletionDeps()
+    );
+  }
+
+  if (
+    requestBody.mode === "adminAccountDeletionResume"
+  ) {
+    return handleAdminAccountDeletionResume(
+      request,
+      response,
+      buildStoreAccountDeletionDeps()
+    );
+  }
+
   // 今だけ投稿 決済 STEP 32-B｜月末締め(運営のみ、既定は試算＝書き込みなし)。
   // 今だけ投稿 決済 STEP 32-D⑤｜月次請求の運営確認一覧(運営のみ、読み取り専用)。
   if (
@@ -30381,6 +30745,72 @@ export default async function handler(
       request,
       response,
       buildStoreSelfServiceDeps()
+    );
+  }
+
+  // STEP 44-A｜月額100円カスタマイズの有料プロフィール(owner本人のみ、保存は利用権限がある時だけ)。
+  if (
+    requestBody.mode === "storeCustomProfileGet"
+  ) {
+    return handleStoreCustomProfileGet(
+      request,
+      response,
+      buildStoreSelfServiceDeps()
+    );
+  }
+
+  if (
+    requestBody.mode === "storeCustomProfileUpdate"
+  ) {
+    return handleStoreCustomProfileUpdate(
+      request,
+      response,
+      buildStoreSelfServiceDeps()
+    );
+  }
+
+  // STEP 44-B｜月額100円プランの申込・解約(owner本人、Stripeの請求なし)と運営の契約一覧(読み取り専用)。
+  const storeCustomPlanHandlers =
+    {
+      storeCustomPlanSubscribe: handleStoreCustomPlanSubscribe,
+      storeCustomPlanCancel: handleStoreCustomPlanCancel,
+      adminStoreCustomPlanList: handleAdminStoreCustomPlanList,
+      // STEP 44-C③｜月末締め(運営のみ・既定は試算)、請求(フラグ false の間は必ず拒否・Stripe へ接続しない)、
+      // 請求台帳の一覧(店主は自分が請求先の分だけ／運営は読み取り専用)。
+      adminStoreCustomPlanMonthlyClose: handleAdminStoreCustomPlanMonthlyClose,
+      adminStoreCustomPlanCharge: handleAdminStoreCustomPlanChargeRun,
+      storeCustomPlanInvoiceList: handleStoreCustomPlanInvoiceList,
+      adminStoreCustomPlanInvoiceList: handleAdminStoreCustomPlanInvoiceList,
+      // STEP 44-C④｜店主の本人認証(既存の PaymentIntent を画面で完了)・確定(サーバーが Stripe に照会)・今すぐ支払う。
+      storeCustomPlanPaymentStart: handleStoreCustomPlanPaymentStart,
+      storeCustomPlanPaymentConfirm: handleStoreCustomPlanPaymentConfirm,
+      storeCustomPlanPayNow: handleStoreCustomPlanPayNow,
+      // STEP 44-C⑤｜定期実行(前月の締め・未払いの判定・請求の対象の判定。定期実行からの請求は許可フラグ false の間は試算だけ)。
+      storeCustomPlanCron: handleStoreCustomPlanCron
+    };
+
+  if (
+    typeof requestBody.mode === "string" &&
+    Object.prototype.hasOwnProperty.call(
+      storeCustomPlanHandlers,
+      requestBody.mode
+    )
+  ) {
+    const storeCustomPlanDeps =
+      buildStoreSelfServiceDeps();
+
+    // STEP 47-C ②｜毎日の定期実行の最後に、店舗の退会の最終削除を行う(締め・未払いの判定・請求の後)。
+    // STEP 47-D｜本番では、自動の最終削除の許可(false)が true になるまでこの手順を渡さない。
+    if (requestBody.mode === "storeCustomPlanCron" && isAccountDeletionSweepAllowed(process.env)) {
+      storeCustomPlanDeps.runAccountDeletionSweep = function(database) {
+        return runAccountDeletionSweep(database, buildStoreAccountDeletionDeps());
+      };
+    }
+
+    return storeCustomPlanHandlers[requestBody.mode](
+      request,
+      response,
+      storeCustomPlanDeps
     );
   }
 

@@ -7,6 +7,14 @@
     {
       "source": "/sitemap.xml",
       "destination": "/api/moderate-submission?mode=renderSitemap"
+    },
+    {
+      "source": "/share/imadake/:postId",
+      "destination": "/api/moderate-submission?mode=renderShareImadake&postId=:postId"
+    },
+    {
+      "source": "/share/shop/:shopId",
+      "destination": "/api/moderate-submission?mode=renderShareShop&shopId=:shopId"
     }
   ]
 }

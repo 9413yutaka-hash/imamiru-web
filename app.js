@@ -23,12 +23,17 @@ let storeProfileListStores = [];
 let storeProfileSuppressedListingIds = new Set();
 // STEP 42-G｜引き継ぎ済み(有効な紐付けあり)の運営掲載ID。詳細の「このお店の方へ」の入口を出さないためだけに使う。
 let storeProfileClaimedListingIds = new Set();
+// STEP 47-B ③｜店主の退会で非公開にした運営掲載ID(お気に入り表示でも出さない)。
+let storeProfileWithdrawnListingIds = new Set();
 // STEP 43-N C案｜店舗の新規登録・引き継ぎが一般に開いているか(publicStoreProfiles の listingClaimOpen)。
 // 取得できない・値が無い時は開いていない扱い(入口を出さない)。
 let storeListingClaimOpen = false;
 let storeProfileListFetchSequence = 0;
 // 無料掲載が一度でも一覧に表示されたか(読み込み中の表示を正式店舗の到着で上書きしないため)。
 let hasAppliedSubmissionsForStoreProfiles = false;
+// STEP 48｜正式店舗の取得が一度でも終わったか(成功・失敗どちらも)。共有リンク(?shop=)の店舗を、
+// 一覧と同じ条件(引き継ぎで外した無料掲載を出さない)で開くために待つ。
+let storeProfileListFetchSettled = false;
 
 // ---- Ver1.7｜多言語化の器(固定UI文言専用) ----
 // ここで扱うのは画面の固定UI文言(見出し・ボタン・カテゴリー表示ラベル等)だけ。
@@ -2867,12 +2872,74 @@ function updateShopsSectionRegionUi() {
   }
 }
 
+// STEP 49-A｜選択中の市区町村の街の発見(期限内)を新しい順に返す。座標の有無は
+// 問わず、距離は現在地と投稿の座標が両方ある時だけ計算する(無ければnull)。
+function getStreetDiscoveryItemsInSelectedRegion(
+  nowMilliseconds,
+  hasUserLocation
+) {
+  return shops
+    .filter(
+      function(shop) {
+        return (
+          shop.submissionType === "street" &&
+          getDateValue(
+            shop.expiresAt
+          ) > nowMilliseconds &&
+          isShopInSelectedShopRegion(
+            shop,
+            selectedShopRegion
+          )
+        );
+      }
+    )
+    .sort(
+      function(first, second) {
+        return (
+          getDateValue(
+            second.createdAt
+          ) -
+          getDateValue(
+            first.createdAt
+          )
+        );
+      }
+    )
+    .map(
+      function(shop) {
+        return {
+          shop: shop,
+          distanceKm:
+            hasUserLocation &&
+            Number.isFinite(
+              shop.latitude
+            ) &&
+            Number.isFinite(
+              shop.longitude
+            )
+              ? calculateDistance(
+                  userLatitude,
+                  userLongitude,
+                  shop.latitude,
+                  shop.longitude
+                )
+              : null
+        };
+      }
+    );
+}
+
 // 街の発見の分離｜street投稿(承認済み・期限内のものだけがshopsに入る)を、
 // 「マチナウ読みもの」直前の専用セクションへ出す。現在地が分かるまでは
 // 何も出さず(全国の投稿を無差別に並べない)、分かった後は座標があり
 // 現在地から15km以内(境界を含む)の投稿だけを近い順に並べる。店舗カテゴリ・
 // お気に入り(selectedCategory)には依存しない。店舗と誤解される表示
 // (掲載中・営業状態・お気に入り・店舗詳細モーダル)は付けない。
+// STEP 49-A｜地域から探すで市区町村を選んでいる間だけ、店舗カードと同じ
+// isShopInSelectedShopRegion()(住所の「都道府県＋市区町村」)で絞り、新しい順に
+// 並べる(現在地が無くても表示する。距離は現在地と座標がある時だけ添える)。
+// 住所で市区町村が判定できない投稿は推測で割り当てず対象外にする。
+// 市区町村を選んでいない間の現在地15kmの判定は従来のまま。
 function renderStreetDiscoverySection() {
   const section =
     document.getElementById(
@@ -2891,9 +2958,13 @@ function renderStreetDiscoverySection() {
     return;
   }
 
+  const hasUserLocation =
+    userLatitude !== null &&
+    userLongitude !== null;
+
   if (
-    userLatitude === null ||
-    userLongitude === null
+    !selectedShopRegion &&
+    !hasUserLocation
   ) {
     list.innerHTML =
       "";
@@ -2908,7 +2979,12 @@ function renderStreetDiscoverySection() {
     Date.now();
 
   const nearbyStreetItems =
-    shops
+    selectedShopRegion
+      ? getStreetDiscoveryItemsInSelectedRegion(
+          nowMilliseconds,
+          hasUserLocation
+        )
+      : shops
       .filter(
         function(shop) {
           return (
@@ -3008,11 +3084,17 @@ function renderStreetDiscoverySection() {
             );
           }
 
-          placeParts.push(
-            formatDistance(
+          if (
+            Number.isFinite(
               item.distanceKm
             )
-          );
+          ) {
+            placeParts.push(
+              formatDistance(
+                item.distanceKm
+              )
+            );
+          }
 
           return (
             '<article class="street-discovery-card">' +
@@ -3098,6 +3180,7 @@ function resetStoreProfileListState() {
   storeProfileListStores = [];
   storeProfileSuppressedListingIds = new Set();
   storeProfileClaimedListingIds = new Set();
+  storeProfileWithdrawnListingIds = new Set();
   storeListingClaimOpen = false;
 }
 
@@ -3119,6 +3202,7 @@ async function loadStoreProfilesForShopList() {
   let nextSuppressedIds = [];
   let nextClaimedIds = [];
   let nextClaimOpen = false;
+  let nextWithdrawnIds = [];
 
   try {
     const response =
@@ -3146,6 +3230,11 @@ async function loadStoreProfilesForShopList() {
           })
         : [];
       nextClaimOpen = data.listingClaimOpen === true;
+      nextWithdrawnIds = Array.isArray(data.withdrawnListingIds)
+        ? data.withdrawnListingIds.filter(function(id) {
+            return typeof id === "string" && id !== "";
+          })
+        : [];
     }
   } catch (error) {
     console.warn("正式店舗の一覧を取得できませんでした(無料掲載はそのまま表示します)：", error && error.name);
@@ -3163,13 +3252,18 @@ async function loadStoreProfilesForShopList() {
   storeProfileListStores = nextStores;
   storeProfileSuppressedListingIds = new Set(nextSuppressedIds);
   storeProfileClaimedListingIds = new Set(nextClaimedIds);
+  storeProfileWithdrawnListingIds = new Set(nextWithdrawnIds);
   storeListingClaimOpen = nextClaimOpen;
+  storeProfileListFetchSettled = true;
 
   if (hasAppliedSubmissionsForStoreProfiles) {
     renderShops();
     // Phase 2D STEP 4C-2｜マイページのお気に入り一覧も、正式店舗の到着に合わせて描き直す。
     renderFavoriteList();
   }
+
+  // STEP 48｜共有リンクの店舗を待っていれば開く(無料掲載の読み込みも済んでいる時だけ)。
+  tryOpenPendingSharedShop();
 }
 
 // 住所表示用：Googleの住所の先頭の「日本、」と郵便番号を除く(地域検索の正規化と同じ考え方)。
@@ -3298,8 +3392,139 @@ function buildStoreProfileListShop(store) {
     }),
     // 並び順(新しい順)だけに使う。カードには表示しない。無い・壊れている場合は0扱い(最後)。
     createdAt: typeof store.publishedAt === "string" ? store.publishedAt : null,
+    // STEP 44-A｜月額100円カスタマイズの有料の内容(サーバーが利用権限を確認した店舗だけに付く)。
+    // 詳細表示だけに使う。一覧カード・地図・お気に入り・並び順・15kmの判定には使わない。
+    custom: readStoreProfileCustom(store.custom),
     distanceKm: null
   };
+}
+
+// STEP 44-A｜有料の内容を、表示してよい形だけに整える(無い・壊れている時は null)。
+// 写真はマチナウのCloudinaryの画像だけ、リンクは https だけ(サーバーと同じ条件を画面でも重ねる)。
+const STORE_PROFILE_CUSTOM_LINK_TYPES = [
+  "instagram",
+  "website",
+  "reservation",
+  "x",
+  "facebook",
+  "tiktok",
+  "youtube",
+  "line",
+  "other"
+];
+
+const STORE_PROFILE_CUSTOM_PHOTO_PREFIX =
+  "https://res.cloudinary.com/cdhyctnp/image/upload/";
+
+function readStoreProfileCustom(custom) {
+  if (!custom || typeof custom !== "object") {
+    return null;
+  }
+
+  const readText = function(value) {
+    return typeof value === "string" ? value.trim() : "";
+  };
+
+  const menuItems = (Array.isArray(custom.menuItems) ? custom.menuItems : [])
+    .map(function(item) {
+      const photoUrl = item ? readText(item.photoUrl) : "";
+
+      return {
+        name: item ? readText(item.name) : "",
+        description: item ? readText(item.description) : "",
+        priceText: item ? readText(item.priceText) : "",
+        photoUrl: photoUrl.indexOf(STORE_PROFILE_CUSTOM_PHOTO_PREFIX) === 0 ? photoUrl : ""
+      };
+    })
+    .filter(function(item) { return item.name !== ""; });
+
+  const links = (Array.isArray(custom.links) ? custom.links : [])
+    .map(function(link) {
+      return {
+        type: link && STORE_PROFILE_CUSTOM_LINK_TYPES.includes(link.type) ? link.type : "",
+        label: link ? readText(link.label) : "",
+        url: link ? readText(link.url) : ""
+      };
+    })
+    .filter(function(link) {
+      return link.type !== "" && /^https:\/\/[^\s]+$/.test(link.url);
+    });
+
+  const story = readText(custom.story);
+
+  if (menuItems.length === 0 && links.length === 0 && story === "") {
+    return null;
+  }
+
+  return { menuItems: menuItems, links: links, story: story };
+}
+
+// 詳細表示の有料の内容(HTML)。登録の無い欄は見出しも出さない。文字はすべてエスケープする。
+// modal-message は white-space: pre-line のため、タグの間に改行を入れない。
+function buildStoreProfileCustomHtml(custom, language) {
+  if (!custom) {
+    return "";
+  }
+
+  const parts = [];
+
+  if (custom.story !== "") {
+    parts.push(
+      '<section class="shop-custom-section">' +
+        '<h3 class="shop-custom-heading">' + escapeHtml(getMachinauTranslation("shop_custom_story_heading", language)) + "</h3>" +
+        '<p class="shop-custom-text">' + escapeHtml(custom.story) + "</p>" +
+      "</section>"
+    );
+  }
+
+  if (custom.menuItems.length > 0) {
+    parts.push(
+      '<section class="shop-custom-section">' +
+        '<h3 class="shop-custom-heading">' + escapeHtml(getMachinauTranslation("shop_custom_menu_heading", language)) + "</h3>" +
+        '<ul class="shop-custom-menu">' +
+        custom.menuItems.map(function(item) {
+          return (
+            '<li class="shop-custom-menu-item' + (item.photoUrl !== "" ? " has-photo" : "") + '">' +
+              (item.photoUrl !== ""
+                ? '<img class="shop-custom-menu-photo" src="' + escapeHtml(item.photoUrl) + '" alt="" loading="lazy">'
+                : "") +
+              '<div class="shop-custom-menu-body">' +
+                '<div class="shop-custom-menu-head">' +
+                  '<span class="shop-custom-menu-name">' + escapeHtml(item.name) + "</span>" +
+                  (item.priceText !== "" ? '<span class="shop-custom-menu-price">' + escapeHtml(item.priceText) + "</span>" : "") +
+                "</div>" +
+                (item.description !== "" ? '<p class="shop-custom-text">' + escapeHtml(item.description) + "</p>" : "") +
+              "</div>" +
+            "</li>"
+          );
+        }).join("") +
+        "</ul>" +
+      "</section>"
+    );
+  }
+
+  if (custom.links.length > 0) {
+    parts.push(
+      '<section class="shop-custom-section">' +
+        '<h3 class="shop-custom-heading">' + escapeHtml(getMachinauTranslation("shop_custom_links_heading", language)) + "</h3>" +
+        '<div class="shop-custom-links">' +
+        custom.links.map(function(link) {
+          const label = link.label !== ""
+            ? link.label
+            : getMachinauTranslation("store_custom_link_type_" + link.type, language);
+
+          return (
+            '<a class="shop-custom-link" href="' + escapeHtml(link.url) + '" target="_blank" rel="noopener noreferrer nofollow">' +
+              escapeHtml(label) +
+            "</a>"
+          );
+        }).join("") +
+        "</div>" +
+      "</section>"
+    );
+  }
+
+  return parts.length > 0 ? '<div class="shop-custom">' + parts.join("") + "</div>" : "";
 }
 
 // 地域検索：正式店舗は住所の文字列ではなく、整理済みの都道府県・市区町村で完全一致させる
@@ -3335,7 +3560,8 @@ function getStoreProfileSuppressedIdsForCurrentView() {
     return storeProfileSuppressedListingIds;
   }
 
-  const aliased = new Set();
+  // STEP 47-B ③｜店主の退会で非公開にした掲載は、お気に入り表示でも外す。
+  const aliased = new Set(storeProfileWithdrawnListingIds);
 
   storeProfileListStores.map(buildStoreProfileListShop).forEach(function(shop) {
     (shop ? shop.linkedListingIds : []).forEach(function(id) {
@@ -4339,7 +4565,10 @@ function renderFavoriteList() {
 
     if (!replacement) {
       // 引き継ぎ先の正式店舗が確認できない時は、お気に入りの無料掲載を消さずに出す。
-      favoriteShops.push(shop);
+      // STEP 47-B ③｜ただし店主の退会で非公開にした掲載は出さない(運営の確認なしに自動で戻さない)。
+      if (!storeProfileWithdrawnListingIds.has(shop.firestoreId)) {
+        favoriteShops.push(shop);
+      }
       return;
     }
 
@@ -5957,6 +6186,15 @@ function openShopModal(
       );
   }
 
+  // STEP 44-A｜正式店舗の有料の内容(ストーリー・メニュー・追加リンク)。無い店舗は何も足さない。
+  if (isStoreProfileShop) {
+    modalText +=
+      buildStoreProfileCustomHtml(
+        selectedShop.custom,
+        modalCurrentLanguage
+      );
+  }
+
   modalMessage.innerHTML =
     modalText;
 
@@ -6034,6 +6272,11 @@ function openShopModal(
         "";
     }
   }
+
+  // STEP 48｜無料店舗(運営掲載の常設店舗広告・店主が管理する正式店舗)の詳細だけにシェアを出す。
+  updateShopModalShareArea(
+    selectedShop
+  );
 
   modal.classList.add(
     "visible"
@@ -11422,6 +11665,9 @@ function applyLoadedSubmissions(
   // TOP復帰時の現在地自動復元 Phase1｜店舗データが揃ってから、保存済みの
   // 現在地を1回だけ適用する(復元待ちデータが無ければ何もしない)。
   applyPendingRestoredUserLocation();
+
+  // STEP 48｜共有リンクの店舗を待っていれば開く(正式店舗の取得も終わっている時だけ)。
+  tryOpenPendingSharedShop();
 
   console.log(
     "✅ 期限内の広告を読み込みました：" +
@@ -21078,7 +21324,8 @@ function sendImadakeFirstViewAnalytics(
 
 // 詳細を取得する。POST imadakeDetailOpen(サーバーが初回閲覧＝CVを記録してから本文を返す。
 // 同じ旅行者の2回目以降・再試行はCVを増やさず本文を返す)。
-//   ・匿名ログインできない時はトークン無しで送る(サーバーは本文を返し、CVは記録しない)
+//   ・匿名ログインできない時はトークン無しで送る(CVは記録しない。課金対象の投稿はサーバーが
+//     詳細を返さず retryable を返すため、再試行の表示にする)
 //   ・店舗ログイン中なら店舗トークンも送る(本人の閲覧かどうかはサーバーが照合する)
 //   ・通信・サーバーの障害時だけ、従来のGET imadakePostGetへ戻る。課金対象の投稿は
 //     GETでは本文が返らない(bodyProtected)ため、本文を出さず再試行の表示にする
@@ -21182,6 +21429,12 @@ async function fetchImadakeDetailWithCv(
     return { postId: postId, state: "ended", post: null, viewedChanged: false };
   }
 
+  // STEP 48-D｜課金対象の投稿でCVの成立を確認できなかった(サーバーが詳細を返さなかった)時は、
+  // 再試行の表示にする(GETでも本文は返らないため戻らない)。
+  if (responseData && responseData.retryable === true) {
+    return { postId: postId, state: "error", post: null, viewedChanged: false };
+  }
+
   return fetchImadakeDetailFromPublicGet(postId);
 }
 
@@ -21239,6 +21492,12 @@ function retryImadakeDetail() {
     imadakeDetailState.state === "error" &&
     typeof imadakeDetailState.postId === "string"
   ) {
+    // STEP 48｜共有リンクの紹介の読み込みに失敗した時は、紹介を読み直す(詳細・CVへは進めない)。
+    if (imadakeDetailState.shared === true) {
+      openImadakeSharedPreview(imadakeDetailState.postId);
+      return;
+    }
+
     openImadakeDetail(imadakeDetailState.postId);
   }
 }
@@ -21531,6 +21790,8 @@ function buildImadakeDetailHtml(
     "</p>" +
     (rowsHtml !== "" ? '<div class="imadake-detail-rows">' + rowsHtml + "</div>" : "") +
     buildImadakeActionLinksHtml(post.actionTargets, language) +
+    // STEP 48｜シェア(共有するのは投稿IDのURLだけ。開いた人の詳細は「続きを見る」から)。
+    buildMachinauShareAreaHtml("imadake", post.postId, post.headline, language) +
     '<p class="imadake-detail-note">' +
       escapeHtml(getMachinauTranslation("imadake_detail_check_note", language)) +
     "</p>"
@@ -21554,6 +21815,19 @@ function renderImadakeDetail() {
   ) {
     body.innerHTML =
       buildImadakeDetailHtml(
+        imadakeDetailState.post,
+        language
+      );
+    return;
+  }
+
+  // STEP 48｜共有リンクから開いた時の紹介(カードと同じ内容と「続きを見る」。CVは記録しない)。
+  if (
+    imadakeDetailState.state === "preview" &&
+    imadakeDetailState.post
+  ) {
+    body.innerHTML =
+      buildImadakeSharedPreviewHtml(
         imadakeDetailState.post,
         language
       );
@@ -21613,6 +21887,701 @@ document.addEventListener(
       modal.classList.contains("visible")
     ) {
       closeImadakeDetail();
+    }
+  }
+);
+
+// ============================================================
+// STEP 48｜シェア(今だけ投稿の詳細・無料店舗の詳細)と、共有リンクで開いた時の表示
+// ============================================================
+// ・共有するURLは正式なドメインの決まった形だけ(位置情報・利用者のID・言語は含めない。
+//   PreviewやローカルのURLにもしない)：
+//     今だけ投稿 https://machinau.jp/share/imadake/{投稿ID}
+//     無料店舗   https://machinau.jp/share/shop/{ID}(運営掲載の常設店舗広告は submission ID、正式店舗は sp_{storeId})
+//   STEP 48-B｜/share/ はLINE等のプレビュー(OGP)を返すページ(api/_lib/share-preview.js)で、人が開くと
+//   すぐ下の直接表示(/?imadake= ・ /?shop=)へ移る。/?imadake= ・ /?shop= を直接開いても同じ表示。
+//   読みものの記事は記事ページ(api/moderate-submission.js の buildColumnArticleHtml)が自分のURLを共有する。
+// ・Web Share API が使える環境ではそれを使い、使えない・失敗した時はリンクをコピーする。
+//   コピーもできない時は、リンクを画面に出して手でコピーしてもらう。
+// ・共有リンクで開いた時の公開の条件は今までと同じ：
+//   今だけ投稿は公開中・期限内のものだけ(GET imadakePostGet。終わっていれば「掲載は終了しました」)。
+//   開いた時はカードと同じ紹介だけを出し、詳細は「続きを見る」を押した時だけ既存の
+//   openImadakeDetail(POST imadakeDetailOpen、初回閲覧のCV)で開く(CVの判定・料金台帳は変えない)。
+//   店舗は、TOPが読み込んだ公開中の一覧(shops の運営掲載・正式店舗)にある時だけ詳細を開く。
+//   引き継ぎで一覧から外した運営掲載は、引き継いだ正式店舗を開く(無ければ開かない)。
+//   一覧の15kmの条件(カードの表示範囲)は変えない(お気に入りと同じく、詳細は距離に関係なく開く)。
+
+const MACHINAU_SHARE_ORIGIN =
+  "https://machinau.jp";
+
+const MACHINAU_SHARE_ID_PATTERN =
+  /^[A-Za-z0-9_-]{1,100}$/;
+
+const MACHINAU_SHARE_KINDS =
+  ["imadake", "shop"];
+
+const SHARED_LINK_NOTICE_HIDE_MS =
+  10000;
+
+// 共有リンク(?shop=)の店舗。無料掲載と正式店舗の両方の読み込みが済むまで待つ。
+var pendingSharedShopId =
+  "";
+
+// 共有の画面を開いている間に、もう一度押されても重ねて開かない。
+var machinauShareInProgress =
+  false;
+
+var sharedLinkNoticeTimer =
+  null;
+
+function buildMachinauShareUrl(
+  kind,
+  id
+) {
+  if (
+    !MACHINAU_SHARE_KINDS.includes(kind) ||
+    typeof id !== "string" ||
+    !MACHINAU_SHARE_ID_PATTERN.test(id)
+  ) {
+    return "";
+  }
+
+  return (
+    MACHINAU_SHARE_ORIGIN +
+    "/share/" +
+    kind +
+    "/" +
+    encodeURIComponent(id)
+  );
+}
+
+function buildMachinauShareAreaHtml(
+  kind,
+  id,
+  title,
+  language
+) {
+  if (buildMachinauShareUrl(kind, id) === "") {
+    return "";
+  }
+
+  return (
+    '<div class="machinau-share">' +
+      '<button class="machinau-share-button" type="button"' +
+        ' data-share-kind="' + escapeHtml(kind) + '"' +
+        ' data-share-id="' + escapeHtml(id) + '"' +
+        ' data-share-title="' + escapeHtml(typeof title === "string" ? title : "") + '"' +
+        ' onclick="shareMachinauItemFromButton(this)">' +
+        escapeHtml(getMachinauTranslation("share_button", language)) +
+      "</button>" +
+      '<div class="machinau-share-status" role="status" aria-live="polite"></div>' +
+    "</div>"
+  );
+}
+
+// 店舗の詳細(#shopModal)のシェア。無料店舗(運営掲載の常設店舗広告・正式店舗)だけに出す。
+function updateShopModalShareArea(
+  shop
+) {
+  const area =
+    document.getElementById("modalShareArea");
+
+  const button =
+    document.getElementById("modalShareButton");
+
+  if (!area || !button) {
+    return;
+  }
+
+  const listingType =
+    getShopListingTypeForAnalytics(shop);
+
+  const shopId =
+    String(shop.firestoreId || "");
+
+  const shareable =
+    (listingType === "free_listing" || listingType === "store_profile") &&
+    buildMachinauShareUrl("shop", shopId) !== "";
+
+  setMachinauShareStatus(
+    area.querySelector(".machinau-share-status"),
+    "",
+    "",
+    getCurrentMachinauLanguage()
+  );
+
+  area.style.display =
+    shareable ? "" : "none";
+
+  button.setAttribute("data-share-kind", "shop");
+  button.setAttribute("data-share-id", shareable ? shopId : "");
+  button.setAttribute("data-share-title", shareable ? String(shop.name || "") : "");
+}
+
+async function shareMachinauItemFromButton(
+  button
+) {
+  if (!button || machinauShareInProgress) {
+    return;
+  }
+
+  const url =
+    buildMachinauShareUrl(
+      button.getAttribute("data-share-kind"),
+      button.getAttribute("data-share-id")
+    );
+
+  if (url === "") {
+    return;
+  }
+
+  const status =
+    button.parentNode
+      ? button.parentNode.querySelector(".machinau-share-status")
+      : null;
+
+  machinauShareInProgress = true;
+
+  try {
+    await shareOrCopyMachinauUrl(
+      url,
+      button.getAttribute("data-share-title") || "",
+      status
+    );
+  } finally {
+    machinauShareInProgress = false;
+  }
+}
+
+// 結果："shared"(共有の画面で送った)・"cancelled"(共有の画面を閉じた)・"copied"・"failed"。
+async function shareOrCopyMachinauUrl(
+  url,
+  title,
+  status
+) {
+  const language =
+    getCurrentMachinauLanguage();
+
+  setMachinauShareStatus(status, "", "", language);
+
+  if (
+    typeof navigator !== "undefined" &&
+    typeof navigator.share === "function"
+  ) {
+    const shareData = {
+      title: title !== "" ? title : document.title,
+      url: url
+    };
+
+    try {
+      if (
+        typeof navigator.canShare !== "function" ||
+        navigator.canShare(shareData)
+      ) {
+        await navigator.share(shareData);
+        return "shared";
+      }
+    } catch (error) {
+      if (error && error.name === "AbortError") {
+        return "cancelled";
+      }
+      // それ以外(許可されない等)はコピーへ。
+    }
+  }
+
+  let copied =
+    false;
+
+  try {
+    if (
+      typeof navigator !== "undefined" &&
+      navigator.clipboard &&
+      typeof navigator.clipboard.writeText === "function"
+    ) {
+      await navigator.clipboard.writeText(url);
+      copied = true;
+    }
+  } catch (error) {
+    copied = false;
+  }
+
+  setMachinauShareStatus(status, copied ? "copied" : "failed", url, language);
+
+  return copied ? "copied" : "failed";
+}
+
+function setMachinauShareStatus(
+  status,
+  result,
+  url,
+  language
+) {
+  if (!status) {
+    return;
+  }
+
+  status.className =
+    "machinau-share-status" +
+    (result === "copied" ? " is-success" : result === "failed" ? " is-error" : "");
+
+  if (result === "copied") {
+    status.textContent =
+      getMachinauTranslation("share_copied", language);
+    return;
+  }
+
+  if (result === "failed") {
+    status.innerHTML =
+      "<p>" + escapeHtml(getMachinauTranslation("share_copy_failed", language)) + "</p>" +
+      '<label class="machinau-share-url-label">' +
+        escapeHtml(getMachinauTranslation("share_link_label", language)) +
+        '<input class="machinau-share-url" type="text" readonly value="' + escapeHtml(url) + '" onfocus="this.select()">' +
+      "</label>";
+
+    const input =
+      status.querySelector(".machinau-share-url");
+
+    if (input) {
+      try {
+        input.focus();
+        input.select();
+      } catch (error) {
+        // 選べなくても、リンクは表示したまま。
+      }
+    }
+    return;
+  }
+
+  status.textContent =
+    "";
+}
+
+// ---- 共有リンクで開いた時：今だけ投稿 ----
+
+// カードの紹介文と同じ作り方(サーバーの buildImadakeCardExcerpt と同じ80文字)。
+// STEP 48-B｜課金対象の投稿は公開GETが本文を返さないため、サーバーが作った紹介文(excerpt)を使う。
+function buildImadakeSharedExcerpt(
+  post
+) {
+  if (
+    typeof post.body !== "string" ||
+    post.body.trim() === ""
+  ) {
+    return typeof post.excerpt === "string" && post.excerpt !== ""
+      ? post.excerpt + (post.excerptTruncated === true ? "…" : "")
+      : "";
+  }
+
+  const characters =
+    Array.from(
+      post.body.replace(/\s+/g, " ").trim()
+    );
+
+  return characters.length > 80
+    ? characters.slice(0, 80).join("") + "…"
+    : characters.join("");
+}
+
+async function openImadakeSharedPreview(
+  postId
+) {
+  const modal =
+    document.getElementById("imadakeDetailModal");
+
+  if (
+    !modal ||
+    typeof postId !== "string" ||
+    !MACHINAU_SHARE_ID_PATTERN.test(postId)
+  ) {
+    return;
+  }
+
+  const requestSequence =
+    ++imadakeDetailRequestSequence;
+
+  imadakeDetailState = {
+    postId: postId,
+    state: "loading",
+    post: null,
+    shared: true
+  };
+
+  renderImadakeDetail();
+
+  modal.classList.add("visible");
+  document.body.style.overflow = "hidden";
+
+  let nextState =
+    "error";
+
+  let nextPost =
+    null;
+
+  try {
+    // 公開中・期限内の投稿だけを返す認証不要のGET(CVは記録しない)。
+    const response =
+      await fetch(
+        "/api/moderate-submission?" +
+          new URLSearchParams({
+            mode: "imadakePostGet",
+            postId: postId
+          }).toString()
+      );
+
+    let responseData =
+      null;
+
+    try {
+      responseData =
+        await response.json();
+    } catch (jsonError) {
+      responseData = null;
+    }
+
+    if (response.status === 404) {
+      nextState = "ended";
+    } else if (
+      response.ok &&
+      responseData &&
+      responseData.success === true &&
+      responseData.post &&
+      responseData.post.postId === postId
+    ) {
+      if (isImadakePostStillListed(responseData.post, Date.now())) {
+        nextState = "preview";
+        nextPost = responseData.post;
+      } else {
+        nextState = "ended";
+      }
+    }
+  } catch (error) {
+    nextState = "error";
+  }
+
+  // STEP 48-C｜この旅行者が以前に「続きを見る」を押した投稿(サーバーのCV記録で確認)なら、
+  // 一覧のカードと同じく、紹介ではなく詳細をそのまま出す(POST imadakeViewedPosts は読み取りだけ。CVは増えない)。
+  if (nextState === "preview") {
+    const viewedPost =
+      await fetchImadakeViewedPostForSharedLink(postId);
+
+    if (viewedPost) {
+      nextState = "ready";
+      nextPost = viewedPost;
+    }
+  }
+
+  if (requestSequence !== imadakeDetailRequestSequence) {
+    return;
+  }
+
+  imadakeDetailState = {
+    postId: postId,
+    state: nextState,
+    post: nextPost,
+    shared: true
+  };
+
+  renderImadakeDetail();
+}
+
+// 共有リンクの投稿が、この旅行者の閲覧済み(サーバーのCV記録あり)か。閲覧済みならその詳細、違えば null。
+// localStorageの手がかりがある投稿だけをサーバーへ確かめる(手がかりだけで閲覧済みとは扱わない)。
+async function fetchImadakeViewedPostForSharedLink(
+  postId
+) {
+  try {
+    const idToken =
+      await getExistingTownNowIdToken();
+
+    const uid =
+      getCurrentImadakeTravelerUid();
+
+    if (
+      idToken === "" ||
+      uid === "" ||
+      readImadakeViewedStoragePostIds(uid).indexOf(postId) === -1
+    ) {
+      return null;
+    }
+
+    const response =
+      await fetch(
+        "/api/moderate-submission",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + idToken
+          },
+          body: JSON.stringify({
+            mode: "imadakeViewedPosts",
+            postIds: [postId]
+          })
+        }
+      );
+
+    const responseData =
+      await response.json();
+
+    const viewedPost =
+      response.ok &&
+      responseData &&
+      responseData.success === true &&
+      Array.isArray(responseData.posts)
+        ? responseData.posts.find(function(post) {
+            return post && post.postId === postId;
+          })
+        : null;
+
+    if (!viewedPost || getCurrentImadakeTravelerUid() !== uid) {
+      return null;
+    }
+
+    rememberImadakeViewedPost(uid, viewedPost);
+
+    return viewedPost;
+  } catch (error) {
+    // 確かめられない時は紹介のまま(「続きを見る」を押せば、サーバーが重複CVにせず詳細を返す)。
+    return null;
+  }
+}
+
+// 共有リンクの紹介。カードと同じ項目(写真1枚・店名・見出し・紹介文・状態)と「続きを見る」だけで、
+// 本文の全文・場所・連絡先は出さない(詳細は「続きを見る」から)。
+function buildImadakeSharedPreviewHtml(
+  post,
+  language
+) {
+  const sourceLanguage =
+    getImadakeSourceLanguageAttribute(post);
+
+  const imageUrl =
+    (Array.isArray(post.imageUrls) ? post.imageUrls : [])
+      .map(getSafeImageUrl)
+      .filter(function(url) {
+        return url !== "";
+      })[0] || "";
+
+  // STEP 48-C｜保存済みのカード訳(一覧のカードと同じ値)があれば、見出しと紹介文は訳で出す。
+  const translation =
+    getImadakeCardTranslation(post, language);
+
+  const originalExcerpt =
+    buildImadakeSharedExcerpt(post);
+
+  const headlineText =
+    translation ? translation.headline : post.headline;
+
+  const excerptText =
+    translation && typeof translation.excerpt === "string" && translation.excerpt !== ""
+      ? translation.excerpt + (/…$/.test(originalExcerpt) ? "…" : "")
+      : originalExcerpt;
+
+  const textLanguage =
+    translation ? language : sourceLanguage;
+
+  const chips =
+    [
+      getMachinauTranslation("imadake_category_" + post.categoryCode, language),
+      getImadakeLiveStateText(post.liveState, language),
+      getImadakeAvailableUntilText(post.availableUntil, language),
+      getImadakeRemainingText(post.expiresAt, language, Date.now())
+    ].filter(function(chipText) {
+      return chipText !== "";
+    });
+
+  return (
+    (imageUrl !== ""
+      ? '<div class="imadake-detail-images">' +
+        '<img src="' +
+        escapeHtml(buildOptimizedImageUrl(imageUrl, { width: OPTIMIZED_IMAGE_WIDTH_MODAL })) +
+        '" alt="" loading="lazy" onerror="handleBrokenImage(this)">' +
+        "</div>"
+      : "") +
+    '<div class="imadake-detail-meta">' +
+      '<span class="imadake-pr-badge">' +
+        escapeHtml(getMachinauTranslation("imadake_pr_label", language)) +
+      "</span>" +
+      '<span class="imadake-card-store" lang="' + sourceLanguage + '">' +
+        escapeHtml(post.storeName) +
+      "</span>" +
+    "</div>" +
+    '<h3 id="imadakeDetailTitle" class="imadake-detail-title" lang="' + textLanguage + '">' +
+      escapeHtml(headlineText) +
+    "</h3>" +
+    (chips.length > 0
+      ? '<div class="imadake-card-chips">' +
+        chips.map(function(chipText) {
+          return '<span class="imadake-chip">' + escapeHtml(chipText) + "</span>";
+        }).join("") +
+        "</div>"
+      : "") +
+    (translation
+      ? '<p class="imadake-original-note">' +
+        '<span class="imadake-auto-translated-label">' +
+          escapeHtml(getMachinauTranslation("imadake_auto_translated", language)) +
+        "</span>" +
+        "</p>"
+      : sourceLanguage !== language
+        ? '<p class="imadake-original-note">' +
+          escapeHtml(getMachinauTranslation("imadake_original_language_note", language)) +
+          "</p>"
+        : "") +
+    (excerptText !== ""
+      ? '<p class="imadake-detail-text imadake-shared-excerpt" lang="' + textLanguage + '">' +
+        escapeHtml(excerptText) +
+        "</p>"
+      : "") +
+    '<button class="imadake-read-more imadake-shared-read-more" type="button" data-imadake-post-id="' +
+      escapeHtml(post.postId) +
+      '" onclick="openImadakeDetail(this.getAttribute(\'data-imadake-post-id\'))">' +
+      escapeHtml(getMachinauTranslation("imadake_read_more", language)) +
+    "</button>" +
+    buildMachinauShareAreaHtml("imadake", post.postId, post.headline, language)
+  );
+}
+
+// ---- 共有リンクで開いた時：無料店舗 ----
+
+// 共有された店舗IDを、今の一覧で開いてよいIDにする(開けない時は"")。
+function resolveSharedShopId(
+  sharedId
+) {
+  if (sharedId.indexOf("sp_") === 0) {
+    return findStoreProfileListShopForModal(sharedId)
+      ? sharedId
+      : "";
+  }
+
+  const shop =
+    shops.find(function(candidate) {
+      return candidate.firestoreId === sharedId;
+    });
+
+  if (!shop || getShopListingTypeForAnalytics(shop) !== "free_listing") {
+    return "";
+  }
+
+  // 引き継ぎで一覧から外した運営掲載は、引き継いだ(表示できる)正式店舗を開く。
+  if (storeProfileSuppressedListingIds.has(sharedId)) {
+    const linkedStore =
+      storeProfileListStores
+        .map(buildStoreProfileListShop)
+        .find(function(storeShop) {
+          return (
+            storeShop !== null &&
+            (storeShop.linkedListingIds || []).includes(sharedId)
+          );
+        });
+
+    return linkedStore
+      ? linkedStore.firestoreId
+      : "";
+  }
+
+  return sharedId;
+}
+
+function tryOpenPendingSharedShop() {
+  if (
+    pendingSharedShopId === "" ||
+    !hasAppliedSubmissionsForStoreProfiles ||
+    !storeProfileListFetchSettled
+  ) {
+    return;
+  }
+
+  const sharedId =
+    pendingSharedShopId;
+
+  pendingSharedShopId = "";
+
+  const openId =
+    resolveSharedShopId(sharedId);
+
+  if (openId === "") {
+    showSharedLinkNotice("share_shop_unavailable");
+    return;
+  }
+
+  openShopModal(openId, "other");
+}
+
+function showSharedLinkNotice(
+  translationKey
+) {
+  const notice =
+    document.getElementById("sharedLinkNotice");
+
+  const text =
+    document.getElementById("sharedLinkNoticeText");
+
+  if (!notice || !text) {
+    return;
+  }
+
+  text.textContent =
+    getMachinauTranslation(translationKey, getCurrentMachinauLanguage());
+
+  notice.hidden = false;
+
+  if (sharedLinkNoticeTimer) {
+    clearTimeout(sharedLinkNoticeTimer);
+  }
+
+  sharedLinkNoticeTimer =
+    setTimeout(hideSharedLinkNotice, SHARED_LINK_NOTICE_HIDE_MS);
+}
+
+function hideSharedLinkNotice() {
+  const notice =
+    document.getElementById("sharedLinkNotice");
+
+  if (sharedLinkNoticeTimer) {
+    clearTimeout(sharedLinkNoticeTimer);
+    sharedLinkNoticeTimer = null;
+  }
+
+  if (notice) {
+    notice.hidden = true;
+  }
+}
+
+// 共有リンク(?imadake= または ?shop=)で開いた時。現在地は使わない(現在地が無くても開く)。
+// 両方ある時は今だけ投稿を優先する。形の違うIDは何もしない(通常のTOP)。
+document.addEventListener(
+  "DOMContentLoaded",
+  function() {
+    let params =
+      null;
+
+    try {
+      params =
+        new URLSearchParams(window.location.search);
+    } catch (error) {
+      return;
+    }
+
+    const sharedImadakeId =
+      params.get("imadake");
+
+    const sharedShopId =
+      params.get("shop");
+
+    if (
+      typeof sharedImadakeId === "string" &&
+      MACHINAU_SHARE_ID_PATTERN.test(sharedImadakeId)
+    ) {
+      openImadakeSharedPreview(sharedImadakeId);
+      return;
+    }
+
+    if (
+      typeof sharedShopId === "string" &&
+      MACHINAU_SHARE_ID_PATTERN.test(sharedShopId)
+    ) {
+      pendingSharedShopId = sharedShopId;
+      tryOpenPendingSharedShop();
     }
   }
 );

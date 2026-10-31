@@ -15,6 +15,10 @@ const ORIGIN = "http://127.0.0.1:8875";
 
 // 告知開始日と施行予定日（代表の承認に合わせて変更する。告知の各ページの日付と一致させる）。
 const SCHEDULE = { start: "2026-10-30", effective: "2026-11-07" };
+// STEP 52-D｜施行日の版(告知を外した版)の施行日。代表が決めるまで null(勝手に決めない)。null の間は L2 が必ず失敗し、
+// Production へ出せない状態であることを示す。決まったら "YYYY-MM-DD" にし、terms.html・privacy.html・tokushoho.html の
+// 最終更新日をその日に合わせる。
+const LAUNCH_EFFECTIVE = null;
 // 告知の日を数えず、その翌日から7日間を告知期間とする（施行日は告知日の8日後以降）。
 const MIN_DAYS_FROM_POSTING_TO_EFFECTIVE = 8;
 // 告知を外した時に一致すべき、現行の版（main 5c8c597）の内容（改行は LF にそろえる）。
@@ -63,7 +67,7 @@ console.log(`line: ${HAS_NOTICE ? "notice" : "no notice"} / feature ${FEATURE_SH
 const flag = (file, name) => { const m = read(file).match(new RegExp("export const " + name + " =\\s*(true|false);")); return m ? m[1] : null; };
 t("F1 本番課金は始まっていない（請求の開始・月次の請求・月次の締めの書き込みはすべて OFF）",
   flag("api/_lib/imadake.js", "IMADAKE_CV_BILLING_STARTED") === "false" && flag("api/_lib/imadake-monthly-charge.js", "IMADAKE_MONTHLY_CHARGE_ENABLED") === "false" && flag("api/_lib/imadake-monthly-close.js", "IMADAKE_MONTHLY_CLOSE_WRITES_ENABLED") === "false");
-t("F2 本番のカード登録の一般公開は OFF のまま（代表限定の試行の設定は変えていない）", flag("api/_lib/store-billing.js", "STORE_CARD_REGISTRATION_LIVE_ENABLED") === "false" && flag("api/_lib/store-billing.js", "STORE_CARD_LIVE_ADMIN_TRIAL_ENABLED") === "true");
+t("F2 本番のカード登録の一般公開は ON（代表限定の試行の設定は変えていない）（STEP 52-F：本番のカード登録・本番の申込は受付開始のため true）", flag("api/_lib/store-billing.js", "STORE_CARD_REGISTRATION_LIVE_ENABLED") === "true" && flag("api/_lib/store-billing.js", "STORE_CARD_LIVE_ADMIN_TRIAL_ENABLED") === "true");
 
 if (HAS_NOTICE) {
   // ===================== N: notice line =====================
@@ -124,9 +128,11 @@ if (HAS_NOTICE) {
   t("L0 施行日の版：告知はどこにも残っていない（4ページ・翻訳・CSS）", ![...PAGES, "translations.js"].some((f) => /LEGAL-NOTICE|legal-change-notice|store_account_legal_notice_/.test(FILES[f])));
   t("L1 施行日の版：退会の機能を含む・本番の自動削除は OFF", FEATURE_SHIPPED && /mode === "storeAccountDelete"|"storeAccountDelete"/.test(MS) && ACC.includes("accountDeletionSection") && flag("api/_lib/store-account-deletion.js", "ACCOUNT_DELETION_SWEEP_PRODUCTION_ENABLED") === "false");
   const T = FILES["terms.html"], P = FILES["privacy.html"];
-  t("L2 利用規約・プライバシーポリシーの最終更新日は施行日", T.includes(`最終更新日：${ja(SCHEDULE.effective)}`) && P.includes(`最終更新日：${ja(SCHEDULE.effective)}`));
+  t("L2 施行日（代表が決定）が設定され、利用規約・プライバシーポリシー・特商法の最終更新日が施行日（未決定の間は失敗＝Production へ出さない）",
+    LAUNCH_EFFECTIVE !== null && T.includes(`最終更新日：${ja(LAUNCH_EFFECTIVE)}`) && P.includes(`最終更新日：${ja(LAUNCH_EFFECTIVE)}`) && read("tokushoho.html").includes(`最終更新日：${ja(LAUNCH_EFFECTIVE)}`), { launchEffective: LAUNCH_EFFECTIVE });
   const olCount = (h2) => { const i = T.indexOf("<h2>" + h2); const s = T.slice(i, T.indexOf("</ol>", i)); return (s.match(/<li>/g) || []).length; };
-  t("L3 利用規約：12条は4項目・13条は11項目・14条は6項目・15条は4項目", olCount("12. ") === 4 && olCount("13. ") === 11 && olCount("14. ") === 6 && olCount("15. ") === 4, [olCount("12. "), olCount("13. "), olCount("14. "), olCount("15. ")]);
+  // STEP 51-B｜15条に「引き継いだ店舗カードの公開には月額契約が必要」(5項目め)を追加。
+  t("L3 利用規約：12条は4項目・13条は11項目・14条は6項目・15条は5項目", olCount("12. ") === 4 && olCount("13. ") === 11 && olCount("14. ") === 6 && olCount("15. ") === 5, [olCount("12. "), olCount("13. "), olCount("14. "), olCount("15. ")]);
   const terms = text(T), priv = text(P);
   const sec12 = terms.slice(terms.indexOf("12. 規約の変更"), terms.indexOf("13. 店舗アカウント"));
   t("L7 利用規約12：新しい文（548条の4・施行日の前に周知・個別の同意）に置き換わり、旧文（事前の通知なく・掲載された時点から）は残っていない", /民法第548条の4/.test(sec12) && /施行日より前の相当な期間に/.test(sec12) && /第2項による周知だけで同意を得たものとは扱わず/.test(sec12) && !/事前の通知なく本規約を変更|掲載された時点から効力/.test(terms));
@@ -137,6 +143,13 @@ if (HAS_NOTICE) {
   t("L6 プライバシーポリシー11：画面から自分で退会できる", /ご自身で退会（削除）を申し込むこともできます/.test(priv.slice(priv.indexOf("11. 開示等のご請求"))));
   const p13 = P.slice(P.indexOf("<h2>13. "), P.indexOf("class=\"back-link\"", P.indexOf("<h2>13. ")));
   t("L8 プライバシーポリシー13：4項目の新しい文（施行日の前に周知・施行日から適用・同意が必要な変更）に置き換わり、旧文は残っていない", (p13.match(/<li>/g) || []).length === 4 && /施行日より前の相当な期間に/.test(p13) && /施行日から適用します/.test(p13) && /第2項の周知だけで同意を得たものとは扱わず/.test(p13) && !/掲載された時点から効力/.test(priv));
+  // STEP 52-F｜10月30日の告知（施行予定日 11月7日）の訂正文：告知を出していた4か所に置く・新しい日付は書かない（改定日は最終更新日）。
+  const corr = PAGES.map((f) => { const m = FILES[f].match(/<!-- LEGAL-CORRECTION:START[\s\S]*?LEGAL-CORRECTION:END -->/); return { f, html: m ? m[0] : "" }; });
+  const corrText = corr.map((c) => text(c.html.replace(/<!--[\s\S]*?-->/g, ""))).join(" ") + " " + tr.store_account_legal_correction_title.ja + " " + tr.store_account_legal_correction_body.ja;
+  const datesInCorr = [...corrText.matchAll(/20\d\d年\d+月\d+日/g)].map((m) => m[0]);
+  t("L9 訂正文：4ページすべてにある・10月30日の告知と11月7日の予定の変更・店舗カード月額100円（税込）とあわせて最終更新日に改定・退会は画面から・新しい日付は書かない・英語あり（日本語が混ざらない）",
+    corr.every((c) => c.html.includes('data-legal-correction="step47"')) && /2026年10月30日/.test(corrText) && /施行予定日（2026年11月7日）を変更/.test(corrText) && /月額100円・税込/.test(corrText) && /最終更新日に改定しました/.test(corrText) && /退会/.test(corrText) && datesInCorr.every((d) => d === "2026年10月30日" || d === "2026年11月7日") &&
+    /November 7, 2026/.test(tr.store_account_legal_correction_body.en) && !/[\u3040-\u30ff\u4e00-\u9fff]/.test(tr.store_account_legal_correction_title.en + tr.store_account_legal_correction_body.en), { pages: corr.map((c) => c.f + ":" + (c.html ? "ok" : "missing")), datesInCorr });
 }
 
 // ===================== B: browser =====================
@@ -149,13 +162,13 @@ try {
     for (const [w, mobile, label, lang] of [[360, true, "スマートフォン（360px）", "ja"], [1280, false, "PC", "ja"], ...(page === "store-account.html" ? [[390, true, "スマートフォン・英語", "en"]] : [])]) {
       const p = await openPage(browser, { origin: ORIGIN, width: w, mobile, state: { apiMock, articles: [], initScripts: [langInit(lang)] } });
       await p.goto("/" + page); await sleep(page === "store-account.html" ? 1500 : 400);
-      const L = await p.ev(`(() => { const n = document.querySelector('[data-legal-notice="step47"]'); const r = n && n.getBoundingClientRect(); return { sw: document.documentElement.scrollWidth, w: window.innerWidth, shown: !!(n && r.height > 40 && getComputedStyle(n).display !== "none"), text: n ? n.innerText : "" }; })()`);
+      const L = await p.ev(`(() => { const n = document.querySelector('[data-legal-notice="step47"]'); const r = n && n.getBoundingClientRect(); const c = document.querySelector('[data-legal-correction="step47"]'); const cr = c && c.getBoundingClientRect(); return { corr: !!(c && cr.height > 30 && getComputedStyle(c).display !== "none"), corrText: c ? c.innerText.slice(0, 80) : "", sw: document.documentElement.scrollWidth, w: window.innerWidth, shown: !!(n && r.height > 40 && getComputedStyle(n).display !== "none"), text: n ? n.innerText : "" }; })()`);
       if (HAS_NOTICE) {
         const textOk = lang === "en" ? /November 7, 2026/.test(L.text) && !/[぀-ヿ一-鿿]/.test(L.text.replace(/利用規約|プライバシーポリシー/g, "")) : new RegExp("施行予定日：" + ja(SCHEDULE.effective)).test(L.text);
         t(`B ${page}・${label}：告知が見える・文言が入っている・横にはみ出さない・JSエラーなし`, L.shown && textOk && L.sw <= L.w && p.log.errors.length === 0, { L: { ...L, text: L.text.slice(0, 120) }, errors: p.log.errors });
         if (mobile) await p.screenshot(join(SHOTS_DIR, `legal-notice-${page.replace(".html", "")}-${lang}-${w}.png`));
       } else {
-        t(`B ${page}・${label}：告知は出ない・横にはみ出さない・JSエラーなし`, !L.shown && L.sw <= L.w && p.log.errors.length === 0, { L, errors: p.log.errors });
+        t(`B ${page}・${label}：旧告知は出ない・訂正文が見える（英語は英語の文）・横にはみ出さない・JSエラーなし`, !L.shown && L.corr && (lang === "en" ? /^Correction/.test(L.corrText) : /^お知らせ（訂正）/.test(L.corrText)) && L.sw <= L.w && p.log.errors.length === 0, { L, errors: p.log.errors });
       }
       t(`B ${page}・${label}：本番のサーバーへ書き込みの要求を送っていない`, !p.log.posts.length, p.log.posts);
       await p.close();

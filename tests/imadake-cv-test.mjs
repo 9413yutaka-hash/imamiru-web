@@ -12,7 +12,7 @@ const jitter = () => sleep(Math.random() * 4);
 const clone = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v, (k, x) => (x && typeof x.toMillis === "function" ? { __ts: x.toMillis() } : x)), (k, x) => (x && typeof x === "object" && "__ts" in x ? TS(x.__ts) : x)));
 
 function makeDb(o = {}) {
-  const store = new Map(); const writeLog = []; let failCommit = o.failCommit || 0, failTx = o.failTx || false; const failGets = o.failGets || new Set();
+  const store = new Map(); const writeLog = []; let failCommit = o.failCommit || 0, failTx = o.failTx || false, failAfterCommit = o.failAfterCommit || 0; const failGets = o.failGets || new Set();
   const ref = (col, id) => ({ path: col + "/" + id, id, col, get: async () => { await jitter(); if (failGets.has(col)) throw new Error("simulated read failure " + col); return snap({ path: col + "/" + id, id }); } });
   const setPath = (obj, dotted, value) => { const ks = dotted.split("."); let x = obj; for (let i = 0; i < ks.length - 1; i++) { if (!x[ks[i]] || typeof x[ks[i]] !== "object") x[ks[i]] = {}; x = x[ks[i]]; } x[ks[ks.length - 1]] = value; };
   const apply = (w) => { const cur = store.get(w.ref.path); let data = cur ? clone(cur.data) : {}; if (w.type === "set") data = w.merge ? { ...data, ...clone(w.data) } : clone(w.data); if (w.type === "update") { if (!cur) throw new Error("update missing"); for (const [k, v] of Object.entries(w.data)) setPath(data, k, clone(v)); } store.set(w.ref.path, { data, version: (cur ? cur.version : 0) + 1 }); writeLog.push(w.ref.path.split("/")[0]); };
@@ -28,7 +28,9 @@ function makeDb(o = {}) {
         await jitter();
         if (failCommit > 0) { failCommit--; throw new Error("simulated commit failure"); }
         let ok = true; for (const [p, v] of reads) { const cur = store.get(p); if ((cur ? cur.version : 0) !== v) ok = false; }
-        if (!ok) continue; writes.forEach(apply); return result;
+        if (!ok) continue; writes.forEach(apply);
+        if (failAfterCommit > 0) { failAfterCommit--; throw new Error("simulated failure after commit (written, response lost)"); }
+        return result;
       }
       throw new Error("contention");
     }
@@ -60,6 +62,8 @@ async function open(m, postId, travelerToken, o = {}) {
 const day = () => CV.computeImadakeCvDayKey(clock);
 const charge = (m, postId, d = day()) => m.get("imadakePostDailyCharges", postId + "_" + d);
 const view = (m, postId, uid) => m.get("imadakeCvViews", postId + "_" + uid);
+// STEP 48-D｜課金対象の投稿でCVの成立を確認できない時：詳細を返さず、再試行できるエラー
+const refused = (r, code, reason) => r.code === code && r.body.success === false && r.body.retryable === true && r.body.reason === reason && !("post" in r.body) && !JSON.stringify(r.body).includes("本文全文");
 const quiet = async (fn) => { const e = console.error; console.error = () => {}; try { return await fn(); } finally { console.error = e; } };
 
 // 1-4, 7
@@ -125,13 +129,17 @@ const quiet = async (fn) => { const e = console.error; console.error = () => {};
   await open(m, "P2S", "anonC", { storeToken: "ownerS1", body: { storeId: "S1" } });
   t("10 client-sent storeId ignored (S1 owner viewing S2's post -> counted)", view(m, "P2S", "travC").counted === true && charge(m, "P2S").validCvCount === 1);
   let rr = await open(m, "P2", "anonA", { storeToken: "garbage" });
-  t("10 [STEP3] invalid store token -> unverifiable: body returned, not_recorded, no CV/charge (not claimed as excluded)", rr.code === 200 && rr.body.post.body === "本文全文です。" && rr.body.cv.status === "not_recorded" && !view(m, "P2", "travA") && !charge(m, "P2"), rr.body);
+  t("10 [STEP48-D] billable + invalid store token -> unverifiable: 401 retryable, no details, no CV/charge (not claimed as excluded)", refused(rr, 401, "store_owner_unverifiable") && !view(m, "P2", "travA") && !charge(m, "P2"), rr.body);
   rr = await open(m, "P2", "anonB", { storeToken: "anonOwnerUid" });
-  t("10 [STEP3] store token with anonymous provider -> unverifiable, not_recorded", rr.body.cv.status === "not_recorded" && !view(m, "P2", "travB"));
+  t("10 [STEP48-D] billable + store token with anonymous provider -> unverifiable: no details, not recorded", refused(rr, 401, "store_owner_unverifiable") && !view(m, "P2", "travB"), rr.body);
+  rr = await open(m, "LEGACY", "anonA", { storeToken: "garbage" });
+  t("10 [STEP48-D] non-billable + invalid store token: as before (200 + body, not_recorded)", rr.code === 200 && rr.body.post.body === "本文全文です。" && rr.body.cv.status === "not_recorded" && !view(m, "LEGACY", "travA"), rr.body);
+  rr = await open(m, "P2", "anonA");
+  t("10 [STEP48-D] same traveler retries without the broken store token -> normal first CV once", rr.code === 200 && rr.body.cv.status === "new" && rr.body.post.body === "本文全文です。" && charge(m, "P2").validCvCount === 1, rr.body.cv);
   await open(m, "SP", "anonA", { storeToken: "ownerSusp" });
   t("10 owner of a suspended store viewing own post -> still excluded", view(m, "SP", "travA").counted === false && !charge(m, "SP"));
   await open(m, "P2", "anonC");
-  t("10 without store token -> counted (exclusion only when verified)", view(m, "P2", "travC").counted === true);
+  t("10 without store token -> counted (exclusion only when verified)", view(m, "P2", "travC").counted === true && charge(m, "P2").validCvCount === 2 && charge(m, "P2").amountJpy === 100);
 }
 // 11 traveler auth failure
 {
@@ -139,8 +147,13 @@ const quiet = async (fn) => { const e = console.error; console.error = () => {};
   for (const [label, tok] of [["no token", null], ["invalid token", "garbage"], ["password (non-anonymous) token", "pwTraveler"]]) {
     const before = m.writeLog.length;
     const r = await open(m, "P1", tok);
-    t(`11 ${label}: 200 with body, cv not_recorded, no writes`, r.code === 200 && r.body.post.body === "本文全文です。" && r.body.cv.status === "not_recorded" && m.writeLog.length === before && !charge(m, "P1"), r.body.cv);
+    const reason = tok === null ? "no_traveler_token" : tok === "garbage" ? "traveler_token_invalid" : "not_anonymous_traveler";
+    t(`11 [STEP48-D] billable, ${label}: 401 retryable, no details, no writes`, refused(r, 401, reason) && m.writeLog.length === before && !charge(m, "P1"), r.body);
+    const rl = await open(m, "LEGACY", tok);
+    t(`11 non-billable, ${label}: as before (200 with body, cv not_recorded, no writes)`, rl.code === 200 && rl.body.post.body === "本文全文です。" && rl.body.cv.status === "not_recorded" && m.writeLog.length === before, rl.body.cv);
   }
+  const r = await open(m, "P1", "anonA");
+  t("11 [STEP48-D] after the traveler signs in (retry with a token): first CV, details shown", r.code === 200 && r.body.cv.status === "new" && r.body.post.body === "本文全文です。" && charge(m, "P1").validCvCount === 1);
 }
 // 12 expiry / non-public / missing
 {
@@ -158,12 +171,23 @@ const quiet = async (fn) => { const e = console.error; console.error = () => {};
 {
   const m = makeDb({ failTx: true }); seedAll(m);
   const r = await quiet(() => open(m, "P1", "anonA"));
-  t("13 transaction failure: body still returned, cv not_recorded, nothing written", r.code === 200 && r.body.cv.status === "not_recorded" && m.count("imadakeCvViews") === 0 && m.count("imadakePostDailyCharges") === 0);
+  t("13 [STEP48-D] billable, transaction failure: 503 retryable, no details, nothing written", refused(r, 503, "cv_record_failed") && m.count("imadakeCvViews") === 0 && m.count("imadakePostDailyCharges") === 0, r.body);
+  const rl = await quiet(() => open(m, "LEGACY", "anonA"));
+  t("13 non-billable, transaction failure: as before (200 + body, not_recorded, nothing written)", rl.code === 200 && rl.body.post.body === "本文全文です。" && rl.body.cv.status === "not_recorded" && m.count("imadakeCvViews") === 0, rl.body.cv);
   const m2 = makeDb({ failCommit: 1 }); seedAll(m2);
   const r2 = await quiet(() => open(m2, "P1", "anonA"));
-  t("13 commit failure: no partial write (no CV without charge or vice versa)", r2.body.cv.status === "not_recorded" && m2.count("imadakeCvViews") === 0 && m2.count("imadakePostDailyCharges") === 0);
+  t("13 commit failure: no partial write (no CV without charge or vice versa), no details", refused(r2, 503, "cv_record_failed") && m2.count("imadakeCvViews") === 0 && m2.count("imadakePostDailyCharges") === 0, r2.body);
   const r3 = await open(m2, "P1", "anonA");
-  t("13 retry after failure records CV and charge together once", r3.body.cv.status === "new" && view(m2, "P1", "travA") && charge(m2, "P1").validCvCount === 1);
+  t("13 retry after failure records CV and charge together once, details shown", r3.body.cv.status === "new" && r3.body.post.body === "本文全文です。" && view(m2, "P1", "travA") && charge(m2, "P1").validCvCount === 1);
+  // STEP 48-D｜書き込みは成功したが応答が失敗した(通信の一時的な失敗)：再試行で重複CV・重複料金にならない
+  const m4 = makeDb({ failAfterCommit: 1 }); seedAll(m4);
+  const r4 = await quiet(() => open(m4, "P1", "anonA"));
+  t("13 [STEP48-D] written but the call failed: 503 retryable, no details (CV and charge written once)", refused(r4, 503, "cv_record_failed") && m4.count("imadakeCvViews") === 1 && charge(m4, "P1").validCvCount === 1, r4.body);
+  const r5 = await open(m4, "P1", "anonA");
+  const r6 = await open(m4, "P1", "anonA");
+  t("13 [STEP48-D] retries after that: existing (no duplicate CV), charge count 1 / 100 JPY, details shown", r5.body.cv.status === "existing" && r6.body.cv.status === "existing" && r5.body.post.body === "本文全文です。" && m4.count("imadakeCvViews") === 1 && charge(m4, "P1").validCvCount === 1 && charge(m4, "P1").amountJpy === 100 && m4.count("imadakePostDailyCharges") === 1, { r5: r5.body.cv, c: charge(m4, "P1") });
+  const r7 = await open(m4, "P1", "anonB");
+  t("13 [STEP48-D] another traveler afterwards: +1 valid CV, still 100 JPY for the day", r7.body.cv.status === "new" && charge(m4, "P1").validCvCount === 2 && charge(m4, "P1").amountJpy === 100);
 }
 // ===== STEP 3 additions =====
 const IM = await import(pathToFileURL(REPO + "/api/_lib/imadake.js").href);
@@ -171,15 +195,19 @@ const IM = await import(pathToFileURL(REPO + "/api/_lib/imadake.js").href);
 {
   const m = makeDb({ failGets: new Set(["storeMembers"]) }); seedAll(m);
   let r = await quiet(() => open(m, "P1", "anonA", { storeToken: "ownerS1" }));
-  t("S3 storeMembers read fails (store token sent): 200 + body, not_recorded, nothing written (was 500)", r.code === 200 && r.body.post.body === "本文全文です。" && r.body.cv.status === "not_recorded" && m.writeLog.length === 0, r);
+  t("S3 [STEP48-D] billable, storeMembers read fails (store token sent): 401 retryable, no details, nothing written", refused(r, 401, "store_owner_unverifiable") && m.writeLog.length === 0, r.body);
+  r = await quiet(() => open(m, "LEGACY", "anonA", { storeToken: "ownerS1" }));
+  t("S3 non-billable, storeMembers read fails (store token sent): as before (200 + body, not_recorded)", r.code === 200 && r.body.post.body === "本文全文です。" && r.body.cv.status === "not_recorded" && m.writeLog.length === 0, r.body);
   r = await open(m, "P1", "anonA");
   t("S3 storeMembers down but no store token: owner check not needed -> normal CV", r.body.cv.status === "new" && view(m, "P1", "travA").counted === true);
   const m2 = makeDb({ failGets: new Set(["storeAccounts"]) }); seedAll(m2);
   r = await quiet(() => open(m2, "P1", "anonA"));
-  t("S3 storeAccounts read fails: 200 + body, not_recorded, nothing written (was 500)", r.code === 200 && r.body.post.body === "本文全文です。" && r.body.cv.status === "not_recorded" && m2.writeLog.length === 0, r);
+  t("S3 [STEP48-D] billable, storeAccounts read fails: 503 retryable, no details, nothing written", refused(r, 503, "store_account_read_failed") && m2.writeLog.length === 0, r.body);
+  r = await quiet(() => open(m2, "LEGACY", "anonA"));
+  t("S3 non-billable, storeAccounts read fails: as before (200 + body, not_recorded, nothing written)", r.code === 200 && r.body.post.body === "本文全文です。" && r.body.cv.status === "not_recorded" && m2.writeLog.length === 0, r.body);
   const m3 = makeDb({ failGets: new Set(["imadakePosts"]) }); seedAll(m3);
   r = await quiet(() => open(m3, "P1", "anonA"));
-  t("S3 post read fails: 500 (no body; client falls back), nothing written", r.code === 500 && m3.writeLog.length === 0);
+  t("S3 post read fails: 500 (no body; client falls back), nothing written", r.code === 500 && m3.writeLog.length === 0 && !("post" in r.body));
 }
 // S3-b: counted flag in the response (for GA4 only)
 {

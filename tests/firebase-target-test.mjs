@@ -83,10 +83,10 @@ t("K6 変数名の定数は FIREBASE_SERVICE_ACCOUNT_KEY_PREVIEW", FT.PREVIEW_SE
 t("K7 Preview の鍵の project_id を読める（Preview専用の変数から）", FT.readServiceAccountProjectId({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: OTHER, FIREBASE_SERVICE_ACCOUNT_KEY: KEYJ("chikashoku-app"), [PV]: KEYJ("machinau-preview") }) === "machinau-preview");
 
 // ---------------- T: Preview試験の機能の有効条件は変えない（ブランチの表のまま） ----------------
-const TRIALS = ["isPreviewCvBillingTrialEnabled", "isPreviewMonthlyCloseTrialEnabled", "isPreviewStoreInvoiceHistoryEnabled", "isPreviewListingPhotoCopyTrialEnabled"];
+const TRIALS = ["isPreviewCvBillingTrialEnabled", "isPreviewMonthlyCloseTrialEnabled", "isPreviewStoreInvoiceHistoryEnabled", "isPreviewListingPhotoCopyTrialEnabled", "isPreviewStoreCustomPlanTrialEnabled"];
 const trialEnv = (env) => TRIALS.map((name) => FT[name](env));
 const PREVIEW_OK = { FIREBASE_SERVICE_ACCOUNT_KEY: KEYJ("chikashoku-app"), [PV]: KEYJ("machinau-preview") };
-t("T1 試験の機能：preview/stripe-card-setup・machinau-preview の時だけ有効（4つとも）", trialEnv({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: BRANCH, ...PREVIEW_OK }).every((v) => v === true), trialEnv({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: BRANCH, ...PREVIEW_OK }));
+t("T1 試験の機能：preview/stripe-card-setup・machinau-preview の時だけ有効（5つとも）", trialEnv({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: BRANCH, ...PREVIEW_OK }).every((v) => v === true), trialEnv({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: BRANCH, ...PREVIEW_OK }));
 t("T2 試験の機能：ほかのブランチは machinau-preview につながっていても無効（有効条件は今までどおりブランチの表）", trialEnv({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: OTHER, ...PREVIEW_OK }).every((v) => v === false));
 t("T3 試験の機能：Production・ローカル・Preview専用の変数なしでは無効", [trialEnv({ VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main", ...PREVIEW_OK }), trialEnv({ ...PREVIEW_OK }), trialEnv({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: BRANCH, FIREBASE_SERVICE_ACCOUNT_KEY: KEYJ("machinau-preview") })].flat().every((v) => v === false));
 t("T4 試験の機能のブランチの表は変えていない（preview/stripe-card-setup → machinau-preview だけ）", JSON.stringify(FT.PREVIEW_CV_BILLING_TRIAL_TARGETS) === JSON.stringify({ [BRANCH]: "machinau-preview" }) && Object.isFrozen(FT.PREVIEW_CV_BILLING_TRIAL_TARGETS));

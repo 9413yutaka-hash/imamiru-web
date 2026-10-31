@@ -1,2 +1,4 @@
 export const TOKENS = globalThis.__MOCK_TOKENS = globalThis.__MOCK_TOKENS || {};
-export function getAuth() { return { verifyIdToken: async (t) => { const u = TOKENS[t]; if (!u) throw new Error("bad token"); return u; } }; }
+// STEP 47-C｜getUser は模擬のトークンの uid から email を返す(無ければ auth/user-not-found)。
+// STEP 47｜deleteUser は削除した uid を __MOCK_AUTH_DELETED に記録する。__MOCK_AUTH_DELETE_FAIL が真なら失敗する。
+export function getAuth() { return { verifyIdToken: async (t) => { const u = TOKENS[t]; if (!u) throw new Error("bad token"); return u; }, deleteUser: async (uid) => { if (globalThis.__MOCK_AUTH_DELETE_FAIL) throw new Error("simulated auth delete failure"); (globalThis.__MOCK_AUTH_DELETED = globalThis.__MOCK_AUTH_DELETED || []).push(uid); }, getUser: async (uid) => { const u = Object.values(TOKENS).find((x) => x && x.uid === uid); if (!u || (globalThis.__MOCK_AUTH_DELETED || []).includes(uid)) { const e = new Error("no user"); e.code = "auth/user-not-found"; throw e; } return { uid, email: u.email }; } }; }
