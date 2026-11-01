@@ -198,6 +198,12 @@
         padding: 0 0 12px;
       }
     }
+    /* BILLING-START-NOTICE-CSS｜店舗カードの月額料金の請求の開始と規約B案の告知(施行日の版で外す) */
+    .legal-notice-billing { border: 1px solid #9cc7f0; background: #f2f8fe; border-radius: 12px; padding: 12px 14px; margin: 12px 0 18px; }
+    .legal-notice-billing-title { margin: 0 0 6px; font-weight: 700; }
+    .legal-notice-billing p { margin: 0 0 6px; overflow-wrap: anywhere; }
+    .legal-notice-billing summary { cursor: pointer; font-weight: 700; margin: 4px 0; }
+    .legal-notice-billing-sub { font-weight: 700; margin: 8px 0 4px; }
   </style>
 </head>
 <body>
@@ -220,6 +226,23 @@
 
       <p class="updated">最終更新日：2026年11月1日</p>
 
+      <!-- BILLING-START-NOTICE:START｜店舗カードの月額料金の請求の開始(2026年11月分・12月2日)と規約B案の事前告知(民法548条の4：変更の内容と施行日の周知)。
+           施行日までは本文(現行の版)をそのまま適用する。施行日の版で、この告知を外し、改定後の文を本文へ反映し、最終更新日を施行日にする。 -->
+      <section class="legal-notice-billing" data-legal-notice="store-card-billing" data-effective="2026-12-01">
+        <p class="legal-notice-billing-title">お知らせ：店舗カードの月額料金の請求の開始と、利用規約・特定商取引法に基づく表記の改定について</p>
+        <p>店舗カードの月額契約（1つのお店・施設につき月額100円・税込）の月額料金は、2026年11月分から請求します。11月分は2026年11月30日に締め、2026年12月2日に、登録されたクレジットカードへ請求します。月額契約を申し込んでいないお店・施設に料金が発生することはありません。申し込みより前の月の月額料金は請求しません。</p>
+        <p>あわせて、利用料金をお支払いいただく時期（予定日に請求できなかった場合の扱い）と、店舗カードの月額料金の請求の開始の記載を改定します。改定後の内容は下記のとおりで、下記の施行日から適用します。施行日の前日までは、改定前の内容（現在の本文）が適用されます。</p>
+        <p class="legal-notice-billing-date">施行日：<span data-legal-billing-effective>2026年12月1日</span></p>
+        <details>
+          <summary>改定後の記載を見る（販売価格・支払時期）</summary>
+          <p class="legal-notice-billing-sub">販売価格（最後の段落を次のとおり改めます）</p>
+          <p>今だけ投稿の利用料金の請求は、現在開始していません。請求を開始する場合は、開始日の3日前までに本サービス上でお知らせします。店舗カードの月額料金は、2026年11月分から請求します（11月分は2026年11月30日に締め、2026年12月2日に請求します）。月額契約の申し込みより前の月の月額料金は請求しません。利用料金の請求には、事業者の明示的な同意が必要です。</p>
+          <p class="legal-notice-billing-sub">支払時期（1つ目の段落を次のとおり改めます）</p>
+          <p>今だけ投稿の利用料金と店舗カードの月額料金は、それぞれ毎月末日に利用料金を締め、原則として翌月2日に登録済みのクレジットカードへ請求します。システム障害、請求処理の遅延その他のやむを得ない事情により予定日に請求できなかった場合は、翌月3日以降に請求することがあります。（別々に請求します）。</p>
+          <p>このほかの記載は変わりません。</p>
+        </details>
+      </section>
+      <!-- BILLING-START-NOTICE:END -->
       <table>
         <tr>
           <th scope="row">サービス名</th>

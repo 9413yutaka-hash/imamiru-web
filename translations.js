@@ -2405,6 +2405,28 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   // LEGAL-CORRECTION｜STEP 52-F 2026年10月30日の告知（施行予定日 11月7日）の訂正(店舗アカウントの画面)。新しい日付は書かない。
+  // 店舗カードの月額料金の請求の開始と規約B案の事前告知(施行日の版で外す)。
+  store_account_billing_notice_title: {
+    ja: "お知らせ：店舗カードの月額料金の請求の開始と、利用規約・特定商取引法に基づく表記の改定について",
+    en: "Notice: the store card monthly fee will start being charged, and our Terms of Service and Specified Commercial Transactions Act disclosure are being revised"
+  },
+  store_account_billing_notice_start: {
+    ja: "店舗カードの月額契約（1つのお店・施設につき月額100円・税込）の月額料金は、2026年11月分から請求します。11月分は2026年11月30日に締め、2026年12月2日に、登録されたクレジットカードへ請求します。月額契約を申し込んでいないお店・施設に料金が発生することはありません。申し込みより前の月の月額料金は請求しません。",
+    en: "The store card monthly fee (¥100 per shop or venue per month, tax included) will be charged from November 2026. November is closed on November 30, 2026 and charged to your registered credit card on December 2, 2026. Shops and venues without a monthly plan are not charged. We do not charge for months before you subscribed."
+  },
+  store_account_billing_notice_revision: {
+    ja: "あわせて、利用料金をお支払いいただく時期（予定日に請求できなかった場合の扱い）と、店舗カードの月額料金の請求の開始の記載を改定します。改定後の内容は利用規約・特定商取引法に基づく表記の各ページの上部のお知らせのとおりで、下記の施行日から適用します。施行日の前日までは、改定前の内容（現在の本文）が適用されます。",
+    en: "We are also revising when fees are charged (what happens if a charge cannot be made on the scheduled day) and the start of store card billing. The revised text is shown in the notice at the top of the Terms of Service and the Specified Commercial Transactions Act disclosure and applies from the effective date below. Until the day before, the current text applies."
+  },
+  store_account_billing_notice_date: {
+    ja: "施行日：2026年12月1日",
+    en: "Effective date: December 1, 2026"
+  },
+  store_account_billing_notice_tokushoho_link: {
+    ja: "特定商取引法に基づく表記",
+    en: "Specified Commercial Transactions Act disclosure"
+  },
+
   store_account_legal_correction_title: {
     ja: "お知らせ（訂正）：2026年10月30日の「店舗アカウントの退会機能の追加と、利用規約・プライバシーポリシーの改定」のお知らせについて",
     en: "Correction to our notice of October 30, 2026 (account closure and revised Terms of Service / Privacy Policy)"
