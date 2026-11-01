@@ -123,6 +123,18 @@ t("5c GPS未取得・指定なし → 従来どおり非表示", !r.shown && r.t
 // 6 該当0件の地域
 r = render({ lat: YAESE.lat, lng: YAESE.lng, region: { prefectureName: "沖縄県", municipalityName: "読谷村" } });
 t("6 該当0件の市区町村 → セクションを出さない(従来の0件と同じ)", !r.shown, r.titles);
+// 完成形一括開発｜多言語：英語表示でも、八重瀬町から北谷町を指定した結果は同じ・ラベルは英語の文言を使う。
+ctx.getCurrentMachinauLanguage = () => "en";
+ctx.getMachinauTranslation = (key, lang) => lang + ":" + key;
+r = render({ lat: YAESE.lat, lng: YAESE.lng, region: CHATAN_REGION });
+t("8a 英語表示：八重瀬町から北谷町を指定 → 北谷町の街の発見（同じ2件・同じ順）", r.shown && r.titles.join(",") === "北谷B,北谷A", r.titles);
+t("8b 英語表示：投稿の種類のラベルは英語の文言（shop_user_post_badge の en）", r.html.includes("en:shop_user_post_badge") && !r.html.includes("ja:shop_user_post_badge"), r.html.slice(0, 200));
+ctx.getCurrentMachinauLanguage = () => "ja";
+ctx.getMachinauTranslation = (key) => key;
+const trSrc = readFileSync(join(REPO_ROOT, "translations.js"), "utf8").split(String.fromCharCode(13)).join("");
+const badge = trSrc.slice(trSrc.indexOf("shop_user_post_badge:"), trSrc.indexOf("}", trSrc.indexOf("shop_user_post_badge:")));
+const enBadge = (badge.match(/en: "([^"]*)"/) || [])[1] || "";
+t("8c 翻訳：shop_user_post_badge に日英があり、英語に日本語が混ざらない", /ja: "[^"]+"/.test(badge) && enBadge !== "" && !/[぀-ヿ一-鿿]/.test(enBadge), badge);
 
 // 7 無料店舗枠の15km・店舗カードの判定は無変更(origin/main と同一)
 const radius = (s) => extract(s, "const NEARBY_SHOP_CARD_RADIUS_KM =") + extract(s, "function isShopWithinNearbyCardRadius(") + extract(s, "function isShopInSelectedShopRegion(");
