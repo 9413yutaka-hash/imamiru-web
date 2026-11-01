@@ -135,6 +135,7 @@ import {
 // STEP 44-C⑤｜月額100円カスタマイズの定期実行の入口(合言葉 X-Machinau-Cron-Secret で認証、運営のログイン不要)。
 import {
   handleAdminStoreCustomPlanCronHealth,
+  handleStoreCardCronStatus,
   handleStoreCustomPlanCron
 } from "./_lib/store-custom-plan-cron.js";
 
@@ -30279,6 +30280,19 @@ export default async function handler(
       return handleFirebaseTargetRequest(
         request,
         response
+      );
+    }
+
+    // STEP 53-H｜外部監視(UptimeRobot)用：店舗カードの定期実行の正常な成功を確認できれば200、できなければ503。
+    // 読むだけ・認証不要・ok と状態の語だけを返す(請求の処理は呼ばない)。
+    if (
+      request.query &&
+      request.query.mode === "storeCardCronStatus"
+    ) {
+      return handleStoreCardCronStatus(
+        request,
+        response,
+        { env: process.env, getFirestore: getFirestore, getFirebaseAdminApp: getFirebaseAdminApp }
       );
     }
 

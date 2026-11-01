@@ -242,6 +242,41 @@ async function writeCronHealth(database, environment, runId, nowMillis, succeede
   await database.collection(STORE_CUSTOM_PLAN_CRON_HEALTH_COLLECTION).doc(environment).set(update, { merge: true });
 }
 
+// STEP 53-H｜外部監視(UptimeRobot)用の公開の状態確認。GET /api/moderate-submission?mode=storeCardCronStatus
+//   200 { ok:true, state:"ok" } … 定期実行の正常な成功を確認できた(今日、または日本時間14時までは昨日)。
+//   503 { ok:false, state } … 正常な成功を確認できない(止まっている・一度も動いていない・状態を読めない)。
+//   原因(GitHub Actions の停止など)は断定しない。返すのは ok と状態の語だけ(日時・件数・店舗・請求・秘密・エラーの内容は返さない)。
+//   読むだけ(Firestore に書かない)・請求の処理は呼ばない・キャッシュしない(no-store)。
+//   読み取りの費用を抑えるため、同じ実行環境では Firestore の読み取りを60秒に1回までにする(結果は判断の基準の数時間より十分短い)。
+const CRON_STATUS_MEMO_MS = 60 * 1000;
+let cronStatusMemo = { atMs: 0, environment: "", health: null };
+
+export function resetStoreCardCronStatusMemo() {
+  cronStatusMemo = { atMs: 0, environment: "", health: null };
+}
+
+export async function handleStoreCardCronStatus(request, response, deps) {
+  response.setHeader("Cache-Control", "no-store");
+  const nowMillis = typeof deps.now === "function" ? deps.now() : Date.now();
+
+  try {
+    const environment = deps.env && deps.env.VERCEL_ENV === "production" ? "production" : "preview_trial";
+
+    if (cronStatusMemo.environment !== environment || nowMillis - cronStatusMemo.atMs >= CRON_STATUS_MEMO_MS || nowMillis < cronStatusMemo.atMs) {
+      const database = deps.getFirestore(deps.getFirebaseAdminApp());
+      const snapshot = await database.collection(STORE_CUSTOM_PLAN_CRON_HEALTH_COLLECTION).doc(environment).get();
+      cronStatusMemo = { atMs: nowMillis, environment: environment, health: snapshot.exists ? snapshot.data() || {} : null };
+    }
+
+    const evaluated = evaluateStoreCustomPlanCronHealth(cronStatusMemo.health, nowMillis);
+    return response.status(evaluated.ok ? 200 : 503).json({ ok: evaluated.ok === true, state: evaluated.state });
+  } catch (error) {
+    cronStatusMemo = { atMs: 0, environment: "", health: null };
+    console.error("店舗カスタマイズ：定期実行の状態の確認エラー");
+    return response.status(503).json({ ok: false, state: "unavailable" });
+  }
+}
+
 // mode: adminStoreCustomPlanCronHealth (POST、運営のみ・読むだけ)。この環境の定期実行が動いているか。
 export async function handleAdminStoreCustomPlanCronHealth(request, response, deps) {
   try {
