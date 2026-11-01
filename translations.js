@@ -5633,6 +5633,18 @@ const MACHINAU_TRANSLATIONS = {
     ja: "共有された店舗・施設の情報は、現在掲載されていません。",
     en: "The shared place is not listed at the moment."
   },
+  site_share_button: {
+    ja: "🔗 マチナウをシェア",
+    en: "🔗 Share Machinau"
+  },
+  site_share_title: {
+    ja: "マチナウ",
+    en: "Machinau"
+  },
+  site_share_text: {
+    ja: "街の今を知れば、もっと、いい旅になる。\n\n今いる街のお店や、今日だけの情報、地元の発見が見つかる「マチナウ」。",
+    en: "Know what's happening in town right now, and your trip gets even better.\n\nMachinau shows you shops, today-only news and local finds in the town you're in."
+  },
   share_post_unavailable: {
     ja: "共有された投稿の掲載は終了しました。",
     en: "The shared post is no longer listed."

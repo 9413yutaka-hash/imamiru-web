@@ -473,6 +473,43 @@ try {
   S.docs.delete("submissions/UX");
   S.docs.delete("submissions/U1");
 
+  // ---- マチナウ自体のシェア（TOP のフッター・旅の保存箱） ----
+  const SITE_JA_TEXT = "街の今を知れば、もっと、いい旅になる。\n\n今いる街のお店や、今日だけの情報、地元の発見が見つかる「マチナウ」。";
+  const FOOTER_BTN = "footer .machinau-site-share .machinau-share-button";
+  p = await top("/");
+  const siteLabel = await p.ev(`(() => { const b = document.querySelector(${JSON.stringify(FOOTER_BTN)}); return b ? { text: b.textContent.trim(), visible: getComputedStyle(b).display !== "none" && b.offsetHeight > 0 } : null; })()`);
+  t("M1 TOP のフッターに「🔗 マチナウをシェア」（日本語・スマートフォン 390px）", !!siteLabel && siteLabel.visible && siteLabel.text === "🔗 マチナウをシェア", siteLabel);
+  let siteShare = await clickShare(p, FOOTER_BTN, "share");
+  const sd = (siteShare.shared || [])[0] || {};
+  t("M2 OS の共有画面へ：URL は https://machinau.jp/・題名「マチナウ」・紹介文（日本語の文案どおり）・位置情報や利用者の情報を含まない", sd.url === "https://machinau.jp/" && sd.title === "マチナウ" && sd.text === SITE_JA_TEXT && !/\d+\.\d{3,}|uid|lat|lng/.test(JSON.stringify(sd)), sd);
+  siteShare = await clickShare(p, FOOTER_BTN, "copy");
+  t("M3 共有の画面が無い時：https://machinau.jp/ をコピーして案内", JSON.stringify(siteShare.copied) === JSON.stringify(["https://machinau.jp/"]) && siteShare.status === "リンクをコピーしました。LINEやメールなどに貼り付けて送れます。", siteShare);
+  siteShare = await clickShare(p, FOOTER_BTN, "copy-fail");
+  t("M4 コピーもできない時：https://machinau.jp/ を表示して手でコピーできる", siteShare.input === "https://machinau.jp/" && /コピーできませんでした/.test(siteShare.status), siteShare);
+  const hscroll360 = await p.ev(`document.documentElement.scrollWidth <= window.innerWidth + 1`);
+  const footerReach = await p.ev(`(async () => { window.scrollTo(0, document.documentElement.scrollHeight); await new Promise((r) => setTimeout(r, 300)); const b = document.querySelector("footer .machinau-site-share .machinau-share-button"); const r = b.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return { inView: r.top >= 0 && r.bottom <= window.innerHeight, notCovered: !!hit && (hit === b || b.contains(hit)), top: Math.round(r.top), bottom: Math.round(r.bottom), vh: window.innerHeight }; })()`);
+  t("M4b ページの一番下まで動かすと、フッターのボタンは画面内にあり、下のメニューに隠れずに押せる", footerReach.inView && footerReach.notCovered, footerReach);
+  t("M5 スマートフォンで横スクロールなし・JSエラーなし", hscroll360 && p.log.errors.length === 0, p.log.errors);
+  await p.ev(`showMyPage(); true`);
+  await sleep(300);
+  const MYPAGE_BTN = "#myPageSection .machinau-site-share .machinau-share-button";
+  const myVisible = await p.ev(`(() => { const b = document.querySelector(${JSON.stringify(MYPAGE_BTN)}); return !!b && b.offsetHeight > 0 && b.textContent.trim() === "🔗 マチナウをシェア"; })()`);
+  siteShare = await clickShare(p, MYPAGE_BTN, "share");
+  t("M6 旅の保存箱（マイページ）にも同じボタン・同じ共有内容", myVisible && (siteShare.shared || [])[0] && siteShare.shared[0].url === "https://machinau.jp/" && siteShare.shared[0].text === SITE_JA_TEXT, { myVisible, siteShare });
+  await shot(p, "site-share-mypage-390", "#myPageSection");
+  await p.close();
+  p = await top("/", { lang: "en", width: 1280 });
+  const enLabel = await p.ev(`document.querySelector(${JSON.stringify(FOOTER_BTN)}).textContent.trim()`);
+  siteShare = await clickShare(p, FOOTER_BTN, "share");
+  const se = (siteShare.shared || [])[0] || {};
+  t("M7 英語・PC：「🔗 Share Machinau」・題名「Machinau」・英語の紹介文（日本語が混ざらない）・URL は https://machinau.jp/", enLabel === "🔗 Share Machinau" && se.url === "https://machinau.jp/" && se.title === "Machinau" && /Machinau/.test(se.text || "") && !/[぀-ヿ一-鿿]/.test(se.text || ""), { enLabel, se });
+  siteShare = await clickShare(p, FOOTER_BTN, "copy-fail");
+  t("M8 英語：コピーできない時の案内も英語・URL を表示・PC で横スクロールなし", /^Couldn't copy the link/.test(siteShare.status) && siteShare.input === "https://machinau.jp/" && (await p.ev(`document.documentElement.scrollWidth <= window.innerWidth + 1`)), siteShare);
+  await shot(p, "site-share-footer-1280-en", "footer");
+  await p.close();
+  const indexHtml = readFileSync(REPO_ROOT + "/index.html", "utf8");
+  t("M9 TOP の OGP：正式な名称（og:site_name マチナウ）・説明・URL https://machinau.jp/・正式なアイコン画像（新しい画像は作らない）", /property="og:site_name" content="マチナウ"/.test(indexHtml) && /property="og:url"\s+content="https:\/\/machinau\.jp\/"/.test(indexHtml) && /property="og:image"\s+content="https:\/\/machinau\.jp\/icon-512\.png\?v=2"/.test(indexHtml) && /property="og:title"\s+content="マチナウ｜今、何が起きているかを見つけよう"/.test(indexHtml));
+
   // 15km rule unchanged: Tokyo listing is not in the Naha card list, but its shared link still opens (like favorites)
   p = await top("/?shop=LT");
   m = await modalState(p);

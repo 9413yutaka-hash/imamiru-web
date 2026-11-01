@@ -22081,11 +22081,46 @@ async function shareMachinauItemFromButton(
   }
 }
 
+// マチナウ自体のシェア(TOP のフッター・旅の保存箱)。共有する URL は常に正式な https://machinau.jp/。
+const MACHINAU_SITE_SHARE_URL =
+  MACHINAU_SHARE_ORIGIN + "/";
+
+async function shareMachinauSite(
+  button
+) {
+  if (!button || machinauShareInProgress) {
+    return;
+  }
+
+  const language =
+    getCurrentMachinauLanguage();
+
+  const status =
+    button.parentNode
+      ? button.parentNode.querySelector(".machinau-share-status")
+      : null;
+
+  machinauShareInProgress = true;
+
+  try {
+    await shareOrCopyMachinauUrl(
+      MACHINAU_SITE_SHARE_URL,
+      getMachinauTranslation("site_share_title", language),
+      status,
+      getMachinauTranslation("site_share_text", language)
+    );
+  } finally {
+    machinauShareInProgress = false;
+  }
+}
+
 // 結果："shared"(共有の画面で送った)・"cancelled"(共有の画面を閉じた)・"copied"・"failed"。
+// text(任意)：共有の画面に添える紹介文(マチナウ自体のシェアだけ。URL は url で別に渡す)。
 async function shareOrCopyMachinauUrl(
   url,
   title,
-  status
+  status,
+  text
 ) {
   const language =
     getCurrentMachinauLanguage();
@@ -22100,6 +22135,10 @@ async function shareOrCopyMachinauUrl(
       title: title !== "" ? title : document.title,
       url: url
     };
+
+    if (typeof text === "string" && text !== "") {
+      shareData.text = text;
+    }
 
     try {
       if (

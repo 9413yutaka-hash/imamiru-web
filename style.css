@@ -2276,6 +2276,19 @@
 }
 
 /* STEP 48｜シェア(今だけ投稿の詳細・無料店舗の詳細)と、共有リンクの店舗が掲載されていない時の案内 */
+/* マチナウ自体のシェア(フッター・旅の保存箱)。ボタンは既存の .machinau-share-button と同じ見た目。 */
+.machinau-share.machinau-site-share {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 4px auto 14px;
+  max-width: 420px;
+}
+
+.travel-box .machinau-share.machinau-site-share {
+  margin-top: 16px;
+}
+
 .machinau-share {
   margin: 14px 0 0;
 }

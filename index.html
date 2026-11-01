@@ -85,6 +85,8 @@
 
   <meta property="og:type" content="website">
 
+  <meta property="og:site_name" content="マチナウ">
+
   <meta
     property="og:title"
     content="マチナウ｜今、何が起きているかを見つけよう"
@@ -2406,12 +2408,24 @@
     </section>
 
     <p class="travel-box-note" data-i18n="travel_box_storage_note">保存した内容は、この端末のブラウザに保存されます。別の端末やブラウザには表示されず、閲覧履歴を消すと消えることがあります。</p>
+
+      <!-- マチナウ自体のシェア(旅の保存箱)。共有するのは https://machinau.jp/ と紹介文だけ(位置情報・利用者の情報は含めない)。 -->
+      <div class="machinau-share machinau-site-share">
+        <button class="machinau-share-button" type="button" data-i18n="site_share_button" onclick="shareMachinauSite(this)">🔗 マチナウをシェア</button>
+        <div class="machinau-share-status" role="status" aria-live="polite"></div>
+      </div>
   </div>
 </section>
 
   </main>
 
   <footer>
+    <!-- マチナウ自体のシェア(TOP のフッター)。共有するのは https://machinau.jp/ と紹介文だけ(位置情報・利用者の情報は含めない)。 -->
+    <div class="machinau-share machinau-site-share">
+      <button class="machinau-share-button" type="button" data-i18n="site_share_button" onclick="shareMachinauSite(this)">🔗 マチナウをシェア</button>
+      <div class="machinau-share-status" role="status" aria-live="polite"></div>
+    </div>
+
     マチナウ Web Version 1 MVP
     <br>
     <span data-i18n="footer_tagline">今、何が起きているかを見つけよう。</span>
