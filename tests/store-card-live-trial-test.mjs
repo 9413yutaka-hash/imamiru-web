@@ -191,8 +191,8 @@ t("F1 課金・請求・写真の複製のフラグは false・本番のカー�
 const CPB = await import(REPO_URL + "/api/_lib/store-custom-plan-billing.js");
 const CPC = await import(REPO_URL + "/api/_lib/store-custom-plan-cron.js");
 const FTG = await import(REPO_URL + "/api/_lib/firebase-target.js");
-t("F2 STEP 44 の本番用のスイッチ：本番の申込・締めの書き込み・請求・定期実行の請求は true（STEP 53：本番の月末締め・請求の開始。請求は Production だけに効く）・本番の環境では試験用の申込は無効",
-  CPB.STORE_CUSTOM_PLAN_MONTHLY_SIGNUP_ENABLED === true && CPB.STORE_CUSTOM_PLAN_CLOSE_WRITES_ENABLED === true && CPB.STORE_CUSTOM_PLAN_CHARGE_ENABLED === true && CPC.STORE_CUSTOM_PLAN_CRON_CHARGES_ENABLED === true && FTG.isPreviewStoreCustomPlanTrialEnabled(PROD) === false);
+t("F2 STEP 44 の本番用のスイッチ：本番の申込・締めの書き込み・定期実行の請求は true・請求は false（STEP 53-I：代表の承認まで本番の請求を一括で停止）・本番の環境では試験用の申込は無効",
+  CPB.STORE_CUSTOM_PLAN_MONTHLY_SIGNUP_ENABLED === true && CPB.STORE_CUSTOM_PLAN_CLOSE_WRITES_ENABLED === true && CPB.STORE_CUSTOM_PLAN_CHARGE_ENABLED === false && CPC.STORE_CUSTOM_PLAN_CRON_CHARGES_ENABLED === true && FTG.isPreviewStoreCustomPlanTrialEnabled(PROD) === false);
 const wf = readFileSync(join(REPO_DIR, ".github", "workflows", "main.yml"), "utf8");
 t("F3 （Preview 系列）Preview 用のジョブは preview/stripe-card-setup の手動実行だけ・本番の expire の条件は本番と同じ",
   wf.includes("if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/preview/stripe-card-setup'") && wf.includes("if: github.event_name == 'schedule' || github.ref == 'refs/heads/main'"), "");

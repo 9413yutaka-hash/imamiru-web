@@ -79,11 +79,11 @@ const invoiceIds = [...S.docs.keys()].filter((k) => k.startsWith("storeCustomPla
 t("D1 同じ月の締めを2回実行しても、請求書は店舗・月で1件のまま・内容も変わらない", c.ok === true && JSON.stringify(invoiceIds) === JSON.stringify(["storeCustomPlanInvoices/SC_2026-10"]) && JSON.stringify(S.docs.get("storeCustomPlanInvoices/SC_2026-10")) === invBefore, invoiceIds);
 
 // ===================== C. Production cron entry (STEP 53: close on, charges off) =====================
-t("C0 締めの書き込み・請求・定期実行の請求のスイッチは true（STEP 53）", B.STORE_CUSTOM_PLAN_CLOSE_WRITES_ENABLED === true && B.STORE_CUSTOM_PLAN_CHARGE_ENABLED === true && CR.STORE_CUSTOM_PLAN_CRON_CHARGES_ENABLED === true);
+t("C0 締めの書き込み・定期実行の請求のスイッチは true（STEP 53）・本番の請求のスイッチは false（STEP 53-I：代表の承認まで）", B.STORE_CUSTOM_PLAN_CLOSE_WRITES_ENABLED === true && B.STORE_CUSTOM_PLAN_CHARGE_ENABLED === false && CR.STORE_CUSTOM_PLAN_CRON_CHARGES_ENABLED === true);
 const writesBefore = S.writes.length, docsBefore = JSON.stringify([...S.docs.entries()]);
 const cr = res();
 await quiet(() => handler({ method: "POST", headers: { "content-type": "application/json", "x-forwarded-for": "198.51.100.9", "x-machinau-cron-secret": "fake-cron-secret-for-tests" }, body: { mode: "storeCustomPlanCron" }, query: {} }, cr));
-t("C1 Production の定期実行の入口（STEP 53）：200・本番として記録・前月の締めは同じ請求書のまま（二重に作らない）・本番の請求専用キーが無い（テストキーだけ）ので請求しない（stripe_unavailable）・退会の最終削除の手順は渡さない・外部へ通信しない", cr.code === 200 && cr.body.success === true && cr.body.steps.close.status === "done" && cr.body.steps.charges.executed === false && cr.body.steps.charges.blockedReason === "stripe_unavailable" && !cr.body.steps.accountDeletion && JSON.stringify(S.docs.get("storeCustomPlanInvoices/SC_2026-10")) === invBefore && [...S.docs.keys()].some((k) => k.startsWith("storeCustomPlanCronRuns/") && S.docs.get(k).environment === "production") && network.length === 0, cr.body);
+t("C1 Production の定期実行の入口（STEP 53）：200・本番として記録・前月の締めは同じ請求書のまま（二重に作らない）・本番の請求のスイッチ false で請求しない（charge_disabled）・退会の最終削除の手順は渡さない・外部へ通信しない", cr.code === 200 && cr.body.success === true && cr.body.steps.close.status === "done" && cr.body.steps.charges.executed === false && cr.body.steps.charges.blockedReason === "charge_disabled" && !cr.body.steps.accountDeletion && JSON.stringify(S.docs.get("storeCustomPlanInvoices/SC_2026-10")) === invBefore && [...S.docs.keys()].some((k) => k.startsWith("storeCustomPlanCronRuns/") && S.docs.get(k).environment === "production") && network.length === 0, cr.body);
 const bad = res();
 await quiet(() => handler({ method: "POST", headers: { "content-type": "application/json", "x-forwarded-for": "198.51.100.9", "x-machinau-cron-secret": "wrong" }, body: { mode: "storeCustomPlanCron" }, query: {} }, bad));
 t("C2 合言葉が違えば 401（何もしない）", bad.code === 401, bad.body);

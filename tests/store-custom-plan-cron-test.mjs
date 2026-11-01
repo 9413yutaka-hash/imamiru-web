@@ -61,7 +61,7 @@ const SUB = (storeId, token) => call({ mode: "storeCustomPlanSubscribe", storeId
 // ===================== helpers / flags =====================
 t("H1 前月（日本時間）：12/1 0:05 JST（UTC 11/30 15:05）は 2026-11、11/30 23:55 JST は 2026-10、1/1 0:00 JST は 2026-12", CR.previousJstMonthKey(jst(2026, 12, 1, 0, 5)) === "2026-11" && CR.previousJstMonthKey(jst(2026, 11, 30, 23, 55)) === "2026-10" && CR.previousJstMonthKey(jst(2027, 1, 1)) === "2026-12" && CR.jstDateKey(jst(2026, 12, 1, 0, 5)) === "2026-12-01");
 t("H2 合言葉の比較：同じ値だけ一致（空・長さ違い・違う値は不一致）", CR.storeCustomPlanCronSecretsMatch(SECRET, SECRET) && !CR.storeCustomPlanCronSecretsMatch("", SECRET) && !CR.storeCustomPlanCronSecretsMatch(SECRET + "x", SECRET) && !CR.storeCustomPlanCronSecretsMatch("fake-cron-secret-for-tests-0002", SECRET) && !CR.storeCustomPlanCronSecretsMatch(SECRET, ""));
-t("H3 定期実行からの請求の許可（STORE_CUSTOM_PLAN_CRON_CHARGES_ENABLED）・請求・締めの書き込み（STEP 53）・本番の申込は true（請求は Production だけに効く）", CR.STORE_CUSTOM_PLAN_CRON_CHARGES_ENABLED === true && B.STORE_CUSTOM_PLAN_CHARGE_ENABLED === true && B.STORE_CUSTOM_PLAN_CLOSE_WRITES_ENABLED === true && B.STORE_CUSTOM_PLAN_MONTHLY_SIGNUP_ENABLED === true);
+t("H3 定期実行からの請求の許可（STORE_CUSTOM_PLAN_CRON_CHARGES_ENABLED）・締めの書き込み（STEP 53）・本番の申込は true・本番の請求は false（STEP 53-I：代表の承認まで）", CR.STORE_CUSTOM_PLAN_CRON_CHARGES_ENABLED === true && B.STORE_CUSTOM_PLAN_CHARGE_ENABLED === false && B.STORE_CUSTOM_PLAN_CLOSE_WRITES_ENABLED === true && B.STORE_CUSTOM_PLAN_MONTHLY_SIGNUP_ENABLED === true);
 
 // ===================== auth / environment =====================
 let r = await CRON(null);
@@ -85,7 +85,7 @@ r = await CRON();
 process.env.AI_COLLECT_CRON_SECRET = SECRET;
 delete process.env.STORE_CARD_BILLING_CRON_SECRET;
 process.env.VERCEL_ENV = "preview";
-t("A4 Production の環境（STEP 53：締めのフラグ true）：200・本番として記録・本番の請求専用キーが無い（テストキーだけ）ので請求しない（stripe_unavailable）・Stripe に通信しない", r.code === 200 && r.body.steps.charges.executed === false && r.body.steps.charges.blockedReason === "stripe_unavailable" && docs("storeCustomPlanCronRuns").length === 1 && docs("storeCustomPlanCronRuns")[0][1].environment === "production" && stripeCalls === 0 && otherNetwork === 0, r.body);
+t("A4 Production の環境（STEP 53：締めのフラグ true）：200・本番として記録・本番の請求のスイッチ false で請求しない（charge_disabled）・Stripe に通信しない", r.code === 200 && r.body.steps.charges.executed === false && r.body.steps.charges.blockedReason === "charge_disabled" && docs("storeCustomPlanCronRuns").length === 1 && docs("storeCustomPlanCronRuns")[0][1].environment === "production" && stripeCalls === 0 && otherNetwork === 0, r.body);
 t("A5 応答に合言葉を含まない", !JSON.stringify(r.body).includes(SECRET));
 
 // ===================== October contracts =====================

@@ -6,7 +6,23 @@
 // REAL moderate-submission handler + REAL api/_lib modules on mocked firebase-admin and an in-memory Stripe stub.
 // No network, no real Stripe. Fake keys only.
 // run: node --import ./tests/mockfa-occ/register.mjs tests/store-card-go-live-test.mjs
-import { REPO_URL } from "./_paths.mjs";
+import { REPO_URL, REPO_ROOT } from "./_paths.mjs";
+import { cpSync, readFileSync as readFileSyncFs, writeFileSync as writeFileSyncFs, rmSync } from "node:fs";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+// STEP 53-I｜本番の請求のスイッチ(STORE_CUSTOM_PLAN_CHARGE_ENABLED)は代表の承認まで false。この試験は「承認して true にした後」の
+// 流れを確かめるため、api/ をこのフォルダの一時コピーへ写し、コピーの中だけスイッチを true にして読み込む(本物のコードは変えない)。
+const LIVE_DIR = join(REPO_ROOT, "tests", ".tmp-go-live-" + process.pid);
+cpSync(join(REPO_ROOT, "api"), join(LIVE_DIR, "api"), { recursive: true });
+{
+  const p = join(LIVE_DIR, "api", "_lib", "store-custom-plan-billing.js");
+  const src = readFileSyncFs(p, "utf8");
+  const next = src.replace(/export const STORE_CUSTOM_PLAN_CHARGE_ENABLED =(\r?\n)  false;/, "export const STORE_CUSTOM_PLAN_CHARGE_ENABLED =$1  true;");
+  if (next === src) throw new Error("charge switch not found in the copy");
+  writeFileSyncFs(p, next);
+}
+process.on("exit", () => rmSync(LIVE_DIR, { recursive: true, force: true }));
+const API_URL = pathToFileURL(LIVE_DIR).href;
 const sa = (id) => JSON.stringify({ type: "service_account", project_id: id, private_key: "-----FAKE-KEY-FOR-TESTS-----" });
 const LIVE_CHARGE_KEY = "rk_" + "live_FAKECHARGEKEYFORTESTS001", LIVE_CARD_KEY = "rk_" + "live_FAKECARDSETUPKEYONLY01", LIVE_PK = "pk_" + "live_FAKEPUBKEYFORTESTS0001";
 const SECRET = "fake-cron-secret-for-tests-0001";
@@ -53,15 +69,15 @@ globalThis.fetch = async (url, opts = {}) => {
 };
 
 const { Timestamp } = await import("firebase-admin/firestore");
-const { default: handler } = await import(REPO_URL + "/api/moderate-submission.js?v=" + Date.now());
-const B = await import(REPO_URL + "/api/_lib/store-custom-plan-billing.js");
-const CR = await import(REPO_URL + "/api/_lib/store-custom-plan-cron.js");
-const CH = await import(REPO_URL + "/api/_lib/store-custom-plan-charge.js");
-const SB = await import(REPO_URL + "/api/_lib/store-billing.js");
-const SD = await import(REPO_URL + "/api/_lib/store-account-deletion.js");
-const IM = await import(REPO_URL + "/api/_lib/imadake.js");
-const MC = await import(REPO_URL + "/api/_lib/imadake-monthly-charge.js");
-const MCL = await import(REPO_URL + "/api/_lib/imadake-monthly-close.js");
+const { default: handler } = await import(API_URL + "/api/moderate-submission.js?v=" + Date.now());
+const B = await import(API_URL + "/api/_lib/store-custom-plan-billing.js");
+const CR = await import(API_URL + "/api/_lib/store-custom-plan-cron.js");
+const CH = await import(API_URL + "/api/_lib/store-custom-plan-charge.js");
+const SB = await import(API_URL + "/api/_lib/store-billing.js");
+const SD = await import(API_URL + "/api/_lib/store-account-deletion.js");
+const IM = await import(API_URL + "/api/_lib/imadake.js");
+const MC = await import(API_URL + "/api/_lib/imadake-monthly-charge.js");
+const MCL = await import(API_URL + "/api/_lib/imadake-monthly-close.js");
 
 let pass = 0, fail = 0;
 const t = (n, ok, d = "") => { ok ? pass++ : fail++; console.log(`${ok ? "PASS" : "FAIL"} ${n}${!ok ? " :: " + JSON.stringify(d).slice(0, 700) : ""}`); };
@@ -98,6 +114,8 @@ S.docs.set("imadakeMonthlyInvoices/G1_2026-11", { storeId: "G1", month: "2026-11
 const IMADAKE_BEFORE = JSON.stringify(S.docs.get("imadakeMonthlyInvoices/G1_2026-11"));
 
 // ===================== S. switches =====================
+const REAL_B = await import(REPO_URL + "/api/_lib/store-custom-plan-billing.js");
+t("S0 本物のコードの本番の請求のスイッチは false（代表の承認まで）・この試験は承認後の状態（コピーの中だけ true）", REAL_B.STORE_CUSTOM_PLAN_CHARGE_ENABLED === false && B.STORE_CUSTOM_PLAN_CHARGE_ENABLED === true);
 t("S1 店舗カードのスイッチ：申込・締め・請求・定期実行の請求は true（STEP 53）・本番のカード登録 true",
   B.STORE_CUSTOM_PLAN_MONTHLY_SIGNUP_ENABLED === true && B.STORE_CUSTOM_PLAN_CLOSE_WRITES_ENABLED === true && B.STORE_CUSTOM_PLAN_CHARGE_ENABLED === true && CR.STORE_CUSTOM_PLAN_CRON_CHARGES_ENABLED === true && SB.STORE_CARD_REGISTRATION_LIVE_ENABLED === true);
 t("S2 今だけ投稿の請求・締め・課金開始と、退会の本番の自動の最終削除は false のまま",

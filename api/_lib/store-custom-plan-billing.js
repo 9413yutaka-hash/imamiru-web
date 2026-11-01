@@ -59,10 +59,12 @@ export const STORE_CUSTOM_PLAN_CLOSE_WRITES_ENABLED =
   true;
 
 // Stripe への請求。false の間は請求の操作をすべて拒否する(Preview でも請求しない)。
-// STEP 53｜本番の請求の開始で true(代表の承認後に Production へ出す)。効くのは Production だけ
-// (readStoreCustomPlanChargeGate。Preview は今までどおり試験の経路だけ)。
+// STEP 53｜効くのは Production だけ(readStoreCustomPlanChargeGate。Preview は今までどおり試験の経路だけ)。
+// STEP 53-I｜代表の明示の承認まで false(本番の請求の一括停止)。定期実行・運営の手動の請求・店主の「今すぐ支払う」は
+// すべてこのスイッチを通るため、請求専用キーが登録済みでも Stripe へ請求しない。締め・未払いの判定・監視は動く。
+// 請求の開始は、代表の承認後にこの値を true にする commit の反映で行う。
 export const STORE_CUSTOM_PLAN_CHARGE_ENABLED =
-  true;
+  false;
 
 const STORE_ACCOUNTS_COLLECTION = "storeAccounts";
 const STORE_MEMBERS_COLLECTION = "storeMembers";

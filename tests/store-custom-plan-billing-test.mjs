@@ -69,7 +69,7 @@ t("K5 決済失敗の予定：初回失敗の3日後・7日後に再試行、14�
 t("K6 料金は100円・税込・翌月2日（定数）", B.STORE_CUSTOM_PLAN_MONTHLY_FEE_JPY === 100 && B.STORE_CUSTOM_PLAN_CHARGE_DAY_OF_MONTH === 2);
 
 // ===================== flags / environment =====================
-t("F1 月額プラン専用のフラグ：本番の申込・締めの書き込み・請求は true（STEP 52-F：申込の受付開始、STEP 53：本番の月末締め・請求の開始）", B.STORE_CUSTOM_PLAN_MONTHLY_SIGNUP_ENABLED === true && B.STORE_CUSTOM_PLAN_CLOSE_WRITES_ENABLED === true && B.STORE_CUSTOM_PLAN_CHARGE_ENABLED === true);
+t("F1 月額プラン専用のフラグ：本番の申込・締めの書き込みは true・請求は false（STEP 52-F：申込の受付開始、STEP 53：本番の月末締め、STEP 53-I：請求は代表の承認まで停止）", B.STORE_CUSTOM_PLAN_MONTHLY_SIGNUP_ENABLED === true && B.STORE_CUSTOM_PLAN_CLOSE_WRITES_ENABLED === true && B.STORE_CUSTOM_PLAN_CHARGE_ENABLED === false);
 process.env.VERCEL_ENV = "production";
 let r = await call(SUB("S1"), "u1");
 t("F2 Production の環境：申込の受付は開いている・本番のカードが無ければ 403 card_required・書き込みなし（STEP 52-F：本番のカード登録・本番の申込は受付開始のため true）", r.code === 403 && r.body.reason === "card_required" && !plan("S1") && docs("storeCustomPlanUsage").length === 0, r.body);
@@ -205,7 +205,7 @@ t("X1 請求の実行：請求用キーが無い（この試験の環境）の�
 process.env.VERCEL_ENV = "production";
 r = await call({ mode: "adminStoreCustomPlanCharge", dryRun: false }, "admin");
 process.env.VERCEL_ENV = "preview";
-t("X1b Production の環境（STEP 53：請求のスイッチ true）でも、本番の請求専用キーが無ければ 403 stripe_unavailable", r.code === 403 && r.body.reason === "stripe_unavailable", r.body);
+t("X1b Production の環境（STEP 53-I：請求のスイッチ false）では請求の実行は 403 charge_disabled", r.code === 403 && r.body.reason === "charge_disabled", r.body);
 r = await call({ mode: "adminStoreCustomPlanCharge" }, "u1");
 t("X2 店主のアカウントでは請求の操作を呼べない", r.code === 401 || r.code === 403, r.code);
 
