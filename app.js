@@ -21918,7 +21918,11 @@ const MACHINAU_SHARE_ID_PATTERN =
   /^[A-Za-z0-9_-]{1,100}$/;
 
 const MACHINAU_SHARE_KINDS =
-  ["imadake", "shop"];
+  ["imadake", "shop", "post"];
+
+// 完成形 B｜共有できる期限つきの公開投稿の種類(地域情報・運営のお知らせ・店舗の投稿・街で見つけた)。
+const MACHINAU_SHAREABLE_POST_TYPES =
+  ["ai_news", "operator_news", "shop_post", "user_post"];
 
 const SHARED_LINK_NOTICE_HIDE_MS =
   10000;
@@ -21926,6 +21930,22 @@ const SHARED_LINK_NOTICE_HIDE_MS =
 // 共有リンク(?shop=)の店舗。無料掲載と正式店舗の両方の読み込みが済むまで待つ。
 var pendingSharedShopId =
   "";
+
+// 完成形 B｜共有リンク(?post=)の投稿。公開一覧(submissions)の読み込みが済むまで待つ。
+var pendingSharedPostId =
+  "";
+
+// 期限つきの公開投稿で、今も期限内のものだけ共有できる(常設店舗広告・正式店舗・その他は対象外)。
+function isShareableMachinauPost(
+  shop
+) {
+  return (
+    !!shop &&
+    shop.isPermanentAd !== true &&
+    MACHINAU_SHAREABLE_POST_TYPES.includes(getShopListingTypeForAnalytics(shop)) &&
+    getDateValue(shop.expiresAt) > Date.now()
+  );
+}
 
 // 共有の画面を開いている間に、もう一度押されても重ねて開かない。
 var machinauShareInProgress =
@@ -21999,9 +22019,17 @@ function updateShopModalShareArea(
   const shopId =
     String(shop.firestoreId || "");
 
+  // 完成形 B｜無料店舗は "shop"、期限内の公開投稿は "post"。それ以外(期限切れ・その他)は出さない。
+  const shareKind =
+    listingType === "free_listing" || listingType === "store_profile"
+      ? "shop"
+      : isShareableMachinauPost(shop)
+        ? "post"
+        : "";
+
   const shareable =
-    (listingType === "free_listing" || listingType === "store_profile") &&
-    buildMachinauShareUrl("shop", shopId) !== "";
+    shareKind !== "" &&
+    buildMachinauShareUrl(shareKind, shopId) !== "";
 
   setMachinauShareStatus(
     area.querySelector(".machinau-share-status"),
@@ -22013,7 +22041,7 @@ function updateShopModalShareArea(
   area.style.display =
     shareable ? "" : "none";
 
-  button.setAttribute("data-share-kind", "shop");
+  button.setAttribute("data-share-kind", shareable ? shareKind : "shop");
   button.setAttribute("data-share-id", shareable ? shopId : "");
   button.setAttribute("data-share-title", shareable ? String(shop.name || "") : "");
 }
@@ -22482,7 +22510,36 @@ function resolveSharedShopId(
   return sharedId;
 }
 
+// 完成形 B｜共有リンクの投稿：公開一覧に今もある期限内の投稿だけ開く(無ければ「掲載は終了しました」)。
+function tryOpenPendingSharedPost() {
+  if (
+    pendingSharedPostId === "" ||
+    !hasAppliedSubmissionsForStoreProfiles
+  ) {
+    return;
+  }
+
+  const sharedId =
+    pendingSharedPostId;
+
+  pendingSharedPostId = "";
+
+  const post =
+    shops.find(function(candidate) {
+      return candidate.firestoreId === sharedId;
+    });
+
+  if (!isShareableMachinauPost(post)) {
+    showSharedLinkNotice("share_post_unavailable");
+    return;
+  }
+
+  openShopModal(sharedId, "other");
+}
+
 function tryOpenPendingSharedShop() {
+  tryOpenPendingSharedPost();
+
   if (
     pendingSharedShopId === "" ||
     !hasAppliedSubmissionsForStoreProfiles ||
@@ -22568,6 +22625,9 @@ document.addEventListener(
     const sharedShopId =
       params.get("shop");
 
+    const sharedPostId =
+      params.get("post");
+
     if (
       typeof sharedImadakeId === "string" &&
       MACHINAU_SHARE_ID_PATTERN.test(sharedImadakeId)
@@ -22582,6 +22642,16 @@ document.addEventListener(
     ) {
       pendingSharedShopId = sharedShopId;
       tryOpenPendingSharedShop();
+      return;
+    }
+
+    // 完成形 B｜期限つきの公開投稿の共有リンク(?post=)。
+    if (
+      typeof sharedPostId === "string" &&
+      MACHINAU_SHARE_ID_PATTERN.test(sharedPostId)
+    ) {
+      pendingSharedPostId = sharedPostId;
+      tryOpenPendingSharedPost();
     }
   }
 );

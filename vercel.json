@@ -15,6 +15,10 @@
     {
       "source": "/share/shop/:shopId",
       "destination": "/api/moderate-submission?mode=renderShareShop&shopId=:shopId"
+    },
+    {
+      "source": "/share/post/:postId",
+      "destination": "/api/moderate-submission?mode=renderSharePost&postId=:postId"
     }
   ]
 }

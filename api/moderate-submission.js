@@ -142,6 +142,7 @@ import {
 // STEP 48-B｜共有リンクのプレビュー(OGP)のページ(/share/imadake/{ID}・/share/shop/{ID}、vercel.json の rewrite)。
 import {
   handleRenderShareImadake,
+  handleRenderSharePost,
   handleRenderShareShop
 } from "./_lib/share-preview.js";
 
@@ -30336,6 +30337,17 @@ export default async function handler(
       request.query.mode === "renderShareShop"
     ) {
       return handleRenderShareShop(
+        request,
+        response,
+        { getFirebaseAdminApp: getFirebaseAdminApp, getFirestore: getFirestore }
+      );
+    }
+
+    // 完成形 B｜期限つきの公開投稿の共有リンクのプレビュー(/share/post/{ID})。
+    if (
+      request.query.mode === "renderSharePost"
+    ) {
+      return handleRenderSharePost(
         request,
         response,
         { getFirebaseAdminApp: getFirebaseAdminApp, getFirestore: getFirestore }

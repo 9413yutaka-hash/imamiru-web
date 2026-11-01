@@ -94,7 +94,7 @@ t("C5 記事の共有の設定に、利用者・位置の情報を含めない�
 
 // ---------- STEP 48-B：共有リンクのプレビュー(OGP) ----------
 const meta = (html, key) => { const m = html.match(new RegExp(`<meta (?:property|name)="${key}" content="([^"]*)">`)); return m ? m[1] : null; };
-const og = async (kind, id) => { const writesBefore = S.writes.length; const r = await get(kind === "imadake" ? { mode: "renderShareImadake", postId: id } : { mode: "renderShareShop", shopId: id }); const html = String(r.body || ""); return { r, html, writes: S.writes.length - writesBefore, title: meta(html, "og:title"), desc: meta(html, "og:description"), image: meta(html, "og:image"), url: meta(html, "og:url"), card: meta(html, "twitter:card") }; };
+const og = async (kind, id) => { const writesBefore = S.writes.length; const r = await get(kind === "imadake" ? { mode: "renderShareImadake", postId: id } : kind === "post" ? { mode: "renderSharePost", postId: id } : { mode: "renderShareShop", shopId: id }); const html = String(r.body || ""); return { r, html, writes: S.writes.length - writesBefore, title: meta(html, "og:title"), desc: meta(html, "og:description"), image: meta(html, "og:image"), url: meta(html, "og:url"), card: meta(html, "twitter:card") }; };
 const DEFAULT_TITLE = "マチナウ｜今、何が起きているかを見つけよう";
 const DEFAULT_IMAGE = "https://machinau.jp/icon-512.png?v=2";
 const isDefault = (o) => o.title === DEFAULT_TITLE && o.image === DEFAULT_IMAGE && o.card === "summary";
@@ -127,7 +127,7 @@ for (const [id, label] of [["sp_SDRAFT", "下書きの正式店舗"], ["sp_SOFF"
 }
 const vercel = JSON.parse(readFileSync(REPO_ROOT + "/vercel.json", "utf8"));
 const rw = (src) => (vercel.rewrites.find((r) => r.source === src) || {}).destination;
-t("O14 vercel.json：/share/imadake/:postId・/share/shop/:shopId を既存の Function（moderate-submission）へ（読みもの・sitemap の rewrite はそのまま）", rw("/share/imadake/:postId") === "/api/moderate-submission?mode=renderShareImadake&postId=:postId" && rw("/share/shop/:shopId") === "/api/moderate-submission?mode=renderShareShop&shopId=:shopId" && rw("/column/:slug.html") === "/api/moderate-submission?mode=renderColumn&slug=:slug" && rw("/sitemap.xml") === "/api/moderate-submission?mode=renderSitemap" && vercel.rewrites.length === 4, vercel);
+t("O14 vercel.json：/share/imadake/:postId・/share/shop/:shopId を既存の Function（moderate-submission）へ（読みもの・sitemap の rewrite はそのまま）", rw("/share/imadake/:postId") === "/api/moderate-submission?mode=renderShareImadake&postId=:postId" && rw("/share/shop/:shopId") === "/api/moderate-submission?mode=renderShareShop&shopId=:shopId" && rw("/column/:slug.html") === "/api/moderate-submission?mode=renderColumn&slug=:slug" && rw("/sitemap.xml") === "/api/moderate-submission?mode=renderSitemap" && rw("/share/post/:postId") === "/api/moderate-submission?mode=renderSharePost&postId=:postId" && vercel.rewrites.length === 5, vercel);
 const pg = await get({ mode: "imadakePostGet", postId: "SHB" });
 t("O15 公開GET（課金対象）：本文は空のまま・カードと同じ紹介文（excerpt 80文字・続きあり）", pg.code === 200 && pg.body.bodyProtected === true && pg.body.post.body === "" && pg.body.post.excerpt + "…" === EXCERPT80 && pg.body.post.excerptTruncated === true, pg.body.post && { excerpt: pg.body.post.excerpt, t: pg.body.post.excerptTruncated });
 // STEP 48-C｜課金対象の公開GETは、公開カードと同じ範囲の項目だけ(許可リスト)
@@ -191,10 +191,10 @@ const shareMock = (mode) => `(() => {
 const staticServer = await serve(REPO_ROOT + "", PORT + 1);
 const server = http.createServer(async (req, rs) => {
   const path = new URL(req.url, "http://x").pathname;
-  const m = path.match(/^\/share\/(imadake|shop)\/([^/]+)$/);
+  const m = path.match(/^\/share\/(imadake|shop|post)\/([^/]+)$/);
   if (m) {
     const id = decodeURIComponent(m[2]);
-    const r = await get(m[1] === "imadake" ? { mode: "renderShareImadake", postId: id } : { mode: "renderShareShop", shopId: id });
+    const r = await get(m[1] === "imadake" ? { mode: "renderShareImadake", postId: id } : m[1] === "post" ? { mode: "renderSharePost", postId: id } : { mode: "renderShareShop", shopId: id });
     rs.writeHead(r.code, { "Content-Type": r.headers["Content-Type"] || "text/html" }); rs.end(String(r.body)); return;
   }
   const up = await realFetch("http://127.0.0.1:" + (PORT + 1) + req.url);
@@ -439,8 +439,38 @@ try {
   t("B9 無料店舗でない掲載（一般の投稿 U1）の共有リンクは開かない（案内のみ）", u1Loaded && !m.shopVisible && m.notice, { m, u1Loaded });
   await p.ev(`hideSharedLinkNotice(); openShopModal("U1", "card"); true`);
   m = await modalState(p);
-  t("B10 一般の投稿の詳細にはシェアを出さない（対象は無料店舗だけ）", m.shopVisible && !m.shopShare && m.shopShareId === "", m);
+  // 完成形 B｜期限内の公開投稿（街で見つけた・地域情報・お知らせ・店舗の投稿）も共有できる（共有リンクは /share/post/{ID}）。
+  const u1Kind = await p.ev(`document.getElementById("modalShareButton").getAttribute("data-share-kind")`);
+  t("B10 完成形 B：期限内の一般の投稿（U1）の詳細にはシェアを出す（種類 post・ID U1）", m.shopVisible && m.shopShare && m.shopShareId === "U1" && u1Kind === "post", { m, u1Kind });
   await p.close();
+  p = await top("/?post=U1");
+  m = await modalState(p);
+  t("B10b 共有リンク /?post=U1：その投稿の詳細を開く・シェアあり・JSエラーなし", m.shopVisible && m.shopShare && m.shopShareId === "U1" && !m.notice && p.log.errors.length === 0, { m, errors: p.log.errors });
+  const postShare = await clickShare(p, "#modalShareButton", "copy");
+  t("B10c 投稿のシェア：共有するURLは https://machinau.jp/share/post/U1（位置情報・利用者のIDを含まない）", /share\/post\/U1/.test(JSON.stringify(postShare)) && !/lat=|lng=|uid=|26\.2/.test(JSON.stringify(postShare)), postShare);
+  await p.close();
+  S.docs.set("submissions/UX", { ...S.docs.get("submissions/U1"), title: "期限切れの投稿", expiresAt: Timestamp.fromMillis(now0 - 1000) });
+  for (const [label, id] of [["期限切れ", "UX"], ["存在しない", "NOPOST01"], ["常設店舗広告（投稿ではない）", "L1"]]) {
+    p = await top("/?post=" + id);
+    m = await modalState(p);
+    t(`B10d 共有リンク /?post=${id}（${label}）：詳細を開かず「共有された投稿の掲載は終了しました。」`, !m.shopVisible && m.notice && m.noticeText === "共有された投稿の掲載は終了しました。", m);
+    await p.close();
+  }
+  p = await top("/?post=U1", { lang: "en", width: 1280 });
+  m = await modalState(p);
+  t("B10e 英語・PC：共有リンクの投稿を開ける・シェアは「🔗 Share」・横スクロールなし", m.shopVisible && m.shopShareLabel === "🔗 Share" && m.noHScroll, m);
+  await p.close();
+  p = await top("/?post=NOPOST01", { lang: "en" });
+  m = await modalState(p);
+  t("B10f 英語：掲載が終わった投稿の案内も英語", !m.shopVisible && m.notice && m.noticeText === "The shared post is no longer listed.", m);
+  await p.close();
+  let ogPost = await og("post", "U1");
+  t("B10g /share/post/U1 のプレビュー：題名＝投稿の題名・紹介文＝本文の冒頭・住所・座標は載せない・書き込みなし・noindex・TOP の /?post=U1 へ移る", ogPost.r.code === 200 && ogPost.title === "旅行者の投稿｜マチナウ" && ogPost.desc === "一般の投稿です。" && !/沖縄県那覇市|26\.2|127\.68/.test(ogPost.html) && ogPost.writes === 0 && ogPost.r.headers["X-Robots-Tag"] === "noindex" && ogPost.html.includes('location.replace("/?post=U1")'), { title: ogPost.title, desc: ogPost.desc });
+  ogPost = await og("post", "UX");
+  t("B10h 期限切れの投稿のプレビューは共通の題名・画像だけ（題名・本文を出さない）", isDefault(ogPost) && !/期限切れの投稿|一般の投稿です/.test(ogPost.html), { title: ogPost.title });
+  ogPost = await og("post", "L1");
+  t("B10i 常設店舗広告を /share/post/ で開いても投稿のプレビューにしない（共通の表示）", isDefault(ogPost), { title: ogPost.title });
+  S.docs.delete("submissions/UX");
   S.docs.delete("submissions/U1");
 
   // 15km rule unchanged: Tokyo listing is not in the Naha card list, but its shared link still opens (like favorites)

@@ -5633,6 +5633,10 @@ const MACHINAU_TRANSLATIONS = {
     ja: "共有された店舗・施設の情報は、現在掲載されていません。",
     en: "The shared place is not listed at the moment."
   },
+  share_post_unavailable: {
+    ja: "共有された投稿の掲載は終了しました。",
+    en: "The shared post is no longer listed."
+  },
 
   share_notice_close: {
     ja: "閉じる",

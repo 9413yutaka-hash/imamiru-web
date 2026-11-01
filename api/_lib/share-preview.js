@@ -4,6 +4,7 @@
 // 共有するURL(vercel.json の rewrite でここへ届く)：
 //   https://machinau.jp/share/imadake/{投稿ID} → GET mode=renderShareImadake&postId=
 //   https://machinau.jp/share/shop/{ID}        → GET mode=renderShareShop&shopId=(正式店舗は sp_{storeId})
+//   https://machinau.jp/share/post/{投稿ID}    → GET mode=renderSharePost&postId=(完成形 B：期限つきの公開投稿)
 // LINE・X・Facebook 等は JavaScript を動かさずに HTML の OGP(og:title・og:image 等)を読むため、
 // 投稿・店舗ごとの題名・写真を載せた小さな HTML を返す。人が開いた時は、すぐに TOP の
 // 直接表示(/?imadake= ・ /?shop=、app.js の STEP 48)へ移る(JavaScript の location.replace。meta refresh は
@@ -14,6 +15,8 @@
 //     本文の全文・住所・連絡先・価格は載せない。CV・料金台帳は記録しない(読み取りだけ)。
 //   店舗：公開一覧と同じ条件の運営掲載(常設店舗広告)・正式店舗の店名・紹介の冒頭80文字・写真1枚。
 //     引き継ぎ済みの運営掲載で、引き継いだ正式店舗が公開中なら、正式店舗の内容を載せる(一覧と同じ)。
+//   投稿(完成形 B)：TOP の公開一覧と同じ条件(承認済み・期限内・常設広告でない)の地域情報・お知らせ・店舗の投稿・
+//     街で見つけた投稿の題名・本文の冒頭80文字・写真1枚。投稿者の名前・連絡先・座標は載せない。
 // 公開中でない・期限切れ・削除済み・存在しない・形の違うIDは、マチナウの共通の題名・画像だけ
 // (固有の写真・本文は出さない)。位置情報・利用者のID・認証情報は URL にも HTML にも含めない。
 // キャッシュは短く(60秒＋60秒)。掲載が終わった後は、遅くとも約2分で共通の表示に変わる
@@ -268,6 +271,41 @@ export async function readShopSharePreview(database, shopId) {
   };
 }
 
+// 完成形 B｜期限つきの公開投稿：TOP の公開一覧(status approved かつ expiresAt が今より後)にあり、常設店舗広告でない時だけ。
+export async function readPostSharePreview(database, postId, nowMillis) {
+  if (!SHARE_PREVIEW_ID_PATTERN.test(postId)) {
+    return null;
+  }
+
+  const snapshot =
+    await database.collection("submissions").doc(postId).get();
+
+  const post =
+    snapshot.exists ? snapshot.data() || {} : null;
+
+  const expiresAt =
+    post && post.expiresAt && typeof post.expiresAt.toMillis === "function" ? post.expiresAt.toMillis() : 0;
+
+  if (!post || post.status !== "approved" || post.isPermanentAd === true || !(expiresAt > nowMillis)) {
+    return null;
+  }
+
+  const title =
+    firstText([post.title, post.adTitle, post.headline]);
+
+  if (title === "") {
+    return null;
+  }
+
+  return {
+    title: title,
+    description:
+      buildShareDescription(firstText([post.message, post.content, post.description, post.details])) ||
+      SHARE_PREVIEW_DEFAULT.description,
+    image: readShareImage(post.imageUrls)
+  };
+}
+
 async function sendSharePreview(response, kind, id, readPreview) {
   const validId =
     SHARE_PREVIEW_ID_PATTERN.test(id);
@@ -314,6 +352,25 @@ export async function handleRenderShareImadake(request, response, deps) {
       deps.getFirestore(deps.getFirebaseAdminApp());
 
     return readImadakeSharePreview(
+      database,
+      postId,
+      typeof deps.now === "function" ? deps.now() : Date.now()
+    );
+  });
+}
+
+// GET mode=renderSharePost&postId=(完成形 B)
+export async function handleRenderSharePost(request, response, deps) {
+  const postId =
+    request.query && typeof request.query.postId === "string"
+      ? request.query.postId.trim()
+      : "";
+
+  return sendSharePreview(response, "post", postId, function() {
+    const database =
+      deps.getFirestore(deps.getFirebaseAdminApp());
+
+    return readPostSharePreview(
       database,
       postId,
       typeof deps.now === "function" ? deps.now() : Date.now()
