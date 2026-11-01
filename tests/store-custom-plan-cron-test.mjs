@@ -74,6 +74,16 @@ process.env.AI_COLLECT_CRON_SECRET = SECRET;
 t("A3 サーバーに合言葉が設定されていない：503 cron_secret_not_configured・何もしない", r.code === 503 && r.body.reason === "cron_secret_not_configured" && docs("storeCustomPlanCronRuns").length === 0, r.body);
 process.env.VERCEL_ENV = "production";
 r = await CRON();
+t("A4a STEP 53-B：Production は専用の合言葉（STORE_CARD_BILLING_CRON_SECRET）が無ければ 503・情報収集の合言葉では動かない・何もしない", r.code === 503 && r.body.reason === "cron_secret_not_configured" && docs("storeCustomPlanCronRuns").length === 0, r.body);
+process.env.STORE_CARD_BILLING_CRON_SECRET = SECRET;
+r = await CRON();
+t("A4b STEP 53-B：専用の合言葉が情報収集の合言葉と同じ値なら 503 cron_secret_not_separated・何もしない", r.code === 503 && r.body.reason === "cron_secret_not_separated" && docs("storeCustomPlanCronRuns").length === 0, r.body);
+process.env.AI_COLLECT_CRON_SECRET = "fake-" + "ai-collect-secret-0002";
+const rOld = await CRON("fake-" + "ai-collect-secret-0002");
+t("A4c STEP 53-B：Production に情報収集の合言葉を送っても 401（専用の合言葉だけ）", rOld.code === 401 && docs("storeCustomPlanCronRuns").length === 0, rOld.body);
+r = await CRON();
+process.env.AI_COLLECT_CRON_SECRET = SECRET;
+delete process.env.STORE_CARD_BILLING_CRON_SECRET;
 process.env.VERCEL_ENV = "preview";
 t("A4 Production の環境（STEP 53：締めのフラグ true）：200・本番として記録・本番の請求専用キーが無い（テストキーだけ）ので請求しない（stripe_unavailable）・Stripe に通信しない", r.code === 200 && r.body.steps.charges.executed === false && r.body.steps.charges.blockedReason === "stripe_unavailable" && docs("storeCustomPlanCronRuns").length === 1 && docs("storeCustomPlanCronRuns")[0][1].environment === "production" && stripeCalls === 0 && otherNetwork === 0, r.body);
 t("A5 応答に合言葉を含まない", !JSON.stringify(r.body).includes(SECRET));
@@ -120,7 +130,7 @@ seedInvoice("S3", "2026-09", "u3", { status: "payment_failed", firstFailedAt: Ti
 S.docs.set("storeCustomPlans/S4", { storeId: "S4", status: "active", ownerUid: "u4", billingAccountUid: "u4", periodKind: "monthly", createdInPreview: true, subscribedAt: Timestamp.fromMillis(jst(2026, 11, 1, 12)), accessUntil: null, paymentStatus: "current", revision: 1 });
 seedInvoice("S4", "2026-09", "u4", { status: "requires_action", paymentIntentId: "pi_x", firstFailedAt: Timestamp.fromMillis(NOW - 2 * DAY), suspendAt: Timestamp.fromMillis(NOW + 12 * DAY), nextRetryAt: null });
 r = await CRON();
-t("D1 未払いの判定：14日を過ぎた S3 は停止（suspended）・猶予中の S4 は past_due・データは保持・Stripe 通信0", r.code === 200 && plan("S3").paymentStatus === "suspended" && plan("S4").paymentStatus === "past_due" && r.body.steps.dunning.suspended === 1 && r.body.steps.dunning.storeCount === 2 && stripeCalls === 0 && plan("S3").status === "active", r.body.steps.dunning);
+t("D1 未払いの判定：14日を過ぎた S3 は停止（suspended）・猶予中の S4 は past_due・データは保持・Stripe 通信0・STEP 53-B：再試行が残っていない S3 は運営へ通知（500 operator_attention_required）", r.code === 500 && r.body.reason === "operator_attention_required" && r.body.billingNotify.some((x) => x.kind === "retries_exhausted" && x.invoiceId === "S3_2026-09") && plan("S3").paymentStatus === "suspended" && plan("S4").paymentStatus === "past_due" && r.body.steps.dunning.suspended === 1 && r.body.steps.dunning.storeCount === 2 && stripeCalls === 0 && plan("S3").status === "active", r.body.steps.dunning);
 t("D2 S3 の再試行は使い切り（対象外）・本人認証待ちの S4 は照合（読むだけ）の対象で、新しい請求・再試行の対象にしない", !r.body.steps.charges.dueInvoiceIds.some((x) => x.startsWith("S3_2026-09:")) && r.body.steps.charges.dueInvoiceIds.includes("S4_2026-09:reconcile") && !r.body.steps.charges.dueInvoiceIds.some((x) => /^S4_2026-09:(charge|retry)$/.test(x)), r.body.steps.charges.dueInvoiceIds);
 S.docs.set("storeCustomPlanInvoices/S3_2026-09", { ...inv("S3_2026-09"), status: "paid" });
 r = await CRON();
@@ -136,9 +146,9 @@ t("F1 契約の読み取りに失敗（締めと未払いの判定が使う stor
 t("F2 失敗の記録・応答に合言葉・キーを含まない", !JSON.stringify(failedRec).includes(SECRET) && !/rk_test|sk_test|pk_test/.test(JSON.stringify(failedRec)));
 NOW = jst(2026, 12, 3, 9);
 r = await CRON();
-t("F3 1日の失敗の後、12/3 の実行で11月の締めを取りこぼさず行う（S1・S2 の11月分）", r.code === 200 && r.body.closeMonth === "2026-11" && !!inv("S1_2026-11") && !!inv("S2_2026-11") && inv("S1_2026-11").chargeScheduledFor === "2026-12-02", r.body.steps.close);
+t("F3 1日の失敗の後、12/3 の実行で11月の締めを取りこぼさず行う（S1・S2 の11月分）・STEP 53-B：2日を過ぎて確定したので自動で請求しない（closed_after_charge_day）・運営へ通知（500）", r.code === 500 && r.body.reason === "operator_attention_required" && ["S1_2026-11", "S2_2026-11"].every((id) => r.body.billingNotify.some((x) => x.kind === "late_closed" && x.invoiceId === id)) && !r.body.steps.charges.dueInvoiceIds.some((x) => /_2026-11:charge$/.test(x)) && r.body.closeMonth === "2026-11" && !!inv("S1_2026-11") && !!inv("S2_2026-11") && inv("S1_2026-11").chargeScheduledFor === "2026-12-02", r.body.steps.close);
 r = await CRON();
-t("F4 再実行しても11月の請求書は増えない", r.code === 200 && !r.body.steps.close.invoices.create && docs("storeCustomPlanInvoices").filter(([k]) => k.endsWith("_2026-11")).length === 2, r.body.steps.close.invoices);
+t("F4 再実行しても11月の請求書は増えない・STEP 53-B：同じ日の同じ案件は再び通知しない（200）", r.code === 200 && !r.body.steps.close.invoices.create && docs("storeCustomPlanInvoices").filter(([k]) => k.endsWith("_2026-11")).length === 2, r.body.steps.close.invoices);
 
 // ===================== STEP 47-C: account deletion as the last step of the daily run =====================
 NOW = jst(2026, 12, 4, 9);
@@ -150,7 +160,7 @@ S.docs.set("storeCustomPlanInvoices/SD3_2026-11", { storeId: "SD3", billingAccou
 S.docs.set("accountDeletions/ud3", { uid: "ud3", status: "awaiting_settlement", blockers: ["custom_plan_invoice_unsettled"], storeIds: [] });
 r = await CRON();
 const del47 = r.body.steps && r.body.steps.accountDeletion;
-t("G1 47-C：毎日の定期実行の最後（締め・未払いの判定・請求の後）に、清算が済んだ退会を自動で最終削除する", r.code === 200 && JSON.stringify(Object.keys(r.body.steps)) === JSON.stringify(["close", "dunning", "charges", "accountDeletion"]) && del47 && del47.counts.completed === 1 && S.docs.get("accountDeletions/ud1").status === "completed" && (globalThis.__MOCK_AUTH_DELETED || []).includes("ud1"), { steps: r.body.steps && Object.keys(r.body.steps), del47 });
+t("G1 47-C：毎日の定期実行の最後（締め・未払いの判定・請求の後）に、清算が済んだ退会を自動で最終削除する（STEP 53-B：翌日は未解決の案件を1日1回だけ再通知＝500）", r.code === 500 && r.body.reason === "operator_attention_required" && r.body.billingNotify.every((x) => x.kind === "late_closed") && JSON.stringify(Object.keys(r.body.steps)) === JSON.stringify(["close", "dunning", "charges", "accountDeletion"]) && del47 && del47.counts.completed === 1 && S.docs.get("accountDeletions/ud1").status === "completed" && (globalThis.__MOCK_AUTH_DELETED || []).includes("ud1"), { steps: r.body.steps && Object.keys(r.body.steps), del47 });
 t("G2 47-C：未払い（payment_failed）・請求の処理中（processing）の退会は削除しない（清算待ちのまま・ログインは残る）", S.docs.get("accountDeletions/ud2").status === "awaiting_settlement" && S.docs.get("accountDeletions/ud3").status === "awaiting_settlement" && !(globalThis.__MOCK_AUTH_DELETED || []).some((u) => u === "ud2" || u === "ud3"), { ud2: S.docs.get("accountDeletions/ud2"), ud3: S.docs.get("accountDeletions/ud3") });
 t("G3 47-C：定期実行の応答・記録に uid・メールアドレスを含めない（件数だけ）", !/ud1|ud2|ud3|@example/.test(JSON.stringify(r.body)) && !/ud1|@example/.test(JSON.stringify(runs().find((x) => x.runId === r.body.runId))), del47);
 S.docs.set("accountDeletions/ud4", { uid: "ud4", status: "card_detach_failed", storeIds: [] });

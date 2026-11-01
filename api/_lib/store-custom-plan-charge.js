@@ -78,6 +78,10 @@ const PAYMENT_INTENT_ID_PATTERN = /^pi_[A-Za-z0-9_]{1,100}$/;
 const LOCK_HOLDING_STATUSES = ["charging", "processing", "requires_action", "needs_review"];
 // 店主の側で支払いが済んでいない状態(猶予・停止の対象)。結果不明・請求の不備(charge_error)は運営の確認のため数えない。
 export const STORE_CUSTOM_PLAN_OWNER_UNPAID_STATUSES = ["payment_failed", "requires_action"];
+// STEP 53-B｜請求予定日(翌月2日)を過ぎて確定した請求書(確定が請求予定日の翌日0時以降)は、自動で請求しない
+// (定期実行・運営の一括の請求とも)。運営が確認して、その請求書を指定した時だけ請求する(approveLateInvoiceIds)。
+export const STORE_CUSTOM_PLAN_LATE_CLOSE_REASON = "closed_after_charge_day";
+const APPROVE_LATE_MAX = 50;
 
 function nowOf(deps) {
   return deps && typeof deps.now === "function" ? deps.now() : Date.now();
@@ -638,7 +642,7 @@ function describePlanInvoice(ledgerId, invoice) {
 
 // 1件の請求書に対して今行うこと：charge(締め後・請求予定日以降)・retry(再試行の予定日以降)・reconcile(請求中・
 // 処理中・本人認証待ち・人の確認待ちの照合)・skip。
-function planInvoiceAction(invoice, nowMs, previewTrialOnly, liveMode) {
+function planInvoiceAction(invoice, nowMs, previewTrialOnly, liveMode, lateApproved) {
   if (previewTrialOnly && invoice.createdInPreview !== true) {
     return { plan: "skip", reason: "not_preview_trial_invoice" };
   }
@@ -649,7 +653,17 @@ function planInvoiceAction(invoice, nowMs, previewTrialOnly, liveMode) {
   }
 
   if (invoice.status === "closed") {
-    return millisOf(invoice.chargeScheduledAt) <= nowMs ? { plan: "charge", reason: "" } : { plan: "skip", reason: "before_scheduled_date" };
+    const scheduledMs = millisOf(invoice.chargeScheduledAt);
+
+    if (scheduledMs > nowMs) {
+      return { plan: "skip", reason: "before_scheduled_date" };
+    }
+
+    if (millisOf(invoice.closedAt) >= scheduledMs + DAY_MS && lateApproved !== true) {
+      return { plan: "skip", reason: STORE_CUSTOM_PLAN_LATE_CLOSE_REASON };
+    }
+
+    return { plan: "charge", reason: "" };
   }
 
   if (invoice.status === "payment_failed") {
@@ -692,7 +706,8 @@ export async function runStoreCustomPlanCharges(database, deps, options) {
     }
 
     const entry = describePlanInvoice(documentSnapshot.id, invoice);
-    const action = planInvoiceAction(invoice, nowMs, previewTrialOnly, gate.ok && gate.config.mode === "live");
+    const lateApproved = !!options && Array.isArray(options.approveLateInvoiceIds) && options.approveLateInvoiceIds.includes(documentSnapshot.id);
+    const action = planInvoiceAction(invoice, nowMs, previewTrialOnly, gate.ok && gate.config.mode === "live", lateApproved);
     entry.plan = action.plan;
     entry.planReason = action.reason;
 
@@ -766,7 +781,11 @@ export async function handleAdminStoreCustomPlanChargeRun(request, response, dep
     const body = deps.readRequestBody(request) || {};
     const month = typeof body.month === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(body.month) ? body.month : "";
     const database = authResult.database || deps.getFirestore(deps.getFirebaseAdminApp());
-    const result = await runStoreCustomPlanCharges(database, deps, { dryRun: body.dryRun !== false, month: month });
+    // STEP 53-B｜2日を過ぎて確定した請求書は、運営が確認して指定した時だけ請求する(最大50件・請求書IDの形を確認)。
+    const approveLateInvoiceIds = Array.isArray(body.approveLateInvoiceIds)
+      ? body.approveLateInvoiceIds.filter(function(id) { return typeof id === "string" && INVOICE_ID_PATTERN.test(id); }).slice(0, APPROVE_LATE_MAX)
+      : [];
+    const result = await runStoreCustomPlanCharges(database, deps, { dryRun: body.dryRun !== false, month: month, approveLateInvoiceIds: approveLateInvoiceIds });
 
     if (!result.ok) {
       return response.status(403).json({ success: false, reason: result.reason, detail: result.detail || "" });

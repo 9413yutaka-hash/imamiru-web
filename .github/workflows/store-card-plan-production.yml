@@ -15,6 +15,8 @@ name: Store card plan (Production)
 # 本番だけに送る(Preview の URL には送らない。Preview は main.yml の preview-plan-cron)。合言葉は、次の確認を
 # すべて満たした時だけ送る：①この workflow のファイルが main のもの ②machinau.jp の接続先の確認(mode=firebaseTarget)が
 # 本番の Firebase(chikashoku-app)・検査あり。合言葉はログに出さない。応答は要約だけを出す。
+# 合言葉は定期請求の専用の STORE_CARD_BILLING_CRON_SECRET(STEP 53-B。情報収集の AI_COLLECT_CRON_SECRET は使わない)。
+# 運営の確認が必要な請求書がある時はサーバーが 500(operator_attention_required)を返し、この実行は失敗＝GitHub から通知のメール。
 # 二重実行：同じ workflow の実行は concurrency で1つずつ。サーバー側にも実行ロック(409 already_running)と、
 # 店舗・月ごとに1件の請求書・冪等キー・請求ロックがある(既存の STEP 44 の仕組み)。
 
@@ -54,7 +56,7 @@ jobs:
 
       - name: Run the store card scheduled entry on Production (close, charges, dunning)
         env:
-          CRON_SECRET: ${{ secrets.AI_COLLECT_CRON_SECRET }}
+          CRON_SECRET: ${{ secrets.STORE_CARD_BILLING_CRON_SECRET }}
         run: |
           set -euo pipefail
           if [ -z "${CRON_SECRET:-}" ]; then

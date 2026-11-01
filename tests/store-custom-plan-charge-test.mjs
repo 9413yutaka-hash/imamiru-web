@@ -251,7 +251,7 @@ t("W3 旧店主は自分の未払いを一覧で見られる・新しい owner �
 
 // ===================== unknown outcome is never re-sent =====================
 seedStore("Z", "u7"); card("u7");
-seedInvoice("Z", "2026-09", "u7", { chargeScheduledFor: "2026-10-02", chargeScheduledAt: Timestamp.fromMillis(jst(2026, 10, 2)) });
+seedInvoice("Z", "2026-09", "u7", { chargeScheduledFor: "2026-10-02", chargeScheduledAt: Timestamp.fromMillis(jst(2026, 10, 2)), closedAt: Timestamp.fromMillis(jst(2026, 10, 1, 0, 30)) });
 ST.modes = ["500_cached"];
 r = await RUN({ month: "2026-09" });
 t("N1 Stripe が 500：結果不明（charging・ロックあり）", inv("Z_2026-09").status === "charging" && inv("Z_2026-09").chargeOutcomeUnknown === true);

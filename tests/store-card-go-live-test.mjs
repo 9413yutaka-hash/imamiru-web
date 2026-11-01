@@ -10,10 +10,10 @@ import { REPO_URL } from "./_paths.mjs";
 const sa = (id) => JSON.stringify({ type: "service_account", project_id: id, private_key: "-----FAKE-KEY-FOR-TESTS-----" });
 const LIVE_CHARGE_KEY = "rk_" + "live_FAKECHARGEKEYFORTESTS001", LIVE_CARD_KEY = "rk_" + "live_FAKECARDSETUPKEYONLY01", LIVE_PK = "pk_" + "live_FAKEPUBKEYFORTESTS0001";
 const SECRET = "fake-cron-secret-for-tests-0001";
-const PROD_ENV = { VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main", FIREBASE_SERVICE_ACCOUNT_KEY: sa("chikashoku-app"), FIREBASE_SERVICE_ACCOUNT_KEY_PREVIEW: sa("machinau-preview"), RATE_LIMIT_HMAC_SECRET: "fake", ADMIN_EMAIL: "admin@example.com", OPENAI_API_KEY: "sk-" + "fake-openai-for-tests", AI_COLLECT_CRON_SECRET: SECRET, STRIPE_MODE: "live", STRIPE_RESTRICTED_KEY: LIVE_CARD_KEY, STRIPE_CHARGE_RESTRICTED_KEY: LIVE_CHARGE_KEY, STRIPE_PUBLISHABLE_KEY: LIVE_PK };
+const PROD_ENV = { VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main", FIREBASE_SERVICE_ACCOUNT_KEY: sa("chikashoku-app"), FIREBASE_SERVICE_ACCOUNT_KEY_PREVIEW: sa("machinau-preview"), RATE_LIMIT_HMAC_SECRET: "fake", ADMIN_EMAIL: "admin@example.com", OPENAI_API_KEY: "sk-" + "fake-openai-for-tests", AI_COLLECT_CRON_SECRET: "fake-ai-collect-secret-0009", STORE_CARD_BILLING_CRON_SECRET: SECRET, STRIPE_MODE: "live", STRIPE_RESTRICTED_KEY: LIVE_CARD_KEY, STRIPE_CHARGE_RESTRICTED_KEY: LIVE_CHARGE_KEY, STRIPE_PUBLISHABLE_KEY: LIVE_PK };
 Object.assign(process.env, PROD_ENV);
 const pw = (uid) => ({ uid, email: uid + "@example.com", email_verified: true, firebase: { sign_in_provider: "password" } });
-globalThis.__MOCK_TOKENS = { u1: pw("u1"), u2: pw("u2") };
+globalThis.__MOCK_TOKENS = { u1: pw("u1"), u2: pw("u2"), admin: { uid: "adm1", email: "admin@example.com", email_verified: true, firebase: { sign_in_provider: "password" } } };
 const S = globalThis.__MOCK_DB = { docs: new Map(), writes: [], failAddFor: null, seq: 0 };
 const jst = (s) => Date.parse(s + "+09:00");
 let NOW = jst("2026-11-05T10:00:00");
@@ -170,12 +170,48 @@ r = await CRON();
 t("X1 12月16日（初回失敗の14日後）：G2 は停止（suspended）・旅行者に公開しない・G1 は公開のまま", plan("G2").paymentStatus === "suspended" && !(await publicIds()).includes("G2") && (await publicIds()).includes("G1"), plan("G2"));
 NOW = jst("2027-01-01T10:10:00");
 r = await CRON();
-t("X2 1月1日の締め：G1・G2 とも12月分100円（G2 は12月の初めに契約中だったため・日割りなし）・停止中の G2 には1月の利用月の記録を作らない", r.code === 200 && inv("G1_2026-12").amountJpy === 100 && inv("G2_2026-12").amountJpy === 100 && inv("G1_2026-12").chargeScheduledFor === "2027-01-02" && !!S.docs.get("storeCustomPlanUsage/G1_2027-01") && !S.docs.get("storeCustomPlanUsage/G2_2027-01"), r.body.steps.close);
+t("X2 1月1日の締め：G1・G2 とも12月分100円（G2 は12月の初めに契約中だったため・日割りなし）・停止中の G2 には1月の利用月の記録を作らない", r.body.steps.close.status === "done" && inv("G1_2026-12").amountJpy === 100 && inv("G2_2026-12").amountJpy === 100 && inv("G1_2026-12").chargeScheduledFor === "2027-01-02" && !!S.docs.get("storeCustomPlanUsage/G1_2027-01") && !S.docs.get("storeCustomPlanUsage/G2_2027-01"), r.body.steps.close);
 ST.modes.set("cus_u2", ["succeed"]);
 NOW = jst("2027-01-01T12:00:00");
 r = await call({ mode: "storeCustomPlanPayNow", invoiceId: "G2_2026-11" }, "u2");
 t("X3 店主が未払いを今すぐ支払う（本番の請求専用キー）：支払い済み・停止を解除（current）・公開を再開", r.code === 200 && inv("G2_2026-11").status === "paid" && plan("G2").paymentStatus === "current" && (await publicIds()).includes("G2"), { body: r.body, inv: inv("G2_2026-11").status, plan: plan("G2").paymentStatus });
 t("X4 合計の請求：G1 は11月分1回、G2 は失敗3回＋支払い1回（同じ請求書を二重に支払わない）", ST.creates.filter((f) => f["metadata[storeId]"] === "G1").length === 1 && ST.creates.filter((f) => f["metadata[storeId]"] === "G2").length === 4 && ST.creates.filter((f) => f["metadata[storeId]"] === "G2" && f["metadata[month]"] === "2026-11").length === 4);
+
+// ===================== N. STEP 53-B: operator notification, cancel, invoices closed after the 2nd =====================
+t("N1 再試行が残っていない支払い失敗（G2 の11月分）は運営の確認待ちとして記録した（1日1回の通知の記録）", S.docs.has("storeCustomPlanBillingAttention/retries_exhausted__G2_2026-11") && S.docs.get("storeCustomPlanBillingAttention/retries_exhausted__G2_2026-11").lastNotifiedJstDate >= "2026-12-12");
+NOW = jst("2027-01-02T10:10:00");
+r = await CRON();
+t("N2 1月2日：12月分を請求（G1・G2 とも支払い済み）・解決済みの案件は通知しない（200）", r.code === 200 && inv("G1_2026-12").status === "paid" && inv("G2_2026-12").status === "paid", { code: r.code, body: r.body.billingNotify });
+NOW = jst("2027-01-10T12:00:00");
+r = await call({ mode: "storeCustomPlanCancel", storeId: "G1" }, "u1");
+t("N3 G1 が1月に解約（月末まで利用できる）", r.code === 200 && plan("G1").status === "canceling", r.body);
+const createsBeforeFeb = ST.creates.length;
+// 2月1日・2日は定期実行が動かなかった（障害）→ 2月3日の実行で1月を締める＝2日を過ぎて確定。
+NOW = jst("2027-02-03T10:10:00");
+r = await CRON();
+t("N4 2月3日の実行で1月を締める：解約した G1 も1月分100円（日割りなし）・2月の利用月の記録は作らない（解約後の翌月の料金なし）", inv("G1_2027-01").amountJpy === 100 && !S.docs.get("storeCustomPlanUsage/G1_2027-02") && !S.docs.has("storeCustomPlanInvoices/G1_2027-02"), { inv: inv("G1_2027-01"), usage: S.docs.get("storeCustomPlanUsage/G1_2027-02") });
+t("N5 2日を過ぎて確定した請求書は自動で請求しない（closed のまま・Stripe に送らない）・運営へ通知（500 operator_attention_required・late_closed）",
+  r.code === 500 && r.body.reason === "operator_attention_required" && inv("G1_2027-01").status === "closed" && ST.creates.filter((x) => x["metadata[month]"] === "2027-01").length === 0 && r.body.billingNotify.some((x) => x.kind === "late_closed" && x.invoiceId === "G1_2027-01"), { code: r.code, notify: r.body.billingNotify });
+NOW = jst("2027-02-03T13:10:00");
+r = await CRON();
+t("N6 同じ日にもう一度：自動で請求しない・同じ案件は再び通知しない（200）", r.code === 200 && inv("G1_2027-01").status === "closed" && ST.creates.filter((x) => x["metadata[month]"] === "2027-01").length === 0, { code: r.code, notify: r.body.billingNotify });
+NOW = jst("2027-02-04T10:10:00");
+r = await CRON();
+t("N7 翌日：未解決の案件を1日1回だけ再通知（500）", r.code === 500 && r.body.billingNotify.some((x) => x.kind === "late_closed" && x.invoiceId === "G1_2027-01"), r.body.billingNotify);
+r = await call({ mode: "adminStoreCustomPlanCharge", dryRun: false }, "admin");
+t("N8 運営の一括の請求でも、指定の無い2日過ぎの請求書は請求しない（closed_after_charge_day）", r.code === 200 && inv("G1_2027-01").status === "closed" && (r.body.invoices || []).some((x) => x.invoiceId === "G1_2027-01" && x.planReason === "closed_after_charge_day"), r.body.totals);
+r = await call({ mode: "adminStoreCustomPlanCharge", dryRun: false, approveLateInvoiceIds: ["G1_2027-01"] }, "admin");
+t("N9 運営が確認して請求書を指定した時だけ請求（G1 の1月分 100円・支払い済み）", r.code === 200 && inv("G1_2027-01").status === "paid" && ST.creates.filter((x) => x["metadata[storeId]"] === "G1" && x["metadata[month]"] === "2027-01").length === 1, r.body.totals);
+r = await call({ mode: "adminStoreCustomPlanCharge", dryRun: false, approveLateInvoiceIds: ["G1_2027-01"] }, "admin");
+NOW = jst("2027-02-05T10:10:00");
+r = await CRON();
+t("N10 同じ指定をもう一度・その後の定期実行でも二重に請求しない", ST.creates.filter((x) => x["metadata[storeId]"] === "G1" && x["metadata[month]"] === "2027-01").length === 1);
+t("N11 指定を受け付けるのは運営だけ（店主のアカウントでは請求の実行を呼べない）", (await call({ mode: "adminStoreCustomPlanCharge", dryRun: false, approveLateInvoiceIds: ["G2_2027-01"] }, "u2")).code >= 401 && inv("G2_2027-01").status !== "paid");
+
+// ===================== A. admin screen (STEP 53-B) =====================
+const ADMIN_HTML = (await import("node:fs")).readFileSync(new URL("../admin-billing.html", import.meta.url), "utf8");
+t("A1 運営の請求画面：2日を過ぎて確定した請求書だけに「確認して請求」（その請求書だけを指定）・本番で請求できないという古い説明・「テスト請求」の表示は無い",
+  ADMIN_HTML.includes("invoice.planReason === \"closed_after_charge_day\"") && ADMIN_HTML.includes("approveLateInvoiceIds: [invoiceId]") && !/本番では実行できません/.test(ADMIN_HTML) && !/テスト請求/.test(ADMIN_HTML));
 
 // ===================== O. other products / records =====================
 t("O1 今だけ投稿の請求書は変わらない", JSON.stringify(S.docs.get("imadakeMonthlyInvoices/G1_2026-11")) === IMADAKE_BEFORE);

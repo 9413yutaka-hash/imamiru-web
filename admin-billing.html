@@ -204,19 +204,20 @@
         <div id="customPlanList"></div>
       </div>
 
-      <!-- STEP 44-C④｜月額100円カスタマイズの月末締め・請求(運営のみ)。試算は読むだけ。実行はサーバーが許可した時だけ
-           (今は Preview 試験の経路＝Preview・machinau-preview・テストキー・試験用の請求書だけ。本番では必ず拒否)。 -->
+      <!-- STEP 44-C④｜月額100円カスタマイズの月末締め・請求(運営のみ)。試算は読むだけ。実行はサーバーが許可した時だけ。
+           STEP 53-B｜本番では、請求のスイッチと本番の請求専用キーがそろった時に実際の請求になる。2日を過ぎて確定した請求書は、
+           表の「確認して請求」で1件ずつ指定した時だけ請求する。 -->
       <div class="panel" id="customPlanBillingPanel">
         <h2>月額100円カスタマイズの締め・請求</h2>
-        <p class="note">締めは月が終わった後に、対象月（日本時間）の請求書を作ります。請求は請求予定日（翌月2日）以降の請求書、再試行の予定日を過ぎた支払い失敗、結果が分からない請求の照合を行います。結果が分からない請求は自動で送り直しません。実行はサーバーが許可した時だけです（本番では実行できません）。</p>
+        <p class="note">締めは月が終わった後に、対象月（日本時間）の請求書を作ります。請求は請求予定日（翌月2日）以降の請求書、再試行の予定日を過ぎた支払い失敗、結果が分からない請求の照合を行います。結果が分からない請求は自動で送り直しません。実行はサーバーが許可した時だけです。本番では実際の請求になります。請求予定日（翌月2日）を過ぎて確定した請求書は自動では請求しません。内容を確認し、表の「確認して請求」から1件ずつ請求してください。</p>
         <div class="button-row">
           <label>対象月 <input type="month" id="customPlanMonthInput"></label>
         </div>
         <div class="button-row">
           <button id="customPlanCloseDryRunButton" class="secondary-button" type="button">締めの試算</button>
-          <button id="customPlanCloseExecuteButton" class="secondary-button" type="button">締めを実行（Preview 試験）</button>
+          <button id="customPlanCloseExecuteButton" class="secondary-button" type="button">締めを実行</button>
           <button id="customPlanChargeDryRunButton" class="secondary-button" type="button">請求の試算</button>
-          <button id="customPlanChargeExecuteButton" class="primary-button" type="button">テスト請求を実行（Preview 試験）</button>
+          <button id="customPlanChargeExecuteButton" class="primary-button" type="button">請求を実行</button>
           <button id="customPlanInvoiceReloadButton" class="secondary-button" type="button">請求台帳を表示</button>
         </div>
         <div id="customPlanBillingMessage" class="message-box" role="status" aria-live="polite"></div>
@@ -1073,7 +1074,7 @@
       const table = document.createElement("table");
       table.className = "custom-plan-table";
       const head = document.createElement("tr");
-      ["請求書", "状態", "請求予定日", "試行", "再試行", "次の再試行", "停止の予定", "結果不明", "予定・理由"].forEach(function(label) {
+      ["請求書", "状態", "請求予定日", "試行", "再試行", "次の再試行", "停止の予定", "結果不明", "予定・理由", "操作"].forEach(function(label) {
         const th = document.createElement("th");
         th.textContent = label;
         head.appendChild(th);
@@ -1090,15 +1091,47 @@
         cell(row, invoice.suspendAtMillis ? formatDate(invoice.suspendAtMillis) : "");
         cell(row, invoice.chargeOutcomeUnknown ? "はい" : "");
         cell(row, [invoice.plan, invoice.planReason, invoice.outcome, invoice.reviewReason].filter(Boolean).join(" / "));
+        // STEP 53-B｜2日を過ぎて確定した請求書は、運営が確認してこの請求書だけを指定して請求する。
+        const actionCell = document.createElement("td");
+        if (invoice.planReason === "closed_after_charge_day") {
+          const approveButton = document.createElement("button");
+          approveButton.type = "button";
+          approveButton.className = "secondary-button";
+          approveButton.textContent = "確認して請求";
+          approveButton.addEventListener("click", function() { approveLateCustomPlanInvoice(invoice.invoiceId); });
+          actionCell.appendChild(approveButton);
+        }
+        row.appendChild(actionCell);
         table.appendChild(row);
       });
       container.appendChild(table);
     }
 
+    async function approveLateCustomPlanInvoice(invoiceId) {
+      const message = document.getElementById("customPlanBillingMessage");
+      if (!window.confirm(invoiceId + " は請求予定日（翌月2日）を過ぎて確定した請求書です。内容を確認しましたか？この請求書を請求します（本番では実際の請求）。")) {
+        return;
+      }
+      showMessage(message, "処理しています…", "info");
+      try {
+        const result = await callCustomPlanAdmin({ mode: "adminStoreCustomPlanCharge", dryRun: false, approveLateInvoiceIds: [invoiceId] });
+        const data = result.data || {};
+        if (result.status !== 200 || data.success !== true) {
+          showMessage(message, "実行できませんでした（" + (data.reason || data.message || ("HTTP " + result.status)) + "）。", "error");
+          return;
+        }
+        const entry = (data.invoices || []).find(function(x) { return x.invoiceId === invoiceId; }) || {};
+        showMessage(message, invoiceId + "：" + (CUSTOM_PLAN_INVOICE_STATUS_LABELS[entry.status] || entry.status || "結果を確認してください") + "。", "info");
+        renderCustomPlanInvoiceTable(data.invoices || []);
+      } catch (error) {
+        showMessage(message, "サーバーと通信できませんでした。", "error");
+      }
+    }
+
     async function runCustomPlanBilling(kind, execute) {
       const message = document.getElementById("customPlanBillingMessage");
       const month = document.getElementById("customPlanMonthInput").value;
-      if (execute && !window.confirm(kind === "close" ? month + " の締めを実行します。よろしいですか？" : "テスト請求を実行します（Preview 試験・テストモードだけ）。よろしいですか？")) {
+      if (execute && !window.confirm(kind === "close" ? month + " の締めを実行します。よろしいですか？" : "請求を実行します。本番では実際の請求になります（2日を過ぎて確定した請求書は請求しません）。よろしいですか？")) {
         return;
       }
       showMessage(message, "処理しています…", "info");
@@ -1120,7 +1153,7 @@
           return;
         }
         if (kind === "charge") {
-          showMessage(message, (data.dryRun ? "請求の試算です（Stripe に接続しません）。" : "テスト請求を実行しました。") + " 請求 " + data.totals.chargeCount + " 件・再試行 " + data.totals.retryCount + " 件・照合 " + data.totals.reconcileCount + " 件" + (data.executionAllowed ? "" : "（実行は許可されていません：" + data.executionBlockedReason + "）") + "。", "info");
+          showMessage(message, (data.dryRun ? "請求の試算です（Stripe に接続しません）。" : "請求を実行しました。") + " 請求 " + data.totals.chargeCount + " 件・再試行 " + data.totals.retryCount + " 件・照合 " + data.totals.reconcileCount + " 件" + (data.executionAllowed ? "" : "（実行は許可されていません：" + data.executionBlockedReason + "）") + "。", "info");
         } else {
           showMessage(message, data.invoices.length + " 件・合計 " + data.totalAmountJpy + " 円。", "info");
         }

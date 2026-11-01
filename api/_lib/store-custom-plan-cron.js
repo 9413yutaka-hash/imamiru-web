@@ -2,8 +2,13 @@
 // STEP 44-C⑤｜月額100円カスタマイズの定期実行の入口(運営のログイン不要・合言葉で認証)
 // ==========================================================================
 // 呼び出し：POST /api/moderate-submission  本文 { "mode": "storeCustomPlanCron" }
-//   見出し X-Machinau-Cron-Secret に合言葉。合言葉は /api/expire・/api/admin-source-collect と同じ
-//   AI_COLLECT_CRON_SECRET を再利用する(新しい秘密値は作らない)。比較は timingSafeEqual。
+//   見出し X-Machinau-Cron-Secret に合言葉。比較は timingSafeEqual。
+//   STEP 53-B｜Production では定期請求の専用の合言葉 STORE_CARD_BILLING_CRON_SECRET だけを使う(情報収集・投稿の期限切れの
+//   AI_COLLECT_CRON_SECRET は使わない。同じ値が入っていたら 503 で何もしない)。Production 以外(Preview 試験)は従来どおり
+//   AI_COLLECT_CRON_SECRET。
+//   STEP 53-B｜運営の確認が必要な請求書(2日を過ぎて確定・人の確認待ち・請求の不備・再試行が残っていない支払い失敗)は
+//   storeCustomPlanBillingAttention に記録し、新しい案件と、解決していない案件の1日1回の再通知の時だけ 500
+//   (reason operator_attention_required)を返す＝定期実行の失敗のメールで運営に知らせる。処理の例外も実行記録に残す。
 // 毎日1回(何回呼ばれても同じ結果)、日本時間の日付で次を行う：
 //   1. 前月分の月末締め(runStoreCustomPlanMonthlyClose。毎月1日に呼ばれる想定だが、1日の実行に失敗しても翌日以降の
 //      実行で同じ締めを行い直す＝取りこぼしを防ぐ。締めは店舗・年月で1件のため重複しない)。
@@ -41,6 +46,7 @@ import {
 } from "./store-custom-plan-billing.js";
 
 import {
+  STORE_CUSTOM_PLAN_LATE_CLOSE_REASON,
   applyStoreCustomPlanDunning,
   readStoreCustomPlanChargeGate,
   runStoreCustomPlanCharges
@@ -53,6 +59,8 @@ export const STORE_CUSTOM_PLAN_CRON_CHARGES_ENABLED =
   true;
 
 export const STORE_CUSTOM_PLAN_CRON_RUNS_COLLECTION = "storeCustomPlanCronRuns";
+export const STORE_CUSTOM_PLAN_BILLING_ATTENTION_COLLECTION = "storeCustomPlanBillingAttention";
+export const STORE_CARD_BILLING_CRON_SECRET_ENV = "STORE_CARD_BILLING_CRON_SECRET";
 const CRON_LOCK_COLLECTION = "storeCustomPlanCronLocks";
 const CRON_LOCK_ID = "daily";
 const CRON_LOCK_LEASE_MS = 5 * 60 * 1000;
@@ -124,6 +132,71 @@ async function releaseLock(database, runId) {
   });
 }
 
+// STEP 53-B｜Production は専用の合言葉だけ。{ ok, secret } か { ok:false, reason }。
+export function readStoreCustomPlanCronSecret(env) {
+  const source = env || {};
+
+  if (source.VERCEL_ENV !== "production") {
+    const shared = source.AI_COLLECT_CRON_SECRET;
+    return typeof shared === "string" && shared !== "" ? { ok: true, secret: shared } : { ok: false, reason: "cron_secret_not_configured" };
+  }
+
+  const dedicated = source[STORE_CARD_BILLING_CRON_SECRET_ENV];
+
+  if (typeof dedicated !== "string" || dedicated === "") {
+    return { ok: false, reason: "cron_secret_not_configured" };
+  }
+
+  if (dedicated === source.AI_COLLECT_CRON_SECRET) {
+    return { ok: false, reason: "cron_secret_not_separated" };
+  }
+
+  return { ok: true, secret: dedicated };
+}
+
+// STEP 53-B｜運営の確認が必要な請求書(請求の対象の判定の結果から)。件数・状態・請求書IDだけ。
+export function collectStoreCustomPlanAttention(invoices) {
+  const items = [];
+
+  (invoices || []).forEach(function(entry) {
+    let kind = "";
+
+    if (entry.planReason === STORE_CUSTOM_PLAN_LATE_CLOSE_REASON) {
+      kind = "late_closed";
+    } else if (entry.status === "needs_review" || entry.status === "charge_error") {
+      kind = entry.status;
+    } else if (entry.status === "payment_failed" && entry.planReason === "retries_exhausted") {
+      kind = "retries_exhausted";
+    }
+
+    if (kind !== "") {
+      items.push({ kind: kind, invoiceId: entry.invoiceId });
+    }
+  });
+
+  return items;
+}
+
+// 同じ案件(種類×請求書)の通知は日本時間の1日1回だけ。記録が無い(新しい案件)か、最後の通知が今日でないものを通知する。
+async function selectAttentionToNotify(database, items, jstDate, nowMillis) {
+  const notify = [];
+
+  for (const item of items) {
+    const ref = database.collection(STORE_CUSTOM_PLAN_BILLING_ATTENTION_COLLECTION).doc(item.kind + "__" + item.invoiceId);
+    const snapshot = await ref.get();
+    const last = snapshot.exists ? (snapshot.data() || {}).lastNotifiedJstDate : "";
+
+    if (last === jstDate) {
+      continue;
+    }
+
+    await ref.set({ kind: item.kind, invoiceId: item.invoiceId, lastNotifiedJstDate: jstDate, firstNotifiedAt: snapshot.exists && (snapshot.data() || {}).firstNotifiedAt ? (snapshot.data() || {}).firstNotifiedAt : Timestamp.fromMillis(nowMillis), lastNotifiedAt: Timestamp.fromMillis(nowMillis) });
+    notify.push(item);
+  }
+
+  return notify;
+}
+
 // 定期実行の本体(認証・環境の確認は呼び出し側)。
 export async function runStoreCustomPlanCron(database, deps, nowMillis) {
   const startedMs = Date.now();
@@ -174,6 +247,7 @@ export async function runStoreCustomPlanCron(database, deps, nowMillis) {
         ? {
             status: "done",
             executed: execute,
+            attention: collectStoreCustomPlanAttention(charged.invoices).slice(0, 50),
             blockedReason: execute ? "" : (!cronChargesEnabled ? "cron_charges_disabled" : gate.reason),
             totals: charged.totals,
             dueInvoiceIds: charged.invoices.filter(function(x) { return x.plan === "charge" || x.plan === "retry" || x.plan === "reconcile"; }).map(function(x) { return x.invoiceId + ":" + x.plan; }).slice(0, 50)
@@ -219,13 +293,13 @@ export async function runStoreCustomPlanCron(database, deps, nowMillis) {
 
 // mode: storeCustomPlanCron (POST、合言葉で認証。運営のログインは不要)
 export async function handleStoreCustomPlanCron(request, response, deps) {
-  const expected = deps.env ? deps.env.AI_COLLECT_CRON_SECRET : "";
+  const secret = readStoreCustomPlanCronSecret(deps.env);
 
-  if (typeof expected !== "string" || expected === "") {
-    return response.status(503).json({ success: false, reason: "cron_secret_not_configured" });
+  if (!secret.ok) {
+    return response.status(503).json({ success: false, reason: secret.reason });
   }
 
-  if (!storeCustomPlanCronSecretsMatch(readCronSecretHeader(request), expected)) {
+  if (!storeCustomPlanCronSecretsMatch(readCronSecretHeader(request), secret.secret)) {
     return response.status(401).json({ success: false, reason: "unauthorized" });
   }
 
@@ -259,15 +333,31 @@ export async function handleStoreCustomPlanCron(request, response, deps) {
     // STEP 47-C ③｜退会の最終削除で運営の対応が必要な異常を今回はじめて見つけた時も 500 にする
     // (定期実行の仕組みの失敗のメールで運営に知らせる。同じ異常では二度と 500 にしない)。
     const deletionStep = result.steps && result.steps.accountDeletion;
-    const attention = Boolean(deletionStep && deletionStep.operatorAttention && Object.keys(deletionStep.operatorAttention).length > 0);
+    // STEP 53-B｜運営の確認が必要な請求書は、新しい案件と1日1回の再通知の時だけ 500 にする。
+    const billingAttention = result.steps && result.steps.charges && Array.isArray(result.steps.charges.attention) ? result.steps.charges.attention : [];
+    const billingNotify = await selectAttentionToNotify(database, billingAttention, result.jstDate, nowMillis);
+    const attention = Boolean(deletionStep && deletionStep.operatorAttention && Object.keys(deletionStep.operatorAttention).length > 0) || billingNotify.length > 0;
 
     return response.status(result.status === "failed" || attention ? 500 : 200).json(Object.assign(
       { success: result.status !== "failed" && !attention, runId: runId },
-      attention ? { reason: "operator_attention_required" } : {},
+      attention ? { reason: "operator_attention_required", billingNotify: billingNotify } : {},
       result
     ));
   } catch (error) {
     console.error("店舗カスタマイズ：定期実行エラー：", error && error.message);
+    // STEP 53-B｜処理の例外も実行記録に残す(記録に失敗しても応答は 500 のまま＝失敗のメールで知らせる)。
+    if (locked) {
+      await database.collection(STORE_CUSTOM_PLAN_CRON_RUNS_COLLECTION).doc(jstDateKey(nowMillis) + "_" + runId).set({
+        runId: runId,
+        startedAt: Timestamp.fromMillis(nowMillis),
+        finishedAt: FieldValue.serverTimestamp(),
+        environment: trial ? "preview_trial" : "production",
+        jstDate: jstDateKey(nowMillis),
+        status: "failed",
+        errors: ["exception"],
+        error: errorSummary(error)
+      }).catch(function() {});
+    }
     return response.status(500).json({ success: false, reason: "server_error" });
   } finally {
     if (locked) {
