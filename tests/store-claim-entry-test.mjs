@@ -115,7 +115,8 @@ try {
   process.env.VERCEL_ENV = "production";
   p = await openTop("ja");
   e = await entry(p);
-  t("U5b Production（本番カード登録の先行テスト中＝一般公開のスイッチ false）：まだ引き継がれていない掲載（L1）にも入口を出さない・JSエラーなし", e.L1.shown === false && e.L2.shown === false && p.log.errors.length === 0, { e, errors: p.log.errors });
+  // STEP 53-D｜STEP 52-F で本番のカード登録は一般公開（STORE_CARD_REGISTRATION_LIVE_ENABLED true）。Production でも Preview と同じく入口を出す。
+  t("U5b Production（本番のカード登録は一般公開済み）：まだ引き継がれていない掲載（L1）には入口を出す・引き継ぎ済み（L2）には出さない・JSエラーなし", e.L1.shown === true && e.L1.href === "store-account.html?claim=L1" && /お店の情報を管理する/.test(e.L1.text) && e.L2.shown === false && p.log.errors.length === 0, { e, errors: p.log.errors });
   await p.close();
   process.env.VERCEL_ENV = "preview";
 
