@@ -4,7 +4,23 @@
 // pay-now and 3-D Secure start. Month-end close, dunning, run records and the monitor keep working.
 // REAL code (no switch override). REAL moderate-submission handler on mocked firebase-admin. Stripe is a counting stub.
 // run: node --import ./tests/mockfa-occ/register.mjs tests/store-card-charge-off-test.mjs
-import { REPO_URL } from "./_paths.mjs";
+import { REPO_ROOT } from "./_paths.mjs";
+import { cpSync, readFileSync as readFileSyncFs, writeFileSync as writeFileSyncFs, rmSync } from "node:fs";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+// この試験は本番の請求のスイッチが false(運営が請求を止めている)の時の流れを確かめる。本物のコードの値に左右されないよう、
+// api/ をこのフォルダの一時コピーへ写し、コピーの中だけスイッチを false にして読み込む(本物のコードは変えない)。
+const OFF_DIR = join(REPO_ROOT, "tests", ".tmp-charge-off-" + process.pid);
+cpSync(join(REPO_ROOT, "api"), join(OFF_DIR, "api"), { recursive: true });
+{
+  const p = join(OFF_DIR, "api", "_lib", "store-custom-plan-billing.js");
+  const src = readFileSyncFs(p, "utf8");
+  const re = /export const STORE_CUSTOM_PLAN_CHARGE_ENABLED =(\r?\n)  (true|false);/;
+  if (!re.test(src)) throw new Error("charge switch not found in the copy");
+  writeFileSyncFs(p, src.replace(re, "export const STORE_CUSTOM_PLAN_CHARGE_ENABLED =$1  false;"));
+}
+process.on("exit", () => rmSync(OFF_DIR, { recursive: true, force: true }));
+const REPO_URL = pathToFileURL(OFF_DIR).href;
 const sa = (id) => JSON.stringify({ type: "service_account", project_id: id, private_key: "-----FAKE-KEY-FOR-TESTS-----" });
 const SECRET = "fake-store-card-billing-secret-0003";
 const ENV = { VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main", FIREBASE_SERVICE_ACCOUNT_KEY: sa("chikashoku-app"), FIREBASE_SERVICE_ACCOUNT_KEY_PREVIEW: sa("machinau-preview"), RATE_LIMIT_HMAC_SECRET: "fake", ADMIN_EMAIL: "admin@example.com", OPENAI_API_KEY: "sk-" + "fake-openai-for-tests", AI_COLLECT_CRON_SECRET: "fake-ai-collect-secret-0003", STORE_CARD_BILLING_CRON_SECRET: SECRET, STRIPE_MODE: "live", STRIPE_RESTRICTED_KEY: "rk_" + "live_FAKECARDKEY0003", STRIPE_CHARGE_RESTRICTED_KEY: "rk_" + "live_FAKECHARGEKEY0003", STRIPE_PUBLISHABLE_KEY: "pk_" + "live_FAKEPUBKEY0003" };

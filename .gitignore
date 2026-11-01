@@ -1,3 +1,5 @@
 node_modules/
 # テスト実行時に生成される一時ファイル
 tests/_safety_harness.mjs
+# テストが作る api/ の一時コピー(終了時に消す。途中で止まった時に commit しないため)
+tests/.tmp-*/

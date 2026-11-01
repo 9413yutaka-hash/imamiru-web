@@ -10,15 +10,16 @@ import { REPO_URL, REPO_ROOT } from "./_paths.mjs";
 import { cpSync, readFileSync as readFileSyncFs, writeFileSync as writeFileSyncFs, rmSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-// STEP 53-I｜本番の請求のスイッチ(STORE_CUSTOM_PLAN_CHARGE_ENABLED)は代表の承認まで false。この試験は「承認して true にした後」の
-// 流れを確かめるため、api/ をこのフォルダの一時コピーへ写し、コピーの中だけスイッチを true にして読み込む(本物のコードは変えない)。
+// この試験は本番の請求のスイッチ(STORE_CUSTOM_PLAN_CHARGE_ENABLED)が true の時の流れを確かめる。本物のコードの値(請求の開始の
+// 承認まで false)に左右されないよう、api/ をこのフォルダの一時コピーへ写し、コピーの中だけスイッチを true にして読み込む。
 const LIVE_DIR = join(REPO_ROOT, "tests", ".tmp-go-live-" + process.pid);
 cpSync(join(REPO_ROOT, "api"), join(LIVE_DIR, "api"), { recursive: true });
 {
   const p = join(LIVE_DIR, "api", "_lib", "store-custom-plan-billing.js");
   const src = readFileSyncFs(p, "utf8");
-  const next = src.replace(/export const STORE_CUSTOM_PLAN_CHARGE_ENABLED =(\r?\n)  false;/, "export const STORE_CUSTOM_PLAN_CHARGE_ENABLED =$1  true;");
-  if (next === src) throw new Error("charge switch not found in the copy");
+  const re = /export const STORE_CUSTOM_PLAN_CHARGE_ENABLED =(\r?\n)  (true|false);/;
+  if (!re.test(src)) throw new Error("charge switch not found in the copy");
+  const next = src.replace(re, "export const STORE_CUSTOM_PLAN_CHARGE_ENABLED =$1  true;");
   writeFileSyncFs(p, next);
 }
 process.on("exit", () => rmSync(LIVE_DIR, { recursive: true, force: true }));
@@ -115,7 +116,7 @@ const IMADAKE_BEFORE = JSON.stringify(S.docs.get("imadakeMonthlyInvoices/G1_2026
 
 // ===================== S. switches =====================
 const REAL_B = await import(REPO_URL + "/api/_lib/store-custom-plan-billing.js");
-t("S0 本物のコードの本番の請求のスイッチは false（代表の承認まで）・この試験は承認後の状態（コピーの中だけ true）", REAL_B.STORE_CUSTOM_PLAN_CHARGE_ENABLED === false && B.STORE_CUSTOM_PLAN_CHARGE_ENABLED === true);
+t("S0 この試験は請求のスイッチ true の状態（コピーの中だけ true・本物のコードの値は各スイッチの試験で確かめる）", B.STORE_CUSTOM_PLAN_CHARGE_ENABLED === true && typeof REAL_B.STORE_CUSTOM_PLAN_CHARGE_ENABLED === "boolean");
 t("S1 店舗カードのスイッチ：申込・締め・請求・定期実行の請求は true（STEP 53）・本番のカード登録 true",
   B.STORE_CUSTOM_PLAN_MONTHLY_SIGNUP_ENABLED === true && B.STORE_CUSTOM_PLAN_CLOSE_WRITES_ENABLED === true && B.STORE_CUSTOM_PLAN_CHARGE_ENABLED === true && CR.STORE_CUSTOM_PLAN_CRON_CHARGES_ENABLED === true && SB.STORE_CARD_REGISTRATION_LIVE_ENABLED === true);
 t("S2 今だけ投稿の請求・締め・課金開始と、退会の本番の自動の最終削除は false のまま",
