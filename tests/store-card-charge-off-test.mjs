@@ -13,7 +13,19 @@ const pw = (uid, email) => ({ uid, email: email || uid + "@example.com", email_v
 globalThis.__MOCK_TOKENS = { u1: pw("u1"), u2: pw("u2"), admin: pw("adm1", "admin@example.com") };
 const S = globalThis.__MOCK_DB = { docs: new Map(), writes: [], failAddFor: null, seq: 0 };
 const stripe = [], other = [];
-globalThis.fetch = async (url) => { const u = String(url); if (u.includes("stripe.com")) { stripe.push(u); return { ok: false, status: 500, json: async () => ({ error: { type: "api_error" } }) }; } other.push(u); throw new Error("unexpected network " + u); };
+// Stripe の模擬：既定は 500（呼ばれた時点で失敗が分かる）。"decline" の時だけ、請求を始めた後の試験のためにカードの拒否を返す。
+let stripeMode = "error500", piSeq = 0;
+globalThis.fetch = async (url, opts = {}) => {
+  const u = String(url);
+  if (!u.includes("stripe.com")) { other.push(u); throw new Error("unexpected network " + u); }
+  stripe.push((opts.method || "GET") + " " + new URL(u).pathname);
+  const json = (status, data) => ({ ok: status < 400, status, json: async () => data });
+  if (stripeMode !== "decline") return json(500, { error: { type: "api_error" } });
+  if ((opts.method || "GET") === "GET") return json(200, { object: "list", data: [], has_more: false });
+  const form = Object.fromEntries(new URLSearchParams(opts.body || ""));
+  const pi = { id: "pi_off" + ++piSeq, object: "payment_intent", amount: Number(form.amount), currency: form.currency, customer: form.customer, status: "requires_payment_method", created: Math.floor(Date.now() / 1000), metadata: { invoiceId: form["metadata[invoiceId]"], chargeAttempt: form["metadata[chargeAttempt]"] } };
+  return json(402, { error: { type: "card_error", code: "card_declined", decline_code: "insufficient_funds", payment_intent: pi } });
+};
 const jst = (s) => Date.parse(s + "+09:00");
 let NOW = jst("2026-11-10T12:00:00");
 Date.now = () => NOW;
@@ -62,7 +74,7 @@ t("C2 12月1日の定期実行：11月を締める（100円・請求予定 12月
 // ===================== path 1: scheduled entry =====================
 NOW = jst("2026-12-02T10:10:00");
 r = await CRON();
-t("P1 12月2日の定期実行（請求予定日）：請求しない（executed false・charge_disabled）・Stripe への通信0・請求書は closed のまま", r.code === 200 && r.body.steps.charges.executed === false && r.body.steps.charges.blockedReason === "charge_disabled" && stripe.length === 0 && inv("G1_2026-11").status === "closed" && (inv("G1_2026-11").chargeAttempt || 0) === 0, r.body.steps.charges);
+t("P1 12月2日の定期実行（請求予定日）：請求の対象（G1 の11月分・1件）を判定するが請求しない（executed false・charge_disabled）・Stripe への通信0・請求書は closed のまま", r.code === 200 && r.body.steps.charges.executed === false && r.body.steps.charges.blockedReason === "charge_disabled" && r.body.steps.charges.totals.chargeCount === 1 && r.body.steps.charges.totals.plannedAmountJpy === 100 && stripe.length === 0 && inv("G1_2026-11").status === "closed" && (inv("G1_2026-11").chargeAttempt || 0) === 0, r.body.steps.charges);
 
 // ===================== path 2: operator manual run =====================
 r = await call({ mode: "adminStoreCustomPlanCharge", dryRun: false }, "admin");
@@ -70,8 +82,11 @@ t("P2 運営の「請求を実行」：403 charge_disabled・Stripe への通信
 r = await call({ mode: "adminStoreCustomPlanCharge", dryRun: false, approveLateInvoiceIds: ["G1_2026-11"] }, "admin");
 t("P2b 運営の「確認して請求」（遅れて確定した請求書の指定）も 403 charge_disabled・Stripe への通信0", r.code === 403 && r.body.reason === "charge_disabled" && stripe.length === 0, r.body);
 r = await call({ mode: "adminStoreCustomPlanCharge", dryRun: true }, "admin");
-// 事実：請求の許可が無い間の試算は、従来から Preview 試験の請求書だけを対象に数える（本番の請求書は対象0件と表示）。
-t("P2c 運営の「請求の試算」は読むだけ（実行は許可されていない＝charge_disabled・Stripe への通信0）", r.code === 200 && r.body.dryRun === true && r.body.executionAllowed === false && r.body.executionBlockedReason === "charge_disabled" && stripe.length === 0, r.body.totals);
+t("P2c STEP 53-J：運営の「請求の試算」は本番の請求書を数える（対象1件・請求予定額100円）・実行は止まっていることを別に返す（charge_disabled）・読むだけ・Stripe への通信0", r.code === 200 && r.body.dryRun === true && r.body.executionAllowed === false && r.body.executionBlockedReason === "charge_disabled" && r.body.totals.chargeCount === 1 && r.body.totals.plannedAmountJpy === 100 && stripe.length === 0, r.body.totals);
+S.docs.set("storeCustomPlanInvoices/PV_2026-11", { ...inv("G1_2026-11"), storeId: "PV", createdInPreview: true });
+r = await call({ mode: "adminStoreCustomPlanCharge", dryRun: true }, "admin");
+t("P2d 試算で Preview で作った請求書は数えない（preview_invoice_in_live）", r.code === 200 && r.body.totals.chargeCount === 1 && r.body.invoices.some((x) => x.invoiceId === "PV_2026-11" && x.planReason === "preview_invoice_in_live"), r.body.totals);
+S.docs.delete("storeCustomPlanInvoices/PV_2026-11");
 
 // ===================== path 3: owner pay-now / 3-D Secure =====================
 const sched = B.storeCustomPlanChargeScheduleFor("2026-10");
@@ -89,11 +104,22 @@ t("P3c 支払いの操作で請求書の内容は変わらない", JSON.stringif
 NOW = jst("2026-12-03T10:10:00");
 r = await CRON();
 t("D1 未払いの判定は今までどおり（14日を過ぎた G2 は停止）・Stripe への通信0", r.code !== 401 && plan("G2").paymentStatus === "suspended" && stripe.length === 0, { code: r.code, dunning: r.body.steps && r.body.steps.dunning });
+// ===================== no suspension while charges are off =====================
+NOW = jst("2026-12-20T10:10:00");
+r = await CRON();
+t("O1 STEP 53-J：請求を止めている間は、請求予定日から14日以上たっても G1 を停止しない（請求していないので未払いの扱いにならない・current のまま・請求書は closed のまま）", r.body.steps.dunning.status === "done" && (plan("G1").paymentStatus || "current") === "current" && inv("G1_2026-11").status === "closed" && !inv("G1_2026-11").suspendAt && stripe.length === 0, { ps: plan("G1").paymentStatus, st: inv("G1_2026-11").status });
+// 承認後（スイッチ true を差し替えで再現）に最初の請求が失敗した場合：14日はこの失敗から数える＝止めていた期間を理由に即時停止しない。
+stripeMode = "decline";
+const { getFirestore } = await import("firebase-admin/firestore");
+const on = await (async () => { const e = console.error; console.error = () => {}; try { return await CH.runStoreCustomPlanCharges(getFirestore(), { env: ENV, fetch: (...a) => globalThis.fetch(...a), now: () => NOW, chargeEnabledOverride: true }, { dryRun: false, month: "2026-11" }); } finally { console.error = e; } })();
+t("O2 請求を始めた後の最初の失敗（12月20日）：支払い失敗・停止の予定は失敗の日から14日後（1月3日）・すぐには停止しない（past_due）", on.ok === true && inv("G1_2026-11").status === "payment_failed" && inv("G1_2026-11").suspendAt.toMillis() === inv("G1_2026-11").firstFailedAt.toMillis() + 14 * 86400000 && inv("G1_2026-11").firstFailedAt.toMillis() === NOW && plan("G1").paymentStatus === "past_due", { inv: inv("G1_2026-11").status, ps: plan("G1").paymentStatus });
+stripeMode = "error500";
+const stripeBeforeMonitor = stripe.length;
 const st = await GET({ mode: "storeCardCronStatus" });
 t("D2 外部監視の状態の URL は 200（定期実行は正常に成功している）", st.code === 200 && st.body.ok === true, st.body);
 const health = await call({ mode: "adminStoreCustomPlanCronHealth" }, "admin");
 t("D3 運営の画面の「定期実行は動いています」も今までどおり", health.code === 200 && health.body.ok === true, health.body);
-t("D4 このテストの間、Stripe への通信は一度もない・Stripe 以外への通信もない", stripe.length === 0 && other.length === 0, { stripe, other });
+t("D4 請求を止めている間（O2 の差し替え以外）、Stripe への通信は一度もない・Stripe 以外への通信もない", stripe.length === stripeBeforeMonitor && stripe.every((x) => /payment_intents/.test(x)) && other.length === 0, { stripe, other });
 
 console.log(`\nTOTAL ${pass + fail}  PASS ${pass}  FAIL ${fail}`);
 process.exit(fail === 0 ? 0 : 1);

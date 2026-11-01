@@ -1181,7 +1181,9 @@
           return;
         }
         if (kind === "charge") {
-          showMessage(message, (data.dryRun ? "請求の試算です（Stripe に接続しません）。" : "請求を実行しました。") + " 請求 " + data.totals.chargeCount + " 件・再試行 " + data.totals.retryCount + " 件・照合 " + data.totals.reconcileCount + " 件" + (data.executionAllowed ? "" : "（実行は許可されていません：" + data.executionBlockedReason + "）") + "。", "info");
+          // STEP 53-I｜請求予定額と、請求の実行が止まっていること(charge_disabled＝本番の請求は停止中)を分けて表示する。
+          const blocked = data.executionAllowed ? "" : data.executionBlockedReason === "charge_disabled" ? "本番の請求は停止中です（代表の承認まで実行されません）" : "実行は許可されていません：" + data.executionBlockedReason;
+          showMessage(message, (data.dryRun ? "請求の試算です（Stripe に接続しません）。" : "請求を実行しました。") + " 請求 " + data.totals.chargeCount + " 件・再試行 " + data.totals.retryCount + " 件・照合 " + data.totals.reconcileCount + " 件・請求予定額 " + (data.totals.plannedAmountJpy || 0) + " 円" + (blocked ? "（" + blocked + "）" : "") + "。", "info");
         } else {
           showMessage(message, data.invoices.length + " 件・合計 " + data.totalAmountJpy + " 円。", "info");
         }

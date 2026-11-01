@@ -738,7 +738,10 @@ export async function runStoreCustomPlanCharges(database, deps, options) {
   }
 
   const nowMs = nowOf(deps);
-  const previewTrialOnly = gate.ok ? gate.previewTrialOnly : true;
+  // STEP 53-I｜請求の許可が無い Production(本番の請求のスイッチ false)の試算は、本番の請求書を本番の請求と同じ基準で数える
+  // (Preview 試験の請求書は数えない)。実行は上で止めているため、試算の数え方だけが変わる。
+  const production = !!deps && !!deps.env && deps.env.VERCEL_ENV === "production";
+  const previewTrialOnly = gate.ok ? gate.previewTrialOnly : !production;
   // deps.lateAutoChargeOverride は試験でスイッチの値を差し替えるためだけ。
   const lateAutoEnabled = deps && typeof deps.lateAutoChargeOverride === "boolean" ? deps.lateAutoChargeOverride : STORE_CUSTOM_PLAN_LATE_AUTO_CHARGE_ENABLED === true;
   const snapshot = await database.collection(STORE_CUSTOM_PLAN_INVOICES_COLLECTION).get();
@@ -753,7 +756,7 @@ export async function runStoreCustomPlanCharges(database, deps, options) {
     }
 
     const entry = describePlanInvoice(documentSnapshot.id, invoice);
-    const liveMode = gate.ok && gate.config.mode === "live";
+    const liveMode = gate.ok ? gate.config.mode === "live" : production;
     let lateApproved = !!options && Array.isArray(options.approveLateInvoiceIds) && options.approveLateInvoiceIds.includes(documentSnapshot.id);
     let lateAuto = false;
 
