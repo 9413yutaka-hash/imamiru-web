@@ -108,7 +108,8 @@ function buildIdempotencyKey(mode, ledgerId, attempt) {
 export function readStoreCustomPlanChargeGate(deps) {
   const production = !!deps && !!deps.env && deps.env.VERCEL_ENV === "production";
   const config = production ? readStripeLiveChargeConfig(deps.env) : readStripeChargeConfig(deps && deps.env);
-  const chargeEnabled = deps && typeof deps.chargeEnabledOverride === "boolean" ? deps.chargeEnabledOverride : STORE_CUSTOM_PLAN_CHARGE_ENABLED;
+  // STEP 53｜請求のスイッチは Production だけに効く(Preview・ローカルでは false と同じ＝試験の経路だけ)。
+  const chargeEnabled = deps && typeof deps.chargeEnabledOverride === "boolean" ? deps.chargeEnabledOverride : STORE_CUSTOM_PLAN_CHARGE_ENABLED === true && production;
 
   if (chargeEnabled === true) {
     return config.ok ? { ok: true, config: config, previewTrialOnly: false } : { ok: false, reason: "stripe_unavailable", detail: config.reason };

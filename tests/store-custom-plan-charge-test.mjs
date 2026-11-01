@@ -98,11 +98,11 @@ S.docs.set("imadakeMonthlyInvoices/A_2026-10", { storeId: "A", month: "2026-10",
 const IMADAKE_BEFORE = JSON.stringify(S.docs.get("imadakeMonthlyInvoices/A_2026-10"));
 
 // ===================== gate =====================
-t("G1 実行の許可：Preview 試験の経路（Preview・対象ブランチ・machinau-preview・テストキー）だけ。Production・テスト以外のキーは不可", CH.readStoreCustomPlanChargeGate({ env: process.env, isStoreCustomPlanTrialEnabled: () => true }).ok === true && CH.readStoreCustomPlanChargeGate({ env: process.env, isStoreCustomPlanTrialEnabled: () => false }).reason === "charge_disabled" && CH.readStoreCustomPlanChargeGate({ env: { ...process.env, VERCEL_ENV: "production" }, isStoreCustomPlanTrialEnabled: () => true }).ok === false && CH.readStoreCustomPlanChargeGate({ env: { ...process.env, STRIPE_CHARGE_RESTRICTED_KEY: "rk_" + "live_FAKELIVEKEY000001" }, isStoreCustomPlanTrialEnabled: () => true }).ok === false && B.STORE_CUSTOM_PLAN_CHARGE_ENABLED === false);
+t("G1 実行の許可：Preview 試験の経路（Preview・対象ブランチ・machinau-preview・テストキー）だけ。Production・テスト以外のキーは不可", CH.readStoreCustomPlanChargeGate({ env: process.env, isStoreCustomPlanTrialEnabled: () => true }).ok === true && CH.readStoreCustomPlanChargeGate({ env: process.env, isStoreCustomPlanTrialEnabled: () => false }).reason === "charge_disabled" && CH.readStoreCustomPlanChargeGate({ env: { ...process.env, VERCEL_ENV: "production" }, isStoreCustomPlanTrialEnabled: () => true }).ok === false && CH.readStoreCustomPlanChargeGate({ env: { ...process.env, STRIPE_CHARGE_RESTRICTED_KEY: "rk_" + "live_FAKELIVEKEY000001" }, isStoreCustomPlanTrialEnabled: () => true }).ok === false && B.STORE_CUSTOM_PLAN_CHARGE_ENABLED === true);
 process.env.VERCEL_ENV = "production";
 let r = await RUN();
 process.env.VERCEL_ENV = "preview";
-t("G2 Production の環境：請求の実行は 403 charge_disabled・Stripe に通信しない", r.code === 403 && r.body.reason === "charge_disabled" && ST.calls.length === 0, r.body);
+t("G2 Production の環境（STEP 53：請求のスイッチ true）：本番の請求専用キーが無い（テストキーだけ）ので 403 stripe_unavailable・Stripe に通信しない", r.code === 403 && r.body.reason === "stripe_unavailable" && ST.calls.length === 0, r.body);
 r = await call({ mode: "adminStoreCustomPlanCharge", dryRun: false }, "u1");
 t("G3 店主のアカウントでは請求を実行できない", (r.code === 401 || r.code === 403) && ST.calls.length === 0, r.code);
 
@@ -270,7 +270,7 @@ const MC = await import(REPO_URL + "/api/_lib/imadake-monthly-charge.js");
 const MCL = await import(REPO_URL + "/api/_lib/imadake-monthly-close.js");
 const SB = await import(REPO_URL + "/api/_lib/store-billing.js");
 const LC = await import(REPO_URL + "/api/_lib/listing-profile-copy.js");
-t("F1 課金関連のフラグ：本番のカード登録・本番の申込・締めの書き込み（STEP 53）だけ true・請求・今だけ投稿は false", IM.IMADAKE_CV_BILLING_STARTED === false && MC.IMADAKE_MONTHLY_CHARGE_ENABLED === false && MCL.IMADAKE_MONTHLY_CLOSE_WRITES_ENABLED === false && SB.STORE_CARD_REGISTRATION_LIVE_ENABLED === true && LC.LISTING_PHOTO_COPY_ENABLED === false && LC.LISTING_PHOTO_COPY_PREVIEW_TRIAL === false && B.STORE_CUSTOM_PLAN_MONTHLY_SIGNUP_ENABLED === true && B.STORE_CUSTOM_PLAN_CLOSE_WRITES_ENABLED === true && B.STORE_CUSTOM_PLAN_CHARGE_ENABLED === false);
+t("F1 課金関連のフラグ：本番のカード登録・本番の申込・締めの書き込み・請求（STEP 53）は true・今だけ投稿は false", IM.IMADAKE_CV_BILLING_STARTED === false && MC.IMADAKE_MONTHLY_CHARGE_ENABLED === false && MCL.IMADAKE_MONTHLY_CLOSE_WRITES_ENABLED === false && SB.STORE_CARD_REGISTRATION_LIVE_ENABLED === true && LC.LISTING_PHOTO_COPY_ENABLED === false && LC.LISTING_PHOTO_COPY_PREVIEW_TRIAL === false && B.STORE_CUSTOM_PLAN_MONTHLY_SIGNUP_ENABLED === true && B.STORE_CUSTOM_PLAN_CLOSE_WRITES_ENABLED === true && B.STORE_CUSTOM_PLAN_CHARGE_ENABLED === true);
 t("F2 今だけ投稿の請求書は変わらない・storeBilling は作らない", JSON.stringify(S.docs.get("imadakeMonthlyInvoices/A_2026-10")) === IMADAKE_BEFORE && ![...S.docs.keys()].some((k) => k.startsWith("storeBilling/")));
 t("F3 Stripe への呼び出しは PaymentIntent の作成・照会・一覧だけ・Stripe 以外への通信なし", ST.calls.every((x) => /^(POST \/v1\/payment_intents|GET \/v1\/payment_intents(\/pi_[A-Za-z0-9_]+)?)$/.test(x)) && ST.otherHosts === 0, [...new Set(ST.calls)]);
 console.log(`TOTAL ${pass + fail}  PASS ${pass}  FAIL ${fail}`);

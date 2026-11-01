@@ -47,8 +47,10 @@ import {
 } from "./store-custom-plan-charge.js";
 
 // 定期実行からの Stripe への請求の許可(コード内の固定値)。代表の承認があるまで false のまま変えない。
+// STEP 53｜本番の定期請求の開始で true(代表の承認後に Production へ出す)。効くのは Production だけ
+// (Preview の定期実行は今までどおり試算だけ)。
 export const STORE_CUSTOM_PLAN_CRON_CHARGES_ENABLED =
-  false;
+  true;
 
 export const STORE_CUSTOM_PLAN_CRON_RUNS_COLLECTION = "storeCustomPlanCronRuns";
 const CRON_LOCK_COLLECTION = "storeCustomPlanCronLocks";
@@ -163,14 +165,16 @@ export async function runStoreCustomPlanCron(database, deps, nowMillis) {
   } else {
     try {
       const gate = readStoreCustomPlanChargeGate(deps);
-      const execute = STORE_CUSTOM_PLAN_CRON_CHARGES_ENABLED === true && gate.ok === true;
+      const production = !!deps.env && deps.env.VERCEL_ENV === "production";
+      const cronChargesEnabled = STORE_CUSTOM_PLAN_CRON_CHARGES_ENABLED === true && production;
+      const execute = cronChargesEnabled && gate.ok === true;
       const charged = await runStoreCustomPlanCharges(database, deps, { dryRun: !execute });
 
       steps.charges = charged.ok
         ? {
             status: "done",
             executed: execute,
-            blockedReason: execute ? "" : (STORE_CUSTOM_PLAN_CRON_CHARGES_ENABLED !== true ? "cron_charges_disabled" : gate.reason),
+            blockedReason: execute ? "" : (!cronChargesEnabled ? "cron_charges_disabled" : gate.reason),
             totals: charged.totals,
             dueInvoiceIds: charged.invoices.filter(function(x) { return x.plan === "charge" || x.plan === "retry" || x.plan === "reconcile"; }).map(function(x) { return x.invoiceId + ":" + x.plan; }).slice(0, 50)
           }
