@@ -82,6 +82,51 @@ export const STORE_CUSTOM_PLAN_OWNER_UNPAID_STATUSES = ["payment_failed", "requi
 // (定期実行・運営の一括の請求とも)。運営が確認して、その請求書を指定した時だけ請求する(approveLateInvoiceIds)。
 export const STORE_CUSTOM_PLAN_LATE_CLOSE_REASON = "closed_after_charge_day";
 const APPROVE_LATE_MAX = 50;
+// STEP 53-F｜2日を過ぎて確定した請求書の自動請求(代表方針「全部自動」)。規約の「翌月2日に請求」との整合が確認できるまで false
+// (false の間は従来どおり運営の確認待ち)。true でも、次をすべて満たす請求書だけ：100円・JPY・税込・本番の請求書／請求予定日から
+// 7日以内に確定／未請求(試行0・PaymentIntent なし・支払い済みでない・結果不明でない)／利用月の記録が請求済みでこの請求書を指し、
+// 請求先＝契約者／請求先に本番のカード。送る直前の Stripe の重複の確認(既存)が失敗・不完全なら請求しない(人の確認)。
+export const STORE_CUSTOM_PLAN_LATE_AUTO_CHARGE_ENABLED =
+  false;
+export const STORE_CUSTOM_PLAN_LATE_AUTO_CHARGE_MAX_DAYS = 7;
+export const STORE_CUSTOM_PLAN_LATE_AUTO_REASON = "late_auto";
+const USAGE_COLLECTION = "storeCustomPlanUsage";
+
+// 読まずに判断できる条件(請求書だけ)。
+function isLateAutoCandidate(invoice, liveMode) {
+  const scheduledMs = millisOf(invoice.chargeScheduledAt);
+  const closedMs = millisOf(invoice.closedAt);
+
+  return liveMode === true &&
+    invoice.status === "closed" &&
+    invoice.createdInPreview !== true &&
+    Number(invoice.amountJpy) === STORE_CUSTOM_PLAN_MONTHLY_FEE_JPY &&
+    invoice.currency === "JPY" &&
+    invoice.taxIncluded === true &&
+    scheduledMs > 0 &&
+    closedMs >= scheduledMs + DAY_MS &&
+    closedMs <= scheduledMs + STORE_CUSTOM_PLAN_LATE_AUTO_CHARGE_MAX_DAYS * DAY_MS &&
+    (!Number.isInteger(invoice.chargeAttempt) || invoice.chargeAttempt === 0) &&
+    !invoice.paymentIntentId &&
+    !invoice.paidAt &&
+    invoice.chargeOutcomeUnknown !== true;
+}
+
+// 利用月の記録・請求先のカードの確認(読むだけ)。
+async function lateAutoRecordsMatch(database, ledgerId, invoice, mode) {
+  const usageSnapshot = await database.collection(USAGE_COLLECTION).doc(ledgerId).get();
+  const usage = usageSnapshot.exists ? usageSnapshot.data() || {} : null;
+
+  if (!usage || usage.status !== "invoiced" || usage.invoiceId !== ledgerId || usage.storeId !== invoice.storeId || usage.month !== invoice.month ||
+    usage.billingAccountUid !== invoice.billingAccountUid || usage.holderUid !== invoice.holderUid || invoice.billingAccountUid !== invoice.holderUid) {
+    return false;
+  }
+
+  const billingSnapshot = await database.collection(ACCOUNT_BILLING_COLLECTION).doc(invoice.billingAccountUid).get();
+  const billing = billingSnapshot.exists ? billingSnapshot.data() || {} : null;
+
+  return !!billing && billing.uid === invoice.billingAccountUid && checkBillingSection(readSection(billing, mode)) === "";
+}
 
 function nowOf(deps) {
   return deps && typeof deps.now === "function" ? deps.now() : Date.now();
@@ -694,6 +739,8 @@ export async function runStoreCustomPlanCharges(database, deps, options) {
 
   const nowMs = nowOf(deps);
   const previewTrialOnly = gate.ok ? gate.previewTrialOnly : true;
+  // deps.lateAutoChargeOverride は試験でスイッチの値を差し替えるためだけ。
+  const lateAutoEnabled = deps && typeof deps.lateAutoChargeOverride === "boolean" ? deps.lateAutoChargeOverride : STORE_CUSTOM_PLAN_LATE_AUTO_CHARGE_ENABLED === true;
   const snapshot = await database.collection(STORE_CUSTOM_PLAN_INVOICES_COLLECTION).get();
   const entries = [];
   const touchedStores = new Set();
@@ -706,10 +753,20 @@ export async function runStoreCustomPlanCharges(database, deps, options) {
     }
 
     const entry = describePlanInvoice(documentSnapshot.id, invoice);
-    const lateApproved = !!options && Array.isArray(options.approveLateInvoiceIds) && options.approveLateInvoiceIds.includes(documentSnapshot.id);
-    const action = planInvoiceAction(invoice, nowMs, previewTrialOnly, gate.ok && gate.config.mode === "live", lateApproved);
+    const liveMode = gate.ok && gate.config.mode === "live";
+    let lateApproved = !!options && Array.isArray(options.approveLateInvoiceIds) && options.approveLateInvoiceIds.includes(documentSnapshot.id);
+    let lateAuto = false;
+
+    // STEP 53-F｜2日を過ぎて確定した請求書の自動請求(スイッチ true・安全条件をすべて満たす時だけ)。
+    if (!lateApproved && lateAutoEnabled && millisOf(invoice.chargeScheduledAt) <= nowMs && isLateAutoCandidate(invoice, liveMode) &&
+      await lateAutoRecordsMatch(database, documentSnapshot.id, invoice, gate.config.mode)) {
+      lateApproved = true;
+      lateAuto = true;
+    }
+
+    const action = planInvoiceAction(invoice, nowMs, previewTrialOnly, liveMode, lateApproved);
     entry.plan = action.plan;
-    entry.planReason = action.reason;
+    entry.planReason = lateAuto && action.plan === "charge" ? STORE_CUSTOM_PLAN_LATE_AUTO_REASON : action.reason;
 
     if (STORE_CUSTOM_PLAN_OWNER_UNPAID_STATUSES.includes(invoice.status)) {
       touchedStores.add(invoice.storeId);

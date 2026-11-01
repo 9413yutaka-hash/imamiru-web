@@ -170,6 +170,9 @@ export function collectStoreCustomPlanAttention(invoices) {
 
     if (entry.planReason === STORE_CUSTOM_PLAN_LATE_CLOSE_REASON) {
       kind = "late_closed";
+    } else if (entry.planReason === "late_auto" && entry.outcome) {
+      // STEP 53-F｜2日を過ぎて確定した請求書を自動で請求した(お知らせ)。送れなかった(skipped)時は運営の確認待ち。
+      kind = entry.outcome === "skipped" || entry.outcome === "lease_lost" ? "late_closed" : "late_auto_charged";
     } else if (entry.status === "needs_review" || entry.status === "charge_error") {
       kind = entry.status;
     } else if (entry.status === "payment_failed" && entry.planReason === "retries_exhausted") {

@@ -233,6 +233,44 @@ NOW = jst("2027-02-06T15:00:00");
 r = await HEALTH();
 t("H7 失敗が続いた日の14時以降は「止まっている可能性」と表示される", r.body.ok === false && r.body.state === "stale" && r.body.lastRunStatus === "failed", r.body);
 
+// ===================== L. STEP 53-F: invoices closed after the 2nd, automatic only when every check passes =====================
+{
+  const sched = B.storeCustomPlanChargeScheduleFor("2027-02");
+  const lateInv = (id, uid, closedDay, extra = {}) => {
+    S.docs.set("storeCustomPlans/" + id, { storeId: id, status: "active", ownerUid: uid, billingAccountUid: uid, periodKind: "monthly", createdInPreview: false, subscribedAt: Timestamp.fromMillis(jst("2027-01-05T10:00:00")), accessUntil: null, paymentStatus: "current", revision: 1 });
+    S.docs.set("storeCustomPlanUsage/" + id + "_2027-02", { storeId: id, month: "2027-02", status: "invoiced", invoiceId: id + "_2027-02", holderUid: uid, billingAccountUid: uid, ...(extra.usage || {}) });
+    S.docs.set("storeCustomPlanInvoices/" + id + "_2027-02", { storeId: id, month: "2027-02", amountJpy: 100, currency: "JPY", taxIncluded: true, holderUid: uid, billingAccountUid: uid, laterHolderUids: [], usageReason: "continued", createdInPreview: false, status: "closed", closedAt: Timestamp.fromMillis(jst("2027-03-" + closedDay + "T10:10:00")), chargeScheduledFor: sched.date, chargeScheduledAt: Timestamp.fromMillis(sched.millis), chargeAttempt: 0, chargeAttempts: [], paymentIntentId: "", chargeOutcomeUnknown: false, ...(extra.invoice || {}) });
+  };
+  const liveCard = (uid) => S.docs.set("accountBilling/" + uid, { uid, live: { customerId: "cus_" + uid, paymentMethodId: "pm_" + uid, setupStatus: "succeeded", card: { brand: "visa", last4: "4242", expMonth: 12, expYear: 2099 }, cardVersion: 1, detachPendingPaymentMethods: [] } });
+  ["u31", "u32", "u33", "u35", "u36", "u37"].forEach(liveCard);
+  lateInv("LA", "u31", "04");                                              // 2日遅れ：すべての条件を満たす
+  lateInv("LB", "u32", "12");                                              // 10日遅れ（7日を超える）
+  lateInv("LC", "u33", "04", { usage: { billingAccountUid: "someone_else" } }); // 請求先が利用月の記録と違う
+  lateInv("LD", "u34", "04");                                              // 本番のカードが無い（u34 は未登録）
+  lateInv("LE", "u35", "04", { invoice: { chargeOutcomeUnknown: true } }); // 結果不明
+  lateInv("LF", "u36", "04", { invoice: { amountJpy: 200 } });            // 金額が100円でない
+  lateInv("LG", "u37", "04");                                              // Stripe に既に支払いがある
+  NOW = jst("2027-03-13T10:10:00");
+  ST.pis.set("pi_existing_LG", { id: "pi_existing_LG", object: "payment_intent", amount: 100, currency: "jpy", customer: "cus_u37", payment_method: "pm_u37", status: "succeeded", created: Math.floor(NOW / 1000) - 60, metadata: { invoiceId: "storeCustomPlan:LG_2027-02", storeId: "LG", month: "2027-02", chargeAttempt: "1", machinauProduct: "store_custom_plan" } });
+  const before = ST.creates.length;
+  const ids = ["LA", "LB", "LC", "LD", "LE", "LF", "LG"].map((x) => x + "_2027-02");
+  const quietRun = async (deps) => { const e = console.error; console.error = () => {}; try { return await CH.runStoreCustomPlanCharges(getFirestore(), deps, { dryRun: false, month: "2027-02" }); } finally { console.error = e; } };
+  const { getFirestore } = await import("firebase-admin/firestore");
+  t("L0 遅れて確定した請求書の自動請求のスイッチは false（規約との整合の確認まで有効にしない）", CH.STORE_CUSTOM_PLAN_LATE_AUTO_CHARGE_ENABLED === false && CH.STORE_CUSTOM_PLAN_LATE_AUTO_CHARGE_MAX_DAYS === 7);
+  let run = await quietRun({ env: PROD_ENV, fetch: (...a) => globalThis.fetch(...a), now: () => NOW });
+  t("L1 スイッチ false：条件を満たす請求書（LA）も自動で請求しない（closed_after_charge_day・運営の確認待ち）・Stripe に送らない", run.ok && ST.creates.length === before && inv("LA_2027-02").status === "closed" && run.invoices.find((x) => x.invoiceId === "LA_2027-02").planReason === "closed_after_charge_day", run.invoices.filter((x) => ids.includes(x.invoiceId)).map((x) => x.invoiceId + ":" + x.planReason));
+  run = await quietRun({ env: PROD_ENV, fetch: (...a) => globalThis.fetch(...a), now: () => NOW, lateAutoChargeOverride: true });
+  const byId = Object.fromEntries(run.invoices.filter((x) => ids.includes(x.invoiceId)).map((x) => [x.invoiceId, x]));
+  t("L2 スイッチ true（試験の差し替え）：すべての条件を満たす LA だけ自動で請求（late_auto・100円・支払い済み）", byId["LA_2027-02"].planReason === "late_auto" && inv("LA_2027-02").status === "paid" && ST.creates.filter((x) => x["metadata[storeId]"] === "LA").length === 1, byId["LA_2027-02"]);
+  t("L3 7日を超えて確定（LB）・請求先の不一致（LC）・本番のカードなし（LD）・結果不明（LE）・金額の違い（LF）は自動で請求しない（運営の確認待ち）", ["LB", "LC", "LD", "LE", "LF"].every((x) => ST.creates.filter((c) => c["metadata[storeId]"] === x).length === 0 && byId[x + "_2027-02"].planReason !== "late_auto"), Object.values(byId).map((x) => x.invoiceId + ":" + x.plan + ":" + x.planReason + ":" + x.status));
+  t("L4 Stripe に既にこの請求書の支払いがある（LG）：新しい支払いを作らず、その結果を記録（二重請求しない）", ST.creates.filter((x) => x["metadata[storeId]"] === "LG").length === 0 && inv("LG_2027-02").status === "paid", inv("LG_2027-02").status);
+  const attention = CR.collectStoreCustomPlanAttention(run.invoices.filter((x) => ids.includes(x.invoiceId)));
+  t("L5 運営への通知：自動で請求したもの（LA・LG）は「お知らせ」（late_auto_charged）・自動で請求しなかった遅れの請求書は運営の確認待ち（late_closed）", attention.some((x) => x.kind === "late_auto_charged" && x.invoiceId === "LA_2027-02") && ["LB", "LC", "LD", "LE"].every((x) => attention.some((y) => y.invoiceId === x + "_2027-02" && y.kind !== "late_auto_charged")), attention);
+  const createsAfter = ST.creates.length;
+  run = await quietRun({ env: PROD_ENV, fetch: (...a) => globalThis.fetch(...a), now: () => NOW, lateAutoChargeOverride: true });
+  t("L6 もう一度実行しても二重に請求しない", ST.creates.length === createsAfter);
+}
+
 // ===================== A. admin screen (STEP 53-B) =====================
 const ADMIN_HTML = (await import("node:fs")).readFileSync(new URL("../admin-billing.html", import.meta.url), "utf8");
 const HUB_HTML = (await import("node:fs")).readFileSync(new URL("../admin.html", import.meta.url), "utf8");
