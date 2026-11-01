@@ -5,13 +5,12 @@ name: Store card plan (Production)
 # 翌月2日 0:00 JST 以降の請求・3日後と7日後の再請求・14日での公開停止・清算の済んだ退会の最終削除。
 # 今だけ投稿の請求は呼ばない(このファイルは店舗カードの入口だけ)。
 #
-# 代表の「本番の定期請求」の承認まで停止している(2つの鍵)：
-#   ①下の schedule の行をコメントにしている(予約の時刻が登録されない)
-#   ②job の if: false(手動の「Run workflow」でも実行されない)
-# 有効にする時は、①の「# - cron」の行の先頭の「# 」を外し、②の if: false を、その下のコメントの条件に置き換える。
-# 有効にした後も、サーバー側のスイッチ(STORE_CUSTOM_PLAN_CLOSE_WRITES_ENABLED・STORE_CUSTOM_PLAN_CHARGE_ENABLED・
-# STORE_CUSTOM_PLAN_CRON_CHARGES_ENABLED)が false の間は、サーバーが 403 cron_disabled を返し、締め・請求は行われない
-# (この実行は「停止中」として成功で終わる)。
+# STEP 53｜代表の承認後に有効(日本時間の毎日 10:10・11:10・12:10・13:10。代表方針 2026-10-30「日本時間の毎日10〜13時の起動」)。
+# 1日に4回呼ぶのは、1回が失敗しても同じ日のうちに続きを行うため(締め・請求・再請求はサーバーが日本時間の日付で判断し、
+# 何回呼ばれても同じ結果)。止める時は、下の schedule の2行をコメントにし、job の if を if: false にする。
+# Stripe への請求は、サーバー側のスイッチ(STORE_CUSTOM_PLAN_CHARGE_ENABLED・STORE_CUSTOM_PLAN_CRON_CHARGES_ENABLED)が
+# true になるまで行われない(その間、請求は試算＝対象の判定と記録だけ)。締めのスイッチ(STORE_CUSTOM_PLAN_CLOSE_WRITES_ENABLED)が
+# false の時は、サーバーが 403 cron_disabled を返す(この実行は「停止中」として成功で終わる)。
 #
 # 本番だけに送る(Preview の URL には送らない。Preview は main.yml の preview-plan-cron)。合言葉は、次の確認を
 # すべて満たした時だけ送る：①この workflow のファイルが main のもの ②machinau.jp の接続先の確認(mode=firebaseTarget)が
@@ -20,8 +19,8 @@ name: Store card plan (Production)
 # 店舗・月ごとに1件の請求書・冪等キー・請求ロックがある(既存の STEP 44 の仕組み)。
 
 on:
-  # schedule:
-  #   - cron: "10 * * * *"  # 毎時10分(UTC)。月末締め・2日の請求の判断はサーバーが日本時間で行う。
+  schedule:
+    - cron: "10 1-4 * * *"  # 01:10〜04:10(UTC)＝日本時間 10:10〜13:10。月末締め・2日の請求の判断はサーバーが日本時間で行う。
   workflow_dispatch:
 
 concurrency:
@@ -30,8 +29,8 @@ concurrency:
 
 jobs:
   production-plan-cron:
-    # 代表承認まで停止。有効にする時の条件：github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
-    if: false
+    # main の時だけ(予約の時刻か、手動の「Run workflow」)。
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

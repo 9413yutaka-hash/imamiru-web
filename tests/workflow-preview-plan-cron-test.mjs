@@ -58,7 +58,8 @@ for (const row of matrix) {
 const mainYml = spawnSync("git", ["-C", REPO_ROOT, "show", "origin/main:.github/workflows/main.yml"], { encoding: "utf8", env: { ...process.env, MSYS_NO_PATHCONV: "1" } }).stdout.replace(/\r\n/g, "\n");
 const expireSteps = (text) => text.slice(text.indexOf("  expire:"), text.indexOf("  collect-sources:")).split("\n").filter((l) => !/^\s*(#|if:)/.test(l)).join("\n");
 t("M1 本番の掲載期限のジョブの処理（URL・合言葉の見出し・30分ごと）は main の版と同じ（このブランチで足したのは条件とコメントだけ）", mainYml.includes("cron: \"*/30 * * * *\"") && expireSteps(yml) === expireSteps(mainYml) && /\n  workflow_dispatch:\n/.test(yml), { here: expireSteps(yml), main: expireSteps(mainYml) });
-t("M2 main の版にはこの変更が無い（Production の workflow は変更しない）", !mainYml.includes("preview-plan-cron") && !mainYml.includes("STEP 44"));
+// STEP 53｜STEP 52-H で Preview のジョブも main に入った。以後は「このブランチは main の main.yml を変えない」を確かめる。
+t("M2 main.yml は main の版と同じ（このブランチで Production の workflow を変えない）", yml === mainYml);
 const previewBlocks = runBlocks("preview-plan-cron");
 t("M3 Preview のジョブの処理は2手順・コマンドの中に GitHub の式（${{ }}）を直接書かない（値は env だけで渡す）", previewBlocks.length === 2 && previewBlocks.every((b) => !b.includes("${{")), previewBlocks.map((b) => b.slice(0, 80)));
 const previewText = (jobBlocks["preview-plan-cron"] || []).join("\n");

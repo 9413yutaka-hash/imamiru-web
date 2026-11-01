@@ -54,8 +54,9 @@ export const STORE_CUSTOM_PLAN_MONTHLY_SIGNUP_ENABLED =
   true;
 
 // 月末締め(請求台帳への書き込み)。false の間は試算だけ(Preview 試験の環境では試験用データへ書き込める)。
+// STEP 53｜本番の月末締め・未払いの判定の開始で true(代表の承認後に Production へ出す)。請求は下の別のスイッチ。
 export const STORE_CUSTOM_PLAN_CLOSE_WRITES_ENABLED =
-  false;
+  true;
 
 // Stripe への請求。false の間は請求の操作をすべて拒否する(Preview でも請求しない)。
 export const STORE_CUSTOM_PLAN_CHARGE_ENABLED =

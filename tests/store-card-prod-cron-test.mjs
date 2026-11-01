@@ -78,12 +78,12 @@ c = await quiet(() => B.runStoreCustomPlanMonthlyClose(db, "2026-10", jst("2026-
 const invoiceIds = [...S.docs.keys()].filter((k) => k.startsWith("storeCustomPlanInvoices/SC_"));
 t("D1 同じ月の締めを2回実行しても、請求書は店舗・月で1件のまま・内容も変わらない", c.ok === true && JSON.stringify(invoiceIds) === JSON.stringify(["storeCustomPlanInvoices/SC_2026-10"]) && JSON.stringify(S.docs.get("storeCustomPlanInvoices/SC_2026-10")) === invBefore, invoiceIds);
 
-// ===================== C. Production cron entry with the switches off =====================
-t("C0 締めの書き込み・請求・定期実行の請求のスイッチは false のまま", B.STORE_CUSTOM_PLAN_CLOSE_WRITES_ENABLED === false && B.STORE_CUSTOM_PLAN_CHARGE_ENABLED === false && CR.STORE_CUSTOM_PLAN_CRON_CHARGES_ENABLED === false);
+// ===================== C. Production cron entry (STEP 53: close on, charges off) =====================
+t("C0 締めの書き込みは true（STEP 53）・請求・定期実行の請求のスイッチは false のまま", B.STORE_CUSTOM_PLAN_CLOSE_WRITES_ENABLED === true && B.STORE_CUSTOM_PLAN_CHARGE_ENABLED === false && CR.STORE_CUSTOM_PLAN_CRON_CHARGES_ENABLED === false);
 const writesBefore = S.writes.length, docsBefore = JSON.stringify([...S.docs.entries()]);
 const cr = res();
 await quiet(() => handler({ method: "POST", headers: { "content-type": "application/json", "x-forwarded-for": "198.51.100.9", "x-machinau-cron-secret": "fake-cron-secret-for-tests" }, body: { mode: "storeCustomPlanCron" }, query: {} }, cr));
-t("C1 Production の定期実行の入口：スイッチが false の間は 403 cron_disabled・締めも請求もせず、データを変えない・外部へ通信しない", cr.code === 403 && cr.body.reason === "cron_disabled" && S.writes.length === writesBefore && JSON.stringify([...S.docs.entries()]) === docsBefore && network.length === 0, cr.body);
+t("C1 Production の定期実行の入口（STEP 53）：200・本番として記録・前月の締めは同じ請求書のまま（二重に作らない）・請求は試算だけ（cron_charges_disabled）・退会の最終削除の手順は渡さない・外部へ通信しない", cr.code === 200 && cr.body.success === true && cr.body.steps.close.status === "done" && cr.body.steps.charges.executed === false && cr.body.steps.charges.blockedReason === "cron_charges_disabled" && !cr.body.steps.accountDeletion && JSON.stringify(S.docs.get("storeCustomPlanInvoices/SC_2026-10")) === invBefore && [...S.docs.keys()].some((k) => k.startsWith("storeCustomPlanCronRuns/") && S.docs.get(k).environment === "production") && network.length === 0, cr.body);
 const bad = res();
 await quiet(() => handler({ method: "POST", headers: { "content-type": "application/json", "x-forwarded-for": "198.51.100.9", "x-machinau-cron-secret": "wrong" }, body: { mode: "storeCustomPlanCron" }, query: {} }, bad));
 t("C2 合言葉が違えば 401（何もしない）", bad.code === 401, bad.body);
@@ -92,7 +92,7 @@ t("C2 合言葉が違えば 401（何もしない）", bad.code === 401, bad.bod
 const PROD = readFileSync(join(REPO_ROOT, ".github", "workflows", "store-card-plan-production.yml"), "utf8").replace(/\r\n/g, "\n");
 const MAIN = readFileSync(join(REPO_ROOT, ".github", "workflows", "main.yml"), "utf8").replace(/\r\n/g, "\n");
 const live = PROD.split("\n").filter((l) => !/^\s*#/.test(l)).map((l) => l.replace(/\s+#.*$/, "")).join("\n");
-t("W1 本番の定期実行は停止中：予約の時刻は登録しない（schedule はコメント）・job は if: false", !/^\s*schedule:/m.test(live) && !/^\s*-\s*cron:/m.test(live) && /^\s*if: false\s*$/m.test(live) && (live.match(/^\s*if:/gm) || []).length === 1);
+t("W1 本番の定期実行（STEP 53）：予約は日本時間の毎日 10:10〜13:10（UTC 01:10〜04:10）の1つだけ・job は main の予約か手動の時だけ（if は1つ）", /^\s*schedule:\n\s*- cron: "10 1-4 \* \* \*"$/m.test(live) && (live.match(/^\s*-\s*cron:/gm) || []).length === 1 && /^\s*if: github\.ref == 'refs\/heads\/main' && \(github\.event_name == 'schedule' \|\| github\.event_name == 'workflow_dispatch'\)$/m.test(live) && (live.match(/^\s*if:/gm) || []).length === 1);
 t("W2 本番だけに送る：送り先は https://machinau.jp だけ（Preview の vercel.app には送らない）", (PROD.match(/https:\/\/[a-z0-9.-]+/g) || []).every((u) => u === "https://machinau.jp") && !/vercel\.app/.test(PROD));
 t("W3 合言葉を送る前に、main のファイルであることと本番の Firebase（chikashoku-app・検査あり）を確かめる", /store-card-plan-production\.yml@refs\/heads\/main/.test(PROD) && /projectId==="chikashoku-app"&&t\.enforced===true/.test(PROD) && PROD.indexOf("chikashoku-app") < PROD.indexOf("X-Machinau-Cron-Secret"));
 t("W4 合言葉は secrets から環境変数で渡すだけ・ログに出さない（echo しない）", /CRON_SECRET: \$\{\{ secrets\.AI_COLLECT_CRON_SECRET \}\}/.test(PROD) && !/echo[^\n]*CRON_SECRET/.test(PROD) && !/set -x/.test(PROD));

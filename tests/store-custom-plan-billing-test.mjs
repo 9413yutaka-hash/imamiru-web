@@ -69,7 +69,7 @@ t("K5 決済失敗の予定：初回失敗の3日後・7日後に再試行、14�
 t("K6 料金は100円・税込・翌月2日（定数）", B.STORE_CUSTOM_PLAN_MONTHLY_FEE_JPY === 100 && B.STORE_CUSTOM_PLAN_CHARGE_DAY_OF_MONTH === 2);
 
 // ===================== flags / environment =====================
-t("F1 月額プラン専用のフラグ：本番の申込は true・締めの書き込み・請求は false（STEP 52-F：本番のカード登録・本番の申込は受付開始のため true）", B.STORE_CUSTOM_PLAN_MONTHLY_SIGNUP_ENABLED === true && B.STORE_CUSTOM_PLAN_CLOSE_WRITES_ENABLED === false && B.STORE_CUSTOM_PLAN_CHARGE_ENABLED === false);
+t("F1 月額プラン専用のフラグ：本番の申込・締めの書き込みは true・請求は false（STEP 52-F：申込の受付開始、STEP 53：本番の月末締めの開始）", B.STORE_CUSTOM_PLAN_MONTHLY_SIGNUP_ENABLED === true && B.STORE_CUSTOM_PLAN_CLOSE_WRITES_ENABLED === true && B.STORE_CUSTOM_PLAN_CHARGE_ENABLED === false);
 process.env.VERCEL_ENV = "production";
 let r = await call(SUB("S1"), "u1");
 t("F2 Production の環境：申込の受付は開いている・本番のカードが無ければ 403 card_required・書き込みなし（STEP 52-F：本番のカード登録・本番の申込は受付開始のため true）", r.code === 403 && r.body.reason === "card_required" && !plan("S1") && docs("storeCustomPlanUsage").length === 0, r.body);
@@ -118,12 +118,13 @@ t("C1 10月の締めの試算：請求書を作る予定 S1・S2・S5・S7 の4�
 process.env.VERCEL_ENV = "production";
 r = await call(CLOSE("2026-10", true), "admin");
 process.env.VERCEL_ENV = "preview";
-t("C2 Production の環境（締めのフラグ false）：締めの実行は 403 close_writes_disabled・書き込みなし", r.code === 403 && r.body.reason === "close_writes_disabled" && docs("storeCustomPlanInvoices").length === 0, r.body);
+const closeInProduction = r;
+t("C2 Production の環境（STEP 53：締めのフラグ true）：運営は締めを実行できる（請求書を書き込む）", r.code === 200 && r.body.executed === true && docs("storeCustomPlanInvoices").length === 4, r.body);
 r = await call(CLOSE("2026-10", true), "u1");
 t("C3 店主のアカウントでは締めを実行できない", r.code === 401 || r.code === 403, r.code);
-r = await call(CLOSE("2026-10", true), "admin");
+r = closeInProduction;
 const i1 = invoice("S1", "2026-10");
-t("C4 10月の締め（Preview 試験の環境）：請求書4件・各100円・税込・JPY・状態 closed・請求予定日 2026-11-02", r.code === 200 && r.body.executed === true && r.body.invoices.create === 4 && r.body.invoices.amountJpy === 400 && docs("storeCustomPlanInvoices").length === 4 && ["S1", "S2", "S5", "S7"].every((s) => invoice(s, "2026-10").amountJpy === 100 && invoice(s, "2026-10").status === "closed" && invoice(s, "2026-10").chargeScheduledFor === "2026-11-02" && invoice(s, "2026-10").taxIncluded === true), r.body);
+t("C4 10月の締め（C2 の本番の環境の実行）：請求書4件・各100円・税込・JPY・状態 closed・請求予定日 2026-11-02", r.code === 200 && r.body.executed === true && r.body.invoices.create === 4 && r.body.invoices.amountJpy === 400 && docs("storeCustomPlanInvoices").length === 4 && ["S1", "S2", "S5", "S7"].every((s) => invoice(s, "2026-10").amountJpy === 100 && invoice(s, "2026-10").status === "closed" && invoice(s, "2026-10").chargeScheduledFor === "2026-11-02" && invoice(s, "2026-10").taxIncluded === true), r.body);
 t("C5 請求書の内容：契約者・請求先 u1・課金の理由（申込）・申込日時・締め日時・請求予定日・試行の記録（空）・PaymentIntent・カードは未設定", i1.holderUid === "u1" && i1.billingAccountUid === "u1" && i1.usageReason === "subscribed" && ms(i1.firstUsageAt) === jst(2026, 10, 15, 10, 0) && ms(i1.closedAt) === NOW && ms(i1.chargeScheduledAt) === jst(2026, 11, 2) && i1.chargeAttempt === 0 && Array.isArray(i1.chargeAttempts) && i1.chargeAttempts.length === 0 && i1.paymentIntentId === "" && i1.chargePaymentMethodId === "" && i1.createdInPreview === true, i1);
 t("C6 試験店舗（isTestAccount）は請求書を作らない（利用月の記録は excluded）", !invoice("S8", "2026-10") && usage("S8", "2026-10").status === "excluded", usage("S8", "2026-10"));
 t("C7 今だけ投稿の請求書（同じ形の ID S1_2026-10）は変わらない（別の台帳）", snapOf("imadakeMonthlyInvoices") === IMADAKE_BEFORE);

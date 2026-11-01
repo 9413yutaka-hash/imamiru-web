@@ -38,8 +38,8 @@ const LIVE = { VERCEL_ENV: "production", STRIPE_MODE: "live", STRIPE_CHARGE_REST
 const SECRET = LIVE.STRIPE_CHARGE_RESTRICTED_KEY;
 
 // ===================== A. all switches stay false =====================
-t("A1 申込受付の開始：本番の申込・本番のカード登録は true／月末締めの書き込み・請求・定期実行の請求・今だけ投稿の請求は false（STEP 52-F：本番のカード登録・本番の申込は受付開始のため true）",
-  B.STORE_CUSTOM_PLAN_MONTHLY_SIGNUP_ENABLED === true && B.STORE_CUSTOM_PLAN_CLOSE_WRITES_ENABLED === false && B.STORE_CUSTOM_PLAN_CHARGE_ENABLED === false && CR.STORE_CUSTOM_PLAN_CRON_CHARGES_ENABLED === false && SB.STORE_CARD_REGISTRATION_LIVE_ENABLED === true && IM.IMADAKE_CV_BILLING_STARTED === false && MC.IMADAKE_MONTHLY_CHARGE_ENABLED === false);
+t("A1 申込受付の開始：本番の申込・本番のカード登録・月末締めの書き込み（STEP 53）は true／請求・定期実行の請求・今だけ投稿の請求は false（STEP 52-F：本番のカード登録・本番の申込は受付開始のため true）",
+  B.STORE_CUSTOM_PLAN_MONTHLY_SIGNUP_ENABLED === true && B.STORE_CUSTOM_PLAN_CLOSE_WRITES_ENABLED === true && B.STORE_CUSTOM_PLAN_CHARGE_ENABLED === false && CR.STORE_CUSTOM_PLAN_CRON_CHARGES_ENABLED === false && SB.STORE_CARD_REGISTRATION_LIVE_ENABLED === true && IM.IMADAKE_CV_BILLING_STARTED === false && MC.IMADAKE_MONTHLY_CHARGE_ENABLED === false);
 
 // ===================== L. live charge config (store card only) =====================
 const lc = (env) => SB.readStripeLiveChargeConfig(env);
