@@ -1617,6 +1617,9 @@
           }
           if (invoice.unpaid && invoice.suspendAtMillis > 0) {
             addPlanPayText(item, "p", t("store_plan_pay_suspend_at").replace("{date}", formatPlanPayDate(invoice.suspendAtMillis)), "hint");
+          } else if (invoice.unpaid && invoice.suspendPaused) {
+            // 完成形 A｜運営が請求を止めている間は停止しない(停止の予定日は請求の再開後に、止めていた日数だけ後ろへずれる)。
+            addPlanPayText(item, "p", t("store_plan_pay_suspend_paused"), "hint");
           }
           if (invoice.requiresAction && planPayData.paymentsAvailable) {
             const button = addPlanPayText(item, "button", t(planPayBusy ? "store_plan_pay_processing" : "store_plan_pay_authenticate"), "primary-button plan-pay-action");

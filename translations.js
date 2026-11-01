@@ -3467,6 +3467,10 @@ const MACHINAU_TRANSLATIONS = {
     ja: "{date}までにお支払いが確認できない場合、有料の内容の表示を停止します（データは残ります）。",
     en: "If payment is not confirmed by {date}, the paid content will stop being shown (your data is kept)."
   },
+  store_plan_pay_suspend_paused: {
+    ja: "現在、運営の都合でお支払いの受付を一時停止しています。この間、店舗カードの公開は止まりません。受付の再開後、停止までの期限は止めていた日数だけ延びます。",
+    en: "Payments are temporarily paused on our side. Your store card stays public during this time. When payments resume, the deadline is extended by the number of days they were paused."
+  },
 
   store_plan_pay_authenticate: {
     ja: "本人認証をして支払う",

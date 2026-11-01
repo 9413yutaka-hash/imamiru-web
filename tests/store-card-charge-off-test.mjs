@@ -91,7 +91,7 @@ S.docs.delete("storeCustomPlanInvoices/PV_2026-11");
 // ===================== path 3: owner pay-now / 3-D Secure =====================
 const sched = B.storeCustomPlanChargeScheduleFor("2026-10");
 S.docs.set("storeCustomPlans/G2", { storeId: "G2", status: "active", ownerUid: "u2", billingAccountUid: "u2", periodKind: "monthly", createdInPreview: false, subscribedAt: Timestamp.fromMillis(jst("2026-10-05T10:00:00")), accessUntil: null, paymentStatus: "past_due", revision: 1 });
-S.docs.set("storeCustomPlanInvoices/G2_2026-10", { storeId: "G2", month: "2026-10", amountJpy: 100, currency: "JPY", taxIncluded: true, holderUid: "u2", billingAccountUid: "u2", laterHolderUids: [], usageReason: "subscribed", createdInPreview: false, status: "payment_failed", closedAt: Timestamp.fromMillis(jst("2026-11-01T10:10:00")), chargeScheduledFor: sched.date, chargeScheduledAt: Timestamp.fromMillis(sched.millis), chargeAttempt: 1, chargeAttempts: [], paymentIntentId: "pi_failed_old", chargeOutcomeUnknown: false, retryCount: 2, firstFailedAt: Timestamp.fromMillis(jst("2026-11-02T10:10:00")), nextRetryAt: null, suspendAt: Timestamp.fromMillis(jst("2026-11-16T10:10:00")) });
+S.docs.set("storeCustomPlanInvoices/G2_2026-10", { storeId: "G2", month: "2026-10", amountJpy: 100, currency: "JPY", taxIncluded: true, holderUid: "u2", billingAccountUid: "u2", laterHolderUids: [], usageReason: "subscribed", createdInPreview: false, status: "payment_failed", closedAt: Timestamp.fromMillis(jst("2026-11-01T10:10:00")), chargeScheduledFor: sched.date, chargeScheduledAt: Timestamp.fromMillis(sched.millis), chargeAttempt: 1, chargeAttempts: [], paymentIntentId: "pi_failed_old", chargeOutcomeUnknown: false, retryCount: 2, firstFailedAt: Timestamp.fromMillis(jst("2026-11-26T10:10:00")), nextRetryAt: null, suspendAt: Timestamp.fromMillis(jst("2026-12-10T10:10:00")) });
 S.docs.set("storeCustomPlanInvoices/G2_2026-09", { ...S.docs.get("storeCustomPlanInvoices/G2_2026-10"), month: "2026-09", status: "requires_action", paymentIntentId: "pi_needs_auth_old" });
 const g2Before = JSON.stringify([inv("G2_2026-10"), inv("G2_2026-09")]);
 r = await call({ mode: "storeCustomPlanPayNow", invoiceId: "G2_2026-10" }, "u2");
@@ -103,7 +103,35 @@ t("P3c 支払いの操作で請求書の内容は変わらない", JSON.stringif
 // ===================== dunning, records and the monitor keep working =====================
 NOW = jst("2026-12-03T10:10:00");
 r = await CRON();
-t("D1 未払いの判定は今までどおり（14日を過ぎた G2 は停止）・Stripe への通信0", r.code !== 401 && plan("G2").paymentStatus === "suspended" && stripe.length === 0, { code: r.code, dunning: r.body.steps && r.body.steps.dunning });
+t("D1 完成形 A：請求を止めている間は、以前の支払い失敗（G2・停止の予定日 12月10日）があっても新しく停止しない（past_due のまま）・止めた時刻を請求書に記録・Stripe への通信0", r.body.steps.dunning.chargesPaused === true && plan("G2").paymentStatus === "past_due" && inv("G2_2026-10").suspendPausedAt && inv("G2_2026-10").suspendPausedAt.toMillis() === NOW && stripe.length === 0, { dunning: r.body.steps && r.body.steps.dunning, ps: plan("G2").paymentStatus });
+const pausedAtMs = NOW;
+const ownerView = CH.describeOwnerPlanInvoice("G2_2026-10", inv("G2_2026-10"), "店G2", false);
+t("D1h 止めている間の店主の表示：停止の予定日を出さず「受付を一時停止・公開は止まらない」の案内（今すぐ支払うは出さない）", ownerView.suspendAtMillis === 0 && ownerView.suspendPaused === true && ownerView.canPayNow === false && ownerView.unpaid === true, ownerView);
+NOW = jst("2026-12-10T10:10:00");
+r = await CRON();
+t("D1b 止めている間に停止の予定日（12月10日）を迎えても停止しない・止めた時刻は最初の時刻のまま", plan("G2").paymentStatus === "past_due" && inv("G2_2026-10").suspendPausedAt.toMillis() === pausedAtMs, plan("G2").paymentStatus);
+// 既に停止中の契約は、請求を止めてもそのまま（支払えた期間の停止は取り消さない）。
+S.docs.set("storeCustomPlans/GS", { storeId: "GS", status: "active", ownerUid: "u2", billingAccountUid: "u2", periodKind: "monthly", createdInPreview: false, subscribedAt: Timestamp.fromMillis(jst("2026-09-05T10:00:00")), accessUntil: null, paymentStatus: "suspended", revision: 1 });
+S.docs.set("storeCustomPlanInvoices/GS_2026-09", { ...inv("G2_2026-10"), storeId: "GS", month: "2026-09", suspendPausedAt: null, suspendAt: Timestamp.fromMillis(jst("2026-10-20T10:10:00")) });
+const { getFirestore: gf } = await import("firebase-admin/firestore");
+await CH.refreshStoreCustomPlanPaymentStatus(gf(), "GS", NOW, { chargesPaused: true });
+t("D1c 既に停止中の契約は、請求を止めている間もそのまま（suspended）", plan("GS").paymentStatus === "suspended", plan("GS").paymentStatus);
+// 再開（請求の許可がある状態を chargesPaused false で再現）：止めていた時間だけ停止の予定日を後ろへずらす。
+const suspendBefore = inv("G2_2026-10").suspendAt.toMillis();
+const resumeAt = jst("2026-12-15T10:10:00");
+await CH.refreshStoreCustomPlanPaymentStatus(gf(), "G2", resumeAt, { chargesPaused: false });
+const shifted = inv("G2_2026-10").suspendAt.toMillis();
+t("D1d 請求を再開した時：止めていた期間を理由に即時停止しない（past_due）・停止の予定日を止めていた時間だけ後ろへ（累計を記録・止めた時刻は消す）", plan("G2").paymentStatus === "past_due" && shifted === suspendBefore + (resumeAt - pausedAtMs) && inv("G2_2026-10").suspendPausedTotalMs === resumeAt - pausedAtMs && !inv("G2_2026-10").suspendPausedAt, { ps: plan("G2").paymentStatus, shifted, suspendBefore });
+const remainingBefore = suspendBefore - pausedAtMs;
+t("D1e 店主に残る猶予は、止める前と同じ長さ（止めた時点の残り＝再開後の残り）", shifted - resumeAt === remainingBefore, { remainingBefore, after: shifted - resumeAt });
+await CH.refreshStoreCustomPlanPaymentStatus(gf(), "G2", shifted - 1000, { chargesPaused: false });
+const beforeDue = plan("G2").paymentStatus;
+await CH.refreshStoreCustomPlanPaymentStatus(gf(), "G2", shifted, { chargesPaused: false });
+t("D1f ずらした予定日の前は停止しない・予定日を過ぎても未払いなら停止（支払い失敗による停止の仕様は請求が有効な間は維持）", beforeDue === "past_due" && plan("G2").paymentStatus === "suspended", { beforeDue, after: plan("G2").paymentStatus });
+S.docs.set("storeCustomPlanInvoices/G2_2026-10", { ...inv("G2_2026-10"), status: "paid" });
+S.docs.set("storeCustomPlanInvoices/G2_2026-09", { ...inv("G2_2026-09"), status: "paid" });
+await CH.refreshStoreCustomPlanPaymentStatus(gf(), "G2", shifted + 1000, { chargesPaused: false });
+t("D1g 支払いが済めば再開（current）", plan("G2").paymentStatus === "current", plan("G2").paymentStatus);
 // ===================== no suspension while charges are off =====================
 NOW = jst("2026-12-20T10:10:00");
 r = await CRON();

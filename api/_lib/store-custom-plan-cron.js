@@ -322,7 +322,10 @@ export async function runStoreCustomPlanCron(database, deps, nowMillis) {
     steps.dunning = { status: "deferred" };
   } else {
     try {
-      steps.dunning = Object.assign({ status: "done" }, await applyStoreCustomPlanDunning(database, nowMillis, deadline));
+      // 完成形 A｜本番の請求を止めている間(請求の許可が無い Production)は、14日の停止の時計を止める。
+      const production = !!deps.env && deps.env.VERCEL_ENV === "production";
+      const chargesPaused = production && readStoreCustomPlanChargeGate(deps).ok !== true;
+      steps.dunning = Object.assign({ status: "done", chargesPaused: chargesPaused }, await applyStoreCustomPlanDunning(database, nowMillis, deadline, { chargesPaused: chargesPaused }));
 
       if (steps.dunning.deferred > 0) {
         steps.dunning.status = "partial";

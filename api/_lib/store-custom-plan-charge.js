@@ -571,7 +571,12 @@ async function performPlanReconcile(database, config, deps, claim) {
 // 契約者が請求先の、その店舗の未払い(payment_failed・requires_action)から決める。
 //   無い → current(停止中だったら再開)。14日(suspendAt)を過ぎた未払いがある → suspended。それ以外 → past_due。
 // 複数月の未払いは、すべてが支払われた時だけ current に戻る。旧店主の未払いは新しい契約者の契約に影響しない。
-export async function refreshStoreCustomPlanPaymentStatus(database, storeId, nowMillis) {
+// 完成形 A｜options.chargesPaused：運営が本番の請求を止めている(請求の許可が無い)間は true。店主は支払えないため、
+//   ・新しく停止(suspended)にしない(既に停止中の契約はそのまま)
+//   ・停止の予定日がある未払いの請求書に、止めた時刻(suspendPausedAt)を残す
+//   請求を再開した後(false)：止めていた時間だけ停止の予定日(suspendAt)を後ろへずらしてから判定する(suspendPausedTotalMs に累計)。
+export async function refreshStoreCustomPlanPaymentStatus(database, storeId, nowMillis, options) {
+  const chargesPaused = !!options && options.chargesPaused === true;
   const planRef = database.collection(STORE_CUSTOM_PLANS_COLLECTION).doc(storeId);
   const invoicesQuery = database.collection(STORE_CUSTOM_PLAN_INVOICES_COLLECTION).where("storeId", "==", storeId);
 
@@ -584,17 +589,51 @@ export async function refreshStoreCustomPlanPaymentStatus(database, storeId, now
     }
 
     const invoicesSnapshot = await transaction.get(invoicesQuery);
-    const unpaid = invoicesSnapshot.docs
-      .map(function(documentSnapshot) { return documentSnapshot.data() || {}; })
-      .filter(function(invoice) {
-        return invoice.storeId === storeId && invoice.billingAccountUid === plan.ownerUid && STORE_CUSTOM_PLAN_OWNER_UNPAID_STATUSES.includes(invoice.status);
-      });
-    const next = unpaid.length === 0
-      ? "current"
-      : unpaid.some(function(invoice) { const at = millisOf(invoice.suspendAt); return at > 0 && at <= nowMillis; })
-        ? "suspended"
-        : "past_due";
+    const unpaidDocs = invoicesSnapshot.docs.filter(function(documentSnapshot) {
+      const invoice = documentSnapshot.data() || {};
+      return invoice.storeId === storeId && invoice.billingAccountUid === plan.ownerUid && STORE_CUSTOM_PLAN_OWNER_UNPAID_STATUSES.includes(invoice.status);
+    });
     const previous = typeof plan.paymentStatus === "string" ? plan.paymentStatus : "current";
+    const pauseWrites = [];
+    // 請求書ごとの、今の停止の予定日(止めていた時間を足した後)。請求を止めている間は停止の判定に使わない。
+    const effectiveSuspendAt = unpaidDocs.map(function(documentSnapshot) {
+      const invoice = documentSnapshot.data() || {};
+      const suspendAtMs = millisOf(invoice.suspendAt);
+      const pausedAtMs = millisOf(invoice.suspendPausedAt);
+
+      if (chargesPaused) {
+        if (suspendAtMs > 0 && pausedAtMs === 0) {
+          pauseWrites.push([documentSnapshot.ref, { suspendPausedAt: Timestamp.fromMillis(nowMillis), updatedAt: FieldValue.serverTimestamp() }]);
+        }
+
+        return 0;
+      }
+
+      if (pausedAtMs > 0) {
+        const pausedMs = Math.max(0, nowMillis - pausedAtMs);
+        // 止めた時点で既に予定日を過ぎていた分は、止める前の未払い(請求が有効な間の失敗)のため取り戻さない。
+        const shifted = suspendAtMs > 0 ? Math.max(suspendAtMs, pausedAtMs) + pausedMs : 0;
+        pauseWrites.push([documentSnapshot.ref, {
+          suspendAt: shifted > 0 ? Timestamp.fromMillis(shifted) : null,
+          suspendPausedAt: null,
+          suspendPausedTotalMs: (Number(invoice.suspendPausedTotalMs) || 0) + pausedMs,
+          lastSuspendPause: { fromMs: pausedAtMs, toMs: nowMillis },
+          updatedAt: FieldValue.serverTimestamp()
+        }]);
+        return shifted;
+      }
+
+      return suspendAtMs;
+    });
+    const next = unpaidDocs.length === 0
+      ? "current"
+      : chargesPaused
+        ? (previous === "suspended" ? "suspended" : "past_due")
+        : effectiveSuspendAt.some(function(at) { return at > 0 && at <= nowMillis; })
+          ? "suspended"
+          : "past_due";
+
+    pauseWrites.forEach(function(write) { transaction.update(write[0], write[1]); });
 
     if (previous === next) {
       return { changed: false, paymentStatus: next };
@@ -618,7 +657,7 @@ export async function refreshStoreCustomPlanPaymentStatus(database, storeId, now
 // STEP 44-C⑤｜未払い(支払い失敗・本人認証待ち)がある店舗の支払いの状態を更新する(14日を過ぎたら停止、
 // すべて支払われていれば再開)。Stripe には接続しない。定期実行から毎日呼ぶ。deadlineMillis を過ぎたら途中で止め、
 // 残りは次の実行で行う(状態の更新は何度行っても同じ結果)。
-export async function applyStoreCustomPlanDunning(database, nowMillis, deadlineMillis) {
+export async function applyStoreCustomPlanDunning(database, nowMillis, deadlineMillis, options) {
   const storeIds = new Set();
 
   for (const status of STORE_CUSTOM_PLAN_OWNER_UNPAID_STATUSES) {
@@ -650,7 +689,7 @@ export async function applyStoreCustomPlanDunning(database, nowMillis, deadlineM
       break;
     }
 
-    const refreshed = await refreshStoreCustomPlanPaymentStatus(database, storeId, nowMillis);
+    const refreshed = await refreshStoreCustomPlanPaymentStatus(database, storeId, nowMillis, options);
     result.checked += 1;
 
     if (refreshed.changed) {
@@ -1060,7 +1099,9 @@ export function describeOwnerPlanInvoice(ledgerId, invoice, storeName, gateOk) {
     closedAtMillis: millisOf(invoice.closedAt),
     paidAtMillis: millisOf(invoice.paidAt),
     nextRetryAtMillis: millisOf(invoice.nextRetryAt),
-    suspendAtMillis: millisOf(invoice.suspendAt),
+    // 完成形 A｜運営が請求を止めている間(suspendPausedAt あり)は、停止の予定日を出さない(その間は停止しない)。
+    suspendAtMillis: millisOf(invoice.suspendPausedAt) > 0 ? 0 : millisOf(invoice.suspendAt),
+    suspendPaused: millisOf(invoice.suspendPausedAt) > 0,
     unpaid: STORE_CUSTOM_PLAN_OWNER_UNPAID_STATUSES.includes(invoice.status),
     requiresAction: invoice.status === "requires_action",
     canPayNow: gateOk === true && invoice.status === "payment_failed",
