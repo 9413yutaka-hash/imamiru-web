@@ -1162,6 +1162,21 @@
         ></span>
       </a>
 
+      <!-- STEP 53-C｜店舗カード月額100円の定期実行(月末締め・翌月2日の請求)が、今日(14時以降)・昨日の成功を
+      記録していない時だけ表示する(本番だけ。読むだけ)。GitHub Actions が止まっていても、この画面を開けば気付ける。 -->
+      <a
+        id="storeCardCronAlert"
+        class="admin-alert"
+        href="admin-billing.html"
+        hidden
+      >
+        <span class="admin-alert-title">⚠️ 店舗カードの定期請求（締め・請求）が動いていない可能性があります</span>
+        <span
+          id="storeCardCronAlertDetail"
+          class="admin-alert-count"
+        ></span>
+      </a>
+
       <nav
         class="admin-menu"
         aria-label="管理メニュー"
@@ -3458,6 +3473,77 @@
       }
     }
 
+    // STEP 53-C｜店舗カードの定期実行が止まっていないか(mode:"adminStoreCustomPlanCronHealth"、運営のみ・読むだけ)。
+    // 本番で、止まっている・一度も動いていない時だけ上部に表示する。取得に失敗した時も、気付けるように表示する。
+    function storeCardCronHealthText(data) {
+      const last = data.lastSuccessJstDate ? "最後の成功：" + data.lastSuccessJstDate : "成功した実行はまだありません";
+      if (data.state === "never_run") {
+        return "定期実行はまだ一度も動いていません。";
+      }
+      return data.ok
+        ? "定期実行は動いています（" + last + "）。"
+        : "定期実行が止まっている可能性があります（" + last + "）。GitHub の Actions の「Store card plan (Production)」を確認してください。";
+    }
+
+    async function loadStoreCardCronHealth() {
+      const alertLink =
+        document.getElementById("storeCardCronAlert");
+
+      const alertDetail =
+        document.getElementById("storeCardCronAlertDetail");
+
+      try {
+        const currentUser =
+          firebase.auth().currentUser;
+
+        if (!currentUser) {
+          return;
+        }
+
+        const idToken =
+          await currentUser.getIdToken();
+
+        const response =
+          await fetch(
+            "/api/moderate-submission",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + idToken
+              },
+              body: JSON.stringify({
+                mode: "adminStoreCustomPlanCronHealth"
+              })
+            }
+          );
+
+        const data =
+          await response.json();
+
+        if (!response.ok || !data || data.success !== true) {
+          throw new Error("定期実行の状態を取得できませんでした。");
+        }
+
+        alertDetail.textContent =
+          storeCardCronHealthText(data) + " →";
+
+        alertLink.hidden =
+          data.environment !== "production" || data.ok === true;
+      } catch (error) {
+        console.error(
+          "店舗カードの定期実行の状態を取得できませんでした",
+          error
+        );
+
+        alertDetail.textContent =
+          "定期実行の状態を取得できませんでした →";
+
+        alertLink.hidden =
+          false;
+      }
+    }
+
     // マチナウ読み物投稿機能(Phase1)｜公開済みのFirestore読み物を、
     // コメント管理の対象記事の選択肢へ動的に追加する(取得失敗時はcatchのみ)。
     // 新しい読み物を公開するたびにこのファイルを編集する必要をなくすための対応。
@@ -3914,6 +4000,8 @@
               " でログインしています。";
 
             loadShopApplicationPendingCount();
+
+            loadStoreCardCronHealth();
 
             await loadSubmissions();
 

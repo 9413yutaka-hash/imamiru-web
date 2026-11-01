@@ -23,6 +23,9 @@
 // 実行の条件：合言葉が設定されていない → 503(何もしない)。合言葉が違う → 401(何もしない)。
 //   Preview 試験の環境(Preview・対象ブランチ・machinau-preview)でない、かつ本番の締めの許可(STORE_CUSTOM_PLAN_CLOSE_WRITES_ENABLED、
 //   false)も無い → 403(何もしない)。同時に別の実行が動いている → 409(何もしない、ロックは5分で自動的に外れる)。
+// STEP 53-C｜止まった時の検知：実行のたびに storeCustomPlanCronHealth/{production|preview_trial} に最後の実行・最後の成功を残す。
+//   運営の画面(mode adminStoreCustomPlanCronHealth)は、今日の成功(14時以降)・昨日の成功(14時まで)が無ければ「止まっている」と表示する。
+//   再開した実行で、前回の成功から1日以上空いていたら cron_gap として運営へ通知する(500、1日1回)。
 // 記録：storeCustomPlanCronRuns/{日本時間の日付}_{実行ID}(手順ごとの結果・件数・失敗の内容)。失敗した手順があれば 500 を返す
 // (cron-job.org 等で失敗に気づけるように)。手順はそれぞれ独立して何度行っても同じ結果のため、途中で止まっても次の実行で続く。
 // 新しい Function は作らない(api/moderate-submission.js の mode)。ブラウザからは読み書きできない(Rules に許可なし)。
@@ -61,6 +64,10 @@ export const STORE_CUSTOM_PLAN_CRON_CHARGES_ENABLED =
 export const STORE_CUSTOM_PLAN_CRON_RUNS_COLLECTION = "storeCustomPlanCronRuns";
 export const STORE_CUSTOM_PLAN_BILLING_ATTENTION_COLLECTION = "storeCustomPlanBillingAttention";
 export const STORE_CARD_BILLING_CRON_SECRET_ENV = "STORE_CARD_BILLING_CRON_SECRET";
+export const STORE_CUSTOM_PLAN_CRON_HEALTH_COLLECTION = "storeCustomPlanCronHealth";
+// 予約は日本時間の毎日 10:10〜13:10。14時を過ぎて今日の成功が無ければ止まっていると判断する。
+export const STORE_CUSTOM_PLAN_CRON_HEALTH_DEADLINE_JST_HOUR = 14;
+const DAY_MS = 24 * 60 * 60 * 1000;
 const CRON_LOCK_COLLECTION = "storeCustomPlanCronLocks";
 const CRON_LOCK_ID = "daily";
 const CRON_LOCK_LEASE_MS = 5 * 60 * 1000;
@@ -197,6 +204,62 @@ async function selectAttentionToNotify(database, items, jstDate, nowMillis) {
   return notify;
 }
 
+// STEP 53-C｜最後の実行・最後の成功の記録から、定期実行が動いているかを判断する(読むだけ)。
+export function evaluateStoreCustomPlanCronHealth(health, nowMillis) {
+  const today = jstDateKey(nowMillis);
+  const yesterday = jstDateKey(nowMillis - DAY_MS);
+  const jstHour = new Date(nowMillis + JST_OFFSET_MS).getUTCHours();
+  const data = health || {};
+  const lastSuccess = typeof data.lastSuccessJstDate === "string" ? data.lastSuccessJstDate : "";
+  const millis = function(value) { return value && typeof value.toMillis === "function" ? value.toMillis() : 0; };
+  const summary = {
+    lastRunAtMillis: millis(data.lastRunAt),
+    lastRunStatus: typeof data.lastStatus === "string" ? data.lastStatus : "",
+    lastSuccessAtMillis: millis(data.lastSuccessAt),
+    lastSuccessJstDate: lastSuccess,
+    deadlineJstHour: STORE_CUSTOM_PLAN_CRON_HEALTH_DEADLINE_JST_HOUR
+  };
+
+  if (!summary.lastRunAtMillis) {
+    return Object.assign({ ok: false, state: "never_run" }, summary);
+  }
+
+  const ok = lastSuccess === today || (lastSuccess === yesterday && jstHour < STORE_CUSTOM_PLAN_CRON_HEALTH_DEADLINE_JST_HOUR);
+  return Object.assign({ ok: ok, state: ok ? "ok" : lastSuccess === "" ? "never_succeeded" : "stale" }, summary);
+}
+
+async function writeCronHealth(database, environment, runId, nowMillis, succeeded) {
+  const update = { environment: environment, lastRunAt: Timestamp.fromMillis(nowMillis), lastRunId: runId, lastRunJstDate: jstDateKey(nowMillis), lastStatus: succeeded ? "succeeded" : "failed" };
+
+  if (succeeded) {
+    update.lastSuccessAt = Timestamp.fromMillis(nowMillis);
+    update.lastSuccessJstDate = jstDateKey(nowMillis);
+  }
+
+  await database.collection(STORE_CUSTOM_PLAN_CRON_HEALTH_COLLECTION).doc(environment).set(update, { merge: true });
+}
+
+// mode: adminStoreCustomPlanCronHealth (POST、運営のみ・読むだけ)。この環境の定期実行が動いているか。
+export async function handleAdminStoreCustomPlanCronHealth(request, response, deps) {
+  try {
+    const authResult = await deps.requireAdmin(request);
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({ success: false, message: authResult.message });
+    }
+
+    const environment = deps.env && deps.env.VERCEL_ENV === "production" ? "production" : "preview_trial";
+    const database = authResult.database || deps.getFirestore(deps.getFirebaseAdminApp());
+    const snapshot = await database.collection(STORE_CUSTOM_PLAN_CRON_HEALTH_COLLECTION).doc(environment).get();
+    const nowMillis = typeof deps.now === "function" ? deps.now() : Date.now();
+
+    return response.status(200).json(Object.assign({ success: true, environment: environment }, evaluateStoreCustomPlanCronHealth(snapshot.exists ? snapshot.data() : null, nowMillis)));
+  } catch (error) {
+    console.error("店舗カスタマイズ：定期実行の状態の取得エラー：", error && error.message);
+    return response.status(500).json({ success: false, reason: "server_error" });
+  }
+}
+
 // 定期実行の本体(認証・環境の確認は呼び出し側)。
 export async function runStoreCustomPlanCron(database, deps, nowMillis) {
   const startedMs = Date.now();
@@ -321,7 +384,13 @@ export async function handleStoreCustomPlanCron(request, response, deps) {
       return response.status(409).json({ success: false, reason: "already_running" });
     }
 
+    const environment = trial ? "preview_trial" : "production";
+    // STEP 53-C｜前回の成功の日付(再開した時に、1日以上空いていたら運営へ通知する)。
+    const healthBefore = await database.collection(STORE_CUSTOM_PLAN_CRON_HEALTH_COLLECTION).doc(environment).get();
+    const previousSuccess = healthBefore.exists ? (healthBefore.data() || {}).lastSuccessJstDate || "" : "";
     const result = await runStoreCustomPlanCron(database, deps, nowMillis);
+
+    await writeCronHealth(database, environment, runId, nowMillis, result.status !== "failed");
 
     await database.collection(STORE_CUSTOM_PLAN_CRON_RUNS_COLLECTION).doc(result.jstDate + "_" + runId).set(Object.assign({
       runId: runId,
@@ -334,7 +403,11 @@ export async function handleStoreCustomPlanCron(request, response, deps) {
     // (定期実行の仕組みの失敗のメールで運営に知らせる。同じ異常では二度と 500 にしない)。
     const deletionStep = result.steps && result.steps.accountDeletion;
     // STEP 53-B｜運営の確認が必要な請求書は、新しい案件と1日1回の再通知の時だけ 500 にする。
-    const billingAttention = result.steps && result.steps.charges && Array.isArray(result.steps.charges.attention) ? result.steps.charges.attention : [];
+    const billingAttention = (result.steps && result.steps.charges && Array.isArray(result.steps.charges.attention) ? result.steps.charges.attention : []).slice();
+
+    if (previousSuccess !== "" && previousSuccess < jstDateKey(nowMillis - DAY_MS)) {
+      billingAttention.push({ kind: "cron_gap", invoiceId: previousSuccess });
+    }
     const billingNotify = await selectAttentionToNotify(database, billingAttention, result.jstDate, nowMillis);
     const attention = Boolean(deletionStep && deletionStep.operatorAttention && Object.keys(deletionStep.operatorAttention).length > 0) || billingNotify.length > 0;
 
@@ -357,6 +430,7 @@ export async function handleStoreCustomPlanCron(request, response, deps) {
         errors: ["exception"],
         error: errorSummary(error)
       }).catch(function() {});
+      await writeCronHealth(database, trial ? "preview_trial" : "production", runId, nowMillis, false).catch(function() {});
     }
     return response.status(500).json({ success: false, reason: "server_error" });
   } finally {

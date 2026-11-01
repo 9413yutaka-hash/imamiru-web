@@ -220,6 +220,8 @@
           <button id="customPlanChargeExecuteButton" class="primary-button" type="button">請求を実行</button>
           <button id="customPlanInvoiceReloadButton" class="secondary-button" type="button">請求台帳を表示</button>
         </div>
+        <!-- STEP 53-C｜定期実行(日本時間の毎日 10:10〜13:10)が動いているか。読むだけ。 -->
+        <p id="customPlanCronHealth" class="note"></p>
         <div id="customPlanBillingMessage" class="message-box" role="status" aria-live="polite"></div>
         <div id="customPlanBillingResult"></div>
       </div>
@@ -1107,6 +1109,32 @@
       container.appendChild(table);
     }
 
+    // STEP 53-C｜定期実行が動いているか(運営のみ・読むだけ)。
+    function storeCardCronHealthText(data) {
+      const last = data.lastSuccessJstDate ? "最後の成功：" + data.lastSuccessJstDate : "成功した実行はまだありません";
+      if (data.state === "never_run") {
+        return "定期実行はまだ一度も動いていません。";
+      }
+      return data.ok
+        ? "定期実行は動いています（" + last + "）。"
+        : "定期実行が止まっている可能性があります（" + last + "）。GitHub の Actions の「Store card plan (Production)」を確認してください。";
+    }
+
+    async function loadCustomPlanCronHealth() {
+      const line = document.getElementById("customPlanCronHealth");
+      try {
+        const result = await callCustomPlanAdmin({ mode: "adminStoreCustomPlanCronHealth" });
+        const data = result.data || {};
+        if (result.status !== 200 || data.success !== true) {
+          line.textContent = "定期実行の状態を取得できませんでした。";
+          return;
+        }
+        line.textContent = storeCardCronHealthText(data);
+      } catch (error) {
+        line.textContent = "定期実行の状態を取得できませんでした。";
+      }
+    }
+
     async function approveLateCustomPlanInvoice(invoiceId) {
       const message = document.getElementById("customPlanBillingMessage");
       if (!window.confirm(invoiceId + " は請求予定日（翌月2日）を過ぎて確定した請求書です。内容を確認しましたか？この請求書を請求します（本番では実際の請求）。")) {
@@ -1179,6 +1207,7 @@
         closeTrialPanel.hidden = !isPreviewFirebaseTarget();
         restart();
         loadCustomPlans();
+        loadCustomPlanCronHealth();
         return;
       }
 

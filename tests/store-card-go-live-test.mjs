@@ -121,6 +121,10 @@ NOW = jst("2026-11-20T15:00:00");
 r = await call({ mode: "storeCustomPlanSubscribe", storeId: "G2", planConsentVersion: B.STORE_CARD_PLAN_CONSENT_VERSION }, "u2");
 t("U2 2店目も申込（11月20日・日割りなし）", r.code === 200 && plan("G2").periodKind === "monthly", r.body);
 t("U3 申込では Stripe に通信しない", ST.calls.length === 0, ST.calls);
+const HEALTH = () => call({ mode: "adminStoreCustomPlanCronHealth" }, "admin");
+r = await HEALTH();
+t("H1 STEP 53-C：定期実行がまだ一度も動いていない本番は「動いていない」（never_run・ok false・本番）", r.code === 200 && r.body.environment === "production" && r.body.state === "never_run" && r.body.ok === false, r.body);
+t("H1b 定期実行の状態は運営だけ（店主のアカウントでは見られない）", (await call({ mode: "adminStoreCustomPlanCronHealth" }, "u1")).code >= 401);
 
 // ===================== C. month-end close on December 1 (JST) =====================
 NOW = jst("2026-11-30T23:59:00");
@@ -130,6 +134,8 @@ NOW = jst("2026-12-01T10:10:00");
 r = await CRON();
 t("C2 12月1日 10:10 の定期実行：11月を締める・G1・G2 とも100円（税込）・請求予定は 12月2日・まだ請求しない（予定日前）",
   r.code === 200 && r.body.closeMonth === "2026-11" && inv("G1_2026-11").amountJpy === 100 && inv("G2_2026-11").amountJpy === 100 && inv("G1_2026-11").taxIncluded === true && inv("G1_2026-11").chargeScheduledFor === "2026-12-02" && inv("G1_2026-11").status === "closed" && r.body.steps.charges.executed === true && r.body.steps.charges.totals.chargeCount === 0 && ST.calls.length === 0, r.body);
+r = await HEALTH();
+t("H2 12月1日 10:10 に成功した後は「動いている」（最後の成功 2026-12-01）", r.body.ok === true && r.body.state === "ok" && r.body.lastSuccessJstDate === "2026-12-01", r.body);
 t("C3 12月の利用月の記録も継続中の2店に作る（翌月の初めの契約者に結び付ける）", !!S.docs.get("storeCustomPlanUsage/G1_2026-12") && !!S.docs.get("storeCustomPlanUsage/G2_2026-12"));
 const closedSnapshot = JSON.stringify([inv("G1_2026-11"), inv("G2_2026-11")]);
 NOW = jst("2026-12-01T13:10:00");
@@ -152,9 +158,17 @@ NOW = jst("2026-12-02T13:10:00");
 r = await CRON();
 t("P6 同じ日にもう一度：新しい請求をしない（G1 は支払い済み・G2 は再試行の予定日前）", r.code === 200 && ST.creates.length === createsAfterFirst && inv("G1_2026-11").status === "paid", r.body.steps.charges);
 
+NOW = jst("2026-12-03T13:00:00");
+r = await HEALTH();
+t("H3 前日（12月2日）に成功していれば、翌日の14時までは「動いている」", r.body.ok === true && r.body.lastSuccessJstDate === "2026-12-02", r.body);
+NOW = jst("2026-12-03T14:00:00");
+r = await HEALTH();
+t("H4 14時を過ぎても今日の成功が無ければ「止まっている可能性」（stale）", r.body.ok === false && r.body.state === "stale", r.body);
+
 // ===================== R. retries on day 3 and day 7 =====================
 NOW = jst("2026-12-05T10:10:00");
 r = await CRON();
+t("H5 再開した実行（12月5日）は、前回の成功（12月2日）から1日以上空いたことを運営へ通知（500・cron_gap）", r.code === 500 && (r.body.billingNotify || []).some((x) => x.kind === "cron_gap" && x.invoiceId === "2026-12-02"), r.body.billingNotify);
 t("R1 12月5日（初回失敗の3日後）：1回目の再試行・また失敗・次は7日後", ST.creates.length === createsAfterFirst + 1 && inv("G2_2026-11").retryCount === 1 && inv("G2_2026-11").status === "payment_failed" && ms(inv("G2_2026-11").nextRetryAt) === ms(inv("G2_2026-11").firstFailedAt) + 7 * DAY, inv("G2_2026-11"));
 NOW = jst("2026-12-09T10:10:00");
 r = await CRON();
@@ -208,15 +222,28 @@ r = await CRON();
 t("N10 同じ指定をもう一度・その後の定期実行でも二重に請求しない", ST.creates.filter((x) => x["metadata[storeId]"] === "G1" && x["metadata[month]"] === "2027-01").length === 1);
 t("N11 指定を受け付けるのは運営だけ（店主のアカウントでは請求の実行を呼べない）", (await call({ mode: "adminStoreCustomPlanCharge", dryRun: false, approveLateInvoiceIds: ["G2_2027-01"] }, "u2")).code >= 401 && inv("G2_2027-01").status !== "paid");
 
+NOW = jst("2027-02-06T10:10:00");
+globalThis.__QUERY_FAIL = "storeCustomPlans";
+const createsBeforeFail = ST.creates.length;
+r = await CRON();
+delete globalThis.__QUERY_FAIL;
+const healthDoc = S.docs.get("storeCustomPlanCronHealth/production") || {};
+t("H6 定期実行が失敗（500）：最後の実行は failed と記録・最後の成功は前日（2月5日）のまま・請求は増えない", r.code === 500 && healthDoc.lastStatus === "failed" && healthDoc.lastSuccessJstDate === "2027-02-05" && ST.creates.length === createsBeforeFail, { code: r.code, healthDoc: { s: healthDoc.lastStatus, d: healthDoc.lastSuccessJstDate } });
+NOW = jst("2027-02-06T15:00:00");
+r = await HEALTH();
+t("H7 失敗が続いた日の14時以降は「止まっている可能性」と表示される", r.body.ok === false && r.body.state === "stale" && r.body.lastRunStatus === "failed", r.body);
+
 // ===================== A. admin screen (STEP 53-B) =====================
 const ADMIN_HTML = (await import("node:fs")).readFileSync(new URL("../admin-billing.html", import.meta.url), "utf8");
+const HUB_HTML = (await import("node:fs")).readFileSync(new URL("../admin.html", import.meta.url), "utf8");
+t("A0 STEP 53-C：管理本部（admin.html）と請求画面は定期実行の状態を読む・管理本部の警告は本番で止まっている時（と取得の失敗）だけ表示", HUB_HTML.includes("mode: \"adminStoreCustomPlanCronHealth\"") && HUB_HTML.includes("data.environment !== \"production\" || data.ok === true") && HUB_HTML.includes("loadStoreCardCronHealth();") && ADMIN_HTML.includes("mode: \"adminStoreCustomPlanCronHealth\"") && ADMIN_HTML.includes("loadCustomPlanCronHealth();"));
 t("A1 運営の請求画面：2日を過ぎて確定した請求書だけに「確認して請求」（その請求書だけを指定）・本番で請求できないという古い説明・「テスト請求」の表示は無い",
   ADMIN_HTML.includes("invoice.planReason === \"closed_after_charge_day\"") && ADMIN_HTML.includes("approveLateInvoiceIds: [invoiceId]") && !/本番では実行できません/.test(ADMIN_HTML) && !/テスト請求/.test(ADMIN_HTML));
 
 // ===================== O. other products / records =====================
 t("O1 今だけ投稿の請求書は変わらない", JSON.stringify(S.docs.get("imadakeMonthlyInvoices/G1_2026-11")) === IMADAKE_BEFORE);
 const runs = [...S.docs.entries()].filter(([k]) => k.startsWith("storeCustomPlanCronRuns/"));
-t("O2 定期実行の記録：本番として記録・退会の最終削除の手順なし・失敗なし・合言葉を含まない", runs.length >= 10 && runs.every(([, v]) => v.environment === "production" && !v.steps.accountDeletion && v.errors.length === 0) && !JSON.stringify(runs).includes(SECRET) && !JSON.stringify(runs).includes(LIVE_CHARGE_KEY), runs.length);
+t("O2 定期実行の記録：本番として記録・退会の最終削除の手順なし・失敗なし（H6 で意図して失敗させた実行を除く）・合言葉を含まない", runs.length >= 10 && runs.filter(([k]) => !k.startsWith("storeCustomPlanCronRuns/2027-02-06_")).every(([, v]) => v.environment === "production" && !v.steps.accountDeletion && v.errors.length === 0) && !JSON.stringify(runs).includes(SECRET) && !JSON.stringify(runs).includes(LIVE_CHARGE_KEY), runs.length);
 
 console.log(`\nTOTAL ${pass + fail}  PASS ${pass}  FAIL ${fail}`);
 process.exit(fail === 0 ? 0 : 1);

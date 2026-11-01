@@ -134,6 +134,7 @@ import {
 
 // STEP 44-C⑤｜月額100円カスタマイズの定期実行の入口(合言葉 X-Machinau-Cron-Secret で認証、運営のログイン不要)。
 import {
+  handleAdminStoreCustomPlanCronHealth,
   handleStoreCustomPlanCron
 } from "./_lib/store-custom-plan-cron.js";
 
@@ -30786,7 +30787,9 @@ export default async function handler(
       storeCustomPlanPaymentConfirm: handleStoreCustomPlanPaymentConfirm,
       storeCustomPlanPayNow: handleStoreCustomPlanPayNow,
       // STEP 44-C⑤｜定期実行(前月の締め・未払いの判定・請求の対象の判定。定期実行からの請求は許可フラグ false の間は試算だけ)。
-      storeCustomPlanCron: handleStoreCustomPlanCron
+      storeCustomPlanCron: handleStoreCustomPlanCron,
+      // STEP 53-C｜定期実行が動いているか(運営のみ・読むだけ)。
+      adminStoreCustomPlanCronHealth: handleAdminStoreCustomPlanCronHealth
     };
 
   if (
