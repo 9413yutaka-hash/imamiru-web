@@ -1183,7 +1183,9 @@
         if (kind === "charge") {
           // STEP 53-I｜請求予定額と、請求の実行が止まっていること(charge_disabled＝本番の請求は停止中)を分けて表示する。
           const blocked = data.executionAllowed ? "" : data.executionBlockedReason === "charge_disabled" ? "本番の請求は停止中です（代表の承認まで実行されません）" : "実行は許可されていません：" + data.executionBlockedReason;
-          showMessage(message, (data.dryRun ? "請求の試算です（Stripe に接続しません）。" : "請求を実行しました。") + " 請求 " + data.totals.chargeCount + " 件・再試行 " + data.totals.retryCount + " 件・照合 " + data.totals.reconcileCount + " 件・請求予定額 " + (data.totals.plannedAmountJpy || 0) + " 円" + (blocked ? "（" + blocked + "）" : "") + "。", "info");
+          // 本番の請求の設定がそろっているか(キーの値は表示しない)。請求を止めている間に、請求を始める前の確認に使う。
+          const liveConfig = data.liveChargeConfig ? (data.liveChargeConfig.ready ? "本番の請求の設定：そろっています（請求専用キー rk_live_・公開可能キー pk_live_・STRIPE_MODE live）。" : "本番の請求の設定：そろっていません（" + ({ charge_key_not_configured: "請求専用キー STRIPE_CHARGE_RESTRICTED_KEY が未登録", not_configured: "STRIPE_MODE が live でない、または公開可能キーが未登録", server_key_not_restricted_live: "請求専用キーが rk_live_ で始まる制限付きキーでない", key_mode_mismatch: "公開可能キーが pk_live_ で始まらない" }[data.liveChargeConfig.reason] || data.liveChargeConfig.reason) + "）。") : "";
+          showMessage(message, (data.dryRun ? "請求の試算です（Stripe に接続しません）。" : "請求を実行しました。") + " 請求 " + data.totals.chargeCount + " 件・再試行 " + data.totals.retryCount + " 件・照合 " + data.totals.reconcileCount + " 件・請求予定額 " + (data.totals.plannedAmountJpy || 0) + " 円" + (blocked ? "（" + blocked + "）" : "") + "。" + (liveConfig ? " " + liveConfig : ""), "info");
         } else {
           showMessage(message, data.invoices.length + " 件・合計 " + data.totalAmountJpy + " 円。", "info");
         }

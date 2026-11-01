@@ -71,6 +71,13 @@ let run = await CH.runStoreCustomPlanCharges(db, { env: LIVE, chargeEnabledOverr
 const pv = (run.invoices || []).find((e) => e.invoiceId === "PV_2026-10"), pr = (run.invoices || []).find((e) => e.invoiceId === "PR_2026-10");
 t("R1 本番の請求（試算）：Preview で作った請求書は請求しない（preview_invoice_in_live）・本番の請求書は請求の対象", run.ok === true && run.mode === "live" && !!pv && pv.plan === "skip" && pv.planReason === "preview_invoice_in_live" && !!pr && pr.plan === "charge", run.invoices);
 t("R2 試算では Stripe に通信せず、データも変えない", stripeCalls.length === 0 && JSON.stringify([...S.docs.entries()]) === before);
+// 請求を止めている間(スイッチ false)の試算でも、本番の請求の設定がそろっているかを返す(キーの値は返さない)。
+const cfgRun = async (env) => CH.runStoreCustomPlanCharges(db, { env, now }, { dryRun: true });
+const offReady = await cfgRun(LIVE), offSk = await cfgRun({ ...LIVE, STRIPE_CHARGE_RESTRICTED_KEY: "sk_" + "live_FAKE" }), offNone = await cfgRun({ ...LIVE, STRIPE_CHARGE_RESTRICTED_KEY: "" }), offTestPk = await cfgRun({ ...LIVE, STRIPE_PUBLISHABLE_KEY: "pk_" + "test_FAKE" }), offPreview = await cfgRun({ VERCEL_ENV: "preview", STRIPE_MODE: "test", STRIPE_CHARGE_RESTRICTED_KEY: "rk_" + "test_FAKE", STRIPE_PUBLISHABLE_KEY: "pk_" + "test_FAKE" });
+t("R2b 請求OFFの試算：実行は charge_disabled のまま・本番の請求の設定がそろっていれば ready true／sk_live_ は server_key_not_restricted_live・未登録は charge_key_not_configured・pk_test_ は key_mode_mismatch・Preview は null",
+  offReady.ok === true && offReady.executionAllowed === false && offReady.executionBlockedReason === "charge_disabled" && offReady.liveChargeConfig.ready === true && offReady.liveChargeConfig.reason === "" &&
+  offSk.liveChargeConfig.ready === false && offSk.liveChargeConfig.reason === "server_key_not_restricted_live" && offNone.liveChargeConfig.reason === "charge_key_not_configured" && offTestPk.liveChargeConfig.reason === "key_mode_mismatch" && offPreview.liveChargeConfig === null, { offReady: offReady.liveChargeConfig, offSk: offSk.liveChargeConfig });
+t("R2c 設定の確認の結果にキーの値を出さない・Stripe に通信しない・データを変えない", ![offReady, offSk, offNone, offTestPk].some((r) => JSON.stringify(r).includes(SECRET) || /(rk|sk|pk)_(live|test)_FAKE/.test(JSON.stringify(r))) && stripeCalls.length === 0 && JSON.stringify([...S.docs.entries()]) === before);
 run = await CH.runStoreCustomPlanCharges(db, { env: { ...LIVE, STRIPE_CHARGE_RESTRICTED_KEY: "" }, now }, { dryRun: false });
 t("R3 請求専用キーが未登録の Production（STEP 53-I：スイッチ false）：実行は charge_disabled・Stripe に通信しない・データを変えない", run.ok === false && run.reason === "charge_disabled" && stripeCalls.length === 0 && JSON.stringify([...S.docs.entries()]) === before, run);
 

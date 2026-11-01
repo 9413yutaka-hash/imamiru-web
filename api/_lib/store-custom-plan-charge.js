@@ -768,6 +768,11 @@ function planInvoiceAction(invoice, nowMs, previewTrialOnly, liveMode, lateAppro
   return { plan: "skip", reason: invoice.status === "paid" ? "paid" : "finished_or_needs_review" };
 }
 
+function liveChargeConfigStatus(env) {
+  const config = readStripeLiveChargeConfig(env);
+  return { ready: config.ok === true, reason: config.ok ? "" : config.reason };
+}
+
 export async function runStoreCustomPlanCharges(database, deps, options) {
   const dryRun = !options || options.dryRun !== false;
   const gate = readStoreCustomPlanChargeGate(deps);
@@ -855,6 +860,9 @@ export async function runStoreCustomPlanCharges(database, deps, options) {
     executionBlockedReason: gate.ok ? "" : gate.reason,
     previewTrialOnly: previewTrialOnly,
     mode: gate.ok ? gate.config.mode : "",
+    // 請求を止めている間も、本番の請求の設定(請求専用キー rk_live_・公開可能キー pk_live_・STRIPE_MODE live)がそろっているかを
+    // 運営が確かめられるようにする。そろっているか(ready)と理由だけで、キーの値は返さない。Production 以外は null。
+    liveChargeConfig: production ? liveChargeConfigStatus(deps.env) : null,
     invoices: entries,
     paymentStatuses: paymentStatuses,
     totals: {
