@@ -70,7 +70,9 @@ const afterFirst = snapshot(); w0 = writesNow();
 const exec2 = await call({ ...SEP, dryRun: false }, "admin");
 t("D3 二重締めの防止：同じ月をもう一度締めても already_closed・請求書と台帳は変わらない・書き込みなし", exec2.code === 200 && exec2.body.stores[0].outcome === "already_closed" && exec2.body.stores[0].addedLines === 0 && snapshot() === afterFirst && writesNow() === w0, { outcome: exec2.body && exec2.body.stores, writes: writesNow() - w0 });
 w0 = writesNow();
-const oct = await call({ mode: "imadakeMonthlyClose", month: "2026-10", dryRun: false }, "admin");
+// 今月(日本時間)は実行の日から求める(日付を固定すると、月が変わると締めの対象になってしまう)。
+const thisMonthJst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 7);
+const oct = await call({ mode: "imadakeMonthlyClose", month: thisMonthJst, dryRun: false }, "admin");
 t("D4 試験環境でも締めの時期より前（今月分）は 409 month_not_closable・書き込みなし", oct.code === 409 && oct.body.reason === "month_not_closable" && writesNow() === w0, { code: oct.code, body: oct.body });
 
 // ---------------- Stripe charge stays disabled ----------------
