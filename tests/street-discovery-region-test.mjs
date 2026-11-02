@@ -32,6 +32,10 @@ const pieces = [
   "function getDateValue(",
   "function isShopWithinNearbyCardRadius(",
   "function isShopInSelectedShopRegion(",
+  "function doesAddressStartWithMunicipality(",
+  "function getJapanMunicipalitiesByPrefecture() {",
+  "function doesAddressStartWithAnyPrefecture(",
+  "function isMunicipalityNameOnlyInPrefecture(",
   "function getStreetDiscoveryItemsInSelectedRegion(",
   "function renderStreetDiscoverySection() {"
 ].map((h) => extract(appJs, h)).join("\n\n");
@@ -50,6 +54,8 @@ const ctx = {
   OPTIMIZED_IMAGE_WIDTH_CARD: 400,
   Math, Number, Date, Array, JSON, isNaN
 };
+// 全国の市区町村データ(本番の TOP と同じ japan-municipalities.js)。
+ctx.JAPAN_MUNICIPALITIES_BY_PREFECTURE = new Function(readFileSync(join(REPO_ROOT, "japan-municipalities.js"), "utf8") + ";return JAPAN_MUNICIPALITIES_BY_PREFECTURE;")();
 vm.createContext(ctx);
 vm.runInContext(pieces + "\nvar shops = []; var userLatitude = null; var userLongitude = null; var selectedShopRegion = null;", ctx);
 
@@ -72,7 +78,7 @@ const fixture = [
   street("c1", "北谷A", "沖縄県中頭郡北谷町美浜1-2", CHATAN, { createdAt: NOW - 3 * H }),
   street("c2", "北谷B", "沖縄県北谷町北谷2-1", null, { createdAt: NOW - H }), // 座標なし・郡名なし
   street("c3", "北谷・住所なし", "", CHATAN), // 住所なし：地域では判定できない
-  street("c4", "北谷・県なし", "北谷町美浜", CHATAN), // 都道府県なし：推測しない
+  street("c4", "北谷・県なし", "北谷町美浜", CHATAN, { createdAt: NOW - 2 * H }), // STEP 53：都道府県なしでも北谷町は全国で沖縄県だけ→北谷町
   street("c5", "北谷・期限切れ", "沖縄県中頭郡北谷町美浜", CHATAN, { expiresAt: NOW - 1 }),
   street("n1", "那覇", "沖縄県那覇市久茂地1", NAHA),
   street("y1", "八重瀬", "沖縄県島尻郡八重瀬町具志頭", YAESE),
@@ -90,10 +96,10 @@ function render({ lat = null, lng = null, region = null }) {
 
 // 1 八重瀬町にいて北谷町を指定
 let r = render({ lat: YAESE.lat, lng: YAESE.lng, region: CHATAN_REGION });
-t("1a 八重瀬町から北谷町を指定 → 北谷町の街の発見が表示される", r.shown && r.titles.includes("北谷A") && r.titles.includes("北谷B"), r.titles);
+t("1a 八重瀬町から北谷町を指定 → 北谷町の街の発見が表示される（都道府県の無い住所「北谷町美浜」も含む）", r.shown && r.titles.includes("北谷A") && r.titles.includes("北谷B") && r.titles.includes("北谷・県なし"), r.titles);
 t("1b 北谷町以外(那覇・八重瀬)は出ない", !r.titles.includes("那覇") && !r.titles.includes("八重瀬"), r.titles);
-t("1c 新しい順(北谷B→北谷A)", r.titles.join(",") === "北谷B,北谷A", r.titles);
-t("1d 住所なし・都道府県なしの投稿は推測で割り当てない", !r.titles.includes("北谷・住所なし") && !r.titles.includes("北谷・県なし"), r.titles);
+t("1c 新しい順(北谷B→北谷・県なし→北谷A)", r.titles.join(",") === "北谷B,北谷・県なし,北谷A", r.titles);
+t("1d 住所の無い投稿は推測で割り当てない（座標だけでは市区町村を判定しない）", !r.titles.includes("北谷・住所なし"), r.titles);
 t("1e 期限切れ・店舗(shop)投稿は出ない", !r.titles.includes("北谷・期限切れ") && !r.titles.includes("北谷の店"), r.titles);
 const card = (html, title) => html.split("<article").find((a) => a.includes(">" + title + "<")) || "";
 const DIST = /\d(?:\.\d)?\s*(?:km|m)\b/;
@@ -115,7 +121,7 @@ t("4b 近い順(八重瀬→那覇)", r.titles.join(",") === "八重瀬,那覇",
 
 // 5 GPS未取得
 r = render({ region: CHATAN_REGION });
-t("5a GPS未取得でも北谷町を指定すれば表示", r.shown && r.titles.join(",") === "北谷B,北谷A", r.titles);
+t("5a GPS未取得でも北谷町を指定すれば表示", r.shown && r.titles.join(",") === "北谷B,北谷・県なし,北谷A", r.titles);
 t("5b GPS未取得のときは距離を出さない", !DIST.test(r.html), "");
 r = render({});
 t("5c GPS未取得・指定なし → 従来どおり非表示", !r.shown && r.titles.length === 0, r.titles);
@@ -127,7 +133,7 @@ t("6 該当0件の市区町村 → セクションを出さない(従来の0件�
 ctx.getCurrentMachinauLanguage = () => "en";
 ctx.getMachinauTranslation = (key, lang) => lang + ":" + key;
 r = render({ lat: YAESE.lat, lng: YAESE.lng, region: CHATAN_REGION });
-t("8a 英語表示：八重瀬町から北谷町を指定 → 北谷町の街の発見（同じ2件・同じ順）", r.shown && r.titles.join(",") === "北谷B,北谷A", r.titles);
+t("8a 英語表示：八重瀬町から北谷町を指定 → 北谷町の街の発見（同じ2件・同じ順）", r.shown && r.titles.join(",") === "北谷B,北谷・県なし,北谷A", r.titles);
 t("8b 英語表示：投稿の種類のラベルは英語の文言（shop_user_post_badge の en）", r.html.includes("en:shop_user_post_badge") && !r.html.includes("ja:shop_user_post_badge"), r.html.slice(0, 200));
 ctx.getCurrentMachinauLanguage = () => "ja";
 ctx.getMachinauTranslation = (key) => key;
@@ -136,8 +142,18 @@ const badge = trSrc.slice(trSrc.indexOf("shop_user_post_badge:"), trSrc.indexOf(
 const enBadge = (badge.match(/en: "([^"]*)"/) || [])[1] || "";
 t("8c 翻訳：shop_user_post_badge に日英があり、英語に日本語が混ざらない", /ja: "[^"]+"/.test(badge) && enBadge !== "" && !/[぀-ヿ一-鿿]/.test(enBadge), badge);
 
-// 7 無料店舗枠の15km・店舗カードの判定は無変更(origin/main と同一)
-const radius = (s) => extract(s, "const NEARBY_SHOP_CARD_RADIUS_KM =") + extract(s, "function isShopWithinNearbyCardRadius(") + extract(s, "function isShopInSelectedShopRegion(");
+// 9 STEP 53｜都道府県の無い住所の判定(本番：那覇市の街の発見が「那覇市 琉球新報本社ビル…」の住所で出なかった)
+vm.runInContext("var __m = function(a, p, m) { return isShopInSelectedShopRegion({ address: a }, { prefectureName: p, municipalityName: m }); };", ctx);
+const m = (a, p, mu) => vm.runInContext("__m(" + JSON.stringify(a) + "," + JSON.stringify(p) + "," + JSON.stringify(mu) + ")", ctx);
+t("9a 都道府県の無い住所：那覇市（全国で沖縄県だけ）は一致・空白や「日本、」「〒」の後でも一致", m("那覇市 琉球新報本社ビル1階 あじまーる広場", "沖縄県", "那覇市") && m("日本、〒900-0015 那覇市久茂地", "沖縄県", "那覇市") && m("中頭郡北谷町美浜", "沖縄県", "北谷町"));
+t("9b 都道府県の無い住所でも、別の市町村・別の都道府県として選んだ時は一致しない", !m("那覇市久茂地", "沖縄県", "北谷町") && !m("那覇市久茂地", "東京都", "那覇市") && !m("北谷町美浜", "沖縄県", "那覇市"));
+t("9c 同じ名前の市が複数の都道府県にある（府中市：東京都・広島県）・「区」（北区・港区：政令指定都市の区と同名になり得る）は、都道府県が無ければ推測しない",
+  !m("府中市宮西町", "東京都", "府中市") && !m("府中市府川町", "広島県", "府中市") && !m("北区王子", "東京都", "北区") && !m("港区芝公園", "東京都", "港区") && m("東京都府中市宮西町", "東京都", "府中市") && m("東京都北区王子", "東京都", "北区"));
+t("9d 別の都道府県から始まる住所は従来どおり一致しない（東京都港区と愛知県名古屋市港区を混同しない）",
+  !m("広島県府中市府川町", "東京都", "府中市") && !m("愛知県名古屋市港区", "東京都", "港区") && m("愛知県名古屋市港区", "愛知県", "名古屋市港区") && m("沖縄県島尻郡八重瀬町具志頭", "沖縄県", "八重瀬町"));
+
+// 7 無料店舗枠の15km・店舗カードの判定は無変更(origin/main と同一)。地域の判定は上の 9 で確かめる(STEP 53 で都道府県の無い住所を追加)。
+const radius = (s) => extract(s, "const NEARBY_SHOP_CARD_RADIUS_KM =") + extract(s, "function isShopWithinNearbyCardRadius(");
 const shopFilter = (s) => { const i = s.indexOf("const adminExcludedShops = mergeStoreProfilesIntoShopCardList("); return s.slice(i, s.indexOf("updateShopsSectionRegionUi();", i)); };
 let mainJs = "";
 try {
@@ -145,7 +161,7 @@ try {
   mainJs = execFileSync("git", ["show", "origin/main:app.js"], { cwd: REPO_ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).replace(/\r\n/g, "\n");
 } catch { mainJs = ""; }
 if (mainJs) {
-  t("7a 15km定数・15km判定・地域判定の関数は origin/main と同一", radius(mainJs) === radius(appJs));
+  t("7a 15km定数・15km判定の関数は origin/main と同一", radius(mainJs) === radius(appJs));
   t("7b 店舗カードの絞り込み・並び順(renderShops)は origin/main と同一", shopFilter(mainJs) !== "" && shopFilter(mainJs) === shopFilter(appJs));
 } else {
   t("7 origin/main を読めない(比較できない)", false, "git show failed");

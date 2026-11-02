@@ -2685,6 +2685,10 @@ function isShopWithinNearbyCardRadius(
 // 「日本、」「〒123-4567」と空白は無視し、町村の前の郡名
 // (例：沖縄県島尻郡八重瀬町)は読み飛ばす。都道府県を含まない住所は
 // 判定できないため対象外にする(推測しない)。外部APIは呼ばない。
+// STEP 53｜都道府県を書かずに市区町村から始まる住所(例：「那覇市 …」)は、
+// その市・町・村の名前が全国で選択中の都道府県にしか無い時だけ一致とする
+// (japan-municipalities.js の正式名で確かめる。同名の市町村がほかの都道府県に
+// ある時と、政令指定都市の区と同じ名前になり得る「区」は推測せず対象外)。
 function isShopInSelectedShopRegion(
   shop,
   region
@@ -2703,43 +2707,135 @@ function isShopInSelectedShopRegion(
       .replace(/^〒?[0-9０-９]{3}[-－−ー‐]?[0-9０-９]{4}/, "");
 
   if (
-    !normalizedAddress.startsWith(
+    normalizedAddress.startsWith(
+      region.prefectureName
+    )
+  ) {
+    return doesAddressStartWithMunicipality(
+      normalizedAddress.slice(
+        region.prefectureName.length
+      ),
+      region.municipalityName
+    );
+  }
+
+  if (
+    doesAddressStartWithAnyPrefecture(
+      normalizedAddress
+    ) ||
+    !isMunicipalityNameOnlyInPrefecture(
+      region.municipalityName,
       region.prefectureName
     )
   ) {
     return false;
   }
 
-  const addressAfterPrefecture =
-    normalizedAddress.slice(
-      region.prefectureName.length
-    );
+  return doesAddressStartWithMunicipality(
+    normalizedAddress,
+    region.municipalityName
+  );
+}
 
+// 住所(都道府県の後ろ、または都道府県の無い住所)が市区町村名で始まるか。
+// 郡は町村にしか付かないため、町・村を選んだ場合だけ郡名を読み飛ばす。
+function doesAddressStartWithMunicipality(
+  addressText,
+  municipalityName
+) {
   if (
-    addressAfterPrefecture.startsWith(
-      region.municipalityName
+    addressText.startsWith(
+      municipalityName
     )
   ) {
     return true;
   }
 
-  // 郡は町村にしか付かないため、町・村を選んだ場合だけ郡名を読み飛ばす。
-  if (!/[町村]$/.test(region.municipalityName)) {
+  if (!/[町村]$/.test(municipalityName)) {
     return false;
   }
 
   const countyMatch =
-    addressAfterPrefecture.match(
+    addressText.match(
       /^[^市区町村郡]+郡/
     );
 
   return (
     countyMatch !== null &&
-    addressAfterPrefecture
+    addressText
       .slice(countyMatch[0].length)
       .startsWith(
-        region.municipalityName
+        municipalityName
       )
+  );
+}
+
+function getJapanMunicipalitiesByPrefecture() {
+  return typeof JAPAN_MUNICIPALITIES_BY_PREFECTURE !== "undefined" &&
+    JAPAN_MUNICIPALITIES_BY_PREFECTURE
+    ? JAPAN_MUNICIPALITIES_BY_PREFECTURE
+    : null;
+}
+
+// 住所がいずれかの都道府県名で始まるか(都道府県が書かれた住所は、
+// 選択中の都道府県と一致した時だけ上の判定を使う)。
+function doesAddressStartWithAnyPrefecture(
+  addressText
+) {
+  const municipalitiesByPrefecture =
+    getJapanMunicipalitiesByPrefecture();
+
+  if (!municipalitiesByPrefecture) {
+    return /^.{2,3}[都道府県]/.test(addressText);
+  }
+
+  return Object.keys(
+    municipalitiesByPrefecture
+  ).some(
+    function(prefectureName) {
+      return addressText.startsWith(
+        prefectureName
+      );
+    }
+  );
+}
+
+// 市・町・村の名前が、全国の市区町村データのうち選択中の都道府県にだけ
+// あるか。データが読めない時・「区」の時は false(推測しない)。
+function isMunicipalityNameOnlyInPrefecture(
+  municipalityName,
+  prefectureName
+) {
+  const municipalitiesByPrefecture =
+    getJapanMunicipalitiesByPrefecture();
+
+  if (
+    !municipalitiesByPrefecture ||
+    !/[市町村]$/.test(municipalityName)
+  ) {
+    return false;
+  }
+
+  const prefecturesWithName =
+    Object.keys(
+      municipalitiesByPrefecture
+    ).filter(
+      function(candidatePrefectureName) {
+        const names =
+          municipalitiesByPrefecture[candidatePrefectureName];
+
+        return (
+          Array.isArray(names) &&
+          names.indexOf(
+            municipalityName
+          ) !== -1
+        );
+      }
+    );
+
+  return (
+    prefecturesWithName.length === 1 &&
+    prefecturesWithName[0] === prefectureName
   );
 }
 
