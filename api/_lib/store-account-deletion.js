@@ -24,7 +24,7 @@
 //     清算をもう一度確かめる(未清算なら awaiting_settlement へ戻す) → カードを外す(終わらなければ
 //     card_detach_pending、上限に達したら card_detach_failed で停止) → 店舗の写真を消す → owner の関係を外す →
 //     カードの記録を消す → ログインを削除(失敗は auth_delete_pending) → completed。
-// 残すもの：請求書・料金台帳・利用月の記録・支払いの記録・CV の記録・店舗の文書(無効のまま)・投稿(終了のまま)・
+// 残すもの：請求書・料金台帳・利用月の記録・支払いの記録・領収書(STEP 54)・CV の記録・店舗の文書(無効のまま)・投稿(終了のまま)・
 //   運営掲載との紐付け(印つき)・削除の記録(uid・店舗ID・Stripe の顧客ID・日時。メールアドレスは記録しない)・
 //   Stripe の顧客(カードだけ取り外す)。
 // このファイルはVercel Functionではない(api/moderate-submission.jsから呼ばれる)。

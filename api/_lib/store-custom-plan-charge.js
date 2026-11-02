@@ -1113,6 +1113,8 @@ export function describeOwnerPlanInvoice(ledgerId, invoice, storeName, gateOk) {
     unpaid: STORE_CUSTOM_PLAN_OWNER_UNPAID_STATUSES.includes(invoice.status),
     requiresAction: invoice.status === "requires_action",
     canPayNow: gateOk === true && invoice.status === "payment_failed",
+    // STEP 54｜領収書の入口を出す(発行の可否はサーバーが台帳と Stripe で改めて確かめる)。
+    receiptAvailable: invoice.status === "paid" && invoice.paymentIntentStatus === "succeeded",
     createdInPreview: invoice.createdInPreview === true
   };
 }

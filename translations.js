@@ -3514,6 +3514,12 @@ const MACHINAU_TRANSLATIONS = {
     en: "Payment completed."
   },
 
+  // STEP 54｜支払い済みの請求の領収書(store-receipt.html)への入口。
+  store_plan_pay_receipt_link: {
+    ja: "領収書を見る",
+    en: "View receipt"
+  },
+
   store_plan_pay_auth_incomplete: {
     ja: "本人認証が完了していません。もう一度お試しください。",
     en: "Authentication was not completed. Please try again."

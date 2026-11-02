@@ -326,6 +326,7 @@
     .plan-pay-item.unpaid { border-color: #f0c2c7; background: #fff7f8; }
     .plan-pay-line { margin: 0 0 4px; font-weight: 800; }
     .plan-pay-status { margin: 0 0 4px; }
+    .plan-pay-receipt { display: inline-block; margin: 0 0 6px; font-weight: 700; }
     .plan-pay-unpaid { margin: 0 0 8px; font-weight: 800; color: #a3212d; }
     .plan-pay-action { margin-top: 8px; }
     /* LEGAL-CORRECTION-CSS｜STEP 52-F 10月30日の告知の訂正 */
@@ -1628,6 +1629,11 @@
           const statusKey = PLAN_PAY_STATUS_KEYS[invoice.status] || "store_plan_pay_status_review";
           addPlanPayText(item, "p", t(statusKey)
             .replace("{date}", invoice.status === "paid" ? formatPlanPayDate(invoice.paidAtMillis) : String(invoice.chargeScheduledFor || "").replace(/-/g, "/")), "plan-pay-status");
+          if (invoice.receiptAvailable) {
+            // STEP 54｜支払い済みの請求だけ。発行の可否はサーバーが台帳と Stripe で確かめる。
+            const receiptLink = addPlanPayText(item, "a", t("store_plan_pay_receipt_link"), "plan-pay-receipt");
+            receiptLink.href = "store-receipt.html?invoice=" + encodeURIComponent(invoice.invoiceId);
+          }
           if (invoice.status === "payment_failed" && invoice.nextRetryAtMillis > 0) {
             addPlanPayText(item, "p", t("store_plan_pay_next_retry").replace("{date}", formatPlanPayDate(invoice.nextRetryAtMillis)), "hint");
           }

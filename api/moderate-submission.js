@@ -132,6 +132,13 @@ import {
   handleStoreCustomPlanPayNow
 } from "./_lib/store-custom-plan-charge.js";
 
+// STEP 54｜月額100円の領収書(支払い成功を Stripe で確かめた請求書だけ・請求書1件に1件)。
+import {
+  handleStoreCustomPlanReceiptGet,
+  handleStoreCustomPlanReceiptIssue,
+  handleStoreCustomPlanReceiptCorrectAddressee
+} from "./_lib/store-custom-plan-receipt.js";
+
 // STEP 44-C⑤｜月額100円カスタマイズの定期実行の入口(合言葉 X-Machinau-Cron-Secret で認証、運営のログイン不要)。
 import {
   handleAdminStoreCustomPlanCronHealth,
@@ -30812,6 +30819,10 @@ export default async function handler(
       storeCustomPlanPaymentStart: handleStoreCustomPlanPaymentStart,
       storeCustomPlanPaymentConfirm: handleStoreCustomPlanPaymentConfirm,
       storeCustomPlanPayNow: handleStoreCustomPlanPayNow,
+      // STEP 54｜領収書(店主本人・請求先のアカウントだけ。発行前の確認・発行・宛名の訂正)。
+      storeCustomPlanReceiptGet: handleStoreCustomPlanReceiptGet,
+      storeCustomPlanReceiptIssue: handleStoreCustomPlanReceiptIssue,
+      storeCustomPlanReceiptCorrectAddressee: handleStoreCustomPlanReceiptCorrectAddressee,
       // STEP 44-C⑤｜定期実行(前月の締め・未払いの判定・請求の対象の判定。定期実行からの請求は許可フラグ false の間は試算だけ)。
       storeCustomPlanCron: handleStoreCustomPlanCron,
       // STEP 53-C｜定期実行が動いているか(運営のみ・読むだけ)。

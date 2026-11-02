@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#071a33">
+  <title>領収書｜マチナウ</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <!-- STEP 54｜店舗カード月額100円(店舗プロフィールカスタマイズプラン)の領収書。
+       店主本人(請求先のアカウント)だけが見られる。発行・宛名の訂正はサーバー(api/_lib/store-custom-plan-receipt.js)が
+       台帳と Stripe を確かめて行う。金額・支払日・番号は画面から変えられない。ブラウザの印刷で印刷・PDF保存できる。 -->
+  <style>
+    :root {
+      --navy: #071a33;
+      --blue: #0788c9;
+      --red: #e0525e;
+      --white: #ffffff;
+      --text: #15233a;
+      --subtext: #697386;
+      --border: #e2eaf1;
+      --background: #f4f8fb;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--background); color: var(--text); font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic", system-ui, sans-serif; line-height: 1.7; }
+    .wrap { max-width: 720px; margin: 0 auto; padding: 16px; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+    .toolbar a { color: var(--blue); font-weight: 700; }
+    .button { appearance: none; border: 0; border-radius: 10px; padding: 10px 16px; font-size: 15px; font-weight: 700; cursor: pointer; background: var(--navy); color: var(--white); }
+    .button.secondary { background: var(--white); color: var(--navy); border: 1px solid var(--border); }
+    .button:disabled { opacity: .6; cursor: default; }
+    .message { margin: 8px 0; padding: 10px 12px; border-radius: 10px; background: var(--white); border: 1px solid var(--border); }
+    .message.error { border-color: var(--red); color: var(--red); }
+    .panel { background: var(--white); border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin-bottom: 12px; }
+    .panel h2 { margin: 0 0 8px; font-size: 17px; }
+    label { display: block; font-weight: 700; margin: 8px 0 4px; }
+    input[type="text"] { width: 100%; font-size: 16px; padding: 10px; border: 1px solid var(--border); border-radius: 10px; }
+    .hint { color: var(--subtext); font-size: 13px; margin: 4px 0; }
+    .receipt { background: var(--white); border: 1px solid var(--border); border-radius: 14px; padding: 24px 20px; }
+    .receipt h1 { text-align: center; letter-spacing: .5em; font-size: 26px; margin: 0 0 16px; }
+    .receipt-meta { text-align: right; font-size: 13px; color: var(--subtext); margin: 0 0 12px; }
+    .receipt-meta p { margin: 0; }
+    .addressee { font-size: 20px; font-weight: 700; border-bottom: 1px solid var(--text); padding-bottom: 4px; margin: 0 0 16px; overflow-wrap: anywhere; }
+    .amount { text-align: center; font-size: 30px; font-weight: 800; border: 2px solid var(--text); border-radius: 8px; padding: 8px; margin: 0 0 8px; }
+    .purpose { text-align: center; margin: 0 0 16px; }
+    .rows { width: 100%; border-collapse: collapse; font-size: 14px; margin: 0 0 16px; }
+    .rows th, .rows td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--border); vertical-align: top; overflow-wrap: anywhere; }
+    .rows th { width: 36%; color: var(--subtext); font-weight: 600; }
+    .issuer { font-size: 14px; margin: 0 0 12px; }
+    .issuer p { margin: 0; }
+    .issuer .name { font-size: 18px; font-weight: 800; }
+    .note { font-size: 12px; color: var(--subtext); margin: 4px 0; }
+    .refund { border: 1px solid var(--red); color: var(--red); border-radius: 8px; padding: 8px 10px; margin: 0 0 12px; font-weight: 700; }
+    .test-badge { display: inline-block; border: 1px solid var(--red); color: var(--red); border-radius: 6px; padding: 0 6px; font-size: 12px; margin-left: 6px; }
+    [hidden] { display: none !important; }
+    @media print {
+      body { background: #fff; }
+      .wrap { max-width: none; padding: 0; }
+      .no-print { display: none !important; }
+      .receipt { border: 0; padding: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="toolbar no-print">
+      <a href="store-account.html">← 店舗アカウントへ戻る</a>
+    </div>
+    <p class="hint no-print" id="langNote" hidden>This receipt is issued in Japanese.</p>
+    <div id="message" class="message no-print" role="status" aria-live="polite" hidden></div>
+
+    <!-- 発行前：宛名の確認(未入力は登録店舗名) -->
+    <div class="panel no-print" id="previewPanel" hidden>
+      <h2>領収書の発行</h2>
+      <p class="hint" id="previewSummary"></p>
+      <label for="addresseeInput">宛名（未入力のときは登録店舗名）</label>
+      <input type="text" id="addresseeInput" maxlength="60" autocomplete="organization">
+      <p class="hint">発行した後は、金額・支払日・領収書番号は変わりません。宛名は、訂正の記録を残して直すことができます。</p>
+      <button type="button" class="button" id="issueButton">この宛名で領収書を発行する</button>
+    </div>
+
+    <!-- 発行済み：領収書 -->
+    <div id="receiptArea" hidden>
+      <div class="toolbar no-print">
+        <button type="button" class="button" id="printButton">印刷・PDFで保存</button>
+        <button type="button" class="button secondary" id="correctToggle">宛名を訂正する</button>
+      </div>
+      <div class="panel no-print" id="correctPanel" hidden>
+        <h2>宛名の訂正</h2>
+        <label for="correctInput">新しい宛名</label>
+        <input type="text" id="correctInput" maxlength="60" autocomplete="organization">
+        <p class="hint">訂正の記録（訂正前の宛名・訂正日）は領収書に残ります。金額・支払日・領収書番号は変わりません。</p>
+        <button type="button" class="button" id="correctButton">宛名を訂正する</button>
+      </div>
+      <article class="receipt" id="receipt">
+        <h1>領収書</h1>
+        <div class="receipt-meta">
+          <p>領収書番号：<span id="rNumber"></span><span class="test-badge" id="rTest" hidden>テスト</span></p>
+          <p>発行日：<span id="rIssued"></span></p>
+        </div>
+        <p class="addressee"><span id="rAddressee"></span> 様</p>
+        <p class="amount">¥<span id="rAmount"></span>（税込）</p>
+        <p class="purpose">但し、<span id="rPurpose"></span></p>
+        <p class="refund" id="rRefund" hidden></p>
+        <table class="rows">
+          <tr><th>対象利用月</th><td id="rMonth"></td></tr>
+          <tr><th>支払日</th><td id="rPaid"></td></tr>
+          <tr><th>支払方法</th><td id="rMethod"></td></tr>
+          <tr><th>請求書ID</th><td id="rInvoice"></td></tr>
+        </table>
+        <div class="issuer">
+          <p class="name" id="rService"></p>
+          <p>販売事業者：<span id="rSeller"></span></p>
+          <p>所在地：<span id="rAddress"></span></p>
+          <p>連絡先：<span id="rEmail"></span></p>
+        </div>
+        <p class="note">上記の金額を、クレジットカード決済により正に領収いたしました。</p>
+        <p class="note">本書は適格請求書（インボイス）ではありません。</p>
+        <div id="rCorrections"></div>
+      </article>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+  <script src="firebase.js"></script>
+  <script>
+    (function () {
+      // 店舗アカウントの画面と同じログイン(専用の Firebase app 名)を使う。
+      const STORE_AUTH_APP_NAME = "machinauStoreAccount";
+      const MESSAGES = {
+        login_required: "領収書を見るには、店舗アカウントにログインしてください。",
+        invoice_not_found: "この請求の領収書は表示できません。",
+        not_paid: "まだお支払いが完了していない請求のため、領収書は発行できません。",
+        payment_processing: "お支払いの処理中のため、領収書はまだ発行できません。処理が終わってからもう一度お試しください。",
+        payment_unconfirmed: "お支払いの結果を確認できないため、領収書は発行できません。",
+        payment_failed: "お支払いができなかった請求のため、領収書は発行できません。",
+        environment_mismatch: "この請求の領収書は、この画面では発行できません。",
+        stripe_unavailable: "お支払いの確認ができませんでした。時間をおいてもう一度お試しください。",
+        email_not_verified: "メールアドレスの確認が済んでいないため、領収書を表示できません。",
+        too_many_corrections: "宛名の訂正の回数が上限に達しました。お問い合わせください。",
+        invalid_input: "宛名は改行を含まない60文字までで入力してください。",
+        network: "通信に失敗しました。時間をおいてもう一度お試しください。",
+        server_error: "エラーが発生しました。時間をおいてもう一度お試しください。"
+      };
+      const invoiceId = new URLSearchParams(window.location.search).get("invoice") || "";
+      let storeAuth = null;
+      let busy = false;
+
+      try {
+        if (localStorage.getItem("machinauLanguage") === "en") {
+          document.getElementById("langNote").hidden = false;
+        }
+      } catch (error) {
+        // 表示の補足だけのため無視する。
+      }
+
+      function showMessage(key, isError) {
+        const box = document.getElementById("message");
+        if (!key) {
+          box.hidden = true;
+          return;
+        }
+        box.hidden = false;
+        box.className = "message no-print" + (isError ? " error" : "");
+        box.textContent = MESSAGES[key] || MESSAGES.server_error;
+      }
+
+      function formatDate(millis) {
+        if (!millis) {
+          return "";
+        }
+        // 日本時間の日付。
+        const date = new Date(millis + 9 * 3600 * 1000);
+        return date.getUTCFullYear() + "年" + (date.getUTCMonth() + 1) + "月" + date.getUTCDate() + "日";
+      }
+
+      function formatMonth(month) {
+        const match = String(month || "").match(/^(\d{4})-(\d{2})$/);
+        return match ? match[1] + "年" + Number(match[2]) + "月分" : "";
+      }
+
+      function setText(id, text) {
+        document.getElementById(id).textContent = text;
+      }
+
+      function callApi(body) {
+        const user = storeAuth && storeAuth.currentUser;
+        if (!user) {
+          return Promise.resolve({ status: 401, result: { reason: "login_required" } });
+        }
+        return user.getIdToken()
+          .then(function (idToken) {
+            return fetch("/api/moderate-submission", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: "Bearer " + idToken },
+              body: JSON.stringify(body)
+            });
+          })
+          .then(function (response) {
+            return response.json()
+              .catch(function () {
+                return null;
+              })
+              .then(function (result) {
+                return { status: response.status, result: result || {} };
+              });
+          });
+      }
+
+      function renderPreview(preview) {
+        document.getElementById("receiptArea").hidden = true;
+        document.getElementById("previewPanel").hidden = false;
+        setText("previewSummary", formatMonth(preview.month) + "・¥" + preview.amountJpy + "（税込）・支払日 " + formatDate(preview.paidAtMillis) + (preview.testMode ? "（テスト）" : ""));
+        const input = document.getElementById("addresseeInput");
+        input.placeholder = preview.defaultAddressee || "";
+      }
+
+      function renderReceipt(receipt) {
+        document.getElementById("previewPanel").hidden = true;
+        document.getElementById("receiptArea").hidden = false;
+        setText("rNumber", receipt.receiptNumber);
+        document.getElementById("rTest").hidden = !receipt.testMode;
+        setText("rIssued", formatDate(receipt.issuedAtMillis));
+        setText("rAddressee", receipt.addressee || "");
+        setText("rAmount", Number(receipt.amountJpy).toLocaleString("ja-JP"));
+        setText("rPurpose", receipt.purpose);
+        setText("rMonth", formatMonth(receipt.month));
+        setText("rPaid", formatDate(receipt.paidAtMillis));
+        setText("rMethod", receipt.paymentMethod);
+        setText("rInvoice", receipt.invoiceId);
+        setText("rService", receipt.issuer.serviceName);
+        setText("rSeller", receipt.issuer.sellerName);
+        setText("rAddress", receipt.issuer.address);
+        setText("rEmail", receipt.issuer.email);
+        const refund = document.getElementById("rRefund");
+        refund.hidden = !receipt.refund;
+        if (receipt.refund) {
+          refund.textContent = (receipt.refund.full ? "返金済み" : "一部返金済み") + "：" +
+            (receipt.refund.refundedAtMillis ? formatDate(receipt.refund.refundedAtMillis) + "に" : "") +
+            "¥" + Number(receipt.refund.amountJpy).toLocaleString("ja-JP") + " を返金しました（この領収書の記録は残します）。";
+        }
+        const corrections = document.getElementById("rCorrections");
+        corrections.textContent = "";
+        (receipt.corrections || []).forEach(function (entry) {
+          const line = document.createElement("p");
+          line.className = "note";
+          line.textContent = "宛名訂正：" + formatDate(entry.correctedAtMillis) + "（訂正前の宛名：" + entry.previous + "）";
+          corrections.appendChild(line);
+        });
+        document.getElementById("correctInput").value = receipt.addressee || "";
+      }
+
+      function handleResult(response) {
+        const result = response.result || {};
+        if (response.status === 200 && result.success) {
+          showMessage(null);
+          if (result.issued) {
+            renderReceipt(result.receipt);
+          } else {
+            renderPreview(result.preview);
+          }
+          return;
+        }
+        document.getElementById("previewPanel").hidden = true;
+        document.getElementById("receiptArea").hidden = true;
+        showMessage(result.reason || "server_error", true);
+      }
+
+      function load() {
+        if (!/^[A-Za-z0-9_-]{1,100}_\d{4}-\d{2}$/.test(invoiceId)) {
+          showMessage("invoice_not_found", true);
+          return;
+        }
+        callApi({ mode: "storeCustomPlanReceiptGet", invoiceId: invoiceId })
+          .then(handleResult)
+          .catch(function () {
+            showMessage("network", true);
+          });
+      }
+
+      function run(button, body, after) {
+        if (busy) {
+          return;
+        }
+        busy = true;
+        button.disabled = true;
+        callApi(body)
+          .then(function (response) {
+            if (response.status === 200 && response.result && response.result.success) {
+              showMessage(null);
+              renderReceipt(response.result.receipt);
+              if (after) {
+                after();
+              }
+            } else {
+              showMessage((response.result && response.result.reason) || "server_error", true);
+            }
+          })
+          .catch(function () {
+            showMessage("network", true);
+          })
+          .then(function () {
+            busy = false;
+            button.disabled = false;
+          });
+      }
+
+      document.getElementById("issueButton").addEventListener("click", function () {
+        run(this, { mode: "storeCustomPlanReceiptIssue", invoiceId: invoiceId, addressee: document.getElementById("addresseeInput").value });
+      });
+      document.getElementById("printButton").addEventListener("click", function () {
+        window.print();
+      });
+      document.getElementById("correctToggle").addEventListener("click", function () {
+        const panel = document.getElementById("correctPanel");
+        panel.hidden = !panel.hidden;
+      });
+      document.getElementById("correctButton").addEventListener("click", function () {
+        run(this, { mode: "storeCustomPlanReceiptCorrectAddressee", invoiceId: invoiceId, addressee: document.getElementById("correctInput").value }, function () {
+          document.getElementById("correctPanel").hidden = true;
+        });
+      });
+
+      try {
+        const defaultApp = window.machinauFirebaseApp || firebase.app();
+        const storeApp = firebase.apps.find(function (app) {
+          return app.name === STORE_AUTH_APP_NAME;
+        }) || firebase.initializeApp(defaultApp.options, STORE_AUTH_APP_NAME);
+        storeAuth = storeApp.auth();
+      } catch (error) {
+        showMessage("server_error", true);
+        return;
+      }
+
+      storeAuth.onAuthStateChanged(function (user) {
+        if (user && !user.isAnonymous) {
+          load();
+        } else {
+          showMessage("login_required", true);
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
