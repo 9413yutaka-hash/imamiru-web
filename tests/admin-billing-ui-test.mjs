@@ -101,7 +101,9 @@ try {
   // STEP 44-B｜月額100円カスタマイズの契約一覧の「読み込み直す」（読み取りのみ）も許可する。
   const others = buttons.filter((b) => !["continueButton", "loginButton", "restartButton", "stripeCheckButton", "closeDryRunButton", "closeExecuteButton", "customPlanReloadButton",
     // STEP 44-C④｜月額100円カスタマイズの締め・請求（試算は読むだけ、実行はサーバーが許可した時だけ）。
-    "customPlanCloseDryRunButton", "customPlanCloseExecuteButton", "customPlanChargeDryRunButton", "customPlanChargeExecuteButton", "customPlanInvoiceReloadButton"].includes(b));
+    "customPlanCloseDryRunButton", "customPlanCloseExecuteButton", "customPlanChargeDryRunButton", "customPlanChargeExecuteButton", "customPlanInvoiceReloadButton",
+    // STEP 54-B｜月額100円の領収書：返金の照会と記録（Stripe へは GET だけ・返金はしない）・退会後の再提供の画面を開く・提供の記録（読むだけ）。
+    "customPlanRefundSyncButton", "customPlanReceiptOperatorButton", "customPlanReceiptProvisionListButton"].includes(b));
   const checkLabel = await p.ev(`document.getElementById("stripeCheckButton").textContent`);
   t("U3d ボタンは「ログイン」「最初から確認」「続きを確認」「Stripeとの接続を確認（読み取りのみ）」と、請求書ごとの「Stripeの記録を確認（読み取りのみ）」だけ（支払い確定・再請求・ロック解除・返金などは無い）", checkLabel === "Stripeとの接続を確認（読み取りのみ）" && buttons.includes("stripeCheckButton") &&  others.length === 2 && others.every((b) => b === "class:inspect-button:Stripeの記録を確認（読み取りのみ）"), buttons);
   t("U3e 一覧の表示では書き込みゼロ・Stripe呼び出しゼロ", S.writes.length === w0 && stripeCalls === 0);

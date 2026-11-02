@@ -1115,6 +1115,9 @@ export function describeOwnerPlanInvoice(ledgerId, invoice, storeName, gateOk) {
     canPayNow: gateOk === true && invoice.status === "payment_failed",
     // STEP 54｜領収書の入口を出す(発行の可否はサーバーが台帳と Stripe で改めて確かめる)。
     receiptAvailable: invoice.status === "paid" && invoice.paymentIntentStatus === "succeeded",
+    // STEP 54-B｜運営が Stripe に照会して記録した返金(全額・一部・処理中)。
+    refundState: ["partial", "full", "pending"].includes(invoice.refundState) ? invoice.refundState : "none",
+    refundedAmountJpy: Number.isInteger(invoice.refundedAmountJpy) ? invoice.refundedAmountJpy : 0,
     createdInPreview: invoice.createdInPreview === true
   };
 }

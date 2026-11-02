@@ -42,6 +42,10 @@ import {
   requireVerifiedStoreUser
 } from "./store-self-service.js";
 
+import {
+  ACCOUNT_DELETIONS_COLLECTION
+} from "./account-deletion-state.js";
+
 export const STORE_CUSTOM_PLAN_RECEIPTS_COLLECTION = "storeCustomPlanReceipts";
 const STORE_ACCOUNTS_COLLECTION = "storeAccounts";
 
@@ -178,17 +182,20 @@ export async function verifyReceiptPaymentWithStripe(invoiceId, invoice, deps) {
   return { ok: true, amountJpy: received };
 }
 
+// 台帳の返金の記録(STEP 54-B：運営が Stripe に照会して記録したもの)。成立した返金だけを返金額に数える。
 function readRefund(invoice) {
   const amount = Number.isInteger(invoice && invoice.refundedAmountJpy) ? invoice.refundedAmountJpy : 0;
+  const pending = !!invoice && invoice.refundState === "pending";
 
-  if (amount <= 0) {
+  if (amount <= 0 && !pending) {
     return null;
   }
 
   return {
     amountJpy: amount,
     refundedAtMillis: millisOf(invoice.refundedAt),
-    full: amount >= (Number(invoice.amountJpy) || 0)
+    full: amount > 0 && amount >= (Number(invoice.amountJpy) || 0),
+    pending: pending
   };
 }
 
@@ -238,6 +245,62 @@ async function readOwn(database, invoiceId, uid) {
   const receipt = receiptSnapshot.exists ? receiptSnapshot.data() || {} : null;
 
   return { invoice: invoice, receipt: receipt && receipt.billingAccountUid === uid ? receipt : null };
+}
+
+// 台帳と Stripe の照合が済んだ請求書の領収書を、トランザクションで1件だけ作る(既にあればそれを返す)。
+// 店主の発行(kind "issued")と、運営による退会後の再提供での発行(kind "issued_by_operator")で共通。
+async function issueReceipt(database, deps, invoiceId, checkedInvoice, amountJpy, requestedAddressee, actorUid, kind) {
+  const storeName = await readStoreName(database, checkedInvoice.storeId);
+  const addressee = requestedAddressee !== "" ? requestedAddressee : storeName;
+  const nowTimestamp = Timestamp.fromMillis(nowOf(deps));
+  const invoiceRef = database.collection(STORE_CUSTOM_PLAN_INVOICES_COLLECTION).doc(invoiceId);
+  const receiptRef = database.collection(STORE_CUSTOM_PLAN_RECEIPTS_COLLECTION).doc(invoiceId);
+
+  return database.runTransaction(async function(transaction) {
+    const receiptSnapshot = await transaction.get(receiptRef);
+    const invoiceSnapshot = await transaction.get(invoiceRef);
+    const latest = invoiceSnapshot.exists ? invoiceSnapshot.data() || {} : null;
+
+    if (receiptSnapshot.exists) {
+      return { receipt: receiptSnapshot.data() || {}, invoice: latest, already: true };
+    }
+
+    // 照会の間に台帳が変わっていないか(支払い済み・同じ支払い・同じ請求先)をもう一度確かめる。
+    if (
+      !latest ||
+      latest.billingAccountUid !== checkedInvoice.billingAccountUid ||
+      latest.paymentIntentId !== checkedInvoice.paymentIntentId ||
+      !readReceiptLedgerState(latest, deps.env).ok
+    ) {
+      return { conflict: true };
+    }
+
+    const receipt = {
+      receiptNumber: storeCustomPlanReceiptNumber(invoiceId, latest.month),
+      invoiceId: invoiceId,
+      storeId: latest.storeId,
+      month: latest.month,
+      amountJpy: amountJpy,
+      currency: "JPY",
+      taxIncluded: true,
+      paidAt: latest.paidAt,
+      paymentIntentId: latest.paymentIntentId,
+      chargeMode: latest.chargeMode,
+      billingAccountUid: latest.billingAccountUid,
+      storeNameAtIssue: storeName,
+      addressee: addressee,
+      addresseeHistory: [{ kind: kind, addressee: addressee, previous: "", at: nowTimestamp, byUid: actorUid }],
+      purpose: STORE_CUSTOM_PLAN_RECEIPT_PURPOSE,
+      paymentMethod: STORE_CUSTOM_PLAN_RECEIPT_PAYMENT_METHOD,
+      issuer: Object.assign({}, STORE_CUSTOM_PLAN_RECEIPT_ISSUER),
+      issuedAt: nowTimestamp,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
+    };
+
+    transaction.set(receiptRef, receipt);
+    return { receipt: Object.assign({}, receipt), invoice: latest, already: false };
+  });
 }
 
 // mode: storeCustomPlanReceiptGet (POST) { invoiceId }
@@ -340,57 +403,7 @@ export async function handleStoreCustomPlanReceiptIssue(request, response, deps)
       return sendError(response, verified.status, verified.reason);
     }
 
-    const storeName = await readStoreName(database, own.invoice.storeId);
-    const addressee = requestedAddressee !== "" ? requestedAddressee : storeName;
-    const nowTimestamp = Timestamp.fromMillis(nowOf(deps));
-    const invoiceRef = database.collection(STORE_CUSTOM_PLAN_INVOICES_COLLECTION).doc(invoiceId);
-    const receiptRef = database.collection(STORE_CUSTOM_PLAN_RECEIPTS_COLLECTION).doc(invoiceId);
-
-    const result = await database.runTransaction(async function(transaction) {
-      const receiptSnapshot = await transaction.get(receiptRef);
-      const invoiceSnapshot = await transaction.get(invoiceRef);
-      const latest = invoiceSnapshot.exists ? invoiceSnapshot.data() || {} : null;
-
-      if (receiptSnapshot.exists) {
-        return { receipt: receiptSnapshot.data() || {}, invoice: latest, already: true };
-      }
-
-      // 照会の間に台帳が変わっていないか(支払い済み・同じ支払い・同じ請求先)をもう一度確かめる。
-      if (
-        !latest ||
-        latest.billingAccountUid !== actor.uid ||
-        latest.paymentIntentId !== own.invoice.paymentIntentId ||
-        !readReceiptLedgerState(latest, deps.env).ok
-      ) {
-        return { conflict: true };
-      }
-
-      const receipt = {
-        receiptNumber: storeCustomPlanReceiptNumber(invoiceId, latest.month),
-        invoiceId: invoiceId,
-        storeId: latest.storeId,
-        month: latest.month,
-        amountJpy: verified.amountJpy,
-        currency: "JPY",
-        taxIncluded: true,
-        paidAt: latest.paidAt,
-        paymentIntentId: latest.paymentIntentId,
-        chargeMode: latest.chargeMode,
-        billingAccountUid: actor.uid,
-        storeNameAtIssue: storeName,
-        addressee: addressee,
-        addresseeHistory: [{ kind: "issued", addressee: addressee, previous: "", at: nowTimestamp, byUid: actor.uid }],
-        purpose: STORE_CUSTOM_PLAN_RECEIPT_PURPOSE,
-        paymentMethod: STORE_CUSTOM_PLAN_RECEIPT_PAYMENT_METHOD,
-        issuer: Object.assign({}, STORE_CUSTOM_PLAN_RECEIPT_ISSUER),
-        issuedAt: nowTimestamp,
-        createdAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp()
-      };
-
-      transaction.set(receiptRef, receipt);
-      return { receipt: Object.assign({}, receipt), invoice: latest, already: false };
-    });
+    const result = await issueReceipt(database, deps, invoiceId, own.invoice, verified.amountJpy, requestedAddressee, actor.uid, "issued");
 
     if (result.conflict) {
       return sendError(response, 409, "payment_unconfirmed");
@@ -466,6 +479,386 @@ export async function handleStoreCustomPlanReceiptCorrectAddressee(request, resp
     return response.status(200).json({ success: true, changed: result.changed, receipt: describeReceipt(result.receipt, result.invoice) });
   } catch (error) {
     console.error("店舗カスタマイズ：領収書の宛名の訂正エラー：", error && error.message);
+    return sendError(response, 500, "server_error");
+  }
+}
+
+// ==========================================================================
+// STEP 54-B｜返金の記録の同期(Stripe で成立した返金を、請求台帳と領収書に反映する)
+// ==========================================================================
+// 返金の操作そのものは Stripe の管理画面で行う(今だけ投稿の返金と同じ方針。マチナウからは返金を作らない)。
+// 運営が「Stripe の返金を確認」を押すと、Stripe に GET で照会し、成立した返金だけを記録する：
+//   1. 請求書が支払い済みで、記録した PaymentIntent が Stripe 上でもこの請求書の支払いとして succeeded(発行と同じ照合)。
+//   2. GET /v1/refunds?payment_intent=… を最後まで読めたこと(形が違う・別の支払いの返金が混じる・返金の合計が
+//      支払額を超える時は何も書かない)。請求専用キーに返金の読み取りの権限が無い時(401・403)は refund_permission_missing
+//      として何も書かない(成功扱いにしない)。
+//   3. 返金1件ごとに storeCustomPlanRefunds/{Stripe の返金ID}(同じ返金は同じ文書＝二重に数えない)。状態は Stripe の値の
+//      まま区別し、変わった時は履歴に残す。請求書には集計(refundedAmountJpy・refundedAt・refundState・照合の履歴)だけを足し、
+//      状態(paid)・支払日時・領収書の記録は変えない(元の領収書は消さない)。全額・一部・処理中を区別する。
+// 運営だけ(requireAdmin)。Stripe には GET だけ。キーの値・Stripe の応答本文は出さない。
+
+export const STORE_CUSTOM_PLAN_REFUNDS_COLLECTION = "storeCustomPlanRefunds";
+export const STORE_CUSTOM_PLAN_REFUND_STATUSES = ["pending", "requires_action", "succeeded", "failed", "canceled"];
+const REFUND_IN_PROGRESS_STATUSES = ["pending", "requires_action"];
+const REFUND_ID_PATTERN = /^re_[A-Za-z0-9_]{1,100}$/;
+const REFUND_LIST_MAX_PAGES = 10;
+const REFUND_SYNC_HISTORY_LIMIT = 20;
+
+// Stripe の返金の一覧を最後まで読む。{ ok, refunds } か { ok:false, reason, status }。
+async function listStripeRefunds(config, deps, paymentIntentId) {
+  const refunds = [];
+  let startingAfter = "";
+
+  for (let page = 0; page < REFUND_LIST_MAX_PAGES; page++) {
+    const params = { "payment_intent": paymentIntentId, "limit": 100 };
+
+    if (startingAfter !== "") {
+      params["starting_after"] = startingAfter;
+    }
+
+    const fetched = await stripeRequest(config, deps, "GET", "/refunds", params, null);
+
+    if (!fetched || !fetched.ok) {
+      const status = fetched ? fetched.status : 0;
+      return status === 401 || status === 403
+        ? { ok: false, reason: "refund_permission_missing", status: 403 }
+        : { ok: false, reason: "stripe_unavailable", status: 503 };
+    }
+
+    const data = fetched.data;
+
+    if (!data || data.object !== "list" || !Array.isArray(data.data) || typeof data.has_more !== "boolean") {
+      return { ok: false, reason: "refund_list_invalid", status: 502 };
+    }
+
+    for (const item of data.data) {
+      if (
+        !item ||
+        item.object !== "refund" ||
+        !REFUND_ID_PATTERN.test(String(item.id || "")) ||
+        item.payment_intent !== paymentIntentId ||
+        String(item.currency || "").toLowerCase() !== "jpy" ||
+        !Number.isInteger(item.amount) ||
+        item.amount <= 0 ||
+        !STORE_CUSTOM_PLAN_REFUND_STATUSES.includes(item.status)
+      ) {
+        return { ok: false, reason: "refund_list_invalid", status: 502 };
+      }
+
+      refunds.push({ id: item.id, amountJpy: item.amount, status: item.status, createdMillis: Number.isInteger(item.created) ? item.created * 1000 : 0 });
+    }
+
+    if (!data.has_more) {
+      return { ok: true, refunds: refunds };
+    }
+
+    startingAfter = refunds.length > 0 ? refunds[refunds.length - 1].id : "";
+
+    if (startingAfter === "") {
+      return { ok: false, reason: "refund_list_invalid", status: 502 };
+    }
+  }
+
+  return { ok: false, reason: "refund_list_too_long", status: 502 };
+}
+
+// 成立した返金(succeeded)だけを返金額に数える。処理中(pending・requires_action)は別に数える。失敗・取消しは数えない。
+export function summarizeStoreCustomPlanRefunds(refunds, paidAmountJpy) {
+  const succeeded = refunds.filter(function(refund) { return refund.status === "succeeded"; });
+  const refundedAmountJpy = succeeded.reduce(function(sum, refund) { return sum + refund.amountJpy; }, 0);
+  const pendingAmountJpy = refunds
+    .filter(function(refund) { return REFUND_IN_PROGRESS_STATUSES.includes(refund.status); })
+    .reduce(function(sum, refund) { return sum + refund.amountJpy; }, 0);
+  const refundedAtMillis = succeeded.reduce(function(latest, refund) { return Math.max(latest, refund.createdMillis); }, 0);
+  const refundState = refundedAmountJpy > 0 && refundedAmountJpy >= paidAmountJpy
+    ? "full"
+    : pendingAmountJpy > 0
+      ? "pending"
+      : refundedAmountJpy > 0
+        ? "partial"
+        : "none";
+
+  return { refundedAmountJpy: refundedAmountJpy, pendingAmountJpy: pendingAmountJpy, refundedAtMillis: refundedAtMillis, refundState: refundState };
+}
+
+// mode: adminStoreCustomPlanRefundSync (POST、運営のみ) { invoiceId }
+export async function handleAdminStoreCustomPlanRefundSync(request, response, deps) {
+  try {
+    const authResult = await deps.requireAdmin(request);
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({ success: false, message: authResult.message });
+    }
+
+    const invoiceId = readInvoiceId(deps.readRequestBody(request));
+
+    if (invoiceId === "") {
+      return sendError(response, 400, "invalid_input", { field: "invoiceId" });
+    }
+
+    const database = authResult.database || deps.getFirestore(deps.getFirebaseAdminApp());
+    const invoiceRef = database.collection(STORE_CUSTOM_PLAN_INVOICES_COLLECTION).doc(invoiceId);
+    const invoiceSnapshot = await invoiceRef.get();
+    const invoice = invoiceSnapshot.exists ? invoiceSnapshot.data() || {} : null;
+    const state = readReceiptLedgerState(invoice, deps.env);
+
+    if (!state.ok) {
+      return sendError(response, state.status, state.reason);
+    }
+
+    const verified = await verifyReceiptPaymentWithStripe(invoiceId, invoice, deps);
+
+    if (!verified.ok) {
+      return sendError(response, verified.status, verified.reason);
+    }
+
+    const listed = await listStripeRefunds(readReceiptStripeConfig(deps.env), deps, invoice.paymentIntentId);
+
+    if (!listed.ok) {
+      return sendError(response, listed.status, listed.reason);
+    }
+
+    const summary = summarizeStoreCustomPlanRefunds(listed.refunds, invoice.amountJpy);
+
+    if (summary.refundedAmountJpy + summary.pendingAmountJpy > invoice.amountJpy) {
+      return sendError(response, 409, "refund_amount_exceeds_payment");
+    }
+
+    const adminUid = authResult.actor && authResult.actor.uid ? authResult.actor.uid : "";
+    const nowTimestamp = Timestamp.fromMillis(nowOf(deps));
+    const refundRefs = listed.refunds.map(function(refund) { return database.collection(STORE_CUSTOM_PLAN_REFUNDS_COLLECTION).doc(refund.id); });
+
+    const result = await database.runTransaction(async function(transaction) {
+      const latestSnapshot = await transaction.get(invoiceRef);
+      const latest = latestSnapshot.exists ? latestSnapshot.data() || {} : null;
+      const existing = [];
+
+      for (const ref of refundRefs) {
+        existing.push(await transaction.get(ref));
+      }
+
+      if (!latest || latest.paymentIntentId !== invoice.paymentIntentId || latest.status !== "paid") {
+        return { conflict: true };
+      }
+
+      // 別の請求書の記録になっている返金IDが来たら、何も書かない(取り違えを防ぐ)。
+      if (existing.some(function(snapshot) { return snapshot.exists && (snapshot.data() || {}).invoiceId !== invoiceId; })) {
+        return { conflict: true };
+      }
+
+      let changed = 0;
+
+      listed.refunds.forEach(function(refund, index) {
+        const before = existing[index].exists ? existing[index].data() || {} : null;
+
+        if (before && before.status === refund.status && before.amountJpy === refund.amountJpy) {
+          return;
+        }
+
+        const history = before && Array.isArray(before.statusHistory) ? before.statusHistory : [];
+        transaction.set(refundRefs[index], {
+          refundId: refund.id,
+          invoiceId: invoiceId,
+          storeId: latest.storeId,
+          paymentIntentId: latest.paymentIntentId,
+          amountJpy: refund.amountJpy,
+          currency: "JPY",
+          status: refund.status,
+          stripeCreatedAt: refund.createdMillis > 0 ? Timestamp.fromMillis(refund.createdMillis) : null,
+          firstSeenAt: before && before.firstSeenAt ? before.firstSeenAt : nowTimestamp,
+          statusHistory: history.concat([{ status: refund.status, at: nowTimestamp, byUid: adminUid }]).slice(-REFUND_SYNC_HISTORY_LIMIT),
+          updatedAt: FieldValue.serverTimestamp()
+        });
+        changed++;
+      });
+
+      const syncHistory = Array.isArray(latest.refundSyncHistory) ? latest.refundSyncHistory : [];
+      transaction.update(invoiceRef, {
+        refundedAmountJpy: summary.refundedAmountJpy,
+        refundPendingAmountJpy: summary.pendingAmountJpy,
+        refundedAt: summary.refundedAtMillis > 0 ? Timestamp.fromMillis(summary.refundedAtMillis) : null,
+        refundState: summary.refundState,
+        refundSyncedAt: nowTimestamp,
+        refundSyncHistory: syncHistory.concat([{ at: nowTimestamp, byUid: adminUid, refundState: summary.refundState, refundedAmountJpy: summary.refundedAmountJpy, refundCount: listed.refunds.length }]).slice(-REFUND_SYNC_HISTORY_LIMIT),
+        updatedAt: FieldValue.serverTimestamp()
+      });
+
+      return { changed: changed };
+    });
+
+    if (result.conflict) {
+      return sendError(response, 409, "refund_record_conflict");
+    }
+
+    return response.status(200).json({
+      success: true,
+      invoiceId: invoiceId,
+      refundState: summary.refundState,
+      refundedAmountJpy: summary.refundedAmountJpy,
+      pendingAmountJpy: summary.pendingAmountJpy,
+      refundCount: listed.refunds.length,
+      changedRefunds: result.changed
+    });
+  } catch (error) {
+    console.error("店舗カスタマイズ：返金の照合エラー：", error && error.message);
+    return sendError(response, 500, "server_error");
+  }
+}
+
+// ==========================================================================
+// STEP 54-B｜退会後の領収書の再提供(運営が本人確認をしたうえで表示し、提供の記録を残す)
+// ==========================================================================
+// 退会でログインが削除された店主は領収書の画面を開けないため、運営が本人を確かめた後に領収書を表示して渡す。
+//   運営だけ(requireAdmin)。本人確認の方法(登録メールへの返信・電話・対面・その他)とメモ(200文字まで)が必須。
+//   領収書が発行済みならそれを返す。未発行なら、店主の発行と同じ照合(台帳・Stripe)の後に1件だけ発行する
+//   (宛名は運営が入力、未入力は登録店舗名)。
+//   提供ごとに storeCustomPlanReceiptProvisions に記録(請求書ID・領収書番号・運営の uid・日時・本人確認の方法とメモ・
+//   その時の退会の状態)。退会したアカウントのログイン・メールアドレスなどは復元しない(返すのは領収書の記載だけ)。
+//   公開の URL からは見られない(運営のログインが必要)。
+
+export const STORE_CUSTOM_PLAN_RECEIPT_PROVISIONS_COLLECTION = "storeCustomPlanReceiptProvisions";
+export const STORE_CUSTOM_PLAN_RECEIPT_VERIFICATION_METHODS = ["registered_email", "phone", "in_person", "other"];
+const VERIFICATION_NOTE_MAX_LENGTH = 200;
+const PROVISION_LIST_LIMIT = 50;
+
+function readVerification(body) {
+  const method = body && typeof body.verificationMethod === "string" ? body.verificationMethod : "";
+  const raw = body && typeof body.verificationNote === "string" ? body.verificationNote : "";
+  const note = raw.replace(/[\t\n\r ]+/g, " ").trim();
+
+  if (!STORE_CUSTOM_PLAN_RECEIPT_VERIFICATION_METHODS.includes(method)) {
+    return { ok: false, field: "verificationMethod" };
+  }
+
+  if (note === "" || note.length > VERIFICATION_NOTE_MAX_LENGTH || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(raw)) {
+    return { ok: false, field: "verificationNote" };
+  }
+
+  return { ok: true, method: method, note: note };
+}
+
+// mode: adminStoreCustomPlanReceiptProvide (POST、運営のみ) { invoiceId, verificationMethod, verificationNote, addressee? }
+export async function handleAdminStoreCustomPlanReceiptProvide(request, response, deps) {
+  try {
+    const authResult = await deps.requireAdmin(request);
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({ success: false, message: authResult.message });
+    }
+
+    const body = deps.readRequestBody(request) || {};
+    const invoiceId = readInvoiceId(body);
+    const verification = readVerification(body);
+    const requestedAddressee = normalizeReceiptAddressee(body.addressee);
+
+    if (invoiceId === "") {
+      return sendError(response, 400, "invalid_input", { field: "invoiceId" });
+    }
+
+    if (!verification.ok) {
+      return sendError(response, 400, "verification_required", { field: verification.field });
+    }
+
+    if (requestedAddressee === null) {
+      return sendError(response, 400, "invalid_input", { field: "addressee" });
+    }
+
+    const database = authResult.database || deps.getFirestore(deps.getFirebaseAdminApp());
+    const [invoiceSnapshot, receiptSnapshot] = await Promise.all([
+      database.collection(STORE_CUSTOM_PLAN_INVOICES_COLLECTION).doc(invoiceId).get(),
+      database.collection(STORE_CUSTOM_PLAN_RECEIPTS_COLLECTION).doc(invoiceId).get()
+    ]);
+    const invoice = invoiceSnapshot.exists ? invoiceSnapshot.data() || {} : null;
+
+    if (!invoice) {
+      return sendError(response, 404, "invoice_not_found");
+    }
+
+    const adminUid = authResult.actor && authResult.actor.uid ? authResult.actor.uid : "";
+    let receipt = receiptSnapshot.exists ? receiptSnapshot.data() || {} : null;
+    let issuedNow = false;
+
+    if (!receipt) {
+      const state = readReceiptLedgerState(invoice, deps.env);
+
+      if (!state.ok) {
+        return sendError(response, state.status, state.reason);
+      }
+
+      const verified = await verifyReceiptPaymentWithStripe(invoiceId, invoice, deps);
+
+      if (!verified.ok) {
+        return sendError(response, verified.status, verified.reason);
+      }
+
+      const issued = await issueReceipt(database, deps, invoiceId, invoice, verified.amountJpy, requestedAddressee, adminUid, "issued_by_operator");
+
+      if (issued.conflict) {
+        return sendError(response, 409, "payment_unconfirmed");
+      }
+
+      receipt = issued.receipt;
+      issuedNow = issued.already !== true;
+    }
+
+    const deletionSnapshot = await database.collection(ACCOUNT_DELETIONS_COLLECTION).doc(String(invoice.billingAccountUid || "-")).get();
+    const deletion = deletionSnapshot.exists ? deletionSnapshot.data() || {} : null;
+    const nowMs = nowOf(deps);
+    const provisionId = invoiceId + "_" + nowMs;
+
+    await database.collection(STORE_CUSTOM_PLAN_RECEIPT_PROVISIONS_COLLECTION).doc(provisionId).set({
+      invoiceId: invoiceId,
+      receiptNumber: receipt.receiptNumber,
+      storeId: invoice.storeId,
+      providedByUid: adminUid,
+      providedAt: Timestamp.fromMillis(nowMs),
+      verificationMethod: verification.method,
+      verificationNote: verification.note,
+      issuedNow: issuedNow,
+      ownerAccountDeletionStatus: deletion && typeof deletion.status === "string" ? deletion.status : "",
+      createdAt: FieldValue.serverTimestamp()
+    });
+
+    return response.status(200).json({ success: true, issued: true, issuedNow: issuedNow, provisionId: provisionId, receipt: describeReceipt(receipt, invoice) });
+  } catch (error) {
+    console.error("店舗カスタマイズ：領収書の再提供エラー：", error && error.message);
+    return sendError(response, 500, "server_error");
+  }
+}
+
+// mode: adminStoreCustomPlanReceiptProvisionList (POST、運営のみ) { invoiceId? }  提供の記録(新しい順に50件まで)
+export async function handleAdminStoreCustomPlanReceiptProvisionList(request, response, deps) {
+  try {
+    const authResult = await deps.requireAdmin(request);
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({ success: false, message: authResult.message });
+    }
+
+    const invoiceId = readInvoiceId(deps.readRequestBody(request) || {});
+    const database = authResult.database || deps.getFirestore(deps.getFirebaseAdminApp());
+    const collection = database.collection(STORE_CUSTOM_PLAN_RECEIPT_PROVISIONS_COLLECTION);
+    const snapshot = invoiceId !== "" ? await collection.where("invoiceId", "==", invoiceId).get() : await collection.get();
+    const items = snapshot.docs
+      .map(function(documentSnapshot) {
+        const data = documentSnapshot.data() || {};
+        return {
+          provisionId: documentSnapshot.id,
+          invoiceId: data.invoiceId,
+          receiptNumber: data.receiptNumber,
+          providedAtMillis: millisOf(data.providedAt),
+          verificationMethod: data.verificationMethod,
+          verificationNote: data.verificationNote,
+          issuedNow: data.issuedNow === true,
+          ownerAccountDeletionStatus: data.ownerAccountDeletionStatus || ""
+        };
+      })
+      .sort(function(a, b) { return b.providedAtMillis - a.providedAtMillis; })
+      .slice(0, PROVISION_LIST_LIMIT);
+
+    return response.status(200).json({ success: true, items: items });
+  } catch (error) {
+    console.error("店舗カスタマイズ：領収書の提供の記録エラー：", error && error.message);
     return sendError(response, 500, "server_error");
   }
 }

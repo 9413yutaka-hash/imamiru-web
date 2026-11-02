@@ -3520,6 +3520,22 @@ const MACHINAU_TRANSLATIONS = {
     en: "View receipt"
   },
 
+  // STEP 54-B｜返金の記録(運営が Stripe に照会して記録したもの)。
+  store_plan_pay_refund_full: {
+    ja: "全額返金済み（{amount}円）",
+    en: "Fully refunded (¥{amount})"
+  },
+
+  store_plan_pay_refund_partial: {
+    ja: "一部返金済み（{amount}円）",
+    en: "Partially refunded (¥{amount})"
+  },
+
+  store_plan_pay_refund_pending: {
+    ja: "返金の処理中です",
+    en: "Refund in progress"
+  },
+
   store_plan_pay_auth_incomplete: {
     ja: "本人認証が完了していません。もう一度お試しください。",
     en: "Authentication was not completed. Please try again."

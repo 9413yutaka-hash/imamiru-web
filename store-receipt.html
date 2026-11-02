@@ -69,6 +69,26 @@
     <p class="hint no-print" id="langNote" hidden>This receipt is issued in Japanese.</p>
     <div id="message" class="message no-print" role="status" aria-live="polite" hidden></div>
 
+    <!-- STEP 54-B｜運営による退会後の再提供(?operator=1。運営のログインが必要。本人確認の方法とメモを入れた時だけ表示し、
+         提供の記録が残る。退会したアカウントの情報は復元しない)。 -->
+    <div class="panel no-print" id="operatorPanel" hidden>
+      <h2>領収書の再提供（運営）</h2>
+      <p class="hint">本人を確認してから表示してください。提供の記録（日時・運営のアカウント・本人確認の方法とメモ）が残ります。</p>
+      <label for="verificationMethodInput">本人確認の方法</label>
+      <select id="verificationMethodInput">
+        <option value="">選択してください</option>
+        <option value="registered_email">登録のメールアドレスからの依頼に返信</option>
+        <option value="phone">電話</option>
+        <option value="in_person">対面</option>
+        <option value="other">その他</option>
+      </select>
+      <label for="verificationNoteInput">本人確認のメモ（200文字まで）</label>
+      <input type="text" id="verificationNoteInput" maxlength="200">
+      <label for="operatorAddresseeInput">宛名（まだ発行していない時だけ使う・未入力は登録店舗名）</label>
+      <input type="text" id="operatorAddresseeInput" maxlength="60">
+      <button type="button" class="button" id="operatorProvideButton">本人確認済みとして領収書を表示</button>
+    </div>
+
     <!-- 発行前：宛名の確認(未入力は登録店舗名) -->
     <div class="panel no-print" id="previewPanel" hidden>
       <h2>領収書の発行</h2>
@@ -140,11 +160,17 @@
         stripe_unavailable: "お支払いの確認ができませんでした。時間をおいてもう一度お試しください。",
         email_not_verified: "メールアドレスの確認が済んでいないため、領収書を表示できません。",
         too_many_corrections: "宛名の訂正の回数が上限に達しました。お問い合わせください。",
+        operator_login_required: "運営のアカウントでログインしてから開いてください（運営の請求の画面）。",
+        verification_required: "本人確認の方法とメモを入力してください。",
+        forbidden: "運営の権限が必要です。",
         invalid_input: "宛名は改行を含まない60文字までで入力してください。",
         network: "通信に失敗しました。時間をおいてもう一度お試しください。",
         server_error: "エラーが発生しました。時間をおいてもう一度お試しください。"
       };
-      const invoiceId = new URLSearchParams(window.location.search).get("invoice") || "";
+      const pageParams = new URLSearchParams(window.location.search);
+      const invoiceId = pageParams.get("invoice") || "";
+      // STEP 54-B｜運営による再提供(運営のログイン＝既定の Firebase app を使う。サーバーが運営の権限を確かめる)。
+      const OPERATOR_MODE = pageParams.get("operator") === "1";
       let storeAuth = null;
       let busy = false;
 
@@ -237,9 +263,12 @@
         const refund = document.getElementById("rRefund");
         refund.hidden = !receipt.refund;
         if (receipt.refund) {
-          refund.textContent = (receipt.refund.full ? "返金済み" : "一部返金済み") + "：" +
-            (receipt.refund.refundedAtMillis ? formatDate(receipt.refund.refundedAtMillis) + "に" : "") +
-            "¥" + Number(receipt.refund.amountJpy).toLocaleString("ja-JP") + " を返金しました（この領収書の記録は残します）。";
+          const refunded = receipt.refund.amountJpy > 0
+            ? (receipt.refund.full ? "返金済み" : "一部返金済み") + "：" +
+              (receipt.refund.refundedAtMillis ? formatDate(receipt.refund.refundedAtMillis) + "に" : "") +
+              "¥" + Number(receipt.refund.amountJpy).toLocaleString("ja-JP") + " を返金しました（この領収書の記録は残します）。"
+            : "";
+          refund.textContent = refunded + (receipt.refund.pending ? (refunded ? " " : "") + "返金の処理中です（返金が成立すると、返金日と金額を表示します）。" : "");
         }
         const corrections = document.getElementById("rCorrections");
         corrections.textContent = "";
@@ -307,6 +336,38 @@
           });
       }
 
+      document.getElementById("operatorProvideButton").addEventListener("click", function () {
+        const button = this;
+        if (busy) {
+          return;
+        }
+        busy = true;
+        button.disabled = true;
+        callApi({
+          mode: "adminStoreCustomPlanReceiptProvide",
+          invoiceId: invoiceId,
+          verificationMethod: document.getElementById("verificationMethodInput").value,
+          verificationNote: document.getElementById("verificationNoteInput").value,
+          addressee: document.getElementById("operatorAddresseeInput").value
+        })
+          .then(function (response) {
+            const result = response.result || {};
+            if (response.status === 200 && result.success) {
+              showMessage(null);
+              document.getElementById("operatorPanel").hidden = true;
+              renderReceipt(result.receipt);
+            } else {
+              showMessage(response.status === 403 && !result.reason ? "forbidden" : result.reason || "server_error", true);
+            }
+          })
+          .catch(function () {
+            showMessage("network", true);
+          })
+          .then(function () {
+            busy = false;
+            button.disabled = false;
+          });
+      });
       document.getElementById("issueButton").addEventListener("click", function () {
         run(this, { mode: "storeCustomPlanReceiptIssue", invoiceId: invoiceId, addressee: document.getElementById("addresseeInput").value });
       });
@@ -325,12 +386,30 @@
 
       try {
         const defaultApp = window.machinauFirebaseApp || firebase.app();
-        const storeApp = firebase.apps.find(function (app) {
-          return app.name === STORE_AUTH_APP_NAME;
-        }) || firebase.initializeApp(defaultApp.options, STORE_AUTH_APP_NAME);
-        storeAuth = storeApp.auth();
+        if (OPERATOR_MODE) {
+          storeAuth = defaultApp.auth();
+        } else {
+          const storeApp = firebase.apps.find(function (app) {
+            return app.name === STORE_AUTH_APP_NAME;
+          }) || firebase.initializeApp(defaultApp.options, STORE_AUTH_APP_NAME);
+          storeAuth = storeApp.auth();
+        }
       } catch (error) {
         showMessage("server_error", true);
+        return;
+      }
+
+      if (OPERATOR_MODE) {
+        // 運営の再提供では宛名の訂正は出さない(店主の操作。宛名は未発行の時だけ運営が入力)。
+        document.getElementById("correctToggle").hidden = true;
+        storeAuth.onAuthStateChanged(function (user) {
+          if (user && !user.isAnonymous) {
+            showMessage(null);
+            document.getElementById("operatorPanel").hidden = false;
+          } else {
+            showMessage("operator_login_required", true);
+          }
+        });
         return;
       }
 

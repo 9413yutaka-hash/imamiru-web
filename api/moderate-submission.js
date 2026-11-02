@@ -136,7 +136,11 @@ import {
 import {
   handleStoreCustomPlanReceiptGet,
   handleStoreCustomPlanReceiptIssue,
-  handleStoreCustomPlanReceiptCorrectAddressee
+  handleStoreCustomPlanReceiptCorrectAddressee,
+  // STEP 54-B｜Stripe で成立した返金の記録(運営のみ・GET だけ)・退会後の領収書の再提供(運営のみ・本人確認の記録つき)。
+  handleAdminStoreCustomPlanRefundSync,
+  handleAdminStoreCustomPlanReceiptProvide,
+  handleAdminStoreCustomPlanReceiptProvisionList
 } from "./_lib/store-custom-plan-receipt.js";
 
 // STEP 44-C⑤｜月額100円カスタマイズの定期実行の入口(合言葉 X-Machinau-Cron-Secret で認証、運営のログイン不要)。
@@ -30823,6 +30827,10 @@ export default async function handler(
       storeCustomPlanReceiptGet: handleStoreCustomPlanReceiptGet,
       storeCustomPlanReceiptIssue: handleStoreCustomPlanReceiptIssue,
       storeCustomPlanReceiptCorrectAddressee: handleStoreCustomPlanReceiptCorrectAddressee,
+      // STEP 54-B｜返金の記録の同期・退会後の領収書の再提供と提供の記録(運営のみ)。
+      adminStoreCustomPlanRefundSync: handleAdminStoreCustomPlanRefundSync,
+      adminStoreCustomPlanReceiptProvide: handleAdminStoreCustomPlanReceiptProvide,
+      adminStoreCustomPlanReceiptProvisionList: handleAdminStoreCustomPlanReceiptProvisionList,
       // STEP 44-C⑤｜定期実行(前月の締め・未払いの判定・請求の対象の判定。定期実行からの請求は許可フラグ false の間は試算だけ)。
       storeCustomPlanCron: handleStoreCustomPlanCron,
       // STEP 53-C｜定期実行が動いているか(運営のみ・読むだけ)。

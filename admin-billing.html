@@ -226,6 +226,24 @@
         <div id="customPlanBillingResult"></div>
       </div>
 
+      <!-- STEP 54-B｜月額100円の領収書：Stripe で成立した返金の記録・退会後の領収書の再提供(運営のみ)。
+           返金の操作は Stripe の管理画面で行い、ここでは Stripe に照会して記録するだけ(返金は作らない)。
+           再提供は、本人確認の方法とメモを入れた時だけ開ける(提供の記録が残る)。 -->
+      <div class="panel" id="customPlanReceiptPanel">
+        <h2>月額100円の領収書（返金の記録・退会後の再提供）</h2>
+        <p class="note">返金は Stripe の管理画面で行ってください。ここでは Stripe に照会し、成立した返金（全額・一部・処理中）を請求台帳と領収書に記録します。請求専用キーに返金の読み取りの権限が無い時は記録しません。退会した店主から領収書を求められた時は、本人を確認してから「本人確認のうえ領収書を開く」で表示し、印刷・PDF で渡してください（提供の記録が残ります）。</p>
+        <div class="button-row">
+          <label>請求書ID <input type="text" id="customPlanReceiptInvoiceInput" placeholder="例：店舗ID_2026-11"></label>
+        </div>
+        <div class="button-row">
+          <button id="customPlanRefundSyncButton" class="secondary-button" type="button">Stripe の返金を確認</button>
+          <button id="customPlanReceiptOperatorButton" class="secondary-button" type="button">本人確認のうえ領収書を開く</button>
+          <button id="customPlanReceiptProvisionListButton" class="secondary-button" type="button">提供の記録</button>
+        </div>
+        <div id="customPlanReceiptMessage" class="message-box" role="status" aria-live="polite"></div>
+        <div id="customPlanReceiptProvisionList"></div>
+      </div>
+
     </section>
 
   </main>
@@ -1201,6 +1219,68 @@
     document.getElementById("customPlanChargeDryRunButton").addEventListener("click", function() { runCustomPlanBilling("charge", false); });
     document.getElementById("customPlanChargeExecuteButton").addEventListener("click", function() { runCustomPlanBilling("charge", true); });
     document.getElementById("customPlanInvoiceReloadButton").addEventListener("click", function() { runCustomPlanBilling("list", false); });
+
+    // STEP 54-B｜領収書：返金の記録・退会後の再提供・提供の記録。
+    const RECEIPT_REASON_LABELS = {
+      refund_permission_missing: "請求専用キーに返金の読み取りの権限がありません。記録していません（Stripe で権限を追加してから、もう一度確認してください）",
+      stripe_unavailable: "Stripe に照会できませんでした。記録していません",
+      refund_list_invalid: "Stripe の返金の一覧を確認できませんでした。記録していません",
+      refund_amount_exceeds_payment: "返金の合計が支払額を超えています。記録していません",
+      refund_record_conflict: "記録の途中で台帳が変わりました。もう一度確認してください",
+      not_paid: "支払い済みの請求ではありません",
+      payment_processing: "決済の処理中です",
+      payment_unconfirmed: "支払いの成功を確認できません",
+      payment_failed: "支払いに失敗した請求です",
+      environment_mismatch: "この環境の請求ではありません",
+      invoice_not_found: "請求書が見つかりません"
+    };
+    const REFUND_STATE_LABELS = { none: "返金なし", partial: "一部返金済み", full: "全額返金済み", pending: "返金処理中" };
+    function readReceiptInvoiceId() {
+      return document.getElementById("customPlanReceiptInvoiceInput").value.trim();
+    }
+    document.getElementById("customPlanRefundSyncButton").addEventListener("click", async function() {
+      const message = document.getElementById("customPlanReceiptMessage");
+      const invoiceId = readReceiptInvoiceId();
+      if (!/^[A-Za-z0-9_-]{1,100}_\d{4}-\d{2}$/.test(invoiceId)) {
+        showMessage(message, "請求書ID を入力してください（例：店舗ID_2026-11）。", "error");
+        return;
+      }
+      showMessage(message, "Stripe に照会しています…", "info");
+      const result = await callCustomPlanAdmin({ mode: "adminStoreCustomPlanRefundSync", invoiceId: invoiceId });
+      const data = result.data || {};
+      if (result.status !== 200 || data.success !== true) {
+        showMessage(message, "記録できませんでした（" + (RECEIPT_REASON_LABELS[data.reason] || data.reason || data.message || ("HTTP " + result.status)) + "）。", "error");
+        return;
+      }
+      showMessage(message, invoiceId + "：" + (REFUND_STATE_LABELS[data.refundState] || data.refundState) + "（返金済み " + data.refundedAmountJpy + " 円・処理中 " + data.pendingAmountJpy + " 円・Stripe の返金 " + data.refundCount + " 件・今回の更新 " + data.changedRefunds + " 件）。", "info");
+    });
+    document.getElementById("customPlanReceiptOperatorButton").addEventListener("click", function() {
+      const invoiceId = readReceiptInvoiceId();
+      if (!/^[A-Za-z0-9_-]{1,100}_\d{4}-\d{2}$/.test(invoiceId)) {
+        showMessage(document.getElementById("customPlanReceiptMessage"), "請求書ID を入力してください（例：店舗ID_2026-11）。", "error");
+        return;
+      }
+      window.open("store-receipt.html?invoice=" + encodeURIComponent(invoiceId) + "&operator=1", "_blank", "noopener");
+    });
+    document.getElementById("customPlanReceiptProvisionListButton").addEventListener("click", async function() {
+      const message = document.getElementById("customPlanReceiptMessage");
+      const list = document.getElementById("customPlanReceiptProvisionList");
+      const invoiceId = readReceiptInvoiceId();
+      const result = await callCustomPlanAdmin({ mode: "adminStoreCustomPlanReceiptProvisionList", invoiceId: invoiceId });
+      const data = result.data || {};
+      list.textContent = "";
+      if (result.status !== 200 || data.success !== true) {
+        showMessage(message, "提供の記録を読めませんでした（HTTP " + result.status + "）。", "error");
+        return;
+      }
+      showMessage(message, "提供の記録：" + data.items.length + " 件（新しい順・最大50件）。", "info");
+      data.items.forEach(function(item) {
+        const line = document.createElement("p");
+        line.className = "note";
+        line.textContent = new Date(item.providedAtMillis).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" }) + "｜" + item.invoiceId + "｜" + item.receiptNumber + "｜本人確認：" + item.verificationMethod + "（" + item.verificationNote + "）" + (item.issuedNow ? "｜この時に発行" : "") + (item.ownerAccountDeletionStatus ? "｜退会の状態：" + item.ownerAccountDeletionStatus : "");
+        list.appendChild(line);
+      });
+    });
 
     // 画面の切り替えは運営のメールアドレスで判定する(最終的な権限確認はサーバーの requireAdmin)。
     // 他のアカウントでログイン中でもログアウトはさせない。

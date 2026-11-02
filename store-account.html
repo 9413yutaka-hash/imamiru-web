@@ -1629,6 +1629,10 @@
           const statusKey = PLAN_PAY_STATUS_KEYS[invoice.status] || "store_plan_pay_status_review";
           addPlanPayText(item, "p", t(statusKey)
             .replace("{date}", invoice.status === "paid" ? formatPlanPayDate(invoice.paidAtMillis) : String(invoice.chargeScheduledFor || "").replace(/-/g, "/")), "plan-pay-status");
+          if (invoice.refundState === "full" || invoice.refundState === "partial" || invoice.refundState === "pending") {
+            // STEP 54-B｜返金の記録(Stripe で成立した返金だけを金額に数える)。
+            addPlanPayText(item, "p", t("store_plan_pay_refund_" + invoice.refundState).replace("{amount}", String(invoice.refundedAmountJpy)), "hint");
+          }
           if (invoice.receiptAvailable) {
             // STEP 54｜支払い済みの請求だけ。発行の可否はサーバーが台帳と Stripe で確かめる。
             const receiptLink = addPlanPayText(item, "a", t("store_plan_pay_receipt_link"), "plan-pay-receipt");
