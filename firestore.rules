@@ -1,0 +1,256 @@
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // マチナウ管理者か確認
+    // STEP 55｜メールの一致に加えて、メール確認済みの時だけ管理者とみなす（サーバーの運営の判定と同じ条件）
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email == "9413yutaka@gmail.com"
+        && request.auth.token.email_verified == true;
+    }
+
+    // STEP 55｜一般の投稿（post.html）で受け付ける項目。運営用の項目（isPermanentAd・postType・
+    // authorType・sourceType・operatorUid・aiReviewStatus など）は含めない。
+    // api/_lib/submission-safety.js・admin.html と同じ一覧（変える時は3か所をそろえる）
+    function publicSubmissionFields() {
+      return [
+        "shopName",
+        "title",
+        "category",
+        "durationHours",
+        "expiresAt",
+        "content",
+        "address",
+        "latitude",
+        "longitude",
+        "websiteUrl",
+        "businessStartTime",
+        "businessEndTime",
+        "isOpen24Hours",
+        "takeout",
+        "paymentMethods",
+        "imageUrls",
+        "imagePublicIds",
+        "images",
+        "submissionType",
+        "status",
+        "publicationNumber",
+        "endCodeHash",
+        "createdAt",
+        "updatedAt",
+        "source",
+        "version"
+      ];
+    }
+
+    // 自動審査（サーバー）が投稿の後に書き足す項目
+    function publicSubmissionReviewFields() {
+      return [
+        "aiReviewStatus",
+        "aiReviewReason",
+        "aiReviewedAt",
+        "aiReviewVersion"
+      ];
+    }
+
+    // 一般の投稿の掲載時間（投稿画面の選択肢と同じ。今だけ投稿の24時間固定とは別）
+    function publicSubmissionDurationHours() {
+      return [3, 6, 12, 24];
+    }
+
+    // 旧コレクション
+    match /advertisements/{document} {
+
+      // 一般公開
+      allow read: if true;
+
+      // 書き込み禁止
+      allow create, update, delete: if false;
+    }
+
+    // 投稿・掲載データ
+    match /submissions/{document} {
+
+      // 一般ユーザーからの新規投稿
+      // 一般投稿は審査待ち（pending）で保存
+      // 管理者はapprovedでの新規作成も可能
+      // STEP 55｜受け付ける項目を限定し（運営用の項目は拒否）、掲載時間は 3・6・12・24 時間だけ、
+      // 掲載の終了日時は作成から48時間以内（最長24時間＋端末の時計のずれの余裕）に限る。
+      // 承認の時はサーバー・運営画面が掲載時間から終了日時を計算し直す。
+      allow create: if
+        request.auth != null
+        && request.resource.data.keys().hasOnly(publicSubmissionFields())
+        &&
+        request.resource.data.shopName is string
+        && request.resource.data.shopName.size() > 0
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.content is string
+        && request.resource.data.content.size() > 0
+        && request.resource.data.category is string
+        && request.resource.data.category.size() > 0
+        && (
+          request.resource.data.status == "pending"
+          || (isAdmin() && request.resource.data.status == "approved")
+        )
+        && request.resource.data.durationHours is number
+        && request.resource.data.durationHours in publicSubmissionDurationHours()
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.expiresAt <= request.time + duration.value(48, 'h')
+        && request.resource.data.publicationNumber is string
+        && request.resource.data.endCodeHash is string;
+
+      // 承認済み広告は誰でも閲覧可能
+      // 管理者はpending・rejected・expiredなども閲覧可能
+      allow read: if
+        resource.data.status == "approved"
+        || isAdmin();
+
+      // 管理者だけステータスを変更可能
+      allow update: if
+        isAdmin()
+        && request.resource.data.diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            "status",
+            "updatedAt",
+            "endedAt",
+            "endedBy",
+            "expiresAt"
+          ])
+        && request.resource.data.status in [
+          "pending",
+          "approved",
+          "rejected",
+          "expired"
+        ]
+        // STEP 55｜審査待ちなどから承認に変える時は、一般の投稿の項目だけ・掲載時間が 3・6・12・24 時間の
+        // 投稿に限る（運営用の項目が混入した投稿を承認で有効にしない）。承認済みの投稿の終了などは従来どおり。
+        && (
+          request.resource.data.status != "approved"
+          || resource.data.status == "approved"
+          || (
+            resource.data.keys().hasOnly(
+              publicSubmissionFields().concat(publicSubmissionReviewFields())
+            )
+            && resource.data.durationHours in publicSubmissionDurationHours()
+          )
+        );
+
+      // 削除は禁止
+      allow delete: if false;
+    }
+
+    // 通報（一般投稿への通報。Phase2 STEP5-D）
+    match /reports/{reportId} {
+
+      // 一般ユーザーは自分のuidで、対象submissionsが存在する場合のみ
+      // 通報を新規作成できる。1submission・1uidにつき1件のみ、
+      // 上書き・削除は一切許可しない。
+      allow create: if
+        request.auth != null
+        && request.resource.data.keys().hasOnly([
+          "submissionId",
+          "reporterUid",
+          "reason",
+          "createdAt"
+        ])
+        && request.resource.data.submissionId is string
+        && request.resource.data.submissionId.size() > 0
+        && request.resource.data.reporterUid == request.auth.uid
+        && reportId == request.resource.data.submissionId + "_" + request.auth.uid
+        && request.resource.data.reason in [
+          "old_or_wrong",
+          "inappropriate",
+          "spam",
+          "other"
+        ]
+        && request.resource.data.createdAt == request.time
+        && exists(/databases/$(database)/documents/submissions/$(request.resource.data.submissionId));
+
+      // 通報の確認はマチナウ管理者のみ
+      allow read: if isAdmin();
+
+      // 通報は書き換え・削除しない
+      allow update, delete: if false;
+    }
+
+    // 地域のおすすめ
+    match /regionRecommendations/{document} {
+
+      // 公開中の記事は誰でも閲覧可能
+      // 非公開記事は管理者だけ閲覧可能
+      allow read: if
+        resource.data.isPublished == true
+        || isAdmin();
+
+      // 作成・編集・削除はマチナウ管理者のみ
+      allow create, update, delete: if isAdmin();
+    }
+
+    // 今だけ投稿（サーバーAPI経由のみ。ブラウザから直接の読み書きは禁止）
+    match /imadakePosts/{docId} {
+      allow read, write: if false;
+    }
+
+    match /imadakeStoreSlots/{docId} {
+      allow read, write: if false;
+    }
+
+    match /imadakeRateLimits/{docId} {
+      allow read, write: if false;
+    }
+
+    // 店舗セルフ登録（サーバーAPI経由のみ。ブラウザから直接の読み書きは禁止）
+    match /storeMembers/{docId} {
+      allow read, write: if false;
+    }
+
+    match /storeProfiles/{docId} {
+      allow read, write: if false;
+    }
+
+    match /storeRegistrationRateLimits/{docId} {
+      allow read, write: if false;
+    }
+
+    // 運営無料掲載→店舗オーナー化（サーバーAPI経由のみ）
+    match /storeListingClaims/{docId} {
+      allow read, write: if false;
+    }
+
+    match /storeListingLinks/{docId} {
+      allow read, write: if false;
+    }
+
+    // Stripe請求情報（サーバーAPI経由のみ）
+    match /storeBilling/{storeId} {
+      allow read, write: if false;
+    }
+    // STEP 42-C／43-C｜アカウント単位の支払い情報（1アカウント1枚のカード）。サーバーのAPI（Admin SDK）だけが読み書きする。
+    // ブラウザからの直接の読み書きは拒否（本番ではワイルドカードの許可が無いため既定でも拒否、明示して将来の誤りを防ぐ）。
+    match /accountBilling/{uid} {
+      allow read, write: if false;
+    }
+
+    match /storeBillingRateLimits/{docId} {
+      allow read, write: if false;
+    }
+
+    match /imadakeMonthlyInvoices/{invoiceId} {
+      allow read, write: if false;
+    }
+
+    match /imadakePostDailyCharges/{chargeId} {
+      allow read, write: if false;
+    }
+
+    match /imadakeCvViews/{viewId} {
+      allow read, write: if false;
+    }
+
+  }
+}

@@ -2696,6 +2696,51 @@
       }
     }
 
+    // STEP 55｜一般投稿で受け付ける項目と掲載時間(api/_lib/submission-safety.js・firestore.rules と同じ一覧)。
+    const PUBLIC_SUBMISSION_ALLOWED_FIELDS = [
+      "shopName",
+      "title",
+      "category",
+      "durationHours",
+      "expiresAt",
+      "content",
+      "address",
+      "latitude",
+      "longitude",
+      "websiteUrl",
+      "businessStartTime",
+      "businessEndTime",
+      "isOpen24Hours",
+      "takeout",
+      "paymentMethods",
+      "imageUrls",
+      "imagePublicIds",
+      "images",
+      "submissionType",
+      "status",
+      "publicationNumber",
+      "endCodeHash",
+      "createdAt",
+      "updatedAt",
+      "source",
+      "version"
+    ];
+
+    // 自動審査が投稿の後に書き足す項目(混入とは扱わない)。
+    const PUBLIC_SUBMISSION_REVIEW_FIELDS = [
+      "aiReviewStatus",
+      "aiReviewReason",
+      "aiReviewedAt",
+      "aiReviewVersion"
+    ];
+
+    const PUBLIC_SUBMISSION_DURATION_HOURS = [
+      3,
+      6,
+      12,
+      24
+    ];
+
     async function approveSubmission(
       documentId
     ) {
@@ -2716,12 +2761,41 @@
         return;
       }
 
+      // STEP 55｜一般投稿で受け付けない項目(運営用の isPermanentAd・postType 等)が付いた投稿は承認しない
+      // (承認すると運営用の扱いが有効になるため)。一覧は api/_lib/submission-safety.js と同じ。
+      const disallowedFields =
+        Object.keys(
+          submission
+        ).filter(
+          function(key) {
+            return key !== "id" &&
+              !PUBLIC_SUBMISSION_ALLOWED_FIELDS.includes(
+                key
+              ) &&
+              !PUBLIC_SUBMISSION_REVIEW_FIELDS.includes(
+                key
+              );
+          }
+        );
+
+      if (disallowedFields.length > 0) {
+        showAdminMessage(
+          "「" +
+          submission.shopName +
+          "」は一般の投稿では使えない項目（" +
+          disallowedFields.join("、") +
+          "）が含まれているため、承認できません。却下してください。",
+          "error"
+        );
+
+        return;
+      }
+
+      // STEP 55｜掲載時間は 3・6・12・24 時間だけ(投稿画面の選択肢と同じ)。
       const durationHoursValue =
-        typeof submission.durationHours === "number" &&
-        Number.isFinite(
+        PUBLIC_SUBMISSION_DURATION_HOURS.includes(
           submission.durationHours
-        ) &&
-        submission.durationHours > 0
+        )
           ? submission.durationHours
           : null;
 

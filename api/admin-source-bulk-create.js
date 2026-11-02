@@ -404,10 +404,12 @@ export default async function handler(
       )
         .toLowerCase();
 
+    // STEP 55｜メールの一致に加えて、メール確認済みの時だけ運営とみなす(Firestore のルールの isAdmin() と同じ条件)。
     if (
       decodedEmail === "" ||
       decodedEmail !==
-        adminEmail.toLowerCase()
+        adminEmail.toLowerCase() ||
+      decodedToken.email_verified !== true
     ) {
       return response.status(403).json({
         success: false,

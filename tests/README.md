@@ -69,6 +69,9 @@ for f in imadake-store-login-test imadake-safety-test imadake-translation-test i
   node --import ./tests/mockfa/register.mjs tests/$f.mjs
 done
 
+# 一般の投稿の安全対策(STEP 55：運営用の項目の混入・掲載時間の制限・運営の判定のメール確認済み。post.html・admin.html・firestore.rules の一覧の一致も確かめる)
+node --import ./tests/mockfa-occ/register.mjs tests/submission-safety-test.mjs
+
 # 既存の回帰(画面、Chrome を使う。ローカルに 127.0.0.1:8701 でリポジトリを配信して確認する)
 for f in tests3 tests5 tests6 tests7 tests8 tests9 tests10; do
   node --import ./tests/mockfa/register.mjs tests/$f.mjs

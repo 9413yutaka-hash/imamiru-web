@@ -1,2 +1,4 @@
 # 模擬テスト一式(tests/)は公開サイトに配信しない。
 /tests
+# STEP 55｜Firestore のルールの正本(Firebase に反映する元の文書)。公開サイトには配信しない。
+/firestore.rules

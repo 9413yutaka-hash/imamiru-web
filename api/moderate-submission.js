@@ -214,6 +214,12 @@ import {
   handleImadakeBillingStripeCheck
 } from "./_lib/imadake-billing-admin.js";
 
+// STEP 55｜一般投稿で受け付ける項目・掲載時間と、運営(メール確認済み)の判定。
+import {
+  checkPublicSubmission,
+  isVerifiedAdminToken
+} from "./_lib/submission-safety.js";
+
 
 function getFirebaseAdminApp() {
   if (getApps().length > 0) {
@@ -21996,20 +22002,18 @@ async function resolveRequestActor(
     };
   }
 
-  const adminEmail =
-    process.env.ADMIN_EMAIL;
-
   const decodedEmail =
     String(
       decodedToken.email || ""
     )
       .toLowerCase();
 
+  // STEP 55｜メールの一致に加えて、メール確認済みの時だけ運営とみなす(Firestore のルールの isAdmin() と同じ条件)。
   if (
-    adminEmail &&
-    decodedEmail !== "" &&
-    decodedEmail ===
-      adminEmail.toLowerCase()
+    isVerifiedAdminToken(
+      decodedToken,
+      process.env.ADMIN_EMAIL
+    )
   ) {
     return {
       ok: true,
@@ -31692,6 +31696,65 @@ export default async function handler(
       });
     }
 
+    // STEP 55｜一般投稿で受け付けない項目(運営用の isPermanentAd・postType 等)が付いた投稿や、
+    // 掲載時間が 3・6・12・24 時間以外の投稿は、審査に進めず却下する(掲載しない)。
+    // 運営用の項目を承認で引き継がないため、運営の手動承認(admin.html)でも同じ条件で承認しない。
+    const publicSubmissionCheck =
+      checkPublicSubmission(
+        currentData
+      );
+
+    if (!publicSubmissionCheck.ok) {
+      await database.runTransaction(
+        async function(transaction) {
+          const freshSnapshot =
+            await transaction.get(
+              matchingDocument.ref
+            );
+
+          if (
+            !freshSnapshot.exists ||
+            freshSnapshot.data().status !== "pending"
+          ) {
+            return;
+          }
+
+          transaction.update(
+            matchingDocument.ref,
+            {
+              status:
+                "rejected",
+
+              aiReviewStatus:
+                "REJECTED",
+
+              aiReviewReason:
+                publicSubmissionCheck.reason === "invalid_duration"
+                  ? "掲載時間が 3・6・12・24 時間以外のため、受け付けませんでした。"
+                  : "一般の投稿では使えない項目が含まれているため、受け付けませんでした。",
+
+              aiReviewedAt:
+                FieldValue.serverTimestamp(),
+
+              aiReviewVersion:
+                AI_REVIEW_VERSION,
+
+              updatedAt:
+                FieldValue.serverTimestamp()
+            }
+          );
+        }
+      );
+
+      return response.status(400).json({
+        success: false,
+        reason:
+          publicSubmissionCheck.reason,
+        message:
+          "この投稿は受け付けられませんでした。"
+      });
+    }
+
     if (
       currentData.aiReviewStatus === "REVIEW" ||
       currentData.aiReviewStatus === "SAFE"
@@ -31723,14 +31786,9 @@ export default async function handler(
       });
     }
 
+    // STEP 55｜ここに来るのは掲載時間が 3・6・12・24 時間の投稿だけ(上の checkPublicSubmission で確認済み)。
     const durationHoursValue =
-      typeof currentData.durationHours === "number" &&
-      Number.isFinite(
-        currentData.durationHours
-      ) &&
-      currentData.durationHours > 0
-        ? currentData.durationHours
-        : null;
+      currentData.durationHours;
 
     let moderationResults =
       null;
