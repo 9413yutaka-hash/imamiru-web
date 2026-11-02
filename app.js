@@ -21993,7 +21993,8 @@ document.addEventListener(
 // ・共有するURLは正式なドメインの決まった形だけ(位置情報・利用者のID・言語は含めない。
 //   PreviewやローカルのURLにもしない)：
 //     今だけ投稿 https://machinau.jp/share/imadake/{投稿ID}
-//     無料店舗   https://machinau.jp/share/shop/{ID}(運営掲載の常設店舗広告は submission ID、正式店舗は sp_{storeId})
+//     無料店舗   https://machinau.jp/share/shop/{ID}(運営掲載の常設店舗広告は submission ID)
+//     正式店舗   https://machinau.jp/shop/{storeId}(STEP 56：店舗ごとの固定の公開ページ。旧 /share/shop/sp_{storeId} も有効)
 //   STEP 48-B｜/share/ はLINE等のプレビュー(OGP)を返すページ(api/_lib/share-preview.js)で、人が開くと
 //   すぐ下の直接表示(/?imadake= ・ /?shop=)へ移る。/?imadake= ・ /?shop= を直接開いても同じ表示。
 //   読みものの記事は記事ページ(api/moderate-submission.js の buildColumnArticleHtml)が自分のURLを共有する。
@@ -22060,6 +22061,20 @@ function buildMachinauShareUrl(
     !MACHINAU_SHARE_ID_PATTERN.test(id)
   ) {
     return "";
+  }
+
+  // STEP 56｜店主が管理する正式店舗(sp_{storeId})は、店舗ごとの固定の公開ページを共有する
+  // (OGP・検索用の正式な URL。旧い /share/shop/sp_{storeId} も店舗ページへ移る)。
+  if (
+    kind === "shop" &&
+    id.indexOf("sp_") === 0 &&
+    id.length > 3
+  ) {
+    return (
+      MACHINAU_SHARE_ORIGIN +
+      "/shop/" +
+      encodeURIComponent(id.slice(3))
+    );
   }
 
   return (

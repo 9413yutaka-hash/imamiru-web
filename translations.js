@@ -2852,8 +2852,74 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_profile_name_location_note: {
-    ja: "店舗・施設名と所在地は、ここでは変更できません（変更方法は準備中です）。",
-    en: "The name and location can't be changed here (a change process is being prepared)."
+    ja: "店舗・施設名と所在地は、下の「店舗・施設名と所在地を変更する」から変えられます。変えても、お店のページのURLは変わりません。",
+    en: "You can change the name and location with \"Change name and location\" below. The URL of your shop page stays the same."
+  },
+
+  // STEP 56｜店舗・施設名と所在地の変更(店主本人)・お店ごとの固定の公開ページ
+  store_identity_edit_button: {
+    ja: "店舗・施設名と所在地を変更する",
+    en: "Change name and location"
+  },
+  store_identity_address_label: {
+    ja: "住所",
+    en: "Address"
+  },
+  store_identity_note: {
+    ja: "住所は、保存の時に地図上の位置を確かめます（国・地域は変わりません）。同じ名前のお店が近くに掲載されている時は、確認が済むまで旅行者に表示されないことがあります。",
+    en: "When you save, we check the address on the map (the country/region stays the same). If a shop with the same name is listed nearby, your shop may not be shown to travelers until this is resolved."
+  },
+  store_identity_save_button: {
+    ja: "変更を保存する",
+    en: "Save changes"
+  },
+  store_identity_cancel_button: {
+    ja: "やめる",
+    en: "Cancel"
+  },
+  store_identity_saved: {
+    ja: "店舗・施設名と所在地を保存しました。お店のページのURLは変わりません。",
+    en: "The name and location have been saved. The URL of your shop page stays the same."
+  },
+  store_identity_saved_duplicate: {
+    ja: "保存しました。同じ名前のお店が近くに掲載されているため、公開の条件をご確認ください。",
+    en: "Saved. A shop with the same name is listed nearby, so please check the publishing conditions."
+  },
+  store_identity_err_account_deleting: {
+    ja: "退会の手続き中のため、変更できません。",
+    en: "This can't be changed while your account closure is in progress."
+  },
+  store_identity_err_conflict: {
+    ja: "別の画面で内容が変わりました。ページを読み込み直してから、もう一度お試しください。",
+    en: "The details were changed on another screen. Please reload the page and try again."
+  },
+  store_page_url_label: {
+    ja: "お店のページ（固定のURL）",
+    en: "Your shop page (permanent URL)"
+  },
+  store_page_copy_button: {
+    ja: "URLをコピー",
+    en: "Copy URL"
+  },
+  store_page_copied: {
+    ja: "URLをコピーしました。",
+    en: "URL copied."
+  },
+  store_page_copy_failed: {
+    ja: "コピーできませんでした。上のURLを長押し・選択してコピーしてください。",
+    en: "Couldn't copy. Please press and hold or select the URL above to copy it."
+  },
+  store_page_note_published: {
+    ja: "旅行者に公開中です。このURLをLINE・Instagram・SNS・QRコードで共有できます。店舗・施設名・写真・紹介文を変えても、URLは変わりません。",
+    en: "Shown to travelers. You can share this URL on LINE, Instagram, other social media or as a QR code. It stays the same even if you change the name, photos or description."
+  },
+  store_page_note_draft: {
+    ja: "旅行者に公開されている間だけ、このURLでお店のページが開きます（今は開けません）。",
+    en: "Your shop page opens at this URL only while it is shown to travelers (it can't be opened right now)."
+  },
+  store_management_pricing_note: {
+    ja: "マチナウの店舗管理サービスは月額100円（税込）です。新規店舗登録も、掲載済み店舗の引き継ぎも、同じ料金でご利用いただけます。アカウントの作成とクレジットカードの登録だけでは料金はかかりません。料金は、お店・施設ごとに月額100円のプランを申し込んだ時からかかります（申し込む前の下書きは旅行者に公開されません）。",
+    en: "Machinau's store management service is ¥100/month (tax included) per shop. Registering a new shop and taking over a shop already listed on Machinau cost the same. Creating an account and registering a credit card alone are free of charge. Charges start when you subscribe to the ¥100/month plan for each shop (drafts saved before you subscribe are not shown to travelers)."
   },
 
   store_profile_description_label: {

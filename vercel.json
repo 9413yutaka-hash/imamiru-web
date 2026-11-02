@@ -17,6 +17,10 @@
       "destination": "/api/moderate-submission?mode=renderShareShop&shopId=:shopId"
     },
     {
+      "source": "/shop/:storeId",
+      "destination": "/api/moderate-submission?mode=renderStorePage&storeId=:storeId"
+    },
+    {
       "source": "/share/post/:postId",
       "destination": "/api/moderate-submission?mode=renderSharePost&postId=:postId"
     }

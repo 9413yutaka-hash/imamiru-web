@@ -87,7 +87,8 @@ import {
 import {
   handleStoreRegistrationPreview,
   handleStoreSelfRegister,
-  handleStoreMyStores
+  handleStoreMyStores,
+  handleStoreIdentityUpdate
 } from "./_lib/store-self-service.js";
 
 // 正式店舗参加基盤 Phase 2B｜店舗自身による常設店舗情報の編集。実処理はapi/_lib/store-profile.js。
@@ -97,6 +98,7 @@ import {
   handleStoreProfilePublish,
   handleStoreProfileUnpublish,
   handlePublicStoreProfilesList,
+  collectPublicStoreProfiles,
   checkStoreProfileEditor,
   buildStorePhotoFolder,
   isStorePhotoPublicId
@@ -156,6 +158,12 @@ import {
   handleRenderSharePost,
   handleRenderShareShop
 } from "./_lib/share-preview.js";
+
+// STEP 56｜店舗ごとの固定の公開ページ(/shop/{storeId})と、その sitemap の項目。
+import {
+  handleRenderStorePage,
+  buildStorePageSitemapEntries
+} from "./_lib/store-page.js";
 
 // 運営無料掲載 → 店舗オーナー化 MVP-1。実処理はapi/_lib/store-listing-claims.js。
 import {
@@ -27996,6 +28004,49 @@ async function handleRenderSitemapRequest(
       );
     }
 
+    // STEP 56｜公開中の正式店舗のページ(旅行者向けの一覧と同じ判定)。読めない時は記事と同じく 503。
+    try {
+      const publicStores =
+        await collectPublicStoreProfiles(
+          database,
+          {}
+        );
+
+      buildStorePageSitemapEntries(
+        publicStores.stores
+      ).forEach(
+        function(entry) {
+          urlEntries.push(
+            entry
+          );
+        }
+      );
+    } catch (storesError) {
+      console.error(
+        "sitemap生成時の店舗ページ一覧取得に失敗しました(503を返します)：",
+        storesError
+      );
+
+      response.setHeader(
+        "Content-Type",
+        "text/plain; charset=utf-8"
+      );
+
+      response.setHeader(
+        "Cache-Control",
+        "no-store"
+      );
+
+      response.setHeader(
+        "Retry-After",
+        String(SITEMAP_RETRY_AFTER_SECONDS)
+      );
+
+      return response.status(503).send(
+        "sitemap temporarily unavailable"
+      );
+    }
+
     const xmlBody =
       urlEntries
         .map(
@@ -30358,6 +30409,18 @@ export default async function handler(
       );
     }
 
+    // STEP 56｜店舗ごとの固定の公開ページ。vercel.json の rewrite 経由で /shop/{storeId} がここへ届く
+    // (読み取りだけ。公開中で公開条件を満たす正式店舗だけを表示し、それ以外は 404)。
+    if (
+      request.query.mode === "renderStorePage"
+    ) {
+      return handleRenderStorePage(
+        request,
+        response,
+        buildStoreSelfServiceDeps()
+      );
+    }
+
     // 完成形 B｜期限つきの公開投稿の共有リンクのプレビュー(/share/post/{ID})。
     if (
       request.query.mode === "renderSharePost"
@@ -30566,6 +30629,17 @@ export default async function handler(
     requestBody.mode === "storeSelfRegister"
   ) {
     return handleStoreSelfRegister(
+      request,
+      response,
+      buildStoreSelfServiceDeps()
+    );
+  }
+
+  // STEP 56｜店舗・施設名と所在地の変更(owner本人。所在地はサーバーで Geocoding して確定)。
+  if (
+    requestBody.mode === "storeIdentityUpdate"
+  ) {
+    return handleStoreIdentityUpdate(
       request,
       response,
       buildStoreSelfServiceDeps()

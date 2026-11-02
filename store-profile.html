@@ -281,6 +281,22 @@
           <span class="readonly-value" id="storeLocationText"></span>
         </div>
         <p class="hint" data-i18n="store_profile_name_location_note"></p>
+        <!-- STEP 56｜店舗・施設名と所在地の変更(店主本人。所在地はサーバーが住所から確かめる。お店のページの URL は変わらない)。 -->
+        <button type="button" class="small-button" id="identityEditButton" data-i18n="store_identity_edit_button">店舗・施設名と所在地を変更する</button>
+        <div id="identityEditor" hidden>
+          <div class="field">
+            <label for="identityNameInput" data-i18n="store_account_store_name_label">店舗・施設名</label>
+            <input type="text" id="identityNameInput" maxlength="60" autocomplete="organization">
+          </div>
+          <div class="field">
+            <label for="identityAddressInput" data-i18n="store_identity_address_label">住所</label>
+            <input type="text" id="identityAddressInput" maxlength="200" autocomplete="street-address">
+          </div>
+          <p class="hint" data-i18n="store_identity_note"></p>
+          <button type="button" class="primary-button" id="identitySaveButton" data-i18n="store_identity_save_button">変更を保存する</button>
+          <button type="button" class="secondary-button" id="identityCancelButton" data-i18n="store_identity_cancel_button">やめる</button>
+        </div>
+        <div id="identityMessage" class="message" role="status" aria-live="polite"></div>
       </section>
 
       <!-- Phase 2D｜旅行者への公開。条件は保存済みの内容でサーバーが判定する(公開時にも再確認)。 -->
@@ -290,6 +306,14 @@
         <p class="hint" id="publishStateNote"></p>
         <p class="publish-checklist-heading" data-i18n="store_profile_publish_checklist_heading">公開の条件</p>
         <ul class="publish-checklist" id="publishChecklist"></ul>
+        <!-- STEP 56｜お店ごとの固定の公開ページ。店舗・施設名・写真・紹介文を変えても URL は変わらない。 -->
+        <div class="readonly-row store-page-row">
+          <span class="readonly-label" data-i18n="store_page_url_label">お店のページ（固定のURL）</span>
+          <a class="readonly-value" id="storePageLink" href="#" target="_blank" rel="noopener"></a>
+          <p class="hint" id="storePageNote"></p>
+          <button type="button" class="small-button" id="storePageCopyButton" data-i18n="store_page_copy_button">URLをコピー</button>
+          <span class="hint" id="storePageCopyStatus" role="status" aria-live="polite"></span>
+        </div>
         <p class="message info" id="publishSaveFirstNote" data-i18n="store_profile_publish_save_first"></p>
         <div id="publishMessage" class="message" role="status" aria-live="polite"></div>
         <button type="button" class="primary-button" id="publishButton" data-i18n="store_profile_publish_button">旅行者に公開する</button>
@@ -489,7 +513,15 @@
         rate_limited: "store_account_store_err_rate_limited",
         photo_upload_failed: "store_profile_photos_err_upload",
         upload_unavailable: "store_profile_photos_err_upload",
-        publish_conditions_not_met: "store_profile_publish_err_conditions"
+        publish_conditions_not_met: "store_profile_publish_err_conditions",
+        // STEP 56｜店舗・施設名と所在地の変更
+        address_not_found: "store_account_store_err_address_not_found",
+        location_too_coarse: "store_account_store_err_too_coarse",
+        country_mismatch: "store_account_store_err_country_mismatch",
+        geocoding_unavailable: "store_account_store_err_geocoding",
+        already_registered: "store_account_store_err_already_registered",
+        account_deleting: "store_identity_err_account_deleting",
+        identity_conflict: "store_identity_err_conflict"
       };
       const FIELD_ERROR_KEYS = {
         categoryCode: "store_account_store_err_category",
@@ -499,6 +531,8 @@
         reservationUrl: "store_profile_err_reservation",
         socialLinks: "store_profile_err_social",
         paymentMethodCodes: "store_account_err_generic",
+        storeName: "store_account_store_err_name",
+        address: "store_account_store_err_address",
         "businessHours.note": "store_profile_err_hours_note",
         photos: "store_profile_photos_err_upload"
       };
@@ -515,6 +549,8 @@
       let lastFormMessage = null;
       let lastPublishMessage = null;
       let publishing = false;
+      let identitySaving = false;
+      let lastIdentityMessage = null;
       // Phase 2D｜サーバーが返した公開状態 { status, missing, conditionCodes }。
       let publication = null;
 
@@ -950,6 +986,7 @@
         dirty = false;
         document.getElementById("storeNameText").textContent = result.storeName;
         renderLocation();
+        renderIdentityEditor();
         const profile = result.profile;
         buildCategoryOptions();
         document.getElementById("categorySelect").value = CATEGORY_CODES.includes(profile.categoryCode) ? profile.categoryCode : "other";
@@ -992,6 +1029,7 @@
       }
 
       function renderPublication() {
+        renderStorePageUrl();
         const view = publicationView();
         const stateText = document.getElementById("publishStateText");
         stateText.className = "publish-state " + view;
@@ -1116,6 +1154,115 @@
         document.getElementById("storeLocationText").textContent =
           [getCountryDisplayName(location.countryCode), location.prefecture, location.city].filter(Boolean).join(" ") +
           (location.formattedAddress ? "（" + location.formattedAddress + "）" : "");
+      }
+
+      // ===== STEP 56｜店舗・施設名と所在地の変更・お店のページの固定の URL =====
+
+      function showIdentityMessage(key, type, code) {
+        lastIdentityMessage = setMessage("identityMessage", key, type, code);
+      }
+
+      function clearIdentityMessage() {
+        lastIdentityMessage = null;
+        const box = document.getElementById("identityMessage");
+        box.textContent = "";
+        box.className = "message";
+      }
+
+      function renderIdentityEditor() {
+        document.getElementById("identityEditButton").hidden = !editable || !document.getElementById("identityEditor").hidden;
+        document.getElementById("identitySaveButton").disabled = identitySaving || !editable;
+        document.getElementById("identityCancelButton").disabled = identitySaving;
+      }
+
+      function openIdentityEditor() {
+        if (!loaded || !editable) {
+          return;
+        }
+        clearIdentityMessage();
+        document.getElementById("identityNameInput").value = loaded.storeName || "";
+        document.getElementById("identityAddressInput").value = (loaded.location && loaded.location.address) || "";
+        document.getElementById("identityEditor").hidden = false;
+        renderIdentityEditor();
+        document.getElementById("identityNameInput").focus();
+      }
+
+      function closeIdentityEditor() {
+        document.getElementById("identityEditor").hidden = true;
+        renderIdentityEditor();
+      }
+
+      async function handleIdentitySave() {
+        if (identitySaving || !loaded || !editable) {
+          return;
+        }
+        const storeName = document.getElementById("identityNameInput").value.trim();
+        const address = document.getElementById("identityAddressInput").value.trim();
+        if (storeName === "") {
+          return showIdentityMessage("store_account_store_err_name", "error");
+        }
+        if (address === "") {
+          return showIdentityMessage("store_account_store_err_address", "error");
+        }
+        clearIdentityMessage();
+        identitySaving = true;
+        renderIdentityEditor();
+        try {
+          const response = await callApi({ mode: "storeIdentityUpdate", storeId: storeId, storeName: storeName, address: address });
+          const result = response.result || {};
+          if (response.status === 200 && result.success) {
+            if (result.changed) {
+              loaded.storeName = result.storeName;
+              loaded.location = Object.assign({}, loaded.location, result.location || {}, { address: address });
+              document.getElementById("storeNameText").textContent = loaded.storeName;
+              renderLocation();
+            }
+            closeIdentityEditor();
+            // 公開の条件(重複の確認・所在地)が変わることがあるため、編集中でなければ読み直す。
+            if (result.changed && !dirty && !customDirty) {
+              loadProfile();
+            }
+            showIdentityMessage(result.possibleDuplicate ? "store_identity_saved_duplicate" : "store_identity_saved", result.possibleDuplicate ? "info" : "success");
+            return;
+          }
+          if (result.reason === "invalid_input" && FIELD_ERROR_KEYS[result.field]) {
+            return showIdentityMessage(FIELD_ERROR_KEYS[result.field], "error", result.field);
+          }
+          showIdentityMessage(ERROR_MESSAGE_KEYS[result.reason] || "store_account_err_generic", "error", result.reason || "http_" + response.status);
+        } catch (error) {
+          showIdentityMessage("store_account_err_network", "error");
+        } finally {
+          identitySaving = false;
+          renderIdentityEditor();
+        }
+      }
+
+      function renderStorePageUrl() {
+        const url = loaded && typeof loaded.storePageUrl === "string" ? loaded.storePageUrl : "";
+        const link = document.getElementById("storePageLink");
+        link.textContent = url;
+        link.href = url || "#";
+        document.getElementById("storePageNote").textContent = t(publicationView() === "published" ? "store_page_note_published" : "store_page_note_draft");
+        document.getElementById("storePageCopyButton").disabled = url === "";
+      }
+
+      function copyStorePageUrl() {
+        const url = loaded && loaded.storePageUrl;
+        const status = document.getElementById("storePageCopyStatus");
+        if (!url) {
+          return;
+        }
+        const done = function () { status.textContent = t("store_page_copied"); };
+        const failed = function () { status.textContent = t("store_page_copy_failed"); };
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url).then(done, failed);
+            return;
+          }
+        } catch (error) {
+          // 下の案内(手でコピー)へ
+        }
+        failed();
       }
 
       function callApi(body) {
@@ -2298,6 +2445,9 @@
         if (lastPublishMessage) {
           showPublishMessage(lastPublishMessage.key, lastPublishMessage.type, lastPublishMessage.code);
         }
+        if (lastIdentityMessage) {
+          showIdentityMessage(lastIdentityMessage.key, lastIdentityMessage.type, lastIdentityMessage.code);
+        }
         if (loaded) {
           renderPublication();
         }
@@ -2396,6 +2546,13 @@
           loadProfile();
         });
         document.getElementById("publishButton").addEventListener("click", handlePublish);
+        document.getElementById("identityEditButton").addEventListener("click", openIdentityEditor);
+        document.getElementById("identityCancelButton").addEventListener("click", function () {
+          clearIdentityMessage();
+          closeIdentityEditor();
+        });
+        document.getElementById("identitySaveButton").addEventListener("click", handleIdentitySave);
+        document.getElementById("storePageCopyButton").addEventListener("click", copyStorePageUrl);
         bindCustomEvents();
         document.getElementById("unpublishButton").addEventListener("click", handleUnpublish);
         window.addEventListener("beforeunload", function (event) {

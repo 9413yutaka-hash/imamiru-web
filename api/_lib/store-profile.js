@@ -848,8 +848,12 @@ export async function handleStoreProfileGet(request, response, deps) {
         countryCode: account.countryCode || "",
         prefecture: account.prefecture || "",
         city: account.city || "",
-        formattedAddress: account.locationFormattedAddress || account.address || ""
+        formattedAddress: account.locationFormattedAddress || account.address || "",
+        // STEP 56｜店主が入力した住所(店舗・施設名と所在地の変更の入力欄の初期値。旅行者には返さない)。
+        address: typeof account.address === "string" ? account.address : ""
       },
+      // STEP 56｜店舗ごとの固定の公開ページ(店舗 ID から作る。旅行者に表示されるのは公開中の時だけ)。
+      storePageUrl: "https://machinau.jp/shop/" + encodeURIComponent(storeId),
       profile: buildProfileResponse(snapshots[2].exists ? snapshots[2].data() : null),
       // Phase 2D｜旅行者への公開状態と、満たしていない公開条件。
       publication: publication,
@@ -1545,133 +1549,142 @@ export async function readPublicStoreProfileForShare(database, storeId) {
     : buildPublicStoreProfile(storeId, account, profile, linkedListingIds);
 }
 
-export async function handlePublicStoreProfilesList(request, response, deps) {
-  try {
-    const database = deps.getFirestore(deps.getFirebaseAdminApp());
-    const snapshots = await Promise.all([
-      database.collection(STORE_PROFILES_COLLECTION).where("status", "==", "published").get(),
-      database.collection(STORE_LISTING_LINKS_COLLECTION).where("status", "==", "active").get()
-    ]);
-    const profileDocs = snapshots[0].docs;
+// STEP 56｜旅行者向けの正式店舗の一覧(公開中で公開条件をすべて満たす店舗だけ)を作る。
+// 一覧の API(publicStoreProfiles)・店舗ページの sitemap が同じ判定を使う(読み取りだけ)。
+// deps.readPublicStoreCustomProfiles があれば、利用権限がある店舗に有料の内容(custom)を付ける。
+export async function collectPublicStoreProfiles(database, deps) {
+  const snapshots = await Promise.all([
+    database.collection(STORE_PROFILES_COLLECTION).where("status", "==", "published").get(),
+    database.collection(STORE_LISTING_LINKS_COLLECTION).where("status", "==", "active").get()
+  ]);
+  const profileDocs = snapshots[0].docs;
 
-    // storeId → 有効に紐付いている運営無料掲載のsubmission ID(文書ID)
-    const linkedListingIdsByStore = new Map();
-    const claimedListingIds = new Set();
-    const withdrawnListingIds = new Set();
+  // storeId → 有効に紐付いている運営無料掲載のsubmission ID(文書ID)
+  const linkedListingIdsByStore = new Map();
+  const claimedListingIds = new Set();
+  const withdrawnListingIds = new Set();
 
-    snapshots[1].docs.forEach(function(documentSnapshot) {
-      const link = documentSnapshot.data() || {};
+  snapshots[1].docs.forEach(function(documentSnapshot) {
+    const link = documentSnapshot.data() || {};
 
-      if (link.status !== "active" || typeof link.storeId !== "string" || link.storeId === "") {
+    if (link.status !== "active" || typeof link.storeId !== "string" || link.storeId === "") {
+      return;
+    }
+
+    claimedListingIds.add(documentSnapshot.id);
+
+    // STEP 47-B ③｜引き継いだ店主が退会した運営掲載は、紐付け先の店舗が公開されていなくても外す
+    // (運営の確認なしに無料掲載へ自動で戻さない。再掲載は運営が紐付けを解除した時)。
+    if (link.listingHiddenReason === LISTING_HIDDEN_BY_OWNER_ACCOUNT_DELETION) {
+      withdrawnListingIds.add(documentSnapshot.id);
+    }
+
+    if (!linkedListingIdsByStore.has(link.storeId)) {
+      linkedListingIdsByStore.set(link.storeId, []);
+    }
+
+    linkedListingIdsByStore.get(link.storeId).push(documentSnapshot.id);
+  });
+
+  const accountSnapshots = await Promise.all(profileDocs.map(function(documentSnapshot) {
+    return database.collection(STORE_ACCOUNTS_COLLECTION).doc(documentSnapshot.id).get();
+  }));
+
+  // STEP 50-B｜店舗カード契約の利用権。読めなかった店舗は契約なしとして扱う(その店舗だけ返さない)。
+  const listNowMillis = Date.now();
+  const planActiveByIndex = await Promise.all(profileDocs.map(function(documentSnapshot) {
+    return readStoreCardPlanActive(database, documentSnapshot.id, listNowMillis, null).catch(function(planError) {
+      console.error("旅行者向け店舗一覧：契約の読み取りを飛ばしました：", documentSnapshot.id, planError && planError.message);
+      return false;
+    });
+  }));
+
+  const stores = [];
+  const suppressedListingIds = new Set();
+
+  profileDocs.forEach(function(documentSnapshot, index) {
+    const storeId = documentSnapshot.id;
+
+    // 1店舗のデータが壊れていても、他の店舗の表示は止めない(その店舗だけ返さない)。
+    try {
+      const profile = documentSnapshot.data() || {};
+      const accountSnapshot = accountSnapshots[index];
+
+      if (profile.status !== "published" || !accountSnapshot.exists) {
         return;
       }
 
-      claimedListingIds.add(documentSnapshot.id);
-
-      // STEP 47-B ③｜引き継いだ店主が退会した運営掲載は、紐付け先の店舗が公開されていなくても外す
-      // (運営の確認なしに無料掲載へ自動で戻さない。再掲載は運営が紐付けを解除した時)。
-      if (link.listingHiddenReason === LISTING_HIDDEN_BY_OWNER_ACCOUNT_DELETION) {
-        withdrawnListingIds.add(documentSnapshot.id);
-      }
-
-      if (!linkedListingIdsByStore.has(link.storeId)) {
-        linkedListingIdsByStore.set(link.storeId, []);
-      }
-
-      linkedListingIdsByStore.get(link.storeId).push(documentSnapshot.id);
-    });
-
-    const accountSnapshots = await Promise.all(profileDocs.map(function(documentSnapshot) {
-      return database.collection(STORE_ACCOUNTS_COLLECTION).doc(documentSnapshot.id).get();
-    }));
-
-    // STEP 50-B｜店舗カード契約の利用権。読めなかった店舗は契約なしとして扱う(その店舗だけ返さない)。
-    const listNowMillis = Date.now();
-    const planActiveByIndex = await Promise.all(profileDocs.map(function(documentSnapshot) {
-      return readStoreCardPlanActive(database, documentSnapshot.id, listNowMillis, null).catch(function(planError) {
-        console.error("旅行者向け店舗一覧：契約の読み取りを飛ばしました：", documentSnapshot.id, planError && planError.message);
-        return false;
+      const account = accountSnapshot.data() || {};
+      const linkedListingIds = linkedListingIdsByStore.get(storeId) || [];
+      const missing = evaluateStorePublishConditions({
+        account: account,
+        profile: profile,
+        ownerActive: true,
+        planActive: planActiveByIndex[index] === true,
+        resolvedListingIds: new Set(linkedListingIds)
       });
-    }));
 
-    const stores = [];
-    const suppressedListingIds = new Set();
-
-    profileDocs.forEach(function(documentSnapshot, index) {
-      const storeId = documentSnapshot.id;
-
-      // 1店舗のデータが壊れていても、他の店舗の表示は止めない(その店舗だけ返さない)。
-      try {
-        const profile = documentSnapshot.data() || {};
-        const accountSnapshot = accountSnapshots[index];
-
-        if (profile.status !== "published" || !accountSnapshot.exists) {
-          return;
-        }
-
-        const account = accountSnapshot.data() || {};
-        const linkedListingIds = linkedListingIdsByStore.get(storeId) || [];
-        const missing = evaluateStorePublishConditions({
-          account: account,
-          profile: profile,
-          ownerActive: true,
-          planActive: planActiveByIndex[index] === true,
-          resolvedListingIds: new Set(linkedListingIds)
-        });
-
-        if (missing.length > 0) {
-          return;
-        }
-
-        stores.push(buildPublicStoreProfile(storeId, account, profile, linkedListingIds));
-        linkedListingIds.forEach(function(listingId) {
-          suppressedListingIds.add(listingId);
-        });
-      } catch (storeError) {
-        console.error("旅行者向け店舗一覧：店舗の読み取りを飛ばしました：", storeId, storeError && storeError.message);
+      if (missing.length > 0) {
+        return;
       }
-    });
 
-    // STEP 44-A｜月額100円カスタマイズの有料の内容(利用権限がある店舗だけ)。読み取りに失敗しても、
-    // 無料の店舗情報の一覧はこれまでどおり返す(有料の内容を付けないだけ)。
-    if (typeof deps.readPublicStoreCustomProfiles === "function" && stores.length > 0) {
-      try {
-        const customByStore = await deps.readPublicStoreCustomProfiles(
-          database,
-          stores.map(function(store) { return store.id.slice(PUBLIC_STORE_ID_PREFIX.length); })
-        );
-
-        stores.forEach(function(store) {
-          const custom = customByStore.get(store.id.slice(PUBLIC_STORE_ID_PREFIX.length));
-
-          if (custom) {
-            store.custom = custom;
-          }
-        });
-      } catch (customError) {
-        console.error("旅行者向け店舗一覧：カスタマイズの読み取りエラー：", customError && customError.message);
-      }
+      stores.push(buildPublicStoreProfile(storeId, account, profile, linkedListingIds));
+      linkedListingIds.forEach(function(listingId) {
+        suppressedListingIds.add(listingId);
+      });
+    } catch (storeError) {
+      console.error("旅行者向け店舗一覧：店舗の読み取りを飛ばしました：", storeId, storeError && storeError.message);
     }
+  });
 
-    stores.sort(function(a, b) { return a.id < b.id ? -1 : a.id > b.id ? 1 : 0; });
+  // STEP 44-A｜月額100円カスタマイズの有料の内容(利用権限がある店舗だけ)。読み取りに失敗しても、
+  // 無料の店舗情報の一覧はこれまでどおり返す(有料の内容を付けないだけ)。
+  if (typeof deps.readPublicStoreCustomProfiles === "function" && stores.length > 0) {
+    try {
+      const customByStore = await deps.readPublicStoreCustomProfiles(
+        database,
+        stores.map(function(store) { return store.id.slice(PUBLIC_STORE_ID_PREFIX.length); })
+      );
 
-    withdrawnListingIds.forEach(function(listingId) {
-      suppressedListingIds.add(listingId);
-    });
+      stores.forEach(function(store) {
+        const custom = customByStore.get(store.id.slice(PUBLIC_STORE_ID_PREFIX.length));
+
+        if (custom) {
+          store.custom = custom;
+        }
+      });
+    } catch (customError) {
+      console.error("旅行者向け店舗一覧：カスタマイズの読み取りエラー：", customError && customError.message);
+    }
+  }
+
+  stores.sort(function(a, b) { return a.id < b.id ? -1 : a.id > b.id ? 1 : 0; });
+
+  withdrawnListingIds.forEach(function(listingId) {
+    suppressedListingIds.add(listingId);
+  });
+
+  return {
+    stores: stores,
+    suppressedListingIds: Array.from(suppressedListingIds).sort(),
+    claimedListingIds: Array.from(claimedListingIds).sort(),
+    // STEP 47-B ③｜店主の退会で非公開にした運営掲載(お気に入り表示でも外すため、suppressedListingIds とは別にも返す)。
+    withdrawnListingIds: Array.from(withdrawnListingIds).sort()
+  };
+}
+
+export async function handlePublicStoreProfilesList(request, response, deps) {
+  try {
+    const database = deps.getFirestore(deps.getFirebaseAdminApp());
+    const collected = await collectPublicStoreProfiles(database, deps);
 
     // 成功時だけ、既存の公開submissions一覧と同じCDN共有キャッシュにする
     // (失敗時は呼び出し元で設定済みの no-store のまま)。
     response.setHeader("Cache-Control", deps.publicListCacheControl);
 
-    return response.status(200).json({
-      success: true,
-      stores: stores,
-      suppressedListingIds: Array.from(suppressedListingIds).sort(),
-      claimedListingIds: Array.from(claimedListingIds).sort(),
-      // STEP 47-B ③｜店主の退会で非公開にした運営掲載(お気に入り表示でも外すため、suppressedListingIds とは別にも返す)。
-      withdrawnListingIds: Array.from(withdrawnListingIds).sort(),
+    return response.status(200).json(Object.assign({ success: true }, collected, {
       listingClaimOpen: isStoreOnboardingOpen((deps && deps.env) || process.env)
-    });
+    }));
   } catch (error) {
     console.error("旅行者向け店舗一覧：取得エラー：", error && error.message);
     return response.status(500).json({

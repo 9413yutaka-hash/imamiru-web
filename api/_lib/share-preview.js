@@ -30,6 +30,7 @@ import {
 } from "./imadake.js";
 
 import {
+  PUBLIC_STORE_ID_PREFIX,
   readPublicStoreProfileForShare
 } from "./store-profile.js";
 
@@ -127,7 +128,13 @@ export function buildSharePreviewHtml(sharePath, landingPath, preview) {
       : content.title;
 
   const shareUrl =
-    SHARE_PREVIEW_ORIGIN + sharePath;
+    SHARE_PREVIEW_ORIGIN + (preview && preview.storePagePath ? preview.storePagePath : sharePath);
+
+  const canonicalHtml =
+    preview && preview.storePagePath
+      ? `
+  <link rel="canonical" href="${escapeShareHtml(shareUrl)}">`
+      : "";
 
   return `<!DOCTYPE html>
 <html lang="ja">
@@ -136,7 +143,7 @@ export function buildSharePreviewHtml(sharePath, landingPath, preview) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex">
   <title>${escapeShareHtml(pageTitle)}</title>
-  <meta name="description" content="${escapeShareHtml(content.description)}">
+  <meta name="description" content="${escapeShareHtml(content.description)}">${canonicalHtml}
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="${SITE_NAME}">
   <meta property="og:title" content="${escapeShareHtml(pageTitle)}">
@@ -196,8 +203,12 @@ export async function readImadakeSharePreview(database, postId, nowMillis) {
   };
 }
 
+// STEP 56｜正式店舗は、店舗ごとの固定の公開ページ(/shop/{storeId})を正式な URL にする。
+// 共有リンク(/share/shop/sp_{storeId}・引き継ぎ済みの運営掲載の ID)は壊さず、開いた人は店舗ページへ移り、
+// og:url・canonical も店舗ページにする(公開中の時だけ。公開中でなければ今までどおり共通の表示)。
 function buildStoreProfileSharePreview(store) {
   return {
+    storePagePath: "/shop/" + encodeURIComponent(store.id.slice(PUBLIC_STORE_ID_PREFIX.length)),
     title: store.storeName,
     description:
       buildShareDescription(store.description) ||
@@ -329,7 +340,9 @@ async function sendSharePreview(response, kind, id, readPreview) {
     validId ? "/share/" + kind + "/" + encodedId : "/";
 
   const landingPath =
-    validId ? "/?" + kind + "=" + encodedId : "/";
+    preview && preview.storePagePath
+      ? preview.storePagePath
+      : validId ? "/?" + kind + "=" + encodedId : "/";
 
   response.setHeader("Content-Type", "text/html; charset=utf-8");
   response.setHeader("Cache-Control", SHARE_PREVIEW_CACHE_CONTROL);

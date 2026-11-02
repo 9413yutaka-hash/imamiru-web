@@ -842,3 +842,257 @@ export async function handleStoreMyStores(request, response, deps) {
   }
 }
 
+
+// ===== STEP 56｜店舗・施設名と所在地の変更(店主本人) =====
+// mode: storeIdentityUpdate (POST、メール確認済み店舗アカウントの有効な owner、編集できる店舗だけ)
+// { storeId, storeName, address }
+// ・国は登録の時のまま(変えない)。住所は登録と同じく、サーバーで改めて Geocoding して確定する
+//   (クライアントの座標・地名は使わない)。住所が変わらなければ所在地は今のまま。
+// ・重複の疑いは登録と同じ判定で作り直す(自分の店舗は除く)。同じ店主の別の店舗と同じ名前で100m以内は 409。
+//   運営無料掲載との重複の疑いは記録に残り、紐付いていない時は旅行者への公開の条件を満たさない(登録と同じ)。
+// ・店舗 ID(固定の公開ページ /shop/{storeId})は変わらない。契約・請求・紐付け(storeListingLinks)・
+//   運営無料掲載(submissions)は書き換えない。
+// ・変更の前後は storeIdentityEvents に追記する(消さない。サーバーだけが書く)。
+const STORE_IDENTITY_EVENTS_COLLECTION = "storeIdentityEvents";
+const STORE_IDENTITY_UPDATE_COOLDOWN_MS = 10 * 1000;
+
+function readStoreIdentityInput(body) {
+  const storeId = readTrimmedString(body.storeId);
+
+  if (storeId === "" || storeId.length > 100 || !/^[A-Za-z0-9_-]+$/.test(storeId)) {
+    return { ok: false, field: "storeId" };
+  }
+
+  const storeName = readSingleLineText(body.storeName, STORE_NAME_MAX_LENGTH);
+
+  if (storeName === null || storeName === "") {
+    return { ok: false, field: "storeName" };
+  }
+
+  const address = readSingleLineText(body.address, STORE_ADDRESS_MAX_LENGTH);
+
+  if (address === null || address === "") {
+    return { ok: false, field: "address" };
+  }
+
+  return { ok: true, storeId: storeId, storeName: storeName, address: address };
+}
+
+function isActiveStoreOwner(memberData, uid, storeId) {
+  return (
+    !!memberData &&
+    memberData.uid === uid &&
+    memberData.storeId === storeId &&
+    memberData.role === "owner" &&
+    memberData.status === "active"
+  );
+}
+
+function isEditableStoreAccount(accountData) {
+  return !!accountData && accountData.registrationStatus === "active" && accountData.enabled === true;
+}
+
+function readStoredText(value) {
+  return typeof value === "string" ? value : "";
+}
+
+export async function handleStoreIdentityUpdate(request, response, deps) {
+  try {
+    const actor = await requireVerifiedStoreUser(request, response, deps);
+
+    if (!actor) {
+      return;
+    }
+
+    const input = readStoreIdentityInput(deps.readRequestBody(request));
+
+    if (!input.ok) {
+      return sendError(response, 400, "invalid_input", { field: input.field });
+    }
+
+    const database = deps.getFirestore(deps.getFirebaseAdminApp());
+    const storeRef = database.collection(STORE_ACCOUNTS_COLLECTION).doc(input.storeId);
+    const memberRef = database.collection(STORE_MEMBERS_COLLECTION).doc(input.storeId + "_" + actor.uid);
+    const profileRef = database.collection(STORE_PROFILES_COLLECTION).doc(input.storeId);
+    const preSnapshots = await Promise.all([memberRef.get(), storeRef.get()]);
+
+    // 他人の店舗・存在しない店舗は区別せず同じ応答にする(存在の有無を漏らさない)。
+    if (!preSnapshots[0].exists || !isActiveStoreOwner(preSnapshots[0].data(), actor.uid, input.storeId) || !preSnapshots[1].exists) {
+      return sendError(response, 404, "store_not_found");
+    }
+
+    const before = preSnapshots[1].data() || {};
+
+    if (!isEditableStoreAccount(before)) {
+      return sendError(response, 403, "store_not_editable");
+    }
+
+    if (await readAccountDeletion(database, actor.uid)) {
+      return sendError(response, 409, "account_deleting");
+    }
+
+    const nameChanged = input.storeName !== readStoredText(before.storeName);
+    const addressChanged = input.address !== readStoredText(before.address);
+
+    if (!nameChanged && !addressChanged) {
+      return response.status(200).json({ success: true, changed: false });
+    }
+
+    const allowed = await deps.claimRateLimit(
+      database,
+      STORE_REGISTRATION_RATE_LIMITS_COLLECTION,
+      deps.computeRateLimitIdentifier("storeIdentityUpdate", actor.uid),
+      STORE_IDENTITY_UPDATE_COOLDOWN_MS
+    );
+
+    if (!allowed) {
+      return sendError(response, 429, "rate_limited");
+    }
+
+    let location = null;
+
+    if (addressChanged) {
+      const countryCode = readCountryCode(before.countryCode);
+
+      if (countryCode === "") {
+        return sendError(response, 409, "store_country_missing");
+      }
+
+      location = await geocodeStoreAddressInCountry(input.address, countryCode, deps);
+
+      if (!location.ok) {
+        return sendError(response, location.reason === "geocoding_unavailable" ? 503 : 400, location.reason);
+      }
+    }
+
+    const duplicates = (await findStrongDuplicates(
+      database,
+      {
+        storeName: input.storeName,
+        latitude: location ? location.latitude : before.latitude,
+        longitude: location ? location.longitude : before.longitude
+      },
+      actor.uid
+    )).filter(function(match) {
+      return !(match.source === "storeAccounts" && match.id === input.storeId);
+    });
+
+    if (duplicates.some(function(match) { return match.sameOwner; })) {
+      return sendError(response, 409, "already_registered");
+    }
+
+    let outcome = null;
+
+    await database.runTransaction(async function(transaction) {
+      const snapshots = await Promise.all([
+        transaction.get(memberRef),
+        transaction.get(storeRef),
+        transaction.get(profileRef)
+      ]);
+
+      if (!snapshots[0].exists || !isActiveStoreOwner(snapshots[0].data(), actor.uid, input.storeId) || !snapshots[1].exists) {
+        outcome = { status: 404, reason: "store_not_found" };
+        return;
+      }
+
+      const current = snapshots[1].data() || {};
+
+      if (!isEditableStoreAccount(current)) {
+        outcome = { status: 403, reason: "store_not_editable" };
+        return;
+      }
+
+      // 退会の受付と同時の変更でも書き込まない(退会の記録と同じトランザクションで確かめる)。
+      if (await readAccountDeletion(database, actor.uid, transaction)) {
+        outcome = { status: 409, reason: "account_deleting" };
+        return;
+      }
+
+      // 事前に読んだ後に別の操作で店名・住所が変わっていたら上書きしない(画面で読み直してもらう)。
+      if (readStoredText(current.storeName) !== readStoredText(before.storeName) || readStoredText(current.address) !== readStoredText(before.address)) {
+        outcome = { status: 409, reason: "identity_conflict" };
+        return;
+      }
+
+      const reviewFlags = Array.isArray(current.reviewFlags) ? current.reviewFlags.slice() : [];
+
+      if (duplicates.length > 0 && !reviewFlags.includes("possible_duplicate")) {
+        reviewFlags.push("possible_duplicate");
+      }
+
+      const update = {
+        storeName: input.storeName,
+        reviewFlags: reviewFlags,
+        duplicateCandidates: duplicates.map(function(match) {
+          return { source: match.source, id: match.id };
+        }),
+        updatedAt: FieldValue.serverTimestamp()
+      };
+
+      if (location) {
+        Object.assign(update, {
+          address: input.address,
+          locationFormattedAddress: location.formattedAddress,
+          latitude: location.latitude,
+          longitude: location.longitude,
+          countryCode: location.countryCode,
+          prefecture: location.prefecture,
+          city: location.city,
+          regionKey: location.regionKey,
+          geohash: encodeTownNowGeohash(location.latitude, location.longitude),
+          locationSource: "storeSelfGeocode",
+          locationUpdatedAt: FieldValue.serverTimestamp()
+        });
+      }
+
+      transaction.update(storeRef, update);
+
+      if (snapshots[2].exists && nameChanged) {
+        transaction.update(profileRef, { storeName: input.storeName, updatedAt: FieldValue.serverTimestamp() });
+      }
+
+      transaction.set(database.collection(STORE_IDENTITY_EVENTS_COLLECTION).doc(), {
+        storeId: input.storeId,
+        uid: actor.uid,
+        before: {
+          storeName: readStoredText(current.storeName),
+          address: readStoredText(current.address),
+          formattedAddress: readStoredText(current.locationFormattedAddress)
+        },
+        after: {
+          storeName: input.storeName,
+          address: location ? input.address : readStoredText(current.address),
+          formattedAddress: location ? location.formattedAddress : readStoredText(current.locationFormattedAddress)
+        },
+        nameChanged: nameChanged,
+        addressChanged: !!location,
+        duplicateCandidateCount: duplicates.length,
+        createdAt: FieldValue.serverTimestamp()
+      });
+
+      outcome = { status: 200 };
+    });
+
+    if (!outcome || outcome.status !== 200) {
+      return sendError(response, outcome ? outcome.status : 500, outcome ? outcome.reason : "server_error");
+    }
+
+    return response.status(200).json({
+      success: true,
+      changed: true,
+      storeName: input.storeName,
+      location: location
+        ? buildPublicLocation(location)
+        : {
+          formattedAddress: readStoredText(before.locationFormattedAddress) || readStoredText(before.address),
+          countryCode: readStoredText(before.countryCode),
+          prefecture: readStoredText(before.prefecture),
+          city: readStoredText(before.city)
+        },
+      possibleDuplicate: duplicates.length > 0
+    });
+  } catch (error) {
+    console.error("店舗・施設名と所在地の変更：エラー：", error && error.message);
+    return sendError(response, 500, "server_error");
+  }
+}
