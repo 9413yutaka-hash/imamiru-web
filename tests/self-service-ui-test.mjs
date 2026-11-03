@@ -79,31 +79,29 @@ try {
   await p.waitFor(`window.__copied.length === 1`, 5000);
   t("S3 「URLをコピー」：その店舗の固定の URL をコピーし、案内を表示(下書きの店舗は「公開されている間だけ開きます」)", (await p.ev(`window.__copied[0]`)) === "https://machinau.jp/shop/SB" && (await p.ev(`[...document.querySelectorAll("#storeList li")].find((li) => li.textContent.includes("店SB")).textContent.includes("URLをコピーしました。")`)) && (await p.ev(`[...document.querySelectorAll("#storeList li")].find((li) => li.textContent.includes("店SB")).textContent.includes("今は開けません")`)));
   let st = await steps(p);
-  t("S4 手順は⑥公開まで・すべて済み(カード・登録・申し込み・公開)", st.length === 6 && st.every((s) => s.cls.startsWith("done")) && /⑤/.test(st[4].text) && /⑥/.test(st[5].text), st);
+  t("S4 手順は⑤公開まで(STEP 58｜登録・引き継ぎと月額100円の契約は同じ手続き)・すべて済み(カード・登録と契約・公開)", st.length === 5 && st.every((s) => s.cls.startsWith("done")) && /④/.test(st[3].text) && /月額100円/.test(st[3].text) && /⑤/.test(st[4].text), st);
   const help = await p.ev(`({ text: document.getElementById("storeManagementHelpNote").textContent, noHScroll: document.documentElement.scrollWidth <= window.innerWidth + 1 })`);
   t("S5 管理の案内(編集・公開・申し込み・解約／請求・領収書／カード／退会の場所)・横にはみ出さない", /解約/.test(help.text) && /領収書/.test(help.text) && /アカウントの削除/.test(help.text) && /お支払い方法/.test(help.text) && help.noHScroll, help);
   t("S6 JavaScript のエラーなし(店舗一覧)", p.log.errors.length === 0, p.log.errors);
   await p.close();
 
-  // ===== 下書きだけのアカウント：⑤⑥が次にすること =====
+  // ===== 契約の無い店舗だけのアカウント(STEP 58 より前に作った下書き)：④(同意して登録・引き継ぎ＝契約)が次にすること =====
   p = await open("drf");
   st = await steps(p);
-  t("S7 下書きだけ：⑤申し込みが「次にすること」(current)・⑥は未完了", st.length === 6 && st[3].cls.startsWith("done") && st[4].cls === "todo current" && st[5].cls === "todo", st);
+  t("S7 契約の無い店舗だけ：④(登録・引き継ぎと契約)が「次にすること」(current)・⑤は未完了", st.length === 5 && st[2].cls.startsWith("done") && st[3].cls === "todo current" && st[4].cls === "todo", st);
 
-  // ===== 新規登録の入力を、再読み込みでも失わない・「やめる」で消す =====
+  // ===== STEP 58｜契約の前に入力を途中保存しない(STEP 57 の入力の保持は撤去・前の版の控えも消す) =====
   await p.ev(`document.getElementById("openStoreFormButton").click(); true`);
   await p.waitFor(`!document.getElementById("storeForm").hidden`, 5000);
-  await p.ev(`(() => { const n = document.getElementById("storeNameInput"); n.value = "途中まで入れた店"; n.dispatchEvent(new Event("input", { bubbles: true })); const a = document.getElementById("storeAddressInput"); a.value = "沖縄県那覇市松尾1-1"; a.dispatchEvent(new Event("input", { bubbles: true })); return true; })()`);
+  await p.ev(`(() => { const n = document.getElementById("storeNameInput"); n.value = "途中まで入れた店"; n.dispatchEvent(new Event("input", { bubbles: true })); const a = document.getElementById("storeAddressInput"); a.value = "沖縄県那覇市松尾1-1"; a.dispatchEvent(new Event("input", { bubbles: true })); sessionStorage.setItem("machinauStoreFormDraft", JSON.stringify({ storeName: "前の版の控え", address: "x" })); return true; })()`);
   await p.ev(`location.reload(); true`);
   await p.waitFor(`!document.getElementById("accountView").hidden && document.querySelectorAll("#storeList li").length > 0`, 15000); await sleep(800);
   await p.ev(`document.getElementById("openStoreFormButton").click(); true`);
   await p.waitFor(`!document.getElementById("storeForm").hidden`, 5000);
-  const restored = await p.ev(`({ name: document.getElementById("storeNameInput").value, address: document.getElementById("storeAddressInput").value })`);
-  t("S8 新規登録の入力は、再読み込み(カード登録の移動・戻る)の後も残る", restored.name === "途中まで入れた店" && restored.address === "沖縄県那覇市松尾1-1", restored);
-  await p.ev(`document.getElementById("storeFormCancelButton").click(); true`);
-  await p.ev(`document.getElementById("openStoreFormButton").click(); true`);
-  const cleared = await p.ev(`({ name: document.getElementById("storeNameInput").value, saved: sessionStorage.getItem("machinauStoreFormDraft") })`);
-  t("S9 「やめる」で入力の控えを消す", cleared.name === "" && cleared.saved === null, cleared);
+  const restored = await p.ev(`({ name: document.getElementById("storeNameInput").value, address: document.getElementById("storeAddressInput").value, saved: sessionStorage.getItem("machinauStoreFormDraft") })`);
+  t("S8 新規登録の入力は端末に残さない(再読み込みで空・前の版の控えも消える)", restored.name === "" && restored.address === "" && restored.saved === null, restored);
+  const form = await p.ev(`({ consent: !!document.getElementById("storeConsentCheck") && document.getElementById("storeConsentCheck").checked === false, terms: /月額100円/.test(document.getElementById("storePlanTerms").innerText), disabled: document.getElementById("storeRegisterButton").disabled, noHScroll: document.documentElement.scrollWidth <= window.innerWidth + 1 })`);
+  t("S9 登録のフォームに料金と条件・同意のチェック(未チェック)・登録ボタンは押せない・横にはみ出さない(375px)", form.consent && form.terms && form.disabled === true && form.noHScroll, form);
   await p.close();
 
   // ===== 引き継ぎの途中でメール確認 → ?claim= の無い画面に戻っても続きへ =====
@@ -139,7 +137,7 @@ try {
   const enCards = await cards(p);
   st = await steps(p);
   const enHelp = await p.ev(`document.getElementById("storeManagementHelpNote").textContent`);
-  t("S16 英語：状態・手続きの案内・手順⑤⑥が英語", enCards.some((x) => x.plan === "¥100/month plan: subscribed") && enCards.some((x) => x.visible === "Shown to travelers") && /Delete account/.test(enHelp) && /^5\. /.test(st[4].text) && /^6\. /.test(st[5].text), { enCards, st: st.map((s) => s.text), enHelp });
+  t("S16 英語：状態・手続きの案内・手順④⑤が英語", enCards.some((x) => x.plan === "¥100/month plan: subscribed") && enCards.some((x) => x.visible === "Shown to travelers") && /Delete account/.test(enHelp) && st.length === 5 && /^4\. Agree/.test(st[3].text) && /^5\. /.test(st[4].text),{ enCards, st: st.map((s) => s.text), enHelp });
   await p.close();
   t("S17 外部への通信なし(試験の偽物以外)", otherNetwork === 0, otherNetwork);
 } finally {

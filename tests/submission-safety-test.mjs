@@ -75,7 +75,9 @@ t("B7 運営の更新で変えられる項目は従来の5つのまま", /hasOnl
 for (const col of ["accountBilling", "storeBilling", "imadakePosts", "imadakeStoreSlots", "imadakeRateLimits", "storeMembers", "storeProfiles", "storeRegistrationRateLimits", "storeListingClaims", "storeListingLinks", "storeBillingRateLimits", "imadakeMonthlyInvoices", "imadakePostDailyCharges", "imadakeCvViews"]) {
   t("B8 " + col + " はブラウザから読み書きできないまま", new RegExp("match /" + col + "/\\{\\w+\\} \\{\\s*allow read, write: if false;\\s*\\}").test(rules));
 }
-t("B9 請求・領収書・返金・提供の記録・契約のコレクションに許可の記載が無い(既定で拒否のまま)", ["storeCustomPlanInvoices", "storeCustomPlanReceipts", "storeCustomPlanRefunds", "storeCustomPlanReceiptProvisions", "storeCustomPlans"].every((c) => !rules.includes(c)));
+// STEP 58｜契約(storeCustomPlans)は明示の拒否(allow read, write: if false)を足した。許可の記載が無いことは同じ。
+const denyOnly = (c) => { const m = rules.match(new RegExp("match /" + c + "/\\{[^}]+\\} \\{([^}]*)\\}")); return !rules.includes(c) || (!!m && m[1].trim() === "allow read, write: if false;" && rules.split(c).length === 2); };
+t("B9 請求・領収書・返金・提供の記録・契約のコレクションに許可の記載が無い(記載が無いか、明示の拒否だけ)", ["storeCustomPlanInvoices", "storeCustomPlanReceipts", "storeCustomPlanRefunds", "storeCustomPlanReceiptProvisions", "storeCustomPlans"].every(denyOnly) && rules.includes("match /storeCustomPlans/{storeId}"));
 t("B10 すべてを許可するワイルドカードが無い", !/match \/\{document=\*\*\}/.test(rules) && !/allow read, write: if true/.test(rules));
 t("B11 投稿の削除は禁止のまま", /match \/submissions\/\{document\}[\s\S]*?allow delete: if false;/.test(rules));
 t("B12 firestore.rules は公開サイトに配信しない(.vercelignore)", read(".vercelignore").split("\n").map((s) => s.trim()).includes("/firestore.rules"));

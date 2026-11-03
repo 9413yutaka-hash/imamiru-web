@@ -95,16 +95,18 @@ t("F2 契約の読み取りに失敗した時は公開操作も成立しない",
 S.docs.get = origGet;
 t("F3 読み取りが戻れば一覧に出る", (await ids()).includes("sp_SF"));
 
-// ===================== B. draft editing and publishing =====================
+// ===================== B. no saving / editing before the contract, publishing blocked (STEP 58) =====================
 S.docs.set("storeProfiles/SN", { ...S.docs.get("storeProfiles/SN"), status: "draft" });
+const snBefore = JSON.stringify(S.docs.get("storeProfiles/SN"));
 clearRate(); r = await call({ mode: "storeProfileUpdate", storeId: "SN", expectedRevision: 3, categoryCode: "cafe_sweets", description: "下書きの紹介文", businessHours: null, phone: "", websiteUrl: "", reservationUrl: "", socialLinks: [], paymentMethodCodes: [] }, "un");
-t("B1 未契約でも下書きの保存・編集ができる", r.code === 200 && S.docs.get("storeProfiles/SN").description === "下書きの紹介文" && S.docs.get("storeProfiles/SN").status === "draft", r.body);
-t("B2 保存の応答の公開状態に plan の不足が出る", Array.isArray(r.body.publication && r.body.publication.missing) && r.body.publication.missing.includes("plan"), r.body.publication);
+t("B1 未契約：店舗情報の保存・編集は 403 plan_required（下書きも変わらない）", r.code === 403 && r.body.reason === "plan_required" && JSON.stringify(S.docs.get("storeProfiles/SN")) === snBefore, r.body);
+const sigSN = await call({ mode: "cloudinarySignature", purpose: "storeProfilePhoto", storeId: "SN" }, "un");
+t("B2 未契約：店舗写真の署名も 403 plan_required（アップロードできない）", sigSN.code === 403 && sigSN.body.reason === "plan_required", sigSN.body);
 const rev = S.docs.get("storeProfiles/SN").revision;
 clearRate(); r = await call({ mode: "storeProfilePublish", storeId: "SN", expectedRevision: rev }, "un");
 t("B3 未契約の公開操作：409 publish_conditions_not_met（missing に plan）・draft のまま", r.code === 409 && r.body.reason === "publish_conditions_not_met" && r.body.missing.includes("plan") && S.docs.get("storeProfiles/SN").status === "draft", r.body);
 clearRate(); r = await call({ mode: "storeProfileGet", storeId: "SN" }, "un");
-t("B4 編集画面の取得：未契約は plan が不足と表示される", r.code === 200 && r.body.publication.missing.includes("plan"), r.body.publication);
+t("B4 編集画面の取得：未契約は plan が不足・editable false・planRequired true（編集できない表示）", r.code === 200 && r.body.publication.missing.includes("plan") && r.body.editable === false && r.body.planRequired === true, r.body);
 
 // ===================== C. consent at subscription =====================
 clearRate(); r = await call({ mode: "storeCustomPlanSubscribe", storeId: "SN" }, "un");
@@ -160,46 +162,49 @@ t("E5 解約予定・契約終了・支払い停止の表示：店舗カード�
 const oldWording = ["store_custom_heading", "store_custom_intro", "store_custom_plan_none_signup", "store_custom_plan_subscribe_button", "store_custom_plan_cancel_confirm", "store_plan_pay_heading", "store_custom_err_plan", "store_custom_plan_suspended"].filter((k) => /無料の店舗情報|月額100円カスタマイズ|月額100円プラン|有料の内容|customization|free shop information/.test(TR[k].ja + TR[k].en));
 t("E6 旧仕様の「無料の店舗情報＋有料カスタマイズ」の言い方が店主の主な文言に残っていない", oldWording.length === 0, oldWording);
 
-// ===================== G. STEP 50-D｜契約前でもメニュー・リンク・ストーリーを保存できる(代表決定 B案) =====================
+// ===================== G. STEP 58(代表最終決定)｜契約が有効な間だけメニュー・リンク・ストーリーを保存・編集できる =====================
+// (STEP 50-D の「契約前でも保存・編集できる」は廃止。保存済みの内容は契約が切れても消さず、再契約で表示に戻る)
 globalThis.__MOCK_TOKENS.ug = pw("ug"); globalThis.__MOCK_TOKENS.uz = pw("uz");
 seedStore("SG", "ug"); seedStore("SZ", "uz");
-const SECRET_MENU = "契約前メニューG", SECRET_LINK = "https://example.com/sg-before", SECRET_STORY = "契約前ストーリーG";
+const SECRET_MENU = "契約中メニューG", SECRET_LINK = "https://example.com/sg-contract", SECRET_STORY = "契約中ストーリーG";
 const CUSTOM = (rev, story) => ({ mode: "storeCustomProfileUpdate", storeId: "SG", expectedRevision: rev, menuItems: [{ name: SECRET_MENU, description: "", priceText: "¥500", photo: null }], links: [{ type: "website", label: "", url: SECRET_LINK }], story });
 const leaks = (text) => [SECRET_MENU, SECRET_LINK, SECRET_STORY, "書き直しG"].filter((x) => text.includes(x));
 const shareShop = async (id) => { const r = res(); const e = console.error; console.error = () => {}; try { await handler({ method: "GET", headers: {}, query: { mode: "renderShareShop", shopId: id } }, r); } finally { console.error = e; } return String(r.body || ""); };
 clearRate(); r = await call(CUSTOM(0, SECRET_STORY), "ug");
-let cg = S.docs.get("storeCustomProfiles/SG") || {};
-t("G1 未契約：メニュー・リンク・ストーリーを保存できる（200・契約は作らない）", r.code === 200 && cg.revision === 1 && cg.menuItems[0].name === SECRET_MENU && cg.links[0].url === SECRET_LINK && cg.story === SECRET_STORY && !plan("SG"), r.body);
+t("G1 未契約：メニュー・リンク・ストーリーの保存は 403 plan_required（何も保存しない・契約も作らない）", r.code === 403 && r.body.reason === "plan_required" && !S.docs.get("storeCustomProfiles/SG") && !plan("SG"), r.body);
 clearRate(); r = await call({ mode: "storeCustomProfileGet", storeId: "SG" }, "ug");
-t("G2 未契約：取得は保存済みの内容と editable true を返す（再編集できる）", r.code === 200 && r.body.editable === true && r.body.plan.access === false && r.body.custom.story === SECRET_STORY && r.body.custom.links.length === 1, r.body);
-clearRate(); r = await call(CUSTOM(1, SECRET_STORY + "書き直しG"), "ug");
-t("G3 未契約：再編集の保存も 200（revision 2）", r.code === 200 && r.body.revision === 2, r.body);
+t("G2 未契約：取得は editable false・planRequired true（画面は編集できない表示）", r.code === 200 && r.body.editable === false && r.body.planRequired === true && r.body.plan.access === false, r.body);
+const sigNone = await call({ mode: "cloudinarySignature", purpose: "storeCustomMenuPhoto", storeId: "SG" }, "ug");
+t("G3 未契約：商品写真の署名も 403 plan_required（アップロードできない）", sigNone.code === 403 && sigNone.body.reason === "plan_required", sigNone.body);
+trialPlan("SG", "ug");
+clearRate(); r = await call(CUSTOM(0, SECRET_STORY), "ug");
+clearRate(); const r2 = await call(CUSTOM(1, SECRET_STORY + "書き直しG"), "ug");
+let cg = S.docs.get("storeCustomProfiles/SG") || {};
+t("G4 契約中：保存・再編集できる（200・revision 2）", r.code === 200 && r2.code === 200 && r2.body.revision === 2 && cg.menuItems[0].name === SECRET_MENU && cg.links[0].url === SECRET_LINK, { r: r.body, r2: r2.body });
 pl = (await publicList()).body;
-t("G4 未契約の店舗カードは旅行者向けの一覧に出ず、メニュー・リンク・ストーリーも公開 API に出ない", !pl.stores.some((x) => x.id === "sp_SG") && leaks(JSON.stringify(pl)).length === 0, leaks(JSON.stringify(pl)));
-let html = await shareShop("sp_SG");
-t("G5 未契約：シェアのプレビューにも店舗カード・有料の内容が出ない", !html.includes("店SG") && leaks(html).length === 0, html.slice(0, 300));
+let sgPub = pl.stores.find((x) => x.id === "sp_SG");
+t("G5 契約中：保存したメニュー・リンク・ストーリーが公開される", !!sgPub && !!sgPub.custom && sgPub.custom.menuItems[0].name === SECRET_MENU && sgPub.custom.links[0].url === SECRET_LINK && sgPub.custom.story === SECRET_STORY + "書き直しG", sgPub);
 const sgSnap = JSON.stringify(S.docs.get("storeCustomProfiles/SG"));
 clearRate(); r = await call(CUSTOM(2, "他人の書き換え"), "uz");
 const sigZ = await call({ mode: "cloudinarySignature", purpose: "storeCustomMenuPhoto", storeId: "SG" }, "uz");
 clearRate(); const getZ = await call({ mode: "storeCustomProfileGet", storeId: "SG" }, "uz");
-t("G6 他の店舗の店主：未契約の店舗でも保存・写真の署名・取得は 404（内容は変わらない）", r.code === 404 && sigZ.code === 404 && getZ.code === 404 && JSON.stringify(S.docs.get("storeCustomProfiles/SG")) === sgSnap, { r: r.body, sig: sigZ.body, get: getZ.body });
-trialPlan("SG", "ug");
-pl = (await publicList()).body;
-let sgPub = pl.stores.find((x) => x.id === "sp_SG");
-t("G7 契約後：契約前に保存したメニュー・リンク・ストーリーがそのまま公開される", !!sgPub && !!sgPub.custom && sgPub.custom.menuItems[0].name === SECRET_MENU && sgPub.custom.links[0].url === SECRET_LINK && sgPub.custom.story === SECRET_STORY + "書き直しG", sgPub);
+t("G6 他の店舗の店主：契約中の店舗でも保存・写真の署名・取得は 404（内容は変わらない）", r.code === 404 && sigZ.code === 404 && getZ.code === 404 && JSON.stringify(S.docs.get("storeCustomProfiles/SG")) === sgSnap, { r: r.body, sig: sigZ.body, get: getZ.body });
 trialPlan("SG", "ug", { status: "canceling", canceledAt: Timestamp.fromMillis(Date.now() - DAY) });
-t("G8 解約予約中（期限内）：月末までは公開のまま", (await ids()).includes("sp_SG"));
+clearRate(); r = await call(CUSTOM(2, SECRET_STORY + "書き直しG"), "ug");
+t("G7 解約予約中（期限内）：月末までは公開のまま・編集もできる（200・revision 3）", (await ids()).includes("sp_SG") && r.code === 200 && r.body.revision === 3, r.body);
+const sgSnap3 = JSON.stringify(S.docs.get("storeCustomProfiles/SG"));
 monthlyPlan("SG", "ug", { paymentStatus: "suspended" });
 pl = (await publicList()).body;
-t("G9 支払い停止（suspended）：非公開・有料の内容も出ない・保存済みの内容は残る", !pl.stores.some((x) => x.id === "sp_SG") && leaks(JSON.stringify(pl)).length === 0 && JSON.stringify(S.docs.get("storeCustomProfiles/SG")) === sgSnap, leaks(JSON.stringify(pl)));
+clearRate(); r = await call(CUSTOM(3, "停止中の書き換え"), "ug");
+t("G8 支払い停止（suspended）：非公開・有料の内容も出ない・保存は 403 plan_required・保存済みの内容は残る", !pl.stores.some((x) => x.id === "sp_SG") && leaks(JSON.stringify(pl)).length === 0 && r.code === 403 && r.body.reason === "plan_required" && JSON.stringify(S.docs.get("storeCustomProfiles/SG")) === sgSnap3, { r: r.body, leaks: leaks(JSON.stringify(pl)) });
 trialPlan("SG", "ug", { status: "canceling", accessUntil: Timestamp.fromMillis(Date.now() - 1000) });
-pl = (await publicList()).body; html = await shareShop("sp_SG");
-t("G10 解約後（利用期限の終了）：非公開・公開 API とシェアに出ない・保存済みの内容は残る", !pl.stores.some((x) => x.id === "sp_SG") && leaks(JSON.stringify(pl) + html).length === 0 && JSON.stringify(S.docs.get("storeCustomProfiles/SG")) === sgSnap);
-clearRate(); r = await call(CUSTOM(2, SECRET_STORY + "書き直しG"), "ug");
-t("G11 解約後も保存・編集できる（200・revision 3）", r.code === 200 && r.body.revision === 3, r.body);
+pl = (await publicList()).body; let html = await shareShop("sp_SG");
+clearRate(); r = await call(CUSTOM(3, "期限後の書き換え"), "ug");
+t("G9 解約後（利用期限の終了）：非公開・公開 API とシェアに出ない・保存は 403 plan_required・保存済みの内容は残る", !pl.stores.some((x) => x.id === "sp_SG") && leaks(JSON.stringify(pl) + html).length === 0 && r.code === 403 && r.body.reason === "plan_required" && JSON.stringify(S.docs.get("storeCustomProfiles/SG")) === sgSnap3, r.body);
 trialPlan("SG", "ug");
 sgPub = (await publicList()).body.stores.find((x) => x.id === "sp_SG");
-t("G12 再契約後：保存済みのメニュー・リンク・ストーリーを再び公開できる", !!sgPub && !!sgPub.custom && sgPub.custom.menuItems[0].name === SECRET_MENU && sgPub.custom.links[0].url === SECRET_LINK && sgPub.custom.story === SECRET_STORY + "書き直しG", sgPub);
+clearRate(); r = await call(CUSTOM(3, SECRET_STORY + "書き直しG"), "ug");
+t("G10 再契約後：保存済みのメニュー・リンク・ストーリーを再び公開でき、編集もできる（revision 4）", !!sgPub && !!sgPub.custom && sgPub.custom.menuItems[0].name === SECRET_MENU && sgPub.custom.links[0].url === SECRET_LINK && sgPub.custom.story === SECRET_STORY + "書き直しG" && r.code === 200 && r.body.revision === 4, { sgPub, r: r.body });
 
 console.log(`\nTOTAL ${pass + fail}  PASS ${pass}  FAIL ${fail}`);
 process.exit(fail === 0 ? 0 : 1);

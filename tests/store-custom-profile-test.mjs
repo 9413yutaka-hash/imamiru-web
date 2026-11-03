@@ -82,26 +82,24 @@ t("A2 メール未確認：取得は 403 email_not_verified", r.code === 403 && 
 r = await call({ mode: "storeCustomProfileGet", storeId: "S1" }, "u2");
 t("A3 他の店舗の店主：404 store_not_found（存在の有無も出さない）", r.code === 404 && r.body.reason === "store_not_found", r.body);
 r = await call({ mode: "storeCustomProfileGet", storeId: "S1" }, "u1");
-t("A4 未契約の店主：取得は 200・利用権限なし（plan.access false）でも編集できる（editable true・STEP 50-D）・上限と種類を返す", r.code === 200 && r.body.plan.access === false && r.body.plan.status === "none" && r.body.editable === true && r.body.limits.menuItemsMax === 20 && r.body.linkTypes.includes("reservation") && r.body.custom.revision === 0, r.body);
+t("A4 未契約の店主：取得は 200・利用権限なし（plan.access false）・編集できない（editable false・planRequired true・STEP 58）・上限と種類を返す", r.code === 200 && r.body.plan.access === false && r.body.plan.status === "none" && r.body.editable === false && r.body.planRequired === true && r.body.limits.menuItemsMax === 20 && r.body.linkTypes.includes("reservation") && r.body.custom.revision === 0, r.body);
 clearRate(); r = await call(GOOD(), "u1");
-// STEP 50-D｜代表決定 B案：契約前・期限切れ・解約後でも、店主はメニュー・リンク・ストーリーを保存・編集できる。
-let a5 = S.docs.get("storeCustomProfiles/S1") || {};
-t("A5 未契約の店主：保存は 200・メニュー2件・リンク2件・ストーリーを保存（STEP 50-D）", r.code === 200 && r.body.revision === 1 && a5.menuItems.length === 2 && a5.links.length === 2 && a5.story.startsWith("祖母") && !S.docs.has("storeCustomPlans/S1"), r.body);
-clearRate(); r = await call(GOOD({ expectedRevision: 1, story: "未契約のまま書き直したストーリー" }), "u1");
-a5 = S.docs.get("storeCustomProfiles/S1") || {};
-t("A5b 未契約の店主：再編集も 200・revision 2", r.code === 200 && r.body.revision === 2 && a5.story === "未契約のまま書き直したストーリー", r.body);
-const a5Snap = snap("storeCustomProfiles/S1");
-clearRate(); r = await call(GOOD({ storeId: "S1", expectedRevision: 2 }), "u2");
-t("A6 他の店舗の店主が S1 を保存：404・書き込みなし（未契約でも他人の店舗は編集できない）", r.code === 404 && snap("storeCustomProfiles/S1") === a5Snap, r.body);
+// STEP 58(代表最終決定)｜契約が成立していない・期限切れ・解約後の店舗は、メニュー・リンク・ストーリーを保存・編集できない
+// (STEP 50-D の「契約前でも保存・編集できる」は廃止)。
+t("A5 未契約の店主：保存は 403 plan_required・何も保存しない・契約も作らない（STEP 58）", r.code === 403 && r.body.reason === "plan_required" && !S.docs.has("storeCustomProfiles/S1") && !S.docs.has("storeCustomPlans/S1"), r.body);
+clearRate(); r = await call(GOOD({ expectedRevision: 0, story: "未契約のまま書き直したストーリー" }), "u1");
+t("A5b 未契約の店主：もう一度送っても 403 plan_required", r.code === 403 && r.body.reason === "plan_required" && !S.docs.has("storeCustomProfiles/S1"), r.body);
+clearRate(); r = await call(GOOD({ storeId: "S1", expectedRevision: 0 }), "u2");
+t("A6 他の店舗の店主が S1 を保存：404・書き込みなし", r.code === 404 && !S.docs.has("storeCustomProfiles/S1"), r.body);
 setPlan("S1", "active", Timestamp.fromMillis(Date.now() - 1000));
-clearRate(); r = await call(GOOD({ expectedRevision: 2 }), "u1");
-t("A7 利用期限が過ぎた契約（active でも accessUntil が過去）：保存は 200（公開は別に判定）", r.code === 200 && r.body.revision === 3, r.body);
+clearRate(); r = await call(GOOD({ expectedRevision: 0 }), "u1");
+t("A7 利用期限が過ぎた契約（active でも accessUntil が過去）：保存は 403 plan_required", r.code === 403 && r.body.reason === "plan_required" && !S.docs.has("storeCustomProfiles/S1"), r.body);
 setPlan("S1", "canceled", future());
-clearRate(); r = await call(GOOD({ expectedRevision: 3 }), "u1");
-t("A8 解約済み（canceled）：保存は 200", r.code === 200 && r.body.revision === 4, r.body);
+clearRate(); r = await call(GOOD({ expectedRevision: 0 }), "u1");
+t("A8 解約済み（canceled）：保存は 403 plan_required", r.code === 403 && r.body.reason === "plan_required", r.body);
 S.docs.set("storeCustomPlans/S1", { storeId: "S1", status: "active", ownerUid: "u1" });
-clearRate(); r = await call(GOOD({ expectedRevision: 4 }), "u1");
-t("A9 利用期限の無い契約（無期限は作らない）：利用権限は無いが保存は 200", r.code === 200 && r.body.revision === 5 && !CP.hasStoreCustomPlanAccess(S.docs.get("storeCustomPlans/S1"), Date.now()), r.body);
+clearRate(); r = await call(GOOD({ expectedRevision: 0 }), "u1");
+t("A9 利用期限の無い契約（無期限は作らない）：利用権限は無く、保存は 403 plan_required", r.code === 403 && r.body.reason === "plan_required" && !CP.hasStoreCustomPlanAccess(S.docs.get("storeCustomPlans/S1"), Date.now()), r.body);
 // 以降の B 節は「保存の無い状態から契約中に保存する」前提なので、模擬データ(メモリー上)の保存内容だけを初期化する。
 S.docs.delete("storeCustomProfiles/S1");
 t("A10 判定関数：active/canceling かつ期限が先の時だけ true", CP.hasStoreCustomPlanAccess({ status: "active", accessUntil: future() }, Date.now()) && CP.hasStoreCustomPlanAccess({ status: "canceling", accessUntil: future() }, Date.now()) && !CP.hasStoreCustomPlanAccess({ status: "past_due", accessUntil: future() }, Date.now()) && !CP.hasStoreCustomPlanAccess(null, Date.now()));
@@ -220,13 +218,15 @@ t("T11 有料の内容が空なら null（画面に空の見出しを出さな�
 
 // ===================== Cloudinary signature =====================
 const sig1 = await call({ mode: "cloudinarySignature", purpose: "storeCustomMenuPhoto", storeId: "S2" }, "u2");
-t("C1 未契約の店舗：商品写真の署名も発行する（STEP 50-D・…/S2/menu）", sig1.code === 200 && sig1.body.folder === "machinau_store_profiles/S2/menu", sig1.body);
+t("C1 未契約の店舗：商品写真の署名は 403 plan_required（STEP 58）", sig1.code === 403 && sig1.body.reason === "plan_required", sig1.body);
 const sig2 = await call({ mode: "cloudinarySignature", purpose: "storeCustomMenuPhoto", storeId: "S1" }, "u1");
 t("C2 契約中の店舗：商品写真の署名は商品写真のフォルダー（…/S1/menu）", sig2.code === 200 && sig2.body.folder === "machinau_store_profiles/S1/menu" && !JSON.stringify(sig2.body).includes("fake-cloudinary-secret"), sig2.body);
 const sig3 = await call({ mode: "cloudinarySignature", purpose: "storeCustomMenuPhoto", storeId: "S1" }, "u2");
 t("C3 他の店舗の店主：商品写真の署名は 404", sig3.code === 404, sig3.body);
 const sig4 = await call({ mode: "cloudinarySignature", purpose: "storeProfilePhoto", storeId: "S2" }, "u2");
-t("C4 無料の店舗写真の署名はこれまでどおり（契約不要・…/S2）", sig4.code === 200 && sig4.body.folder === "machinau_store_profiles/S2", sig4.body);
+t("C4 未契約の店舗：店舗写真の署名も 403 plan_required（STEP 58｜契約前は写真も保存できない）", sig4.code === 403 && sig4.body.reason === "plan_required", sig4.body);
+const sig4b = await call({ mode: "cloudinarySignature", purpose: "storeProfilePhoto", storeId: "S1" }, "u1");
+t("C4b 契約中の店舗：店舗写真の署名は店舗の写真フォルダー（…/S1）", sig4b.code === 200 && sig4b.body.folder === "machinau_store_profiles/S1", sig4b.body);
 
 // ===================== shop-wide photo limit (代表決定：商品写真は店舗全体で最大5枚) =====================
 const rev = () => S.docs.get("storeCustomProfiles/S1").revision;

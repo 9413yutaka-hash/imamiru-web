@@ -75,6 +75,8 @@ node --import ./tests/mockfa-occ/register.mjs tests/store-page-test.mjs
 node --import ./tests/mockfa-occ/register.mjs tests/store-page-ui-test.mjs
 node --import ./tests/mockfa-occ/register.mjs tests/self-service-test.mjs
 node --import ./tests/mockfa-occ/register.mjs tests/self-service-ui-test.mjs
+# 店主の編集・管理は月額100円の契約が必須(STEP 58：新規登録・引き継ぎは同意と一体で契約が成立・契約の無い店舗はどの保存の経路も拒否・既存の契約中の店舗は編集できる・月末締めの請求書と同じ)
+node --import ./tests/mockfa-occ/register.mjs tests/paid-edit-test.mjs
 
 # 既存の回帰(画面、Chrome を使う。ローカルに 127.0.0.1:8701 でリポジトリを配信して確認する)
 for f in tests3 tests5 tests6 tests7 tests8 tests9 tests10; do

@@ -171,7 +171,7 @@ const susp = await call({ mode: "storeCustomProfileGet", storeId: "S11" }, "u9")
 let plU = await publicList();
 const s11pub = plU.body.stores.find((s) => s.id === "sp_S11");
 // STEP 50-B(代表決定 2026-10-31)｜支払い停止で契約の利用権が無くなると、店舗カード自体を旅行者に出さない。
-t("U1 未払いで停止（paymentStatus suspended、契約の状態とは別）：利用権なし・保存・編集はできる(STEP 50-D)・店舗カードを旅行者に出さない(STEP 50-B)", r.code === 200 && susp.body.plan.paymentStatus === "suspended" && susp.body.plan.state === "active" && susp.body.plan.access === false && susp.body.editable === true && !s11pub, { plan: susp.body.plan, s11pub });
+t("U1 未払いで停止（paymentStatus suspended、契約の状態とは別）：利用権なし・支払いまで保存・編集できない(STEP 58)・店舗カードを旅行者に出さない(STEP 50-B)", r.code === 200 && susp.body.plan.paymentStatus === "suspended" && susp.body.plan.state === "active" && susp.body.plan.access === false && susp.body.editable === false && !s11pub, { plan: susp.body.plan, s11pub });
 r = await call(SUB("S11"), "u9");
 t("U2 停止中は新しい申込・解約の取り消しを受け付けない（409 plan_unpaid）", r.code === 409 && r.body.reason === "plan_unpaid", r.body);
 S.docs.set("storeCustomPlans/S11", { ...plan("S11"), paymentStatus: "past_due" });

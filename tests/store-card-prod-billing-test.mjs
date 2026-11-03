@@ -85,7 +85,7 @@ t("R3 請求専用キーが未登録の Production（STEP 53-I：スイッチ fa
 S.docs.set("storeAccounts/SP", { storeName: "店SP", registrationStatus: "active", enabled: true, countryCode: "JP", prefecture: "沖縄県", city: "那覇市", locationFormattedAddress: "沖縄県那覇市", latitude: 26.2, longitude: 127.68, duplicateCandidates: [] });
 S.docs.set("storeMembers/SP_u1", { uid: "u1", storeId: "SP", role: "owner", status: "active" });
 let r = await call({ mode: "storeCustomProfileGet", storeId: "SP" }, "u1");
-t("P1 Production：画面の目安は「申込できる」（signupAvailable true）・保存・編集はできる（STEP 52-F：本番のカード登録・本番の申込は受付開始のため true）", r.code === 200 && r.body.plan.signupAvailable === true && r.body.editable === true, r.body && r.body.plan);
+t("P1 Production：画面の目安は「申込できる」（signupAvailable true）・契約の前は保存・編集できない（STEP 58：editable false・planRequired true）", r.code === 200 && r.body.plan.signupAvailable === true && r.body.editable === false && r.body.planRequired === true, r.body && r.body.plan);
 r = await call({ mode: "storeCustomPlanSubscribe", storeId: "SP", planConsentVersion: B.STORE_CARD_PLAN_CONSENT_VERSION }, "u1");
 t("P2 Production：申込の受付は開いている・本番のカードが無ければ 403 card_required・契約を作らない（STEP 52-F：本番のカード登録・本番の申込は受付開始のため true）", r.code === 403 && r.body.reason === "card_required" && !S.docs.has("storeCustomPlans/SP"), r.body);
 t("P3 このテストの間、Stripe へは一度も通信していない", stripeCalls.length === 0);

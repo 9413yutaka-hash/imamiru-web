@@ -602,8 +602,11 @@ export async function handleStoreRegistrationPreview(request, response, deps) {
 
 
 // mode: storeSelfRegister (POST、メール確認済み店舗アカウント)
-// { storeName, categoryCode, countryCode, address, sourceLanguage }
+// { storeName, categoryCode, countryCode, address, sourceLanguage, planConsentVersion }
 // 所在地はクライアントの値を信用せず、サーバーで改めてGeocodingして確定する。
+// STEP 58(代表最終決定)｜新規登録は月額100円の契約の申込と一体の手続き。同意(planConsentVersion)が無い・
+// 申込を受け付けない環境では登録しない。店舗と契約は同じトランザクションで作る(契約の無い店舗を作らない)。
+// 契約の記録はこのファイルでは書かない(deps.writeNewStoreCardPlanInTransaction＝store-custom-profile.js)。
 export async function handleStoreSelfRegister(request, response, deps) {
   try {
     const actor = await requireVerifiedStoreUser(request, response, deps);
@@ -632,6 +635,14 @@ export async function handleStoreSelfRegister(request, response, deps) {
 
     if (!card || card.ok !== true) {
       return sendError(response, 409, card && typeof card.reason === "string" && card.reason !== "" ? card.reason : "card_billing_unavailable");
+    }
+
+    const signup = typeof deps.resolveStoreCardPlanSignup === "function" && typeof deps.writeNewStoreCardPlanInTransaction === "function"
+      ? deps.resolveStoreCardPlanSignup(deps, deps.readRequestBody(request))
+      : { ok: false, status: 403, reason: "plan_signup_unavailable" };
+
+    if (!signup.ok) {
+      return sendError(response, signup.status, signup.reason, signup.extra);
     }
 
     const allowed = await deps.claimRateLimit(
@@ -685,6 +696,8 @@ export async function handleStoreSelfRegister(request, response, deps) {
     const profileRef = database.collection(STORE_PROFILES_COLLECTION).doc(storeId);
 
     let deletionStarted = false;
+    let plan = null;
+    const nowMillis = typeof deps.now === "function" ? deps.now() : Date.now();
 
     await database.runTransaction(async function(transaction) {
       const existing = await Promise.all([
@@ -703,6 +716,15 @@ export async function handleStoreSelfRegister(request, response, deps) {
       if (deletionStarted) {
         return;
       }
+
+      // STEP 58｜月額100円の契約(同意の証跡・今月の利用の記録)。店舗と同時に成立する。
+      plan = deps.writeNewStoreCardPlanInTransaction(transaction, database, {
+        storeId: storeId,
+        uid: actor.uid,
+        nowMillis: nowMillis,
+        signup: signup,
+        channel: "store_registration"
+      });
 
       // 管理情報。tokenHashは作らない(旧store token経路では操作できない)。
       transaction.set(storeRef, {
@@ -758,7 +780,8 @@ export async function handleStoreSelfRegister(request, response, deps) {
     return response.status(200).json({
       success: true,
       storeId: storeId,
-      registrationStatus: registrationStatus
+      registrationStatus: registrationStatus,
+      plan: plan
     });
   } catch (error) {
     console.error("セルフ店舗登録：登録エラー：", error && error.message);
@@ -952,6 +975,11 @@ export async function handleStoreIdentityUpdate(request, response, deps) {
       return sendError(response, 403, "store_not_editable");
     }
 
+    // STEP 58｜店舗・施設名と所在地の変更も、月額100円の契約が有効な時だけ(契約の判定は deps.readStoreCardPlanActive)。
+    if (typeof deps.readStoreCardPlanActive !== "function" || !(await deps.readStoreCardPlanActive(database, input.storeId, Date.now()))) {
+      return sendError(response, 403, "plan_required");
+    }
+
     if (await readAccountDeletion(database, actor.uid)) {
       return sendError(response, 409, "account_deleting");
     }
@@ -1024,6 +1052,11 @@ export async function handleStoreIdentityUpdate(request, response, deps) {
 
       if (!isEditableStoreAccount(current)) {
         outcome = { status: 403, reason: "store_not_editable" };
+        return;
+      }
+
+      if (!(await deps.readStoreCardPlanActive(database, input.storeId, Date.now(), transaction))) {
+        outcome = { status: 403, reason: "plan_required" };
         return;
       }
 

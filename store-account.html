@@ -132,6 +132,13 @@
     }
 
     .check-line input { margin-top: 4px; width: 18px; height: 18px; flex-shrink: 0; }
+    /* STEP 58｜新規登録・引き継ぎと一体の月額100円の料金と条件・同意(店舗プロフィール画面の申込と同じ見た目) */
+    .plan-terms { margin: 12px 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; }
+    .plan-terms-heading { margin: 0 0 6px; font-weight: 700; }
+    .plan-terms-list { margin: 0 0 10px; padding-left: 1.2em; }
+    .plan-terms-list li { margin: 0 0 4px; overflow-wrap: anywhere; }
+    .plan-consent { display: flex; gap: 8px; align-items: flex-start; overflow-wrap: anywhere; min-height: 44px; }
+    .plan-consent input { margin-top: 3px; width: 18px; height: 18px; flex: none; }
     .check-line a { color: var(--blue); }
 
     .primary-button, .secondary-button {
@@ -540,7 +547,23 @@
             <p class="hint" data-i18n="store_account_store_preview_confirm_hint"></p>
           </div>
 
-          <button type="submit" class="primary-button" id="storeRegisterButton" disabled data-i18n="store_account_store_register_button">この内容で登録する</button>
+          <!-- STEP 58(代表最終決定)｜新規登録は月額100円(税込)の契約の申込と一体の手続き。同意のチェックを入れた時だけ
+               登録できる(サーバーも同意の版 planConsentVersion が無い登録を受け付けない)。契約の前に店舗情報を保存する機能は無い。 -->
+          <div class="plan-terms" id="storePlanTerms">
+            <p class="plan-terms-heading" data-i18n="store_card_plan_terms_heading">料金と条件（店舗カード）</p>
+            <ul class="plan-terms-list">
+              <li data-i18n="store_card_plan_terms_fee"></li>
+              <li data-i18n="store_card_plan_terms_scope"></li>
+              <li data-i18n="store_card_plan_terms_billing"></li>
+              <li data-i18n="store_card_plan_terms_proration"></li>
+              <li data-i18n="store_card_plan_terms_separate"></li>
+              <li data-i18n="store_card_plan_terms_cancel"></li>
+            </ul>
+            <p class="hint" data-i18n="store_signup_plan_note"></p>
+            <p class="hint"><span data-i18n="store_billing_legal_prefix">料金・お支払いについて：</span><a href="terms.html" target="_blank" rel="noopener" data-i18n="store_billing_legal_terms_link">利用規約</a><span data-i18n="store_billing_legal_and">・</span><a href="tokushoho.html" target="_blank" rel="noopener" data-i18n="store_billing_legal_tokushoho_link">特定商取引法に基づく表記</a></p>
+            <label class="plan-consent"><input type="checkbox" id="storeConsentCheck"> <span data-i18n="store_card_plan_consent_label"></span></label>
+          </div>
+          <button type="submit" class="primary-button" id="storeRegisterButton" disabled data-i18n="store_account_store_register_with_plan">同意して登録し、月額100円（税込）を申し込む</button>
           <button type="button" class="secondary-button" id="storeFormCancelButton" data-i18n="store_account_store_cancel_button">やめる</button>
         </form>
       </div>
@@ -643,6 +666,22 @@
               <input type="text" id="claimNoteInput" maxlength="200">
               <p class="hint" data-i18n="store_claim_note_hint"></p>
             </div>
+            <!-- STEP 58｜新しい店舗として引き継ぐ時は、月額100円(税込)の契約の申込と一体(新規登録と同じ条件)。
+                 登録済みの自分の店舗につなぐ時は、その店舗の契約が有効なこと(候補にもその店舗だけを出す)。 -->
+            <div class="plan-terms" id="claimPlanTerms">
+            <p class="plan-terms-heading" data-i18n="store_card_plan_terms_heading">料金と条件（店舗カード）</p>
+            <ul class="plan-terms-list">
+              <li data-i18n="store_card_plan_terms_fee"></li>
+              <li data-i18n="store_card_plan_terms_scope"></li>
+              <li data-i18n="store_card_plan_terms_billing"></li>
+              <li data-i18n="store_card_plan_terms_proration"></li>
+              <li data-i18n="store_card_plan_terms_separate"></li>
+              <li data-i18n="store_card_plan_terms_cancel"></li>
+            </ul>
+            <p class="hint" data-i18n="store_claim_plan_note"></p>
+            <p class="hint"><span data-i18n="store_billing_legal_prefix">料金・お支払いについて：</span><a href="terms.html" target="_blank" rel="noopener" data-i18n="store_billing_legal_terms_link">利用規約</a><span data-i18n="store_billing_legal_and">・</span><a href="tokushoho.html" target="_blank" rel="noopener" data-i18n="store_billing_legal_tokushoho_link">特定商取引法に基づく表記</a></p>
+            <label class="plan-consent"><input type="checkbox" id="claimConsentCheck"> <span data-i18n="store_card_plan_consent_label"></span></label>
+          </div>
             <button type="submit" class="primary-button" id="claimSubmitButton" data-i18n="store_claim_submit">オーナー申請を送る</button>
           </form>
         </div>
@@ -934,8 +973,13 @@
         card_account_mismatch: "store_card_gate_needed",
         card_retiring: "store_card_gate_needed",
         card_expired: "store_card_gate_expired",
-        card_billing_unavailable: "store_card_gate_unavailable"
+        card_billing_unavailable: "store_card_gate_unavailable",
+        // STEP 58｜新規登録は月額100円の申込と一体。
+        plan_consent_required: "store_signup_consent_required",
+        plan_signup_unavailable: "store_signup_unavailable"
       };
+      // STEP 58｜店舗カード月額契約への同意の版(サーバーの STORE_CARD_PLAN_CONSENT_VERSION・店舗プロフィール画面と同じ値)。
+      const STORE_CARD_PLAN_CONSENT_VERSION = "store-card-monthly-2026-10-31";
       const STORE_FIELD_ERROR_KEYS = {
         storeName: "store_account_store_err_name",
         categoryCode: "store_account_store_err_category",
@@ -1258,56 +1302,13 @@
         }
       }
 
-      // STEP 57｜新規登録の入力を、カード登録(本人確認の画面への移動)・戻る操作・再読み込みで失わないよう、
-      // このタブの sessionStorage に残す(店舗名・カテゴリ・国・住所だけ)。登録が済む・「やめる」で消す。
-      const STORE_FORM_DRAFT_STORAGE_KEY = "machinauStoreFormDraft";
-
-      function saveStoreFormDraft() {
-        try {
-          sessionStorage.setItem(STORE_FORM_DRAFT_STORAGE_KEY, JSON.stringify({
-            storeName: document.getElementById("storeNameInput").value,
-            categoryCode: document.getElementById("storeCategorySelect").value,
-            countryCode: document.getElementById("storeCountrySelect").value,
-            address: document.getElementById("storeAddressInput").value
-          }));
-        } catch (error) {
-          // 保存できなくても入力はそのまま続けられる。
-        }
-      }
-
-      function restoreStoreFormDraft() {
-        let draft = null;
-        try {
-          draft = JSON.parse(sessionStorage.getItem(STORE_FORM_DRAFT_STORAGE_KEY) || "null");
-        } catch (error) {
-          draft = null;
-        }
-        if (!draft || typeof draft !== "object") {
-          return false;
-        }
-        const name = document.getElementById("storeNameInput");
-        const address = document.getElementById("storeAddressInput");
-        if (name.value === "" && typeof draft.storeName === "string") {
-          name.value = draft.storeName.slice(0, 60);
-        }
-        if (address.value === "" && typeof draft.address === "string") {
-          address.value = draft.address.slice(0, 200);
-        }
-        [["storeCategorySelect", draft.categoryCode], ["storeCountrySelect", draft.countryCode]].forEach(function (pair) {
-          const select = document.getElementById(pair[0]);
-          if (typeof pair[1] === "string" && Array.prototype.some.call(select.options, function (option) { return option.value === pair[1]; })) {
-            select.value = pair[1];
-          }
-        });
-        return name.value !== "" || address.value !== "";
-      }
-
-      function clearStoreFormDraft() {
-        try {
-          sessionStorage.removeItem(STORE_FORM_DRAFT_STORAGE_KEY);
-        } catch (error) {
-          // 消せなくても、このタブを閉じれば消える。
-        }
+      // STEP 58(代表最終決定)｜STEP 57 の「新規登録の入力をこのタブに残す」は撤去した(契約の前に入力を途中保存する
+      // 機能を残さない)。登録のフォームはカード登録の後にしか開かないため、カード登録の画面へ移って入力を失うことは無い。
+      // 前の版が残した値も消す(読み戻さない)。
+      try {
+        sessionStorage.removeItem("machinauStoreFormDraft");
+      } catch (error) {
+        // 消せなくても、このタブを閉じれば消える。読み戻す処理は無い。
       }
 
       function renderStoreSection() {
@@ -2080,8 +2081,8 @@
           { key: "store_steps_account", done: true },
           { key: "store_steps_email", done: true },
           { key: "store_steps_card", done: ready },
-          { key: "store_steps_register", done: myStores.length > 0 },
-          { key: "store_steps_plan", done: myStores.some(function (store) { return store.planState === "active" || store.planState === "canceling"; }) },
+          // STEP 58｜登録・引き継ぎと月額100円の契約は同じ手続き(契約の無い店舗は数えない)。
+          { key: "store_steps_register", done: myStores.some(function (store) { return store.planState === "active" || store.planState === "canceling"; }) },
           { key: "store_steps_publish", done: myStores.some(function (store) { return store.publiclyVisible === true; }) }
         ];
         let currentMarked = false;
@@ -2111,9 +2112,28 @@
           document.getElementById("claimCardGateText").textContent = ready ? "" : t(cardGateMessageKey());
           document.getElementById("claimCardGateLink").hidden = !(billingStatus && billingStatus.available === true);
         }
+        claimCardReady = ready;
+        updateClaimSubmitButton();
+      }
+
+      // STEP 58｜引き継ぎのボタン：カード登録済み・まだ引き継がれていない掲載で、新しい店舗として引き継ぐ時は
+      // 月額100円の料金と条件への同意が済んでいること(登録済みの自分の店舗につなぐ時は同意の欄を出さない)。
+      let claimCardReady = false;
+
+      function updateClaimSubmitButton() {
+        const checked = document.querySelector('input[name="claimTarget"]:checked');
+        const newStore = !checked || checked.value === "new_store";
+        const terms = document.getElementById("claimPlanTerms");
+        if (terms) {
+          terms.hidden = !newStore;
+        }
         const claimButton = document.getElementById("claimSubmitButton");
         if (claimButton) {
-          claimButton.disabled = !ready || !!(claimPreview && claimPreview.linkState === "linked");
+          claimButton.disabled =
+            claimBusy ||
+            !claimCardReady ||
+            !!(claimPreview && claimPreview.linkState === "linked") ||
+            (newStore && document.getElementById("claimConsentCheck").checked !== true);
         }
       }
 
@@ -2332,7 +2352,11 @@
         card_account_mismatch: "store_card_gate_needed",
         card_retiring: "store_card_gate_needed",
         card_expired: "store_card_gate_expired",
-        card_billing_unavailable: "store_card_gate_unavailable"
+        card_billing_unavailable: "store_card_gate_unavailable",
+        // STEP 58｜引き継ぎも月額100円の申込と一体。既存の自店舗は契約中の時だけ。
+        plan_consent_required: "store_signup_consent_required",
+        plan_signup_unavailable: "store_signup_unavailable",
+        plan_required: "store_claim_err_plan_required"
       };
       let claimPreview = null;
       let claimPreviewLoadedForUid = "";
@@ -2421,6 +2445,7 @@
       function updateClaimTargetSelect() {
         const checked = document.querySelector('input[name="claimTarget"]:checked');
         document.getElementById("claimTargetStoreSelect").hidden = !checked || checked.value !== "existing_store";
+        updateClaimSubmitButton();
       }
 
       function renderMyClaims() {
@@ -2521,6 +2546,11 @@
           if (!payload.targetStoreId) {
             return showClaimMessage("store_claim_err_target", "error");
           }
+        } else {
+          if (document.getElementById("claimConsentCheck").checked !== true) {
+            return showClaimMessage("store_signup_consent_required", "error");
+          }
+          payload.planConsentVersion = STORE_CARD_PLAN_CONSENT_VERSION;
         }
         claimBusy = true;
         const button = document.getElementById("claimSubmitButton");
@@ -2549,7 +2579,7 @@
           })
           .finally(function () {
             claimBusy = false;
-            button.disabled = false;
+            updateClaimSubmitButton();
           });
       }
 
@@ -2583,10 +2613,12 @@
 
       function updateStoreRegisterButton() {
         const values = readStoreForm();
+        // STEP 58｜所在地の確認と、月額100円の料金と条件への同意の両方が済んだ時だけ登録できる。
         document.getElementById("storeRegisterButton").disabled =
           storeRequestPending ||
           storePreviewKey === "" ||
-          storePreviewKey !== values.countryCode + "|" + values.address;
+          storePreviewKey !== values.countryCode + "|" + values.address ||
+          document.getElementById("storeConsentCheck").checked !== true;
         document.getElementById("storePreviewButton").disabled = storeRequestPending;
       }
 
@@ -2612,12 +2644,10 @@
         clearStoreMessage();
         document.getElementById("storeForm").hidden = false;
         document.getElementById("openStoreFormButton").hidden = true;
-        restoreStoreFormDraft();
         document.getElementById("storeNameInput").focus();
       }
 
       function closeStoreForm() {
-        clearStoreFormDraft();
         const form = document.getElementById("storeForm");
         form.reset();
         document.getElementById("storeCountrySelect").value = STORE_DEFAULT_COUNTRY;
@@ -2679,6 +2709,9 @@
         if (invalidKey) {
           return showStoreMessage(invalidKey, "error");
         }
+        if (document.getElementById("storeConsentCheck").checked !== true) {
+          return showStoreMessage("store_signup_consent_required", "error");
+        }
         storeRequestPending = true;
         updateStoreRegisterButton();
         callStoreApi({
@@ -2687,7 +2720,8 @@
           categoryCode: values.categoryCode,
           countryCode: values.countryCode,
           address: values.address,
-          sourceLanguage: currentLanguage
+          sourceLanguage: currentLanguage,
+          planConsentVersion: STORE_CARD_PLAN_CONSENT_VERSION
         })
           .then(function (response) {
             if (response.status === 200 && response.result && response.result.success) {
@@ -3100,10 +3134,8 @@
           forgetPendingClaim();
           renderClaimResumeNotice();
         });
-        ["storeNameInput", "storeCategorySelect", "storeCountrySelect", "storeAddressInput"].forEach(function (id) {
-          document.getElementById(id).addEventListener("input", saveStoreFormDraft);
-          document.getElementById(id).addEventListener("change", saveStoreFormDraft);
-        });
+        document.getElementById("storeConsentCheck").addEventListener("change", updateStoreRegisterButton);
+        document.getElementById("claimConsentCheck").addEventListener("change", updateClaimSubmitButton);
         document.addEventListener("visibilitychange", refreshVerificationQuietly);
         window.addEventListener("focus", refreshVerificationQuietly);
         document.getElementById("loginForm").addEventListener("submit", handleLogin);

@@ -9,6 +9,9 @@ const ORIGIN = "http://127.0.0.1:8873";
 const ADMIN = "9413yutaka@gmail.com";
 process.env.FIREBASE_SERVICE_ACCOUNT_KEY = "{}"; process.env.RATE_LIMIT_HMAC_SECRET = "fake"; process.env.ADMIN_EMAIL = ADMIN;
 Object.assign(process.env, { VERCEL_ENV: "preview", STRIPE_MODE: "test", STRIPE_RESTRICTED_KEY: "rk_" + "test_FAKEKEYFORLOCALTESTS0001", STRIPE_PUBLISHABLE_KEY: "pk_" + "test_FAKEPUBLISHABLEFORTESTS01" });
+// STEP 58｜引き継ぎは月額100円の申込と一体。申込を受け付ける Preview 試験の環境(Preview の Firebase)で試す。
+const sa = (id) => JSON.stringify({ type: "service_account", project_id: id, private_key: "-----FAKE-KEY-FOR-TESTS-----" });
+Object.assign(process.env, { VERCEL_GIT_COMMIT_REF: "preview/stripe-card-setup", FIREBASE_SERVICE_ACCOUNT_KEY: sa("chikashoku-app"), FIREBASE_SERVICE_ACCOUNT_KEY_PREVIEW: sa("machinau-preview") });
 const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
 const NOWS = Math.floor(Date.now() / 1000);
 const tok = (email) => b64({ alg: "RS256" }) + "." + b64({ user_id: "a", sub: "a", email, exp: NOWS + 3600, iat: NOWS, aud: "chikashoku-app", iss: "https://securetoken.google.com/chikashoku-app", firebase: { sign_in_provider: "password" } }) + ".s";
@@ -44,7 +47,7 @@ S.docs.set("submissions/L1", { ...LISTING, shopName: "まだ引き継がれて�
 S.docs.set("submissions/L2", { ...LISTING, shopName: "引き継ぎ済みのカフェ", latitude: 26.151 });
 const card = (uid) => S.docs.set("accountBilling/" + uid, { uid, test: { customerId: "cus_" + uid + "SECRET", paymentMethodId: "pm_" + uid, setupStatus: "succeeded", card: { brand: "visa", last4: "4242", expMonth: 12, expYear: 2099 }, cardVersion: 1, detachPendingPaymentMethods: [] } });
 ["u1", "u2", "u3"].forEach(card);
-const CLAIM = (id) => ({ mode: "storeListingClaimCreate", submissionId: id, targetType: "new_store", role: "owner", publicReferenceUrl: "", note: "" });
+const CLAIM = (id) => ({ mode: "storeListingClaimCreate", submissionId: id, targetType: "new_store", role: "owner", publicReferenceUrl: "", note: "", planConsentVersion: "store-card-monthly-2026-10-31" });
 const claimedIds = async () => { const r = await get({ mode: "publicStoreProfiles" }); return { r, ids: (r.body && r.body.claimedListingIds) || null }; };
 
 // ===================== server =====================

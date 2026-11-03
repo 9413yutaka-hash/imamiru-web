@@ -167,7 +167,7 @@ const bfPub = pl.body.stores.find((s) => s.id === "sp_Bf");
 t("S1 初回失敗から14日：paymentStatus suspended・店舗カードを旅行者に出さない(STEP 50-B)・データは保持", plan("Bf").paymentStatus === "suspended" && ms(plan("Bf").suspendedAt) === NOW && !bfPub && !!S.docs.get("storeCustomProfiles/Bf") && plan("Bf").status === "active", { plan: plan("Bf"), bfPub });
 t("S2 本人認証待ちのまま14日の C3 も停止", plan("C3").paymentStatus === "suspended");
 let g = await call({ mode: "storeCustomProfileGet", storeId: "Bf" }, "u2");
-t("S3 停止中：利用権なし・保存済みの内容の編集はできる（STEP 50-D）（契約の状態は active のまま・支払いの状態は suspended）", g.body.plan.access === false && g.body.editable === true && g.body.plan.state === "active" && g.body.plan.paymentStatus === "suspended", g.body.plan);
+t("S3 停止中：利用権なし・支払いまで編集できない（STEP 58。保存済みの内容は残る）（契約の状態は active のまま・支払いの状態は suspended）", g.body.plan.access === false && g.body.editable === false && g.body.plan.state === "active" && g.body.plan.paymentStatus === "suspended", g.body.plan);
 
 // ===================== owner: invoice list / pay now / resume =====================
 let l = await call({ mode: "storeCustomPlanInvoiceList" }, "u2");

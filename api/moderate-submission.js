@@ -102,6 +102,8 @@ import {
   readPublicStoreProfileForShare,
   readStorePlanSummaryForList,
   checkStoreProfileEditor,
+  checkStoreProfilePaidEditor,
+  readStoreCardPlanActive,
   buildStorePhotoFolder,
   isStorePhotoPublicId
 } from "./_lib/store-profile.js";
@@ -118,7 +120,10 @@ import {
   buildStoreMenuPhotoFolder,
   isStoreMenuPhotoPublicId,
   // STEP 47-F｜店舗の退会の受付での解約(依存として渡す)。
-  cancelStoreCustomPlan
+  cancelStoreCustomPlan,
+  // STEP 58｜新規登録・引き継ぎと月額100円の申込を一体にする(依存として渡す)。
+  resolveStoreCardPlanSignup,
+  writeNewStoreCardPlanInTransaction
 } from "./_lib/store-custom-profile.js";
 
 // STEP 44-C③｜月額100円カスタマイズの後払い請求の基盤(月末締め・請求台帳。Stripe への請求はしない)。
@@ -20666,12 +20671,13 @@ async function handleStoreProfilePhotoSignatureRequest(
             actorResult.actor.uid,
             Date.now()
           )
-        : await checkStoreProfileEditor(
+        : await checkStoreProfilePaidEditor(
             getFirestore(
               getFirebaseAdminApp()
             ),
             storeId,
-            actorResult.actor.uid
+            actorResult.actor.uid,
+            Date.now()
           );
 
     if (!editorCheck.ok) {
@@ -30115,6 +30121,10 @@ function buildStoreSelfServiceDeps() {
     readStorePlanSummary: function(database, storeId) {
       return readStorePlanSummaryForList(database, storeId, Date.now());
     },
+    // STEP 58｜店主の編集・管理は月額100円の契約が必須。新規登録・引き継ぎ(新しいお店)は申込と一体で契約を作る。
+    readStoreCardPlanActive: readStoreCardPlanActive,
+    resolveStoreCardPlanSignup: resolveStoreCardPlanSignup,
+    writeNewStoreCardPlanInTransaction: writeNewStoreCardPlanInTransaction,
     // STEP 44-B｜月額100円カスタマイズの申込を受け付ける環境か(Preview試験の環境だけ true、Productionは常に false)。
     isStoreCustomPlanTrialEnabled: function() {
       return isPreviewStoreCustomPlanTrialEnabled(process.env);

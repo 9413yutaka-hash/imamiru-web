@@ -55,7 +55,8 @@ import {
   readMultilineText,
   readSingleLineText,
   isActiveOwner,
-  isEditableStore
+  isEditableStore,
+  readStoreCardPlanActive
 } from "./store-profile.js";
 
 const STORE_ACCOUNTS_COLLECTION = "storeAccounts";
@@ -486,8 +487,8 @@ function readNowMillis(deps) {
   return typeof deps.now === "function" ? deps.now() : Date.now();
 }
 
-// 商品写真の署名発行の前に使う確認(owner・編集可能な店舗)。
-// STEP 50-D｜契約前でも保存・編集できる(代表決定 B案)。旅行者への表示は契約の有効性で別に判定する。
+// 商品写真の署名発行の前に使う確認(owner・編集可能な店舗・月額100円の契約が有効)。
+// STEP 58(代表最終決定)｜契約が成立していない店舗は保存・編集できない(STEP 50-D の「契約前でも保存・編集できる」は廃止)。
 export async function checkStoreCustomEditor(database, storeId, uid, nowMillis) {
   const snapshots = await Promise.all([
     database.collection(STORE_MEMBERS_COLLECTION).doc(storeId + "_" + uid).get(),
@@ -502,12 +503,16 @@ export async function checkStoreCustomEditor(database, storeId, uid, nowMillis) 
     return { ok: false, status: 403, reason: "store_not_editable" };
   }
 
+  if (!(await readStoreCardPlanActive(database, storeId, nowMillis))) {
+    return { ok: false, status: 403, reason: "plan_required" };
+  }
+
   return { ok: true };
 }
 
 
 // mode: storeCustomProfileGet (POST、メール確認済み店舗アカウントの owner)
-// 有料の内容と契約状態を返す。STEP 50-D｜未契約・期限切れでも、owner は保存・編集できる(公開は契約が有効な時だけ)。
+// 有料の内容と契約状態を返す。STEP 58｜editable は契約が有効な時だけ true(未契約・期限切れ・未払いで停止中は編集できない)。
 export async function handleStoreCustomProfileGet(request, response, deps) {
   try {
     const actor = await requireVerifiedStoreUser(request, response, deps);
@@ -564,11 +569,14 @@ export async function handleStoreCustomProfileGet(request, response, deps) {
       plan.otherHolderActive = false;
     }
 
+    const planActive = storeEditable && (await readStoreCardPlanActive(database, storeId, readNowMillis(deps)));
+
     return response.status(200).json({
       success: true,
       storeId: storeId,
       plan: plan,
-      editable: storeEditable,
+      editable: planActive,
+      planRequired: storeEditable && !planActive,
       custom: buildCustomResponse(snapshots[3].exists ? snapshots[3].data() : null),
       limits: STORE_CUSTOM_LIMITS,
       linkTypes: STORE_CUSTOM_LINK_TYPES
@@ -580,7 +588,7 @@ export async function handleStoreCustomProfileGet(request, response, deps) {
 }
 
 
-// mode: storeCustomProfileUpdate (POST、owner・編集可能な店舗の時だけ。STEP 50-D｜契約の有無は問わない)
+// mode: storeCustomProfileUpdate (POST、owner・編集可能な店舗・STEP 58｜月額100円の契約が有効な時だけ)
 // { storeId, expectedRevision, menuItems, links, story }
 // 送られた内容で有料の内容をまるごと置き換える(並べ替え・削除も同じ操作)。
 // expectedRevisionが保存済みのrevisionと違う場合は上書きせず409(revision_conflict)。
@@ -626,6 +634,10 @@ export async function handleStoreCustomProfileUpdate(request, response, deps) {
 
     if (!isEditableStore(accountBefore)) {
       return sendError(response, 403, "store_not_editable");
+    }
+
+    if (!(await readStoreCardPlanActive(database, storeId, readNowMillis(deps)))) {
+      return sendError(response, 403, "plan_required");
     }
 
     const customBefore = preSnapshots[2].exists ? preSnapshots[2].data() || {} : {};
@@ -744,6 +756,12 @@ export async function handleStoreCustomProfileUpdate(request, response, deps) {
 
       if (!isEditableStore(snapshots[1].data())) {
         outcome = { status: 403, reason: "store_not_editable" };
+        return;
+      }
+
+      // 確認の後に解約の期限が過ぎた・未払いで停止した時も保存しない(同じトランザクションで確かめる)。
+      if (!(await readStoreCardPlanActive(database, storeId, readNowMillis(deps), transaction))) {
+        outcome = { status: 403, reason: "plan_required" };
         return;
       }
 
@@ -950,6 +968,94 @@ function writePlanEvent(transaction, database, storeId, uid, event, nowMillis, d
   }, detail || {}));
 }
 
+// STEP 58｜月額100円の申込を受け付けるか(同意の版・受付の環境)と契約の種類。申込(storeCustomPlanSubscribe)・
+// 新規登録(storeSelfRegister)・引き継ぎ(storeListingClaimCreate の新しいお店)で同じ条件にする。
+//   STEP 50-B｜店舗カード月額契約への明示の同意(現在の版)が無い申込は受け付けない(旧画面からの申込も含む)。
+//   STEP 44-C③｜本番の申込の受付(STORE_CUSTOM_PLAN_MONTHLY_SIGNUP_ENABLED)が有効なら本番の暦月契約。
+//   それ以外は Preview 試験の環境の時だけ受け付け、既定は STEP 44-B の試験の契約(申込から暦の1か月・請求の対象外)、
+//   contractModel "monthly" を指定した時だけ試験用の暦月契約(createdInPreview。請求台帳の試験用)。
+// 戻り値 { ok: true, contractModel, createdInPreview } か { ok: false, status, reason, extra }。
+export function resolveStoreCardPlanSignup(deps, body) {
+  if (!body || body.planConsentVersion !== STORE_CARD_PLAN_CONSENT_VERSION) {
+    return { ok: false, status: 400, reason: "plan_consent_required", extra: { consentVersion: STORE_CARD_PLAN_CONSENT_VERSION } };
+  }
+
+  const monthlySignupEnabled = isStoreCustomPlanMonthlySignupOpen(deps);
+  const trialEnvironment = typeof deps.isStoreCustomPlanTrialEnabled === "function" && deps.isStoreCustomPlanTrialEnabled() === true;
+
+  if (!monthlySignupEnabled && !trialEnvironment) {
+    return { ok: false, status: 403, reason: "plan_signup_unavailable" };
+  }
+
+  return {
+    ok: true,
+    contractModel: monthlySignupEnabled || body.contractModel === STORE_CUSTOM_PLAN_PERIOD_MONTHLY
+      ? STORE_CUSTOM_PLAN_PERIOD_MONTHLY
+      : STORE_CUSTOM_PLAN_PERIOD_PREVIEW_TRIAL,
+    createdInPreview: !monthlySignupEnabled
+  };
+}
+
+// STEP 58｜新しく作る店舗(新規登録・引き継ぎの新しいお店)の契約を、店舗を作るのと同じトランザクションで書く
+// (契約の無い店舗を作らない)。新しい店舗 ID のため、前の契約・今月の利用の記録は無い。読み取りはしない
+// (呼び出し側のトランザクションの読み取りの後に呼ぶ)。内容は storeCustomPlanSubscribe の新しい契約と同じ
+// (料金の記録は申込んだ本人・今月の100円が上限・同意の証跡を契約と履歴の両方に残す)。
+// params: { storeId, uid, nowMillis, signup(resolveStoreCardPlanSignup の結果), channel }
+export function writeNewStoreCardPlanInTransaction(transaction, database, params) {
+  const storeId = params.storeId;
+  const uid = params.uid;
+  const nowMillis = params.nowMillis;
+  const contractModel = params.signup.contractModel;
+  const createdInPreview = params.signup.createdInPreview === true;
+  const monthly = contractModel === STORE_CUSTOM_PLAN_PERIOD_MONTHLY;
+  const accessUntilMillis = monthly ? 0 : addOneCalendarMonthJst(nowMillis);
+  const monthKey = jstMonthKey(nowMillis);
+  const consent = {
+    version: STORE_CARD_PLAN_CONSENT_VERSION,
+    consentedAt: Timestamp.fromMillis(nowMillis),
+    feeJpy: STORE_CUSTOM_PLAN_MONTHLY_FEE_JPY,
+    taxIncluded: true,
+    storeId: storeId,
+    uid: uid
+  };
+
+  if (monthly) {
+    writeStoreCustomPlanUsage(transaction, storeCustomPlanUsageRef(database, storeId, monthKey), { exists: false }, {
+      storeId: storeId,
+      month: monthKey,
+      holderUid: uid,
+      reason: "subscribed",
+      atMillis: nowMillis,
+      contractSubscribedAt: Timestamp.fromMillis(nowMillis),
+      createdInPreview: createdInPreview
+    });
+  }
+
+  transaction.set(database.collection(STORE_CUSTOM_PLANS_COLLECTION).doc(storeId), {
+    storeId: storeId,
+    status: "active",
+    ownerUid: uid,
+    billingAccountUid: uid,
+    periodKind: contractModel,
+    createdInPreview: createdInPreview,
+    subscribedAt: Timestamp.fromMillis(nowMillis),
+    accessUntil: monthly ? null : Timestamp.fromMillis(accessUntilMillis),
+    canceledAt: null,
+    consent: consent,
+    signupChannel: params.channel,
+    updatedAt: FieldValue.serverTimestamp(),
+    revision: 1
+  });
+  writePlanEvent(transaction, database, storeId, uid, "subscribed", nowMillis, {
+    periodKind: contractModel,
+    accessUntil: monthly ? null : Timestamp.fromMillis(accessUntilMillis),
+    consent: consent,
+    signupChannel: params.channel
+  });
+
+  return { result: "subscribed", periodKind: contractModel, accessUntilMillis: accessUntilMillis };
+}
+
 // mode: storeCustomPlanSubscribe (POST、メール確認済み店舗アカウントの owner)
 // 条件：Preview試験の環境・自店の有効な owner・店舗が編集可能・このアカウントにカード登録済み・
 // 有効な契約が無い。解約手続き済み(期限内)の自分の契約は、申込で「解約の取り消し」になる(期限は変えない)。
@@ -969,26 +1075,14 @@ export async function handleStoreCustomPlanSubscribe(request, response, deps) {
       return sendError(response, 400, "invalid_input", { field: "storeId" });
     }
 
-    // STEP 50-B｜店舗カード月額契約への明示の同意(現在の版)が無い申込は受け付けない(旧画面からの申込も含む)。
-    if (deps.readRequestBody(request).planConsentVersion !== STORE_CARD_PLAN_CONSENT_VERSION) {
-      return sendError(response, 400, "plan_consent_required", { consentVersion: STORE_CARD_PLAN_CONSENT_VERSION });
+    const signup = resolveStoreCardPlanSignup(deps, deps.readRequestBody(request));
+
+    if (!signup.ok) {
+      return sendError(response, signup.status, signup.reason, signup.extra);
     }
 
-    // STEP 44-C③｜契約の種類：本番の申込の受付(STORE_CUSTOM_PLAN_MONTHLY_SIGNUP_ENABLED、false)が有効なら本番の暦月契約。
-    // それ以外は Preview 試験の環境の時だけ受け付け、既定は STEP 44-B の試験の契約(申込から暦の1か月・請求の対象外)、
-    // contractModel "monthly" を指定した時だけ試験用の暦月契約(createdInPreview。請求台帳の試験用)。Production では受け付けない。
-    const monthlySignupEnabled = isStoreCustomPlanMonthlySignupOpen(deps);
-    const trialEnvironment = typeof deps.isStoreCustomPlanTrialEnabled === "function" && deps.isStoreCustomPlanTrialEnabled() === true;
-    const requestedModel = deps.readRequestBody(request).contractModel;
-
-    if (!monthlySignupEnabled && !trialEnvironment) {
-      return sendError(response, 403, "plan_signup_unavailable");
-    }
-
-    const contractModel = monthlySignupEnabled || requestedModel === STORE_CUSTOM_PLAN_PERIOD_MONTHLY
-      ? STORE_CUSTOM_PLAN_PERIOD_MONTHLY
-      : STORE_CUSTOM_PLAN_PERIOD_PREVIEW_TRIAL;
-    const createdInPreview = !monthlySignupEnabled;
+    const contractModel = signup.contractModel;
+    const createdInPreview = signup.createdInPreview;
 
     const database = deps.getFirestore(deps.getFirebaseAdminApp());
     const memberRef = database.collection(STORE_MEMBERS_COLLECTION).doc(storeId + "_" + actor.uid);

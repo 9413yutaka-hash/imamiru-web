@@ -222,6 +222,28 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // STEP 58｜店主の編集・管理は月額100円の契約が必須。店舗の管理情報・契約・有料の内容は、契約を確かめるサーバー API
+    // (Admin SDK)だけが読み書きする。ブラウザからの直接の読み書きは拒否(許可の指定が無いため既定でも拒否、明示して将来の誤りを防ぐ)。
+    match /storeAccounts/{storeId} {
+      allow read, write: if false;
+    }
+
+    match /storeCustomPlans/{storeId} {
+      allow read, write: if false;
+    }
+
+    match /storeCustomPlanEvents/{docId} {
+      allow read, write: if false;
+    }
+
+    match /storeCustomPlanUsage/{docId} {
+      allow read, write: if false;
+    }
+
+    match /storeCustomProfiles/{storeId} {
+      allow read, write: if false;
+    }
+
     // 運営無料掲載→店舗オーナー化（サーバーAPI経由のみ）
     match /storeListingClaims/{docId} {
       allow read, write: if false;

@@ -98,12 +98,16 @@ const click = (p, id) => p.ev(`document.getElementById("${id}").click(), true`);
 const consent = (p) => p.ev(`(() => { const c = document.getElementById("customPlanConsentCheck"); c.checked = true; c.dispatchEvent(new Event("change", { bubbles: true })); return true; })()`);
 const terms = (p) => p.ev(`({ hidden: document.getElementById("customPlanTerms").hidden, text: document.getElementById("customPlanTerms").innerText, checked: document.getElementById("customPlanConsentCheck").checked })`);
 const planCond = (p) => p.ev(`(() => { const li = document.querySelector('#publishChecklist li[data-condition="plan"]'); return li ? { cls: li.className, text: li.innerText } : null; })()`);
+// STEP 58｜契約の無い間は、店舗情報(無料の欄)も保存・編集できない(サーバーの editable・planRequired に従う)。
+const freeLock = (p) => p.ev(`({ freeSaveDisabled: document.getElementById("saveButton").disabled, descDisabled: document.getElementById("descriptionInput").disabled, photoAddDisabled: document.getElementById("photoAddButton").disabled, note: document.getElementById("notEditableNote").hidden ? "" : document.getElementById("notEditableNote").textContent })`);
 const SUB_JA = "店舗カードを申し込む（月額100円・税込）";
 const SUB_EN = "Subscribe to the store card (¥100/month, tax included)";
 try {
   let p = await openEditor("u1", "S1");
   let v = await view(p);
-  t("U1 未契約（カード登録済み）：非公開の案内・試験の注意・「店舗カードを申し込む（月額100円・税込）」（同意前は押せない）・解約ボタンなし・契約前でもメニュー等を編集できる（STEP 50-D）", /未契約です/.test(v.note) && /非公開/.test(v.note) && /下書きの保存・編集はできます/.test(v.note) && v.trial && !v.card && v.sub && v.sub.text === SUB_JA && v.sub.disabled === true && v.cancel === null && !v.storyDisabled && !v.saveHidden, v);
+  t("U1 未契約（カード登録済み）：非公開の案内・試験の注意・「店舗カードを申し込む（月額100円・税込）」（同意前は押せない）・解約ボタンなし・契約前はメニュー等を編集できない（STEP 58）", /未契約です/.test(v.note) && /非公開/.test(v.note) && /保存・編集には月額100円/.test(v.note) && v.trial && !v.card && v.sub && v.sub.text === SUB_JA && v.sub.disabled === true && v.cancel === null && v.storyDisabled === true && v.saveHidden === true, v);
+  let fl = await freeLock(p);
+  t("U1b 未契約：店舗情報（紹介文・写真）も編集できない・「契約中だけできます」の案内（STEP 58）", fl.freeSaveDisabled === true && fl.descDisabled === true && fl.photoAddDisabled === true && /月額100円（税込）の契約中だけ/.test(fl.note), fl);
   let tm = await terms(p);
   t("C1 料金と条件：月額100円（税込）・新規作成と引き継ぎは同じ料金・基本情報とカスタマイズを含む・月末締め翌月2日請求・日割りなし・今だけ投稿とは別・解約月の月末まで", !tm.hidden && !tm.checked && /月額100円（税込）/.test(tm.text) && /新規作成・引き継ぎ/.test(tm.text) && /基本情報/.test(tm.text) && /メニュー/.test(tm.text) && /月末に締めて、翌月2日/.test(tm.text) && /日割りはありません/.test(tm.text) && /今だけ投稿の料金とは別/.test(tm.text) && /解約した月の月末まで/.test(tm.text) && /同意します/.test(tm.text), tm);
   let pc = await planCond(p);
@@ -117,6 +121,9 @@ try {
   v = await view(p);
   const plan1 = S.docs.get("storeCustomPlans/S1");
   t("U2 申込：「申し込みました。…まで利用できます」・契約中・申込と利用期限の表示・解約ボタン・有料の欄が編集できる", /申し込みました。.*まで利用できます/.test(v.msg) && /契約中です/.test(v.note) && /申込：/.test(v.dates) && /利用期限：/.test(v.dates) && v.cancel === "解約する" && v.sub === null && !v.storyDisabled && !v.saveHidden && plan1 && plan1.status === "active" && plan1.ownerUid === "u1", { v, plan1 });
+  await p.waitFor(`!document.getElementById("descriptionInput").disabled`, 10000);
+  fl = await freeLock(p);
+  t("U2b 申込の後は、店舗情報（紹介文・写真）も編集できる（開き直さなくてよい）・案内は消える", fl.freeSaveDisabled === false && fl.descDisabled === false && fl.photoAddDisabled === false && fl.note === "", fl);
   t("U3 申込の API は1回だけ（ボタンの連打防止・申込後はボタンを隠す）", posts.filter((b) => b.mode === "storeCustomPlanSubscribe").length === 1);
   const subPost = posts.find((b) => b.mode === "storeCustomPlanSubscribe");
   t("C5 申込は正式な同意の版（store-card-monthly-2026-10-31）を送る", !!subPost && subPost.planConsentVersion === "store-card-monthly-2026-10-31", subPost);
@@ -143,7 +150,7 @@ try {
   S.docs.set("storeCustomPlans/S1", { ...S.docs.get("storeCustomPlans/S1"), status: "canceling", canceledAt: Timestamp.fromMillis(Date.now() - 2000), accessUntil: Timestamp.fromMillis(Date.now() - 1000) });
   p = await openEditor("u1", "S1");
   v = await view(p);
-  t("U8 利用期限の終了後：「利用期限（…）が終了しました」・データは残っている案内・「申し込む」・保存済みの内容を編集できる（STEP 50-D）", /が終了しました/.test(v.note) && /削除されていません/.test(v.note) && v.sub && v.sub.text === SUB_JA && !v.storyDisabled && !v.saveHidden, v);
+  t("U8 利用期限の終了後：「利用期限（…）が終了しました」・データは残っている案内・「申し込む」・再契約まで編集できない（STEP 58）", /が終了しました/.test(v.note) && /削除されていません/.test(v.note) && v.sub && v.sub.text === SUB_JA && v.storyDisabled === true && v.saveHidden === true && (await freeLock(p)).descDisabled === true, v);
   await p.close();
   p = await openEditor("u1", "S1", "en");
   v = await view(p);

@@ -177,7 +177,7 @@ t("28b shop-guide.html：旧専用URL方式（お店専用の投稿ページ・U
 const guideHrefs = [...guideVisible.matchAll(/href="([^"#]+)"/g)].map((m) => m[1]).filter((h) => !h.startsWith("/favicon"));
 t("28c shop-guide.html：リンクは既存のページだけ（存在しないURLを作らない）", guideHrefs.length > 0 && guideHrefs.every((h) => fs.existsSync(REPO_ROOT + "/" + h.split("?")[0])), guideHrefs);
 // STEP 51-B｜料金は正式な4商品の案内だけを載せる(店舗カードの作成・下書きは無料・公開は月額100円・今だけ投稿は契約不要)。
-t("28d shop-guide.html：運営の個別承認・電話確認・書類提出などの新しい条件を加えない・料金は正式な案内だけ（ラベルは実際の画面の文言）", !/電話|書類|審査|本人確認|手数料|特定商取引|500円/.test(guideVisible) && /マチナウの店舗管理サービスは月額100円（税込）です。新規店舗登録も、掲載済み店舗の引き継ぎも、同じ料金でご利用いただけます。アカウントの作成とクレジットカードの登録だけでは料金はかかりません。[^<]*今だけ投稿は店舗カードの契約が無くても使え/.test(guideVisible) && !/お店・施設の情報の登録は無料/.test(guideVisible) && /「カードを登録する」/.test(guideVisible) && /「店舗・施設を登録する」/.test(guideVisible) && /「このお店を引き継ぐ」/.test(guideVisible) && /「常設店舗情報を編集する」/.test(guideVisible) && /「旅行者に公開する」/.test(guideVisible));
+t("28d shop-guide.html：運営の個別承認・電話確認・書類提出などの新しい条件を加えない・料金は正式な案内だけ（ラベルは実際の画面の文言）", !/電話|書類|審査|本人確認|手数料|特定商取引|500円/.test(guideVisible) && /マチナウの店舗管理サービスは月額100円（税込）です。新規店舗登録も、掲載済み店舗の引き継ぎも、同じ料金・同じ条件です。[^<]*契約の前に店舗情報を保存・編集することはできません[^<]*アカウントの作成とクレジットカードの登録だけでは料金はかかりません。[^<]*今だけ投稿は店舗カードの契約が無くても使え/.test(guideVisible) && /「同意して登録し、月額100円（税込）を申し込む」/.test(guideVisible) && !/お店・施設の情報の登録は無料/.test(guideVisible) && /「カードを登録する」/.test(guideVisible) && /「店舗・施設を登録する」/.test(guideVisible) && /「このお店を引き継ぐ」/.test(guideVisible) && /「常設店舗情報を編集する」/.test(guideVisible) && /「旅行者に公開する」/.test(guideVisible));
 
 // STEP 43-D｜「街の声」の編集・掲載終了（edit.html／end.html の API、api/edit-ad.js）は維持
 {

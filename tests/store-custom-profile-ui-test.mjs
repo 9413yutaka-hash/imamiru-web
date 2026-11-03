@@ -103,33 +103,13 @@ try {
   // ===== editor: no plan =====
   let p = await openEditor("ja");
   let v = await editorView(p);
-  // STEP 50-D｜代表決定 B案：契約前でもメニュー・リンク・ストーリーを入力・保存・編集できる(公開だけが契約で決まる)。
-  t("E1 未契約：「契約していません」「非公開」の案内・保存ボタンあり・追加ボタンと入力が使える（STEP 50-D）", /月額契約をしていません/.test(v.note) && /非公開/.test(v.note) && !v.saveHidden && !v.addMenuDisabled && !v.addLinkDisabled && !v.storyDisabled, v);
-  t("E2 未契約でも無料の店舗情報の編集はこれまでどおり使える（無料の保存ボタンは有効）", v.freeVisible && v.freeSaveDisabled === false, v);
-  await p.ev(`(() => {
-    const set = (el, value) => { el.value = value; el.dispatchEvent(new Event("input", { bubbles: true })); };
-    set(document.getElementById("customStoryInput"), "契約前に書いたストーリー");
-    document.getElementById("customMenuAddButton").click();
-    set(document.getElementById("custom-name-0"), "契約前のメニュー");
-    document.getElementById("customLinkAddButton").click();
-    const row = document.querySelector("#customLinkRows .custom-link-row");
-    const select = row.querySelector("select"); select.value = "website"; select.dispatchEvent(new Event("change", { bubbles: true }));
-    set(row.querySelector(".custom-link-url"), "https://example.com/before");
-    document.getElementById("customSaveButton").click();
-    return true;
-  })()`);
-  await p.waitFor(`/保存しました/.test(document.getElementById("customMessage").textContent)`, 20000); await sleep(300);
-  let draft = S.docs.get("storeCustomProfiles/S1") || {};
-  t("E3 未契約：画面からメニュー・リンク・ストーリーを保存できる（契約は作らない）", draft.revision === 1 && draft.menuItems.length === 1 && draft.menuItems[0].name === "契約前のメニュー" && draft.links.length === 1 && draft.links[0].url === "https://example.com/before" && draft.story === "契約前に書いたストーリー" && !S.docs.has("storeCustomPlans/S1"), draft);
+  // STEP 58(代表最終決定)｜契約の無い店舗は、メニュー・リンク・ストーリーも、無料の欄(紹介文・写真)も保存・編集できない
+  // (STEP 50-D の「契約前でも保存・編集できる」は廃止)。画面はサーバーの editable に従って入力を止める。
+  t("E1 未契約：「契約していません」「非公開」「保存・編集はできません」の案内・保存ボタンなし・追加ボタンと入力は使えない（STEP 58）", /月額契約をしていません/.test(v.note) && /非公開/.test(v.note) && /保存・編集はできません/.test(v.note) && v.saveHidden && v.addMenuDisabled && v.addLinkDisabled && v.storyDisabled, v);
+  const free = await p.ev(`({ save: document.getElementById("saveButton").disabled, desc: document.getElementById("descriptionInput").disabled, note: document.getElementById("notEditableNote").textContent, noteShown: !document.getElementById("notEditableNote").hidden })`);
+  t("E2 未契約：無料の店舗情報も編集できない（保存ボタンは押せない）・「月額100円の契約中だけできます」の案内（STEP 58）", v.freeVisible && free.save === true && free.desc === true && free.noteShown && /契約中だけできます/.test(free.note), free);
+  t("E3 未契約：保存の API を呼ばない・何も保存されない", !S.docs.has("storeCustomProfiles/S1") && !S.docs.has("storeCustomPlans/S1"));
   t("E4 JSエラーなし（未契約）", p.log.errors.length === 0, p.log.errors);
-  await p.close();
-  for (const k of [...S.docs.keys()]) if (k.startsWith("storeRateLimits/")) S.docs.delete(k);
-  p = await openEditor("ja");
-  const reopened = await p.ev(`({ story: document.getElementById("customStoryInput").value, menu: document.getElementById("custom-name-0") && document.getElementById("custom-name-0").value, link: (document.querySelector("#customLinkRows .custom-link-url") || {}).value })`);
-  await p.ev(`(() => { const el = document.getElementById("customStoryInput"); el.value = "契約前に書き直したストーリー"; el.dispatchEvent(new Event("input", { bubbles: true })); document.getElementById("customSaveButton").click(); return true; })()`);
-  await p.waitFor(`/保存しました/.test(document.getElementById("customMessage").textContent)`, 20000); await sleep(300);
-  draft = S.docs.get("storeCustomProfiles/S1") || {};
-  t("E3b 未契約：開き直すと保存済みの内容が表示され、再編集して保存できる（revision 2）", reopened.story === "契約前に書いたストーリー" && reopened.menu === "契約前のメニュー" && reopened.link === "https://example.com/before" && draft.revision === 2 && draft.story === "契約前に書き直したストーリー" && draft.menuItems.length === 1, { reopened, draft });
   await p.close();
   // 以降(契約中の編集)は「保存の無い状態」から始める前提なので、模擬データ(メモリー上)の保存内容と連続保存の制限だけを初期化する。
   S.docs.delete("storeCustomProfiles/S1");

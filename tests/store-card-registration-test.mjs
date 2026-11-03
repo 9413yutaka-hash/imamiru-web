@@ -33,10 +33,14 @@ async function call(body, token) {
 }
 const FAKE_RK = "rk_" + "test_FAKEKEYFORLOCALTESTS0001", FAKE_PK = "pk_" + "test_FAKEPUBLISHABLEFORTESTS01";
 Object.assign(process.env, { VERCEL_ENV: "preview", STRIPE_MODE: "test", STRIPE_RESTRICTED_KEY: FAKE_RK, STRIPE_PUBLISHABLE_KEY: FAKE_PK });
+// STEP 58｜新規登録・引き継ぎは月額100円の申込と一体。申込を受け付ける Preview 試験の環境(Preview の Firebase)で試す。
+const sa = (id) => JSON.stringify({ type: "service_account", project_id: id, private_key: "-----FAKE-KEY-FOR-TESTS-----" });
+Object.assign(process.env, { VERCEL_GIT_COMMIT_REF: "preview/stripe-card-setup", FIREBASE_SERVICE_ACCOUNT_KEY: sa("chikashoku-app"), FIREBASE_SERVICE_ACCOUNT_KEY_PREVIEW: sa("machinau-preview") });
+const CONSENT = "store-card-monthly-2026-10-31";
 const card = (uid, o = {}) => S.docs.set("accountBilling/" + uid, { uid, test: { customerId: "cus_" + uid, paymentMethodId: "pm_" + uid, setupStatus: "succeeded", card: { brand: "visa", last4: "4242", expMonth: 12, expYear: 2099 }, cardVersion: 1, detachPendingPaymentMethods: [], ...o } });
 const clearRate = () => { for (const k of [...S.docs.keys()]) if (k.startsWith("storeRegistrationRateLimits/")) S.docs.delete(k); };
 const docsIn = (col) => [...S.docs.entries()].filter(([k]) => k.startsWith(col + "/") && !k.slice(col.length + 1).includes("/")).map(([k, v]) => ({ id: k.split("/")[1], v }));
-const REG = (name) => ({ mode: "storeSelfRegister", storeName: name, categoryCode: "gourmet", countryCode: "JP", address: "沖縄県島尻郡八重瀬町1-1", sourceLanguage: "ja" });
+const REG = (name) => ({ mode: "storeSelfRegister", storeName: name, categoryCode: "gourmet", countryCode: "JP", address: "沖縄県島尻郡八重瀬町1-1", sourceLanguage: "ja", planConsentVersion: CONSENT });
 
 // operator listing (permanent ad) with hours / closed days / payment / takeout / photos
 const LISTING = { title: "本日のおすすめ", shopName: "八重瀬の食堂", category: "グルメ", content: "地元の食材を使った定食の店です。\n駐車場あり。", address: "沖縄県島尻郡八重瀬町", latitude: 26.15, longitude: 127.72, status: "approved", isPermanentAd: true, authorType: "shopAd", websiteUrl: "https://example.com/source", paymentMethods: ["cash", "qr"], takeout: true, businessStartTime: "11:00", businessEndTime: "21:00", closedDays: ["tue"], irregularClosed: true, imageUrls: ["https://res.cloudinary.com/cdhyctnp/image/upload/v1/machinau_admin/a1.jpg", "https://res.cloudinary.com/cdhyctnp/image/upload/v1/machinau_admin/a2.jpg"] };
@@ -75,7 +79,7 @@ const sameOwner = await call(REG("新しいカフェ"), "u1");
 t("A9 同じアカウントの同じ店（名前・100m以内）は 409 already_registered（既存の店舗を上書きしない）", sameOwner.code === 409 && sameOwner.body.reason === "already_registered", sameOwner.body);
 
 // ===================== B: automatic takeover =====================
-const CLAIM = (submissionId, extra = {}) => ({ mode: "storeListingClaimCreate", submissionId, targetType: "new_store", role: "owner", publicReferenceUrl: "", note: "", ...extra });
+const CLAIM = (submissionId, extra = {}) => ({ mode: "storeListingClaimCreate", submissionId, targetType: "new_store", role: "owner", publicReferenceUrl: "", note: "", planConsentVersion: CONSENT, ...extra });
 r = await call(CLAIM("L1"), "u3");
 t("B1 カード未登録：引き継ぎは 409 card_required・紐付け・申請・店舗は作られない", r.code === 409 && r.body.reason === "card_required" && !S.docs.get("storeListingLinks/L1") && docsIn("storeListingClaims").length === 0, r.body);
 card("u3");
@@ -179,6 +183,7 @@ t("D2 撤去した旧方式の mode はすべて 410（未対応件数・申請�
 // ===================== Z: invariants =====================
 t("Z1 課金関連3フラグは false のまま・Stripe／Cloudinary への通信なし（地図の住所確認だけ模擬）", IM.IMADAKE_CV_BILLING_STARTED === false && MC.IMADAKE_MONTHLY_CLOSE_WRITES_ENABLED === false && CH.IMADAKE_MONTHLY_CHARGE_ENABLED === false && otherNetwork === 0 && geocodeCalls > 0);
 const touched = [...new Set(S.writes.map((w) => w.split("/")[0]))].sort();
-t("Z2 書き込み先は店舗登録・引き継ぎ関連だけ（請求・カード・submissions は書かない）", !touched.includes("submissions") && !touched.includes("imadakeMonthlyInvoices") && touched.every((c) => ["accountBilling", "storeAccounts", "storeMembers", "storeProfiles", "storeListingLinks", "storeListingClaims", "storeRegistrationRateLimits"].includes(c)), touched);
+// STEP 58｜新規登録・引き継ぎは月額100円の申込と一体のため、契約(storeCustomPlans)と契約の履歴(storeCustomPlanEvents)も同時に書く。
+t("Z2 書き込み先は店舗登録・引き継ぎと、同時に成立する月額100円の契約だけ（請求書・カード・submissions は書かない）", !touched.includes("submissions") && !touched.includes("imadakeMonthlyInvoices") && !touched.includes("storeCustomPlanInvoices") && touched.includes("storeCustomPlans") && touched.every((c) => ["accountBilling", "storeAccounts", "storeMembers", "storeProfiles", "storeListingLinks", "storeListingClaims", "storeRegistrationRateLimits", "storeCustomPlans", "storeCustomPlanEvents", "storeCustomPlanUsage"].includes(c)), touched);
 console.log(`\nTOTAL ${pass + fail}  PASS ${pass}  FAIL ${fail}`);
 process.exit(0);

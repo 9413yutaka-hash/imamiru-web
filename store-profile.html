@@ -1004,7 +1004,7 @@
         setPhotosFromServer(profile.photos);
         const notEditable = document.getElementById("notEditableNote");
         notEditable.hidden = editable;
-        notEditable.textContent = editable ? "" : t("store_profile_not_editable_" + statusKey(result.registrationStatus));
+        notEditable.textContent = editable ? "" : t(notEditableMessageKey(result));
         document.getElementById("reloadButton").hidden = true;
         setFormEnabled(editable);
         renderPhotos();
@@ -1140,6 +1140,23 @@
           publishing = false;
           renderPublication();
         }
+      }
+
+      // STEP 58(代表最終決定)｜店舗情報の保存・編集は月額100円の契約が有効な時だけ(サーバーの editable・planRequired に従う)。
+      function notEditableMessageKey(result) {
+        return result && result.planRequired === true
+          ? "store_profile_not_editable_plan"
+          : "store_profile_not_editable_" + statusKey(result && result.registrationStatus);
+      }
+
+      // 申込・解約の後に、店舗情報を編集できるか(契約が有効か)を読み直す(編集中の未保存の内容は消さない)。
+      function refreshProfileEditable() {
+        return callApi({ mode: "storeProfileGet", storeId: storeId }).then(function (response) {
+          const result = response.result || {};
+          if (response.status === 200 && result.success && loaded && !dirty && (result.editable === true) !== editable) {
+            applyLoaded(result);
+          }
+        }).catch(function () {});
       }
 
       function statusKey(status) {
@@ -1655,7 +1672,7 @@
       // ===== STEP 44-A｜月額100円カスタマイズ =====
       // ・無料の店舗情報とは別に読み込み・保存する(storeCustomProfileGet / storeCustomProfileUpdate)
       // ・編集できるか(owner・登録状態)はサーバーが判定する。画面は応答の editable に従うだけ
-      //   (STEP 50-D｜契約前でも保存・編集できる。旅行者への公開だけが契約の有効性で決まる)
+      //   (STEP 58｜保存・編集も旅行者への公開も、月額100円の契約が有効な時だけ。STEP 50-D の「契約前でも保存・編集できる」は廃止)
       // ・商品写真は保存時にまとめてアップロード(署名は purpose:"storeCustomMenuPhoto"、フォルダーはサーバーが決める)
       let customLoaded = null;  // storeCustomProfileGet の結果
       let customRevision = 0;
@@ -1928,6 +1945,7 @@
             showPlanMessage(PLAN_ERROR_KEYS[result.reason] || "store_account_err_generic", "error", result.reason || "http_" + response.status);
           }
           await refreshCustomPlan();
+          await refreshProfileEditable();
           await refreshPublication();
         } catch (error) {
           showPlanMessage("store_account_err_network", "error");
@@ -2432,7 +2450,7 @@
           renderPhotos();
           const notEditable = document.getElementById("notEditableNote");
           if (!editable) {
-            notEditable.textContent = t("store_profile_not_editable_" + statusKey(loaded.registrationStatus));
+            notEditable.textContent = t(notEditableMessageKey(loaded));
           }
         }
         updateDescriptionCounter();

@@ -174,6 +174,22 @@ export async function checkStoreProfileEditor(database, storeId, uid) {
   return { ok: true };
 }
 
+// STEP 58(代表最終決定)｜店舗情報の写真の署名発行・保存は、月額100円の契約が有効な店舗だけ
+// (契約が成立していない店舗の保存・編集・下書きの管理はできない)。今だけ投稿の店舗の確認(checkStoreProfileEditor)は変えない。
+export async function checkStoreProfilePaidEditor(database, storeId, uid, nowMillis) {
+  const editor = await checkStoreProfileEditor(database, storeId, uid);
+
+  if (!editor.ok) {
+    return editor;
+  }
+
+  if (!(await readStoreCardPlanActive(database, storeId, nowMillis))) {
+    return { ok: false, status: 403, reason: "plan_required" };
+  }
+
+  return { ok: true };
+}
+
 // 新しく追加された写真だけをModerationにかける。OpenAI Moderationは1回のリクエストに
 // 画像を複数入れると 400 invalid_request_error / too_many_images を返すため
 // (2026-10-10 Preview実測)、写真は必ず1枚ずつ別のリクエストで確認する。
@@ -867,13 +883,17 @@ export async function handleStoreProfileGet(request, response, deps) {
     const account = snapshots[1].data() || {};
     const profileData = snapshots[2].exists ? snapshots[2].data() || {} : {};
     const publication = await readPublicationForOwner(database, storeId, account, profileData);
+    // STEP 58｜編集できるのは、店舗が利用できて月額100円の契約が有効な時だけ。planRequired は「契約が無いため編集できない」。
+    const storeEditable = isEditableStore(account);
+    const planActive = storeEditable && (await readStoreCardPlanActive(database, storeId, Date.now()));
 
     return response.status(200).json({
       success: true,
       storeId: storeId,
       storeName: typeof account.storeName === "string" ? account.storeName : "",
       registrationStatus: readRegistrationStatusForDisplay(account),
-      editable: isEditableStore(account),
+      editable: planActive,
+      planRequired: storeEditable && !planActive,
       location: {
         countryCode: account.countryCode || "",
         prefecture: account.prefecture || "",
@@ -901,7 +921,7 @@ export async function handleStoreProfileGet(request, response, deps) {
 }
 
 
-// mode: storeProfileUpdate (POST、メール確認済み店舗アカウントの owner、編集可能な店舗のみ)
+// mode: storeProfileUpdate (POST、メール確認済み店舗アカウントの owner、編集可能な店舗・STEP 58｜月額100円の契約が有効な時だけ)
 // { storeId, expectedRevision, categoryCode, description, businessHours, phone,
 //   websiteUrl, reservationUrl, socialLinks, paymentMethodCodes }
 // expectedRevisionが保存済みのrevisionと違う場合は上書きせず409(revision_conflict)。
@@ -955,6 +975,10 @@ export async function handleStoreProfileUpdate(request, response, deps) {
       return sendError(response, 403, "store_not_editable", {
         registrationStatus: readRegistrationStatusForDisplay(accountBefore)
       });
+    }
+
+    if (!(await readStoreCardPlanActive(database, storeId, Date.now()))) {
+      return sendError(response, 403, "plan_required");
     }
 
     const profileBefore = preSnapshots[2].exists ? preSnapshots[2].data() || {} : {};
@@ -1078,6 +1102,12 @@ export async function handleStoreProfileUpdate(request, response, deps) {
 
       if (!isEditableStore(snapshots[1].data())) {
         outcome = { status: 403, reason: "store_not_editable" };
+        return;
+      }
+
+      // 確認の後に解約の期限が過ぎた・未払いで停止した時も保存しない(同じトランザクションで確かめる)。
+      if (!(await readStoreCardPlanActive(database, storeId, Date.now(), transaction))) {
+        outcome = { status: 403, reason: "plan_required" };
         return;
       }
 
