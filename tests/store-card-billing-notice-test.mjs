@@ -30,7 +30,7 @@ const TK_PAY = "今だけ投稿の利用料金と店舗カードの月額料金�
 // 本番の現行の版の利用規約・特商法(改行は LF)。STEP 58-B｜2026年11月3日の改定(13条3項・15条5項・17条1項・17条5項・販売価格の無料の範囲)の版。
 // 以前の版(origin/main ea83217)：terms 0144788346dceac9d53b5fef434aa6bd71a7689349e2c1dcca418b1a58ce7dd5・tokushoho 5c9416d6cd782c4c111c1b0df687bba85e02eb231ffbfbbee08be8a63b7e22f5
 // STEP 59｜利用規約は2026年11月4日の改定(17条9項：申し込みは受付中・実際の請求は未開始・初回の請求の予定)の版。11月3日の版：d363796671d3d79af0bba3d932e426ec05906a8ca064855856331f7030ddd2f7
-const CURRENT_SHA = { terms: "6ad7826dc122b8d4c73a19512e55fe36643cfd07a4677d923b7e8a229e5021ea", tokushoho: "84aa166ee713b3de285f0b5ec942d880d441700413ce26b9d166d1bfc3f8b17b" };
+const CURRENT_SHA = { terms: "6ad7826dc122b8d4c73a19512e55fe36643cfd07a4677d923b7e8a229e5021ea", tokushoho: "e7596d8ed2572c542901353dc52c1f9da47bf3633f525952f52da78e3fc653cc" }; // STEP 59-B｜特商法は2026年11月4日の改定の版(11月3日の版：84aa166ee713b3de285f0b5ec942d880d441700413ce26b9d166d1bfc3f8b17b)
 const OLD_CONSENT = "store-card-monthly-2026-10-31";
 
 const serverVersion = (BILL.match(/export const STORE_CARD_PLAN_CONSENT_VERSION = "([^"]+)";/) || [])[1];
@@ -61,7 +61,7 @@ if (STAGE === "notice") {
     [nT, nK, TR.store_account_billing_notice_revision.ja].every((s) => s.includes("施行日の前日までは、改定前の内容（現在の本文）が適用されます。")));
   // STEP 58-B｜最終更新日は11月3日の別の改定(店舗カードの管理は月額契約が必須)の日付。12月1日の改定の内容はまだ入れない。
   t("N5 掲示の間は申込画面・同意の版を変えない・最終更新日は11月3日・11月4日の別の改定の日（同意の版 store-card-monthly-2026-10-31・申込画面に支払い失敗時の1行なし）",
-    serverVersion === OLD_CONSENT && pageVersion === OLD_CONSENT && ymd(updated(TERMS)) === "2026-11-04" && ymd(updated(TOK)) === "2026-11-03" && TERMS.includes('data-revision="2026-11-03"') && TERMS.includes('data-revision="2026-11-04"') && TOK.includes('data-revision="2026-11-03"') && !PROF.includes("store_card_plan_terms_failure"), { serverVersion, pageVersion });
+    serverVersion === OLD_CONSENT && pageVersion === OLD_CONSENT && ymd(updated(TERMS)) === "2026-11-04" && ymd(updated(TOK)) === "2026-11-04" && TERMS.includes('data-revision="2026-11-03"') && TERMS.includes('data-revision="2026-11-04"') && TOK.includes('data-revision="2026-11-03"') && TOK.includes('data-revision="2026-11-04"') && !PROF.includes("store_card_plan_terms_failure"), { serverVersion, pageVersion });
   t("N6 施行日は掲示の後（同意の版の日付より後）・英語の告知に日本語が混ざらない",
     eff > "2026-11-01" && ["store_account_billing_notice_title", "store_account_billing_notice_start", "store_account_billing_notice_revision", "store_account_billing_notice_date"].every((k) => !/[぀-ヿ一-鿿]/.test(TR[k].en)));
 } else {
