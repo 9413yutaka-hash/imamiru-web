@@ -36,7 +36,7 @@ Object.assign(process.env, { VERCEL_ENV: "preview", STRIPE_MODE: "test", STRIPE_
 // STEP 58｜新規登録・引き継ぎは月額100円の申込と一体。申込を受け付ける Preview 試験の環境(Preview の Firebase)で試す。
 const sa = (id) => JSON.stringify({ type: "service_account", project_id: id, private_key: "-----FAKE-KEY-FOR-TESTS-----" });
 Object.assign(process.env, { VERCEL_GIT_COMMIT_REF: "preview/stripe-card-setup", FIREBASE_SERVICE_ACCOUNT_KEY: sa("chikashoku-app"), FIREBASE_SERVICE_ACCOUNT_KEY_PREVIEW: sa("machinau-preview") });
-const CONSENT = "store-card-monthly-2026-10-31";
+const CONSENT = (await import(REPO_URL + "/api/_lib/store-custom-plan-billing.js")).STORE_CARD_PLAN_CONSENT_VERSION; // 版が変わっても追従する
 const card = (uid, o = {}) => S.docs.set("accountBilling/" + uid, { uid, test: { customerId: "cus_" + uid, paymentMethodId: "pm_" + uid, setupStatus: "succeeded", card: { brand: "visa", last4: "4242", expMonth: 12, expYear: 2099 }, cardVersion: 1, detachPendingPaymentMethods: [], ...o } });
 const clearRate = () => { for (const k of [...S.docs.keys()]) if (k.startsWith("storeRegistrationRateLimits/")) S.docs.delete(k); };
 const docsIn = (col) => [...S.docs.entries()].filter(([k]) => k.startsWith(col + "/") && !k.slice(col.length + 1).includes("/")).map(([k, v]) => ({ id: k.split("/")[1], v }));

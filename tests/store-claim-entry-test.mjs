@@ -47,7 +47,8 @@ S.docs.set("submissions/L1", { ...LISTING, shopName: "まだ引き継がれて�
 S.docs.set("submissions/L2", { ...LISTING, shopName: "引き継ぎ済みのカフェ", latitude: 26.151 });
 const card = (uid) => S.docs.set("accountBilling/" + uid, { uid, test: { customerId: "cus_" + uid + "SECRET", paymentMethodId: "pm_" + uid, setupStatus: "succeeded", card: { brand: "visa", last4: "4242", expMonth: 12, expYear: 2099 }, cardVersion: 1, detachPendingPaymentMethods: [] } });
 ["u1", "u2", "u3"].forEach(card);
-const CLAIM = (id) => ({ mode: "storeListingClaimCreate", submissionId: id, targetType: "new_store", role: "owner", publicReferenceUrl: "", note: "", planConsentVersion: "store-card-monthly-2026-10-31" });
+const CONSENT = (await import(REPO_URL + "/api/_lib/store-custom-plan-billing.js")).STORE_CARD_PLAN_CONSENT_VERSION; // 版が変わっても追従する
+const CLAIM = (id) => ({ mode: "storeListingClaimCreate", submissionId: id, targetType: "new_store", role: "owner", publicReferenceUrl: "", note: "", planConsentVersion: CONSENT });
 const claimedIds = async () => { const r = await get({ mode: "publicStoreProfiles" }); return { r, ids: (r.body && r.body.claimedListingIds) || null }; };
 
 // ===================== server =====================

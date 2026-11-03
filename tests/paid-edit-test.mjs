@@ -248,6 +248,12 @@ const LEGACY = "LEGACY1";
   const ss = readFileSync(join(REPO_ROOT, "api/_lib/store-self-service.js"), "utf8");
   const lc = readFileSync(join(REPO_ROOT, "api/_lib/store-listing-claims.js"), "utf8");
   t("J5 登録・引き継ぎのファイルは契約の記録を直接書かない(契約のファイルの関数を依存で受け取る)", !/storeCustomPlans"/.test(ss + lc) && ss.includes("deps.writeNewStoreCardPlanInTransaction") && lc.includes("deps.writeNewStoreCardPlanInTransaction"));
+  // 新規登録・引き継ぎの同意は、店舗プロフィール画面の申込と同じ同意の版・同じ料金と条件の行(版を変える時に取り残さない)。
+  const acc = readFileSync(join(REPO_ROOT, "store-account.html"), "utf8");
+  const prof = readFileSync(join(REPO_ROOT, "store-profile.html"), "utf8");
+  const termsKeys = (html, id) => { const m = html.match(new RegExp('id="' + id + '"[^>]*>([\\s\\S]*?)</ul>')); return m ? [...m[1].matchAll(/<li data-i18n="([a-z_]+)"/g)].map((x) => x[1]).join(",") : ""; };
+  const versions = [acc, prof].map((html) => (html.match(/const STORE_CARD_PLAN_CONSENT_VERSION = "([^"]+)"/) || [])[1]);
+  t("J7 画面の同意の版はサーバーと同じ・新規登録と引き継ぎの料金と条件の行は店舗プロフィール画面の申込と同じ", versions.every((v) => v === CONSENT) && termsKeys(prof, "customPlanTerms") !== "" && termsKeys(acc, "storePlanTerms") === termsKeys(prof, "customPlanTerms") && termsKeys(acc, "claimPlanTerms") === termsKeys(prof, "customPlanTerms"), { versions, prof: termsKeys(prof, "customPlanTerms"), reg: termsKeys(acc, "storePlanTerms"), claim: termsKeys(acc, "claimPlanTerms") });
   t("J6 試験の通信は OpenAI・Geocoding の偽物だけ(Stripe・本番には接続していない)", otherNetwork === 0, otherNetwork);
 }
 
