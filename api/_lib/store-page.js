@@ -11,7 +11,9 @@
 //   公開中(status "published")で公開条件(月額100円の店舗カード契約・店主・写真・紹介文・審査・所在地など)を
 //   すべて満たす店舗だけ。項目は store-profile.js の許可リスト(buildPublicStoreProfile)と、
 //   利用権限がある店舗の有料の内容(store-custom-profile.js の buildPublicStoreCustomProfile)だけ。
-//   電話・予約・SNS(無料の欄)・対応言語・店主・契約・請求の情報は載せない(一覧と同じ)。
+//   STEP 57｜店主が公開用に入力した電話・予約先・SNS・対応言語(buildPublicStoreContact)も、このページだけに出す
+//   (登録がある項目だけ。電話は tel: で発信、URL は http/https だけを新しいタブで開く)。
+//   店主・契約・請求の情報と、店主が入力した住所の文字列は載せない(一覧と同じ)。
 // それ以外(存在しない・下書き・非公開・契約なし・停止・退会)は、区別せず同じ 404 の終了表示
 // (店舗の有無・状態を漏らさない。noindex)。
 //
@@ -93,6 +95,16 @@ export const STORE_PAGE_LABELS = {
       store_pickup: "店頭受取",
       tax_free: "免税対応"
     },
+    social: {
+      instagram: "Instagram",
+      x: "X",
+      facebook: "Facebook",
+      tiktok: "TikTok",
+      youtube: "YouTube",
+      threads: "Threads",
+      line: "LINE",
+      other: "その他のSNS"
+    },
     linkType: {
       instagram: "Instagram",
       website: "公式サイト",
@@ -112,6 +124,10 @@ export const STORE_PAGE_LABELS = {
     headingStory: "こだわり・ストーリー",
     headingMenu: "メニュー・商品",
     headingLinks: "リンク",
+    headingContact: "電話・予約・SNS",
+    headingLanguages: "対応言語",
+    phone: "電話番号",
+    reservation: "予約ページ",
     website: "公式サイト",
     openMap: "地図で見る",
     openMachinau: "マチナウで近くの「今」を見る",
@@ -166,6 +182,16 @@ export const STORE_PAGE_LABELS = {
       store_pickup: "In-store pickup",
       tax_free: "Tax-free shopping"
     },
+    social: {
+      instagram: "Instagram",
+      x: "X",
+      facebook: "Facebook",
+      tiktok: "TikTok",
+      youtube: "YouTube",
+      threads: "Threads",
+      line: "LINE",
+      other: "Other social media"
+    },
     linkType: {
       instagram: "Instagram",
       website: "Official website",
@@ -185,6 +211,10 @@ export const STORE_PAGE_LABELS = {
     headingStory: "Our story",
     headingMenu: "Menu & products",
     headingLinks: "Links",
+    headingContact: "Phone, booking & social media",
+    headingLanguages: "Languages spoken",
+    phone: "Phone number",
+    reservation: "Reservation page",
     website: "Official website",
     openMap: "View on map",
     openMachinau: "See what's happening nearby on Machinau",
@@ -256,6 +286,51 @@ function isSafeHttpsUrl(url) {
     return new URL(url).protocol === "https:";
   } catch (error) {
     return false;
+  }
+}
+
+// STEP 57｜店主が入力した外部の URL(公式サイト・予約先・SNS)。http/https だけ・認証情報なし・空白や引用符なし
+// (保存の時の検証と同じ条件を、表示の前にもう一度確かめる。javascript: などは出さない)。
+function isSafeExternalUrl(url) {
+  if (typeof url !== "string" || url.length > 2000 || /[\s"'<>\\]/.test(url)) {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(url);
+
+    return (
+      (parsed.protocol === "https:" || parsed.protocol === "http:") &&
+      parsed.username === "" &&
+      parsed.password === "" &&
+      parsed.hostname.includes(".")
+    );
+  } catch (error) {
+    return false;
+  }
+}
+
+// 電話番号の発信用(tel:)。先頭の + と数字だけにする(9〜15桁でなければ発信のリンクにしない)。
+function buildTelHref(phone) {
+  const text = readText(phone);
+
+  if (!/^\+?[0-9()\-\s]+$/.test(text)) {
+    return "";
+  }
+
+  const digits = text.replace(/[^0-9]/g, "");
+
+  return digits.length >= 9 && digits.length <= 15
+    ? "tel:" + (text.charAt(0) === "+" ? "+" : "") + digits
+    : "";
+}
+
+function readLanguageDisplayName(code, language) {
+  try {
+    const name = new Intl.DisplayNames([language], { type: "language" }).of(code);
+    return name && name !== code ? name : code;
+  } catch (error) {
+    return code;
   }
 }
 
@@ -357,8 +432,27 @@ function buildStructuredData(store, custom, pageUrl) {
     data.openingHoursSpecification = hours;
   }
 
+  const contact = store.contact || {};
+  const telHref = buildTelHref(contact.phone);
+
+  if (telHref !== "") {
+    data.telephone = telHref.slice(4);
+  }
+
+  const sameAs = [];
+
   if (isSafeHttpsUrl(store.websiteUrl)) {
-    data.sameAs = [store.websiteUrl];
+    sameAs.push(store.websiteUrl);
+  }
+
+  (contact.socialLinks || []).forEach(function(link) {
+    if (link && isSafeHttpsUrl(link.url) && !sameAs.includes(link.url)) {
+      sameAs.push(link.url);
+    }
+  });
+
+  if (sameAs.length > 0) {
+    data.sameAs = sameAs;
   }
 
   // JSON を <script> に埋め込むため、"<" を文字参照にする(</script> で閉じられない)。
@@ -396,6 +490,9 @@ const STORE_PAGE_STYLE = `
     ul.menu .price { color: #0b6b3a; margin: 0; }
     ul.menu .desc { margin: 2px 0 0; font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
     ul.links { padding-left: 1.2em; margin: 0; }
+    ul.contact { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+    ul.contact li a { display: block; padding: 10px 14px; border: 1px solid #cfe3f2; border-radius: 12px; text-decoration: none; font-weight: 700; min-height: 44px; }
+    ul.contact li .label { display: block; color: #4a5a70; font-size: 13px; margin-bottom: 2px; }
     a { color: #0788c9; overflow-wrap: anywhere; }
     .actions { display: flex; flex-direction: column; gap: 8px; margin: 16px 0; }
     .actions a { display: block; text-align: center; padding: 12px; border-radius: 12px; text-decoration: none; font-weight: 700; }
@@ -518,11 +615,62 @@ export function buildStorePageHtml(storeId, store, custom, languageValue) {
     );
   }
 
-  const links = [];
+  // STEP 57｜電話・予約先・公式サイト・SNS(登録がある項目だけ)。
+  const contact = store.contact || {};
+  const contactRows = [];
+  const telHref = buildTelHref(contact.phone);
 
-  if (isSafeHttpsUrl(store.websiteUrl)) {
-    links.push({ label: labels.website, url: store.websiteUrl });
+  if (telHref !== "") {
+    contactRows.push(
+      "<li><span class=\"label\">" + escapeStorePageHtml(labels.phone) + "</span>" +
+      "<a href=\"" + escapeStorePageHtml(telHref) + "\" data-contact=\"phone\">" + escapeStorePageHtml(readText(contact.phone)) + "</a></li>"
+    );
   }
+
+  if (isSafeExternalUrl(contact.reservationUrl)) {
+    contactRows.push(
+      "<li><a href=\"" + escapeStorePageHtml(contact.reservationUrl) + "\" target=\"_blank\" rel=\"noopener noreferrer nofollow\" data-contact=\"reservation\">" +
+      escapeStorePageHtml(labels.reservation) + "</a></li>"
+    );
+  }
+
+  if (isSafeExternalUrl(store.websiteUrl)) {
+    contactRows.push(
+      "<li><a href=\"" + escapeStorePageHtml(store.websiteUrl) + "\" target=\"_blank\" rel=\"noopener noreferrer\" data-contact=\"website\">" +
+      escapeStorePageHtml(labels.website) + "</a></li>"
+    );
+  }
+
+  (contact.socialLinks || []).forEach(function(link) {
+    if (link && isSafeExternalUrl(link.url)) {
+      contactRows.push(
+        "<li><a href=\"" + escapeStorePageHtml(link.url) + "\" target=\"_blank\" rel=\"noopener noreferrer nofollow\" data-contact=\"social\">" +
+        escapeStorePageHtml(labels.social[link.type] || labels.social.other) + "</a></li>"
+      );
+    }
+  });
+
+  if (contactRows.length > 0) {
+    sections.push(
+      "<section class=\"block\" id=\"contact\"><h2>" + escapeStorePageHtml(labels.headingContact) + "</h2>" +
+      "<ul class=\"contact\">" + contactRows.join("") + "</ul></section>"
+    );
+  }
+
+  const languageNames = (contact.supportedLanguageCodes || []).map(function(code) {
+    return readLanguageDisplayName(code, language);
+  });
+
+  if (languageNames.length > 0) {
+    sections.push(
+      "<section class=\"block\"><h2>" + escapeStorePageHtml(labels.headingLanguages) + "</h2><ul class=\"tags\">" +
+      languageNames.map(function(text) { return "<li>" + escapeStorePageHtml(text) + "</li>"; }).join("") +
+      "</ul></section>"
+    );
+  }
+
+  // 有料の追加リンク(利用権限がある間だけ)。公式サイトは上の連絡先に出す。
+  const links = [];
 
   if (custom && Array.isArray(custom.links)) {
     custom.links.forEach(function(link) {
@@ -637,7 +785,7 @@ export async function readPublicStorePage(database, storeId, deps) {
     return null;
   }
 
-  const store = await readPublicStoreProfileForShare(database, storeId);
+  const store = await readPublicStoreProfileForShare(database, storeId, { includeContact: true });
 
   if (!store) {
     return null;

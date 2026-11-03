@@ -73,6 +73,8 @@ done
 node --import ./tests/mockfa-occ/register.mjs tests/submission-safety-test.mjs
 node --import ./tests/mockfa-occ/register.mjs tests/store-page-test.mjs
 node --import ./tests/mockfa-occ/register.mjs tests/store-page-ui-test.mjs
+node --import ./tests/mockfa-occ/register.mjs tests/self-service-test.mjs
+node --import ./tests/mockfa-occ/register.mjs tests/self-service-ui-test.mjs
 
 # 既存の回帰(画面、Chrome を使う。ローカルに 127.0.0.1:8701 でリポジトリを配信して確認する)
 for f in tests3 tests5 tests6 tests7 tests8 tests9 tests10; do

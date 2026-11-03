@@ -99,6 +99,8 @@ import {
   handleStoreProfileUnpublish,
   handlePublicStoreProfilesList,
   collectPublicStoreProfiles,
+  readPublicStoreProfileForShare,
+  readStorePlanSummaryForList,
   checkStoreProfileEditor,
   buildStorePhotoFolder,
   isStorePhotoPublicId
@@ -30103,6 +30105,15 @@ function buildStoreSelfServiceDeps() {
     // STEP 44-A｜旅行者向け一覧に付ける、月額100円カスタマイズの有料の内容(利用権限がある店舗だけ)。
     readPublicStoreCustomProfiles: function(database, storeIds) {
       return readPublicStoreCustomProfiles(database, storeIds, Date.now());
+    },
+    // STEP 57｜店舗一覧(storeMyStores)の案内用：旅行者に公開されているか(一覧と同じ判定)と、月額プランの利用権限。
+    isStorePubliclyVisible: function(database, storeId) {
+      return readPublicStoreProfileForShare(database, storeId).then(function(store) {
+        return !!store;
+      });
+    },
+    readStorePlanSummary: function(database, storeId) {
+      return readStorePlanSummaryForList(database, storeId, Date.now());
     },
     // STEP 44-B｜月額100円カスタマイズの申込を受け付ける環境か(Preview試験の環境だけ true、Productionは常に false)。
     isStoreCustomPlanTrialEnabled: function() {

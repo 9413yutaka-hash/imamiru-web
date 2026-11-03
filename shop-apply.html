@@ -15,16 +15,21 @@
 
   <meta
     name="description"
-    content="マチナウへの無料投稿のお申し込み（お店・施設向け）。現在、マチナウへの店舗・施設からの投稿は無料です。"
+    content="マチナウの店舗・施設の登録のご案内。店舗アカウントから、お店・施設の方ご自身で登録・引き継ぎ・編集・公開まで手続きできます。"
+  >
+
+  <meta
+    name="robots"
+    content="noindex"
   >
 
   <title>
-    無料投稿のお申し込み｜マチナウ
+    店舗・施設の登録のご案内｜マチナウ
   </title>
 
   <link
     rel="canonical"
-    href="https://machinau.jp/shop-apply.html"
+    href="https://machinau.jp/shop.html"
   >
 
   <link
@@ -33,10 +38,10 @@
     href="/favicon.png?v=2"
   >
 
-  <!-- 店舗・施設申込み Phase1｜shop.htmlの「無料投稿を申し込む」から開く
-       申込みフォーム。送信内容は/api/moderate-submission
-       (mode:"shopApplicationCreate")経由でのみ保存し、Firestoreへは直接
-       書き込まない。代表はadmin-shop-applications.htmlで確認する。 -->
+  <!-- STEP 57｜旧方式(無料投稿の申込み→運営が確認→専用URLを発行)の申込みフォームは撤去した。
+       URL は残し(既存のリンク・ブックマークを切らない)、今の正式な店舗登録(店舗アカウント)へ案内する。
+       料金の文言は shop.html・shop-guide.html と同じ(新規登録も引き継ぎも同じ月額100円)。
+       運営の確認用の画面(admin-shop-applications.html)と、受付済みの申込みの記録はそのまま。 -->
 
   <style>
     :root {
@@ -330,6 +335,9 @@
       font-weight: 900;
       cursor: pointer;
       box-shadow: 0 10px 24px rgba(5, 144, 194, 0.25);
+      margin: 16px 0 12px;
+      text-align: center;
+      text-decoration: none;
     }
 
     .submit-button:disabled {
@@ -462,11 +470,11 @@
       </div>
 
       <h1>
-        マチナウ 無料投稿のお申し込み
+        店舗・施設の登録は、店舗アカウントから
       </h1>
 
-      <div class="free-badge">
-        現在、マチナウへの店舗・施設からの投稿は無料です。
+      <div class="free-badge" id="shopApplyPricing">
+        マチナウの店舗管理サービスは月額100円（税込）です。新規店舗登録も、掲載済み店舗の引き継ぎも、同じ料金でご利用いただけます。アカウントの作成とクレジットカードの登録だけでは料金はかかりません。料金は、お店・施設ごとに月額100円のプランを申し込んだ時からかかります（申し込む前の下書きは旅行者に公開されません）。
       </div>
 
     </div>
@@ -475,294 +483,69 @@
   <main>
 
     <section
-      id="applyIntroCard"
+      id="applyMovedCard"
       class="guide-card"
     >
       <h2>
-        お申し込み後の流れ
+        このページのお申し込み方法について
+      </h2>
+
+      <p>
+        以前このページでご案内していたお申し込みの方法（運営が確認して、専用の投稿ページのURLをお渡しする方式）は、現在ご案内していません。
+      </p>
+
+      <p>
+        いまは、店舗アカウントを作成すると、お店・施設の方ご自身でスマートフォンから、登録・引き継ぎ・編集・公開まで手続きできます。運営の確認やお電話は必要ありません。
+      </p>
+    </section>
+
+    <section
+      id="applyStepsCard"
+      class="guide-card"
+    >
+      <h2>
+        手続きの流れ
       </h2>
 
       <ol class="step-list">
         <li>
-          このページのフォームからお申し込みください。
+          店舗アカウントを作成し、届いたメールで確認します。
         </li>
         <li>
-          お申し込み後、運営がお店・施設を確認し、ご記入の連絡先へご連絡します。
+          クレジットカードを登録します（登録だけでは料金はかかりません）。
         </li>
         <li>
-          確認後、お店専用の投稿ページ（URL）と投稿ガイドをお渡しします。
+          新しくお店・施設を登録するか、マチナウに掲載中のお店・施設を引き継ぎます。
+        </li>
+        <li>
+          お店・施設ごとに、月額100円（税込）のプランの内容を確認して申し込みます。
+        </li>
+        <li>
+          店舗情報を編集して、旅行者に公開します。
         </li>
       </ol>
-    </section>
-
-    <section
-      id="applyFormCard"
-      class="guide-card"
-    >
-      <h2>
-        お申し込みフォーム
-      </h2>
-
-      <form
-        id="applyForm"
-        novalidate
-      >
-
-        <div
-          id="formMessage"
-          class="form-message"
-          role="alert"
-        ></div>
-
-        <div class="form-field">
-          <label for="shopNameInput">
-            店舗・施設名
-            <span class="required-mark">必須</span>
-          </label>
-          <input
-            id="shopNameInput"
-            name="shopName"
-            type="text"
-            maxlength="60"
-            autocomplete="organization"
-            required
-          >
-        </div>
-
-        <div class="form-field">
-          <label for="addressInput">
-            所在地
-            <span class="required-mark">必須</span>
-          </label>
-          <input
-            id="addressInput"
-            name="address"
-            type="text"
-            maxlength="120"
-            autocomplete="street-address"
-            placeholder="例：沖縄県那覇市〇〇1-2-3"
-            required
-          >
-        </div>
-
-        <div class="form-field">
-          <label for="contactNameInput">
-            担当者名
-            <span class="required-mark">必須</span>
-          </label>
-          <input
-            id="contactNameInput"
-            name="contactName"
-            type="text"
-            maxlength="40"
-            autocomplete="name"
-            required
-          >
-        </div>
-
-        <div class="form-field">
-          <label for="contactInput">
-            連絡先
-            <span class="required-mark">必須</span>
-          </label>
-          <p class="field-hint">
-            メールアドレスまたは電話番号をご記入ください。
-          </p>
-          <input
-            id="contactInput"
-            name="contact"
-            type="text"
-            maxlength="100"
-            autocomplete="email"
-            placeholder="例：info@example.com / 098-000-0000"
-            required
-          >
-        </div>
-
-        <div class="form-field">
-          <label for="websiteOrSnsInput">
-            WebサイトまたはSNS
-            <span class="optional-mark">任意</span>
-          </label>
-          <input
-            id="websiteOrSnsInput"
-            name="websiteOrSns"
-            type="text"
-            maxlength="300"
-            autocomplete="url"
-            placeholder="例：https://example.com / Instagram @example"
-          >
-        </div>
-
-        <div class="form-field">
-          <label for="noteInput">
-            備考
-            <span class="optional-mark">任意</span>
-          </label>
-          <textarea
-            id="noteInput"
-            name="note"
-            maxlength="1000"
-            placeholder="ご質問や、お店・施設について伝えたいことがあればご記入ください。"
-          ></textarea>
-        </div>
-
-        <div
-          class="confirmation-field"
-          aria-hidden="true"
-        >
-          <label for="confirmationFieldInput">確認用（入力しないでください）</label>
-          <input
-            id="confirmationFieldInput"
-            type="text"
-            tabindex="-1"
-            autocomplete="off"
-          >
-        </div>
-
-        <button
-          id="submitButton"
-          class="submit-button"
-          type="submit"
-        >
-          この内容で申し込む
-        </button>
-
-        <p class="privacy-note">
-          ご記入いただいた担当者名・連絡先は、お申し込みの確認とご連絡のためにのみ使用し、公開されることはありません。
-          詳しくは<a href="privacy.html">プライバシーポリシー</a>をご覧ください。
-        </p>
-
-      </form>
-    </section>
-
-    <section
-      id="completeCard"
-      class="guide-card complete-card"
-      role="status"
-      aria-live="polite"
-    >
-      <div class="complete-icon">✅</div>
-
-      <h2>
-        お申し込みありがとうございました。
-      </h2>
 
       <p>
-        運営がお店・施設を確認のうえ、ご記入の連絡先へご連絡いたします。
+        マチナウに掲載中のお店・施設を引き継ぐ時は、マチナウのトップでそのお店・施設を開き、「このお店の方へ：お店の情報を管理する」から手続きできます。
       </p>
+
+      <a
+        class="submit-button"
+        id="applyStoreAccountLink"
+        href="store-account.html"
+      >
+        店舗アカウントを作成・ログインする
+      </a>
+
+      <a
+        class="back-link"
+        href="shop.html"
+      >
+        お店・施設の方へ（詳しいご案内）
+      </a>
     </section>
 
-    <a class="back-link" href="shop.html">← お店・施設の方へ戻る</a>
-
   </main>
-
-  <footer>
-    マチナウ Web Version 1.2
-    <br>
-    沖縄の「今」を、旅人へ。
-  </footer>
-
-  <script>
-    (function() {
-      const applyForm = document.getElementById("applyForm");
-      const submitButton = document.getElementById("submitButton");
-      const formMessage = document.getElementById("formMessage");
-      const applyIntroCard = document.getElementById("applyIntroCard");
-      const applyFormCard = document.getElementById("applyFormCard");
-      const completeCard = document.getElementById("completeCard");
-
-      const inputs = {
-        shopName: document.getElementById("shopNameInput"),
-        address: document.getElementById("addressInput"),
-        contactName: document.getElementById("contactNameInput"),
-        contact: document.getElementById("contactInput"),
-        websiteOrSns: document.getElementById("websiteOrSnsInput"),
-        note: document.getElementById("noteInput")
-      };
-
-      const requiredLabels = {
-        shopName: "店舗・施設名",
-        address: "所在地",
-        contactName: "担当者名",
-        contact: "連絡先"
-      };
-
-      function showFormMessage(text) {
-        formMessage.textContent = text;
-        formMessage.classList.add("visible");
-        formMessage.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
-
-      function clearFormMessage() {
-        formMessage.textContent = "";
-        formMessage.classList.remove("visible");
-      }
-
-      applyForm.addEventListener("submit", async function(event) {
-        event.preventDefault();
-        clearFormMessage();
-
-        const payload = {
-          mode: "shopApplicationCreate",
-          confirmationField: document.getElementById("confirmationFieldInput").value
-        };
-
-        Object.keys(inputs).forEach(function(fieldName) {
-          payload[fieldName] = inputs[fieldName].value.trim();
-        });
-
-        // 入力漏れはここで先に知らせる(最終的な確認はサーバー側でも行う)。
-        for (const fieldName of Object.keys(requiredLabels)) {
-          if (payload[fieldName] === "") {
-            showFormMessage(requiredLabels[fieldName] + "を入力してください。");
-            inputs[fieldName].focus();
-            return;
-          }
-        }
-
-        submitButton.disabled = true;
-        submitButton.textContent = "送信しています…";
-
-        try {
-          const response = await fetch("/api/moderate-submission", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify(payload)
-          });
-
-          let responseData = null;
-
-          try {
-            responseData = await response.json();
-          } catch (jsonError) {
-            responseData = null;
-          }
-
-          if (!response.ok || !responseData || responseData.success !== true) {
-            showFormMessage(
-              (responseData && responseData.message) ||
-                "送信できませんでした。時間をおいて、もう一度お試しください。"
-            );
-            return;
-          }
-
-          applyIntroCard.style.display = "none";
-          applyFormCard.style.display = "none";
-          completeCard.classList.add("visible");
-          window.scrollTo({ top: 0, behavior: "smooth" });
-        } catch (error) {
-          console.error("お申し込みの送信に失敗しました：", error);
-          showFormMessage("送信できませんでした。通信状況を確認して、もう一度お試しください。");
-        } finally {
-          submitButton.disabled = false;
-          submitButton.textContent = "この内容で申し込む";
-        }
-      });
-    })();
-  </script>
 
 </body>
 </html>

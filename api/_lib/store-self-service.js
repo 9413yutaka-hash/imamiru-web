@@ -769,6 +769,9 @@ export async function handleStoreSelfRegister(request, response, deps) {
 
 // mode: storeMyStores (POST、ログイン済み店舗アカウント)
 // 自分がメンバーになっている店舗の概要を返す(複数店舗を前提にした形)。
+// STEP 57｜一か所から確認できるよう、固定の公開 URL(storePageUrl)・旅行者に公開されているか(publiclyVisible)・
+// 月額100円プランの状態(planState)を足す。契約の情報は owner の店舗だけ。読み取りに失敗した項目は null(一覧は止めない)。
+// 契約の記録はこのファイルでは読まない(deps.readStorePlanSummary＝store-profile.js の readStorePlanSummaryForList)。
 export async function handleStoreMyStores(request, response, deps) {
   try {
     const result = await deps.resolveStoreUserActor(request);
@@ -805,6 +808,24 @@ export async function handleStoreMyStores(request, response, deps) {
 
         const account = snapshots[0].data() || {};
         const profile = snapshots[1].exists ? snapshots[1].data() || {} : {};
+        let planSummary = { planState: null, planAccessUntilMillis: 0 };
+        let publiclyVisible = null;
+
+        if (member.role === "owner" && typeof deps.readStorePlanSummary === "function") {
+          try {
+            planSummary = await deps.readStorePlanSummary(database, member.storeId);
+          } catch (planError) {
+            planSummary = { planState: null, planAccessUntilMillis: 0 };
+          }
+        }
+
+        if (typeof deps.isStorePubliclyVisible === "function") {
+          try {
+            publiclyVisible = (await deps.isStorePubliclyVisible(database, member.storeId)) === true;
+          } catch (visibleError) {
+            publiclyVisible = null;
+          }
+        }
 
         return {
           storeId: member.storeId,
@@ -820,6 +841,10 @@ export async function handleStoreMyStores(request, response, deps) {
           prefecture: account.prefecture || "",
           city: account.city || "",
           formattedAddress: account.locationFormattedAddress || account.address || "",
+          storePageUrl: "https://machinau.jp/shop/" + encodeURIComponent(member.storeId),
+          publiclyVisible: publiclyVisible,
+          planState: planSummary.planState,
+          planAccessUntilMillis: planSummary.planAccessUntilMillis,
           createdAtMillis:
             account.createdAt && typeof account.createdAt.toMillis === "function"
               ? account.createdAt.toMillis()

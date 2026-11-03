@@ -243,6 +243,15 @@
     .store-card-name, .claim-card-name { font-size: 15px; font-weight: 800; color: var(--navy); }
     .store-card-meta, .claim-card-meta { margin-top: 2px; color: var(--subtext); }
     .store-card-note, .claim-card-note { margin-top: 6px; font-size: 12px; color: var(--subtext); }
+    /* STEP 57｜店舗ごとの公開・契約の状態と、お店のページの固定の URL */
+    .store-card-state { margin-top: 6px; font-size: 13px; font-weight: 700; color: var(--navy); }
+    .store-card-state.warn { color: #8a4b00; }
+    .store-card-url { margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: var(--background); font-size: 12.5px; }
+    .store-card-url a { word-break: break-all; color: var(--blue); }
+    .store-card-url button { margin-top: 6px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--white); color: var(--navy); font-size: 12.5px; font-weight: 800; font-family: inherit; cursor: pointer; }
+    .claim-resume { margin: 0 0 12px; padding: 12px; border: 1px solid #f0c987; border-radius: 12px; background: #fff8ec; font-size: 13.5px; }
+    .claim-resume a { display: inline-block; margin: 6px 12px 0 0; font-weight: 800; color: var(--blue); }
+    .claim-resume button { margin-top: 6px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--white); font-size: 12.5px; font-family: inherit; cursor: pointer; }
 
     .claim-listing { margin-bottom: 10px; }
     .claim-listing-image { width: 100%; max-height: 180px; object-fit: cover; border-radius: 10px; margin-bottom: 8px; }
@@ -484,6 +493,14 @@
         <ol class="onboarding-steps" id="onboardingSteps"></ol>
         <!-- STEP 56｜店主向けの料金の案内(新規登録・引き継ぎとも同じ月額100円。アカウント・カードの登録だけでは料金なし)。 -->
         <p class="note" id="storeManagementPricingNote" data-i18n="store_management_pricing_note"></p>
+        <!-- STEP 57｜メール確認などで ?claim= の無い画面に戻った時、引き継ぎの途中なら続きへ案内する
+             (この端末に残した掲載 ID だけ。引き継ぎの可否はサーバーが決める)。 -->
+        <div class="claim-resume" id="claimResumeNotice" hidden>
+          <span data-i18n="store_claim_resume_text"></span><br>
+          <a id="claimResumeLink" href="store-account.html" data-i18n="store_claim_resume_link"></a>
+          <button type="button" id="claimResumeDismiss" data-i18n="store_claim_resume_dismiss"></button>
+        </div>
+        <p class="note" id="storeManagementHelpNote" data-i18n="store_management_help_note"></p>
         <p class="message info show" id="cardGateNotice" hidden>
           <span id="cardGateText"></span>
           <a href="#billingSection" id="cardGateLink" data-i18n="store_card_gate_link">カードを登録する ↓</a>
@@ -1078,6 +1095,11 @@
           note.textContent = t("store_account_store_note_" + statusCode);
           item.appendChild(note);
 
+          // STEP 57｜公開の状態・月額100円プランの状態・お店のページの固定の URL(サーバーの判定をそのまま表示)。
+          if (statusCode === "active") {
+            appendStoreCardStates(item, store);
+          }
+
           // Phase 2B｜常設店舗情報の編集画面へ。編集できる(登録済み)店舗だけに出す
           // (編集できるかの最終判定はサーバー)。
           if (statusCode === "active") {
@@ -1103,6 +1125,191 @@
         renderStoreLinkStatus();
       }
 
+      // STEP 57｜店舗一覧のカードに、公開・契約の状態と固定の URL を足す(表示は textContent だけ)。
+      const STORE_LIST_PLAN_KEYS = {
+        active: "store_list_plan_active",
+        canceling: "store_list_plan_canceling",
+        unpaid: "store_list_plan_unpaid",
+        none: "store_list_plan_none"
+      };
+
+      function formatStoreListDate(millis) {
+        try {
+          return new Intl.DateTimeFormat(currentLanguage, { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Tokyo", timeZoneName: "short" }).format(new Date(millis));
+        } catch (error) {
+          return new Date(millis).toISOString().slice(0, 10);
+        }
+      }
+
+      function appendStoreCardStates(item, store) {
+        if (store.publiclyVisible === true || store.publiclyVisible === false) {
+          const visible = document.createElement("div");
+          visible.className = "store-card-state" + (store.publiclyVisible ? "" : " warn");
+          visible.setAttribute("data-store-visible", store.publiclyVisible ? "yes" : "no");
+          visible.textContent = t(store.publiclyVisible ? "store_list_public_visible" : "store_list_public_hidden");
+          item.appendChild(visible);
+        }
+
+        if (STORE_LIST_PLAN_KEYS[store.planState]) {
+          const plan = document.createElement("div");
+          plan.className = "store-card-state" + (store.planState === "active" || store.planState === "canceling" ? "" : " warn");
+          plan.setAttribute("data-store-plan", store.planState);
+          plan.textContent = t(STORE_LIST_PLAN_KEYS[store.planState]).replace(
+            "{date}",
+            store.planAccessUntilMillis > 0 ? formatStoreListDate(store.planAccessUntilMillis) : ""
+          );
+          item.appendChild(plan);
+        }
+
+        if (typeof store.storePageUrl === "string" && store.storePageUrl.indexOf("https://machinau.jp/shop/") === 0) {
+          const box = document.createElement("div");
+          box.className = "store-card-url";
+          const label = document.createElement("div");
+          label.textContent = t("store_page_url_label");
+          box.appendChild(label);
+          const link = document.createElement("a");
+          link.href = store.storePageUrl;
+          link.target = "_blank";
+          link.rel = "noopener";
+          link.textContent = store.storePageUrl;
+          link.setAttribute("data-store-page-url", store.storeId);
+          box.appendChild(link);
+          const hint = document.createElement("div");
+          hint.className = "store-card-note";
+          hint.textContent = t(store.publiclyVisible === true ? "store_page_note_published" : "store_page_note_draft");
+          box.appendChild(hint);
+          const copy = document.createElement("button");
+          copy.type = "button";
+          copy.textContent = t("store_page_copy_button");
+          copy.setAttribute("data-store-page-copy", store.storeId);
+          const status = document.createElement("div");
+          status.className = "store-card-note";
+          status.setAttribute("aria-live", "polite");
+          copy.addEventListener("click", function () {
+            copyStorePageUrlText(store.storePageUrl).then(function (copied) {
+              status.textContent = t(copied ? "store_page_copied" : "store_page_copy_failed");
+            });
+          });
+          box.appendChild(copy);
+          box.appendChild(status);
+          item.appendChild(box);
+        }
+      }
+
+      function copyStorePageUrlText(url) {
+        try {
+          if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+            return navigator.clipboard.writeText(url).then(function () { return true; }, function () { return false; });
+          }
+        } catch (error) {
+          // 下の「長押し・選択してコピー」の案内に任せる。
+        }
+        return Promise.resolve(false);
+      }
+
+      // STEP 57｜引き継ぎの途中(?claim=)でメール確認などに出て、?claim= の無い画面に戻った時の続きの案内。
+      // この端末の localStorage に掲載 ID と保存の時刻だけを残す(24時間)。引き継ぎが終わる・やめると消す。
+      const CLAIM_RESUME_STORAGE_KEY = "machinauPendingClaim";
+      const CLAIM_RESUME_MAX_AGE_MILLISECONDS = 24 * 60 * 60 * 1000;
+
+      function rememberPendingClaim(submissionId) {
+        try {
+          localStorage.setItem(CLAIM_RESUME_STORAGE_KEY, JSON.stringify({ id: submissionId, savedAt: Date.now() }));
+        } catch (error) {
+          // 保存できなくても、今の画面の手続きはそのまま続けられる。
+        }
+      }
+
+      function readPendingClaim() {
+        try {
+          const saved = JSON.parse(localStorage.getItem(CLAIM_RESUME_STORAGE_KEY) || "null");
+          if (
+            saved &&
+            typeof saved.id === "string" &&
+            /^[A-Za-z0-9_-]{1,100}$/.test(saved.id) &&
+            typeof saved.savedAt === "number" &&
+            Date.now() - saved.savedAt < CLAIM_RESUME_MAX_AGE_MILLISECONDS
+          ) {
+            return saved.id;
+          }
+        } catch (error) {
+          return "";
+        }
+        return "";
+      }
+
+      function forgetPendingClaim() {
+        try {
+          localStorage.removeItem(CLAIM_RESUME_STORAGE_KEY);
+        } catch (error) {
+          // 消せなくても24時間で使われなくなる。
+        }
+      }
+
+      function renderClaimResumeNotice() {
+        const notice = document.getElementById("claimResumeNotice");
+        if (!notice) {
+          return;
+        }
+        const pendingId = CLAIM_SUBMISSION_ID === "" ? readPendingClaim() : "";
+        notice.hidden = pendingId === "";
+        if (pendingId !== "") {
+          document.getElementById("claimResumeLink").href = "store-account.html?claim=" + encodeURIComponent(pendingId);
+        }
+      }
+
+      // STEP 57｜新規登録の入力を、カード登録(本人確認の画面への移動)・戻る操作・再読み込みで失わないよう、
+      // このタブの sessionStorage に残す(店舗名・カテゴリ・国・住所だけ)。登録が済む・「やめる」で消す。
+      const STORE_FORM_DRAFT_STORAGE_KEY = "machinauStoreFormDraft";
+
+      function saveStoreFormDraft() {
+        try {
+          sessionStorage.setItem(STORE_FORM_DRAFT_STORAGE_KEY, JSON.stringify({
+            storeName: document.getElementById("storeNameInput").value,
+            categoryCode: document.getElementById("storeCategorySelect").value,
+            countryCode: document.getElementById("storeCountrySelect").value,
+            address: document.getElementById("storeAddressInput").value
+          }));
+        } catch (error) {
+          // 保存できなくても入力はそのまま続けられる。
+        }
+      }
+
+      function restoreStoreFormDraft() {
+        let draft = null;
+        try {
+          draft = JSON.parse(sessionStorage.getItem(STORE_FORM_DRAFT_STORAGE_KEY) || "null");
+        } catch (error) {
+          draft = null;
+        }
+        if (!draft || typeof draft !== "object") {
+          return false;
+        }
+        const name = document.getElementById("storeNameInput");
+        const address = document.getElementById("storeAddressInput");
+        if (name.value === "" && typeof draft.storeName === "string") {
+          name.value = draft.storeName.slice(0, 60);
+        }
+        if (address.value === "" && typeof draft.address === "string") {
+          address.value = draft.address.slice(0, 200);
+        }
+        [["storeCategorySelect", draft.categoryCode], ["storeCountrySelect", draft.countryCode]].forEach(function (pair) {
+          const select = document.getElementById(pair[0]);
+          if (typeof pair[1] === "string" && Array.prototype.some.call(select.options, function (option) { return option.value === pair[1]; })) {
+            select.value = pair[1];
+          }
+        });
+        return name.value !== "" || address.value !== "";
+      }
+
+      function clearStoreFormDraft() {
+        try {
+          sessionStorage.removeItem(STORE_FORM_DRAFT_STORAGE_KEY);
+        } catch (error) {
+          // 消せなくても、このタブを閉じれば消える。
+        }
+      }
+
       function renderStoreSection() {
         const user = storeAuth ? storeAuth.currentUser : null;
         const verified = !!(user && user.emailVerified);
@@ -1113,6 +1320,7 @@
           loadMyStores();
         }
         renderClaimSection();
+        renderClaimResumeNotice();
         // STEP 47-B ⑧｜メール未確認のアカウントも本人が削除できる(紐付けの検査はサーバー)。
         document.getElementById("accountDeletionSection").hidden = !user;
       }
@@ -1867,11 +2075,14 @@
           return;
         }
         const ready = accountCardReady();
+        // STEP 57｜⑤月額プランの申し込み・⑥公開まで(どれか1店舗で済んでいれば済み。店舗ごとの状態は一覧に出す)。
         const steps = [
           { key: "store_steps_account", done: true },
           { key: "store_steps_email", done: true },
           { key: "store_steps_card", done: ready },
-          { key: "store_steps_register", done: myStores.length > 0 }
+          { key: "store_steps_register", done: myStores.length > 0 },
+          { key: "store_steps_plan", done: myStores.some(function (store) { return store.planState === "active" || store.planState === "canceling"; }) },
+          { key: "store_steps_publish", done: myStores.some(function (store) { return store.publiclyVisible === true; }) }
         ];
         let currentMarked = false;
         list.textContent = "";
@@ -2319,6 +2530,7 @@
             const result = response.result || {};
             if (response.status === 200 && result.success) {
               // STEP 42-D｜運営の承認なしで、その場で引き継ぎが完了する。
+              forgetPendingClaim();
               document.getElementById("claimFormArea").hidden = true;
               showClaimMessage("store_claim_completed", "success");
               storesLoadedForUid = "";
@@ -2400,10 +2612,12 @@
         clearStoreMessage();
         document.getElementById("storeForm").hidden = false;
         document.getElementById("openStoreFormButton").hidden = true;
+        restoreStoreFormDraft();
         document.getElementById("storeNameInput").focus();
       }
 
       function closeStoreForm() {
+        clearStoreFormDraft();
         const form = document.getElementById("storeForm");
         form.reset();
         document.getElementById("storeCountrySelect").value = STORE_DEFAULT_COUNTRY;
@@ -2787,6 +3001,36 @@
           });
       }
 
+      // STEP 57｜メールのリンクで確認してこの画面(タブ)に戻った時、「状態を更新する」を押さなくても取り直す。
+      // 未確認の時だけ・同時に1回だけ。失敗しても何も表示しない(ボタンでいつでも取り直せる)。
+      let quietRefreshPending = false;
+
+      function refreshVerificationQuietly() {
+        const user = storeAuth && storeAuth.currentUser;
+        if (busy || quietRefreshPending || !user || user.emailVerified || document.visibilityState !== "visible") {
+          return;
+        }
+        quietRefreshPending = true;
+        user.reload()
+          .then(function () {
+            const current = storeAuth.currentUser;
+            if (!current || !current.emailVerified) {
+              return;
+            }
+            return current.getIdToken(true).then(function () {
+              renderAccount();
+              showMessage("store_account_verified_now", "success");
+              return confirmStatusWithServer();
+            });
+          })
+          .catch(function () {
+            // 「状態を更新する」ボタンで取り直せる。
+          })
+          .finally(function () {
+            quietRefreshPending = false;
+          });
+      }
+
       function handleLogout() {
         if (busy) {
           return;
@@ -2848,6 +3092,20 @@
       }
 
       function bindEvents() {
+        // STEP 57｜引き継ぎの画面(?claim=)で開いたら、途中でメール確認などに出ても続きへ戻れるよう覚えておく。
+        if (CLAIM_SUBMISSION_ID !== "") {
+          rememberPendingClaim(CLAIM_SUBMISSION_ID);
+        }
+        document.getElementById("claimResumeDismiss").addEventListener("click", function () {
+          forgetPendingClaim();
+          renderClaimResumeNotice();
+        });
+        ["storeNameInput", "storeCategorySelect", "storeCountrySelect", "storeAddressInput"].forEach(function (id) {
+          document.getElementById(id).addEventListener("input", saveStoreFormDraft);
+          document.getElementById(id).addEventListener("change", saveStoreFormDraft);
+        });
+        document.addEventListener("visibilitychange", refreshVerificationQuietly);
+        window.addEventListener("focus", refreshVerificationQuietly);
         document.getElementById("loginForm").addEventListener("submit", handleLogin);
         document.getElementById("signupForm").addEventListener("submit", handleSignup);
         document.getElementById("resetForm").addEventListener("submit", handleReset);

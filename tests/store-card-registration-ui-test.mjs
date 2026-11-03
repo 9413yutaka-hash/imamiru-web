@@ -73,7 +73,7 @@ try {
   // ---- new store: card first ----
   let p = await open("newOwner");
   let g = await gate(p);
-  t("U1 カード未登録：手順（①アカウント ✓ ②メール確認 ✓ ③カード登録＝今の手順 ④登録・引き継ぎ）を表示・「店舗・施設を登録する」は押せない・カード登録への案内", g.steps.length === 4 && g.steps[0].startsWith("done") && g.steps[1].startsWith("done") && g.steps[2].startsWith("todo current") && /クレジットカード/.test(g.steps[2]) && g.registerDisabled === true && /クレジットカードの登録が必要/.test(g.notice) && g.overflow === false, g);
+  t("U1 カード未登録：手順（①アカウント ✓ ②メール確認 ✓ ③カード登録＝今の手順 ④登録・引き継ぎ）を表示(STEP 57：⑤申し込み・⑥公開まで6つ)・「店舗・施設を登録する」は押せない・カード登録への案内", g.steps.length === 6 && g.steps[4].startsWith("todo") && g.steps[5].startsWith("todo") && g.steps[0].startsWith("done") && g.steps[1].startsWith("done") && g.steps[2].startsWith("todo current") && /クレジットカード/.test(g.steps[2]) && g.registerDisabled === true && /クレジットカードの登録が必要/.test(g.notice) && g.overflow === false, g);
   await p.ev(`document.getElementById("cardGateLink").click(), true`);
   await registerCard(p);
   g = await gate(p);
@@ -105,7 +105,7 @@ try {
   await p.close();
   p = await open("claimer", "", "en", 1280);
   g = await gate(p);
-  t("U8 英語・PC：手順の表示も英語", g.steps.length === 4 && /Register a credit card/.test(g.steps[2]) && /Register a store, or take over/.test(g.steps[3]), g.steps);
+  t("U8 英語・PC：手順の表示も英語", g.steps.length === 6 && /subscribe to the ¥100\/month plan/.test(g.steps[4]) && /Register a credit card/.test(g.steps[2]) && /Register a store, or take over/.test(g.steps[3]), g.steps);
   await p.close();
 
   // ---- TOP entry ----

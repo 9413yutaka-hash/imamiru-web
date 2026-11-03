@@ -151,7 +151,8 @@ seedStore("M2", "um", "published", { latitude: 26.40, longitude: 127.90 }); mont
   t("B5 構造化データ LocalBusiness：名前・URL・住所・座標・営業時間・写真(審査通過のみ)", ld["@type"] === "LocalBusiness" && ld.name === "店SN" && ld.url === "https://machinau.jp/shop/SN" && ld.address.addressRegion === "沖縄県" && ld.address.addressLocality === "那覇市" && ld.geo.latitude === 26.215 && ld.openingHoursSpecification.length === 4 && ld.image.length === 2 && !JSON.stringify(ld).includes("/b.webp"), ld);
   t("B6 営業時間(定休日・24時間・2区間・補足)・支払い方法・設備・公式サイトを表示", html.includes("定休日") && html.includes("24時間") && html.includes("11:00–14:00 / 17:00–22:00") && html.includes("祝日は休み") && html.includes("QRコード決済") && html.includes("無料Wi-Fi") && html.includes('href="https://sn.example.com/"'));
   t("B7 審査中の写真は出さない(写真は審査を通過したものだけ)", !html.includes("/SN/b.webp") && html.includes("/SN/c.webp"));
-  t("B8 非公開の項目を出さない(電話・予約先・店主が入力した住所の文字列・uid・メール・契約)", !html.includes("098-111-2222") && !html.includes("reserve.example.com") && !html.includes("沖縄県那覇市牧志1-1-1") && !html.includes("un@example.com") && !/ownerUid|storeCustomPlans|"un"/.test(html));
+  // STEP 57｜店主が公開用に入力した電話・予約先は店舗ページに出す(本部指示 STEP 56-B 4-A)。
+  t("B8 非公開の項目を出さない(店主が入力した住所の文字列・uid・メール・契約)。電話・予約先は STEP 57 から表示", html.includes('href="tel:0981112222"') && html.includes('href="https://reserve.example.com/SN"') && !html.includes("沖縄県那覇市牧志1-1-1") && !html.includes("un@example.com") && !/ownerUid|storeCustomPlans|"un"/.test(html));
   t("B9 スマートフォン：viewport・1段の幅(最大760px)・横にはみ出さない指定", html.includes('name="viewport" content="width=device-width, initial-scale=1.0"') && html.includes("max-width: 760px") && html.includes("overflow-wrap: anywhere"));
   t("B10 マチナウの TOP の同じ店舗の表示(/?shop=sp_SN)へのリンク・地図へのリンク", html.includes('href="/?shop=sp_SN"') && html.includes("https://www.google.com/maps/search/?api=1&amp;query=26.215%2C127.688"));
 

@@ -695,6 +695,36 @@ export async function readStoreCardPlanActive(database, storeId, nowMillis, tran
   return holderSnapshot.exists && isActiveOwner(holderSnapshot.data(), holderUid, storeId);
 }
 
+// STEP 57｜店舗アカウント画面の店舗一覧に出す月額100円プランの状態(画面の案内用。申込・解約・公開の可否の
+// 最終判定は各操作のサーバー側)。active：契約中／canceling：解約済み(accessUntil まで利用できる)／
+// unpaid：未払いで停止中／none：契約なし・終了。
+export function summarizeStorePlanForList(plan, nowMillis) {
+  if (!plan) {
+    return { planState: "none", planAccessUntilMillis: 0 };
+  }
+
+  if (plan.paymentStatus === "suspended") {
+    return { planState: "unpaid", planAccessUntilMillis: 0 };
+  }
+
+  if (evaluateStoreCustomPlanAccess(plan, nowMillis)) {
+    return plan.status === "canceling"
+      ? {
+        planState: "canceling",
+        planAccessUntilMillis: plan.accessUntil && typeof plan.accessUntil.toMillis === "function" ? plan.accessUntil.toMillis() : 0
+      }
+      : { planState: "active", planAccessUntilMillis: 0 };
+  }
+
+  return { planState: "none", planAccessUntilMillis: 0 };
+}
+
+export async function readStorePlanSummaryForList(database, storeId, nowMillis) {
+  const snapshot = await database.collection(STORE_CUSTOM_PLANS_COLLECTION).doc(storeId).get();
+
+  return summarizeStorePlanForList(snapshot.exists ? snapshot.data() || {} : null, nowMillis);
+}
+
 // 公開条件の判定に使う紐付け(storeListingLinks)。重複候補のうち運営無料掲載
 // (source:"submissions")は、その無料掲載がこの店舗へ有効に紐付いていれば解決済みとする。
 // それ以外(他の店舗アカウントとの重複など)は今のデータでは解決済みと判定できないため、
@@ -1453,7 +1483,8 @@ function readPublicBusinessHours(value) {
 // 写真のpublicId・公開/非公開の監査記録(publishedAt以外。publishedByUid・unpublished*等)・
 // revision・登録経緯(createdBy*/source*)・
 // 店舗が入力した住所文字列(address)・geohash等の管理用項目。
-// 電話・予約・SNS・対応言語は、詳細表示を広げる時に改めて追加を判断する。
+// 電話・予約・SNS・対応言語は一覧・共有のプレビューには出さない。STEP 57 で、店舗ごとの公開ページ
+// (/shop/{storeId})だけに buildPublicStoreContact の形で出す(readPublicStoreProfileForShare の includeContact)。
 // linkedListingIds(有効な紐付けの無料掲載ID)は STEP 4C-2 で追加(お気に入りの別名用)。
 // 紐付けのclaimId・運営者・申請者などの情報は返さない。
 function buildPublicStoreProfile(storeId, account, profile, linkedListingIds) {
@@ -1498,11 +1529,45 @@ function buildPublicStoreProfile(storeId, account, profile, linkedListingIds) {
   };
 }
 
+// STEP 57｜店舗ページだけに出す連絡先・対応言語(店主が公開用に入力した項目)。保存済みの値も、表示の前に
+// 保存の時と同じ検証をやり直す(電話は数字・+・-・括弧・空白で9〜15桁、URL は http/https で認証情報なし)。
+// 通らない値・知らない SNS の種類は出さない。URL は引用符・山括弧・バックスラッシュを含むものも出さない(HTML の属性に入れるため)。
+function readPublicContactUrl(value) {
+  const url = validateImadakeUrl(value);
+
+  return typeof url === "string" && !/["'<>\\]/.test(url) ? url : "";
+}
+
+export function buildPublicStoreContact(profile) {
+  const source = profile || {};
+  const phone = validateImadakePhone(source.phone);
+  const reservationUrl = readPublicContactUrl(source.reservationUrl);
+  const socialLinks = (Array.isArray(source.socialLinks) ? source.socialLinks : [])
+    .slice(0, STORE_SOCIAL_LINKS_MAX)
+    .map(function(link) {
+      const type = link && typeof link.type === "string" ? link.type : "";
+      const url = readPublicContactUrl(link && link.url);
+
+      return STORE_SOCIAL_TYPES.includes(type) && url !== ""
+        ? { type: type, url: url }
+        : null;
+    })
+    .filter(Boolean);
+
+  return {
+    phone: typeof phone === "string" ? phone : "",
+    reservationUrl: reservationUrl,
+    socialLinks: socialLinks,
+    supportedLanguageCodes: readPublicCodes(source.supportedLanguageCodes, STORE_LANGUAGE_CODES)
+  };
+}
+
 // STEP 48-B｜共有リンクのプレビュー(OGP)用に、1店舗だけを旅行者向け一覧と同じ条件で読む。
 // 一覧に出る店舗(status:"published" かつ公開条件をすべて満たす)だけを、一覧と同じ許可リストの形で返す。
 // それ以外(下書き・非公開・停止・条件不足・存在しない)は null。書き込みはしない。
 // 紐付けは一覧と同じ query(status == "active")を読み、この店舗の分だけ使う(新しい index は不要)。
-export async function readPublicStoreProfileForShare(database, storeId) {
+// STEP 57｜options.includeContact が true の時だけ、店舗ページ用の contact(buildPublicStoreContact)を付ける。
+export async function readPublicStoreProfileForShare(database, storeId, options) {
   if (typeof storeId !== "string" || !/^[A-Za-z0-9_-]{1,100}$/.test(storeId)) {
     return null;
   }
@@ -1544,9 +1609,17 @@ export async function readPublicStoreProfileForShare(database, storeId) {
     resolvedListingIds: new Set(linkedListingIds)
   });
 
-  return missing.length > 0
-    ? null
-    : buildPublicStoreProfile(storeId, account, profile, linkedListingIds);
+  if (missing.length > 0) {
+    return null;
+  }
+
+  const store = buildPublicStoreProfile(storeId, account, profile, linkedListingIds);
+
+  if (options && options.includeContact === true) {
+    store.contact = buildPublicStoreContact(profile);
+  }
+
+  return store;
 }
 
 // STEP 56｜旅行者向けの正式店舗の一覧(公開中で公開条件をすべて満たす店舗だけ)を作る。

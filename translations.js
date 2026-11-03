@@ -4640,6 +4640,67 @@ const MACHINAU_TRANSLATIONS = {
     en: "4. Register a store, or take over a listing on Machinau"
   },
 
+  // STEP 57｜手順の続き(月額プランの申し込みと公開)・店舗ごとの状態・引き継ぎの再開・管理の案内
+  store_steps_plan: {
+    ja: "⑤ お店ごとに、月額100円（税込）のプランの内容を確認して申し込む",
+    en: "5. Review and subscribe to the ¥100/month plan (tax included) for each shop"
+  },
+
+  store_steps_publish: {
+    ja: "⑥ 店舗情報を編集して、旅行者に公開する",
+    en: "6. Edit your shop details and publish them to travelers"
+  },
+
+  store_list_public_visible: {
+    ja: "旅行者に公開中",
+    en: "Shown to travelers"
+  },
+
+  store_list_public_hidden: {
+    ja: "旅行者には公開されていません",
+    en: "Not shown to travelers"
+  },
+
+  store_list_plan_active: {
+    ja: "月額100円プラン：契約中",
+    en: "¥100/month plan: subscribed"
+  },
+
+  store_list_plan_canceling: {
+    ja: "月額100円プラン：解約済み（{date}まで公開できます）",
+    en: "¥100/month plan: canceled (can stay public until {date})"
+  },
+
+  store_list_plan_unpaid: {
+    ja: "月額100円プラン：未払いのため停止中です。下の「店舗カード（月額100円）のご請求」からお支払いください。",
+    en: "¥100/month plan: paused because of an unpaid charge. Please pay under \"Store card (¥100/month) charges\" below."
+  },
+
+  store_list_plan_none: {
+    ja: "月額100円プラン：未契約（旅行者に公開するには「店舗カードの編集・申し込み」から申し込みます）",
+    en: "¥100/month plan: not subscribed (to show your shop to travelers, subscribe from \"Edit store card / subscribe\")"
+  },
+
+  store_management_help_note: {
+    ja: "お店ごとの店舗情報の編集・公開と、月額100円のプランの申し込み・解約は「店舗カードの編集・申し込み」から行えます。ご請求・領収書は「ご請求の履歴」と「店舗カード（月額100円）のご請求」、カードの変更は「お支払い方法」、退会は一番下の「アカウントの削除」から行えます。",
+    en: "Edit and publish each shop, and subscribe to or cancel its ¥100/month plan, from \"Edit store card / subscribe\". Charges and receipts are under \"Billing history\" and \"Store card (¥100/month) charges\", card changes under \"Payment method\", and closing your account under \"Delete account\" at the bottom."
+  },
+
+  store_claim_resume_text: {
+    ja: "マチナウに掲載中のお店の引き継ぎの途中です。",
+    en: "You were in the middle of taking over a listing on Machinau."
+  },
+
+  store_claim_resume_link: {
+    ja: "引き継ぎの手続きを続ける →",
+    en: "Continue taking over the listing →"
+  },
+
+  store_claim_resume_dismiss: {
+    ja: "この案内を消す",
+    en: "Dismiss"
+  },
+
   modal_claim_link: {
     ja: "このお店の方へ：お店の情報を管理する →",
     en: "Own this business? Manage this listing →"
