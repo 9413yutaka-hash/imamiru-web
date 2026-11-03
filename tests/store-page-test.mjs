@@ -363,7 +363,7 @@ seedStore("M2", "um", "published", { latitude: 26.40, longitude: 127.90 }); mont
 
   const terms = readFileSync(join(REPO_ROOT, "terms.html"), "utf8");
   const toku = readFileSync(join(REPO_ROOT, "tokushoho.html"), "utf8");
-  t("G7 規約は11月1日の版のまま・12月1日の施行の告知を残す(早期の施行をしない)", terms.includes("最終更新日：2026年11月1日") && terms.includes('data-legal-notice="store-card-billing"') && terms.includes('data-effective="2026-12-01"') && toku.includes("data-legal-notice"));
+  t("G7 規約は11月3日の改定の版(STEP 58-B)・12月1日の施行の告知を残す(12月1日の改定は早期に施行しない)", terms.includes("最終更新日：2026年11月3日") && terms.includes("現在、店舗カードの月額契約の申し込みと月額料金の請求は開始していません。") && terms.includes('data-legal-notice="store-card-billing"') && terms.includes('data-effective="2026-12-01"') && toku.includes("data-legal-notice"));
   t("G8 課金のスイッチは OFF のまま(店舗カードの請求・今だけ投稿の請求)", BL.STORE_CUSTOM_PLAN_CHARGE_ENABLED === false && IM.IMADAKE_CV_BILLING_STARTED === false && MC.IMADAKE_MONTHLY_CHARGE_ENABLED === false && typeof CR.STORE_CUSTOM_PLAN_CRON_CHARGES_ENABLED === "boolean", { charge: BL.STORE_CUSTOM_PLAN_CHARGE_ENABLED });
   const wf = readFileSync(join(REPO_ROOT, ".github/workflows/store-card-plan-production.yml"), "utf8");
   t("G9 定期実行は1日4回のまま", /cron: "10 1-4 \* \* \*"/.test(wf));

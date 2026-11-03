@@ -249,7 +249,8 @@ let CLAIM_ID = "";
 
   const terms = readFileSync(join(REPO_ROOT, "terms.html"), "utf8");
   const toku = readFileSync(join(REPO_ROOT, "tokushoho.html"), "utf8");
-  t("G9 規約・特商法は変えていない(11月1日の版・12月1日の告知を残す・法務の判断の文言は保留)", terms.includes("最終更新日：2026年11月1日") && terms.includes('data-effective="2026-12-01"') && toku.includes("最終更新日：2026年11月1日") && terms.includes("店舗カード」といいます）の作成・保存・編集は無料です。") && toku.includes("の作成・保存・編集：無料。"));
+  // STEP 58-B(代表決定)｜11月3日の改定で、契約の前でも作成・保存・編集できるとしていた記載を削除。12月1日の告知はそのまま残す。
+  t("G9 規約・特商法は11月3日の改定(改定の条項と施行日を表示)・旧い無料の編集の記載は無い・12月1日の告知を残す", terms.includes("最終更新日：2026年11月3日") && terms.includes('data-revision="2026-11-03"') && terms.includes('data-effective="2026-12-01"') && toku.includes("最終更新日：2026年11月3日") && !terms.includes("作成・保存・編集は無料") && !terms.includes("作成・保存・編集はできます") && !toku.includes("作成・保存・編集：無料"));
   t("G10 課金・削除のスイッチは OFF のまま(店舗カードの請求・遅れた請求の自動・今だけ投稿の請求・本番の自動の最終削除)", BL.STORE_CUSTOM_PLAN_CHARGE_ENABLED === false && CH.STORE_CUSTOM_PLAN_LATE_AUTO_CHARGE_ENABLED === false && IM.IMADAKE_CV_BILLING_STARTED === false && MC.IMADAKE_MONTHLY_CHARGE_ENABLED === false && DEL.ACCOUNT_DELETION_SWEEP_PRODUCTION_ENABLED === false);
   const wf = readFileSync(join(REPO_ROOT, ".github/workflows/store-card-plan-production.yml"), "utf8");
   t("G11 定期実行は1日4回のまま", /cron: "10 1-4 \* \* \*"/.test(wf));

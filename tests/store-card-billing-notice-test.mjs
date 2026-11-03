@@ -27,8 +27,9 @@ const START = "店舗カードの月額料金は、2026年11月分から請求�
 const T18_1 = "今だけ投稿の利用料金と店舗カードの月額料金（以下あわせて「利用料金」といいます）について、運営は、" + PAY;
 const TK_PRICE = "今だけ投稿の利用料金の請求は、現在開始していません。請求を開始する場合は、開始日の3日前までに本サービス上でお知らせします。" + START + "利用料金の請求には、事業者の明示的な同意が必要です。";
 const TK_PAY = "今だけ投稿の利用料金と店舗カードの月額料金は、それぞれ" + PAY + "（別々に請求します）。";
-// 本番の現行の版(origin/main ea83217 と同じ。改行は LF)の利用規約・特商法
-const CURRENT_SHA = { terms: "0144788346dceac9d53b5fef434aa6bd71a7689349e2c1dcca418b1a58ce7dd5", tokushoho: "5c9416d6cd782c4c111c1b0df687bba85e02eb231ffbfbbee08be8a63b7e22f5" };
+// 本番の現行の版の利用規約・特商法(改行は LF)。STEP 58-B｜2026年11月3日の改定(13条3項・15条5項・17条1項・17条5項・販売価格の無料の範囲)の版。
+// 以前の版(origin/main ea83217)：terms 0144788346dceac9d53b5fef434aa6bd71a7689349e2c1dcca418b1a58ce7dd5・tokushoho 5c9416d6cd782c4c111c1b0df687bba85e02eb231ffbfbbee08be8a63b7e22f5
+const CURRENT_SHA = { terms: "d363796671d3d79af0bba3d932e426ec05906a8ca064855856331f7030ddd2f7", tokushoho: "84aa166ee713b3de285f0b5ec942d880d441700413ce26b9d166d1bfc3f8b17b" };
 const OLD_CONSENT = "store-card-monthly-2026-10-31";
 
 const serverVersion = (BILL.match(/export const STORE_CARD_PLAN_CONSENT_VERSION = "([^"]+)";/) || [])[1];
@@ -57,8 +58,9 @@ if (STAGE === "notice") {
   t("N4 告知の内容：請求の開始（11月分・11月30日締め・12月2日請求）・申し込みの無いお店に料金なし・申込前の月は請求しない・施行日の前日までは改定前（現在の本文）",
     [nT, nK, TR.store_account_billing_notice_start.ja].every((s) => s.includes("2026年11月分から請求します。11月分は2026年11月30日に締め、2026年12月2日に、登録されたクレジットカードへ請求します。月額契約を申し込んでいないお店・施設に料金が発生することはありません。申し込みより前の月の月額料金は請求しません。")) &&
     [nT, nK, TR.store_account_billing_notice_revision.ja].every((s) => s.includes("施行日の前日までは、改定前の内容（現在の本文）が適用されます。")));
-  t("N5 掲示の間は申込画面・同意の版・最終更新日を変えない（同意の版 store-card-monthly-2026-10-31・最終更新日 2026年11月1日・申込画面に支払い失敗時の1行なし）",
-    serverVersion === OLD_CONSENT && pageVersion === OLD_CONSENT && ymd(updated(TERMS)) === "2026-11-01" && ymd(updated(TOK)) === "2026-11-01" && !PROF.includes("store_card_plan_terms_failure"), { serverVersion, pageVersion });
+  // STEP 58-B｜最終更新日は11月3日の別の改定(店舗カードの管理は月額契約が必須)の日付。12月1日の改定の内容はまだ入れない。
+  t("N5 掲示の間は申込画面・同意の版を変えない・最終更新日は11月3日の別の改定の日（同意の版 store-card-monthly-2026-10-31・申込画面に支払い失敗時の1行なし）",
+    serverVersion === OLD_CONSENT && pageVersion === OLD_CONSENT && ymd(updated(TERMS)) === "2026-11-03" && ymd(updated(TOK)) === "2026-11-03" && TERMS.includes('data-revision="2026-11-03"') && TOK.includes('data-revision="2026-11-03"') && !PROF.includes("store_card_plan_terms_failure"), { serverVersion, pageVersion });
   t("N6 施行日は掲示の後（同意の版の日付より後）・英語の告知に日本語が混ざらない",
     eff > "2026-11-01" && ["store_account_billing_notice_title", "store_account_billing_notice_start", "store_account_billing_notice_revision", "store_account_billing_notice_date"].every((k) => !/[぀-ヿ一-鿿]/.test(TR[k].en)));
 } else {
