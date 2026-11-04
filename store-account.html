@@ -237,6 +237,22 @@
     .invoice-note { margin: 4px 0 0; font-size: 12px; color: #555; }
     .store-form { margin-top: 14px; }
 
+    /* 店主向け「この街のマチナウ利用状況」 */
+    .area-usage { margin: 0 0 14px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--white); }
+    .area-usage h3 { margin: 0 0 6px; }
+    .area-usage .field { margin: 10px 0 0; }
+    .area-usage-city { margin: 10px 0 8px; font-size: 18px; font-weight: 800; color: var(--navy); overflow-wrap: anywhere; }
+    .area-usage-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+    .area-usage-tabs button { flex: 1 1 0; min-width: 84px; min-height: 40px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--white); color: var(--navy); font-size: 13px; font-weight: 800; font-family: inherit; cursor: pointer; }
+    .area-usage-tabs button[aria-pressed="true"] { border-color: var(--blue); background: var(--sky); color: var(--navy); }
+    .area-usage-values { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0 0 8px; }
+    .area-usage-value { padding: 10px; border-radius: 10px; background: var(--background); }
+    .area-usage-value-label { font-size: 12px; color: var(--subtext); }
+    .area-usage-value-number { font-size: 20px; font-weight: 800; color: var(--navy); overflow-wrap: anywhere; }
+    .area-usage .message { margin: 8px 0; }
+    .area-usage-meta { margin: 0; font-size: 12.5px; color: var(--text); }
+    .area-usage-notes { margin: 8px 0 0; padding-left: 18px; font-size: 12px; color: var(--subtext); line-height: 1.7; }
+
     .store-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 10px; }
 
     .store-card, .claim-card {
@@ -496,6 +512,42 @@
 
       <div class="store-section" id="storeSection" hidden>
         <h3 data-i18n="store_account_stores_heading">あなたの店舗・施設</h3>
+        <!-- 店主向け「この街のマチナウ利用状況」(代表決定 2026-11-05)｜選択中の店舗の所在地の市町村の利用人数・利用回数。
+             数値は運営の定期実行が GA4 から30分ごとに取得して保存した値だけ(この画面から GA4 は呼ばない)。表示は textContent だけ。 -->
+        <div class="area-usage" id="areaUsagePanel" hidden>
+          <h3 data-i18n="area_usage_heading">この街のマチナウ利用状況</h3>
+          <p class="note" data-i18n="area_usage_intro"></p>
+          <div class="field" id="areaUsageStoreField" hidden>
+            <label for="areaUsageStoreSelect" data-i18n="area_usage_store_label">店舗・施設</label>
+            <select id="areaUsageStoreSelect"></select>
+          </div>
+          <p class="area-usage-city" id="areaUsageCity"></p>
+          <div class="area-usage-tabs" id="areaUsageTabs">
+            <button type="button" data-area-usage-period="today" aria-pressed="true" data-i18n="area_usage_period_today">今日</button>
+            <button type="button" data-area-usage-period="last7Days" aria-pressed="false" data-i18n="area_usage_period_7days">過去7日間</button>
+            <button type="button" data-area-usage-period="last30Days" aria-pressed="false" data-i18n="area_usage_period_30days">過去30日間</button>
+          </div>
+          <div class="area-usage-values" id="areaUsageValues" hidden>
+            <div class="area-usage-value">
+              <div class="area-usage-value-label" data-i18n="area_usage_users_label">利用人数</div>
+              <div class="area-usage-value-number" id="areaUsageUsers"></div>
+            </div>
+            <div class="area-usage-value">
+              <div class="area-usage-value-label" data-i18n="area_usage_events_label">利用回数</div>
+              <div class="area-usage-value-number" id="areaUsageEvents"></div>
+            </div>
+          </div>
+          <p class="area-usage-meta" id="areaUsageRange" hidden></p>
+          <p class="area-usage-meta" id="areaUsageUpdated" hidden></p>
+          <p class="message info" id="areaUsageStatus" role="status" aria-live="polite"></p>
+          <ul class="area-usage-notes">
+            <li data-i18n="area_usage_note_users"></li>
+            <li data-i18n="area_usage_note_events"></li>
+            <li data-i18n="area_usage_note_not_visits"></li>
+            <li data-i18n="area_usage_note_delay"></li>
+            <li data-i18n="area_usage_note_small"></li>
+          </ul>
+        </div>
         <!-- STEP 42-D｜登録・引き継ぎの前にカード登録が必要(1アカウント1枚)。表示は textContent だけ。 -->
         <ol class="onboarding-steps" id="onboardingSteps"></ol>
         <!-- STEP 56｜店主向けの料金の案内(新規登録・引き継ぎとも同じ月額100円。アカウント・カードの登録だけでは料金なし)。 -->
@@ -1167,7 +1219,180 @@
         });
         document.getElementById("storeListEmpty").hidden = myStores.length > 0 || storesLoading;
         renderStoreLinkStatus();
+        renderAreaUsagePanel();
       }
+
+      // 店主向け「この街のマチナウ利用状況」｜登録済み(active)の店舗の所在地ごとの利用人数・利用回数。
+      // 数値はサーバーが保存済みの値(秘匿の済んだもの)だけを返す。店舗の所在地もサーバーが決める。
+      const areaUsageByStore = {};
+      const areaUsageLoading = {};
+      let areaUsageStoreId = "";
+      let areaUsagePeriod = "today";
+
+      function areaUsageStores() {
+        return myStores.filter(function (store) {
+          return store.registrationStatus === "active";
+        });
+      }
+
+      function formatAreaUsageDate(dateKey) {
+        try {
+          return new Intl.DateTimeFormat(currentLanguage, { month: "long", day: "numeric", timeZone: "UTC" }).format(new Date(dateKey + "T00:00:00Z"));
+        } catch (error) {
+          return dateKey;
+        }
+      }
+
+      function formatAreaUsageTime(millis, timeZone) {
+        try {
+          return new Intl.DateTimeFormat(currentLanguage, { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: timeZone || "Asia/Tokyo" }).format(new Date(millis));
+        } catch (error) {
+          return new Date(millis).toISOString();
+        }
+      }
+
+      function formatAreaUsageNumber(value) {
+        try {
+          return new Intl.NumberFormat(currentLanguage).format(value);
+        } catch (error) {
+          return String(value);
+        }
+      }
+
+      function loadAreaUsage(storeId) {
+        if (areaUsageLoading[storeId]) {
+          return;
+        }
+        areaUsageLoading[storeId] = true;
+        callStoreApi({ mode: "storeAreaUsage", storeId: storeId })
+          .then(function (response) {
+            areaUsageByStore[storeId] = response.status === 200 && response.result && response.result.success === true
+              ? response.result
+              : { status: "load_failed" };
+          })
+          .catch(function () {
+            areaUsageByStore[storeId] = { status: "load_failed" };
+          })
+          .finally(function () {
+            areaUsageLoading[storeId] = false;
+            renderAreaUsagePanel();
+          });
+      }
+
+      function renderAreaUsagePanel() {
+        const panel = document.getElementById("areaUsagePanel");
+        if (!panel) {
+          return;
+        }
+        const stores = areaUsageStores();
+        panel.hidden = stores.length === 0;
+        if (stores.length === 0) {
+          return;
+        }
+        if (!stores.some(function (store) { return store.storeId === areaUsageStoreId; })) {
+          areaUsageStoreId = stores[0].storeId;
+        }
+
+        const select = document.getElementById("areaUsageStoreSelect");
+        document.getElementById("areaUsageStoreField").hidden = stores.length < 2;
+        select.textContent = "";
+        stores.forEach(function (store) {
+          const option = document.createElement("option");
+          option.value = store.storeId;
+          option.textContent = store.storeName;
+          select.appendChild(option);
+        });
+        select.value = areaUsageStoreId;
+
+        document.querySelectorAll("[data-area-usage-period]").forEach(function (button) {
+          button.setAttribute("aria-pressed", button.getAttribute("data-area-usage-period") === areaUsagePeriod ? "true" : "false");
+        });
+
+        const store = stores.find(function (entry) { return entry.storeId === areaUsageStoreId; });
+        const data = areaUsageByStore[areaUsageStoreId];
+        const city = document.getElementById("areaUsageCity");
+        const values = document.getElementById("areaUsageValues");
+        const range = document.getElementById("areaUsageRange");
+        const updated = document.getElementById("areaUsageUpdated");
+        const status = document.getElementById("areaUsageStatus");
+        const area = data && data.area ? data.area : { prefecture: store.prefecture, city: store.city };
+        const statusKeys = [];
+
+        city.textContent = [area.prefecture, area.city].filter(Boolean).join(" ");
+        values.hidden = true;
+        range.hidden = true;
+        updated.hidden = true;
+
+        if (!data) {
+          statusKeys.push("area_usage_status_loading");
+          loadAreaUsage(areaUsageStoreId);
+        } else if (data.status === "ok") {
+          const entry = data.periods && data.periods[areaUsagePeriod] ? data.periods[areaUsagePeriod] : { state: "withheld" };
+          const users = document.getElementById("areaUsageUsers");
+          const events = document.getElementById("areaUsageEvents");
+          values.hidden = false;
+          if (entry.state === "ok") {
+            users.textContent = t("area_usage_users_value").replace("{n}", formatAreaUsageNumber(entry.users));
+            events.textContent = t("area_usage_events_value").replace("{n}", formatAreaUsageNumber(entry.events));
+          } else if (entry.state === "zero") {
+            users.textContent = t("area_usage_users_value").replace("{n}", "0");
+            events.textContent = t("area_usage_events_zero");
+          } else if (entry.state === "under_min") {
+            users.textContent = t("area_usage_users_under_min");
+            events.textContent = t("area_usage_value_hidden");
+            statusKeys.push("area_usage_status_under_min");
+          } else {
+            users.textContent = t("area_usage_value_hidden");
+            events.textContent = t("area_usage_value_hidden");
+            statusKeys.push("area_usage_status_withheld");
+          }
+          if (entry.startDate && entry.endDate) {
+            range.hidden = false;
+            range.textContent = t(entry.clipped ? "area_usage_range_from_start" : "area_usage_range")
+              .replace("{start}", formatAreaUsageDate(entry.startDate))
+              .replace("{end}", formatAreaUsageDate(entry.endDate));
+          }
+          if (data.stale === true) {
+            statusKeys.push("area_usage_status_stale");
+          }
+        } else if (data.status === "not_started") {
+          statusKeys.push("area_usage_status_not_started");
+        } else if (data.status === "preparing") {
+          statusKeys.push("area_usage_status_preparing");
+        } else if (data.status === "not_covered") {
+          statusKeys.push("area_usage_status_not_covered");
+        } else if (data.status === "area_unknown") {
+          statusKeys.push("area_usage_status_area_unknown");
+        } else {
+          statusKeys.push("area_usage_status_load_failed");
+        }
+
+        if (data && data.refreshFailed === true && (data.status === "ok" || data.status === "not_started")) {
+          statusKeys.push("area_usage_status_refresh_failed");
+        }
+        if (data && data.updatedAtMillis > 0) {
+          updated.hidden = false;
+          updated.textContent = t("area_usage_updated").replace("{time}", formatAreaUsageTime(data.updatedAtMillis, data.timeZone));
+        }
+
+        status.textContent = statusKeys.map(function (key) {
+          return t(key).replace("{city}", area.city || "");
+        }).join(" ");
+        status.classList.toggle("show", statusKeys.length > 0);
+        status.setAttribute("data-area-usage-status", data ? data.status + (data.periods && data.periods[areaUsagePeriod] ? ":" + data.periods[areaUsagePeriod].state : "") : "loading");
+      }
+
+      document.getElementById("areaUsageStoreSelect").addEventListener("change", function (event) {
+        areaUsageStoreId = event.target.value;
+        renderAreaUsagePanel();
+      });
+
+      document.querySelectorAll("[data-area-usage-period]").forEach(function (button) {
+        button.addEventListener("click", function () {
+          areaUsagePeriod = button.getAttribute("data-area-usage-period");
+          renderAreaUsagePanel();
+        });
+      });
 
       // STEP 57｜店舗一覧のカードに、公開・契約の状態と固定の URL を足す(表示は textContent だけ)。
       const STORE_LIST_PLAN_KEYS = {

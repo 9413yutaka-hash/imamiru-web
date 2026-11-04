@@ -10637,6 +10637,281 @@ function applyPendingRestoredUserLocation() {
 }
 
 
+// 店主向け「この街のマチナウ利用状況」(代表決定 2026-11-05・A案 GA4)｜現在地の取得に成功し、市町村が
+// 判定できた時だけ、GA4 へ location_area_resolved(都道府県名・市町村名だけ。座標・住所・場所の ID は送らない)を
+// 送る。既存の location_button_click(ボタンの操作)・region_search(手動の地域検索)とは別の計測。
+// 送らない時：30分以内の現在地の復元(applyUserLocation の復元)／同じタブで同じ市町村を30分以内に送った後
+// (「現在地を更新」の連打・自動の再表示で回数が増えないように)／市町村を判定できない時／旅行者が地域の利用統計を
+// 拒否した時(この端末の localStorage)／下のスイッチが false の時(プライバシーポリシーの改定の施行まで false)。
+// 市町村名は japan-municipalities.js の正式名に合わせる(端末の言語が日本語以外で Geocoder が英語等の名前を
+// 返した時だけ、日本語の名前をもう1回だけ問い合わせる)。失敗しても本体の機能には影響しない。
+const AREA_USAGE_MEASUREMENT_ENABLED =
+  false;
+
+const AREA_USAGE_EVENT_NAME =
+  "location_area_resolved";
+
+const AREA_USAGE_LAST_SENT_STORAGE_KEY =
+  "machinauAreaUsageLastSent";
+
+const AREA_USAGE_OPT_OUT_STORAGE_KEY =
+  "machinauAreaUsageOptOut";
+
+const AREA_USAGE_RESEND_INTERVAL_MILLISECONDS =
+  30 * 60 * 1000;
+
+function isAreaUsageMeasurementOptedOut() {
+  try {
+    return localStorage.getItem(
+      AREA_USAGE_OPT_OUT_STORAGE_KEY
+    ) === "1";
+  } catch (error) {
+    return false;
+  }
+}
+
+function findOfficialMunicipalityName(
+  prefecture,
+  city
+) {
+  if (
+    typeof JAPAN_MUNICIPALITIES_BY_PREFECTURE === "undefined" ||
+    typeof prefecture !== "string" ||
+    typeof city !== "string" ||
+    !Array.isArray(
+      JAPAN_MUNICIPALITIES_BY_PREFECTURE[prefecture]
+    )
+  ) {
+    return "";
+  }
+
+  return JAPAN_MUNICIPALITIES_BY_PREFECTURE[prefecture].includes(city)
+    ? city
+    : "";
+}
+
+// 端末の言語が日本語以外で、Geocoder の名前が日本語でない時だけ使う(日本語の名前で1回だけ問い合わせる)。
+function resolveJapaneseAreaNamesFromCoordinates(
+  latitude,
+  longitude
+) {
+  return new Promise(
+    function(resolve) {
+      const empty =
+        { prefecture: "", city: "" };
+
+      try {
+        if (
+          typeof google === "undefined" ||
+          !google.maps ||
+          !google.maps.Geocoder
+        ) {
+          resolve(empty);
+          return;
+        }
+
+        const timeoutId =
+          setTimeout(
+            function() {
+              resolve(empty);
+            },
+            AREA_NAME_RESOLUTION_TIMEOUT_MS
+          );
+
+        new google.maps.Geocoder().geocode(
+          {
+            location: {
+              lat: latitude,
+              lng: longitude
+            },
+            language: "ja"
+          },
+          function(results, status) {
+            clearTimeout(
+              timeoutId
+            );
+
+            if (
+              status !== "OK" ||
+              !Array.isArray(results)
+            ) {
+              resolve(empty);
+              return;
+            }
+
+            for (const result of results) {
+              const components =
+                Array.isArray(result.address_components)
+                  ? result.address_components
+                  : [];
+
+              const prefectureComponent =
+                components.find(
+                  function(component) {
+                    return Array.isArray(component.types) &&
+                      component.types.includes("administrative_area_level_1");
+                  }
+                );
+
+              const cityComponent =
+                components.find(
+                  function(component) {
+                    return Array.isArray(component.types) &&
+                      component.types.includes("locality");
+                  }
+                );
+
+              if (prefectureComponent && cityComponent) {
+                resolve(
+                  {
+                    prefecture: String(prefectureComponent.long_name || ""),
+                    city: String(cityComponent.long_name || "")
+                  }
+                );
+                return;
+              }
+            }
+
+            resolve(empty);
+          }
+        );
+      } catch (error) {
+        resolve(empty);
+      }
+    }
+  );
+}
+
+function wasAreaUsageSentRecently(
+  prefecture,
+  city
+) {
+  try {
+    const saved =
+      JSON.parse(
+        sessionStorage.getItem(
+          AREA_USAGE_LAST_SENT_STORAGE_KEY
+        ) || "null"
+      );
+
+    const ageMilliseconds =
+      saved && Number.isFinite(saved.sentAt)
+        ? Date.now() - saved.sentAt
+        : -1;
+
+    return (
+      !!saved &&
+      saved.prefecture === prefecture &&
+      saved.city === city &&
+      ageMilliseconds >= 0 &&
+      ageMilliseconds < AREA_USAGE_RESEND_INTERVAL_MILLISECONDS
+    );
+  } catch (error) {
+    return false;
+  }
+}
+
+function rememberAreaUsageSent(
+  prefecture,
+  city
+) {
+  try {
+    sessionStorage.setItem(
+      AREA_USAGE_LAST_SENT_STORAGE_KEY,
+      JSON.stringify(
+        {
+          prefecture: prefecture,
+          city: city,
+          sentAt: Date.now()
+        }
+      )
+    );
+  } catch (error) {
+    // 保存できない環境では、30分以内の重複の確認ができないだけで、本体の機能は続く。
+  }
+}
+
+// applyUserLocation()の GPS で新しく取得した時だけ呼ぶ(復元の時は呼ばない)。
+function recordAreaUsageMeasurement(
+  locationHierarchy,
+  latitude,
+  longitude
+) {
+  try {
+    if (
+      !AREA_USAGE_MEASUREMENT_ENABLED ||
+      isAreaUsageMeasurementOptedOut() ||
+      !locationHierarchy ||
+      locationHierarchy.countryCode !== "JP"
+    ) {
+      return Promise.resolve(false);
+    }
+
+    const directCity =
+      findOfficialMunicipalityName(
+        locationHierarchy.prefecture,
+        locationHierarchy.city
+      );
+
+    const namesPromise =
+      directCity !== ""
+        ? Promise.resolve(
+            {
+              prefecture: locationHierarchy.prefecture,
+              city: directCity
+            }
+          )
+        : resolveJapaneseAreaNamesFromCoordinates(
+            latitude,
+            longitude
+          );
+
+    return namesPromise
+      .then(
+        function(names) {
+          const city =
+            findOfficialMunicipalityName(
+              names.prefecture,
+              names.city
+            );
+
+          if (
+            city === "" ||
+            wasAreaUsageSentRecently(
+              names.prefecture,
+              city
+            )
+          ) {
+            return false;
+          }
+
+          rememberAreaUsageSent(
+            names.prefecture,
+            city
+          );
+
+          sendMachinauAnalyticsEvent(
+            AREA_USAGE_EVENT_NAME,
+            {
+              area_prefecture: names.prefecture,
+              area_city: city
+            }
+          );
+
+          return true;
+        }
+      )
+      .catch(
+        function() {
+          return false;
+        }
+      );
+  } catch (error) {
+    return Promise.resolve(false);
+  }
+}
+
+
 function getLocation() {
   const locationButton =
     document.getElementById(
@@ -10976,6 +11251,15 @@ function applyUserLocation(
 
         if (!locationHierarchy) {
           return;
+        }
+
+        // 店主向け「この街のマチナウ利用状況」｜GPS で新しく取得した時だけ(30分の復元では送らない)。
+        if (!isRestoredLocation) {
+          recordAreaUsageMeasurement(
+            locationHierarchy,
+            latitude,
+            longitude
+          );
         }
 
         if (

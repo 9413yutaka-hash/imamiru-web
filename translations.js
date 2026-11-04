@@ -4712,6 +4712,162 @@ const MACHINAU_TRANSLATIONS = {
     en: "¥100/month plan: not subscribed (editing and publishing your shop details require subscribing from \"Edit store card / subscribe\")"
   },
 
+  // 店主向け「この街のマチナウ利用状況」(代表決定 2026-11-05)｜store-account.html の店舗管理画面の上部。
+  area_usage_heading: {
+    ja: "この街のマチナウ利用状況",
+    en: "Machinau use in your town"
+  },
+
+  area_usage_intro: {
+    ja: "この街で、マチナウがどれくらい利用されているかをご確認いただけます。地域の利用状況を参考に、お店の情報発信にお役立てください。",
+    en: "See how much Machinau is being used in your town. Use it as a guide when sharing your shop's information."
+  },
+
+  area_usage_store_label: {
+    ja: "店舗・施設",
+    en: "Shop / facility"
+  },
+
+  area_usage_period_today: {
+    ja: "今日",
+    en: "Today"
+  },
+
+  area_usage_period_7days: {
+    ja: "過去7日間",
+    en: "Last 7 days"
+  },
+
+  area_usage_period_30days: {
+    ja: "過去30日間",
+    en: "Last 30 days"
+  },
+
+  area_usage_users_label: {
+    ja: "利用人数",
+    en: "People"
+  },
+
+  area_usage_events_label: {
+    ja: "利用回数",
+    en: "Times"
+  },
+
+  area_usage_users_value: {
+    ja: "{n}人",
+    en: "{n}"
+  },
+
+  area_usage_events_value: {
+    ja: "約{n}回",
+    en: "About {n}"
+  },
+
+  area_usage_events_zero: {
+    ja: "0回",
+    en: "0"
+  },
+
+  area_usage_users_under_min: {
+    ja: "10人未満",
+    en: "Fewer than 10"
+  },
+
+  area_usage_value_hidden: {
+    ja: "表示なし",
+    en: "Not shown"
+  },
+
+  area_usage_range: {
+    ja: "集計対象：{start}〜{end}",
+    en: "Period: {start} – {end}"
+  },
+
+  area_usage_range_from_start: {
+    ja: "集計対象：{start}（計測の開始日）〜{end}",
+    en: "Period: {start} (when measurement started) – {end}"
+  },
+
+  area_usage_updated: {
+    ja: "最終更新：{time}",
+    en: "Last updated: {time}"
+  },
+
+  area_usage_status_loading: {
+    ja: "利用状況を読み込んでいます…",
+    en: "Loading…"
+  },
+
+  area_usage_status_under_min: {
+    ja: "人数が少ないため、人数は「10人未満」とだけ表示し、回数は表示していません。",
+    en: "Because the number of people is small, we only show \"fewer than 10\" and do not show the number of times."
+  },
+
+  area_usage_status_withheld: {
+    ja: "集計の仕組み上、人数が少ない時などは数値が表示されないことがあります（0人という意味ではありません）。",
+    en: "The figures may not be shown when, for example, the number of people is small (this does not mean zero)."
+  },
+
+  area_usage_status_stale: {
+    ja: "集計の更新が遅れています。表示は最終更新の時点の数値です。",
+    en: "Updates are running late. The figures are as of the last update."
+  },
+
+  area_usage_status_refresh_failed: {
+    ja: "最新の集計を取得できませんでした。表示は最終更新の時点の数値です。",
+    en: "We could not get the latest figures. The figures are as of the last update."
+  },
+
+  area_usage_status_not_started: {
+    ja: "まだ計測のデータがありません。計測が始まると、ここに数値を表示します。",
+    en: "There is no measurement data yet. Figures will appear here once measurement starts."
+  },
+
+  area_usage_status_preparing: {
+    ja: "利用状況の集計は準備中です。集計が始まると、ここに数値を表示します。",
+    en: "Usage figures are being prepared. They will appear here once counting starts."
+  },
+
+  area_usage_status_not_covered: {
+    ja: "{city}は、まだ集計の対象の地域ではありません。対象の地域は沖縄県の市町村から順に広げていきます。",
+    en: "{city} is not covered yet. We are starting with the municipalities of Okinawa and will expand from there."
+  },
+
+  area_usage_status_area_unknown: {
+    ja: "お店の所在地の市町村を確認できないため、利用状況を表示できません。",
+    en: "We cannot show usage because the municipality of your shop's address could not be confirmed."
+  },
+
+  area_usage_status_load_failed: {
+    ja: "利用状況を読み込めませんでした。時間をおいて、この画面を開き直してください。",
+    en: "We could not load the usage figures. Please reopen this page later."
+  },
+
+  area_usage_note_users: {
+    ja: "利用人数は、この市町村でマチナウの現在地の取得に成功した方の人数です（同じ方は1人として数えます）。Google アナリティクスの集計による推定値です。",
+    en: "People: the number of people whose current location was found in this municipality on Machinau (each person counted once). It is an estimate from Google Analytics."
+  },
+
+  area_usage_note_events: {
+    ja: "利用回数は、この市町村で現在地の判定に成功した回数です（同じ方の複数回を含みます）。",
+    en: "Times: how many times a current location was found in this municipality (including repeat times by the same person)."
+  },
+
+  area_usage_note_not_visits: {
+    ja: "表示される数値はマチナウの利用状況であり、実際の来店人数ではありません。来店の回数や、ページが見られた回数でもありません。",
+    en: "These figures show how Machinau is used. They are not the number of visitors to your shop, store visits or page views."
+  },
+
+  area_usage_note_delay: {
+    ja: "数値は30分ごとに更新しますが、集計に時間がかかるため、今日の数値は数時間遅れて反映されることがあります。",
+    en: "Figures are updated every 30 minutes, but today's figures can take a few hours to appear because counting takes time."
+  },
+
+  area_usage_note_small: {
+    ja: "個人の行動が分からないよう、人数が10人未満の時は「10人未満」と表示し、回数は表示しません。回数は10回単位の概数です。",
+    en: "To protect privacy, fewer than 10 people is shown as \"fewer than 10\" without the number of times. Times are rounded to the nearest 10."
+  },
+
   store_management_help_note: {
     ja: "お店ごとの店舗情報の編集・公開（月額100円の契約中だけ）と、プランの申し込み・解約は「店舗カードの編集・申し込み」から行えます。ご請求・領収書は「ご請求の履歴」と「店舗カード（月額100円）のご請求」、カードの変更は「お支払い方法」、退会は一番下の「アカウントの削除」から行えます。",
     en: "Edit and publish each shop (only while its ¥100/month contract is active), and subscribe to or cancel the plan, from \"Edit store card / subscribe\". Charges and receipts are under \"Billing history\" and \"Store card (¥100/month) charges\", card changes under \"Payment method\", and closing your account under \"Delete account\" at the bottom."

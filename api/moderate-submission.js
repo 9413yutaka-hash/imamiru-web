@@ -159,6 +159,12 @@ import {
   handleStoreCustomPlanCron
 } from "./_lib/store-custom-plan-cron.js";
 
+// 店主向け「この街のマチナウ利用状況」(GA4 の地域イベントの30分ごとの集計と、店主の画面の読み取り)。
+import {
+  handleAreaUsageRefresh,
+  handleStoreAreaUsage
+} from "./_lib/area-usage.js";
+
 // STEP 48-B｜共有リンクのプレビュー(OGP)のページ(/share/imadake/{ID}・/share/shop/{ID}、vercel.json の rewrite)。
 import {
   handleRenderShareImadake,
@@ -30661,6 +30667,27 @@ export default async function handler(
     requestBody.mode === "storeIdentityUpdate"
   ) {
     return handleStoreIdentityUpdate(
+      request,
+      response,
+      buildStoreSelfServiceDeps()
+    );
+  }
+
+  // 店主向け「この街のマチナウ利用状況」｜店主の画面(保存済みの値だけ・GA4 は呼ばない)と、定期実行の取得。
+  if (
+    requestBody.mode === "storeAreaUsage"
+  ) {
+    return handleStoreAreaUsage(
+      request,
+      response,
+      buildStoreSelfServiceDeps()
+    );
+  }
+
+  if (
+    requestBody.mode === "areaUsageRefresh"
+  ) {
+    return handleAreaUsageRefresh(
       request,
       response,
       buildStoreSelfServiceDeps()

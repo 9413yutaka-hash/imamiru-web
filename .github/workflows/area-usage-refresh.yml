@@ -1,0 +1,72 @@
+name: Area usage refresh (Production)
+
+# 店主向け「この街のマチナウ利用状況」(代表決定 2026-11-05・A案 GA4)。30分ごとに本番(machinau.jp)の
+# mode areaUsageRefresh を呼ぶ。サーバーが GA4 Data API から沖縄の市町村ごとの利用人数・利用回数(今日・過去7日間・
+# 過去30日間)を1回の問い合わせでまとめて取得し、少人数の秘匿をした値だけを Firestore に保存する。店主の画面は
+# 保存済みの値を読むだけで、GA4 を呼ばない(閲覧の人数が増えても GA4 への問い合わせは増えない)。
+#
+# GA4 の当日分のデータは通常数時間遅れるため、30分ごとの更新は「30分以内の数値」ではない(画面にも書いている)。
+# GA4・Google Cloud の設定(代表の操作)が済むまでは、サーバーが setup_pending を返し、この実行は成功で終わる
+# (設定待ちの間に失敗の通知を30分ごとに出さない)。一度取得できた後の失敗は失敗として終わる。
+#
+# 合言葉は他の定期実行と同じ AI_COLLECT_CRON_SECRET。次の確認をすべて満たした時だけ送る：①この workflow のファイルが
+# main のもの ②machinau.jp の接続先の確認(mode=firebaseTarget)が本番の Firebase(chikashoku-app)・検査あり。
+# 合言葉はログに出さない。応答は要約だけを出す。二重実行：concurrency で1つずつ＋サーバー側の実行ロック(409)。
+# 課金・請求・店舗の情報には一切触れない。
+
+on:
+  schedule:
+    - cron: "5,35 * * * *"  # 30分ごと(毎時5分・35分 UTC)
+  workflow_dispatch:
+
+concurrency:
+  group: area-usage-refresh
+  cancel-in-progress: false
+
+jobs:
+  area-usage-refresh:
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+
+    steps:
+      - name: Verify the workflow version and the Production connection
+        env:
+          WORKFLOW_REF: ${{ github.workflow_ref }}
+        run: |
+          set -euo pipefail
+          case "$WORKFLOW_REF" in
+            *"/.github/workflows/area-usage-refresh.yml@refs/heads/main") ;;
+            *) echo "STOP: this run does not use the main workflow file"; exit 1 ;;
+          esac
+          target_json="$(curl -fsS --max-time 30 "https://machinau.jp/api/moderate-submission?mode=firebaseTarget")"
+          if ! printf '%s' "$target_json" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const t=JSON.parse(s);process.exit(t&&t.success===true&&t.projectId==="chikashoku-app"&&t.enforced===true?0:1)})'; then
+            echo "STOP: machinau.jp is not connected to the Production Firebase"; exit 1
+          fi
+          echo "Verified Production: https://machinau.jp (Firebase chikashoku-app)"
+
+      - name: Refresh the area usage figures from GA4
+        env:
+          CRON_SECRET: ${{ secrets.AI_COLLECT_CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "STOP: missing secret"; exit 1
+          fi
+          code="$(curl -sS -o response.json -w '%{http_code}' --max-time 60 -X POST "https://machinau.jp/api/moderate-submission" \
+            -H "Content-Type: application/json" \
+            -H "X-Machinau-Cron-Secret: $CRON_SECRET" \
+            -d '{"mode":"areaUsageRefresh"}')"
+          echo "HTTP $code"
+          node -e 'const r=JSON.parse(require("fs").readFileSync("response.json","utf8"));console.log(JSON.stringify({success:r.success,status:r.status,reason:r.reason,errorCode:r.errorCode,prefectures:r.prefectures,rows:r.rows,thresholded:r.thresholded,measurementStarted:r.measurementStarted,tokensPerDayRemaining:r.tokensPerDayRemaining}))' || echo "(response was not JSON)"
+          reason="$(node -e 'try{const r=JSON.parse(require("fs").readFileSync("response.json","utf8"));process.stdout.write(typeof r.reason==="string"?r.reason:"")}catch(e){}')"
+          rm -f response.json
+          if [ "$code" = "409" ]; then
+            echo "Skipped: another refresh is running"; exit 0
+          fi
+          if [ "$code" = "200" ] && [ "$reason" = "setup_pending" ]; then
+            echo "Waiting for the GA4 / Google Cloud setup (no figures yet)"; exit 0
+          fi
+          [ "$code" = "200" ]
