@@ -242,7 +242,8 @@ const flagBad = FLAGS.filter(([f, name, v]) => !new RegExp("export const " + nam
 t("E1 課金・請求・退会の削除のスイッチ10個は変更なし(本番の請求の一括停止 STORE_CUSTOM_PLAN_CHARGE_ENABLED は false)", flagBad.length === 0, flagBad);
 const au = readFileSync(REPO_ROOT + "/api/_lib/area-usage.js", "utf8");
 t("E2 集計のモジュールは課金・請求・Stripe に触れない", !/storeCustomPlans|stripe|accountBilling|imadake/i.test(au.replace(/^\/\/.*$/gm, "")));
-const wf = readFileSync(REPO_ROOT + "/.github/workflows/area-usage-refresh.yml", "utf8");
+// 改行は CRLF の checkout(Windows)でも LF でも同じに扱う。
+const wf = readFileSync(REPO_ROOT + "/.github/workflows/area-usage-refresh.yml", "utf8").split("\r\n").join("\n");
 t("E3 workflow：30分ごと・main のファイルだけ・本番の接続先を確認してから・合言葉は secrets・同時に1つ", /cron: "5,35 \* \* \* \*"/.test(wf) && wf.includes("area-usage-refresh.yml@refs/heads/main") && wf.includes('t.projectId==="chikashoku-app"') && wf.includes("secrets.AI_COLLECT_CRON_SECRET") && /concurrency:\n  group: area-usage-refresh/.test(wf) && !/echo[^\n]*\$CRON_SECRET/.test(wf));
 const sc = readFileSync(REPO_ROOT + "/.github/workflows/store-card-plan-production.yml", "utf8");
 t("E4 店舗カードの本番の定期実行は1日4回のまま(変更なし)", sc.includes('- cron: "10 1-4 * * *"'));
