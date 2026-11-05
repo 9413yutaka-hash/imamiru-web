@@ -17,7 +17,8 @@
 // プロパティ ID を自動で探す時は Analytics Admin API)を有効にするまでは、取得は「設定待ち」で止まる。
 //
 // 30分ごとの更新(代表決定 2026-11-05)：GitHub Actions の定期実行は実際には1日数回しか動かないため、既存の自動実行
-// (掲載期限の定期実行 /api/expire。既存のジョブ・合言葉は変えない)に相乗りする(refreshAreaUsageIfDue)。
+// (cron-job.org が呼ぶ情報収集 /api/admin-source-collect＝情報収集は停止中で、この更新だけを行う・掲載期限の定期実行
+// /api/expire。既存のジョブ・合言葉は変えない)に相乗りする(refreshAreaUsageIfDue)。
 // 前回の成功から25分以上たっている時だけ取得する。GitHub Actions の定期実行(area-usage-refresh.yml)は予備として残す。
 // 実行の記録(直近12回の時刻・呼び出し元・成否)を保存し、公開の状態確認(mode areaUsageRefreshStatus)で確かめられる。
 
@@ -459,14 +460,15 @@ async function acquireRefreshLock(database, runId, nowMillis) {
 }
 
 // GA4 から取得して保存する。戻り値 { status: "refreshed" | "failed", ... }。
-// 実行の記録(直近12回)。時刻・呼び出し元(expire＝掲載期限の定期実行への相乗り／direct＝mode areaUsageRefresh)・成否だけ。
+// 実行の記録(直近12回)。時刻・呼び出し元(collect＝cron-job.org の情報収集の呼び出し／expire＝掲載期限の定期実行／
+// direct＝mode areaUsageRefresh)・成否だけ。
 function appendRunHistory(history, nowMillis, trigger, result) {
   const previous = Array.isArray(history) ? history : [];
   return previous.concat([{ at: Timestamp.fromMillis(nowMillis), trigger: trigger, result: result }]).slice(-AREA_USAGE_RUN_HISTORY_LIMIT);
 }
 
 export async function runAreaUsageRefresh(database, deps, nowMillis, runId, trigger) {
-  const runTrigger = trigger === "expire" ? "expire" : "direct";
+  const runTrigger = trigger === "collect" || trigger === "expire" ? trigger : "direct";
   const state = await acquireRefreshLock(database, runId, nowMillis);
 
   if (state === null) {
@@ -637,7 +639,7 @@ export async function handleAreaUsageRefreshStatus(request, response, deps) {
     const lastSuccess = readMillis(state.lastSuccessAt);
     const condition = lastSuccess === 0 ? "never_succeeded" : nowMillis - lastSuccess > AREA_USAGE_STATUS_STALE_MS ? "stale" : "ok";
     const recentRuns = (Array.isArray(state.recentRuns) ? state.recentRuns : []).map(function(run) {
-      return { at: toIso(run && run.at), trigger: run && run.trigger === "expire" ? "expire" : "direct", result: run && run.result === "ok" ? "ok" : "failed" };
+      return { at: toIso(run && run.at), trigger: run && (run.trigger === "collect" || run.trigger === "expire") ? run.trigger : "direct", result: run && run.result === "ok" ? "ok" : "failed" };
     });
 
     return response.status(condition === "ok" ? 200 : 503).json({ ok: condition === "ok", state: condition, lastSuccessAt: toIso(state.lastSuccessAt), recentRuns: recentRuns });

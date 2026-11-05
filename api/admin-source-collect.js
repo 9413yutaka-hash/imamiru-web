@@ -32,6 +32,19 @@ import {
   XMLParser
 } from "fast-xml-parser";
 
+// 店主向け「この街のマチナウ利用状況」の30分ごとの更新(代表決定 2026-11-05)。
+import {
+  refreshAreaUsageIfDue
+} from "./_lib/area-usage.js";
+
+// 情報の自動収集・AI の自動投稿の停止(代表決定 2026-11-05・案2)。false の間は、この API は情報を収集せず、
+// 自動投稿・OpenAI の呼び出しもしない：
+//   定期実行(cron-job.org・合言葉は下の既存の確認のまま)…地域の利用状況の更新だけを行い 200 collection_paused。
+//   運営の手動の収集・旅行者の現在地からの収集(locationCollect)…何もせず 503 collection_paused。
+// 再開は代表の別の承認が必要(true にするだけで従来の処理に戻る)。
+export const SOURCE_COLLECTION_ENABLED =
+  false;
+
 
 function getFirebaseAdminApp() {
   if (getApps().length > 0) {
@@ -4068,13 +4081,8 @@ function hasConcreteTravelImpactSignal(
 // 「台風」だけを除いた既存配列のサブセットとして、行政活動保護の可否判定に
 // 限定して使う(hasStrongSafetySignal自体は変更しない。既存の鮮度判定等は
 // 引き続きDRAFT_EMERGENCY_KEYWORDS全体＝「台風」を含む定義を使う)。
-const ACTIONABLE_SAFETY_KEYWORDS =
-  DRAFT_EMERGENCY_KEYWORDS.filter(
-    function(keyword) {
-      return keyword !== "台風";
-    }
-  );
-
+// ACTIONABLE_SAFETY_KEYWORDS は DRAFT_EMERGENCY_KEYWORDS の定義の直後に置く(2026-11-05：ここに置いていた時は
+// 読み込みの時点で未定義の配列を参照し、本番で読み込みに失敗していた。731ecb0 以降)。
 function hasActionableSafetySignal(
   combinedText
 ) {
@@ -4944,6 +4952,15 @@ const DRAFT_TRANSPORT_KEYWORDS = [
 const DRAFT_EMERGENCY_KEYWORDS = [
   "避難", "警報", "台風", "津波", "大雨", "熱中症"
 ];
+
+// 行政活動保護の可否判定に限定して使う、「台風」を除いた DRAFT_EMERGENCY_KEYWORDS のサブセット
+// (説明は hasActionableSafetySignal の上)。
+const ACTIONABLE_SAFETY_KEYWORDS =
+  DRAFT_EMERGENCY_KEYWORDS.filter(
+    function(keyword) {
+      return keyword !== "台風";
+    }
+  );
 
 const DRAFT_EVENT_KEYWORDS = ["イベント", "祭り", "花火"];
 
@@ -6286,6 +6303,16 @@ export default async function handler(
   const isCronRequest =
     cronSecretHeaderValue !== "";
 
+  // 情報収集の停止中：運営の手動の収集・旅行者の現在地からの収集は、ログインの確認も Firestore も使わずに止める。
+  if (!isCronRequest && !SOURCE_COLLECTION_ENABLED) {
+    return response.status(503).json({
+      success: false,
+      reason: "collection_paused",
+      message:
+        "情報の自動収集は停止しています。"
+    });
+  }
+
   if (isCronRequest) {
     // 街を見るAI Phase1.6-C｜cron-job.org移行のため、既存のGitHub Actions用
     // secret(AI_COLLECT_CRON_SECRET)に加えて、cron-job.org専用の
@@ -6317,6 +6344,29 @@ export default async function handler(
         success: false,
         message:
           "認証情報が正しくありません。"
+      });
+    }
+
+    // 情報収集の停止中：定期実行(cron-job.org)の呼び出しは、地域の利用状況の更新だけに使う(収集・自動投稿はしない)。
+    // 前回の成功から25分以上たっている時だけ GA4 から取得する(Production だけ・二重実行は実行ロックで防ぐ)。
+    if (!SOURCE_COLLECTION_ENABLED) {
+      await refreshAreaUsageIfDue(
+        {
+          env: process.env,
+          fetch: function(url, options) {
+            return fetch(url, options);
+          },
+          getFirestore: getFirestore,
+          getFirebaseAdminApp: getFirebaseAdminApp
+        },
+        "collect"
+      );
+
+      return response.status(200).json({
+        success: true,
+        status: "collection_paused",
+        message:
+          "情報の自動収集は停止しています(地域の利用状況の更新だけを行いました)。"
       });
     }
   }

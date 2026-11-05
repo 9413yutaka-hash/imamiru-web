@@ -379,8 +379,48 @@ t("E4 店舗カードの本番の定期実行は1日4回のまま(変更なし)"
   t("F12 相乗りは掲載期限の定期実行の合言葉の確認(既存の AI_COLLECT_CRON_SECRET のまま)の後・期限切れの処理の前の1か所だけ",
     hookAt > src.indexOf("process.env.AI_COLLECT_CRON_SECRET;") && hookAt > src.indexOf("return response.status(401)") && hookAt < src.indexOf('.collection("submissions")') &&
     src.split("refreshAreaUsageIfDue(").length === 2 && !/AI_COLLECT_CRON_SECRET_ALT|STORE_CARD_BILLING_CRON_SECRET/.test(src));
-  const collectSrc = readFileSync(REPO_ROOT + "/api/admin-source-collect.js", "utf8");
-  t("F13 情報収集(本番で読み込みに失敗している)・GitHub Actions の workflow・合言葉は変えていない", !collectSrc.includes("refreshAreaUsageIfDue") && collectSrc.includes("process.env.AI_COLLECT_CRON_SECRET_ALT"));
+  // ---------- G 情報収集 API(cron-job.org の既存の呼び出し)：読み込みの修復・収集と自動投稿は停止・地域の更新だけ ----------
+  process.env.AI_COLLECT_CRON_SECRET_ALT = "alt-secret-for-tests";
+  let SC = null, loadError = "";
+  try { SC = await import(REPO_URL + "/api/admin-source-collect.js?v=g" + Date.now()); } catch (error) { loadError = String(error && error.message); }
+  t("G1 情報収集 API が読み込める(2026-09-15 以降の読み込みの失敗を修復)・収集のスイッチ SOURCE_COLLECTION_ENABLED は false", !!SC && typeof SC.default === "function" && SC.SOURCE_COLLECTION_ENABLED === false, loadError);
+  const callSC = async ({ secret = "", token = "", body = { priorityTier: "IMPORTANT" } } = {}) => {
+    const res = { code: 200, body: null, status(c) { this.code = c; return this; }, json(x) { this.body = x; return this; }, setHeader() {}, send(x) { this.body = x; return this; }, end() { return this; } };
+    const e = console.error; console.error = () => {};
+    try { await SC.default({ method: "POST", headers: { "content-type": "application/json", ...(secret ? { "x-machinau-cron-secret": secret } : {}), ...(token ? { authorization: "Bearer " + token } : {}) }, body, query: {} }, res); } catch (error) { res.code = "threw"; } finally { console.error = e; }
+    return res;
+  };
+  const snapshotDocs = () => new Map([...S.docs.entries()].map(([k, v]) => [k, JSON.stringify(v)]));
+  const changedKeys = (before) => [...S.docs.keys()].filter((k) => before.get(k) !== JSON.stringify(S.docs.get(k)));
+  S.docs.set(stateKey, { ...S.docs.get(stateKey), lockRunId: "", lockLeaseUntil: ts(0), lastSuccessAt: ts(Date.now() - 40 * 60000), lastAttemptAt: ts(Date.now() - 40 * 60000), recentRuns: [] });
+  let callsBefore = G.calls.length, docsBefore = snapshotDocs();
+  let sc = await callSC({ secret: "cron-secret-for-tests" });
+  let newCalls = G.calls.slice(callsBefore).map((c) => c.url);
+  let runsG = S.docs.get(stateKey).recentRuns || [];
+  t("G2 定期実行(既存の合言葉)：200 collection_paused・地域の利用状況だけ更新(呼び出し元 collect)・通信は Google の認証と GA4 だけ(RSS・OpenAI を呼ばない)・書き込みは地域の利用状況の2件だけ",
+    sc.code === 200 && sc.body.status === "collection_paused" && runsG.length === 1 && runsG[0].trigger === "collect" && runsG[0].result === "ok" &&
+    newCalls.length > 0 && newCalls.every((u) => /^https:\/\/(oauth2\.googleapis\.com|analyticsdata\.googleapis\.com|analyticsadmin\.googleapis\.com)\//.test(u)) &&
+    changedKeys(docsBefore).every((k) => /^areaUsage(RefreshState|Stats)\//.test(k)), { code: sc.code, body: sc.body, newCalls, changed: changedKeys(docsBefore) });
+  callsBefore = G.calls.length; docsBefore = snapshotDocs();
+  sc = await callSC({ secret: "alt-secret-for-tests", body: { priorityTier: "NORMAL" } });
+  t("G3 cron-job.org 専用の合言葉(AI_COLLECT_CRON_SECRET_ALT・既存)も従来どおり受け付ける・直後なので GA4 は呼ばない・何も書かない",
+    sc.code === 200 && sc.body.status === "collection_paused" && G.calls.length === callsBefore && changedKeys(docsBefore).length === 0, { code: sc.code, changed: changedKeys(docsBefore) });
+  callsBefore = G.calls.length; docsBefore = snapshotDocs();
+  sc = await callSC({ secret: "wrong" });
+  t("G4 合言葉が違う → 401(既存どおり)・何もしない", sc.code === 401 && G.calls.length === callsBefore && changedKeys(docsBefore).length === 0);
+  callsBefore = G.calls.length; docsBefore = snapshotDocs();
+  sc = await callSC({ token: "anon", body: { mode: "locationCollect", targetArea: "那覇市" } });
+  const scAdmin = await callSC({ token: "own", body: { priorityTier: "IMPORTANT" } });
+  t("G5 旅行者の現在地からの収集(locationCollect)・運営の手動の収集：503 collection_paused・通信なし・書き込みなし(収集も自動投稿もしない)",
+    sc.code === 503 && sc.body.reason === "collection_paused" && scAdmin.code === 503 && scAdmin.body.reason === "collection_paused" && G.calls.length === callsBefore && changedKeys(docsBefore).length === 0, { a: sc.body, b: scAdmin.body });
+  const collectSrc = readFileSync(REPO_ROOT + "/api/admin-source-collect.js", "utf8").replace(/\r/g, "");
+  const pausedAt = collectSrc.indexOf("if (!SOURCE_COLLECTION_ENABLED) {\n      await refreshAreaUsageIfDue(");
+  t("G6 地域の更新は定期実行の合言葉の確認(既存の2つ)の後だけ・停止中はその後の収集・自動投稿の処理へ進まない・配列の定義の順番を修正",
+    /export const SOURCE_COLLECTION_ENABLED =\n  false;/.test(collectSrc) && pausedAt > collectSrc.indexOf("if (!isAuthorizedCronRequest) {") && pausedAt < collectSrc.indexOf("const adminEmail =") &&
+    collectSrc.split("refreshAreaUsageIfDue(").length === 2 && /process\.env\.AI_COLLECT_CRON_SECRET,\n\s+process\.env\.AI_COLLECT_CRON_SECRET_ALT\n\s+\]/.test(collectSrc) &&
+    collectSrc.indexOf("const ACTIONABLE_SAFETY_KEYWORDS =") > collectSrc.indexOf("const DRAFT_EMERGENCY_KEYWORDS = ["));
+  const mainYml = readFileSync(REPO_ROOT + "/.github/workflows/main.yml", "utf8");
+  t("G7 GitHub Actions の情報収集は停止のまま(if: false)", /collect-sources:\s*\n\s+runs-on: ubuntu-latest\s*\n\s+timeout-minutes: 5\s*\n\s+if: false/.test(mainYml.replace(/\r/g, "")));
 }
 
 console.log(`TOTAL ${pass + fail} PASS ${pass} FAIL ${fail}`);
