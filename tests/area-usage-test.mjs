@@ -233,6 +233,13 @@ res = await c.ctx.record(H(), 26.2, 127.6);
 t("D15 スイッチ false：何も送らない・何も保存しない", res === false && c.sent.length === 0 && c.ss.size === 0);
 const apply = app.slice(app.indexOf("function applyUserLocation("), app.indexOf("function resetLocationPermissionGuide()"));
 t("D16 呼び出しは GPS で新しく取得した時だけ(30分の現在地の復元 isRestoredLocation では呼ばない)", /if \(!isRestoredLocation\) \{\n\s+recordAreaUsageMeasurement\(\n\s+locationHierarchy,\n\s+latitude,\n\s+longitude\n\s+\);\n\s+\}/.test(apply) && apply.split("recordAreaUsageMeasurement(").length === 2);
+// プライバシーポリシー 2026年11月5日改定(代表決定・即日施行)｜本文に市町村の統計・停止の設定。計測のスイッチは false のまま。
+const PRIV = readFileSync(REPO_ROOT + "/privacy.html", "utf8");
+t("D20 プライバシーポリシーの改定：最終更新日・改定の条項と施行日・1/2/4/5/7条・停止の設定(ボタン・同じ保存の名前)があり、日付の空欄は残らない",
+  PRIV.includes("最終更新日：2026年11月5日") && PRIV.includes('data-revision="2026-11-05"') && /2026年11月5日から適用します。/.test(PRIV) &&
+  PRIV.includes('id="area-usage"') && PRIV.includes("市町村名と都道府県名だけ") && PRIV.includes("座標・住所は送信しません。") &&
+  PRIV.includes('id="areaUsageOptOutButton"') && PRIV.includes('var KEY = "machinauAreaUsageOptOut";') && !/__[A-Z_]+__/.test(PRIV));
+t("D21 停止の画面は、スイッチ OFF の間も事実と食い違う表示をしない(「送信しています」と書かない)", !PRIV.includes("現在：送信しています") && PRIV.includes("現在：送信を停止していません"));
 t("D17 既存の location_button_click・region_search は変えていない", app.split('"location_button_click"').length === readFileSync(REPO_ROOT + "/app.js", "utf8").split('"location_button_click"').length && app.includes('"region_search"'));
 
 // ---------- E 課金のスイッチ・workflow ----------

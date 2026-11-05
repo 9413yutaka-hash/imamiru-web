@@ -196,7 +196,9 @@
         This page's official text is the Japanese version. An English translation is not yet available; where any discrepancy exists, the Japanese version prevails.
       </p>
 
-      <p class="updated">最終更新日：2026年11月1日</p>
+      <p class="updated">最終更新日：2026年11月5日</p>
+      <!-- 店主向け「この街のマチナウ利用状況」(代表決定 2026-11-05)｜位置情報から判定した市町村を、地域ごとの利用統計に使う改定。 -->
+      <p class="updated" data-revision="2026-11-05">2026年11月5日改定：1（取得する情報）・2（利用目的）・4（位置情報について）・5（外部の事業者への委託・情報の送信）・7（ブラウザ内に保存される情報）。現在地から判定した市町村を、市町村ごとの利用状況の統計に使うことを追加しました。2026年11月5日から適用します。</p>
 
       <!-- LEGAL-CORRECTION:START｜STEP 52-F 2026年10月30日の告知（施行予定日 11月7日）の訂正。新しい日付は書かない（改定日は最終更新日）。 -->
       <section class="legal-correction" data-legal-correction="step47">
@@ -231,6 +233,7 @@
         <li>街の掲示板・「街の今」スレッドへの投稿や返信、マチナウ読み物へのコメント、無料投稿のお申し込み、お問い合わせ・ご意見の送信時の、通信元IPアドレスから計算した値（IPアドレスそのものは保存せず、本サービスのサーバー側で管理する秘密の情報を用いて変換した値と、最後に送信した時刻など判定に必要な時刻情報のみを保存します。「街の今」でIPアドレスを取得できない場合は、IPアドレスの代わりに、ログイン機能が発行する匿名の利用者IDを同様に変換した値を使います）</li>
         <li>利用者が現在地取得ボタンを操作した場合の位置情報（詳細は「4. 位置情報について」をご覧ください）</li>
         <li>本サービスの利用状況に関する情報（Google Analyticsによるもの。詳細は「5. 外部の事業者への委託・情報の送信」をご覧ください）</li>
+        <li>現在地の取得に成功した時に判定した市町村名・都道府県名（市町村ごとの利用状況の統計のため。座標・住所は含みません。詳細は「4. 位置情報について」をご覧ください）</li>
       </ul>
 
       <h2>2. 利用目的</h2>
@@ -248,6 +251,7 @@
         <li>利用者の現在地に応じた情報表示・地図表示を行うため</li>
         <li>現在地等から判定した地域情報等をもとに、AIによる周辺情報・行動提案を行うため</li>
         <li>本サービスの利用状況を把握し、改善に役立てるため</li>
+        <li>市町村ごとの本サービスの利用状況（利用人数・利用回数）を統計として集計し、店舗・施設のアカウントの画面で、その店舗・施設の所在地の市町村の統計を表示するため（個人を特定・推測できない形に限ります）</li>
         <li>短時間の連続投稿・連続送信を防ぐため（通信元IPアドレスから計算した値は、この判定にのみ利用し、公開したり、投稿内容と結び付けて保存したりしません）</li>
       </ul>
 
@@ -272,6 +276,19 @@
       <p>
         なお、地図の表示や住所から座標への変換のために、位置情報がGoogle社（Google Maps／Geocoding API）へ送信される場合があります。
       </p>
+      <p id="area-usage">
+        また、現在地の取得に成功した場合は、その場所から判定した<strong>市町村名と都道府県名だけ</strong>を、市町村ごとの利用状況の統計のためにGoogle Analyticsへ送信します。座標・住所は送信しません。同じブラウザのタブで、同じ市町村について30分以内に繰り返し送信することはありません。
+      </p>
+      <p>
+        集計した結果は、市町村ごとの利用人数（Google Analyticsによる推定値）と利用回数（現在地の判定に成功した回数）として、店舗・施設のアカウントの画面に、その店舗・施設の所在地の市町村の分だけを表示します。利用人数が10人未満の場合は「10人未満」とだけ表示して回数は表示しないなど、個人が特定・推測されない形でのみ表示します。利用者ごとの記録や位置情報を、店舗・施設の事業者に提供することはありません。
+      </p>
+      <p>
+        この送信は、次のボタンで停止・再開できます（このブラウザだけの設定です）。停止しても、本サービスはこれまでどおりご利用いただけます。
+      </p>
+      <p class="area-usage-choice">
+        <button type="button" id="areaUsageOptOutButton"></button>
+        <span id="areaUsageOptOutState" role="status" aria-live="polite"></span>
+      </p>
 
       <h2>5. 外部の事業者への委託・情報の送信</h2>
       <p>本サービスは、利用目的の達成に必要な範囲で、以下の事業者のサービスを利用し、情報の取扱いを委託しています。</p>
@@ -281,7 +298,7 @@
         <tr><th>地図の表示、住所と座標の相互変換</th><td>Google（Google Maps Platform）</td></tr>
         <tr><th>投稿内容（テキスト・画像）の安全性確認、AIによる周辺情報・行動提案の生成、翻訳</th><td>OpenAI</td></tr>
         <tr><th>投稿画像の保存・配信</th><td>Cloudinary</td></tr>
-        <tr><th>本サービスの利用状況の把握</th><td>Google（Google Analytics）</td></tr>
+        <tr><th>本サービスの利用状況の把握（市町村ごとの利用状況の統計を含みます）</th><td>Google（Google Analytics）</td></tr>
         <tr><th>データの保存、ログイン機能の提供、本サービスの配信</th><td>クラウドサービスの事業者（Google等）</td></tr>
       </table>
       <p>
@@ -306,6 +323,7 @@
       <ul>
         <li>表示言語の設定（日本語／English）</li>
         <li>お気に入りに登録した店舗の情報</li>
+        <li>市町村ごとの利用状況の統計への送信を停止した設定（「4. 位置情報について」）</li>
       </ul>
       <p>
         次の情報は、ブラウザのタブを閉じる、または一定時間が経過すると自動的に消える一時的な保存です。
@@ -383,5 +401,42 @@
     </div>
   </main>
 
+  <script>
+    // 「4. 位置情報について」の、市町村ごとの利用状況の統計への送信の停止・再開(このブラウザの localStorage だけ)。
+    (function () {
+      var KEY = "machinauAreaUsageOptOut";
+      var button = document.getElementById("areaUsageOptOutButton");
+      var state = document.getElementById("areaUsageOptOutState");
+      if (!button || !state) {
+        return;
+      }
+      function read() {
+        try {
+          return localStorage.getItem(KEY) === "1";
+        } catch (error) {
+          return false;
+        }
+      }
+      function render() {
+        var stopped = read();
+        button.textContent = stopped ? "送信を再開する" : "送信を停止する";
+        state.textContent = stopped ? "現在：停止しています" : "現在：送信を停止していません";
+      }
+      button.addEventListener("click", function () {
+        try {
+          if (read()) {
+            localStorage.removeItem(KEY);
+          } else {
+            localStorage.setItem(KEY, "1");
+          }
+        } catch (error) {
+          state.textContent = "このブラウザでは設定を保存できませんでした。";
+          return;
+        }
+        render();
+      });
+      render();
+    })();
+  </script>
 </body>
 </html>

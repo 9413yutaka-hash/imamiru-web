@@ -77,7 +77,8 @@ if (STAGE === "notice") {
     PROF.includes('data-i18n="store_card_plan_terms_failure"') && /原則として翌月2日/.test(TR.store_card_plan_terms_billing.ja) && /as a rule/.test(TR.store_card_plan_terms_billing.en) &&
     /月額契約を申し込んだお店・施設についてだけ請求します/.test(TR.store_billing_intro.ja) && !/現在、請求は行っていません/.test(TR.store_billing_intro.ja));
 }
-t("C1 本文の外の文（プライバシーポリシーの最終更新日）は変えない", /最終更新日：2026年11月1日/.test(read("privacy.html")));
+// プライバシーポリシーは2026年11月5日に別の改定(市町村ごとの利用状況の統計・即日施行)。店舗カードの請求の改定では変えない。
+t("C1 本文の外の文（プライバシーポリシーの最終更新日）は変えない", /最終更新日：2026年11月5日/.test(read("privacy.html")) && read("privacy.html").includes('data-revision="2026-11-05"'));
 
 console.log(`TOTAL ${pass + fail}  PASS ${pass}  FAIL ${fail}`);
 process.exit(fail ? 1 : 0);

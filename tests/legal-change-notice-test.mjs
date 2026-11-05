@@ -132,7 +132,8 @@ if (HAS_NOTICE) {
   const enDate = (d) => { const [y, m, dd] = d.split("-").map(Number); return ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][m - 1] + " " + dd + ", " + y; };
   const effOk = LAUNCH_EFFECTIVE !== null &&
     // STEP 58-B｜利用規約・特商法は、その後の別の改定(2026年11月3日・改定の条項と施行日を本文の前に表示)で最終更新日が新しい。
-    [T, read("tokushoho.html")].every((h) => h.includes(`最終更新日：${ja(LAUNCH_EFFECTIVE)}`) || (/最終更新日：2026年11月[34]日/.test(h) && h.includes('data-revision="2026-11-03"'))) && P.includes(`最終更新日：${ja(LAUNCH_EFFECTIVE)}`) &&
+    [T, read("tokushoho.html")].every((h) => h.includes(`最終更新日：${ja(LAUNCH_EFFECTIVE)}`) || (/最終更新日：2026年11月[34]日/.test(h) && h.includes('data-revision="2026-11-03"'))) && // プライバシーポリシーは、その後の別の改定(2026年11月5日・市町村ごとの利用状況の統計・即日施行)で最終更新日が新しい。
+    (P.includes(`最終更新日：${ja(LAUNCH_EFFECTIVE)}`) || (P.includes("最終更新日：2026年11月5日") && P.includes('data-revision="2026-11-05"'))) &&
     ["terms.html", "privacy.html", "shop-guide.html"].every((f) => FILES[f].includes(`施行日：<span data-legal-effective>${ja(LAUNCH_EFFECTIVE)}</span>`)) &&
     tr.store_account_legal_correction_date.ja === `施行日：${ja(LAUNCH_EFFECTIVE)}` && tr.store_account_legal_correction_date.en === `Effective date: ${enDate(LAUNCH_EFFECTIVE)}` &&
     ![...PAGES, "translations.js"].some((f) => /公開時に確定|to be set at publication/.test(FILES[f]));
