@@ -18,6 +18,11 @@ import {
   timingSafeEqual
 } from "node:crypto";
 
+// 店主向け「この街のマチナウ利用状況」の30分ごとの更新(代表決定 2026-11-05)。
+import {
+  refreshAreaUsageIfDue
+} from "./_lib/area-usage.js";
+
 // admin-source-collect.jsのcron認証(X-Machinau-Cron-Secret)と同じ考え方・
 // 同じSecret(AI_COLLECT_CRON_SECRET)を再利用する。新規Secretは作らない。
 function readCronSecretHeader(
@@ -158,6 +163,21 @@ export default async function handler(
     const app = getFirebaseAdminApp();
     const database = getFirestore(app);
     const currentTime = new Date();
+
+    // 店主向け「この街のマチナウ利用状況」｜この定期実行(合言葉は上の既存の確認のまま)に相乗りして、前回の成功から
+    // 25分以上たっている時だけ GA4 から取得する(Production だけ・二重実行は実行ロックで防ぐ)。
+    // 失敗しても掲載期限の処理には影響させない(例外を投げない・応答にも含めない)。
+    await refreshAreaUsageIfDue(
+      {
+        env: process.env,
+        fetch: function(url, options) {
+          return fetch(url, options);
+        },
+        getFirestore: getFirestore,
+        getFirebaseAdminApp: getFirebaseAdminApp
+      },
+      "expire"
+    );
 
     const expiredSnapshot =
       await database

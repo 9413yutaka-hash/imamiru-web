@@ -162,6 +162,7 @@ import {
 // 店主向け「この街のマチナウ利用状況」(GA4 の地域イベントの30分ごとの集計と、店主の画面の読み取り)。
 import {
   handleAreaUsageRefresh,
+  handleAreaUsageRefreshStatus,
   handleStoreAreaUsage
 } from "./_lib/area-usage.js";
 
@@ -30374,6 +30375,18 @@ export default async function handler(
       return handleFirebaseTargetRequest(
         request,
         response
+      );
+    }
+
+    // 店主向け「この街のマチナウ利用状況」｜30分ごとの更新が動いているかの確認(読むだけ・認証不要・時刻と成否だけ)。
+    if (
+      request.query &&
+      request.query.mode === "areaUsageRefreshStatus"
+    ) {
+      return handleAreaUsageRefreshStatus(
+        request,
+        response,
+        { env: process.env, getFirestore: getFirestore, getFirebaseAdminApp: getFirebaseAdminApp }
       );
     }
 

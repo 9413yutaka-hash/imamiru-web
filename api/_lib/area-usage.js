@@ -15,6 +15,11 @@
 // GA4 の認証は Firebase のサービスアカウント(既存の環境変数。新しい秘密値は作らない)で JWT を署名して行う。
 // GA4 の管理画面でこのサービスアカウントに閲覧の権限を付け、Google Cloud で Analytics Data API(と、
 // プロパティ ID を自動で探す時は Analytics Admin API)を有効にするまでは、取得は「設定待ち」で止まる。
+//
+// 30分ごとの更新(代表決定 2026-11-05)：GitHub Actions の定期実行は実際には1日数回しか動かないため、既存の自動実行
+// (掲載期限の定期実行 /api/expire。既存のジョブ・合言葉は変えない)に相乗りする(refreshAreaUsageIfDue)。
+// 前回の成功から25分以上たっている時だけ取得する。GitHub Actions の定期実行(area-usage-refresh.yml)は予備として残す。
+// 実行の記録(直近12回の時刻・呼び出し元・成否)を保存し、公開の状態確認(mode areaUsageRefreshStatus)で確かめられる。
 
 import {
   createSign,
@@ -61,6 +66,13 @@ export const AREA_USAGE_STATS_COLLECTION = "areaUsageStats";
 export const AREA_USAGE_STATE_COLLECTION = "areaUsageRefreshState";
 const AREA_USAGE_STATE_ID = "ga4";
 const REFRESH_LOCK_LEASE_MS = 2 * 60 * 1000;
+// 相乗りの更新：前回の成功からこの時間がたっていれば取得する(30分ごとの呼び出しの揺れを吸収し、より短い間隔で
+// 呼ばれても30分に1回程度にする)。失敗の後は、この時間をおいて次の呼び出しで再実行する。
+export const AREA_USAGE_REFRESH_DUE_MS = 25 * 60 * 1000;
+export const AREA_USAGE_RETRY_AFTER_FAILURE_MS = 5 * 60 * 1000;
+const AREA_USAGE_RUN_HISTORY_LIMIT = 12;
+// 公開の状態確認：前回の成功がこの時間より古ければ「遅れ」(30分ごとの更新が1回抜けても ok のまま)。
+const AREA_USAGE_STATUS_STALE_MS = 65 * 60 * 1000;
 // 最終更新からこれより経つと、画面に「更新が遅れています」と出す(30分ごとの更新が数回続けて届かない時)。
 export const AREA_USAGE_STALE_AFTER_MS = 2 * 60 * 60 * 1000;
 // 店主の画面の読み取りの、関数のインスタンスごとの一時保存(同時に多くの店主が開いても Firestore の読み取りを抑える)。
@@ -447,7 +459,14 @@ async function acquireRefreshLock(database, runId, nowMillis) {
 }
 
 // GA4 から取得して保存する。戻り値 { status: "refreshed" | "failed", ... }。
-export async function runAreaUsageRefresh(database, deps, nowMillis, runId) {
+// 実行の記録(直近12回)。時刻・呼び出し元(expire＝掲載期限の定期実行への相乗り／direct＝mode areaUsageRefresh)・成否だけ。
+function appendRunHistory(history, nowMillis, trigger, result) {
+  const previous = Array.isArray(history) ? history : [];
+  return previous.concat([{ at: Timestamp.fromMillis(nowMillis), trigger: trigger, result: result }]).slice(-AREA_USAGE_RUN_HISTORY_LIMIT);
+}
+
+export async function runAreaUsageRefresh(database, deps, nowMillis, runId, trigger) {
+  const runTrigger = trigger === "expire" ? "expire" : "direct";
   const state = await acquireRefreshLock(database, runId, nowMillis);
 
   if (state === null) {
@@ -482,7 +501,8 @@ export async function runAreaUsageRefresh(database, deps, nowMillis, runId) {
       lastAttemptAt: Timestamp.fromMillis(nowMillis),
       lastSuccessAt: Timestamp.fromMillis(nowMillis),
       lastErrorCode: "",
-      lastRunId: runId
+      lastRunId: runId,
+      recentRuns: appendRunHistory(state.recentRuns, nowMillis, runTrigger, "ok")
     }, { merge: true });
     await batch.commit();
 
@@ -504,7 +524,8 @@ export async function runAreaUsageRefresh(database, deps, nowMillis, runId) {
       lockLeaseUntil: Timestamp.fromMillis(0),
       lastAttemptAt: Timestamp.fromMillis(nowMillis),
       lastErrorCode: code,
-      lastRunId: runId
+      lastRunId: runId,
+      recentRuns: appendRunHistory(state.recentRuns, nowMillis, runTrigger, "failed")
     }, { merge: true });
 
     // 一度も取得できていない間は、GA4・Google Cloud の設定待ち(代表の操作)として扱う。
@@ -547,6 +568,83 @@ export async function handleAreaUsageRefresh(request, response, deps) {
   } catch (error) {
     console.error("地域の利用状況：更新エラー：", error && error.message);
     return response.status(500).json({ success: false, reason: "server_error" });
+  }
+}
+
+// 前回の成功から25分以上(失敗の直後は5分おいて)なら取得する。
+export function isAreaUsageRefreshDue(state, nowMillis) {
+  const source = state || {};
+  const lastSuccess = readMillis(source.lastSuccessAt);
+  const lastAttempt = readMillis(source.lastAttemptAt);
+
+  if (lastSuccess > 0 && nowMillis - lastSuccess >= 0 && nowMillis - lastSuccess < AREA_USAGE_REFRESH_DUE_MS) {
+    return false;
+  }
+
+  return !(lastAttempt > lastSuccess && nowMillis - lastAttempt >= 0 && nowMillis - lastAttempt < AREA_USAGE_RETRY_AFTER_FAILURE_MS);
+}
+
+// 既存の自動実行(掲載期限の定期実行)からの相乗り。合言葉の確認は呼び出し側(既存の認証)で済んでいる。
+// Production だけ。例外は投げない(呼び出し側の処理に影響させない)。
+export async function refreshAreaUsageIfDue(deps, trigger) {
+  if (!deps || !deps.env || deps.env.VERCEL_ENV !== "production") {
+    return { status: "skipped", reason: "not_production" };
+  }
+
+  try {
+    const database = deps.getFirestore(deps.getFirebaseAdminApp());
+    const nowMillis = typeof deps.now === "function" ? deps.now() : Date.now();
+    const snapshot = await database.collection(AREA_USAGE_STATE_COLLECTION).doc(AREA_USAGE_STATE_ID).get();
+
+    if (!isAreaUsageRefreshDue(snapshot.exists ? snapshot.data() : null, nowMillis)) {
+      return { status: "not_due" };
+    }
+
+    return await runAreaUsageRefresh(database, deps, nowMillis, randomUUID(), trigger);
+  } catch (error) {
+    console.error("地域の利用状況：相乗りの更新エラー：", error && error.message);
+    return { status: "failed", errorCode: "server_error" };
+  }
+}
+
+// mode: areaUsageRefreshStatus (GET・認証不要・読むだけ)。30分ごとの更新が動いているかの確認用。
+// 返すのは ok・状態の語・前回の成功の時刻・直近12回の実行の時刻と呼び出し元と成否だけ(数値・市町村・原因の詳細・秘密は返さない)。
+// 同じ実行環境では Firestore の読み取りを60秒に1回までにする。
+const STATUS_MEMO_MS = 60 * 1000;
+let statusMemo = { atMs: 0, state: null };
+
+export function resetAreaUsageStatusMemoForTests() {
+  statusMemo = { atMs: 0, state: null };
+}
+
+function toIso(value) {
+  const millis = readMillis(value);
+  return millis > 0 ? new Date(millis).toISOString() : "";
+}
+
+export async function handleAreaUsageRefreshStatus(request, response, deps) {
+  response.setHeader("Cache-Control", "no-store");
+  const nowMillis = typeof deps.now === "function" ? deps.now() : Date.now();
+
+  try {
+    if (nowMillis - statusMemo.atMs >= STATUS_MEMO_MS || nowMillis < statusMemo.atMs) {
+      const database = deps.getFirestore(deps.getFirebaseAdminApp());
+      const snapshot = await database.collection(AREA_USAGE_STATE_COLLECTION).doc(AREA_USAGE_STATE_ID).get();
+      statusMemo = { atMs: nowMillis, state: snapshot.exists ? snapshot.data() || {} : {} };
+    }
+
+    const state = statusMemo.state || {};
+    const lastSuccess = readMillis(state.lastSuccessAt);
+    const condition = lastSuccess === 0 ? "never_succeeded" : nowMillis - lastSuccess > AREA_USAGE_STATUS_STALE_MS ? "stale" : "ok";
+    const recentRuns = (Array.isArray(state.recentRuns) ? state.recentRuns : []).map(function(run) {
+      return { at: toIso(run && run.at), trigger: run && run.trigger === "expire" ? "expire" : "direct", result: run && run.result === "ok" ? "ok" : "failed" };
+    });
+
+    return response.status(condition === "ok" ? 200 : 503).json({ ok: condition === "ok", state: condition, lastSuccessAt: toIso(state.lastSuccessAt), recentRuns: recentRuns });
+  } catch (error) {
+    statusMemo = { atMs: 0, state: null };
+    console.error("地域の利用状況：状態の確認エラー");
+    return response.status(503).json({ ok: false, state: "unavailable" });
   }
 }
 

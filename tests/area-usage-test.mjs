@@ -11,6 +11,7 @@ import { generateKeyPairSync, createVerify } from "node:crypto";
 import vm from "node:vm";
 
 let pass = 0, fail = 0;
+const readMs = (v) => (v && typeof v.toMillis === "function" ? v.toMillis() : 0);
 const t = (n, ok, d = "") => { ok ? pass++ : fail++; console.log(`${ok ? "PASS" : "FAIL"} ${n}${!ok ? " :: " + JSON.stringify(d).slice(0, 700) : ""}`); };
 
 const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
@@ -285,6 +286,102 @@ const wf = readFileSync(REPO_ROOT + "/.github/workflows/area-usage-refresh.yml",
 t("E3 workflow：30分ごと・main のファイルだけ・本番の接続先を確認してから・合言葉は secrets・同時に1つ", /cron: "5,35 \* \* \* \*"/.test(wf) && wf.includes("area-usage-refresh.yml@refs/heads/main") && wf.includes('t.projectId==="chikashoku-app"') && wf.includes("secrets.AI_COLLECT_CRON_SECRET") && /concurrency:\n  group: area-usage-refresh/.test(wf) && !/echo[^\n]*\$CRON_SECRET/.test(wf));
 const sc = readFileSync(REPO_ROOT + "/.github/workflows/store-card-plan-production.yml", "utf8");
 t("E4 店舗カードの本番の定期実行は1日4回のまま(変更なし)", sc.includes('- cron: "10 1-4 * * *"'));
+
+
+// ---------- F 30分ごとの更新(既存の定期実行＝掲載期限 /api/expire への相乗り) ----------
+{
+  const ts = (ms) => Timestamp.fromMillis(ms);
+  const T0 = Date.parse("2026-11-06T03:00:00Z");
+  const due = (success, attempt) => AU.isAreaUsageRefreshDue({ lastSuccessAt: ts(T0 - success * 60000), lastAttemptAt: ts(T0 - attempt * 60000) }, T0);
+  t("F1 取得の条件：未取得なら取得／前回の成功から25分未満は取得しない・25分以上は取得／失敗の直後は5分おいて再実行",
+    AU.isAreaUsageRefreshDue(null, T0) && !due(10, 10) && !due(24, 24) && due(25, 25) && due(31, 31) && !due(40, 2) && due(40, 6) && AU.AREA_USAGE_REFRESH_DUE_MS === 25 * 60000);
+
+  const { default: collect } = await import(REPO_URL + "/api/expire.js?v=" + Date.now());
+  const callCollect = async (secret, body = {}) => {
+    const res = { code: 200, body: null, status(c) { this.code = c; return this; }, json(x) { this.body = x; return this; }, setHeader() {}, send(x) { this.body = x; return this; }, end() { return this; } };
+    const e = console.error, w = console.warn, l = console.log; console.error = () => {}; console.warn = () => {}; console.log = () => {};
+    try { await collect({ method: "POST", headers: { "content-type": "application/json", "x-machinau-cron-secret": secret }, body, query: {} }, res); } catch (error) { res.code = "threw"; } finally { console.error = e; console.warn = w; console.log = l; }
+    return res;
+  };
+  report = mkReport([row("today", "沖縄県", "那覇市", 12, 31), row("last30Days", "沖縄県", "那覇市", 128, 356)]);
+  startReport = { rows: [{ dimensionValues: [{ value: "20261105" }], metricValues: [{ value: "5" }] }] };
+  G.fail = null;
+  AU.resetAreaUsageCachesForTests();
+  const stateKey = "areaUsageRefreshState/ga4";
+  const old = Date.now() - 40 * 60000;
+  S.docs.set(stateKey, { ...S.docs.get(stateKey), lockRunId: "", lockLeaseUntil: ts(0), lastSuccessAt: ts(old), lastAttemptAt: ts(old), lastErrorCode: "", recentRuns: [] });
+
+  let reportsBefore = G.reports.length;
+  let res = await callCollect("wrong-secret");
+  t("F2 掲載期限の合言葉が違う → 既存どおり 401・GA4 を呼ばない", res.code === 401 && G.reports.length === reportsBefore, res.code);
+
+  process.env.VERCEL_ENV = "preview";
+  res = await callCollect("cron-secret-for-tests");
+  t("F3 Production 以外(Preview)の掲載期限の実行では GA4 を読まない", G.reports.length === reportsBefore && (S.docs.get(stateKey).recentRuns || []).length === 0);
+  process.env.VERCEL_ENV = "production";
+
+  res = await callCollect("cron-secret-for-tests");
+  let st = S.docs.get(stateKey);
+  const runs1 = st.recentRuns || [];
+  t("F4 掲載期限の定期実行(合言葉は既存の確認のまま)で、前回の成功から40分たっていれば GA4 から取得して保存する(呼び出し元 expire・成功)・掲載期限の処理も既存どおり 200",
+    res.code === 200 && res.body && res.body.success === true && G.reports.length > reportsBefore && runs1.length === 1 && runs1[0].trigger === "expire" && runs1[0].result === "ok" && readMs(st.lastSuccessAt) > old && readMs(S.docs.get("areaUsageStats/JP_沖縄県").refreshedAt) === readMs(st.lastSuccessAt),
+    { code: res.code, runs1 });
+
+  reportsBefore = G.reports.length;
+  res = await callCollect("cron-secret-for-tests");
+  t("F5 直後の別の呼び出し(GitHub と cron-job.org の両方から等)では取得しない(25分未満)＝呼び出しが重なっても30分に1回程度", G.reports.length === reportsBefore && (S.docs.get(stateKey).recentRuns || []).length === 1);
+
+  S.docs.set(stateKey, { ...S.docs.get(stateKey), lastSuccessAt: ts(old), lastAttemptAt: ts(old) });
+  G.fail = { status: 500, body: { error: { code: 500, status: "INTERNAL", message: "backend error" } } };
+  const failedCode = (await callCollect("cron-secret-for-tests")).code;
+  st = S.docs.get(stateKey);
+  const runs2 = st.recentRuns || [];
+  reportsBefore = G.reports.length;
+  await callCollect("cron-secret-for-tests");
+  t("F6 GA4 の失敗：失敗を記録(数値の文書は前回のまま)・掲載期限の処理は止めない(200)・5分以内の次の呼び出しでは再実行しない",
+    runs2.length === 2 && runs2[1].result === "failed" && failedCode === 200 && G.reports.length === reportsBefore && st.lastErrorCode !== "", { runs2, failedCode });
+  S.docs.set(stateKey, { ...S.docs.get(stateKey), lastAttemptAt: ts(Date.now() - 6 * 60000) });
+  G.fail = null;
+  await callCollect("cron-secret-for-tests");
+  const runs3 = S.docs.get(stateKey).recentRuns || [];
+  t("F7 失敗から5分たった次の呼び出しで再実行して成功する", runs3.length === 3 && runs3[2].result === "ok" && S.docs.get(stateKey).lastErrorCode === "");
+
+  S.docs.set(stateKey, { ...S.docs.get(stateKey), lockRunId: "other", lockLeaseUntil: ts(Date.now() + 60000), lastSuccessAt: ts(old), lastAttemptAt: ts(old) });
+  reportsBefore = G.reports.length;
+  const r409 = await AU.refreshAreaUsageIfDue({ env: process.env, fetch: globalThis.fetch, getFirestore: (await import("firebase-admin/firestore")).getFirestore, getFirebaseAdminApp: () => ({}) }, "expire");
+  t("F8 二重実行の防止：別の実行がロック中なら取得しない(already_running)", r409.status === "already_running" && G.reports.length === reportsBefore, r409);
+  S.docs.set(stateKey, { ...S.docs.get(stateKey), lockRunId: "", lockLeaseUntil: ts(0) });
+
+  const { getFirestore: gf } = await import("firebase-admin/firestore");
+  const db = gf({});
+  for (let i = 0; i < 14; i++) await AU.runAreaUsageRefresh(db, { env: process.env, fetch: globalThis.fetch }, Date.now() + i * 1000, "h" + i, "direct");
+  const runs4 = S.docs.get(stateKey).recentRuns || [];
+  t("F9 実行の記録は直近12回だけ(時刻・呼び出し元・成否だけ。数値・市町村・秘密は記録しない)",
+    runs4.length === 12 && runs4.every((x) => Object.keys(x).sort().join() === "at,result,trigger") && !/ya29|PRIVATE|那覇/.test(JSON.stringify(runs4)));
+
+  const getStatus = async (nowMs) => {
+    const res = { code: 200, body: null, headers: {}, status(c) { this.code = c; return this; }, json(x) { this.body = x; return this; }, setHeader(k, v) { this.headers[k] = v; }, send(x) { this.body = x; return this; }, end() { return this; } };
+    AU.resetAreaUsageStatusMemoForTests();
+    if (nowMs) { await AU.handleAreaUsageRefreshStatus({ method: "GET", query: { mode: "areaUsageRefreshStatus" }, headers: {} }, res, { now: () => nowMs, getFirestore: gf, getFirebaseAdminApp: () => ({}) }); return res; }
+    await handler({ method: "GET", headers: {}, query: { mode: "areaUsageRefreshStatus" } }, res);
+    return res;
+  };
+  let sres = await getStatus();
+  t("F10 公開の状態確認(GET mode=areaUsageRefreshStatus・認証なし)：200 ok・前回の成功の時刻・直近の実行(時刻・呼び出し元・成否だけ)・no-store",
+    sres.code === 200 && sres.body.ok === true && sres.body.state === "ok" && /^\d{4}-\d\d-\d\dT/.test(sres.body.lastSuccessAt) && sres.body.recentRuns.length === 12 &&
+    sres.body.recentRuns.every((x) => Object.keys(x).sort().join() === "at,result,trigger" && /T/.test(x.at)) && sres.headers["Cache-Control"] === "no-store" &&
+    Object.keys(sres.body).sort().join() === "lastSuccessAt,ok,recentRuns,state", sres.body);
+  sres = await getStatus(Date.now() + 66 * 60000);
+  t("F11 前回の成功から65分を超えたら 503 stale(30分ごとの更新が止まったことが分かる)", sres.code === 503 && sres.body.state === "stale" && sres.body.ok === false, sres.body);
+
+  const src = readFileSync(REPO_ROOT + "/api/expire.js", "utf8").replace(/\r/g, "");
+  const hookAt = src.indexOf("await refreshAreaUsageIfDue(");
+  t("F12 相乗りは掲載期限の定期実行の合言葉の確認(既存の AI_COLLECT_CRON_SECRET のまま)の後・期限切れの処理の前の1か所だけ",
+    hookAt > src.indexOf("process.env.AI_COLLECT_CRON_SECRET;") && hookAt > src.indexOf("return response.status(401)") && hookAt < src.indexOf('.collection("submissions")') &&
+    src.split("refreshAreaUsageIfDue(").length === 2 && !/AI_COLLECT_CRON_SECRET_ALT|STORE_CARD_BILLING_CRON_SECRET/.test(src));
+  const collectSrc = readFileSync(REPO_ROOT + "/api/admin-source-collect.js", "utf8");
+  t("F13 情報収集(本番で読み込みに失敗している)・GitHub Actions の workflow・合言葉は変えていない", !collectSrc.includes("refreshAreaUsageIfDue") && collectSrc.includes("process.env.AI_COLLECT_CRON_SECRET_ALT"));
+}
 
 console.log(`TOTAL ${pass + fail} PASS ${pass} FAIL ${fail}`);
 process.exit(fail ? 1 : 0);
