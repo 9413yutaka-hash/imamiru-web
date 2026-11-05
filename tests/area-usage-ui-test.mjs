@@ -144,7 +144,7 @@ try {
   S.docs.set("areaUsageRefreshState/ga4", { lastAttemptAt: Timestamp.fromMillis(NOW), lastSuccessAt: Timestamp.fromMillis(NOW), lastErrorCode: "" });
   AU.resetAreaUsageCachesForTests();
   p = await open("one"); v = await view(p);
-  t("U22 計測の開始前(地域イベントがまだ無い)：「まだ計測のデータがありません」・最終更新は出す", v.valuesHidden && /まだ計測のデータがありません/.test(v.status) && /^最終更新：/.test(v.updated), v);
+  t("U22 計測の開始直後(地域イベントがまだ無い)：「計測を始めたばかり」・数値は出さない・最終更新は出す", v.valuesHidden && /計測を始めたばかりで、まだ集計できる利用のデータがありません/.test(v.status) && /^最終更新：/.test(v.updated), v);
   await p.close();
   S.docs.set("areaUsageStats/" + docs[0].id, { ...docs[0].data, refreshedAt: Timestamp.fromMillis(NOW - 3 * 3600000) });
   S.docs.set("areaUsageRefreshState/ga4", { lastAttemptAt: Timestamp.fromMillis(NOW), lastSuccessAt: Timestamp.fromMillis(NOW - 3 * 3600000), lastErrorCode: "ga4_request_failed" });

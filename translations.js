@@ -4712,6 +4712,17 @@ const MACHINAU_TRANSLATIONS = {
     en: "¥100/month plan: not subscribed (editing and publishing your shop details require subscribing from \"Edit store card / subscribe\")"
   },
 
+  // 店主向け「この街のマチナウ利用状況」｜TOP の現在地ボタンの下の説明(計測のスイッチ ON の時だけ表示)。
+  location_area_usage_note: {
+    ja: "現在地から判定した市町村名（座標は含みません）は、地域ごとの利用統計にも使います。",
+    en: "The municipality name found from your location (not your coordinates) is also used for area usage statistics."
+  },
+
+  location_area_usage_note_link: {
+    ja: "詳しく・停止",
+    en: "Details / turn off"
+  },
+
   // 店主向け「この街のマチナウ利用状況」(代表決定 2026-11-05)｜store-account.html の店舗管理画面の上部。
   area_usage_heading: {
     ja: "この街のマチナウ利用状況",
@@ -4819,8 +4830,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   area_usage_status_not_started: {
-    ja: "まだ計測のデータがありません。計測が始まると、ここに数値を表示します。",
-    en: "There is no measurement data yet. Figures will appear here once measurement starts."
+    ja: "計測を始めたばかりで、まだ集計できる利用のデータがありません。データが集まると、ここに数値を表示します（Google Analyticsへの反映には数時間かかることがあります）。",
+    en: "Measurement has just started and there is no usage data to count yet. Figures will appear here as data comes in (it can take a few hours to reach Google Analytics)."
   },
 
   area_usage_status_preparing: {

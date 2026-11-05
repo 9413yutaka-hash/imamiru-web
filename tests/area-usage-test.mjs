@@ -177,22 +177,25 @@ const start = app.indexOf("const AREA_USAGE_MEASUREMENT_ENABLED =");
 const end = app.indexOf("\nfunction getLocation() {");
 const sendStart = app.indexOf("function sendMachinauAnalyticsEvent(");
 const sendEnd = app.indexOf("\nfunction degreesToRadians(");
-t("D1 計測のスイッチは false のまま(プライバシーポリシーの改定の施行まで地域イベントを送らない)", /const AREA_USAGE_MEASUREMENT_ENABLED =\n  false;/.test(app));
+// 地域計測 ON(代表決定 2026-11-05)｜プライバシーポリシーの改定(2026年11月5日施行・停止の設定)の後だけ true。
+const PRIV = readFileSync(REPO_ROOT + "/privacy.html", "utf8");
+t("D1 計測のスイッチ true は、プライバシーポリシーの改定(市町村の統計・停止の設定)が本文にある版だけ", /const AREA_USAGE_MEASUREMENT_ENABLED =\n  true;/.test(app) && PRIV.includes('data-revision="2026-11-05"') && PRIV.includes('id="areaUsageOptOutButton"') && PRIV.includes("machinauAreaUsageOptOut"));
 const block = app.slice(start, end);
 const muni = readFileSync(REPO_ROOT + "/japan-municipalities.js", "utf8");
 function makeCtx({ host = "machinau.jp", jaGeocode = null, enabled = true } = {}) {
-  const sent = [], ls = new Map(), ss = new Map(), geocodeCalls = [];
+  const sent = [], ls = new Map(), ss = new Map(), geocodeCalls = [], domReady = [], note = { hidden: true };
   const ctx = {
     location: { hostname: host }, Date, JSON, Promise, Array, String, Number, setTimeout, clearTimeout, console,
     localStorage: { getItem: (k) => (ls.has(k) ? ls.get(k) : null), setItem: (k, v) => ls.set(k, String(v)), removeItem: (k) => ls.delete(k) },
     sessionStorage: { getItem: (k) => (ss.has(k) ? ss.get(k) : null), setItem: (k, v) => ss.set(k, String(v)), removeItem: (k) => ss.delete(k) },
     gtag: (...a) => sent.push(a), AREA_NAME_RESOLUTION_TIMEOUT_MS: 50,
+    document: { getElementById: (id) => (id === "areaUsageLocationNote" ? note : null), addEventListener: (type, fn) => { if (type === "DOMContentLoaded") domReady.push(fn); } },
     google: { maps: { Geocoder: function() { this.geocode = (req, cb) => { geocodeCalls.push(req); cb(jaGeocode ? [jaGeocode] : [], jaGeocode ? "OK" : "ZERO_RESULTS"); }; } } }
   };
   vm.createContext(ctx);
   vm.runInContext(muni.replace("const JAPAN_MUNICIPALITIES_BY_PREFECTURE", "var JAPAN_MUNICIPALITIES_BY_PREFECTURE"), ctx);
-  vm.runInContext(app.slice(sendStart, sendEnd) + "\n" + block.replace("const AREA_USAGE_MEASUREMENT_ENABLED =\n  false;", "const AREA_USAGE_MEASUREMENT_ENABLED =\n  " + enabled + ";") + "\nthis.record = recordAreaUsageMeasurement;", ctx);
-  return { ctx, sent, ls, ss, geocodeCalls };
+  vm.runInContext(app.slice(sendStart, sendEnd) + "\n" + block.replace(/const AREA_USAGE_MEASUREMENT_ENABLED =\n  (true|false);/, "const AREA_USAGE_MEASUREMENT_ENABLED =\n  " + enabled + ";") + "\nthis.record = recordAreaUsageMeasurement;", ctx);
+  return { ctx, sent, ls, ss, geocodeCalls, domReady, note };
 }
 const H = (o = {}) => ({ country: "JP", countryCode: "JP", prefecture: "沖縄県", city: "那覇市", municipality: "那覇市", ...o });
 let c = makeCtx();
@@ -234,12 +237,40 @@ t("D15 スイッチ false：何も送らない・何も保存しない", res ===
 const apply = app.slice(app.indexOf("function applyUserLocation("), app.indexOf("function resetLocationPermissionGuide()"));
 t("D16 呼び出しは GPS で新しく取得した時だけ(30分の現在地の復元 isRestoredLocation では呼ばない)", /if \(!isRestoredLocation\) \{\n\s+recordAreaUsageMeasurement\(\n\s+locationHierarchy,\n\s+latitude,\n\s+longitude\n\s+\);\n\s+\}/.test(apply) && apply.split("recordAreaUsageMeasurement(").length === 2);
 // プライバシーポリシー 2026年11月5日改定(代表決定・即日施行)｜本文に市町村の統計・停止の設定。計測のスイッチは false のまま。
-const PRIV = readFileSync(REPO_ROOT + "/privacy.html", "utf8");
 t("D20 プライバシーポリシーの改定：最終更新日・改定の条項と施行日・1/2/4/5/7条・停止の設定(ボタン・同じ保存の名前)があり、日付の空欄は残らない",
   PRIV.includes("最終更新日：2026年11月5日") && PRIV.includes('data-revision="2026-11-05"') && /2026年11月5日から適用します。/.test(PRIV) &&
   PRIV.includes('id="area-usage"') && PRIV.includes("市町村名と都道府県名だけ") && PRIV.includes("座標・住所は送信しません。") &&
   PRIV.includes('id="areaUsageOptOutButton"') && PRIV.includes('var KEY = "machinauAreaUsageOptOut";') && !/__[A-Z_]+__/.test(PRIV));
-t("D21 停止の画面は、スイッチ OFF の間も事実と食い違う表示をしない(「送信しています」と書かない)", !PRIV.includes("現在：送信しています") && PRIV.includes("現在：送信を停止していません"));
+t("D21 停止の画面の状態の表示は「送信を停止していません」(現在地を取得した時だけ送るため「送信しています」と書かない)", !PRIV.includes("現在：送信しています") && PRIV.includes("現在：送信を停止していません"));
+const idx = readFileSync(REPO_ROOT + "/index.html", "utf8");
+t("D18 TOP の現在地ボタンの下の説明(既定は非表示・プライバシーポリシーの説明と停止へのリンク・日英)", /<p id="areaUsageLocationNote" class="location-area-usage-note" hidden>/.test(idx) && idx.includes('href="privacy.html#area-usage"') && idx.includes('data-i18n="location_area_usage_note"') && idx.includes('data-i18n="location_area_usage_note_link"') && PRIV.includes('id="area-usage"'));
+c = makeCtx({ enabled: true }); c.domReady.forEach((fn) => fn());
+const shownOn = c.note.hidden === false;
+c = makeCtx({ enabled: true }); c.ls.set("machinauAreaUsageOptOut", "1"); c.domReady.forEach((fn) => fn());
+const hiddenOptOut = c.note.hidden === true;
+c = makeCtx({ enabled: false }); c.domReady.forEach((fn) => fn());
+t("D19 説明はスイッチ ON・停止していない端末だけ表示(停止した端末・スイッチ OFF では出さない)", shownOn && hiddenOptOut && c.note.hidden === true);
+// プライバシーポリシーの停止のボタン(privacy.html の script)を実際に動かし、同じ端末の計測が止まる・再開できることを確かめる。
+{
+  const script = (PRIV.match(/<script>([\s\S]*?)<\/script>/) || ["", ""])[1];
+  c = makeCtx({ enabled: true });
+  const els = { areaUsageOptOutButton: { textContent: "", listeners: [], addEventListener(type, fn) { if (type === "click") this.listeners.push(fn); } }, areaUsageOptOutState: { textContent: "" } };
+  vm.runInContext(script, Object.assign(c.ctx, { document: { getElementById: (id) => els[id] || null } }));
+  const before = els.areaUsageOptOutButton.textContent + "|" + els.areaUsageOptOutState.textContent;
+  els.areaUsageOptOutButton.listeners.forEach((fn) => fn());
+  const stoppedLabel = els.areaUsageOptOutButton.textContent + "|" + els.areaUsageOptOutState.textContent;
+  const stoppedKey = c.ls.get("machinauAreaUsageOptOut");
+  const resStopped = await c.ctx.record(H(), 26.2, 127.6);
+  const sentStopped = c.sent.length;
+  els.areaUsageOptOutButton.listeners.forEach((fn) => fn());
+  const resumedKey = c.ls.has("machinauAreaUsageOptOut");
+  const resResumed = await c.ctx.record(H(), 26.2, 127.6);
+  t("D22 停止のボタン：押すと停止(この端末の保存)・地域イベントを送らない／もう一度押すと再開して送る",
+    before === "送信を停止する|現在：送信を停止していません" && stoppedLabel === "送信を再開する|現在：停止しています" && stoppedKey === "1" && resStopped === false && sentStopped === 0 &&
+    resumedKey === false && resResumed === true && c.sent.length === 1 && c.sent[0][1] === "location_area_resolved",
+    { before, stoppedLabel, stoppedKey, resStopped, sentStopped, resumedKey, resResumed, sent: c.sent.length });
+}
+t("D23 送るのは市町村名・都道府県名の2つだけ(座標・住所・場所の ID・利用者の ID を送らない)", (() => { const m = block.match(/AREA_USAGE_EVENT_NAME,\n\s+\{([\s\S]*?)\}\n/); return !!m && m[1].replace(/\s/g, "") === "area_prefecture:names.prefecture,area_city:city"; })());
 t("D17 既存の location_button_click・region_search は変えていない", app.split('"location_button_click"').length === readFileSync(REPO_ROOT + "/app.js", "utf8").split('"location_button_click"').length && app.includes('"region_search"'));
 
 // ---------- E 課金のスイッチ・workflow ----------

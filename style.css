@@ -453,6 +453,17 @@
       font-size: 17px;
     }
 
+    .location-area-usage-note {
+      margin: 8px 0 0;
+      font-size: 12px;
+      line-height: 1.6;
+      color: #697386;
+    }
+
+    .location-area-usage-note a {
+      color: #0788c9;
+    }
+
     #locationMessage {
       margin: 4px 0 0;
       color: var(--subtext);

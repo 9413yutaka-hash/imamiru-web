@@ -10646,7 +10646,7 @@ function applyPendingRestoredUserLocation() {
 // 市町村名は japan-municipalities.js の正式名に合わせる(端末の言語が日本語以外で Geocoder が英語等の名前を
 // 返した時だけ、日本語の名前をもう1回だけ問い合わせる)。失敗しても本体の機能には影響しない。
 const AREA_USAGE_MEASUREMENT_ENABLED =
-  false;
+  true;
 
 const AREA_USAGE_EVENT_NAME =
   "location_area_resolved";
@@ -10830,6 +10830,29 @@ function rememberAreaUsageSent(
     // 保存できない環境では、30分以内の重複の確認ができないだけで、本体の機能は続く。
   }
 }
+
+// 現在地ボタンの下の説明は、計測のスイッチ ON・この端末で停止していない時だけ出す。
+function renderAreaUsageLocationNote() {
+  try {
+    const note =
+      document.getElementById(
+        "areaUsageLocationNote"
+      );
+
+    if (note) {
+      note.hidden =
+        !AREA_USAGE_MEASUREMENT_ENABLED ||
+        isAreaUsageMeasurementOptedOut();
+    }
+  } catch (error) {
+    // 説明の表示に失敗しても本体の機能は続く。
+  }
+}
+
+document.addEventListener(
+  "DOMContentLoaded",
+  renderAreaUsageLocationNote
+);
 
 // applyUserLocation()の GPS で新しく取得した時だけ呼ぶ(復元の時は呼ばない)。
 function recordAreaUsageMeasurement(
