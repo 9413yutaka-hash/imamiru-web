@@ -97,7 +97,7 @@ const server = http.createServer(async (req, rs) => {
 await new Promise((r) => server.listen(PORT, "127.0.0.1", r));
 const browser = await launchChrome();
 const imgBlock = { blockUrls: ["res.cloudinary.com"] };
-const pageView = (p) => p.ev(`({ h1: (document.querySelector("h1") || {}).textContent || "", lang: document.documentElement.lang, title: document.title, noHScroll: document.documentElement.scrollWidth <= window.innerWidth + 1, imgs: document.querySelectorAll("main img").length, sections: Array.from(document.querySelectorAll("section.block h2")).map((h) => h.textContent), canonical: (document.querySelector('link[rel="canonical"]') || {}).href || "" })`);
+const pageView = (p) => p.ev(`({ h1: (document.querySelector("h1") || {}).textContent || "", lang: document.documentElement.lang, title: document.title, noHScroll: document.documentElement.scrollWidth <= window.innerWidth + 1, imgs: document.querySelectorAll("main img").length, sections: Array.from(document.querySelectorAll("section.block h2")).map((h) => h.textContent), facts: Array.from(document.querySelectorAll(".facts h3")).map((h) => h.textContent), quick: Array.from(document.querySelectorAll("nav.quick a")).map((a) => a.dataset.quick), canonical: (document.querySelector('link[rel="canonical"]') || {}).href || "" })`);
 
 try {
   // ===== 店舗ページ：スマートフォン(日本語) =====
@@ -105,8 +105,9 @@ try {
   await p.goto("/shop/S1");
   let v = await pageView(p);
   if (process.env.STORE_PAGE_SHOT) await p.screenshot(process.env.STORE_PAGE_SHOT);
-  // STEP 57｜公式サイトは「電話・予約・SNS」の欄へ(有料の追加リンクが無い時は「リンク」の欄は出ない)。
-  t("P1 スマートフォン(375px)：店名・写真4枚・紹介/営業時間/所在地/支払い/設備/電話・予約・SNS/対応言語・横にはみ出さない", v.h1 === "海辺のカフェ" && v.imgs === 4 && JSON.stringify(v.sections) === JSON.stringify(["お店・施設の紹介", "営業時間", "所在地", "支払い方法", "設備・サービス", "電話・予約・SNS", "対応言語"]) && v.noHScroll && v.lang === "ja", v);
+  // STEP 57｜公式サイトは「電話・予約・SNS」の欄へ。2026-11-08 LP級：写真が主役のファーストビュー＋地図・電話・予約・共有、
+  // 支払い・設備・対応言語は「お店の情報」にまとめ、最後に共有の欄。
+  t("P1 スマートフォン(375px)：店名・写真4枚・紹介/写真/営業時間/所在地/お店の情報(支払い・設備・対応言語)/電話・予約・SNS/共有・すぐ下の操作(地図・電話・予約・共有)・横にはみ出さない", v.h1 === "海辺のカフェ" && v.imgs === 4 && JSON.stringify(v.sections) === JSON.stringify(["お店・施設の紹介", "写真", "営業時間", "所在地", "お店の情報", "電話・予約・SNS", "このページを共有"]) && JSON.stringify(v.facts) === JSON.stringify(["支払い方法", "設備・サービス", "対応言語"]) && JSON.stringify(v.quick) === JSON.stringify(["map", "phone", "reservation", "share"]) && v.noHScroll && v.lang === "ja", v);
   const contact = await p.ev(`[...document.querySelectorAll("ul.contact a")].map((a) => ({ href: a.getAttribute("href"), kind: a.getAttribute("data-contact"), target: a.target, h: a.getBoundingClientRect().height, w: a.getBoundingClientRect().width }))`);
   t("P7 電話(tel:)・予約先・公式サイト・SNS は押しやすい大きさ(高さ44px以上・幅いっぱい)・外部のリンクは新しいタブ", contact.length === 4 && contact[0].href === "tel:0981234567" && contact[0].kind === "phone" && contact.slice(1).every((x) => x.target === "_blank") && contact.every((x) => x.h >= 44 && x.w >= 300), contact);
   t("P2 title・canonical(固定の URL)", v.title === "海辺のカフェ（沖縄県那覇市）｜マチナウ" && v.canonical === "https://machinau.jp/shop/S1", v);
@@ -114,7 +115,7 @@ try {
   await p.ev(`document.querySelector('nav.lang a[hreflang="en"]').click(); true`);
   await p.waitFor(`document.documentElement.lang === "en"`, 10000); await sleep(200);
   v = await pageView(p);
-  t("P4 English に切り替え：同じ店舗・英語の見出し・横にはみ出さない", v.lang === "en" && v.h1 === "海辺のカフェ" && v.sections.includes("Opening hours") && v.sections.includes("Payment methods") && v.noHScroll && (await p.ev("location.pathname + location.search")) === "/shop/S1?lang=en", v);
+  t("P4 English に切り替え：同じ店舗・英語の見出し・横にはみ出さない", v.lang === "en" && v.h1 === "海辺のカフェ" && v.sections.includes("Opening hours") && v.facts.includes("Payment methods") && v.noHScroll && (await p.ev("location.pathname + location.search")) === "/shop/S1?lang=en", v);
   await p.close();
 
   // ===== 店舗ページ：PC・存在しない店舗 =====

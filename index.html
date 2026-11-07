@@ -1776,6 +1776,187 @@
     .address-language-note {
       font-weight: 800;
     }
+
+    /* 2026-11-08 TOP店舗カードの刷新(代表承認)｜写真が主役・店名・種類・距離・お気に入りを中心に整理する。
+       並び順・件数・15km・表示の条件・押した時の動作・お気に入り・地図は変えない(見た目だけ)。
+       ⚡見出し(運営掲載の見出し)は写真の上から本文の店名の下へ1行で移す(app.js)。掲載の種類のラベル
+       (店舗広告・店舗が管理・利用者の投稿)は消さずに控えめな文字にし、距離のすぐ上の最下段に置く。
+       写真の無い店舗は、淡い色の面と小さな絵(白い円の中)で、写真のある店舗と同じ枠の大きさにする。
+       TOP で読み込む写真は今までどおり1店舗1枚。#shopsList の中だけに効かせる(マイページのお気に入り等は変えない)。 */
+    #shopsList .shop-card {
+      border: 1px solid rgba(16, 42, 67, 0.06);
+      box-shadow: 0 8px 24px rgba(16, 42, 67, 0.08);
+    }
+
+    #shopsList .shop-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 14px 30px rgba(16, 42, 67, 0.12);
+    }
+
+    #shopsList .shop-visual::before,
+    #shopsList .shop-visual::after {
+      display: none;
+    }
+
+    /* 写真：PC でカードに指を置いた(カーソルを載せた)時だけ少し寄る。 */
+    #shopsList .shop-visual img {
+      transition: transform 0.4s ease;
+    }
+
+    #shopsList .shop-card:hover .shop-visual img {
+      transform: scale(1.03);
+    }
+
+    /* 写真の無い店舗の代わりの表示(種類ごとの淡い色・白い円の中の小さな絵)。 */
+    #shopsList .shop-visual.visual-food { background: linear-gradient(160deg, #fff1d6, #ffd2b0); }
+    #shopsList .shop-visual.visual-cafe { background: linear-gradient(160deg, #e3f7f5, #bfe7ec); }
+    #shopsList .shop-visual.visual-bar { background: linear-gradient(160deg, #e8eafb, #c7cdf1); }
+    #shopsList .shop-visual.visual-event { background: linear-gradient(160deg, #ffe6ee, #fbc3d3); }
+    #shopsList .shop-visual.visual-shopping { background: linear-gradient(160deg, #fff0d2, #fbd59a); }
+    #shopsList .shop-visual.visual-sightseeing { background: linear-gradient(160deg, #e2f6ec, #b9e5cf); }
+    #shopsList .shop-visual.visual-beauty { background: linear-gradient(160deg, #f8e6f6, #ecc6e5); }
+    #shopsList .shop-visual.visual-stay { background: linear-gradient(160deg, #e6eefb, #c4d5f2); }
+    #shopsList .shop-visual.visual-official { background: linear-gradient(160deg, #ffe7e1, #ffc6b8); }
+
+    #shopsList .shop-emoji {
+      display: grid;
+      place-items: center;
+      width: 84px;
+      height: 84px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.62);
+      box-shadow: 0 6px 18px rgba(16, 42, 67, 0.08);
+      font-size: 40px;
+      line-height: 1;
+      filter: none;
+    }
+
+    #shopsList .favorite-button {
+      background: rgba(255, 255, 255, 0.96);
+      box-shadow: 0 4px 12px rgba(16, 42, 67, 0.16);
+    }
+
+    /* 本文：店名(大きく・全文)、見出し(1行)、種類と営業の状態、最下段にラベルと距離。 */
+    #shopsList .shop-name {
+      color: #102a43;
+      letter-spacing: 0.01em;
+    }
+
+    #shopsList .shop-headline {
+      margin: 2px 0 0;
+      overflow: hidden;
+      color: #52667a;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.5;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    #shopsList .shop-category {
+      margin-top: 4px;
+      font-weight: 800;
+    }
+
+    #shopsList .user-post-badge {
+      padding: 0;
+      background: none;
+      color: #6b7d8f;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    #shopsList .info-chip-distance {
+      background: #e8f4fb;
+      color: #066fa6;
+      font-weight: 800;
+    }
+
+    @media (max-width: 700px) {
+      #shopsSection:not(.shops-show-all) .shop-visual {
+        height: 176px;
+      }
+
+      #shopsSection:not(.shops-show-all) .shop-body {
+        padding: 12px 12px 12px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-rows: auto auto auto 1fr auto auto;
+      }
+
+      #shopsSection:not(.shops-show-all) .shop-body > * {
+        grid-column: 1 / -1;
+        min-width: 0;
+      }
+
+      /* 店名の大きさは TOP第3弾の14px(全角10文字が1行に入る)のまま。 */
+      #shopsSection:not(.shops-show-all) .shop-name {
+        grid-row: 1;
+        margin: 0;
+      }
+
+      #shopsSection:not(.shops-show-all) .shop-headline {
+        grid-row: 2;
+        font-size: 12px;
+      }
+
+      #shopsSection:not(.shops-show-all) .shop-category {
+        grid-row: 3;
+      }
+
+      /* 最下段：ラベル(英語の長いラベルも折り返さずに入るよう1行を使う)、その下に距離。カード間で同じ位置に揃う。 */
+      #shopsSection:not(.shops-show-all) .user-post-badge-row {
+        grid-row: 5;
+        margin: 0;
+        padding-top: 10px;
+        line-height: 1.4;
+      }
+
+      #shopsSection:not(.shops-show-all) .shop-info-row {
+        grid-row: 6;
+        margin: 0;
+        padding-top: 6px;
+      }
+
+      #shopsSection:not(.shops-show-all) .shop-info-row .info-chip-distance {
+        padding: 4px 9px;
+        border-radius: 999px;
+        font-size: 12px;
+      }
+    }
+
+    /* 見つける全件表示(スマホ1列)・PC：写真を大きく。 */
+    @media (max-width: 700px) {
+      #shopsSection.shops-show-all .shop-visual {
+        height: 210px;
+      }
+    }
+
+    @media (min-width: 701px) {
+      #shopsList .shop-visual {
+        height: 220px;
+      }
+
+      #shopsList .shop-headline {
+        font-size: 14px;
+      }
+
+      #shopsList .shop-emoji {
+        width: 104px;
+        height: 104px;
+        font-size: 50px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      #shopsList .shop-visual img {
+        transition: none;
+      }
+
+      #shopsList .shop-card:hover .shop-visual img {
+        transform: none;
+      }
+    }
 </style>
 </head>
 

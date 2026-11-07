@@ -1649,6 +1649,23 @@ export async function readPublicStoreProfileForShare(database, storeId, options)
     store.contact = buildPublicStoreContact(profile);
   }
 
+  // 2026-11-08｜店舗ページの英語表示用：保存済みの紹介文の訳(G案の storeProfileTranslationGet が保存したもの)。
+  // 読むだけで、ここから翻訳を頼むことはない。原文との一致は店舗ページの側で確かめる。
+  if (options && Array.isArray(options.includeDescriptionTranslations)) {
+    store.descriptionTranslations = {};
+
+    options.includeDescriptionTranslations.forEach(function(language) {
+      const entry =
+        profile.translations &&
+        profile.translations[language] &&
+        profile.translations[language].description;
+
+      if (entry && typeof entry === "object" && entry.status === "ready" && typeof entry.description === "string") {
+        store.descriptionTranslations[language] = { sourceHash: entry.sourceHash, description: entry.description };
+      }
+    });
+  }
+
   return store;
 }
 

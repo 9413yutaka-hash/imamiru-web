@@ -4239,12 +4239,7 @@ function renderShops() {
 
                 <div class="shop-badges">
 
-                  <span class="event-badge">
-                    ⚡
-                    ${escapeHtml(
-                      shop.badge
-                    )}
-                  </span>
+                  <span></span>
 
                   <button
                     class="
@@ -4292,6 +4287,14 @@ function renderShops() {
                     shop.name
                   )}
                 </h3>
+
+                ${
+                  // 2026-11-08 TOP店舗カードの刷新｜見出し(⚡見出し)は写真の上から店名の下の1行へ(絵文字なし)。
+                  typeof shop.badge === "string" &&
+                  shop.badge.trim() !== ""
+                    ? `<p class="shop-headline">${escapeHtml(shop.badge)}</p>`
+                    : ""
+                }
 
                 <div class="shop-category">
 
