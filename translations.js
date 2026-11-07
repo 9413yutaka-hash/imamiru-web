@@ -1402,6 +1402,12 @@ const MACHINAU_TRANSLATIONS = {
     ja: "🥡 テイクアウトOK",
     en: "🥡 Takeout OK"
   },
+  // 2026-11-07 C案｜日本語以外の表示で、店舗の住所(日本語のまま)の前に添える案内。
+  // 日本語の表示では出さない(app.js getShopAddressHtml)。
+  shop_address_in_japanese_label: {
+    ja: "住所（日本語）",
+    en: "Address (in Japanese)"
+  },
 
   shop_admin_badge: {
     ja: "🌺 マチナウ運営より",

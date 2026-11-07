@@ -1529,8 +1529,11 @@
       font-size: 12px;
     }
 
+    /* 英語の長いラベル(Shared by a Machinau user 等)がカードの幅を超えて切れないよう、幅の中で折り返す。 */
     .user-post-badge {
       font-size: 11px;
+      max-width: 100%;
+      white-space: normal;
     }
 
     .shop-button {
@@ -1768,7 +1771,12 @@
       color: var(--subtext);
       font-size: 13px;
     }
-  </style>
+
+    /* 2026-11-07 C案｜英語表示の住所の案内(Address (in Japanese))。住所は次の行に日本語のまま。 */
+    .address-language-note {
+      font-weight: 800;
+    }
+</style>
 </head>
 
 <body>

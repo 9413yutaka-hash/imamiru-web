@@ -83,6 +83,12 @@ import {
   callOpenAiImadakeCardTranslation
 } from "./_lib/imadake-translation.js";
 
+// 店主の店舗カードの紹介文の英語自動翻訳(2026-11-07 G案)｜実処理はapi/_lib/store-profile-translation.js。
+import {
+  handleStoreProfileTranslationGet,
+  callOpenAiStoreProfileTranslation
+} from "./_lib/store-profile-translation.js";
+
 // 正式店舗参加基盤 Phase 2A｜セルフ店舗登録。実処理はapi/_lib/store-self-service.js。
 import {
   handleStoreRegistrationPreview,
@@ -30270,6 +30276,23 @@ function buildImadakeCvDeps() {
 
 // 今だけ投稿 カード翻訳｜既存の認証・連打制限・リクエスト読み取りを参照として渡す
 // (既存関数自体は変更しない)。OpenAIの呼び出しはimadake-translation.jsの専用関数。
+// 店主の店舗カードの紹介文の翻訳｜公開中かどうかは旅行者向けの一覧と同じ判定(readPublicStoreProfileForShare)。
+function buildStoreProfileTranslationDeps() {
+  return {
+    getFirebaseAdminApp: getFirebaseAdminApp,
+    getFirestore: getFirestore,
+    verifyIdToken: function(app, idToken) {
+      return getAuth(app).verifyIdToken(idToken);
+    },
+    readBearerToken: readBearerToken,
+    readRequestBody: readRequestBody,
+    claimRateLimit: claimRateLimit,
+    hashClientIpAddress: hashClientIpAddress,
+    readPublicStore: readPublicStoreProfileForShare,
+    translateDescriptions: callOpenAiStoreProfileTranslation
+  };
+}
+
 function buildImadakeTranslationDeps() {
   return {
     getFirebaseAdminApp: getFirebaseAdminApp,
@@ -31207,6 +31230,18 @@ export default async function handler(
       request,
       response,
       buildImadakeTranslationDeps()
+    );
+  }
+
+  // 店主の店舗カードの紹介文の英語訳(匿名認証必須、2026-11-07 G案)。
+  // 実処理はapi/_lib/store-profile-translation.js。新規翻訳は1日50件まで。
+  if (
+    requestBody.mode === "storeProfileTranslationGet"
+  ) {
+    return handleStoreProfileTranslationGet(
+      request,
+      response,
+      buildStoreProfileTranslationDeps()
     );
   }
 

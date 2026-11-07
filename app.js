@@ -35,6 +35,36 @@ let hasAppliedSubmissionsForStoreProfiles = false;
 // 一覧と同じ条件(引き継ぎで外した無料掲載を出さない)で開くために待つ。
 let storeProfileListFetchSettled = false;
 
+// 2026-11-07 G案｜店主の店舗カードの紹介文の英語訳の状態(処理は requestStoreProfileTranslationsIfNeeded)。
+const STORE_PROFILE_TRANSLATION_LANGUAGES =
+  ["en"];
+
+const STORE_PROFILE_TRANSLATION_MAX_STORES_PER_REQUEST =
+  10;
+
+// 生成中・後回し(pending)の店舗を頼み直すまでの待ち時間(サーバーの連打制限5秒より長く)と回数。
+const STORE_PROFILE_TRANSLATION_RETRY_DELAY_MS =
+  6000;
+
+const STORE_PROFILE_TRANSLATION_MAX_RETRIES =
+  3;
+
+// 取得した訳。{ "sp_...": { en: { source: 訳した時の原文, description: 訳 } } }
+const storeProfileDescriptionTranslations =
+  {};
+
+// 頼んだ店舗("language:sp_...")。同じ店舗を何度も頼まない。
+const storeProfileTranslationRequestedKeys =
+  new Set();
+
+// 頼み直した回数("language:sp_..." → 回数)。
+const storeProfileTranslationRetryCounts =
+  new Map();
+
+let storeProfileTranslationInFlight =
+  false;
+
+
 // ---- Ver1.7｜多言語化の器(固定UI文言専用) ----
 // ここで扱うのは画面の固定UI文言(見出し・ボタン・カテゴリー表示ラベル等)だけ。
 // category / area / sourceType / postType / authorType / selectedCategory と
@@ -3459,6 +3489,9 @@ function buildStoreProfileListShop(store) {
     emoji: categoryDisplay.emoji,
     visualClass: categoryDisplay.visualClass,
     message: typeof store.description === "string" ? store.description : "",
+    // 2026-11-07 G案｜紹介文の訳(取得済みで、今の原文と同じ原文から作った訳だけ)。
+    // カード・詳細は無料掲載と同じく translatedMessages を読む(無い時は原文)。
+    translatedMessages: getStoreProfileTranslatedMessages(store),
     imageUrls: Array.isArray(store.photos)
       ? store.photos
           .map(function(photo) { return photo && typeof photo.url === "string" ? photo.url : ""; })
@@ -3858,7 +3891,7 @@ function buildStoreProfileShopCardHtml(shop, shopCardIndex) {
         <div class="user-post-badge-row">
           <span class="user-post-badge store-managed-badge">${escapeHtml(getMachinauTranslation("shop_store_managed_badge", language))}</span>
         </div>
-        <p class="shop-description">${escapeHtml(shop.message)}</p>
+        <p class="shop-description">${escapeHtml(getShopDisplayMessage(shop, language))}</p>
         <div class="shop-info-row">
           ${
             selectedShopRegion
@@ -3881,7 +3914,7 @@ function buildStoreProfileShopCardHtml(shop, shopCardIndex) {
         </div>
         ${
           shop.address
-            ? `<div class="time-limit">📍 ${escapeHtml(shop.address)}</div>`
+            ? `<div class="time-limit">📍 ${getShopAddressHtml(shop.address)}</div>`
             : ""
         }
         <div class="shop-actions">
@@ -4426,7 +4459,7 @@ function renderShops() {
                     ? `
                       <div class="time-limit">
                         📍
-                        ${escapeHtml(
+                        ${getShopAddressHtml(
                           shop.address
                         )}
                       </div>
@@ -6140,7 +6173,7 @@ function openShopModal(
   ) {
     modalText +=
       "<br><br>📍 " +
-      escapeHtml(
+      getShopAddressHtml(
         selectedShop.address
       );
   }
@@ -17701,6 +17734,10 @@ function refreshShopTranslationsIfNeeded() {
     return;
   }
 
+  // 2026-11-07 G案｜店主の店舗カード(sp_)の紹介文は別の翻訳(storeProfileTranslationGet)。
+  // 下の無料掲載の翻訳は shops に無い sp_ を対象にしない。
+  requestStoreProfileTranslationsIfNeeded();
+
   const shopIdsNeedingTranslation =
     lastRenderedShopCardIds.filter(
       function(firestoreId) {
@@ -17814,6 +17851,251 @@ function refreshShopTranslationsIfNeeded() {
           null;
       }
     );
+}
+
+// ---- 2026-11-07 C案｜店舗の住所の案内 ----
+// 住所は日本語のまま表示する(翻訳・外部の住所検索はしない)。日本語以外の表示では、
+// 日本語の住所だと分かるように案内を添え、住所自体には lang="ja" を付ける。日本語の表示は従来どおり。
+function getShopAddressHtml(address) {
+  const language =
+    getCurrentMachinauLanguage();
+
+  if (language === MACHINAU_DEFAULT_LANGUAGE) {
+    return escapeHtml(address);
+  }
+
+  return (
+    '<span class="address-language-note">' +
+    escapeHtml(getMachinauTranslation("shop_address_in_japanese_label", language)) +
+    '</span><br><span lang="ja">' +
+    escapeHtml(address) +
+    "</span>"
+  );
+}
+
+// 表示言語の訳(translatedMessages)があれば訳、無ければ原文。
+function getShopDisplayMessage(shop, language) {
+  return language !== MACHINAU_DEFAULT_LANGUAGE &&
+    shop.translatedMessages &&
+    typeof shop.translatedMessages[language] === "string" &&
+    shop.translatedMessages[language] !== ""
+    ? shop.translatedMessages[language]
+    : shop.message;
+}
+
+// ---- 2026-11-07 G案｜店主の店舗カードの紹介文の英語訳 ----
+// サーバー(storeProfileTranslationGet)が訳を保存・再利用し、原文が変わった時だけ訳し直す。
+// 画面は表示中の店舗だけを頼み、訳が届くまで・失敗した時は原文のまま。
+// 店名・住所・営業時間・有料の内容は訳さない。
+// 一覧の原文と同じ原文から作った訳だけを返す(一覧の再取得で紹介文が変わっていたら使わない)。
+function getStoreProfileTranslatedMessages(store) {
+  const translatedMessages =
+    {};
+  const entries =
+    store && storeProfileDescriptionTranslations[store.id];
+
+  if (!entries || typeof store.description !== "string") {
+    return translatedMessages;
+  }
+
+  Object.keys(entries).forEach(function(language) {
+    const entry =
+      entries[language];
+
+    if (
+      entry &&
+      entry.source === store.description &&
+      store.sourceLanguage !== language &&
+      typeof entry.description === "string" &&
+      entry.description !== ""
+    ) {
+      translatedMessages[language] =
+        entry.description;
+    }
+  });
+
+  return translatedMessages;
+}
+
+function findStoreProfileListStore(publicId) {
+  for (const store of storeProfileListStores) {
+    if (store && store.id === publicId) {
+      return store;
+    }
+  }
+
+  return null;
+}
+
+// 直近に描画したカードのうち、店主の店舗カードで表示言語の訳がまだ無い店舗だけをまとめて頼む。
+function requestStoreProfileTranslationsIfNeeded() {
+  const language =
+    getCurrentMachinauLanguage();
+
+  if (
+    storeProfileTranslationInFlight ||
+    !STORE_PROFILE_TRANSLATION_LANGUAGES.includes(language)
+  ) {
+    return;
+  }
+
+  const storeIds =
+    lastRenderedShopCardIds
+      .filter(function(publicId) {
+        if (typeof publicId !== "string" || publicId.indexOf("sp_") !== 0) {
+          return false;
+        }
+
+        const store =
+          findStoreProfileListStore(publicId);
+
+        return (
+          store !== null &&
+          typeof store.description === "string" &&
+          store.description.trim() !== "" &&
+          store.sourceLanguage !== language &&
+          !getStoreProfileTranslatedMessages(store)[language] &&
+          !storeProfileTranslationRequestedKeys.has(language + ":" + publicId)
+        );
+      })
+      .slice(0, STORE_PROFILE_TRANSLATION_MAX_STORES_PER_REQUEST);
+
+  if (storeIds.length === 0) {
+    return;
+  }
+
+  storeIds.forEach(function(publicId) {
+    storeProfileTranslationRequestedKeys.add(language + ":" + publicId);
+  });
+
+  fetchStoreProfileTranslations(
+    storeIds,
+    language
+  );
+}
+
+async function fetchStoreProfileTranslations(
+  storeIds,
+  language
+) {
+  storeProfileTranslationInFlight =
+    true;
+
+  let responseData =
+    null;
+
+  try {
+    const idToken =
+      await getAnonymousIdTokenForLocationCollection();
+
+    const response =
+      await fetch(
+        "/api/moderate-submission",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + idToken
+          },
+          body: JSON.stringify({
+            mode: "storeProfileTranslationGet",
+            storeIds: storeIds,
+            language: language
+          })
+        }
+      );
+
+    responseData =
+      response.ok
+        ? await response.json()
+        : null;
+  } catch (error) {
+    // 翻訳は補助機能のため、失敗しても原文のまま表示を続ける。
+    responseData =
+      null;
+  }
+
+  storeProfileTranslationInFlight =
+    false;
+
+  if (
+    !responseData ||
+    responseData.success !== true
+  ) {
+    // 失敗・連打制限：原文のまま。頼み直しはしない。
+    return;
+  }
+
+  const translations =
+    responseData.translations && typeof responseData.translations === "object"
+      ? responseData.translations
+      : {};
+
+  let didUpdate =
+    false;
+
+  storeIds.forEach(function(publicId) {
+    const description =
+      translations[publicId];
+    const store =
+      findStoreProfileListStore(publicId);
+
+    if (
+      store &&
+      typeof description === "string" &&
+      description !== ""
+    ) {
+      storeProfileDescriptionTranslations[publicId] =
+        Object.assign({}, storeProfileDescriptionTranslations[publicId] || {}, {
+          [language]: {
+            source: store.description,
+            description: description
+          }
+        });
+
+      didUpdate = true;
+    }
+  });
+
+  // 生成中・後回しの店舗は、少し後に頼み直す(1店舗あたり最大3回。上限到達の日は頼まない)。
+  const pendingStoreIds =
+    Array.isArray(responseData.pending) && responseData.limited !== true
+      ? responseData.pending.filter(function(publicId) {
+          const key =
+            language + ":" + publicId;
+
+          return (
+            storeIds.includes(publicId) &&
+            (storeProfileTranslationRetryCounts.get(key) || 0) < STORE_PROFILE_TRANSLATION_MAX_RETRIES
+          );
+        })
+      : [];
+
+  pendingStoreIds.forEach(function(publicId) {
+    const key =
+      language + ":" + publicId;
+
+    storeProfileTranslationRetryCounts.set(
+      key,
+      (storeProfileTranslationRetryCounts.get(key) || 0) + 1
+    );
+  });
+
+  // 訳の差し替え(カード・詳細は描き直しで translatedMessages を読む)。
+  // 頼み済みの店舗は二度と頼まないので、描き直しが繰り返しにはならない。
+  if (didUpdate) {
+    renderShops();
+  }
+
+  if (pendingStoreIds.length > 0) {
+    setTimeout(function() {
+      pendingStoreIds.forEach(function(publicId) {
+        storeProfileTranslationRequestedKeys.delete(language + ":" + publicId);
+      });
+
+      requestStoreProfileTranslationsIfNeeded();
+    }, STORE_PROFILE_TRANSLATION_RETRY_DELAY_MS);
+  }
 }
 
 async function fetchShopTranslations(

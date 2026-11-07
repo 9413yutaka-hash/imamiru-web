@@ -192,7 +192,8 @@ export function decideImadakeCardTranslationState(
   return "claimable";
 }
 
-function buildFailureEntry(
+// 店主の店舗カードの紹介文の翻訳(store-profile-translation.js)も、同じ失敗の扱いに使う。
+export function buildFailureEntry(
   sourceHash,
   errorCount,
   nowMillis,
