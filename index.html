@@ -1284,6 +1284,491 @@
     .shop-custom-links { display: flex; flex-wrap: wrap; gap: 8px; }
     .shop-custom-link { display: inline-flex; align-items: center; min-height: 40px; padding: 6px 14px; border-radius: 999px; background: #ffffff; border: 1px solid #cfe3ee; color: #0788c9; font-weight: 800; font-size: 13.5px; text-decoration: none; overflow-wrap: anywhere; }
   </style>
+  <style>
+    /* Webデザイン全面改善・TOP第1弾(2026-11-07、代表の確認待ち)｜TOPのスマホ表示の読みやすさ・押しやすさ。
+       見た目の値だけを上書きする(要素の順番・ID・class・表示の条件・文言・機能は変えない)。
+       style.css は admin-post.html も読むため変更せず、TOP だけに効くようここ(head の最後)に置く。
+       計測の停止のリンクを含む .location-area-usage-note は変更しない。 */
+    :root {
+      --radius-card: 20px;
+      --radius-inner: 16px;
+      --radius-control: 14px;
+      --shadow-card: 0 12px 32px rgba(20, 52, 82, 0.1);
+      --shadow-action: 0 8px 20px rgba(5, 144, 194, 0.2);
+    }
+
+    /* 上部のバー：余白を詰めて高さを減らす(sticky・内容はそのまま)。言語の切り替えは文字13px・押せる範囲44px。 */
+    .top-bar-inner {
+      padding: 8px 16px;
+      gap: 8px 14px;
+    }
+
+    .brand-icon {
+      width: 38px;
+      height: 38px;
+    }
+
+    .brand-caption {
+      font-size: 12px;
+    }
+
+    .language-switch-button {
+      position: relative;
+      min-height: 36px;
+    }
+
+    .language-switch-button::after {
+      content: "";
+      position: absolute;
+      inset: -4px 0;
+    }
+
+    /* 下部のナビ：余白を詰めて高さを減らす(4つのボタン・固定の位置はそのまま)。文字は11px、各ボタンは高さ44px以上。 */
+    .bottom-navigation {
+      bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+      padding: 5px 10px;
+      border-radius: var(--radius-card);
+    }
+
+    .nav-button {
+      min-height: 46px;
+      padding: 4px;
+      gap: 2px;
+      color: var(--subtext);
+      font-size: 11px;
+    }
+
+    .nav-button.active {
+      color: var(--blue);
+    }
+
+    /* ヒーロー：見出し・4つの入口の文字を大きく。英語の見出しは狭い画面で1語だけの行を作らない。 */
+    .hero-main-copy {
+      font-size: 22px;
+      line-height: 1.45;
+      text-wrap: balance;
+    }
+
+    @media (max-width: 400px) {
+      html[lang="en"] .hero-main-copy {
+        font-size: 19px;
+      }
+    }
+
+    @media (min-width: 720px) {
+      .hero-main-copy {
+        font-size: 32px;
+      }
+    }
+
+    .hero-action-card {
+      min-height: 84px;
+      border-radius: var(--radius-inner);
+    }
+
+    .hero-action-title {
+      font-size: 14px;
+      line-height: 1.35;
+    }
+
+    .hero-action-caption {
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .how-to-entry-label {
+      font-size: 12px;
+    }
+
+    /* 現在地のカード：案内の本文をスマホで14px(PC は横並びのため従来どおり。隣の計測の説明・停止のリンクの
+       折り返しを変えない)。ボタンは高さ48px・文字15px(同じ見た目の「もっと見る」等も同じ)。 */
+    @media (max-width: 700px) {
+      #locationMessage {
+        font-size: 14px;
+        line-height: 1.7;
+      }
+    }
+
+    .location-button {
+      min-height: 48px;
+      border-radius: var(--radius-control);
+      box-shadow: var(--shadow-action);
+    }
+
+    @media (max-width: 700px) {
+      .location-button {
+        font-size: 15px;
+      }
+    }
+
+    /* カード・枠の角丸と影を揃える(大きな枠20px・中の枠16px・ボタン14px)。 */
+    .location-card,
+    .region-recommendation-section,
+    .map-section,
+    .contribute-cta-section {
+      border-radius: var(--radius-card);
+    }
+
+    .location-card,
+    .region-recommendation-section,
+    .map-section {
+      box-shadow: var(--shadow-card);
+    }
+
+    .shop-card {
+      border-radius: var(--radius-card);
+      box-shadow: var(--shadow-card);
+    }
+
+    .region-recommendation-card,
+    #google-map {
+      border-radius: var(--radius-inner);
+    }
+
+    .shop-button,
+    .contribute-cta-button {
+      border-radius: var(--radius-control);
+    }
+
+    .contribute-cta-button,
+    .detail-button {
+      box-shadow: var(--shadow-action);
+    }
+
+    /* 見出しの階層：セクションの見出しを揃える(スマホ20px・PC 24px)。説明文は13px、本文は14px・行間1.7。 */
+    .section-title-area h2,
+    .region-recommendation-section h2,
+    .map-section h2 {
+      font-size: 20px;
+      line-height: 1.4;
+    }
+
+    .contribute-cta-heading {
+      font-size: 18px;
+    }
+
+    @media (min-width: 701px) {
+      .section-title-area h2,
+      .region-recommendation-section h2,
+      .map-section h2 {
+        font-size: 24px;
+      }
+    }
+
+    .section-title-area p,
+    .section-link {
+      font-size: 13px;
+    }
+
+    .region-recommendation-card-title,
+    #cityInfoTitle {
+      font-size: 16px;
+      line-height: 1.5;
+    }
+
+    .region-recommendation-card-content,
+    #cityInfoContent,
+    .contribute-cta-message {
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    .region-recommendation-card-label {
+      font-size: 12px;
+    }
+
+    /* カテゴリーの切り替え・文字のリンク・保存の♡：押せる範囲を44px以上にする(見た目の大きさはほぼそのまま)。 */
+    .category-button {
+      min-height: 44px;
+    }
+
+    .region-recommendation-card-link,
+    .secondary-link-button {
+      display: inline-flex;
+      align-items: center;
+      min-height: 44px;
+      font-size: 14px;
+    }
+
+    .column-entry-more-link {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      min-height: 44px;
+      margin-top: 6px;
+      font-size: 14px;
+    }
+
+    .contribute-cta-shop-link {
+      min-height: 44px;
+      padding: 10px 4px;
+      font-size: 13px;
+    }
+
+    .favorite-button,
+    .column-save-button {
+      position: relative;
+    }
+
+    .favorite-button::after {
+      content: "";
+      position: absolute;
+      inset: -8px;
+    }
+
+    .column-save-button::after {
+      content: "";
+      position: absolute;
+      inset: -4px;
+    }
+
+    /* お店・施設のカード：小さなラベルの文字を大きく(PC は12px)。 */
+    .event-badge,
+    .shop-category,
+    .info-chip {
+      font-size: 12px;
+    }
+
+    .user-post-badge {
+      font-size: 11px;
+    }
+
+    .shop-button {
+      font-size: 13px;
+    }
+
+    /* スマホの横並びのカード(TOP第2弾：1画面に約3枚 → 2枚＋次のカードの端)：横スクロール・並び順・件数・
+       押した時の動作はそのまま、カードの幅だけを広げる(390pxで約116px → 約164px)。次のカードの端を少し見せて
+       横にスクロールできることを伝える。地名は途中で折り返さない(長い地名は「…」)。種類と掲載の状態は語の途中で
+       切らない。♡の見た目は28pxのまま、押せる範囲は上の ::after で44px角に広げる。
+       見つける全件表示(.shops-show-all)は style.css の1列表示のまま(そちらの指定が優先される)。 */
+    @media (max-width: 700px) {
+      .shop-card {
+        flex: 0 0 calc((100% - 34px) / 2);
+        min-width: 0;
+      }
+
+      .shop-visual {
+        height: 148px;
+      }
+
+      .shop-body {
+        padding: 12px 10px;
+      }
+
+      .event-badge {
+        display: block;
+        min-width: 0;
+        max-width: calc(100% - 36px);
+        padding: 5px 8px;
+        font-size: 12px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .favorite-button {
+        flex-shrink: 0;
+      }
+
+      .shop-category {
+        flex-wrap: wrap;
+        justify-content: flex-start;
+        gap: 2px 8px;
+        font-size: 12px;
+      }
+
+      .shop-category > span {
+        white-space: nowrap;
+      }
+
+      /* 店名(TOP第3弾)：全文を表示する(style.css の2行で「…」に切る指定を外す)。日本語は文節で折り返し
+         (word-break: auto-phrase、対応していないブラウザは従来の折り返し)、最後の行に1〜2文字だけ残りにくくする(text-wrap: pretty)。
+         括弧付きの読み仮名(全角10文字)が1行に入るよう14px。区切りのない長い英数字はカードの幅で折り返してはみ出さない。カードの高さは同じ列の一番長い店名に揃う。 */
+      .shop-name {
+        font-size: 14px;
+        line-height: 1.4;
+        display: block;
+        -webkit-line-clamp: unset;
+        line-clamp: none;
+        overflow: visible;
+        word-break: auto-phrase;
+        overflow-wrap: anywhere;
+        text-wrap: pretty;
+      }
+
+      /* 英語表示では文節の折り返しが効かない(ページが lang="en")ため、日本語の店名は空白・括弧の位置で折り返す
+         (1行に入らない長さの時だけカードの幅で折り返す)。 */
+      html[lang="en"] .shop-name {
+        word-break: keep-all;
+      }
+
+      .shop-info-row .info-chip-distance {
+        padding: 5px 8px;
+        font-size: 12px;
+      }
+    }
+
+    /* 上部のバー(スマホ、TOP第2弾)：1行目にロゴ・説明と「配信中」、2行目に言語の切り替え(横幅いっぱい・2つを同じ幅)。
+       日本語・英語で同じ並びにする。sticky(上に固定)の動作はそのまま。 */
+    @media (max-width: 700px) {
+      .top-bar-inner {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 6px 10px;
+        padding: 8px 14px;
+      }
+
+      .brand-area {
+        min-width: 0;
+      }
+
+      .brand-caption {
+        line-height: 1.35;
+      }
+
+      .live-chip {
+        padding: 6px 10px;
+        font-size: 12px;
+        white-space: nowrap;
+      }
+
+      #languageSwitcher {
+        grid-column: 1 / -1;
+      }
+
+      .language-switch-button {
+        flex: 1 1 0;
+        justify-content: center;
+      }
+    }
+
+    /* PC のナビ(TOP第2弾、701px以上)：スマホ用の下部の固定ナビは出さず、上部のバーに同じ4つの移動先を置く
+       (押した時の処理は下部のナビと同じ関数・同じ現在地の入口。文言は同じ翻訳キー)。
+       TOP第3弾：上部のバーの幅と左右の端を本文(main：最大920px・左右18px)に揃える。
+       900px以上は1行(ロゴ｜ナビ｜配信中・言語、説明は2行まで折り返す)。701〜899px は1行目にロゴと配信中・言語、
+       2行目にナビ(本文の幅で中央・細い区切り線)。 */
+    .top-pc-navigation {
+      display: none;
+    }
+
+    @media (min-width: 701px) {
+      body {
+        padding-bottom: 24px;
+      }
+
+      .bottom-navigation {
+        display: none;
+      }
+
+      .shared-link-notice {
+        bottom: 24px;
+      }
+
+      .top-bar-inner {
+        width: min(100%, 920px);
+        padding: 6px 18px;
+        gap: 0 10px;
+      }
+
+      .live-chip {
+        margin-left: auto;
+      }
+
+      .top-pc-navigation {
+        order: 10;
+        flex: 1 0 100%;
+        display: flex;
+        justify-content: center;
+        gap: 2px;
+        margin-top: 6px;
+        border-top: 1px solid rgba(12, 54, 87, 0.06);
+      }
+
+      .top-pc-nav-button {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 44px;
+        padding: 0 12px;
+        border: none;
+        border-radius: 999px;
+        background: transparent;
+        color: var(--subtext);
+        font: inherit;
+        font-size: 14px;
+        font-weight: 800;
+        white-space: nowrap;
+        cursor: pointer;
+      }
+
+      .top-pc-nav-button:hover,
+      .top-pc-nav-button:focus-visible {
+        background: var(--background);
+        color: var(--blue);
+      }
+
+      .top-pc-nav-button.active {
+        color: var(--blue);
+      }
+
+      .top-pc-nav-icon {
+        font-size: 17px;
+      }
+    }
+
+    @media (min-width: 900px) {
+      .brand-caption {
+        max-width: 8.2em;
+        line-height: 1.3;
+      }
+
+      html[lang="en"] .brand-caption {
+        max-width: 10em;
+      }
+
+      .live-chip {
+        margin-left: 0;
+      }
+
+      .top-pc-navigation {
+        order: 0;
+        flex: 0 1 auto;
+        margin: 0 auto;
+        border-top: none;
+      }
+
+      .top-bar-inner {
+        gap: 0 8px;
+      }
+
+      .top-pc-nav-button {
+        gap: 4px;
+        padding: 0 7px;
+        font-size: 13px;
+      }
+    }
+
+    /* フッター：文字を13px・各リンクの押せる範囲を44px、薄すぎる灰色を本文の補足と同じ色に。 */
+    footer {
+      color: var(--subtext);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .footer-links {
+      gap: 0 14px;
+    }
+
+    .footer-links a {
+      display: inline-flex;
+      align-items: center;
+      min-height: 44px;
+      color: var(--subtext);
+      font-size: 13px;
+    }
+  </style>
 </head>
 
 <body>
@@ -1309,6 +1794,26 @@
 
       </div>
 
+      <!-- TOP第2弾｜PC(701px以上)だけに出すナビ。下部のナビ(スマホ用)と同じ4つの移動先・同じ処理。 -->
+      <nav class="top-pc-navigation">
+        <button class="top-pc-nav-button active" type="button" onclick="scrollToTopPage()">
+          <span class="top-pc-nav-icon" aria-hidden="true">🏠</span>
+          <span data-i18n="nav_home">ホーム</span>
+        </button>
+        <button class="top-pc-nav-button" type="button" onclick="showAllShopCardsAndScrollToShops()">
+          <span class="top-pc-nav-icon" aria-hidden="true">🔍</span>
+          <span data-i18n="nav_find">見つける</span>
+        </button>
+        <button class="top-pc-nav-button" type="button" data-location-trigger>
+          <span class="top-pc-nav-icon" aria-hidden="true">📍</span>
+          <span data-i18n="nav_location">現在地</span>
+        </button>
+        <button class="top-pc-nav-button" type="button" onclick="showMyPage()">
+          <span class="top-pc-nav-icon" aria-hidden="true">👤</span>
+          <span data-i18n="nav_mypage">マイページ</span>
+        </button>
+      </nav>
+
       <div class="live-chip">
         <span class="live-dot"></span>
         <span data-i18n="live_chip_label">今を配信中</span>
@@ -1322,7 +1827,7 @@
           type="button"
           class="language-switch-button"
           data-language="ja"
-          style="border:none; background:var(--white); padding:6px 10px; border-radius:999px; font-size:11px; font-weight:800; color:var(--blue); cursor:pointer; white-space:nowrap; box-shadow:0 2px 6px rgba(20, 52, 82, 0.12);"
+          style="border:none; background:var(--white); padding:7px 12px; border-radius:999px; font-size:13px; font-weight:800; color:var(--blue); cursor:pointer; white-space:nowrap; box-shadow:0 2px 6px rgba(20, 52, 82, 0.12);"
         >
           🌐 日本語
         </button>
@@ -1330,7 +1835,7 @@
           type="button"
           class="language-switch-button"
           data-language="en"
-          style="border:none; background:transparent; padding:6px 10px; border-radius:999px; font-size:11px; font-weight:800; color:var(--subtext); cursor:pointer; white-space:nowrap;"
+          style="border:none; background:transparent; padding:7px 12px; border-radius:999px; font-size:13px; font-weight:800; color:var(--subtext); cursor:pointer; white-space:nowrap;"
         >
           🌐 English
         </button>
@@ -2447,7 +2952,7 @@
       <a href="shop.html" data-i18n="footer_shop_link">お店・施設の方へ｜店舗カード・今だけ投稿のご案内</a>
     </div>
 
-    <div class="footer-data-credit" style="margin-top: 8px; font-size: 11px; opacity: 0.6;">
+    <div class="footer-data-credit" style="margin-top: 8px; font-size: 12px; opacity: 0.75;">
       市区町村データ：<a href="https://github.com/geolonia/japanese-addresses" target="_blank" rel="noopener noreferrer" style="color: inherit;">Geolonia 住所データ</a>（<a href="https://creativecommons.org/licenses/by/4.0/deed.ja" target="_blank" rel="noopener noreferrer" style="color: inherit;">CC BY 4.0</a>）
     </div>
   </footer>
