@@ -310,7 +310,7 @@
         </div>
 
         <div>
-          <p class="brand-caption">
+          <p class="brand-caption" data-i18n="contribute_brand_caption">
             リアルタイム観光コンシェルジュ
           </p>
         </div>
@@ -320,6 +320,7 @@
       <a
         class="home-link"
         href="index.html"
+        data-i18n="contribute_home_link"
       >
         ← トップへ戻る
       </a>
@@ -330,15 +331,15 @@
   <section class="page-hero">
     <div class="page-hero-inner">
 
-      <div class="hero-label">
+      <div class="hero-label" data-i18n="contribute_hero_label">
         街のみんなで届ける
       </div>
 
-      <h1>
+      <h1 data-i18n="contribute_heading">
         この街で、何か見つけた？
       </h1>
 
-      <p>
+      <p data-i18n-lines="contribute_lead">
         イベント、お店、景色、街のちょっとした変化。<br>
         見つけた「今」を、写真付きでも投稿できます。
       </p>
@@ -353,20 +354,20 @@
       href="post.html?mode=street"
     >
 
-      <h2>
+      <h2 data-i18n="contribute_street_heading">
         投稿、ありませんか？
       </h2>
 
-      <p class="entry-card-examples">
+      <p class="entry-card-examples" data-i18n-lines="contribute_street_text">
         景色、お店、イベント、ちょっとした発見など。<br>
         写真なしでも、写真を付けても投稿できます。
       </p>
 
-      <p class="entry-card-message">
+      <p class="entry-card-message" data-i18n="contribute_street_message">
         あなたが今見つけたものが、次の旅行者の「知っててよかった」になる。
       </p>
 
-      <span class="entry-card-cta">
+      <span class="entry-card-cta" data-i18n="contribute_street_cta">
         街の「今」を投稿する →
       </span>
     </a>
@@ -379,16 +380,16 @@
       href="town-now-post.html"
     >
 
-      <h2>
+      <h2 data-i18n="contribute_thread_heading">
         街の今スレッド
       </h2>
 
-      <p class="entry-card-examples">
+      <p class="entry-card-examples" data-i18n-lines="contribute_thread_text">
         その場所について、聞きたいこと・伝えたいことを書いて、近くの人と話せます。<br>
         会話はその日の0時まで。
       </p>
 
-      <span class="entry-card-cta">
+      <span class="entry-card-cta" data-i18n="contribute_thread_cta">
         新しいスレッドを立てる →
       </span>
     </a>
@@ -401,50 +402,88 @@
       href="shop.html"
     >
 
-      <h2>
+      <h2 data-i18n="contribute_shop_heading">
         お店・施設の方へ
       </h2>
 
-      <p class="entry-card-examples">
+      <p class="entry-card-examples" data-i18n="contribute_shop_text">
         お店・施設からは、店舗アカウントで今だけ投稿ができます（有効な閲覧があった日だけ1投稿100円・税込）。
       </p>
 
-      <span class="entry-card-cta">
+      <span class="entry-card-cta" data-i18n="contribute_shop_cta">
         投稿について詳しく見る →
       </span>
     </a>
 
     <div class="notice-box">
-      <h2>
+      <h2 data-i18n="contribute_rules_heading">
         投稿する前に
       </h2>
 
       <ul>
-        <li>
+        <li data-i18n="contribute_rule_photo">
           写真は自分で撮影したもの、または投稿権限があるものをお使いください
         </li>
-        <li>
+        <li data-i18n="contribute_rule_privacy">
           個人が特定できる写真や、プライバシーへの配慮をお願いします
         </li>
-        <li>
+        <li data-i18n="contribute_rule_review">
           投稿内容は確認のうえ公開される場合があります
         </li>
-        <li>
+        <li data-i18n="contribute_rule_emergency">
           危険情報・緊急を要する情報は、まず消防・警察等の公的機関へご連絡ください
         </li>
-        <li>
+        <li data-i18n="contribute_rule_false">
           虚偽の情報や、他者の権利を侵害する投稿はご遠慮ください
         </li>
       </ul>
 
       <p style="margin: 12px 0 0; font-size: 12px;">
-        詳しくは<a href="terms.html">利用規約</a>・<a href="privacy.html">プライバシーポリシー</a>をご覧ください。
+        <span data-i18n="contribute_rules_more_before">詳しくは</span><a href="terms.html" data-i18n="contribute_terms_link">利用規約</a><span data-i18n="contribute_rules_more_and">・</span><a href="privacy.html" data-i18n="contribute_privacy_link">プライバシーポリシー</a><span data-i18n="contribute_rules_more_after">をご覧ください。</span>
       </p>
     </div>
 
-    <a class="back-link" href="index.html">← マチナウTOPへ戻る</a>
+    <a class="back-link" href="index.html" data-i18n="contribute_back">← マチナウTOPへ戻る</a>
 
   </main>
+
+  <script src="translations.js"></script>
+  <script>
+    (function() {
+      // サイト全体改善 第3弾｜TOP で選んだ言語(machinauLanguage)を引き継ぐ。値が無い・不正なら日本語。
+      function readMachinauLanguage() {
+        let stored = null;
+        try {
+          stored = localStorage.getItem("machinauLanguage");
+        } catch (error) {
+          stored = null;
+        }
+        return typeof stored === "string" && MACHINAU_SUPPORTED_LANGUAGES.includes(stored) ? stored : MACHINAU_DEFAULT_LANGUAGE;
+      }
+
+      // サイト全体改善 第3弾｜英語の時だけ固定の文言を差し替える(日本語は HTML のまま)。
+      // data-i18n-lines は訳文の改行(\n)を <br> にする(訳文は辞書の固定文言だけで、利用者の入力は入らない)。
+      const language = readMachinauLanguage();
+      if (language === MACHINAU_DEFAULT_LANGUAGE) {
+        return;
+      }
+      document.documentElement.lang = language;
+      document.title = getMachinauTranslation("contribute_doc_title", language);
+      document.querySelectorAll("[data-i18n]").forEach(function(element) {
+        element.textContent = getMachinauTranslation(element.getAttribute("data-i18n"), language);
+      });
+      document.querySelectorAll("[data-i18n-lines]").forEach(function(element) {
+        const lines = getMachinauTranslation(element.getAttribute("data-i18n-lines"), language).split("\n");
+        element.textContent = "";
+        lines.forEach(function(line, index) {
+          if (index > 0) {
+            element.appendChild(document.createElement("br"));
+          }
+          element.appendChild(document.createTextNode(line));
+        });
+      });
+    })();
+  </script>
 
 </body>
 </html>

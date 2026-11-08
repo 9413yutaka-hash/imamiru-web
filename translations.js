@@ -992,6 +992,199 @@ const MACHINAU_TRANSLATIONS = {
     ja: "送れるのは公開中のお店・施設だけで、一度に最大30件までです。リンクに位置情報やあなたの情報は含まれません。",
     en: "Only places that are currently listed are sent, up to 30 at a time. The link doesn't include your location or any personal information."
   },
+  // サイト全体改善 第3弾｜TOP のフッターの名前・読みもの一覧(column-list.html)・投稿の入口(contribute.html)。
+  footer_brand: {
+    ja: "マチナウ",
+    en: "Machinau"
+  },
+  column_list_doc_title: {
+    ja: "マチナウ読み物 一覧｜マチナウ",
+    en: "Machinau Reads | Machinau"
+  },
+  column_list_brand: {
+    ja: "マチナウ読み物",
+    en: "Machinau Reads"
+  },
+  column_list_heading: {
+    ja: "読みものを探す",
+    en: "Find an article"
+  },
+  column_list_month_label: {
+    ja: "掲載年月",
+    en: "Month published"
+  },
+  column_list_category_label: {
+    ja: "カテゴリー",
+    en: "Category"
+  },
+  column_list_all: {
+    ja: "すべて",
+    en: "All"
+  },
+  column_list_reset: {
+    ja: "条件をリセット",
+    en: "Clear filters"
+  },
+  column_list_loading: {
+    ja: "読み込んでいます…",
+    en: "Loading…"
+  },
+  column_list_no_match: {
+    ja: "この条件に一致する読み物はまだありません。",
+    en: "No articles match these filters yet."
+  },
+  column_list_load_error: {
+    ja: "読み物を読み込めませんでした。時間をおいて再度お試しください。",
+    en: "We couldn't load the articles. Please try again later."
+  },
+  column_list_language_note: {
+    ja: "",
+    en: "Article titles and summaries in this list are shown in Japanese. Open an article to read it in English."
+  },
+  column_list_back: {
+    ja: "← マチナウTOPへ戻る",
+    en: "← Back to Machinau"
+  },
+  "column_category_街を知る": {
+    ja: "街を知る",
+    en: "Know the Town"
+  },
+  "column_category_街を歩く": {
+    ja: "街を歩く",
+    en: "Walk the Town"
+  },
+  "column_category_食べる・飲む": {
+    ja: "食べる・飲む",
+    en: "Eat & Drink"
+  },
+  "column_category_見る・遊ぶ": {
+    ja: "見る・遊ぶ",
+    en: "See & Do"
+  },
+  "column_category_地元のくらし": {
+    ja: "地元のくらし",
+    en: "Local Life"
+  },
+  "column_category_旅のヒント": {
+    ja: "旅のヒント",
+    en: "Travel Tips"
+  },
+  "column_category_ちょっと深掘り": {
+    ja: "ちょっと深掘り",
+    en: "A Little Deeper"
+  },
+  contribute_doc_title: {
+    ja: "この街で、何か見つけた？｜マチナウ",
+    en: "Found something in town? | Machinau"
+  },
+  contribute_brand_caption: {
+    ja: "リアルタイム観光コンシェルジュ",
+    en: "Real-time travel concierge"
+  },
+  contribute_home_link: {
+    ja: "← トップへ戻る",
+    en: "← Back to top"
+  },
+  contribute_hero_label: {
+    ja: "街のみんなで届ける",
+    en: "Shared by the people in town"
+  },
+  contribute_heading: {
+    ja: "この街で、何か見つけた？",
+    en: "Found something in town?"
+  },
+  contribute_lead: {
+    ja: "イベント、お店、景色、街のちょっとした変化。\n見つけた「今」を、写真付きでも投稿できます。",
+    en: "Events, shops, views, little changes around town.\nShare what you found right now, with or without photos."
+  },
+  contribute_street_heading: {
+    ja: "投稿、ありませんか？",
+    en: "Anything to share?"
+  },
+  contribute_street_text: {
+    ja: "景色、お店、イベント、ちょっとした発見など。\n写真なしでも、写真を付けても投稿できます。",
+    en: "A view, a shop, an event, a small discovery.\nYou can post with or without photos."
+  },
+  contribute_street_message: {
+    ja: "あなたが今見つけたものが、次の旅行者の「知っててよかった」になる。",
+    en: "What you found today could be what the next traveler is glad to know."
+  },
+  contribute_street_cta: {
+    ja: "街の「今」を投稿する →",
+    en: "Post what's happening now →"
+  },
+  contribute_thread_heading: {
+    ja: "街の今スレッド",
+    en: "Town Now Threads"
+  },
+  contribute_thread_text: {
+    ja: "その場所について、聞きたいこと・伝えたいことを書いて、近くの人と話せます。\n会話はその日の0時まで。",
+    en: "Ask or share something about a place and talk with people nearby.\nConversations end at midnight that day."
+  },
+  contribute_thread_cta: {
+    ja: "新しいスレッドを立てる →",
+    en: "Start a new thread →"
+  },
+  contribute_shop_heading: {
+    ja: "お店・施設の方へ",
+    en: "For shops & venues"
+  },
+  contribute_shop_text: {
+    ja: "お店・施設からは、店舗アカウントで今だけ投稿ができます（有効な閲覧があった日だけ1投稿100円・税込）。",
+    en: "Shops and venues can post \"Just for Now\" updates from a business account. Details and fees are explained on the next page (in Japanese)."
+  },
+  contribute_shop_cta: {
+    ja: "投稿について詳しく見る →",
+    en: "Learn more (in Japanese) →"
+  },
+  contribute_rules_heading: {
+    ja: "投稿する前に",
+    en: "Before you post"
+  },
+  contribute_rule_photo: {
+    ja: "写真は自分で撮影したもの、または投稿権限があるものをお使いください",
+    en: "Use photos you took yourself or have permission to post."
+  },
+  contribute_rule_privacy: {
+    ja: "個人が特定できる写真や、プライバシーへの配慮をお願いします",
+    en: "Please respect privacy and avoid photos that identify people."
+  },
+  contribute_rule_review: {
+    ja: "投稿内容は確認のうえ公開される場合があります",
+    en: "Posts may be reviewed before they are published."
+  },
+  contribute_rule_emergency: {
+    ja: "危険情報・緊急を要する情報は、まず消防・警察等の公的機関へご連絡ください",
+    en: "For dangers or emergencies, contact the fire department, police or other authorities first."
+  },
+  contribute_rule_false: {
+    ja: "虚偽の情報や、他者の権利を侵害する投稿はご遠慮ください",
+    en: "Do not post false information or anything that infringes others' rights."
+  },
+  contribute_rules_more_before: {
+    ja: "詳しくは",
+    en: "See the "
+  },
+  contribute_terms_link: {
+    ja: "利用規約",
+    en: "Terms of Service"
+  },
+  contribute_rules_more_and: {
+    ja: "・",
+    en: " and "
+  },
+  contribute_privacy_link: {
+    ja: "プライバシーポリシー",
+    en: "Privacy Policy"
+  },
+  contribute_rules_more_after: {
+    ja: "をご覧ください。",
+    en: " (in Japanese)."
+  },
+  contribute_back: {
+    ja: "← マチナウTOPへ戻る",
+    en: "← Back to Machinau"
+  },
   travel_box_share_limit: {
     ja: "保存した{N}件のうち、上から30件を送ります。",
     en: "You have {N} saved places. The first 30 will be sent."

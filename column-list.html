@@ -226,6 +226,13 @@
       text-align: center;
     }
 
+    .list-language-note {
+      margin: 14px 0 0;
+      color: var(--subtext, #697386);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
     .back-link {
       display: inline-block;
       margin-top: 20px;
@@ -241,10 +248,10 @@
 <body class="machinau-page">
 
   <div class="page-header">
-    <div class="brand-mini">
+    <div class="brand-mini" data-i18n="column_list_brand">
       マチナウ読み物
     </div>
-    <h1>読みものを探す</h1>
+    <h1 data-i18n="column_list_heading">読みものを探す</h1>
   </div>
 
   <main>
@@ -256,16 +263,16 @@
              「いつの記事か(掲載年月＝publishedAt・初回公開日) × 何についての
              記事か(カテゴリー)」で探す。年月の選択肢は公開記事から自動生成する。 -->
         <div>
-          <label for="filterMonthInput">掲載年月</label>
+          <label for="filterMonthInput" data-i18n="column_list_month_label">掲載年月</label>
           <select id="filterMonthInput">
             <option value="">すべて</option>
           </select>
         </div>
 
         <div>
-          <label for="filterCategoryInput">カテゴリー</label>
+          <label for="filterCategoryInput" data-i18n="column_list_category_label">カテゴリー</label>
           <select id="filterCategoryInput">
-            <option value="">すべて</option>
+            <option value="" data-i18n="column_list_all">すべて</option>
             <option value="街を知る">街を知る</option>
             <option value="街を歩く">街を歩く</option>
             <option value="食べる・飲む">食べる・飲む</option>
@@ -277,21 +284,64 @@
         </div>
 
         <div class="filter-actions">
-          <button type="button" id="resetButton" class="reset-button">条件をリセット</button>
+          <button type="button" id="resetButton" class="reset-button" data-i18n="column_list_reset">条件をリセット</button>
         </div>
 
       </form>
     </div>
 
     <div id="articleList">
-      <div class="empty-state">読み込んでいます…</div>
+      <div class="empty-state" data-i18n="column_list_loading">読み込んでいます…</div>
     </div>
 
-    <a class="back-link" href="/">← マチナウTOPへ戻る</a>
+    <p class="list-language-note" id="listLanguageNote" hidden data-i18n="column_list_language_note"></p>
+
+    <a class="back-link" href="/" data-i18n="column_list_back">← マチナウTOPへ戻る</a>
 
   </main>
 
+  <script src="translations.js"></script>
   <script>
+    // サイト全体改善 第3弾｜TOP で選んだ言語(machinauLanguage)を引き継ぐ。値が無い・不正なら日本語。
+    function readMachinauLanguage() {
+      let stored = null;
+      try {
+        stored = localStorage.getItem("machinauLanguage");
+      } catch (error) {
+        stored = null;
+      }
+      return typeof stored === "string" && MACHINAU_SUPPORTED_LANGUAGES.includes(stored) ? stored : MACHINAU_DEFAULT_LANGUAGE;
+    }
+
+    // 固定の文言だけを訳す。記事の題名・紹介文は原文(日本語)のまま(一覧のために翻訳を新たに呼ばない)。
+    // 記事を開くと、詳細ページの既存の英語の表示(?lang=en・保存済みの訳と原文の予備)に移る。
+    const currentLanguage = readMachinauLanguage();
+    function t(key) {
+      return getMachinauTranslation(key, currentLanguage);
+    }
+    // カテゴリーの表示名(サーバーの COLUMN_CATEGORY_DISPLAY_LABELS と同じ訳)。値(絞り込みの条件)は日本語のまま。
+    function categoryLabel(category) {
+      const label = getMachinauTranslation("column_category_" + category, currentLanguage);
+      return label !== "" ? label : category;
+    }
+    function applyColumnListLanguage() {
+      if (currentLanguage === MACHINAU_DEFAULT_LANGUAGE) {
+        return;
+      }
+      document.documentElement.lang = currentLanguage;
+      document.title = t("column_list_doc_title");
+      document.querySelectorAll("[data-i18n]").forEach(function(element) {
+        element.textContent = t(element.getAttribute("data-i18n"));
+      });
+      Array.from(document.getElementById("filterCategoryInput").options).forEach(function(option) {
+        if (option.value !== "") {
+          option.textContent = categoryLabel(option.value);
+        }
+      });
+      document.getElementById("listLanguageNote").hidden = false;
+    }
+    applyColumnListLanguage();
+
     function escapeHtml(value) {
       return String(value ?? "")
         .replaceAll("&", "&amp;")
@@ -335,11 +385,16 @@
     // 再取得しない)。
     let loadedArticles = [];
 
-    // "2026-10" → "2026年10月"。将来このページを多言語化する時はここだけを
-    // 言語別(例："October 2026")にすればよい。
+    // "2026-10" → "2026年10月"(英語は "October 2026")。
     function formatMonthLabel(monthKey) {
       const parts = String(monthKey).split("-");
-      return parts.length === 2 ? Number(parts[0]) + "年" + Number(parts[1]) + "月" : monthKey;
+      if (parts.length !== 2) {
+        return monthKey;
+      }
+      if (currentLanguage === "en") {
+        return new Date(Date.UTC(Number(parts[0]), Number(parts[1]) - 1, 1)).toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+      }
+      return Number(parts[0]) + "年" + Number(parts[1]) + "月";
     }
 
     // 掲載年月の選択肢は、公開記事に実際に存在する年月だけを新しい順に並べる
@@ -354,7 +409,7 @@
       ).sort().reverse();
 
       filterMonthInput.innerHTML =
-        '<option value="">すべて</option>' +
+        '<option value="">' + escapeHtml(t("column_list_all")) + '</option>' +
         monthKeys
           .map(function(monthKey) {
             return '<option value="' + escapeHtml(monthKey) + '">' + escapeHtml(formatMonthLabel(monthKey)) + '</option>';
@@ -370,10 +425,10 @@
       }
 
       return (
-        '<a class="card article-card" href="column/' + encodeURIComponent(slug) + '.html">' +
+        '<a class="card article-card" href="column/' + encodeURIComponent(slug) + '.html' + (currentLanguage !== MACHINAU_DEFAULT_LANGUAGE ? "?lang=" + encodeURIComponent(currentLanguage) : "") + '">' +
           (article.imageUrl ? '<img class="article-card-image" src="' + escapeHtml(buildOptimizedImageUrl(article.imageUrl, { width: 600 })) + '" alt="" loading="lazy" onerror="this.remove()">' : "") +
           '<div class="article-card-body">' +
-            (article.category ? '<span class="article-card-category">' + escapeHtml(article.category) + '</span>' : "") +
+            (article.category ? '<span class="article-card-category">' + escapeHtml(categoryLabel(article.category)) + '</span>' : "") +
             '<p class="article-card-title">' + escapeHtml(article.title) + '</p>' +
             '<p class="article-card-description">' + escapeHtml(article.description) + '</p>' +
             (article.publishedDate ? '<p class="article-card-date">' + escapeHtml(article.publishedDate) + '</p>' : "") +
@@ -394,7 +449,7 @@
       });
 
       if (filteredArticles.length === 0) {
-        articleList.innerHTML = '<div class="empty-state">この条件に一致する読み物はまだありません。</div>';
+        articleList.innerHTML = '<div class="empty-state">' + escapeHtml(t("column_list_no_match")) + '</div>';
         return;
       }
 
@@ -402,7 +457,7 @@
     }
 
     async function loadArticles() {
-      articleList.innerHTML = '<div class="empty-state">読み込んでいます…</div>';
+      articleList.innerHTML = '<div class="empty-state">' + escapeHtml(t("column_list_loading")) + '</div>';
 
       const searchParams = new URLSearchParams({ mode: "publicListPublishedColumns" });
 
@@ -419,7 +474,7 @@
         renderFilteredArticles();
       } catch (error) {
         console.error("読み物一覧の取得に失敗しました：", error);
-        articleList.innerHTML = '<div class="empty-state">読み物を読み込めませんでした。時間をおいて再度お試しください。</div>';
+        articleList.innerHTML = '<div class="empty-state">' + escapeHtml(t("column_list_load_error")) + '</div>';
       }
     }
 

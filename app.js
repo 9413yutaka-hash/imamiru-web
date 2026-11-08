@@ -23750,3 +23750,33 @@ function openAreaSearchFromShopsEmpty() {
     areaButton.click();
   }
 }
+
+// サイト全体改善 第3弾｜ヒーローの4入口のクリック数(GA4 hero_action_click {action})。2入口案の判断のための計測。
+// 利用者が押した時だけ送る(isTrusted)。ほかの導線(店舗一覧の「ほかの地域を選ぶ」・位置の失敗時・掲載なしの案内)が
+// 内部で押す「地域から探す」は数えない。既存のクリック処理(移動・現在地の案内・community_board_view)は変えない。
+const HERO_ACTION_ANALYTICS_ACTIONS =
+  {
+    heroActionToday: "today",
+    heroActionNearby: "nearby",
+    heroActionArea: "area",
+    heroActionReads: "reads"
+  };
+Object.keys(HERO_ACTION_ANALYTICS_ACTIONS).forEach(function(elementId) {
+  const element =
+    document.getElementById(elementId);
+  if (!element) {
+    return;
+  }
+  element.addEventListener(
+    "click",
+    function(event) {
+      if (!event || event.isTrusted !== true) {
+        return;
+      }
+      sendMachinauAnalyticsEvent(
+        "hero_action_click",
+        { action: HERO_ACTION_ANALYTICS_ACTIONS[elementId] }
+      );
+    }
+  );
+});
