@@ -989,8 +989,12 @@ const MACHINAU_TRANSLATIONS = {
     en: "Send saved places to your travel companions"
   },
   travel_box_share_note: {
-    ja: "送れるのは公開中のお店・施設だけです。リンクに位置情報やあなたの情報は含まれません。",
-    en: "Only places that are currently listed are sent. The link doesn't include your location or any personal information."
+    ja: "送れるのは公開中のお店・施設だけで、一度に最大30件までです。リンクに位置情報やあなたの情報は含まれません。",
+    en: "Only places that are currently listed are sent, up to 30 at a time. The link doesn't include your location or any personal information."
+  },
+  travel_box_share_limit: {
+    ja: "保存した{N}件のうち、上から30件を送ります。",
+    en: "You have {N} saved places. The first 30 will be sent."
   },
   travel_box_share_empty: {
     ja: "送れるお店・施設がまだありません。カードの♡で保存してください。",
@@ -5709,8 +5713,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   imadake_post_photo_add: {
-    ja: "📷 写真を選ぶ",
-    en: "📷 Choose photos"
+    ja: "写真を選ぶ",
+    en: "Choose photos"
   },
 
   imadake_post_photo_hint_basic: {

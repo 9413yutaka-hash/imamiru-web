@@ -254,13 +254,15 @@
       text-decoration: none;
     }
   </style>
+  <!-- サイト全体改善 第2弾｜公開ページの共通の基準(見出し・押せる高さ・帯の色)。このページのスタイルの後に読む。 -->
+  <link rel="stylesheet" href="machinau-pages.css">
 </head>
 
-<body>
+<body class="machinau-page">
 
   <header>
     <div class="page-label">
-      📋 街の掲示板
+      街の掲示板
     </div>
 
     <h1>
@@ -522,7 +524,7 @@
       }
 
       if (remoteRegionBanner && remoteRegionBannerHeading && remoteRegionBannerDescription) {
-        remoteRegionBannerHeading.textContent = "📌 " + remoteRegionName + "の掲示板に投稿";
+        remoteRegionBannerHeading.textContent = remoteRegionName + "の掲示板に投稿";
         remoteRegionBannerDescription.textContent =
           remoteRegionName + "について知っていること、今の情報、おすすめなどを教えてください。";
         remoteRegionBanner.style.display = "block";

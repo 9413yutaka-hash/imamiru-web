@@ -1108,9 +1108,11 @@
       }
     }
   </style>
+  <!-- サイト全体改善 第2弾｜公開ページの共通の基準(見出し・押せる高さ・帯の色)。このページのスタイルの後に読む。 -->
+  <link rel="stylesheet" href="machinau-pages.css">
 </head>
 
-<body>
+<body class="machinau-page">
 
   <header class="top-bar">
     <div class="top-bar-inner">
@@ -1148,7 +1150,7 @@
     <div class="page-hero-inner">
 
       <div class="hero-label">
-        📍 街の「今」を届ける
+        街の「今」を届ける
       </div>
 
       <h1>
@@ -1203,7 +1205,7 @@
           class="post-mode-shop-unavailable-notice"
           style="display:none;"
         >
-          店舗・施設からの投稿は現在準備中です。「👀 街で見つけた！」からの投稿はご利用いただけます。
+          店舗・施設からの投稿は現在準備中です。「街で見つけた！」からの投稿はご利用いただけます。
         </p>
 
         <div class="post-mode-options">
@@ -1213,7 +1215,7 @@
             type="button"
             class="location-button"
           >
-            🏪 お店・施設からのお知らせ
+            お店・施設からのお知らせ
           </button>
 
           <button
@@ -1221,7 +1223,7 @@
             type="button"
             class="location-button"
           >
-            👀 街で見つけた！
+            街で見つけた！
           </button>
 
         </div>
@@ -1252,7 +1254,7 @@
         class="notice-box"
         style="display:none;"
       >
-        <strong>⏰ 今だけ投稿（24時間限定）</strong><br>
+        <strong>今だけ投稿（24時間限定）</strong><br>
         「今夜まだ空席あります」「あと6個」など、今だから役立つ情報を24時間だけ届けられます。
         <div style="margin-top:10px;">
           <button
@@ -1270,7 +1272,7 @@
         class="notice-box"
         style="display:none;"
       >
-        💡 写真は最大5枚まで選択できます。
+        写真は最大5枚まで選択できます。
         1枚目の写真がトップページのメイン画像になります。
         写真を付けずに投稿することもできます。
       </div>
@@ -1559,7 +1561,7 @@
             class="location-button"
             type="button"
           >
-            📍 この場所を現在地から設定
+            この場所を現在地から設定
           </button>
 
           <div
@@ -1927,7 +1929,7 @@
             class="after-action edit-post-button"
             href="edit.html"
           >
-            ✏️ 内容を編集する
+            内容を編集する
           </a>
 
           <a
@@ -1935,7 +1937,7 @@
             class="after-action end-post-button"
             href="end.html"
           >
-            🛑 掲載を終了する
+            掲載を終了する
           </a>
 
         </div>
@@ -2388,7 +2390,7 @@
         "street"
       ) {
         postModeSelectedLabel.textContent =
-          "選択中：👀 街で見つけた！";
+          "選択中：街で見つけた！";
 
         titleFormGroup.style.display =
           "none";
@@ -2416,7 +2418,7 @@
       } else {
         // 一般公開の shop 選択(postModeShopButton経由、現在は準備中で到達しない)の表示。
         postModeSelectedLabel.textContent =
-          "選択中：🏪 お店・施設からのお知らせ";
+          "選択中：お店・施設からのお知らせ";
 
         titleFormGroup.style.display =
           "";
@@ -2678,7 +2680,7 @@
       // 以内の人向け)に出るため、掲載先が分かる文言にする。店舗投稿は従来どおり。
       const publicationNoticeText =
         currentPostMode === "street"
-          ? "内容の安全確認後、トップページの「📍 街の発見」に、近く（15km以内）にいる方向けに掲載されます。反映まで少し時間がかかる場合があります。"
+          ? "内容の安全確認後、トップページの「街の発見」に、近く（15km以内）にいる方向けに掲載されます。反映まで少し時間がかかる場合があります。"
           : "内容の安全確認後、トップページに掲載されます。";
 
       // 街の発見(street)｜3/6/12/24時間で自動終了するため、投稿者に掲載番号・
@@ -3767,7 +3769,7 @@ function requestCurrentLocationForPost() {
           false;
 
         locationButton.textContent =
-          "📍 現在地を再取得";
+          "現在地を再取得";
       },
 
       function(error) {
@@ -3798,7 +3800,7 @@ function requestCurrentLocationForPost() {
           false;
 
         locationButton.textContent =
-          "📍 この場所を現在地から設定";
+          "この場所を現在地から設定";
       },
 
       {
@@ -4521,7 +4523,7 @@ longitude:
         false;
 
       locationButton.textContent =
-        "📍 この場所を現在地から設定";
+        "この場所を現在地から設定";
 
       locationMessageBox.className =
         "message-box";

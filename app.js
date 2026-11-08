@@ -4739,6 +4739,7 @@ function renderFavoriteList() {
     favoriteShops.map(function (shop) {
       return String(shop.firestoreId || "");
     });
+  updateTravelBoxShareLimit();
   if (favoriteShops.length === 0) {
     favoriteList.innerHTML =
       "<p>" +
@@ -23498,6 +23499,31 @@ function buildTravelBoxTripUrl(
     return "";
   }
   return MACHINAU_SHARE_ORIGIN + "/?trip=" + valid.join(".");
+}
+// 送れる件数(形の正しい ID・重複なし)が30件を超える時だけ、上から30件を送ることを共有ボタンの下に出す。
+function updateTravelBoxShareLimit() {
+  const limit =
+    document.getElementById("travelBoxShareLimit");
+  if (!limit) {
+    return;
+  }
+  const count =
+    travelBoxShareShopIds
+      .filter(function(id) {
+        return typeof id === "string" && MACHINAU_SHARE_ID_PATTERN.test(id);
+      })
+      .filter(function(id, index, list) {
+        return list.indexOf(id) === index;
+      })
+      .length;
+  if (count <= SHARED_TRIP_MAX_IDS) {
+    limit.hidden = true;
+    limit.textContent = "";
+    return;
+  }
+  limit.textContent =
+    getMachinauTranslation("travel_box_share_limit", getCurrentMachinauLanguage()).replace("{N}", String(count));
+  limit.hidden = false;
 }
 function readSharedTripIds(
   value

@@ -1684,6 +1684,7 @@
     .shared-trip-status { margin: 8px 0 0; font-size: 14px; color: #066fa6; min-height: 1em; }
     .travel-box-trip-share { margin-top: 18px; }
     .travel-box-share-note { margin: 8px 0 0; font-size: 13px; line-height: 1.6; color: var(--subtext, #55707a); }
+    .travel-box-share-limit { margin: 6px 0 0; font-size: 13px; line-height: 1.6; font-weight: 700; color: #8a5a00; }
     /* 共有リンクで開いた時に上部の固定バー(スマホ約110px・PC 57px)の下へ見出しが隠れないようにする。 */
     .shared-trip { scroll-margin-top: 124px; }
     @media (min-width: 701px) {
@@ -3143,7 +3144,8 @@
       <!-- サイト全体改善 G｜保存したお店・施設を同行者へ送る(公開中の ID だけの URL。位置情報・利用者の情報は含めない)。 -->
       <div class="machinau-share travel-box-trip-share">
         <button class="machinau-share-button" type="button" data-i18n="travel_box_share_button" onclick="shareTravelBoxTrip(this)">保存したお店を一緒に旅する人に送る</button>
-        <p class="travel-box-share-note" data-i18n="travel_box_share_note">送れるのは公開中のお店・施設だけです。リンクに位置情報やあなたの情報は含まれません。</p>
+        <p class="travel-box-share-note" data-i18n="travel_box_share_note">送れるのは公開中のお店・施設だけで、一度に最大30件までです。リンクに位置情報やあなたの情報は含まれません。</p>
+        <p class="travel-box-share-limit" id="travelBoxShareLimit" hidden></p>
         <div class="machinau-share-status" role="status" aria-live="polite"></div>
       </div>
     </section>

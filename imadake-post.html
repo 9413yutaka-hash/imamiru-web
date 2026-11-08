@@ -251,8 +251,10 @@
 
     [hidden] { display: none !important; }
   </style>
+  <!-- サイト全体改善 第2弾｜公開ページの共通の基準(見出し・押せる高さ・帯の色)。このページのスタイルの後に読む。 -->
+  <link rel="stylesheet" href="machinau-pages.css">
 </head>
-<body>
+<body class="machinau-page machinau-account-page">
 
   <!-- 多言語化｜固定文言はtranslations.jsのimadake_post_*(JA/EN、成果レポートはimadake_report_*)。
        data-i18n(文字)・data-i18n-placeholder・data-i18n-aria-label を applyPageLanguage() が差し替える。
@@ -263,7 +265,7 @@
       <div class="page-label" data-i18n="imadake_post_header_label">マチナウ｜お店・施設の方へ</div>
       <div id="languageSwitch" class="language-switch" role="group" aria-label="表示言語" data-i18n-aria-label="imadake_post_language_aria"></div>
     </div>
-    <h1 data-i18n="imadake_heading">⏰ 今だけ投稿</h1>
+    <h1 data-i18n="imadake_heading">今だけ投稿</h1>
     <p data-i18n="imadake_post_header_lead">「今、伝えたいこと」を、24時間だけ旅行者へ届けます。</p>
   </header>
 
@@ -357,7 +359,7 @@
 
       <div class="field">
         <span class="field-label"><span data-i18n="imadake_post_photos_label">写真</span><span class="optional" data-i18n="imadake_post_photos_optional">任意・最大10枚</span></span>
-        <button id="photoAddButton" class="photo-add-button" type="button" data-i18n="imadake_post_photo_add">📷 写真を選ぶ</button>
+        <button id="photoAddButton" class="photo-add-button" type="button" data-i18n="imadake_post_photo_add">写真を選ぶ</button>
         <input id="photoInput" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden>
         <div id="photoGrid" class="photo-grid"></div>
         <p id="photoHint" class="hint" data-i18n="imadake_post_photo_hint_basic">1枚目がメインの写真になります。</p>

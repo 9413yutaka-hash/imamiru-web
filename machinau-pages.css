@@ -1,0 +1,51 @@
+/* サイト全体改善 第2弾(2026-11-08、代表承認)｜TOP 以外の公開ページの共通の基準。
+   基準は TOP の新しい店舗カードと LP 級の店舗ページ(青のグラデーション #0687c5→#13c3ce・見出しは絵文字なし・押せる高さ44px)。
+   各ページの <style> の後に読み込み、見出しの大きさ・押せる高さ・アカウント系の帯の色だけを揃える。
+   要素の順番・ID・文言・フォームの動き・表示の条件は変えない。管理者の画面・領収書(store-receipt.html)は対象外。利用規約・特商法は告知の間(本番の現行の版と同一に保つ)対象外。 */
+
+/* 見出し：ページの題名は24px(PC は28px)、区切りの見出しは18px。 */
+.machinau-page h1 {
+  font-size: 24px;
+  line-height: 1.35;
+}
+
+.machinau-page h2 {
+  font-size: 18px;
+  line-height: 1.45;
+}
+
+/* 投稿の前の注意など、囲みの中の小さな見出しは本文より少しだけ大きく。 */
+.machinau-page .notice-box h2 {
+  font-size: 15px;
+}
+
+@media (min-width: 701px) {
+  .machinau-page h1 {
+    font-size: 28px;
+  }
+}
+
+/* アカウント系(店舗アカウント・店舗情報・今だけ投稿)の帯を、ほかの公開ページと同じ青のグラデーションに。 */
+.machinau-account-page > header {
+  background: linear-gradient(135deg, #0687c5, #13c3ce);
+}
+
+.machinau-account-page .language-switch button[aria-pressed="true"] {
+  color: #0687c5;
+}
+
+/* 押せる高さ：言語の切り替え・文字のボタン・計測の停止は44px。 */
+.machinau-page .language-switch button {
+  min-height: 44px;
+  padding: 8px 14px;
+}
+
+.machinau-page .link-button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+.machinau-page #areaUsageOptOutButton {
+  min-height: 44px;
+}
