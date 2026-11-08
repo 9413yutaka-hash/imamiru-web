@@ -107,7 +107,7 @@ if (!only || only === "2") for (const W of [{ w: 390, m: true, tag: "390" }, { w
   await setLocation(p, A); await p.waitFor("!document.getElementById('imadakeSection').hidden", 10000); await sleep(500);
   const s = await section(p);
   t(`[${W.tag}] 2 multiple posts shown in API order, expired one dropped`, !s.hidden && JSON.stringify(s.ids) === JSON.stringify(["p1", "p2", "p3"]), s.ids);
-  t(`[${W.tag}] 2 heading/lead`, s.heading === "⏰ 今だけ投稿" && s.lead.startsWith("近くのお店"), s);
+  t(`[${W.tag}] 2 heading/lead`, s.heading === "今だけ投稿" && s.lead.startsWith("近くのお店"), s);
   const c1 = await cardInfo(p, 0);
   t(`[${W.tag}] 2 card: PR, store, title, excerpt(+…), photo, chips, 続きを見る`, c1.pr === "PR・お店の投稿" && c1.store === "カフェp1" && c1.title === "今日だけのランチ p1" && c1.excerpt.endsWith("…") && c1.img && c1.chips.includes("残り席わずか・残り3") && c1.chips.includes("21:00まで") && c1.chips.some((x) => /^掲載あと5時間$/.test(x)) && c1.btn === "続きを見る" && c1.btnH >= 44 && c1.note === null, c1);
   const c2 = await cardInfo(p, 1);
@@ -198,13 +198,13 @@ if (!only || only === "5") {
   await setLocation(p, A); await p.waitFor("!document.getElementById('imadakeSection').hidden", 10000);
   await p.ev("switchMachinauLanguage('en'); true"); await sleep(500);
   const s = await section(p); const c = await cardInfo(p, 0);
-  t("9 English fixed texts (heading, lead, PR, button, chips)", s.heading === "⏰ Just for Now" && s.lead.startsWith("Nearby shops") && c.pr === "PR · From the shop" && c.btn === "See more" && c.chips.includes("Few seats left・3 left") && c.chips.includes("Until 21:00") && c.chips.some((x) => /^5h left$/.test(x)), { s, c });
+  t("9 English fixed texts (heading, lead, PR, button, chips)", s.heading === "Just for Now" && s.lead.startsWith("Nearby shops") && c.pr === "PR · From the shop" && c.btn === "See more" && c.chips.includes("Few seats left・3 left") && c.chips.includes("Until 21:00") && c.chips.some((x) => /^5h left$/.test(x)), { s, c });
   t("9 English: shop-written text stays original, with note", c.title === "今日だけのランチ e1" && c.note === "Shown as written by the shop", c);
   await tap(p, '#imadakeCardList .imadake-read-more', true); await sleep(600);
   const m = await modal(p);
   t("9 English detail labels; content original", m.text.includes("Price") && m.text.includes("Cash・QR code payment") && m.text.includes("Takeout available") && m.text.includes("📞 Call") && m.text.includes("本文1行目") && m.text.includes("Please check the latest"), m.text.slice(0, 300));
   await p.ev("switchMachinauLanguage('ja'); true"); await sleep(300);
-  t("9 language switch while detail open re-renders labels (ja)", (await modal(p)).text.includes("価格") && (await section(p)).heading === "⏰ 今だけ投稿");
+  t("9 language switch while detail open re-renders labels (ja)", (await modal(p)).text.includes("価格") && (await section(p)).heading === "今だけ投稿");
   await p.screenshot(`${SHOTS_DIR}/imadake-en-detail-390.png`, "#imadakeDetailModal .modal-card");
   await finish(p, "5");
 }

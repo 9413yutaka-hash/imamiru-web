@@ -288,6 +288,13 @@ function switchMachinauLanguage(language) {
   // renderShops()経由で✨⚡🔥も既存ロジックのまま再評価・再描画される)。
   refreshShopCategoryTextForCurrentLanguage();
 
+  // サイト全体改善 G｜共有された旅のリストを表示中なら、説明と種類の名前を今の言語で組み直す。
+  const sharedTripSectionElement =
+    document.getElementById("sharedTripSection");
+  if (sharedTripSectionElement && !sharedTripSectionElement.hidden) {
+    renderSharedTrip();
+  }
+
   // 地域おすすめはrenderShops()の対象外の独立セクションのため、
   // 別途Firestore再取得なしで再描画する(regionRecommendationArticlesは
   // 既に取得済みの配列をそのまま使う)。同じセクションに街の掲示板を
@@ -4089,6 +4096,12 @@ function renderShops() {
     topShopCardCandidates.length ===
     0
   ) {
+    // サイト全体改善 A｜現在地から15km以内に1件も無い時(カテゴリー「すべて」)は、カテゴリーの
+    // 問題ではないため距離の案内と「地域から探す」への導線を出す(15km・距離順の判定は変えない)。
+    const nearbyEmpty =
+      !selectedShopRegion &&
+      selectedCategory === "すべて" &&
+      userLatitude !== null;
     shopsList.innerHTML = `
       <div class="sample-notice">
         ${getMachinauTranslation(
@@ -4096,9 +4109,14 @@ function renderShops() {
             countShopsInSelectedShopRegion() +
               countStoreProfileListShopsInSelectedRegion() === 0
             ? "shops_region_empty"
-            : "shop_empty_category_notice",
+            : nearbyEmpty
+              ? "shops_nearby_empty"
+              : "shop_empty_category_notice",
           getCurrentMachinauLanguage()
         )}
+        ${nearbyEmpty
+          ? `<button type="button" class="shops-empty-area-button" onclick="openAreaSearchFromShopsEmpty()">${escapeHtml(getMachinauTranslation("shops_nearby_empty_area_button", getCurrentMachinauLanguage()))}</button>`
+          : ""}
       </div>
     `;
 
@@ -4717,6 +4735,10 @@ function renderFavoriteList() {
     }
   });
 
+  travelBoxShareShopIds =
+    favoriteShops.map(function (shop) {
+      return String(shop.firestoreId || "");
+    });
   if (favoriteShops.length === 0) {
     favoriteList.innerHTML =
       "<p>" +
@@ -4873,6 +4895,10 @@ function toggleFavorite(
         favoriteShopIds.add(id);
       }
     });
+    sendMachinauAnalyticsEvent(
+      turnOff ? "favorite_remove" : "favorite_add",
+      { content_type: "shop", listing_type: "store_profile" }
+    );
 
     localStorage.setItem(
       "machinauFavoriteShopIds",
@@ -4888,11 +4914,11 @@ function toggleFavorite(
     return;
   }
 
-  if (
+  const favoriteTurnOff =
     favoriteShopIds.has(
       firestoreId
-    )
-  ) {
+    );
+  if (favoriteTurnOff) {
     favoriteShopIds.delete(
       firestoreId
     );
@@ -4901,6 +4927,10 @@ function toggleFavorite(
       firestoreId
     );
   }
+  sendMachinauAnalyticsEvent(
+    favoriteTurnOff ? "favorite_remove" : "favorite_add",
+    { content_type: "shop", listing_type: "free_listing" }
+  );
 localStorage.setItem(
   "machinauFavoriteShopIds",
   JSON.stringify(
@@ -11034,14 +11064,22 @@ function getLocation() {
   navigator.geolocation
     .getCurrentPosition(
       function(position) {
+        sendMachinauAnalyticsEvent(
+          "location_result",
+          { result: "success" }
+        );
         applyUserLocation(
           position.coords.latitude,
           position.coords.longitude,
           null
         );
       },
-
       function(error) {
+        // サイト全体改善 H｜現在地の取得の失敗の理由だけを送る(位置・端末の情報は送らない)。
+        sendMachinauAnalyticsEvent(
+          "location_result",
+          { result: error && error.code === 1 ? "denied" : error && error.code === 2 ? "unavailable" : error && error.code === 3 ? "timeout" : "error" }
+        );
         let message =
           getMachinauTranslation(
             "location_error_generic",
@@ -11807,6 +11845,9 @@ function scrollToTopPage() {
 }
 
 function showMyPage() {
+  sendMachinauAnalyticsEvent(
+    "travel_box_open"
+  );
   const shopsSection =
     document.getElementById("shopsSection");
 
@@ -22772,12 +22813,16 @@ async function shareMachinauItemFromButton(
       : null;
 
   machinauShareInProgress = true;
-
   try {
-    await shareOrCopyMachinauUrl(
-      url,
-      button.getAttribute("data-share-title") || "",
-      status
+    const shareResult =
+      await shareOrCopyMachinauUrl(
+        url,
+        button.getAttribute("data-share-title") || "",
+        status
+      );
+    sendMachinauAnalyticsEvent(
+      "share",
+      { content_type: button.getAttribute("data-share-kind") || "", method: shareResult }
     );
   } finally {
     machinauShareInProgress = false;
@@ -22806,11 +22851,16 @@ async function shareMachinauSite(
   machinauShareInProgress = true;
 
   try {
-    await shareOrCopyMachinauUrl(
-      MACHINAU_SITE_SHARE_URL,
-      getMachinauTranslation("site_share_title", language),
-      status,
-      getMachinauTranslation("site_share_text", language)
+    const shareResult =
+      await shareOrCopyMachinauUrl(
+        MACHINAU_SITE_SHARE_URL,
+        getMachinauTranslation("site_share_title", language),
+        status,
+        getMachinauTranslation("site_share_text", language)
+      );
+    sendMachinauAnalyticsEvent(
+      "share",
+      { content_type: "site", method: shareResult }
     );
   } finally {
     machinauShareInProgress = false;
@@ -23281,6 +23331,7 @@ function tryOpenPendingSharedPost() {
 
 function tryOpenPendingSharedShop() {
   tryOpenPendingSharedPost();
+  tryShowPendingSharedTrip();
 
   if (
     pendingSharedShopId === "" ||
@@ -23397,3 +23448,279 @@ document.addEventListener(
     }
   }
 );
+
+// サイト全体改善 H｜TOP の「投稿する」と「お店・施設の方へ」の導線を押した時の計測(リンク先・移動は変えない)。
+document.addEventListener(
+  "click",
+  function(event) {
+    const link =
+      event.target && event.target.closest
+        ? event.target.closest(".contribute-cta-button, .contribute-cta-shop-link")
+        : null;
+    if (!link) {
+      return;
+    }
+    sendMachinauAnalyticsEvent(
+      link.classList.contains("contribute-cta-button") ? "contribute_cta_click" : "shop_guide_click",
+      { placement: "top_cta" }
+    );
+  }
+);
+
+// ==========================================================================
+// サイト全体改善 G｜旅の保存箱の共有(同行者へ保存したお店・施設を送る)
+// ==========================================================================
+// 送る URL は https://machinau.jp/?trip={ID}.{ID}...(公開中のお店・施設の ID だけ、最大30件)。
+// 位置情報・利用者の ID・保存の日時は含めない。新しい保存先・API・費用はない。
+// 受け取った側は、読み込み済みの公開一覧(無料掲載・正式店舗)にあるものだけを出す
+// (非公開・掲載終了・形の違う ID は出さない。公開の条件と15kmのルールは変えない)。
+const SHARED_TRIP_MAX_IDS =
+  30;
+var travelBoxShareShopIds =
+  [];
+var pendingSharedTripIds =
+  [];
+var sharedTripShopIds =
+  [];
+function buildTravelBoxTripUrl(
+  ids
+) {
+  const valid =
+    ids
+      .filter(function(id) {
+        return typeof id === "string" && MACHINAU_SHARE_ID_PATTERN.test(id);
+      })
+      .filter(function(id, index, list) {
+        return list.indexOf(id) === index;
+      })
+      .slice(0, SHARED_TRIP_MAX_IDS);
+  if (valid.length === 0) {
+    return "";
+  }
+  return MACHINAU_SHARE_ORIGIN + "/?trip=" + valid.join(".");
+}
+function readSharedTripIds(
+  value
+) {
+  if (typeof value !== "string" || value === "") {
+    return [];
+  }
+  return value
+    .split(".")
+    .filter(function(id) {
+      return MACHINAU_SHARE_ID_PATTERN.test(id);
+    })
+    .filter(function(id, index, list) {
+      return list.indexOf(id) === index;
+    })
+    .slice(0, SHARED_TRIP_MAX_IDS);
+}
+async function shareTravelBoxTrip(
+  button
+) {
+  if (!button || machinauShareInProgress) {
+    return;
+  }
+  const language =
+    getCurrentMachinauLanguage();
+  const status =
+    button.parentNode
+      ? button.parentNode.querySelector(".machinau-share-status")
+      : null;
+  renderFavoriteList();
+  const url =
+    buildTravelBoxTripUrl(travelBoxShareShopIds);
+  if (url === "") {
+    if (status) {
+      status.className = "machinau-share-status is-error";
+      status.textContent = getMachinauTranslation("travel_box_share_empty", language);
+    }
+    return;
+  }
+  machinauShareInProgress = true;
+  try {
+    const shareResult =
+      await shareOrCopyMachinauUrl(
+        url,
+        getMachinauTranslation("travel_box_share_title", language),
+        status
+      );
+    sendMachinauAnalyticsEvent(
+      "share",
+      { content_type: "trip", method: shareResult }
+    );
+  } finally {
+    machinauShareInProgress = false;
+  }
+}
+// 無料掲載と正式店舗の両方の読み込みが済んでから出す(tryOpenPendingSharedShop から呼ばれる)。
+function tryShowPendingSharedTrip() {
+  if (
+    pendingSharedTripIds.length === 0 ||
+    !hasAppliedSubmissionsForStoreProfiles ||
+    !storeProfileListFetchSettled
+  ) {
+    return;
+  }
+  const ids =
+    pendingSharedTripIds;
+  pendingSharedTripIds = [];
+  sharedTripShopIds =
+    ids
+      .map(resolveSharedShopId)
+      .filter(function(id, index, list) {
+        return id !== "" && list.indexOf(id) === index;
+      });
+  if (sharedTripShopIds.length === 0) {
+    showSharedLinkNotice("shared_trip_unavailable");
+    return;
+  }
+  renderSharedTrip();
+  sendMachinauAnalyticsEvent(
+    "shared_trip_view",
+    { item_count: sharedTripShopIds.length }
+  );
+  const section =
+    document.getElementById("sharedTripSection");
+  if (section && typeof section.scrollIntoView === "function") {
+    section.scrollIntoView({ block: "start" });
+  }
+}
+function findSharedTripShop(
+  id
+) {
+  if (id.indexOf("sp_") === 0) {
+    return findStoreProfileListShopForModal(id);
+  }
+  return shops.find(function(candidate) {
+    return candidate.firestoreId === id;
+  }) || null;
+}
+function renderSharedTrip() {
+  const section =
+    document.getElementById("sharedTripSection");
+  const lead =
+    document.getElementById("sharedTripLead");
+  const list =
+    document.getElementById("sharedTripList");
+  if (!section || !lead || !list) {
+    return;
+  }
+  const language =
+    getCurrentMachinauLanguage();
+  const items =
+    sharedTripShopIds
+      .map(function(id) {
+        return { id: id, shop: findSharedTripShop(id) };
+      })
+      .filter(function(item) {
+        return item.shop !== null;
+      });
+  if (items.length === 0) {
+    section.hidden = true;
+    return;
+  }
+  lead.textContent =
+    getMachinauTranslation("shared_trip_lead", language).replace("{N}", String(items.length));
+  list.innerHTML =
+    items
+      .map(function(item) {
+        const meta =
+          [item.shop.categoryText || "", item.shop.area || ""]
+            .filter(function(text) {
+              return typeof text === "string" && text !== "";
+            })
+            .join(" ・ ");
+        return (
+          '<li><button type="button" data-shared-trip-id="' + escapeHtml(item.id) + '">' +
+          '<span class="shared-trip-name">' + escapeHtml(item.shop.name || "") + "</span>" +
+          (meta !== "" ? '<span class="shared-trip-meta">' + escapeHtml(meta) + "</span>" : "") +
+          "</button></li>"
+        );
+      })
+      .join("");
+  section.hidden = false;
+}
+function saveSharedTripToTravelBox() {
+  sharedTripShopIds.forEach(function(id) {
+    const storeProfileShop =
+      id.indexOf("sp_") === 0 ? findStoreProfileListShopForModal(id) : null;
+    const ids =
+      storeProfileShop
+        ? [storeProfileShop.firestoreId].concat(storeProfileShop.linkedListingIds || [])
+        : [id];
+    ids.forEach(function(saveId) {
+      favoriteShopIds.add(saveId);
+    });
+  });
+  try {
+    localStorage.setItem(
+      "machinauFavoriteShopIds",
+      JSON.stringify(Array.from(favoriteShopIds))
+    );
+  } catch (error) {
+    // 保存できない端末(プライベートブラウズ等)でも、画面のお気に入りの表示は続ける。
+  }
+  renderShops();
+  renderFavoriteList();
+  sendMachinauAnalyticsEvent(
+    "shared_trip_save",
+    { item_count: sharedTripShopIds.length }
+  );
+  const status =
+    document.getElementById("sharedTripStatus");
+  if (status) {
+    status.textContent =
+      getMachinauTranslation("shared_trip_saved", getCurrentMachinauLanguage());
+  }
+}
+function closeSharedTrip() {
+  const section =
+    document.getElementById("sharedTripSection");
+  if (section) {
+    section.hidden = true;
+  }
+}
+document.addEventListener(
+  "click",
+  function(event) {
+    const button =
+      event.target && event.target.closest
+        ? event.target.closest("[data-shared-trip-id]")
+        : null;
+    if (button) {
+      openShopModal(button.getAttribute("data-shared-trip-id"), "other");
+    }
+  }
+);
+document.addEventListener(
+  "DOMContentLoaded",
+  function() {
+    let params =
+      null;
+    try {
+      params =
+        new URLSearchParams(window.location.search);
+    } catch (error) {
+      return;
+    }
+    // 他の共有リンク(?imadake=・?shop=・?post=)がある時は、そちらを優先して何もしない。
+    if (params.get("imadake") || params.get("shop") || params.get("post")) {
+      return;
+    }
+    pendingSharedTripIds =
+      readSharedTripIds(params.get("trip"));
+    if (pendingSharedTripIds.length > 0) {
+      tryShowPendingSharedTrip();
+    }
+  }
+);
+
+// サイト全体改善 A｜近くにお店・施設が無い時の「地域から探す」(ヒーローの同じボタンと同じ動き)。
+function openAreaSearchFromShopsEmpty() {
+  const areaButton =
+    document.getElementById("heroActionArea");
+  if (areaButton) {
+    areaButton.click();
+  }
+}

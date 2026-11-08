@@ -320,8 +320,8 @@ const MACHINAU_TRANSLATIONS = {
   // 多言語対応が無く、遷移先が日本語のみのため、玄関ページだけ英語化しても
   // 一貫した体験にならないという確認済みの理由による)。
   contribute_cta_heading: {
-    ja: "📣 あなたの発見を教えて！",
-    en: "📣 Tell us what you've found!"
+    ja: "あなたの発見を教えて！",
+    en: "Tell us what you've found!"
   },
 
   contribute_cta_message: {
@@ -404,8 +404,8 @@ const MACHINAU_TRANSLATIONS = {
   // AIコンシェルジュ Phase2｜「店からの提案か、マチナウからの提案か
   // 分かりにくい」問題への対応。本部第一候補をそのまま採用。
   suggestion_heading: {
-    ja: "✨ マチナウAI「今どうする？」",
-    en: "✨ Machinau AI: What now?"
+    ja: "マチナウAI「今どうする？」",
+    en: "Machinau AI: What now?"
   },
 
   // 初心回帰後の新トップ体験 Phase1｜旅行者向けUIから「AI」という言葉・
@@ -598,13 +598,13 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   factual_heading: {
-    ja: "⚡ 今、知っておきたいこと",
-    en: "⚡ Good to Know"
+    ja: "今、知っておきたいこと",
+    en: "Good to Know"
   },
 
   today_machinau_heading: {
-    ja: "🔥 今、見てほしい",
-    en: "🔥 Worth a Look Now"
+    ja: "今、見てほしい",
+    en: "Worth a Look Now"
   },
 
   today_machinau_label: {
@@ -953,6 +953,14 @@ const MACHINAU_TRANSLATIONS = {
     en: "🗺️ Pick another area"
   },
 
+  shops_nearby_empty: {
+    ja: "現在地から15km以内に、掲載中のお店・施設はまだありません。ほかの地域のお店・施設は「地域から探す」で見られます。",
+    en: "There are no listed places within 15 km of you yet. You can browse other areas with \"Explore by Area.\""
+  },
+  shops_nearby_empty_area_button: {
+    ja: "地域から探す",
+    en: "Explore by Area"
+  },
   shops_region_empty: {
     ja: "現在、この地域に掲載中のお店・施設はありません。",
     en: "There are no shops or spots listed in this area yet."
@@ -975,9 +983,51 @@ const MACHINAU_TRANSLATIONS = {
     en: "Close"
   },
 
+  // サイト全体改善 G｜旅の保存箱の共有。送るのは公開中のお店・施設の ID だけ(位置情報・利用者の情報は含めない)。
+  travel_box_share_button: {
+    ja: "保存したお店を一緒に旅する人に送る",
+    en: "Send saved places to your travel companions"
+  },
+  travel_box_share_note: {
+    ja: "送れるのは公開中のお店・施設だけです。リンクに位置情報やあなたの情報は含まれません。",
+    en: "Only places that are currently listed are sent. The link doesn't include your location or any personal information."
+  },
+  travel_box_share_empty: {
+    ja: "送れるお店・施設がまだありません。カードの♡で保存してください。",
+    en: "There are no places to send yet. Tap ♡ on a card to save one."
+  },
+  travel_box_share_title: {
+    ja: "マチナウ 旅のリスト",
+    en: "Machinau trip list"
+  },
+  shared_trip_heading: {
+    ja: "共有された旅のリスト",
+    en: "A shared trip list"
+  },
+  shared_trip_lead: {
+    ja: "{N}件のお店・施設が届きました。押すと詳しく見られます。",
+    en: "{N} places were shared with you. Tap one to see the details."
+  },
+  shared_trip_unavailable: {
+    ja: "共有されたお店・施設は、今は掲載されていません。",
+    en: "The shared places aren't listed right now."
+  },
+  shared_trip_save_all: {
+    ja: "まとめて自分の保存箱に保存",
+    en: "Save all to my Travel Box"
+  },
+  shared_trip_saved: {
+    ja: "旅の保存箱に保存しました。",
+    en: "Saved to your Travel Box."
+  },
+  shared_trip_close: {
+    ja: "閉じる",
+    en: "Close"
+  },
+
   mypage_heading: {
-    ja: "🧳 旅の保存箱",
-    en: "🧳 Travel Box"
+    ja: "旅の保存箱",
+    en: "Travel Box"
   },
 
   mypage_description: {
@@ -993,13 +1043,13 @@ const MACHINAU_TRANSLATIONS = {
   // 旅の保存箱 Phase 1a｜保存の種類ごとの見出しと、保存先の説明。
   // Phase 1b｜代表確定仕様の見出し(❤️ お気に入り／📖 お気に入り読み物)へ変更。
   travel_box_shops_heading: {
-    ja: "❤️ お気に入り",
-    en: "❤️ Favorites"
+    ja: "お気に入り",
+    en: "Favorites"
   },
 
   travel_box_articles_heading: {
-    ja: "📖 お気に入り読み物",
-    en: "📖 Saved Reads"
+    ja: "お気に入り読み物",
+    en: "Saved Reads"
   },
 
   // 旅の保存箱 Phase 1b｜読みもの保存の案内・ボタン文言。
@@ -1054,8 +1104,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   map_heading: {
-    ja: "📍 今いる場所の近くを地図で見る",
-    en: "📍 See What's Nearby on the Map"
+    ja: "今いる場所の近くを地図で見る",
+    en: "See What's Nearby on the Map"
   },
 
   toilet_search_button: {
@@ -1069,8 +1119,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   region_recommendation_heading_default: {
-    ja: "📍 この地域のおすすめ",
-    en: "📍 Recommended in This Area"
+    ja: "この地域のおすすめ",
+    en: "Recommended in This Area"
   },
 
   city_info_button: {
@@ -1089,8 +1139,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   column_entry_heading: {
-    ja: "📖 マチナウ読みもの",
-    en: "📖 Machinau Reads"
+    ja: "マチナウ読みもの",
+    en: "Machinau Reads"
   },
 
   column_entry_lead: {
@@ -1144,6 +1194,12 @@ const MACHINAU_TRANSLATIONS = {
   footer_tagline: {
     ja: "今、何が起きているかを見つけよう。",
     en: "Discover what's happening right now."
+  },
+
+  // サイト全体改善 F｜フッターの出典のラベル(データの名前「Geolonia 住所データ」は出典の表記のまま)。
+  footer_data_credit_label: {
+    ja: "市区町村データ：",
+    en: "Municipality data: "
   },
 
   footer_terms_link: {
@@ -1582,13 +1638,13 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   region_recommendation_heading_dynamic: {
-    ja: "📍 {AREA}のおすすめ",
-    en: "📍 Recommendations in {AREA}"
+    ja: "{AREA}のおすすめ",
+    en: "Recommendations in {AREA}"
   },
 
   community_board_heading_dynamic: {
-    ja: "📌 {AREA}の掲示板",
-    en: "📌 {AREA} Community Board"
+    ja: "{AREA}の掲示板",
+    en: "{AREA} Community Board"
   },
 
   // 街の掲示板 停止防止｜掲示板を取得できなかった時(投稿0件とは別の表示)。
@@ -1608,8 +1664,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   street_discovery_heading: {
-    ja: "📍 街の発見",
-    en: "📍 Spotted Nearby"
+    ja: "街の発見",
+    en: "Spotted Nearby"
   },
 
   street_discovery_lead: {
@@ -1831,8 +1887,8 @@ const MACHINAU_TRANSLATIONS = {
   // 街の今スレッド Phase 1C-2｜TOP一覧＋詳細モーダル(見るだけ)。
   // 文言は仮(代表が実機確認後に最終判断)。投稿本文・返信本文は翻訳しない。
   town_now_heading: {
-    ja: "💬 街の今スレッド",
-    en: "💬 Town Now Threads"
+    ja: "街の今スレッド",
+    en: "Town Now Threads"
   },
 
   town_now_description: {
@@ -4948,8 +5004,8 @@ const MACHINAU_TRANSLATIONS = {
   // 今だけ投稿 STEP 2｜TOPの独立枠と詳細表示の固定文言。投稿の見出し・本文・店名・
   // 価格等(店舗が書いた内容)はここでは扱わず、原文のまま表示する。
   imadake_heading: {
-    ja: "⏰ 今だけ投稿",
-    en: "⏰ Just for Now"
+    ja: "今だけ投稿",
+    en: "Just for Now"
   },
 
   imadake_lead: {

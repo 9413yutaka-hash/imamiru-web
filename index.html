@@ -1656,6 +1656,40 @@
       display: none;
     }
 
+    /* サイト全体改善 A・G｜近くに掲載が無い時の「地域から探す」と、共有された旅のリスト(スマホ・PC 共通)。 */
+    .shops-empty-area-button {
+      display: inline-flex; align-items: center; justify-content: center; min-height: 44px; margin-top: 12px; padding: 10px 18px;
+      border: 0; border-radius: 999px; background: #0b84a5; color: #ffffff; font: inherit; font-weight: 700; cursor: pointer;
+    }
+    .shared-trip {
+      margin: 16px auto;
+      padding: 18px 16px;
+      background: #ffffff;
+      border-radius: 18px;
+      box-shadow: 0 6px 20px rgba(15, 40, 70, 0.08);
+    }
+    .shared-trip h2 { margin: 0 0 6px; font-size: 18px; }
+    .shared-trip-lead { margin: 0 0 12px; font-size: 14px; color: #4a5b6b; }
+    .shared-trip-list { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 8px; }
+    .shared-trip-list button {
+      display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; min-height: 52px;
+      padding: 10px 14px; border: 1px solid #d7e6f1; border-radius: 12px; background: #f7fbfe; text-align: left; font: inherit; cursor: pointer;
+    }
+    .shared-trip-list .shared-trip-name { font-size: 15px; font-weight: 700; color: #16303a; }
+    .shared-trip-list .shared-trip-meta { font-size: 13px; color: #55707a; }
+    .shared-trip-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .shared-trip-actions button { min-height: 44px; padding: 10px 16px; border-radius: 999px; font: inherit; font-weight: 700; cursor: pointer; }
+    .shared-trip-save { border: 0; background: #0b84a5; color: #ffffff; }
+    .shared-trip-close { border: 1px solid #cfe0ea; background: #ffffff; color: #16303a; }
+    .shared-trip-status { margin: 8px 0 0; font-size: 14px; color: #066fa6; min-height: 1em; }
+    .travel-box-trip-share { margin-top: 18px; }
+    .travel-box-share-note { margin: 8px 0 0; font-size: 13px; line-height: 1.6; color: var(--subtext, #55707a); }
+    /* 共有リンクで開いた時に上部の固定バー(スマホ約110px・PC 57px)の下へ見出しが隠れないようにする。 */
+    .shared-trip { scroll-margin-top: 124px; }
+    @media (min-width: 701px) {
+      .shared-trip { scroll-margin-top: 76px; }
+    }
+
     @media (min-width: 701px) {
       body {
         padding-bottom: 24px;
@@ -2381,7 +2415,7 @@
       aria-labelledby="imadakeHeading"
       hidden
     >
-      <h2 id="imadakeHeading" data-i18n="imadake_heading">⏰ 今だけ投稿</h2>
+      <h2 id="imadakeHeading" data-i18n="imadake_heading">今だけ投稿</h2>
       <p class="imadake-lead" data-i18n="imadake_lead">近くのお店・施設が「今」を伝えています（掲載は最長24時間）。</p>
       <div id="imadakeCardList" class="imadake-card-list"></div>
     </section>
@@ -2398,7 +2432,7 @@
     >
 
       <span class="suggestion-highlight-heading" data-i18n="suggestion_heading">
-        ✨ マチナウAI「今どうする？」
+        マチナウAI「今どうする？」
       </span>
 
       <p
@@ -2713,6 +2747,18 @@
 
     </section>
 
+    <!-- サイト全体改善 G｜共有された旅のリスト(?trip=)。公開中のお店・施設だけを、読み込み済みの一覧から出す(通信の追加なし)。 -->
+    <section id="sharedTripSection" class="section shared-trip" aria-labelledby="sharedTripHeading" hidden>
+      <h2 id="sharedTripHeading" data-i18n="shared_trip_heading">共有された旅のリスト</h2>
+      <p id="sharedTripLead" class="shared-trip-lead"></p>
+      <ul id="sharedTripList" class="shared-trip-list"></ul>
+      <div class="shared-trip-actions">
+        <button id="sharedTripSaveAllButton" class="shared-trip-save" type="button" data-i18n="shared_trip_save_all" onclick="saveSharedTripToTravelBox()">まとめて自分の保存箱に保存</button>
+        <button class="shared-trip-close" type="button" data-i18n="shared_trip_close" onclick="closeSharedTrip()">閉じる</button>
+      </div>
+      <p id="sharedTripStatus" class="shared-trip-status" role="status" aria-live="polite"></p>
+    </section>
+
     <section
       id="unifiedImportantInfoSection"
       class="unified-important-info-section"
@@ -2721,7 +2767,7 @@
 
       <div class="unified-important-info-header">
         <span class="unified-important-info-heading" data-i18n="factual_heading">
-          ⚡ 今、知っておきたいこと
+          今、知っておきたいこと
         </span>
         <span
           id="unifiedImportantInfoLabel"
@@ -2764,7 +2810,7 @@
 
       <div class="today-machinau-header">
         <span class="today-machinau-heading" data-i18n="today_machinau_heading">
-          🔥 今、見てほしい
+          今、見てほしい
         </span>
         <span class="today-machinau-label" data-i18n="today_machinau_label">
           運営情報
@@ -2840,7 +2886,7 @@
       style="display:none;"
     >
       <h2 data-i18n="town_now_heading">
-        💬 街の今スレッド
+        街の今スレッド
       </h2>
       <p class="town-now-description" data-i18n="town_now_description">
         近くにいる人たちの、今日の会話です。
@@ -2866,7 +2912,7 @@
     >
 
       <h2 id="regionRecommendationHeading" data-i18n="region_recommendation_heading_default">
-        📍 この地域のおすすめ
+        この地域のおすすめ
       </h2>
 
       <!-- 街の掲示板 Phase5｜地域代表画像(1地域につき1枚、投稿カードの
@@ -2945,7 +2991,7 @@
         class="contribute-cta-heading"
         data-i18n="contribute_cta_heading"
       >
-        📣 あなたの発見を教えて！
+        あなたの発見を教えて！
       </span>
 
       <p
@@ -2987,7 +3033,7 @@
     >
 
       <h2 data-i18n="street_discovery_heading">
-        📍 街の発見
+        街の発見
       </h2>
 
       <p class="column-entry-lead" data-i18n="street_discovery_lead">
@@ -3008,7 +3054,7 @@
     >
 
       <h2 data-i18n="column_entry_heading">
-        📖 マチナウ読みもの
+        マチナウ読みもの
       </h2>
 
       <p class="column-entry-lead" data-i18n="column_entry_lead">
@@ -3031,7 +3077,7 @@
 
     <section class="map-section">
       <h2 data-i18n="map_heading">
-        📍 今いる場所の近くを地図で見る
+        今いる場所の近くを地図で見る
       </h2>
       <div id="google-map"></div>
 
@@ -3083,24 +3129,30 @@
     <section id="myPageSection" class="travel-box" style="display:none;">
   <div class="section-header">
     <div class="section-title-area">
-      <h2 data-i18n="mypage_heading">🧳 旅の保存箱</h2>
+      <h2 data-i18n="mypage_heading">旅の保存箱</h2>
       <p data-i18n="mypage_description">旅先で見つけた情報を保存して、旅の途中や旅のあとに振り返れます。</p>
     </div>
   </div>
 
   <div id="myPageContent">
     <section class="travel-box-group" aria-labelledby="travelBoxShopsHeading">
-      <h3 id="travelBoxShopsHeading" class="travel-box-group-heading" data-i18n="travel_box_shops_heading">❤️ お気に入り</h3>
+      <h3 id="travelBoxShopsHeading" class="travel-box-group-heading" data-i18n="travel_box_shops_heading">お気に入り</h3>
       <div id="favoriteList">
   <p data-i18n="mypage_favorite_empty">まだ保存したお店・施設はありません。カードの♡を押すと、ここに保存されます。</p>
 </div>
+      <!-- サイト全体改善 G｜保存したお店・施設を同行者へ送る(公開中の ID だけの URL。位置情報・利用者の情報は含めない)。 -->
+      <div class="machinau-share travel-box-trip-share">
+        <button class="machinau-share-button" type="button" data-i18n="travel_box_share_button" onclick="shareTravelBoxTrip(this)">保存したお店を一緒に旅する人に送る</button>
+        <p class="travel-box-share-note" data-i18n="travel_box_share_note">送れるのは公開中のお店・施設だけです。リンクに位置情報やあなたの情報は含まれません。</p>
+        <div class="machinau-share-status" role="status" aria-live="polite"></div>
+      </div>
     </section>
 
     <!-- 旅の保存箱 Phase 1b｜保存したマチナウ読みもの。中身はapp.jsのrenderSavedArticleList()が
          端末内の保存(machinauSavedItems)と取得済みの記事一覧から描く(通信なし)。
          街の掲示板の保存枠は未実装のため置かない(空の「準備中」も出さない)。 -->
     <section id="travelBoxArticlesGroup" class="travel-box-group" aria-labelledby="travelBoxArticlesHeading">
-      <h3 id="travelBoxArticlesHeading" class="travel-box-group-heading" data-i18n="travel_box_articles_heading">📖 お気に入り読み物</h3>
+      <h3 id="travelBoxArticlesHeading" class="travel-box-group-heading" data-i18n="travel_box_articles_heading">お気に入り読み物</h3>
       <p id="savedArticleNotice" class="saved-items-notice" role="status" aria-live="polite" hidden></p>
       <div id="savedArticleList">
         <p data-i18n="travel_box_articles_empty">まだ保存した読みものはありません。「マチナウ読みもの」の♡を押すと、ここに保存されます。</p>
@@ -3142,7 +3194,7 @@
     </div>
 
     <div class="footer-data-credit" style="margin-top: 8px; font-size: 12px; opacity: 0.75;">
-      市区町村データ：<a href="https://github.com/geolonia/japanese-addresses" target="_blank" rel="noopener noreferrer" style="color: inherit;">Geolonia 住所データ</a>（<a href="https://creativecommons.org/licenses/by/4.0/deed.ja" target="_blank" rel="noopener noreferrer" style="color: inherit;">CC BY 4.0</a>）
+      <span data-i18n="footer_data_credit_label">市区町村データ：</span><a href="https://github.com/geolonia/japanese-addresses" target="_blank" rel="noopener noreferrer" style="color: inherit;">Geolonia 住所データ</a>（<a href="https://creativecommons.org/licenses/by/4.0/deed.ja" target="_blank" rel="noopener noreferrer" style="color: inherit;">CC BY 4.0</a>）
     </div>
   </footer>
 

@@ -113,7 +113,7 @@ try {
     const q = await openPage(browser, { origin: ORIGIN, width: 390, mobile: true, state: { initScripts: [fakeStoreAuth({ uid: "u1", token: "acct-token" }), `try{ if (window.top===window && !sessionStorage.getItem("__l")) { sessionStorage.setItem("__l","1"); localStorage.setItem("machinauLanguage", "${lang}"); } }catch(e){}`], apiMock: async (url, method, l, postData) => { if (method !== "POST") return null; let body = {}; try { body = JSON.parse(postData || "{}"); } catch {} calls5.push(body.mode); if (body.mode === "storeMyStores") return { body: { success: true, stores: STORES } }; return { body: { success: false } }; } } });
     await q.goto("/store-account.html"); await q.waitFor("document.querySelectorAll('#storeList > *').length >= 5", 10000); await sleep(500);
     const links = await q.ev(`[...document.querySelectorAll("#storeList > *")].map(item => [...item.querySelectorAll("a")].map(a => a.getAttribute("href") + "|" + a.textContent))`);
-    const label = lang === "ja" ? "⏰ 今だけ投稿" : "⏰ Just for Now";
+    const label = lang === "ja" ? "今だけ投稿" : "Just for Now";
     t(`5 [${lang}] active stores: profile link unchanged + imadake link with own storeId, no token`, [0, 1].every((i) => links[i].length === 2 && links[i][0].startsWith(`store-profile.html?store=self${i + 1}|`) && links[i][1] === `imadake-post.html?store=self${i + 1}|${label}`), links);
     t(`5 [${lang}] pending / suspended / rejected: no imadake link (no links as before)`, links.slice(2).every((x) => x.length === 0), links.slice(2));
     t(`5 [${lang}] no link contains a token`, links.flat().every((l) => !/token=/.test(l)));
