@@ -287,6 +287,14 @@ try {
     }
     await p.close();
   }
+  {
+    // 記事の取得に失敗した時も、英語の選択肢・案内は英語のまま。
+    const p = await openPage(browser, { origin: ORIGIN, width: 390, mobile: true, state: { apiMock: (url, ...rest) => (url.includes("publicListPublishedColumns") ? null : api(url, ...rest)), articles: [], columnFail: true, urlMock, initScripts: [langInit("en")] } });
+    await p.goto("/column-list.html"); await sleep(1000);
+    const v = await p.ev(`({ months: [...document.getElementById("filterMonthInput").options].map((o) => o.textContent), msg: document.getElementById("articleList").textContent.trim() })`);
+    t("3g 読みもの一覧(英語)：取得に失敗した時も選択肢と案内は英語", v.months.join("|") === "All" && v.msg === "We couldn't load the articles. Please try again later.", v);
+    await p.close();
+  }
   t("4 翻訳の API は呼ばない・想定外の外部通信なし", calls.translation === 0 && calls.other === 0, calls);
 } finally {
   browser.close(); server.close(); staticServer.close();
