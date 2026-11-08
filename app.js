@@ -905,14 +905,13 @@ function getExpiryDisplayText(
     expiryMilliseconds -
     nowMilliseconds;
 
+  // サイト全体改善 第5弾｜期限の無い掲載(常設の掲載など)・期限を過ぎた掲載には、時間の表示を出さない
+  // (以前は作成日に関係なく「新着」と出ていた)。表示するのは、実際の掲載期限までの残り時間だけ。
   if (
     expiryMilliseconds <= 0 ||
     remainingMilliseconds <= 0
   ) {
-    return getMachinauTranslation(
-      "shop_expiry_new",
-      getCurrentMachinauLanguage()
-    );
+    return "";
   }
 
   if (
@@ -937,20 +936,27 @@ function getExpiryDisplayText(
     );
   }
 
+  // 翌日まで続く掲載を「今日だけ」と言わないよう、残りの時間(切り捨て)で伝える。
   if (
     remainingMilliseconds <=
     24 * 60 * 60 * 1000
   ) {
     return getMachinauTranslation(
-      "shop_expiry_today_only",
+      "shop_expiry_hours_left",
       getCurrentMachinauLanguage()
+    ).replace(
+      "{N}",
+      Math.max(
+        1,
+        Math.floor(
+          remainingMilliseconds /
+            (60 * 60 * 1000)
+        )
+      )
     );
   }
 
-  return getMachinauTranslation(
-    "shop_expiry_new",
-    getCurrentMachinauLanguage()
-  );
+  return "";
 }
 
 function getJstMinutesSinceMidnight(
@@ -996,7 +1002,21 @@ function parseTimeStringToMinutes(
   );
 }
 
+// サイト全体改善 第5弾(代表指示：今営業していると確かめられない店舗に「営業中」と出さない)｜
+// 投稿の営業時間には定休日・臨時休業の情報が無く、今営業しているかを確かめられない。そのため
+// 営業中・営業時間外・「掲載中」の状態と、閉店まで・本日の営業終了の案内(この結果から決まる)は出さない。
+// 店舗が入力した営業時間は、従来どおり詳細の時間の案内(getBusinessHoursDisplayText)に出る。
+// 時刻による判定(getBusinessStatusFromHours)は、根拠のある営業状態を扱えるようになった時のために残す。
 function getBusinessStatus(
+  shop
+) {
+  return {
+    text: "",
+    isOpen: null
+  };
+}
+
+function getBusinessStatusFromHours(
   shop
 ) {
   if (shop.isOpen24Hours === true) {
@@ -3847,6 +3867,52 @@ function countStoreProfileListShopsInSelectedRegion() {
     }).length;
 }
 
+// サイト全体改善 第5弾｜TOPカードの短い紹介。紹介文(表示中の言語)の最初の段落を、途中の改行をつないで
+// 先頭の「📢」等の記号を除き、最初の一文(。！？!? または ". " まで)だけを使う(長さはCSSで2行までに
+// 収める。全文は詳細・店舗ページで読める)。文章を作り足したり要約したりしない。紹介文が無ければ何も出さない。
+function getShopCardSummaryHtml(
+  message
+) {
+  const firstParagraph =
+    String(message || "")
+      .replace(/\r\n?/g, "\n")
+      .split(/\n\s*\n/)
+      .map(function(paragraph) {
+        return paragraph
+          .split("\n")
+          .map(function(line) {
+            return line.trim();
+          })
+          .filter(function(line) {
+            return line !== "";
+          })
+          .reduce(function(joined, line) {
+            if (joined === "") {
+              return line;
+            }
+            // 英数字どうしの改行だけ空白でつなぐ(日本語の途中の改行は詰める)。
+            return /[A-Za-z0-9,.]$/.test(joined) && /^[A-Za-z0-9]/.test(line)
+              ? joined + " " + line
+              : joined + line;
+          }, "")
+          .replace(/^[\s\u{1F300}-\u{1FAFF}\u2600-\u27BF\uFE0F]+/u, "")
+          .trim();
+      })
+      .find(function(paragraph) {
+        return paragraph !== "";
+      }) || "";
+
+  const sentenceMatch =
+    firstParagraph.match(/^.+?(?:[。！？!?]|\.(?=\s|$))/u);
+
+  const summary =
+    sentenceMatch ? sentenceMatch[0] : firstParagraph;
+
+  return summary === ""
+    ? ""
+    : `<p class="shop-summary">${escapeHtml(summary)}</p>`;
+}
+
 // 正式店舗カード(STEP 4A)。本部決定：「店舗が管理」＋写真・店名・カテゴリー・紹介文・
 // 距離/徒歩(既存条件)・テイクアウト/支払い・住所・Googleマップ(外部リンク)だけ。
 // ⚡見出し・🆕新着・営業中/閉店まで・時間文言・お気に入りは出さない(お気に入り・地図は
@@ -3892,6 +3958,7 @@ function buildStoreProfileShopCardHtml(shop, shopCardIndex) {
       </div>
       <div class="shop-body">
         <h3 class="shop-name">${escapeHtml(shop.name)}</h3>
+        ${getShopCardSummaryHtml(getShopDisplayMessage(shop, language))}
         <div class="shop-category">
           <span>${escapeHtml(shop.categoryText)}</span>
         </div>
@@ -4314,6 +4381,11 @@ function renderShops() {
                     : ""
                 }
 
+                ${
+                  // サイト全体改善 第5弾｜紹介文の最初の一文を短い紹介として出す(2行まで)。
+                  getShopCardSummaryHtml(displayMessage)
+                }
+
                 <div class="shop-category">
 
                   <span>
@@ -4394,20 +4466,12 @@ function renderShops() {
 
                 <div class="shop-info-row">
 
-                  <span class="info-chip">
-                    ${
-                      expiryDisplayText
-                        ? escapeHtml(
-                            expiryDisplayText
-                          )
-                        : escapeHtml(
-                            getMachinauTranslation(
-                              "shop_expiry_new",
-                              getCurrentMachinauLanguage()
-                            )
-                          )
-                    }
-                  </span>
+                  ${
+                    // サイト全体改善 第5弾｜実際の掲載期限がある時だけ残り時間を出す(期限の無い掲載に「新着」と出さない)。
+                    expiryDisplayText
+                      ? `<span class="info-chip info-chip-time">${escapeHtml(expiryDisplayText)}</span>`
+                      : ""
+                  }
 
                   ${
                     // 地域から探す｜選んだ街の表示中は現在地からの距離で
@@ -19979,6 +20043,22 @@ if (locationButtonElementForAnalytics) {
 
 // 2. 近くで楽しめる場所 → 「今、近くで楽しめる場所」(#shopsSection、
 // 15km以内の店舗・施設)。現在地必須。取得済みならGPSを取り直さない。
+// サイト全体改善 第5弾｜ヒーローの入口(#heroActionNearby)は外したが、同じ動きを楽しみ方の説明
+// (「近くで楽しめる場所を見る」)から使うため、処理を関数にして残す。
+function openNearbyShopsEntry() {
+  if (!isMachinauLocationAcquired()) {
+    guideToMachinauLocationButton();
+    return;
+  }
+
+  // 「近くで楽しめる場所」は常に現在地側を見せる。
+  clearSelectedShopRegion();
+
+  scrollToHeroActionSection(
+    "shopsSection"
+  );
+}
+
 const heroActionNearbyElement =
   document.getElementById(
     "heroActionNearby"
@@ -19987,19 +20067,7 @@ const heroActionNearbyElement =
 if (heroActionNearbyElement) {
   heroActionNearbyElement.addEventListener(
     "click",
-    function() {
-      if (!isMachinauLocationAcquired()) {
-        guideToMachinauLocationButton();
-        return;
-      }
-
-      // 「近くで楽しめる場所」は常に現在地側を見せる。
-      clearSelectedShopRegion();
-
-      scrollToHeroActionSection(
-        "shopsSection"
-      );
-    }
+    openNearbyShopsEntry
   );
 }
 
@@ -20288,9 +20356,7 @@ function runHowToAction(
   }
 
   if (action === "nearby") {
-    if (heroActionNearbyElement) {
-      heroActionNearbyElement.click();
-    }
+    openNearbyShopsEntry();
     return;
   }
 
@@ -20960,6 +21026,11 @@ let imadakeNearbyRequestSequence =
 
 // 最後に取得を始めた現在地(小数点以下3桁に丸めた"緯度,経度")。同じ地点の
 // 重複取得をしない。
+// サイト全体改善 第5弾｜近くの一覧の取得の状態("idle"|"loading"|"ok"|"error")。取得に成功して0件の時
+// だけ「今日の今」の案内を出す(失敗・取得中に「掲載はありません」と言わない)。
+let imadakeNearbyLoadState =
+  "idle";
+
 let imadakeNearbyLocationKey =
   "";
 
@@ -21072,10 +21143,16 @@ async function loadImadakeNearbyPosts(
   imadakeNearbyPosts =
     [];
 
+  imadakeNearbyLoadState =
+    "loading";
+
   renderImadakeSection();
 
   let posts =
     [];
+
+  let loadedOk =
+    false;
 
   try {
     const response =
@@ -21105,6 +21182,9 @@ async function loadImadakeNearbyPosts(
             post.postId !== ""
           );
         });
+
+      loadedOk =
+        true;
     }
   } catch (error) {
     // 今だけ投稿の取得に失敗しても、TOPの他の表示には影響させない(枠は隠したまま)。
@@ -21118,6 +21198,9 @@ async function loadImadakeNearbyPosts(
 
   imadakeNearbyPosts =
     posts;
+
+  imadakeNearbyLoadState =
+    loadedOk ? "ok" : "error";
 
   renderImadakeSection();
 
@@ -21701,6 +21784,7 @@ function renderImadakeSection() {
     cardList.innerHTML = "";
     section.hidden = true;
     stopImadakeExpiryCheck();
+    renderTodayNowEmptySection(imadakeNearbyLoadState === "ok");
     return;
   }
 
@@ -21712,11 +21796,121 @@ function renderImadakeSection() {
       .join("");
 
   section.hidden = false;
+  renderTodayNowEmptySection(false);
   startImadakeExpiryCheck();
 
   // 今だけ投稿 カード翻訳 STEP 3｜表示中のカードで訳がまだ無いものだけを頼む。
   requestImadakeCardTranslationsIfNeeded(visiblePosts);
 }
+
+// ---- サイト全体改善 第5弾｜今だけ投稿が0件の日の「今日の今」 ----
+// 新しい情報は作らず、ページ内で今表示されている既存の枠への移動ボタンだけを出す。
+// 枠が非表示・中身が空のボタンは出さない(枠の表示が変わったら付け直す)。
+const TODAY_NOW_EMPTY_TARGET_CHECKS = {
+  regionTodayInfoSection: function(section) {
+    return section.style.display !== "none" &&
+      document.querySelectorAll("#regionTodayInfoList .region-today-info-card").length > 0;
+  },
+  shopsSection: function(section) {
+    return section.style.display !== "none" &&
+      document.querySelectorAll("#shopsList .shop-card").length > 0;
+  },
+  townNowThreadsSection: function(section) {
+    return section.style.display !== "none" &&
+      document.querySelectorAll("#townNowThreadsList .town-now-thread-item").length > 0;
+  },
+  columnEntrySection: function(section) {
+    const list =
+      document.getElementById("columnEntryCardList");
+    return section.style.display !== "none" &&
+      !!list &&
+      list.childElementCount > 0;
+  }
+};
+
+let todayNowEmptyObserver =
+  null;
+
+function updateTodayNowEmptyLinks() {
+  const section =
+    document.getElementById("todayNowEmptySection");
+
+  if (!section || section.hidden) {
+    return;
+  }
+
+  section
+    .querySelectorAll("[data-today-now-target]")
+    .forEach(function(button) {
+      const targetId =
+        button.getAttribute("data-today-now-target");
+      const target =
+        document.getElementById(targetId);
+      const check =
+        TODAY_NOW_EMPTY_TARGET_CHECKS[targetId];
+      const available =
+        !!target && !!check && check(target);
+
+      if (button.hidden === available) {
+        button.hidden = !available;
+      }
+    });
+}
+
+function renderTodayNowEmptySection(
+  show
+) {
+  const section =
+    document.getElementById("todayNowEmptySection");
+
+  if (!section) {
+    return;
+  }
+
+  section.hidden = !show;
+
+  if (!show) {
+    if (todayNowEmptyObserver) {
+      todayNowEmptyObserver.disconnect();
+      todayNowEmptyObserver = null;
+    }
+    return;
+  }
+
+  updateTodayNowEmptyLinks();
+
+  if (!todayNowEmptyObserver && typeof MutationObserver === "function") {
+    todayNowEmptyObserver =
+      new MutationObserver(updateTodayNowEmptyLinks);
+
+    Object.keys(TODAY_NOW_EMPTY_TARGET_CHECKS).forEach(function(targetId) {
+      const target =
+        document.getElementById(targetId);
+      if (target) {
+        todayNowEmptyObserver.observe(target, {
+          attributes: true,
+          attributeFilter: ["style", "hidden"],
+          childList: true,
+          subtree: true
+        });
+      }
+    });
+  }
+}
+
+document
+  .querySelectorAll("#todayNowEmptySection [data-today-now-target]")
+  .forEach(function(button) {
+    button.addEventListener("click", function() {
+      const target =
+        document.getElementById(
+          button.getAttribute("data-today-now-target")
+        );
+      if (target) {
+        target.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    });
+  });
 
 function startImadakeExpiryCheck() {
   if (imadakeExpiryCheckTimer !== null) {
@@ -23454,16 +23648,29 @@ document.addEventListener(
 document.addEventListener(
   "click",
   function(event) {
+    // 第5弾｜店舗向け案内(shop.html)へのほかの入口(フッター・楽しみ方の説明)も、同じ shop_guide_click で
+    // 置き場所(placement)を分けて数える。1回の押下で1件だけ送る。
     const link =
       event.target && event.target.closest
-        ? event.target.closest(".contribute-cta-button, .contribute-cta-shop-link")
+        ? event.target.closest(".contribute-cta-button, .contribute-cta-shop-link, footer a[href=\"shop.html\"], #howToModal a[href=\"shop.html\"]")
         : null;
     if (!link) {
       return;
     }
+    if (link.classList.contains("contribute-cta-button")) {
+      sendMachinauAnalyticsEvent("contribute_cta_click", { placement: "top_cta" });
+      return;
+    }
     sendMachinauAnalyticsEvent(
-      link.classList.contains("contribute-cta-button") ? "contribute_cta_click" : "shop_guide_click",
-      { placement: "top_cta" }
+      "shop_guide_click",
+      {
+        placement:
+          link.classList.contains("contribute-cta-shop-link")
+            ? "top_cta"
+            : link.closest("#howToModal")
+              ? "how_to"
+              : "footer"
+      }
     );
   }
 );
@@ -23754,12 +23961,12 @@ function openAreaSearchFromShopsEmpty() {
 // サイト全体改善 第3弾｜ヒーローの4入口のクリック数(GA4 hero_action_click {action})。2入口案の判断のための計測。
 // 利用者が押した時だけ送る(isTrusted)。ほかの導線(店舗一覧の「ほかの地域を選ぶ」・位置の失敗時・掲載なしの案内)が
 // 内部で押す「地域から探す」は数えない。既存のクリック処理(移動・現在地の案内・community_board_view)は変えない。
+// 第5弾｜ヒーローの入口は「現在地から探す」(#locationButton、既存の location_button_click で数える。同じ押下を
+// hero_action_click でも送ると二重になるため送らない)と「地域から探す」の2つになった。外した入口
+// (today・nearby・reads)はページに無いため、この計測からも外す(過去の集計は GA4 にそのまま残る)。
 const HERO_ACTION_ANALYTICS_ACTIONS =
   {
-    heroActionToday: "today",
-    heroActionNearby: "nearby",
-    heroActionArea: "area",
-    heroActionReads: "reads"
+    heroActionArea: "area"
   };
 Object.keys(HERO_ACTION_ANALYTICS_ACTIONS).forEach(function(elementId) {
   const element =

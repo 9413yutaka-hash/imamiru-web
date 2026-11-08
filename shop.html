@@ -438,6 +438,350 @@
         grid-template-columns: 1fr;
       }
     }
+    /* サイト全体改善 第5弾｜店舗向け案内の再設計(ヒーローの2つの導線・見本・活用例・メリット・料金と条件)。 */
+    .hero-cta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .hero-cta-primary,
+    .hero-cta-secondary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 48px;
+      padding: 10px 18px;
+      border-radius: 14px;
+      font-size: 15px;
+      font-weight: 900;
+      text-decoration: none;
+    }
+
+    .hero-cta-primary {
+      background: var(--white);
+      color: #066fa6;
+      box-shadow: 0 10px 24px rgba(4, 60, 100, 0.22);
+    }
+
+    .hero-cta-secondary {
+      border: 1.5px solid rgba(255, 255, 255, 0.7);
+      color: var(--white);
+    }
+
+    .sample-board {
+      margin-top: 14px;
+      padding: 14px;
+      border-radius: 18px;
+      background: #f2f8fc;
+      border: 1px dashed rgba(6, 111, 166, 0.3);
+    }
+
+    .sample-tag {
+      margin: 0 0 10px !important;
+      color: #5b6e80 !important;
+      font-size: 12px !important;
+      font-weight: 800;
+    }
+
+    .sample-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+      gap: 12px;
+      align-items: start;
+    }
+
+    .sample-grid figure {
+      margin: 0;
+    }
+
+    .sample-grid figcaption {
+      margin-top: 6px;
+      color: #5b6e80;
+      font-size: 11.5px;
+      font-weight: 700;
+      line-height: 1.5;
+      text-align: center;
+    }
+
+    .sample-card,
+    .sample-page {
+      min-width: 0;
+    }
+
+    .sample-card > div:first-child,
+    .sample-card .sample-card-body,
+    .sample-page-hero,
+    .sample-page-body {
+      background: var(--white);
+    }
+
+    .sample-photo {
+      display: grid;
+      place-items: center;
+      height: 96px;
+      border-radius: 14px 14px 0 0;
+    }
+
+    .sample-photo span {
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.7);
+      color: #7a5a3a;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .sample-photo-food {
+      background: linear-gradient(160deg, #fff1d6, #ffc9a3) !important;
+    }
+
+    .sample-card-body {
+      padding: 9px 10px 11px;
+      border-radius: 0 0 14px 14px;
+      box-shadow: 0 6px 16px rgba(16, 42, 67, 0.08);
+    }
+
+    .sample-card-body p,
+    .sample-page-body p {
+      margin: 0 !important;
+    }
+
+    .sample-name {
+      color: #102a43 !important;
+      font-size: 13px !important;
+      font-weight: 900;
+      line-height: 1.4 !important;
+    }
+
+    .sample-intro {
+      margin-top: 3px !important;
+      color: #3d5266 !important;
+      font-size: 11.5px !important;
+      line-height: 1.5 !important;
+    }
+
+    .sample-category {
+      margin-top: 4px !important;
+      color: #0788c9 !important;
+      font-size: 11px !important;
+      font-weight: 800;
+    }
+
+    .sample-distance {
+      display: inline-block;
+      margin-top: 6px !important;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #e8f4fb;
+      color: #066fa6 !important;
+      font-size: 11px !important;
+      font-weight: 800;
+    }
+
+    .sample-page-hero {
+      display: flex;
+      align-items: flex-end;
+      height: 110px;
+      padding: 10px;
+      border-radius: 14px 14px 0 0;
+    }
+
+    .sample-page-name {
+      margin: 0 !important;
+      padding: 4px 9px;
+      border-radius: 9px;
+      background: rgba(255, 255, 255, 0.88);
+      color: #102a43 !important;
+      font-size: 13px !important;
+      font-weight: 900;
+      line-height: 1.4 !important;
+    }
+
+    .sample-page-body {
+      display: grid;
+      gap: 5px;
+      padding: 10px;
+      border-radius: 0 0 14px 14px;
+      box-shadow: 0 6px 16px rgba(16, 42, 67, 0.08);
+    }
+
+    .sample-page-line {
+      padding: 5px 8px;
+      border-radius: 8px;
+      background: #f4f7fa;
+      color: #3d5266 !important;
+      font-size: 11.5px !important;
+      font-weight: 700;
+      line-height: 1.5 !important;
+    }
+
+    .sample-page-buttons {
+      display: flex;
+      gap: 5px;
+    }
+
+    .sample-page-buttons span {
+      flex: 1 1 0;
+      padding: 5px 0;
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      color: var(--white);
+      font-size: 11px;
+      font-weight: 800;
+      text-align: center;
+    }
+
+    .sample-imadake {
+      margin-top: 12px;
+      padding: 10px 12px;
+      border-left: 4px solid #f59e0b;
+      border-radius: 12px;
+      background: var(--white);
+      box-shadow: 0 6px 16px rgba(16, 42, 67, 0.06);
+    }
+
+    .sample-imadake p {
+      margin: 0 !important;
+    }
+
+    .sample-imadake-label {
+      color: #8a4b00 !important;
+      font-size: 11px !important;
+      font-weight: 900;
+    }
+
+    .sample-imadake-title {
+      margin-top: 2px !important;
+      color: #102a43 !important;
+      font-size: 13.5px !important;
+      font-weight: 900;
+      line-height: 1.5 !important;
+    }
+
+    .sample-imadake-note {
+      margin-top: 2px !important;
+      color: #5b6e80 !important;
+      font-size: 11.5px !important;
+    }
+
+    .use-list,
+    .benefit-list {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .use-list li,
+    .benefit-list li {
+      padding: 10px 12px;
+      border-radius: 13px;
+      background: #f6fafd;
+      color: #3d5163;
+      font-size: 13.5px;
+      line-height: 1.7;
+      text-wrap: pretty;
+    }
+
+    .use-title,
+    .benefit-title {
+      display: block;
+      color: var(--navy);
+      font-size: 14px;
+      font-weight: 900;
+    }
+
+    .plan-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .plan {
+      padding: 14px 15px;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+    }
+
+    .plan p {
+      margin: 0 !important;
+    }
+
+    .plan-open {
+      border: 2px solid #0788c9;
+      background: #f3faff;
+    }
+
+    .plan-soon {
+      background: #f7f8fa;
+    }
+
+    .plan-status {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 11.5px !important;
+      font-weight: 900;
+      line-height: 1.6 !important;
+    }
+
+    .plan-status-open {
+      background: #0788c9;
+      color: var(--white) !important;
+    }
+
+    .plan-status-soon {
+      background: #e4e8ee;
+      color: #4b5a6a !important;
+    }
+
+    .plan-name {
+      margin-top: 8px !important;
+      color: var(--navy) !important;
+      font-size: 14.5px !important;
+      font-weight: 900;
+      line-height: 1.5 !important;
+    }
+
+    .plan-price {
+      margin-top: 2px !important;
+      color: #102a43 !important;
+      font-size: 22px !important;
+      font-weight: 900;
+      line-height: 1.4 !important;
+    }
+
+    .plan-soon .plan-price {
+      color: #6b7a8a !important;
+    }
+
+    .plan-price span {
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .plan-text {
+      margin-top: 8px !important;
+      font-size: 12.5px !important;
+      line-height: 1.8 !important;
+    }
+
+    .pricing-notes {
+      margin-top: 14px;
+    }
+
+    @media (max-width: 420px) {
+      .sample-grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .hero-cta-primary,
+      .hero-cta-secondary {
+        flex: 1 1 100%;
+      }
+    }
   </style>
   <!-- サイト全体改善 第2弾｜公開ページの共通の基準(見出し・押せる高さ・帯の色)。このページのスタイルの後に読む。 -->
   <link rel="stylesheet" href="machinau-pages.css">
@@ -476,6 +820,10 @@
     </div>
   </header>
 
+  <!-- サイト全体改善 第5弾(代表の正式採用)｜店舗向け案内を「掲載したくなる」構成へ。最初に価値、次に見本・活用例・
+       管理のメリット・料金と条件・登録と引き継ぎ。料金・条件の文面は従来の正式な案内のまま(変更しない)。
+       運営管理(月額500円)・運営への変更依頼(1回1,000円)は請求の仕組みが未実装のため「準備中・申し込みはできません」
+       とだけ示し、申込みの導線・業務範囲は書かない。実績・集客の効果・旅行者数は書かない(見本は架空と明示)。 -->
   <section class="page-hero">
     <div class="page-hero-inner">
 
@@ -484,25 +832,17 @@
       </div>
 
       <h1>
-        お店・施設の「今」を、旅行者へ。
+        今、この街にいる旅行者へ、<br>お店の情報を届ける。
       </h1>
 
       <p>
-        店舗アカウントを作ると、お店・施設の情報の登録と、旅行者へ「今」を伝える投稿を、ご自身で行えます。<br>
-        運営からの専用URLの受け取りは不要です。
+        マチナウは、旅行者が今いる場所から、近くのお店・施設や今日の情報を探すサービスです。<br>
+        写真を生かした店舗ページと「今だけ投稿」で、お店の魅力と今日の様子を、近くにいる旅行者へ伝えられます。
       </p>
 
-      <div class="free-badge">
-        マチナウの店舗管理サービスは月額100円（税込）です。新規店舗登録も、掲載済み店舗の引き継ぎも、同じ料金・同じ条件です。店舗情報の登録・編集・公開には、メールアドレスの確認・クレジットカードの登録・月額100円の契約が必要です（契約の前に店舗情報を保存・編集することはできません）。アカウントの作成とクレジットカードの登録だけでは料金はかかりません。料金は、お店・施設の登録・引き継ぎと同時に申し込む月額100円の契約からかかります。今だけ投稿は店舗カードの契約が無くても使え、別の料金で、有効な閲覧があった日だけ1投稿100円（税込）です。
-      </div>
-
-      <div>
-        <a
-          class="hero-start-link"
-          href="#start"
-        >
-          はじめ方を見る ↓
-        </a>
+      <div class="hero-cta-row">
+        <a class="hero-cta-primary" href="store-account.html?view=signup">店舗アカウントを作る →</a>
+        <a class="hero-cta-secondary" href="#pricing">料金と条件を見る ↓</a>
       </div>
 
     </div>
@@ -510,40 +850,159 @@
 
   <main>
 
-    <!-- STEP 41-B｜店舗向けの入口を新方式(店舗アカウント：store-account.html)へ切り替えた。
-         旧方式(無料投稿の申込み→運営が確認→専用URLを発行)への新規の案内は外した。
-         STEP 43-C｜専用URL利用店舗向けの欄(edit.html / end.html / shop-guide.html への導線)も外した。 -->
-    <section class="guide-card">
+    <!-- 見本：旅行者に見える形(TOPのカード・店舗ページ・今だけ投稿)。お店の名前・内容は架空。 -->
+    <section class="guide-card" aria-labelledby="sampleHeading">
 
-      <h2>
-        店舗アカウントでできること
+      <h2 id="sampleHeading">
+        旅行者には、こう見えます
       </h2>
 
-      <ul class="guide-list">
+      <p>
+        旅行者が「現在地から探す」を押すと、近いお店から順にカードが並びます。カードを押すと、写真・紹介・メニュー・営業時間・地図・予約などを1ページにまとめた、お店専用のページが開きます。
+      </p>
+
+      <div class="sample-board" aria-label="見本（架空のお店）">
+
+        <p class="sample-tag">見本（架空のお店です）</p>
+
+        <div class="sample-grid">
+
+          <figure class="sample-card" aria-hidden="true">
+            <div class="sample-photo sample-photo-food"><span>写真</span></div>
+            <div class="sample-card-body">
+              <p class="sample-name">島の台所 なかゆくい</p>
+              <p class="sample-intro">島野菜と県産豚を使った、旅の途中に寄れる定食屋です。</p>
+              <p class="sample-category">グルメ・飲食店</p>
+              <p class="sample-distance">350m</p>
+            </div>
+            <figcaption>TOPのカード</figcaption>
+          </figure>
+
+          <figure class="sample-page" aria-hidden="true">
+            <div class="sample-page-hero sample-photo-food">
+              <p class="sample-page-name">島の台所 なかゆくい</p>
+            </div>
+            <div class="sample-page-body">
+              <p class="sample-page-line">紹介・ストーリー</p>
+              <p class="sample-page-line">メニュー（写真つき）</p>
+              <p class="sample-page-line">営業時間・定休日・支払い</p>
+              <div class="sample-page-buttons">
+                <span>地図</span><span>電話</span><span>予約</span>
+              </div>
+            </div>
+            <figcaption>お店専用のページ（machinau.jp/shop/…）</figcaption>
+          </figure>
+
+        </div>
+
+        <div class="sample-imadake" aria-hidden="true">
+          <p class="sample-imadake-label">今だけ投稿</p>
+          <p class="sample-imadake-title">本日、カウンター席に空きがあります</p>
+          <p class="sample-imadake-note">掲載はあと5時間</p>
+        </div>
+
+      </div>
+
+      <p class="soft-note">
+        店舗ページのデザインは、どのお店も同じ品質の共通デザインです。写真・紹介・メニューなどの中身を、お店ご自身で入れられます。
+      </p>
+    </section>
+
+    <section class="guide-card" aria-labelledby="usesHeading">
+
+      <h2 id="usesHeading">
+        「今だけ投稿」の使い方の例
+      </h2>
+
+      <p>
+        今日・今だけの情報を、近くにいる旅行者へ届けられます（掲載は最長24時間）。
+      </p>
+
+      <ul class="use-list">
+        <li><span class="use-title">今日の空席</span>「本日、カウンター席に空きがあります」</li>
+        <li><span class="use-title">限定メニュー</span>「今日だけの島魚のまかない丼、残りわずか」</li>
+        <li><span class="use-title">天気に合わせた案内</span>「雨の日は店内でゆっくりどうぞ」</li>
+        <li><span class="use-title">イベント・体験</span>「今夜19時から三線のミニライブ」</li>
+      </ul>
+
+      <p class="soft-note">
+        今だけ投稿は店舗カードの契約が無くても使え、有効な閲覧があった日だけ1投稿100円（税込）です。投稿内容は自動で確認し、問題がなければそのまま掲載されます。内容によっては、運営が確認してから掲載します。
+      </p>
+    </section>
+
+    <section class="guide-card" aria-labelledby="benefitHeading">
+
+      <h2 id="benefitHeading">
+        お店の情報をご自身で管理すると
+      </h2>
+
+      <ul class="benefit-list">
         <li>
-          お店・施設を登録できます。登録はご自身で行い、通常はすぐに完了します。
+          <span class="benefit-title">いつでも最新の情報に</span>
+          紹介文・写真（最大10枚）・営業時間・メニューを、ご自身で更新できます。
         </li>
         <li>
-          お店・施設の情報（紹介文・写真・営業時間など）をご自身で作成・編集できます。
+          <span class="benefit-title">お店専用のページ</span>
+          旅行者向けの店舗専用ページ（machinau.jp/shop/…）を、URLで共有できます。
         </li>
         <li>
-          「今だけ投稿」で、今日のおすすめや空き状況など、今伝えたい情報を旅行者へ届けられます。
+          <span class="benefit-title">海外からの旅行者にも</span>
+          紹介文は、英語の表示で自動翻訳されます（店名・住所は原文のままです）。
         </li>
         <li>
-          写真・紹介・メニュー・営業時間・地図・予約などを1ページにまとめた、旅行者向けの店舗専用ページ（machinau.jp/shop/…）が使えます。
-        </li>
-        <li>
+          <span class="benefit-title">複数のお店も1つのアカウントで</span>
           1つのアカウントで、複数のお店・施設を管理できます。
         </li>
       </ul>
+    </section>
 
-      <!-- サイト全体改善 E（代表の正式方針 2026-11-08）｜無料掲載の継続と、料金で表示順を優遇しないこと。 -->
-      <p class="soft-note">
-        運営が掲載している無料の掲載は、店舗カードの契約が無くても続きます。料金によってトップページでの表示順が上がることはありません（旅行者の現在地から近い順です）。
-      </p>
+    <!-- STEP 41-B｜店舗向けの入口を新方式(店舗アカウント：store-account.html)へ切り替えた。
+         旧方式(無料投稿の申込み→運営が確認→専用URLを発行)への新規の案内は外した。
+         STEP 43-C｜専用URL利用店舗向けの欄(edit.html / end.html / shop-guide.html への導線)も外した。 -->
+    <section
+      id="pricing"
+      class="guide-card"
+      aria-labelledby="pricingHeading"
+    >
+
+      <h2 id="pricingHeading">
+        料金と条件
+      </h2>
+
+      <div class="plan-list">
+
+        <div class="plan plan-open">
+          <p class="plan-status plan-status-open">お申し込み受付中</p>
+          <p class="plan-name">セルフ運用（店主が登録・編集）</p>
+          <p class="plan-price">月額100円<span>（税込）／1店舗</span></p>
+          <p class="plan-text">
+            マチナウの店舗管理サービスは月額100円（税込）です。新規店舗登録も、掲載済み店舗の引き継ぎも、同じ料金・同じ条件です。店舗情報の登録・編集・公開には、メールアドレスの確認・クレジットカードの登録・月額100円の契約が必要です（契約の前に店舗情報を保存・編集することはできません）。アカウントの作成とクレジットカードの登録だけでは料金はかかりません。料金は、お店・施設の登録・引き継ぎと同時に申し込む月額100円の契約からかかります。
+          </p>
+        </div>
+
+        <div class="plan plan-soon">
+          <p class="plan-status plan-status-soon">準備中・現在はお申し込みできません</p>
+          <p class="plan-name">運営管理（運営が店舗ページを管理）</p>
+          <p class="plan-price">月額500円<span>（税込）／1店舗</span></p>
+        </div>
+
+        <div class="plan plan-soon">
+          <p class="plan-status plan-status-soon">準備中・現在はお申し込みできません</p>
+          <p class="plan-name">運営への変更依頼</p>
+          <p class="plan-price">1回1,000円<span>（税込）</span></p>
+        </div>
+
+      </div>
+
+      <ul class="guide-list pricing-notes">
+        <li>店舗ページは、どのプランでも同じ共通のデザインです。</li>
+        <li>運営が掲載している無料の掲載は、店舗カードの契約が無くても続きます。無料の掲載と、店主による有料の管理は別のものです。</li>
+        <li>料金によってトップページでの表示順が上がることはありません（旅行者の現在地から近い順です）。</li>
+        <li>今だけ投稿は店舗カードの契約が無くても使え、別の料金で、有効な閲覧があった日だけ1投稿100円（税込）です。</li>
+      </ul>
 
       <p class="soft-note">
-        飲食店、カフェ、宿泊施設、観光施設、体験事業者、小売店、美容・リラクゼーション、イベント運営者など、旅行者に街の「今」を届けるお店・施設の方にご利用いただけます。
+        詳しくは<a href="terms.html">利用規約</a>・<a href="tokushoho.html">特定商取引法に基づく表記</a>をご覧ください。
       </p>
     </section>
 
@@ -587,25 +1046,10 @@
         </p>
       </div>
 
-    </section>
-
-    <section class="guide-card">
-
-      <h2>
-        投稿内容の確認
-      </h2>
-
-      <p>
-        投稿内容は自動で確認し、問題がなければそのまま掲載されます。内容によっては、運営が確認してから掲載します。
-      </p>
-
-      <p>
-        ご自身のお店・施設について、事実に基づいて投稿してください。ほかの人の写真や文章を無断で使わないでください。
-      </p>
-
       <p class="soft-note">
-        詳しくは<a href="terms.html">利用規約</a>をご覧ください。
+        飲食店、カフェ、宿泊施設、観光施設、体験事業者、小売店、美容・リラクゼーション、イベント運営者など、旅行者に街の「今」を届けるお店・施設の方にご利用いただけます。
       </p>
+
     </section>
 
     <section class="guide-card">
@@ -625,6 +1069,21 @@
 
       <p class="soft-note">
         掲載内容の修正や掲載の停止をご希望の場合は、<a href="contact.html">お問い合わせ</a>からご連絡ください。
+      </p>
+    </section>
+
+    <section class="guide-card">
+
+      <h2>
+        投稿内容の確認
+      </h2>
+
+      <p>
+        ご自身のお店・施設について、事実に基づいて投稿してください。ほかの人の写真や文章を無断で使わないでください。
+      </p>
+
+      <p class="soft-note">
+        詳しくは<a href="terms.html">利用規約</a>をご覧ください。
       </p>
     </section>
 

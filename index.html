@@ -1983,6 +1983,191 @@
       }
     }
 
+    /* サイト全体改善 第5弾｜ファーストビュー(代表採用)：見出し・補足・主ボタン「現在地から探す」・副導線「地域から探す」。
+       主ボタンを一番大きく目立たせ、副導線は白地の枠付き。ブランドの青のグラデーションはそのまま。 */
+    .hero-content .hero-main-copy {
+      margin-bottom: 8px;
+    }
+
+    .hero-content .hero-lead {
+      max-width: 30em;
+      margin: 0 auto 16px;
+      font-size: 14px;
+      line-height: 1.7;
+      text-wrap: balance;
+    }
+
+    .hero-entry-card .location-card-top {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
+    }
+
+    .hero-entry-card .hero-primary-button {
+      width: 100%;
+      min-height: 56px;
+      padding: 12px 16px;
+      border-radius: 16px;
+      font-size: 17px;
+      letter-spacing: 0.02em;
+      box-shadow: 0 10px 24px rgba(5, 144, 194, 0.32);
+    }
+
+    .hero-entry-card #locationMessage {
+      margin: 0;
+      text-align: center;
+    }
+
+    #locationMessage:empty {
+      display: none;
+    }
+
+    .hero-area-button {
+      width: 100%;
+      min-height: 48px;
+      padding: 10px 14px;
+      border: 1.5px solid rgba(6, 111, 166, 0.35);
+      border-radius: 14px;
+      background: var(--white);
+      color: #066fa6;
+      font-size: 15px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .hero-area-button .hero-action-title {
+      font-size: inherit;
+      color: inherit;
+    }
+
+    .hero-area-button:focus-visible,
+    .hero-entry-card .hero-primary-button:focus-visible {
+      outline: 3px solid #ffd166;
+      outline-offset: 2px;
+    }
+
+    /* 現在地の失敗時は、すぐ上の「地域から探す」と同じボタンを重ねて出さない(案内の文は出す)。 */
+    .hero-entry-card #locationFailureAreaButton {
+      display: none;
+    }
+
+    @media (min-width: 720px) {
+      .hero-content .hero-entry-card {
+        max-width: 520px;
+      }
+
+      .hero-content .hero-lead {
+        font-size: 16px;
+      }
+    }
+
+    /* サイト全体改善 第5弾｜今だけ投稿が0件の日の「今日の今」(ページ内の既存の枠への移動だけ)。 */
+    .today-now-empty-links {
+      display: grid;
+      gap: 8px;
+    }
+
+    .today-now-empty-link {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 46px;
+      padding: 10px 14px;
+      border: 1px solid rgba(6, 111, 166, 0.18);
+      border-radius: 14px;
+      background: #f3f9fd;
+      color: #0b4f7a;
+      font-size: 14px;
+      font-weight: 800;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .today-now-empty-link::after {
+      content: "›";
+      flex-shrink: 0;
+      font-size: 18px;
+      color: #066fa6;
+    }
+
+    @media (min-width: 720px) {
+      .today-now-empty-links {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    /* サイト全体改善 第5弾｜TOPカードを短時間で選べる形に(写真・店名・短い紹介・種類・距離・詳細への導線)。
+       短い紹介は2行まで。紹介文の全文・住所・支払い・徒歩の時間・地図・情報元は詳細(押した時の表示)と店舗ページで見る。
+       並び順・件数・15km・お気に入り・詳細・地図の機能は変えない。見つける全件表示(.shops-show-all)は従来どおり。 */
+    #shopsList .shop-summary {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      margin: 4px 0 0;
+      color: #3d5266;
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.5;
+    }
+
+    /* 見つける全件表示は紹介文の全文を出すため、短い紹介は重ねない。 */
+    #shopsSection.shops-show-all .shop-summary {
+      display: none;
+    }
+
+    /* スマホの2枚表示：店名・見出し・種類の下(余白の行)に短い紹介を置く。 */
+    @media (max-width: 700px) {
+      #shopsSection:not(.shops-show-all) .shop-summary {
+        grid-row: 4;
+        align-self: start;
+        font-size: 12px;
+      }
+    }
+
+    .today-now-empty-link[hidden] {
+      display: none;
+    }
+
+    #shopsSection:not(.shops-show-all) .shop-description,
+    #shopsSection:not(.shops-show-all) .time-limit,
+    #shopsSection:not(.shops-show-all) .shop-info-row .info-chip:not(.info-chip-distance):not(.info-chip-time),
+    #shopsSection:not(.shops-show-all) .shop-actions .map-button,
+    #shopsSection:not(.shops-show-all) .shop-actions .source-link-button {
+      display: none;
+    }
+
+    #shopsList .info-chip-time {
+      background: #fff4e0;
+      color: #8a4b00;
+      font-weight: 800;
+    }
+
+    #shopsSection:not(.shops-show-all) .shop-actions .detail-button {
+      width: auto;
+      min-height: 32px;
+      padding: 0;
+      border: none;
+      background: none;
+      box-shadow: none;
+      color: #066fa6;
+      font-size: 13px;
+      font-weight: 800;
+      text-align: left;
+    }
+
+    @media (max-width: 700px) {
+      #shopsSection:not(.shops-show-all) .shop-info-row .info-chip-time {
+        display: inline-block;
+        padding: 4px 9px;
+        border-radius: 999px;
+        font-size: 12px;
+      }
+    }
+    /* スマホの2枚表示は、TOP店舗カードの刷新(2026-11-08 代表承認)のとおり操作のボタンを出さず、カード全体を押すと詳細が開く。 */
+
     @media (prefers-reduced-motion: reduce) {
       #shopsList .shop-visual img {
         transition: none;
@@ -2086,43 +2271,40 @@
 
       <div class="hero-content">
 
+        <!-- サイト全体改善 第5弾(代表採用のファーストビュー)｜見出し・補足・主ボタン「現在地から探す」・
+             副導線「地域から探す」。旧4入口のうち現在地が必要な「今いる街の情報」「近くで楽しめる場所」は
+             現在地ボタンと重複し、「マチナウ読みもの」は下の読みもの枠と重複するため外した(処理は app.js に残し、
+             楽しみ方の説明などほかの導線から使う)。「地域から探す」(#heroActionArea)は ID・処理とも従来のまま。 -->
         <h1 class="hero-main-copy" data-i18n="hero_main_copy">
-          街の今を知れば、<br>もっと、いい旅になる。
+          今、この街で何しよう？
         </h1>
+
+        <p class="hero-sub-copy hero-lead" data-i18n="hero_lead">
+          今だけの情報も、近くのお店も。<br>今いる場所から見つけよう。
+        </p>
 
         <!-- ヒーロー・現在地導線改善｜現在地取得を最も目立つ主要導線にするため、
              旧ヒーロー外(直下)の現在地カードをID・機能そのままでここへ移動
              (同じカードを2か所に残さない)。 -->
-        <section class="location-card">
+        <section class="location-card hero-entry-card">
 
           <div class="location-card-top">
 
-            <div class="location-heading">
-
-              <div class="location-icon">
-                📍
-              </div>
-
-              <div>
-                <h2 id="locationHeading" data-i18n="location_heading">
-                  今いる街を見る
-                </h2>
-
-                <p id="locationMessage" data-i18n="location_message_initial">
-                  マチナウは、今いる街の「今」をお届けします。まずは現在地ボタンを押してね。
-                </p>
-              </div>
-
-            </div>
-
             <button
               id="locationButton"
-              class="location-button"
+              class="location-button hero-primary-button"
               type="button"
               data-location-trigger
               data-i18n="location_button_get"
             >
-              現在地を取得する
+              現在地から探す
+            </button>
+
+            <!-- 取得中・取得後・失敗の案内(getLocation()が書き換える)。取得前は空で、何も表示しない。 -->
+            <p id="locationMessage" role="status" aria-live="polite"></p>
+
+            <button type="button" class="hero-area-button" id="heroActionArea">
+              <span class="hero-action-title" data-i18n="hero_action_area_title">地域から探す</span>
             </button>
 
             <!-- 店主向け「この街のマチナウ利用状況」｜現在地から判定した市町村を利用統計に使うことの説明(app.js が表示を決める)。 -->
@@ -2357,35 +2539,9 @@
 
         </section>
 
-        <div class="hero-action-grid">
-
-          <button type="button" class="hero-action-card" id="heroActionToday">
-            <span class="hero-action-icon" aria-hidden="true">☀️</span>
-            <span class="hero-action-title" data-i18n="hero_action_today_title">今いる街の情報</span>
-          </button>
-
-          <button type="button" class="hero-action-card" id="heroActionNearby">
-            <span class="hero-action-icon" aria-hidden="true">📍</span>
-            <span class="hero-action-title" data-i18n="hero_action_nearby_title">近くで楽しめる場所</span>
-            <span class="hero-action-caption" data-i18n="hero_action_nearby_caption">今いる場所から</span>
-          </button>
-
-          <button type="button" class="hero-action-card" id="heroActionArea">
-            <span class="hero-action-icon" aria-hidden="true">🗺️</span>
-            <span class="hero-action-title" data-i18n="hero_action_area_title">地域から探す</span>
-            <span class="hero-action-caption" data-i18n="hero_action_area_caption">都道府県・市区町村で</span>
-          </button>
-
-          <button type="button" class="hero-action-card" id="heroActionReads">
-            <span class="hero-action-icon" aria-hidden="true">📖</span>
-            <span class="hero-action-title" data-i18n="hero_action_reads_title">マチナウ読みもの</span>
-            <span class="hero-action-caption" data-i18n="hero_action_reads_caption">旅のヒント・ストーリー</span>
-          </button>
-
-        </div>
-
-        <!-- マチナウの楽しみ方｜初めての旅行者向けの控えめな入口。現在地カード・
-             4入口の主役を奪わないよう、4入口の直下に1行の半透明ボタンとして置く。
+        <!-- マチナウの楽しみ方｜初めての旅行者向けの控えめな入口。現在地・地域の
+             主役を奪わないよう、その直下に1行の半透明ボタンとして置く(使い方・現在地の設定・
+             利用統計の停止の説明はここと現在地の案内から見られる)。
              押すと#howToModal(既存.modal-overlay流用)を開く。 -->
         <button type="button" class="how-to-entry" id="howToEntryButton">
           <span class="how-to-entry-label" data-i18n="how_to_entry_label">はじめての方へ</span>
@@ -2419,6 +2575,26 @@
       <h2 id="imadakeHeading" data-i18n="imadake_heading">今だけ投稿</h2>
       <p class="imadake-lead" data-i18n="imadake_lead">近くのお店・施設が「今」を伝えています（掲載は最長24時間）。</p>
       <div id="imadakeCardList" class="imadake-card-list"></div>
+    </section>
+
+    <!-- サイト全体改善 第5弾｜今だけ投稿が0件の日の「今日の今」。近くの今だけ投稿の取得に成功して0件だった時だけ出す
+         (取得の失敗・現在地なしでは出さない)。今だけ投稿の枠・判定・CVの記録には触れない。中身は作らず、
+         ページ内で今表示されている既存の枠(今日の地域情報・近くのお店・街の今スレッド・読みもの)への移動だけを並べる
+         (同じ情報を2か所に出さない。表示されていない枠へのボタンは出さない)。 -->
+    <section
+      id="todayNowEmptySection"
+      class="imadake-section today-now-empty"
+      aria-labelledby="todayNowEmptyHeading"
+      hidden
+    >
+      <h2 id="todayNowEmptyHeading" data-i18n="today_now_empty_heading">今日の今</h2>
+      <p class="imadake-lead" data-i18n="today_now_empty_text">今、近くで掲載中の「今だけ投稿」はありません。近くのこんな情報から探してみよう。</p>
+      <div class="today-now-empty-links">
+        <button type="button" class="today-now-empty-link" data-today-now-target="regionTodayInfoSection" data-i18n="today_now_empty_link_region" hidden>今日、この地域で起きていること</button>
+        <button type="button" class="today-now-empty-link" data-today-now-target="shopsSection" data-i18n="today_now_empty_link_shops" hidden>近くで楽しめるお店・施設</button>
+        <button type="button" class="today-now-empty-link" data-today-now-target="townNowThreadsSection" data-i18n="today_now_empty_link_threads" hidden>近くの人の今日の会話（街の今スレッド）</button>
+        <button type="button" class="today-now-empty-link" data-today-now-target="columnEntrySection" data-i18n="today_now_empty_link_reads" hidden>街を楽しむヒント（マチナウ読みもの）</button>
+      </div>
     </section>
 
     <!-- マチナウAI一本化 Phase1｜旧「✨マチナウAI『今どうする？』」は

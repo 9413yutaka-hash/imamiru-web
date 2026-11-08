@@ -192,13 +192,16 @@ try {
   for (const [width, mobile] of [[390, true], [1280, false]]) {
     const p = await openAt("/", { width, geo: NAHA });
     const seen = [];
-    for (const [id, action] of [["heroActionToday", "today"], ["heroActionNearby", "nearby"], ["heroActionArea", "area"], ["heroActionReads", "reads"]]) {
+    // 第5弾｜ヒーローの入口は「現在地から探す」(location_button_click で数える)と「地域から探す」の2つ。
+    // 外した入口(today・nearby・reads)はページに無く、hero_action_click は「地域から探す」だけが送る。
+    for (const [id, action] of [["heroActionArea", "area"]]) {
       const before = (await heroGa(p)).length;
       const tapped = await tap(p, "#" + id, mobile);
       const after = await heroGa(p);
       seen.push({ action, tapped, added: after.length - before, last: after[after.length - 1] });
     }
-    t(`1 ${width}：4入口それぞれを押すと hero_action_click を1回だけ(action で区別・ほかの項目なし)`, seen.every((x) => x.added === 1 && x.last && x.last[1].action === x.action && JSON.stringify(Object.keys(x.last[1])) === '["action"]'), seen);
+    const removed = await p.ev(`["heroActionToday", "heroActionNearby", "heroActionReads"].filter((id) => document.getElementById(id))`);
+    t(`1 ${width}：「地域から探す」を押すと hero_action_click を1回だけ(action area・ほかの項目なし)、外した入口はページに無い`, removed.length === 0 && seen.every((x) => x.added === 1 && x.last && x.last[1].action === x.action && JSON.stringify(Object.keys(x.last[1])) === '["action"]'), { seen, removed });
     if (mobile) {
       const cb = await p.ev(`window.__ga.filter((e) => e[0] === "community_board_view").length`);
       t("1b 既存の処理はそのまま：「地域から探す」の community_board_view も従来どおり送る", cb >= 1, cb);
@@ -207,7 +210,7 @@ try {
   }
   {
     const p = await openAt("/", { geo: NAHA });
-    await p.ev(`document.getElementById("heroActionArea").click(); document.getElementById("heroActionReads").click(); typeof openAreaSearchFromShopsEmpty === "function" && openAreaSearchFromShopsEmpty(); true`); await sleep(600);
+    await p.ev(`document.getElementById("heroActionArea").click(); typeof openAreaSearchFromShopsEmpty === "function" && openAreaSearchFromShopsEmpty(); true`); await sleep(600);
     const ga = await heroGa(p);
     const cb = await p.ev(`window.__ga.filter((e) => e[0] === "community_board_view").length`);
     t("1c ほかの導線が内部で押した時(プログラムの click)は hero_action_click を送らない(既存の community_board_view は送る)", ga.length === 0 && cb >= 2, { ga, cb });
@@ -215,9 +218,9 @@ try {
   }
   {
     const p = await openAt("/", { geo: NAHA, lang: "en" });
-    await tap(p, "#heroActionNearby", true);
+    await tap(p, "#heroActionArea", true);
     const ga = await heroGa(p);
-    t("1d 英語でも同じ action の値(言語・位置・個人の情報を含まない)", ga.length === 1 && ga[0][1].action === "nearby" && !JSON.stringify(ga).match(/26\.|127\.|@|lang/), ga);
+    t("1d 英語でも同じ action の値(言語・位置・個人の情報を含まない)", ga.length === 1 && ga[0][1].action === "area" &&!JSON.stringify(ga).match(/26\.|127\.|@|lang/), ga);
     await p.close();
   }
 

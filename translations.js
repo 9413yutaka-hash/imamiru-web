@@ -36,9 +36,46 @@ const MACHINAU_TRANSLATIONS = {
   // TOPヒーロー緊急変更｜新ヒーロー(背景画像＋本物のHTML)の
   // メイン/サブコピー・4入口(hero_action_*)。下のhero_heading/hero_kicker
   // (STEP3の旧ヒーロー由来、参照箇所なし)とは別物。
+  // サイト全体改善 第5弾｜代表採用のファーストビュー(見出し・補足・主ボタン「現在地から探す」)。
   hero_main_copy: {
-    ja: "街の今を知れば、<br>もっと、いい旅になる。",
-    en: "Know what's happening in town now,<br>and make your trip even better."
+    ja: "今、この街で何しよう？",
+    en: "What to do in this town, right now?"
+  },
+
+  hero_lead: {
+    ja: "今だけの情報も、近くのお店も。<br>今いる場所から見つけよう。",
+    en: "Limited-time updates and nearby places. Find them from where you are."
+  },
+
+  // 今だけ投稿が0件の日の「今日の今」(ページ内の既存の枠への移動だけ)。
+  today_now_empty_heading: {
+    ja: "今日の今",
+    en: "Today, right now"
+  },
+
+  today_now_empty_text: {
+    ja: "今、近くで掲載中の「今だけ投稿」はありません。近くのこんな情報から探してみよう。",
+    en: "There are no limited-time posts nearby right now. Try these instead."
+  },
+
+  today_now_empty_link_region: {
+    ja: "今日、この地域で起きていること",
+    en: "What's happening in this area today"
+  },
+
+  today_now_empty_link_shops: {
+    ja: "近くで楽しめるお店・施設",
+    en: "Places to enjoy nearby"
+  },
+
+  today_now_empty_link_threads: {
+    ja: "近くの人の今日の会話（街の今スレッド）",
+    en: "Today's local conversations (Town Now)"
+  },
+
+  today_now_empty_link_reads: {
+    ja: "街を楽しむヒント（マチナウ読みもの）",
+    en: "Tips for enjoying the town (Machinau Reads)"
   },
 
   hero_action_today_title: {
@@ -295,8 +332,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   location_button_get: {
-    ja: "現在地を取得する",
-    en: "Get my location"
+    ja: "現在地から探す",
+    en: "Search near me"
   },
 
   location_button_update: {
@@ -2467,9 +2504,15 @@ const MACHINAU_TRANSLATIONS = {
     en: "🆕 New"
   },
 
+  // サイト全体改善 第5弾｜実際の掲載期限までの残り時間(期限の無い掲載には出さない)。
   shop_expiry_minutes_left: {
-    ja: "⚡ あと{N}分",
-    en: "⚡ {N} min left"
+    ja: "掲載はあと{N}分",
+    en: "Listed for {N} more min"
+  },
+
+  shop_expiry_hours_left: {
+    ja: "掲載はあと{N}時間",
+    en: "Listed for {N} more hr"
   },
 
   shop_expiry_today_only: {
