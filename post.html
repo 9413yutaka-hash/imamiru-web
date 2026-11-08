@@ -1128,7 +1128,7 @@
         </div>
 
         <div>
-          <p class="brand-caption">
+          <p class="brand-caption" data-i18n="post_brand_caption">
             リアルタイム観光コンシェルジュ
           </p>
         </div>
@@ -1139,7 +1139,7 @@
         id="topHomeLink"
         class="home-link"
         href="index.html"
-      >
+       data-i18n="post_home_link">
         ← トップへ戻る
       </a>
 
@@ -1149,16 +1149,16 @@
   <section class="page-hero">
     <div class="page-hero-inner">
 
-      <div class="hero-label">
+      <div class="hero-label" data-i18n="post_hero_label">
         街の「今」を届ける
       </div>
 
-      <h1>
+      <h1 data-i18n-lines="post_hero_heading">
         街の「今」を、<br>
         みんなへ届けよう。
       </h1>
 
-      <p>
+      <p data-i18n="post_hero_lead">
         タイムセール、限定メニュー、イベントだけでなく、
         街で見つけた出来事の共有もできます。
         地元の人も、旅行中の人も。
@@ -1173,11 +1173,11 @@
 
       <div class="form-heading">
 
-        <h2>
+        <h2 data-i18n="post_form_heading">
           今の情報を届ける
         </h2>
 
-        <p>
+        <p data-i18n="post_form_lead">
           投稿後、マチナウ運営による確認を行います。
           承認された情報だけがトップページに掲載されます。
         </p>
@@ -1192,7 +1192,7 @@
            判断されることを防ぐため)。 -->
       <div id="postModeSelector">
 
-        <p class="post-mode-question">
+        <p class="post-mode-question" data-i18n="post_mode_question">
           どんな「今」を届けますか？
         </p>
 
@@ -1204,7 +1204,7 @@
           id="postModeShopUnavailableNotice"
           class="post-mode-shop-unavailable-notice"
           style="display:none;"
-        >
+         data-i18n="post_shop_unavailable">
           店舗・施設からの投稿は現在準備中です。「街で見つけた！」からの投稿はご利用いただけます。
         </p>
 
@@ -1214,7 +1214,7 @@
             id="postModeShopButton"
             type="button"
             class="location-button"
-          >
+           data-i18n="post_mode_shop">
             お店・施設からのお知らせ
           </button>
 
@@ -1222,7 +1222,7 @@
             id="postModeStreetButton"
             type="button"
             class="location-button"
-          >
+           data-i18n="post_mode_street">
             街で見つけた！
           </button>
 
@@ -1241,7 +1241,7 @@
           id="postModeReselectButton"
           type="button"
           class="post-mode-reselect-button"
-        >
+         data-i18n="post_mode_reselect">
           選び直す
         </button>
       </div>
@@ -1271,7 +1271,7 @@
         id="photoNoticeBox"
         class="notice-box"
         style="display:none;"
-      >
+       data-i18n="post_photo_notice">
         写真は最大5枚まで選択できます。
         1枚目の写真がトップページのメイン画像になります。
         写真を付けずに投稿することもできます。
@@ -1296,9 +1296,9 @@
             class="form-label"
             for="shopName"
           >
-            <span id="shopNameLabelText">店舗・イベント名</span>
+            <span id="shopNameLabelText" data-i18n="post_label_shop_name">店舗・イベント名</span>
 
-            <span class="required">
+            <span class="required" data-i18n="post_required">
               必須
             </span>
           </label>
@@ -1309,11 +1309,11 @@
             type="text"
             maxlength="60"
             autocomplete="organization"
-            placeholder="例：南国食堂"
+            placeholder="例：南国食堂" data-i18n-placeholder="post_shop_name_placeholder"
             required
           >
 
-          <p class="form-help">
+          <p class="form-help" data-i18n="post_shop_name_help">
             お客様に表示される正式な名称を入力してください。
             お店・イベント名だけでなく、見つけた場所や出来事の名前でも構いません。
           </p>
@@ -1331,7 +1331,7 @@
           >
             タイトル
 
-            <span class="required">
+            <span class="required" data-i18n="post_required">
               必須
             </span>
           </label>
@@ -1365,7 +1365,7 @@
           >
             カテゴリー
 
-            <span class="required">
+            <span class="required" data-i18n="post_required">
               必須
             </span>
           </label>
@@ -1375,7 +1375,7 @@
             name="category"
             required
           >
-            <option value="">
+            <option value="" data-i18n="post_select_placeholder">
               選択してください
             </option>
 
@@ -1432,9 +1432,9 @@
             class="form-label"
             for="durationHours"
           >
-            いつまで役立つ情報ですか？
+            <span data-i18n="post_label_duration">いつまで役立つ情報ですか？</span>
 
-            <span class="required">
+            <span class="required" data-i18n="post_required">
               必須
             </span>
           </label>
@@ -1444,7 +1444,7 @@
             name="durationHours"
             required
           >
-            <option value="">
+            <option value="" data-i18n="post_select_placeholder">
               選択してください
             </option>
 
@@ -1465,7 +1465,7 @@
             </option>
           </select>
 
-          <p class="form-help">
+          <p class="form-help" data-i18n-lines="post_duration_help">
             運営による承認後、選択した時間が経過すると、
             トップページから自動で非表示になります。
             <br>
@@ -1480,9 +1480,9 @@
             class="form-label"
             for="content"
           >
-            <span id="contentLabelText">内容</span>
+            <span id="contentLabelText" data-i18n="post_label_content">内容</span>
 
-            <span class="required">
+            <span class="required" data-i18n="post_required">
               必須
             </span>
           </label>
@@ -1491,7 +1491,7 @@
             id="content"
             name="content"
             maxlength="300"
-            placeholder="例：本日限定でハマチのお刺身を半額で提供します。売り切れ次第終了です！"
+            placeholder="例：本日限定でハマチのお刺身を半額で提供します。売り切れ次第終了です！" data-i18n-placeholder="post_content_placeholder"
             required
           ></textarea>
 
@@ -1510,9 +1510,9 @@
             class="form-label"
             for="address"
           >
-            住所・場所
+            <span data-i18n="post_label_address">住所・場所</span>
 
-            <span class="optional">
+            <span class="optional" data-i18n="post_optional">
               任意
             </span>
           </label>
@@ -1523,10 +1523,10 @@
             type="text"
             maxlength="120"
             autocomplete="street-address"
-            placeholder="例：沖縄県那覇市〇〇1-2-3"
+            placeholder="例：沖縄県那覇市〇〇1-2-3" data-i18n-placeholder="post_address_placeholder"
           >
 
-          <p class="form-help">
+          <p class="form-help" data-i18n="post_address_help">
             入力すると、トップページの地図ボタンから
             Googleマップで検索できるようになります。
           </p>
@@ -1536,14 +1536,14 @@
         <div class="form-group">
 
           <div class="form-label">
-            この情報がある場所
+            <span data-i18n="post_label_location">この情報がある場所</span>
 
-            <span class="optional">
+            <span class="optional" data-i18n="post_optional">
               任意
             </span>
           </div>
 
-          <p class="form-help">
+          <p class="form-help" data-i18n="post_location_help">
             現在地から設定すると、住所入力を省略できます。
             ここで設定するのは「この情報がある場所」であり、投稿者本人の居場所を公開するものではありません。
           </p>
@@ -1552,7 +1552,7 @@
             id="streetModeLocationHint"
             class="form-help"
             style="display:none;"
-          >
+           data-i18n="post_street_location_hint">
             場所を入れると、近くにいる人に見つけてもらいやすくなります。
           </p>
 
@@ -1560,7 +1560,7 @@
             id="locationButton"
             class="location-button"
             type="button"
-          >
+           data-i18n="post_location_button">
             この場所を現在地から設定
           </button>
 
@@ -1586,7 +1586,7 @@
           >
             お店のページ（任意）
 
-            <span class="optional">
+            <span class="optional" data-i18n="post_optional">
               任意
             </span>
           </label>
@@ -1612,7 +1612,7 @@
           <div class="form-label">
             店舗の営業時間
 
-            <span class="optional">
+            <span class="optional" data-i18n="post_optional">
               任意
             </span>
           </div>
@@ -1660,7 +1660,7 @@
           >
             営業開始時刻
 
-            <span class="optional">
+            <span class="optional" data-i18n="post_optional">
               任意
             </span>
           </label>
@@ -1681,7 +1681,7 @@
           >
             営業終了時刻
 
-            <span class="optional">
+            <span class="optional" data-i18n="post_optional">
               任意
             </span>
           </label>
@@ -1781,9 +1781,9 @@
         <div class="form-group">
 
           <div class="form-label">
-            掲載写真
+            <span data-i18n="post_label_photos">掲載写真</span>
 
-            <span class="optional">
+            <span class="optional" data-i18n="post_optional_photos">
               任意・最大5枚
             </span>
           </div>
@@ -1797,11 +1797,11 @@
               📷
             </div>
 
-            <p class="image-upload-title">
+            <p class="image-upload-title" data-i18n="post_image_upload_title">
               写真を選択（任意）
             </p>
 
-            <p class="image-upload-description">
+            <p class="image-upload-description" data-i18n-lines="post_image_upload_description">
               JPG・PNG・WEBPに対応しています。<br>
               1枚につき10MB以内、最大5枚まで選択できます。<br>
               自分で撮影した写真、または掲載する権利のある写真のみご利用ください。
@@ -1819,7 +1819,7 @@
               id="imageSelectButton"
               class="image-select-button"
               type="button"
-            >
+             data-i18n="post_image_select">
               ＋ 写真を選ぶ
             </button>
 
@@ -1849,7 +1849,7 @@
               required
             >
 
-            <span class="agreement-text">
+            <span class="agreement-text" data-i18n="post_agreement">
               入力内容に虚偽がなく、第三者の権利を侵害する
               写真や文章を投稿していないことを確認しました。
             </span>
@@ -1862,23 +1862,23 @@
           id="streetModeSafetyNote"
           class="form-help"
           style="display:none; margin-top: 10px;"
-        >
+         data-i18n="post_street_safety_note">
           人の顔や子ども、車のナンバー、個人のお宅など、個人が特定できるものの掲載にはご注意ください。
         </p>
 
         <p class="legal-links-note">
-          投稿することで、
-          <a href="terms.html" target="_blank" rel="noopener noreferrer">利用規約</a>
-          および
-          <a href="privacy.html" target="_blank" rel="noopener noreferrer">プライバシーポリシー</a>
-          に同意したものとみなされます。
+          <span data-i18n="post_legal_before">投稿することで、</span>
+          <a href="terms.html" target="_blank" rel="noopener noreferrer" data-i18n="post_terms_link">利用規約</a>
+          <span data-i18n="post_legal_and">および</span>
+          <a href="privacy.html" target="_blank" rel="noopener noreferrer" data-i18n="post_privacy_link">プライバシーポリシー</a>
+          <span data-i18n="post_legal_after">に同意したものとみなされます。</span>
         </p>
 
         <button
           id="submitButton"
           class="submit-button"
           type="submit"
-        >
+         data-i18n="post_submit">
           この内容で掲載を申し込む
         </button>
 
@@ -1890,7 +1890,7 @@
           <p
             id="progressMessage"
             class="progress-message"
-          >
+           data-i18n="post_preparing">
             投稿の準備をしています…
           </p>
 
@@ -1912,7 +1912,7 @@
             id="backHomeLink"
             class="after-action back-home-button"
             href="index.html"
-          >
+           data-i18n="post_back_home">
             トップページへ戻る
           </a>
 
@@ -1920,7 +1920,7 @@
             id="newPostButton"
             class="after-action new-post-button"
             type="button"
-          >
+           data-i18n="post_new_post">
             続けて投稿する
           </button>
 
@@ -1928,7 +1928,7 @@
             id="editPostLink"
             class="after-action edit-post-button"
             href="edit.html"
-          >
+           data-i18n="post_edit_post">
             内容を編集する
           </a>
 
@@ -1936,7 +1936,7 @@
             id="endPostLink"
             class="after-action end-post-button"
             href="end.html"
-          >
+           data-i18n="post_end_post">
             掲載を終了する
           </a>
 
@@ -1944,7 +1944,7 @@
 
       </form>
 
-      <div class="security-note">
+      <div class="security-note" data-i18n="post_security_note">
         投稿された情報は、マチナウ運営の確認後に公開されます。
         API Secretや管理者情報が、このページから送信されることはありません。
       </div>
@@ -1953,7 +1953,7 @@
 
   </main>
 
-  <footer>
+  <footer data-i18n-lines="post_footer">
     マチナウ
     <br>
     沖縄の「今」を、みんなへ。
@@ -1982,7 +1982,86 @@
   async
   defer
 ></script>
+  <script src="translations.js"></script>
   <script>
+    // サイト全体改善 第4弾｜TOP で選んだ言語(machinauLanguage)を引き継ぐ(値が無い・不正なら日本語)。
+    // 英語の時だけ、data-i18n 系の属性が付いた固定の文言を辞書(translations.js)で差し替える。
+    // 日本語は HTML のまま。このページのスクリプトより先に動く(後から書き換える文言は tr() で引く)。
+    const PAGE_LANGUAGE = (function () {
+      let stored = null;
+      try {
+        stored = localStorage.getItem("machinauLanguage");
+      } catch (error) {
+        stored = null;
+      }
+      return typeof stored === "string" && MACHINAU_SUPPORTED_LANGUAGES.includes(stored) ? stored : MACHINAU_DEFAULT_LANGUAGE;
+    })();
+    function tr(key, params) {
+      let text = getMachinauTranslation(key, PAGE_LANGUAGE);
+      Object.keys(params || {}).forEach(function (name) {
+        text = text.split("{" + name + "}").join(String(params[name]));
+      });
+      return text;
+    }
+    (function applyPageLanguage() {
+      if (PAGE_LANGUAGE === MACHINAU_DEFAULT_LANGUAGE) {
+        return;
+      }
+      document.documentElement.lang = PAGE_LANGUAGE;
+      document.title = tr("post_doc_title");
+      document.querySelectorAll("[data-i18n]").forEach(function (element) {
+        element.textContent = tr(element.getAttribute("data-i18n"));
+      });
+      document.querySelectorAll("[data-i18n-placeholder]").forEach(function (element) {
+        element.placeholder = tr(element.getAttribute("data-i18n-placeholder"));
+      });
+      // 訳文の改行(\n)は <br> にする(辞書の固定の文言だけで、利用者の入力は入らない)。
+      document.querySelectorAll("[data-i18n-lines]").forEach(function (element) {
+        const lines = tr(element.getAttribute("data-i18n-lines")).split("\n");
+        element.textContent = "";
+        lines.forEach(function (line, index) {
+          if (index > 0) {
+            element.appendChild(document.createElement("br"));
+          }
+          element.appendChild(document.createTextNode(line));
+        });
+      });
+    })();
+  </script>
+  <script>
+    // サイト全体改善 第4弾｜サーバー(cloudinarySignature)が返す利用者向けのメッセージ(日本語)を、英語の時は対応する訳にする。
+    // 知らないメッセージは汎用の案内。日本語の時はサーバーの文言のまま。
+    const SERVER_MESSAGE_KEYS = {
+      "認証情報がありません。": "post_server_auth",
+      "認証情報が正しくありません。": "post_server_auth",
+      "画像アップロードの準備ができませんでした。時間をおいて、もう一度お試しください。": "post_error_upload_prepare_later"
+    };
+    function localizeServerMessage(message, fallbackKey) {
+      if (PAGE_LANGUAGE === MACHINAU_DEFAULT_LANGUAGE) {
+        return typeof message === "string" && message !== "" ? message : tr(fallbackKey);
+      }
+      return typeof message === "string" && SERVER_MESSAGE_KEYS[message] ? tr(SERVER_MESSAGE_KEYS[message]) : tr(fallbackKey);
+    }
+    // 掲載時間の選択肢(3・6・12・24時間)は、一般投稿の安全対策(STEP 55)の試験が option の書き方を照合するため
+    // 属性を足さず、ここで値ごとに訳す(値・選べる時間は変えない)。
+    if (PAGE_LANGUAGE !== MACHINAU_DEFAULT_LANGUAGE) {
+      Array.from(document.querySelectorAll("#durationHours option")).forEach(function (option) {
+        if (/^\d+$/.test(option.value)) {
+          option.textContent = tr("post_duration_" + option.value);
+        }
+      });
+    }
+    // 英語の時、画面に出すエラーに日本語が残っていれば(想定外の文言)汎用の案内にする。
+    function localizeDisplayedError(message, fallbackKey) {
+      if (typeof message !== "string" || message === "") {
+        return tr(fallbackKey);
+      }
+      if (PAGE_LANGUAGE !== MACHINAU_DEFAULT_LANGUAGE && /[\u3040-\u30ff\u4e00-\u9fff]/.test(message)) {
+        return tr(fallbackKey);
+      }
+      return message;
+    }
+
     /*
       Cloudinary設定
     */
@@ -2343,22 +2422,22 @@
       "街の発見";
 
     const SHOP_NAME_LABEL_TEXT_SHOP =
-      "店舗・イベント名";
+      tr("post_label_shop_name");
 
     const SHOP_NAME_LABEL_TEXT_STREET =
-      "何を見つけた？";
+      tr("post_label_street_name");
 
     const SHOP_NAME_PLACEHOLDER_SHOP =
-      "例：南国食堂";
+      tr("post_shop_name_placeholder");
 
     const SHOP_NAME_PLACEHOLDER_STREET =
-      "例：きれいなハイビスカス";
+      tr("post_street_name_placeholder");
 
     const CONTENT_LABEL_TEXT_SHOP =
-      "内容";
+      tr("post_label_content");
 
     const CONTENT_LABEL_TEXT_STREET =
-      "ひとこと";
+      tr("post_label_street_content");
 
     let currentPostMode =
       null;
@@ -2390,7 +2469,7 @@
         "street"
       ) {
         postModeSelectedLabel.textContent =
-          "選択中：街で見つけた！";
+          tr("post_selected_street");
 
         titleFormGroup.style.display =
           "none";
@@ -2418,7 +2497,7 @@
       } else {
         // 一般公開の shop 選択(postModeShopButton経由、現在は準備中で到達しない)の表示。
         postModeSelectedLabel.textContent =
-          "選択中：お店・施設からのお知らせ";
+          tr("post_selected_shop");
 
         titleFormGroup.style.display =
           "";
@@ -2585,12 +2664,9 @@
 
     function updateCharacterCounts() {
       titleCount.textContent =
-        titleInput.value.length +
-        " / 50文字";
-
+        tr("post_count_title", { count: titleInput.value.length });
       contentCount.textContent =
-        contentInput.value.length +
-        " / 300文字";
+        tr("post_count_content", { count: contentInput.value.length });
     }
 
     function showMessage(
@@ -2631,7 +2707,7 @@
           .writeText
       ) {
         buttonElement.textContent =
-          "コピーできませんでした";
+          tr("post_copy_failed");
 
         window.setTimeout(
           function() {
@@ -2650,10 +2726,10 @@
         );
 
         buttonElement.textContent =
-          "コピーしました";
+          tr("post_copied");
       } catch (error) {
         buttonElement.textContent =
-          "コピーできませんでした";
+          tr("post_copy_failed");
       }
 
       window.setTimeout(
@@ -2680,18 +2756,18 @@
       // 以内の人向け)に出るため、掲載先が分かる文言にする。店舗投稿は従来どおり。
       const publicationNoticeText =
         currentPostMode === "street"
-          ? "内容の安全確認後、トップページの「街の発見」に、近く（15km以内）にいる方向けに掲載されます。反映まで少し時間がかかる場合があります。"
-          : "内容の安全確認後、トップページに掲載されます。";
+          ? tr("post_published_street")
+          : tr("post_published_shop");
 
       // 街の発見(street)｜3/6/12/24時間で自動終了するため、投稿者に掲載番号・
       // 終了番号の保存は求めない(番号の生成・保存・sessionStorageへの一時保持
       // 等の内部処理はそのまま)。店舗投稿の表示は従来どおり下のテンプレート。
       if (currentPostMode === "street") {
         messageBox.innerHTML =
-          "投稿を受け付けました。<br><br>" +
+          tr("post_received_html") +
           escapeHtml(
             publicationNoticeText +
-            "選択した掲載時間が経過すると、自動的に掲載終了します。"
+            tr("post_auto_end")
           );
 
         return;
@@ -2838,10 +2914,10 @@
 
       if (submitting) {
         submitButton.textContent =
-          "送信しています…";
+          tr("post_sending");
       } else {
         submitButton.textContent =
-          "この内容で掲載を申し込む";
+          tr("post_submit");
       }
     }
 
@@ -2867,7 +2943,7 @@
       ) {
         return (
           file.name +
-          "は対応していない画像形式です。"
+          tr("post_error_image_type")
         );
       }
 
@@ -2877,7 +2953,7 @@
       ) {
         return (
           file.name +
-          "は10MBを超えています。"
+          tr("post_error_image_size")
         );
       }
 
@@ -2918,7 +2994,7 @@
         ) {
           showMessage(
             "error",
-            "写真は最大5枚まで選択できます。"
+            tr("post_error_image_max")
           );
 
           break;
@@ -2979,10 +3055,7 @@
 
     function renderImagePreviews() {
       imageCount.textContent =
-        selectedImageFiles.length +
-        " / " +
-        MAX_IMAGE_COUNT +
-        "枚";
+        tr("post_image_count", { count: selectedImageFiles.length, max: MAX_IMAGE_COUNT });
 
       if (
         selectedImageFiles.length ===
@@ -2992,7 +3065,7 @@
           "";
 
         imageSelectButton.textContent =
-          "＋ 写真を選ぶ";
+          tr("post_image_select");
 
         return;
       }
@@ -3000,8 +3073,8 @@
       imageSelectButton.textContent =
         selectedImageFiles.length <
         MAX_IMAGE_COUNT
-          ? "＋ 写真を追加する"
-          : "写真を5枚選択済み";
+          ? tr("post_image_add")
+          : tr("post_image_full");
 
       imageSelectButton.disabled =
         selectedImageFiles.length >=
@@ -3037,7 +3110,7 @@
             previewUrl;
 
           image.alt =
-            "選択した写真" +
+            tr("post_image_alt") +
             (index + 1);
 
           image.addEventListener(
@@ -3076,9 +3149,7 @@
 
           removeButton.setAttribute(
             "aria-label",
-            "写真" +
-            (index + 1) +
-            "を削除"
+            tr("post_image_remove", { number: index + 1 })
           );
 
           removeButton.textContent =
@@ -3115,7 +3186,7 @@
               "first-image-label";
 
             firstLabel.textContent =
-              "トップ画像";
+              tr("post_image_first");
 
             previewItem.appendChild(
               firstLabel
@@ -3158,7 +3229,7 @@
             ) {
               reject(
                 new Error(
-                  "Firebaseへ接続できませんでした。"
+                  tr("post_error_firebase")
                 )
               );
 
@@ -3246,7 +3317,7 @@
         imageBitmap.close();
 
         throw new Error(
-          "写真を軽量化できませんでした。"
+          tr("post_error_resize")
         );
       }
 
@@ -3276,7 +3347,7 @@
 
                 reject(
                   new Error(
-                    "写真を軽量化できませんでした。"
+                    tr("post_error_resize")
                   )
                 );
               },
@@ -3324,7 +3395,7 @@
       ) {
         return Promise.reject(
           new Error(
-            "画像アップロードの準備ができませんでした。"
+            tr("post_error_upload_prepare")
           )
         );
       }
@@ -3395,7 +3466,7 @@
           await response.json();
       } catch (jsonError) {
         throw new Error(
-          "画像アップロードの準備に失敗しました。"
+          tr("post_error_upload_prepare_failed")
         );
       }
 
@@ -3405,10 +3476,7 @@
         responseData.success !== true
       ) {
         throw new Error(
-          responseData &&
-          responseData.message
-            ? responseData.message
-            : "画像アップロードの準備に失敗しました。"
+          localizeServerMessage(responseData && responseData.message, "post_error_upload_prepare_failed")
         );
       }
 
@@ -3427,7 +3495,7 @@
         new FormData();
 
             setProgress(
-        "写真を軽量化しています…",
+        tr("post_resizing"),
         8
       );
 
@@ -3504,7 +3572,7 @@
         jsonError
       ) {
         throw new Error(
-          "画像アップロードの応答を読み取れませんでした。"
+          tr("post_error_upload_response")
         );
       }
 
@@ -3518,7 +3586,7 @@
             ? responseData
                 .error
                 .message
-            : "画像をアップロードできませんでした。";
+            : tr("post_error_upload");
 
         throw new Error(
           cloudinaryMessage
@@ -3529,7 +3597,7 @@
         !responseData.secure_url
       ) {
         throw new Error(
-          "画像URLを取得できませんでした。"
+          tr("post_error_upload_url")
         );
       }
 
@@ -3567,8 +3635,7 @@
         0;
 
       setProgress(
-        selectedImageFiles.length +
-          "枚の写真を軽量化・アップロードしています…",
+        tr("post_progress_uploading", { count: selectedImageFiles.length }),
         10
       );
 
@@ -3597,11 +3664,7 @@
               );
 
             setProgress(
-              "写真" +
-                completedImageCount +
-                " / " +
-                selectedImageFiles.length +
-                "枚のアップロードが完了しました。",
+              tr("post_progress_uploaded", { done: completedImageCount, total: selectedImageFiles.length }),
               completedPercent
             );
 
@@ -3657,7 +3720,7 @@ async function convertAddressToCoordinates(
     !google.maps.Geocoder
   ) {
     throw new Error(
-      "地図機能の準備が完了していません。少し待ってから、もう一度お試しください。"
+      tr("post_error_maps_not_ready")
     );
   }
 
@@ -3678,7 +3741,7 @@ async function convertAddressToCoordinates(
     response.results.length === 0
   ) {
     throw new Error(
-      "入力された住所の場所を確認できませんでした。住所を詳しく入力してください。"
+      tr("post_error_address")
     );
   }
 
@@ -3712,7 +3775,7 @@ function requestCurrentLocationForPost() {
   if (!navigator.geolocation) {
     showLocationMessage(
       "error",
-      "このブラウザでは位置情報を利用できません。"
+      tr("post_error_no_geolocation")
     );
 
     return;
@@ -3722,7 +3785,7 @@ function requestCurrentLocationForPost() {
     true;
 
   locationButton.textContent =
-    "取得しています…";
+    tr("post_locating");
 
   navigator.geolocation
     .getCurrentPosition(
@@ -3752,16 +3815,12 @@ function requestCurrentLocationForPost() {
         ) {
           showLocationMessage(
             "success",
-            "現在地を取得しました(誤差 約" +
-              roundedAccuracy +
-              "m)。位置の誤差が大きいため、電波状況の良い場所で再取得することをおすすめします。"
+            tr("post_location_done_inaccurate", { meters: roundedAccuracy })
           );
         } else {
           showLocationMessage(
             "success",
-            "現在地を取得しました(誤差 約" +
-              roundedAccuracy +
-              "m)。"
+            tr("post_location_done", { meters: roundedAccuracy })
           );
         }
 
@@ -3769,26 +3828,26 @@ function requestCurrentLocationForPost() {
           false;
 
         locationButton.textContent =
-          "現在地を再取得";
+          tr("post_location_retry");
       },
 
       function(error) {
         let message =
-          "位置情報を取得できませんでした。";
+          tr("post_error_location");
 
         if (error.code === 1) {
           message =
-            "位置情報の利用が許可されませんでした。ブラウザの設定から位置情報を許可してください。";
+            tr("post_error_location_denied");
         } else if (
           error.code === 2
         ) {
           message =
-            "現在地を取得できませんでした。電波状況の良い場所でもう一度お試しください。";
+            tr("post_error_location_unavailable");
         } else if (
           error.code === 3
         ) {
           message =
-            "取得に時間がかかりました。もう一度お試しください。";
+            tr("post_error_location_timeout");
         }
 
         showLocationMessage(
@@ -3800,7 +3859,7 @@ function requestCurrentLocationForPost() {
           false;
 
         locationButton.textContent =
-          "この場所を現在地から設定";
+          tr("post_location_button");
       },
 
       {
@@ -3844,7 +3903,7 @@ function requestCurrentLocationForPost() {
       ) {
         validationErrors.push({
           message:
-            "店舗・イベント名を入力してください。",
+            tr("post_error_name"),
 
           element:
             shopNameInput
@@ -3858,7 +3917,7 @@ function requestCurrentLocationForPost() {
       ) {
         validationErrors.push({
           message:
-            "タイトルを入力してください。",
+            tr("post_error_title"),
 
           element:
             titleInput
@@ -3871,7 +3930,7 @@ function requestCurrentLocationForPost() {
       ) {
         validationErrors.push({
           message:
-            "カテゴリーを選択してください。",
+            tr("post_error_category"),
 
           element:
             categoryInput
@@ -3890,7 +3949,7 @@ function requestCurrentLocationForPost() {
       ) {
         validationErrors.push({
           message:
-            "掲載時間を選択してください。",
+            tr("post_error_duration"),
 
           element:
             durationHoursInput
@@ -3904,7 +3963,7 @@ function requestCurrentLocationForPost() {
       ) {
         validationErrors.push({
           message:
-            "内容を入力してください。",
+            tr("post_error_content"),
 
           element:
             contentInput
@@ -3923,7 +3982,7 @@ function requestCurrentLocationForPost() {
       ) {
         validationErrors.push({
           message:
-            "ページのアドレスは「https://」または「http://」から始まる形で貼り付けてください。\nわからない場合は、空欄のままで大丈夫です。",
+            tr("post_error_url"),
 
           element:
             websiteUrlInput
@@ -3959,7 +4018,7 @@ function requestCurrentLocationForPost() {
         ) {
           validationErrors.push({
             message:
-              "営業開始時刻と営業終了時刻は両方入力するか、両方空欄にしてください。",
+              tr("post_error_hours"),
 
             element:
               isOnlyStartTimeFilled
@@ -3974,7 +4033,7 @@ function requestCurrentLocationForPost() {
       ) {
         validationErrors.push({
           message:
-            "確認事項への同意が必要です。",
+            tr("post_error_agreement"),
 
           element:
             agreementInput
@@ -3991,14 +4050,14 @@ function requestCurrentLocationForPost() {
         );
 
         const combinedMessage =
-          "入力内容を確認してください。\n" +
+          tr("post_error_check") +
           validationErrors
             .map(
               function(
                 validationError
               ) {
                 return (
-                  "・" +
+                  tr("post_error_bullet") +
                   validationError.message
                 );
               }
@@ -4105,7 +4164,7 @@ function requestCurrentLocationForPost() {
       endCode
     ) {
       setProgress(
-        "投稿が完了しました。",
+        tr("post_completed"),
         100
       );
 
@@ -4171,7 +4230,7 @@ function requestCurrentLocationForPost() {
           !isGeneralPublicShopSubmissionCurrentlyEnabled()
         ) {
           throw new Error(
-            "店舗・施設からの投稿は現在準備中です。「街で見つけた！」からの投稿はご利用いただけます。"
+            tr("post_shop_unavailable")
           );
         }
 
@@ -4197,7 +4256,7 @@ function requestCurrentLocationForPost() {
         );
 
         setProgress(
-          "投稿の準備をしています…",
+          tr("post_preparing"),
           5
         );
 
@@ -4219,7 +4278,7 @@ function requestCurrentLocationForPost() {
         await getAnonymousIdTokenForImageUpload();
 
         setProgress(
-          "情報をマチナウへ送信しています…",
+          tr("post_sending_to_machinau"),
           82
         );
 
@@ -4493,10 +4552,7 @@ longitude:
 
         showMessage(
           "error",
-          error &&
-          error.message
-            ? error.message
-            : "投稿に失敗しました。もう一度お試しください。"
+          localizeDisplayedError(error && error.message, "post_error_submit")
         );
       }
     }
@@ -4523,7 +4579,7 @@ longitude:
         false;
 
       locationButton.textContent =
-        "この場所を現在地から設定";
+        tr("post_location_button");
 
       locationMessageBox.className =
         "message-box";

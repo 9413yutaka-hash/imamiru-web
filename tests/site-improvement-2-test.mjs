@@ -206,7 +206,7 @@ try {
     }
     const post = read("post.html"), cb = read("community-board-post.html");
     t("2 公開ページの画面の絵文字は、カテゴリー・写真の枠・完了の印だけ(見出し・ラベル・ボタン・飾りのアイコンには無い)", left.length === 0, left);
-    t("2b 投稿画面のスクリプトの文言も絵文字なし・TOP の見出しの名前(「街の発見」)と一致", !post.includes("選択中：👀") && !post.includes("📍 この場所を現在地から設定") && !post.includes("📍 現在地を再取得") && post.includes("トップページの「街の発見」") && !cb.includes('"📌 "'));
+    t("2b 投稿画面のスクリプトの文言も絵文字なし・TOP の見出しの名前(「街の発見」)と一致", !post.includes("選択中：👀") && !post.includes("📍 この場所を現在地から設定") && !post.includes("📍 現在地を再取得") && post.includes('tr("post_published_street")') && /post_published_street: \{\s*ja: "[^"]*トップページの「街の発見」/.test(read("translations.js")) && !cb.includes('"📌 "'));
     t("2c 今だけ投稿の写真ボタンの日英の辞書も絵文字なし", /imadake_post_photo_add: \{\s*ja: "写真を選ぶ",\s*en: "Choose photos"/.test(read("translations.js").replace(/\r\n/g, "\n")));
   }
   // ---- 3. 共有の30件の案内(TOP)

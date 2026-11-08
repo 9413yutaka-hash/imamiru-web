@@ -338,7 +338,10 @@
           option.textContent = categoryLabel(option.value);
         }
       });
-      document.getElementById("listLanguageNote").hidden = false;
+    }
+    function updateListLanguageNote() {
+      document.getElementById("listLanguageNote").hidden =
+        currentLanguage === MACHINAU_DEFAULT_LANGUAGE || loadedArticles.every(function(article) { return readArticleTranslation(article) !== null; });
     }
     applyColumnListLanguage();
 
@@ -417,8 +420,19 @@
           .join("");
     }
 
+    // 保存済みの訳(一覧の API が返すもの)があれば使う。無ければ原文(日本語)のまま。
+    function readArticleTranslation(article) {
+      if (currentLanguage === MACHINAU_DEFAULT_LANGUAGE || !article || !article.translations) {
+        return null;
+      }
+      const translation = article.translations[currentLanguage];
+      return translation && typeof translation.title === "string" && typeof translation.description === "string" ? translation : null;
+    }
+
     function renderArticleCard(article) {
       const slug = typeof article.slug === "string" ? article.slug : "";
+      const translation = readArticleTranslation(article);
+      const originalLang = translation || currentLanguage === MACHINAU_DEFAULT_LANGUAGE ? "" : ' lang="ja"';
 
       if (slug === "") {
         return "";
@@ -429,8 +443,8 @@
           (article.imageUrl ? '<img class="article-card-image" src="' + escapeHtml(buildOptimizedImageUrl(article.imageUrl, { width: 600 })) + '" alt="" loading="lazy" onerror="this.remove()">' : "") +
           '<div class="article-card-body">' +
             (article.category ? '<span class="article-card-category">' + escapeHtml(categoryLabel(article.category)) + '</span>' : "") +
-            '<p class="article-card-title">' + escapeHtml(article.title) + '</p>' +
-            '<p class="article-card-description">' + escapeHtml(article.description) + '</p>' +
+            '<p class="article-card-title"' + originalLang + '>' + escapeHtml(translation ? translation.title : article.title) + '</p>' +
+            '<p class="article-card-description"' + originalLang + '>' + escapeHtml(translation ? translation.description : article.description) + '</p>' +
             (article.publishedDate ? '<p class="article-card-date">' + escapeHtml(article.publishedDate) + '</p>' : "") +
           '</div>' +
         '</a>'
@@ -470,6 +484,7 @@
         }
 
         loadedArticles = responseData.articles;
+        updateListLanguageNote();
         populateMonthOptions(loadedArticles);
         renderFilteredArticles();
       } catch (error) {

@@ -23967,6 +23967,69 @@ function isColumnArticleTranslationReady(
   return summaryReady && contentReady;
 }
 
+// サイト全体改善 第4弾｜読みもの一覧(column-list.html)の英語の表示用。保存済みの題名・紹介文の訳のうち、
+// 今の原文に対して完成しているもの(status "ready" かつ原文のハッシュが一致)だけを返す。読むだけで、
+// 翻訳の生成・保存・ロックはしない(新しい AI 翻訳の呼び出しは増えない)。訳が無ければ undefined。
+function readReadyColumnArticleSummaryTranslations(
+  data
+) {
+  const summarySource =
+    getColumnArticleSummaryFromData(
+      data || {}
+    );
+
+  if (
+    !summarySource ||
+    !data.translations ||
+    typeof data.translations !== "object"
+  ) {
+    return undefined;
+  }
+
+  const sourceHash =
+    computeColumnArticleSummaryHash(
+      summarySource.title,
+      summarySource.description
+    );
+
+  const result =
+    {};
+
+  REGION_TODAY_INFO_SUPPORTED_LANGUAGES.forEach(
+    function(language) {
+      const translation =
+        data.translations[language];
+
+      const summary =
+        translation &&
+        typeof translation === "object"
+          ? translation.summary
+          : null;
+
+      if (
+        language !== "ja" &&
+        summary &&
+        summary.status === "ready" &&
+        summary.sourceHash === sourceHash &&
+        typeof summary.title === "string" &&
+        summary.title.trim() !== "" &&
+        typeof summary.description === "string" &&
+        summary.description.trim() !== ""
+      ) {
+        result[language] =
+          {
+            title: summary.title,
+            description: summary.description
+          };
+      }
+    }
+  );
+
+  return Object.keys(result).length > 0
+    ? result
+    : undefined;
+}
+
 function computeColumnArticleSummaryHash(
   title,
   description
@@ -27850,7 +27913,11 @@ async function handlePublicListPublishedColumnArticlesRequest(
               publishedAtMillis:
                 publishedAtDate
                   ? publishedAtDate.getTime()
-                  : 0
+                  : 0,
+              summaryTranslations:
+                readReadyColumnArticleSummaryTranslations(
+                  data
+                )
             };
           }
         )
@@ -27892,7 +27959,9 @@ async function handlePublicListPublishedColumnArticlesRequest(
               regionArea: article.regionArea,
               matchLevel: article.matchLevel,
               publishedDate: article.publishedDate,
-              publishedMonth: article.publishedMonth
+              publishedMonth: article.publishedMonth,
+              // サイト全体改善 第4弾｜保存済みの英語の題名・紹介文(無い時は項目ごと無し)。
+              translations: article.summaryTranslations
             };
           }
         );

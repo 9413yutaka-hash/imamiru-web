@@ -1039,7 +1039,7 @@ const MACHINAU_TRANSLATIONS = {
   },
   column_list_language_note: {
     ja: "",
-    en: "Article titles and summaries in this list are shown in Japanese. Open an article to read it in English."
+    en: "Some titles and summaries are shown in Japanese because an English version isn't ready yet. Open an article to read it in English."
   },
   column_list_back: {
     ja: "← マチナウTOPへ戻る",
@@ -1184,6 +1184,926 @@ const MACHINAU_TRANSLATIONS = {
   contribute_back: {
     ja: "← マチナウTOPへ戻る",
     en: "← Back to Machinau"
+  },
+  // サイト全体改善 第4弾｜town-now-post.html の固定の文言(英語の TOP から移っても日本語に戻らない)。
+  townnow_post_heading: {
+    ja: "街の今スレッド",
+    en: "Town Now Threads"
+  },
+  townnow_post_lead: {
+    ja: "その場所について、聞きたいこと・伝えたいことを書いてください。話題の場所の近くにいる人に表示され、その日の0時に公開を終了します。",
+    en: "Ask or share something about a place. Your post is shown to people near that place and stays up until midnight that day."
+  },
+  townnow_post_place_label: {
+    ja: "どこの話？",
+    en: "Which place?"
+  },
+  townnow_post_use_current_location: {
+    ja: "現在地を使う",
+    en: "Use my location"
+  },
+  townnow_post_choose_place: {
+    ja: "場所を選ぶ",
+    en: "Choose a place"
+  },
+  townnow_post_prefecture_label: {
+    ja: "都道府県",
+    en: "Prefecture"
+  },
+  townnow_post_municipality_label: {
+    ja: "市区町村",
+    en: "City / town"
+  },
+  townnow_post_select_placeholder: {
+    ja: "選択してください",
+    en: "Please choose"
+  },
+  townnow_post_prefecture_first: {
+    ja: "先に都道府県を選んでください",
+    en: "Choose a prefecture first"
+  },
+  townnow_post_confirm_place: {
+    ja: "この場所にする",
+    en: "Use this place"
+  },
+  townnow_post_place_hint: {
+    ja: "施設の場所が分からない場合は、所在地の市区町村を調べて選んでください。",
+    en: "If you're not sure where a place is, look up its city or town and choose that."
+  },
+  townnow_post_text_label: {
+    ja: "何を聞く・伝える？",
+    en: "What do you want to ask or share?"
+  },
+  townnow_post_submit: {
+    ja: "投稿する",
+    en: "Post"
+  },
+  townnow_post_back_top: {
+    ja: "マチナウTOPへ戻る",
+    en: "Back to Machinau"
+  },
+  townnow_post_back_top_arrow: {
+    ja: "← マチナウTOPへ戻る",
+    en: "← Back to Machinau"
+  },
+  townnow_post_text_placeholder: {
+    ja: "例：今から沖縄ワールド行くけど、おすすめある？",
+    en: "e.g. Heading to Okinawa World now. Any tips?"
+  },
+  townnow_post_error_no_geolocation: {
+    ja: "この端末では現在地を取得できません。「場所を選ぶ」をお使いください。",
+    en: "This device can't get your location. Please use \"Choose a place\"."
+  },
+  townnow_post_locating: {
+    ja: "現在地を取得しています…",
+    en: "Getting your location…"
+  },
+  townnow_post_error_maps: {
+    ja: "地図情報の読み込みに失敗しました。時間をおいて、もう一度お試しください。",
+    en: "We couldn't load the map data. Please try again later."
+  },
+  townnow_post_error_region: {
+    ja: "現在地の市区町村を特定できませんでした。「場所を選ぶ」をお使いください。",
+    en: "We couldn't find the city or town for your location. Please use \"Choose a place\"."
+  },
+  townnow_post_error_location: {
+    ja: "現在地を取得できませんでした。位置情報の利用を許可するか、「場所を選ぶ」をお使いください。",
+    en: "We couldn't get your location. Allow location access or use \"Choose a place\"."
+  },
+  townnow_post_checking_place: {
+    ja: "場所を確認しています…",
+    en: "Checking the place…"
+  },
+  townnow_post_error_place: {
+    ja: "この場所を確認できませんでした。時間をおいて、もう一度お試しください。",
+    en: "We couldn't confirm this place. Please try again later."
+  },
+  townnow_post_sending: {
+    ja: "送信しています…",
+    en: "Sending…"
+  },
+  townnow_post_done_visible: {
+    ja: "投稿しました。話題の場所の近くにいる人に表示されます。",
+    en: "Posted. It's shown to people near the place."
+  },
+  townnow_post_done_review: {
+    ja: "投稿を受け付けました。確認後に公開されます。",
+    en: "Thanks! Your post will be published after review."
+  },
+  townnow_post_error_rate: {
+    ja: "短時間に続けて投稿されています。少し待ってから、もう一度お試しください。",
+    en: "You're posting too often. Please wait a moment and try again."
+  },
+  townnow_post_error_invalid: {
+    ja: "投稿できませんでした。場所と内容を確認して、もう一度お試しください。",
+    en: "We couldn't post this. Check the place and your message, then try again."
+  },
+  townnow_post_error_generic: {
+    ja: "投稿できませんでした。時間をおいて、もう一度お試しください。",
+    en: "We couldn't post this. Please try again later."
+  },
+  townnow_post_place_selected: {
+    ja: "どこの話：{place}",
+    en: "Place: {place}"
+  },
+  townnow_post_place_current: {
+    ja: "{place}（現在地）",
+    en: "{place} (your location)"
+  },
+  townnow_post_current_location: {
+    ja: "現在地",
+    en: "Your location"
+  },
+  townnow_post_doc_title: {
+    ja: "街の今スレッド｜マチナウ",
+    en: "Town Now Threads | Machinau"
+  },
+  // サイト全体改善 第4弾｜community-board-post.html の固定の文言(英語の TOP から移っても日本語に戻らない)。
+  board_post_label: {
+    ja: "街の掲示板",
+    en: "Community Board"
+  },
+  board_post_heading: {
+    ja: "この街を訪れる人に、知ってほしいことを残そう",
+    en: "Leave a tip for people visiting this town"
+  },
+  board_post_lead: {
+    ja: "「豊見城といえばマンゴーだよ」「ここから見る夕日がきれいだよ」など、旅行者や次にこの街を訪れる人へ伝えたいひとことを投稿できます。内容を確認のうえ、街の掲示板に掲載します。",
+    en: "Share a short tip for travelers and the next visitors, like \"Tomigusuku is all about mangoes\" or \"The sunset from here is beautiful.\" We review posts before they appear on the board."
+  },
+  board_post_current_location_label: {
+    ja: "現在地",
+    en: "Your location"
+  },
+  board_post_detect_location: {
+    ja: "現在地から対象の街を調べる",
+    en: "Find the town from my location"
+  },
+  board_post_text_label: {
+    ja: "投稿内容",
+    en: "Your message"
+  },
+  board_post_submit: {
+    ja: "投稿する",
+    en: "Post"
+  },
+  board_post_back_top_arrow: {
+    ja: "← マチナウTOPへ戻る",
+    en: "← Back to Machinau"
+  },
+  board_post_done: {
+    ja: "投稿ありがとうございます。\n内容を確認後、街の掲示板に掲載します。",
+    en: "Thank you for posting.\nIt will appear on the board after review."
+  },
+  board_post_text_placeholder: {
+    ja: "例：豊見城といえばマンゴーだよ。ぜひ食べてみて！",
+    en: "e.g. Tomigusuku is famous for mangoes. Be sure to try one!"
+  },
+  board_post_error_no_geolocation: {
+    ja: "この端末では現在地を取得できません。",
+    en: "This device can't get your location."
+  },
+  board_post_locating: {
+    ja: "現在地を取得しています…",
+    en: "Getting your location…"
+  },
+  board_post_error_timeout: {
+    ja: "現在地を取得できませんでした（時間切れ）。もう一度お試しいただくか、TOPの「ほかの地域を見る」から地域を選んで投稿してください。",
+    en: "We couldn't get your location in time. Try again, or choose an area from \"See other areas\" on the top page to post."
+  },
+  board_post_error_no_response: {
+    ja: "対象の街を確認できませんでした（応答がありません）。時間をおいてもう一度お試しいただくか、TOPの「ほかの地域を見る」から地域を選んで投稿してください。",
+    en: "We couldn't confirm the town (no response). Try again later, or choose an area from \"See other areas\" on the top page to post."
+  },
+  board_post_error_maps: {
+    ja: "地図情報の読み込みに失敗しました。時間をおいて、もう一度お試しください。",
+    en: "We couldn't load the map data. Please try again later."
+  },
+  board_post_error_region: {
+    ja: "対象の街を特定できませんでした。",
+    en: "We couldn't identify the town."
+  },
+  board_post_error_location: {
+    ja: "現在地を取得できませんでした。位置情報の利用を許可してください。",
+    en: "We couldn't get your location. Please allow location access."
+  },
+  board_post_error_auth_unavailable: {
+    ja: "Firebase Authenticationが利用できません。",
+    en: "Sign-in isn't available right now. Please try again later."
+  },
+  board_post_error_auth_timeout: {
+    ja: "ログイン状態の確認が時間内に終わりませんでした。",
+    en: "Checking your session took too long. Please try again."
+  },
+  board_post_error_auth: {
+    ja: "ログイン状態を確認できませんでした。",
+    en: "We couldn't confirm your session."
+  },
+  board_post_error_auth_reload: {
+    ja: "ログイン状態を確認できませんでした。ページを読み込み直してから、もう一度お試しください。",
+    en: "We couldn't confirm your session. Reload the page and try again."
+  },
+  board_post_error_prepare: {
+    ja: "投稿の準備ができませんでした。",
+    en: "We couldn't prepare your post. Please try again."
+  },
+  board_post_error_need_region: {
+    ja: "先に現在地から対象の街を調べてください。",
+    en: "First find the town from your location."
+  },
+  board_post_error_empty: {
+    ja: "投稿内容を入力してください。",
+    en: "Please enter your message."
+  },
+  board_post_sending: {
+    ja: "送信しています…",
+    en: "Sending…"
+  },
+  board_post_error_send: {
+    ja: "投稿の送信に失敗しました。",
+    en: "We couldn't send your post. Please try again."
+  },
+  board_post_remote_heading: {
+    ja: "{region}の掲示板に投稿",
+    en: "Post to the {region} board"
+  },
+  board_post_remote_lead: {
+    ja: "{region}について知っていること、今の情報、おすすめなどを教えてください。",
+    en: "Share what you know about {region}: what's happening now, tips and recommendations."
+  },
+  board_post_region_result: {
+    ja: "対象の街：{region}",
+    en: "Town: {region}"
+  },
+  board_post_server_auth: {
+    ja: "認証情報がありません。",
+    en: "We couldn't confirm your session. Reload the page and try again."
+  },
+  board_post_server_invalid: {
+    ja: "入力内容を確認してください。",
+    en: "Please check your message and try again."
+  },
+  board_post_server_url: {
+    ja: "URLを含む投稿はできません。URLを除いて投稿してください。",
+    en: "Posts can't include links. Remove the URL and try again."
+  },
+  board_post_server_rate: {
+    ja: "短時間に続けて投稿されています。少し待ってから、もう一度お試しください。",
+    en: "You're posting too often. Please wait a moment and try again."
+  },
+  board_post_server_region: {
+    ja: "地域情報を確認できませんでした。時間をおいて、もう一度お試しください。",
+    en: "We couldn't confirm the area. Please try again later."
+  },
+  board_post_server_error: {
+    ja: "投稿の送信中にエラーが発生しました。時間をおいて、もう一度お試しください。",
+    en: "Something went wrong while sending your post. Please try again later."
+  },
+  board_post_doc_title: {
+    ja: "街の掲示板投稿｜マチナウ",
+    en: "Post to the Community Board | Machinau"
+  },
+  // サイト全体改善 第4弾｜contact.html の固定の文言(英語の TOP から移っても日本語に戻らない)。
+  contact_brand_caption: {
+    ja: "リアルタイム観光コンシェルジュ",
+    en: "Real-time travel concierge"
+  },
+  contact_home_link: {
+    ja: "← マチナウTOPへ",
+    en: "← Machinau top"
+  },
+  contact_hero_label: {
+    ja: "マチナウ運営へ",
+    en: "To the Machinau team"
+  },
+  contact_heading: {
+    ja: "お問い合わせ・ご意見",
+    en: "Contact & Feedback"
+  },
+  contact_free_badge: {
+    ja: "旅行者・地域の方・お店・施設の方、どなたでもご利用いただけます。",
+    en: "Open to everyone: travelers, locals, shops and venues."
+  },
+  contact_form_heading: {
+    ja: "お問い合わせフォーム",
+    en: "Contact form"
+  },
+  contact_form_lead: {
+    ja: "掲載内容の変更・訂正、不具合のご報告、機能へのご意見・ご要望など、マチナウ運営へお気軽にお送りください。",
+    en: "Send the Machinau team changes or corrections to listings, bug reports, or feedback and requests about features."
+  },
+  contact_required: {
+    ja: "必須",
+    en: "Required"
+  },
+  contact_optional: {
+    ja: "任意",
+    en: "Optional"
+  },
+  contact_category_placeholder: {
+    ja: "選んでください",
+    en: "Please choose"
+  },
+  contact_category_shop: {
+    ja: "お店・施設について",
+    en: "About a shop or venue"
+  },
+  contact_category_listing_change: {
+    ja: "掲載内容・写真の変更",
+    en: "Change listing details or photos"
+  },
+  contact_category_correction: {
+    ja: "情報の訂正",
+    en: "Correct information"
+  },
+  contact_category_bug: {
+    ja: "不具合の報告",
+    en: "Report a problem"
+  },
+  contact_category_feedback: {
+    ja: "ご意見・ご要望",
+    en: "Feedback or requests"
+  },
+  contact_category_other: {
+    ja: "その他",
+    en: "Other"
+  },
+  contact_email_hint: {
+    ja: "返信をご希望の場合は入力してください。",
+    en: "Enter this if you'd like a reply."
+  },
+  contact_message_hint: {
+    ja: "写真の添付には対応していません。掲載写真の変更をご希望の場合は、その旨と返信先メールアドレスをご記入ください。運営からご連絡します。",
+    en: "Photo attachments aren't supported. To change a listing photo, say so and include your email address. We'll get in touch."
+  },
+  contact_honeypot_label: {
+    ja: "確認用（入力しないでください）",
+    en: "For verification (leave blank)"
+  },
+  contact_submit: {
+    ja: "この内容で送信する",
+    en: "Send"
+  },
+  contact_done_heading: {
+    ja: "お問い合わせを受け付けました。",
+    en: "We received your message."
+  },
+  contact_done_text: {
+    ja: "マチナウ運営へ届きました。ありがとうございます。返信先をご記入いただいた場合は、必要に応じて運営からご連絡します。",
+    en: "It has reached the Machinau team. Thank you. If you left an email address, we'll contact you if needed."
+  },
+  contact_back_top_arrow: {
+    ja: "← マチナウTOPへ戻る",
+    en: "← Back to Machinau"
+  },
+  contact_footer: {
+    ja: "マチナウ\n街の今を知れば、もっと、いい旅になる。",
+    en: "Machinau\nKnow what's happening in town now, and make your trip even better."
+  },
+  contact_email_placeholder: {
+    ja: "例：info@example.com",
+    en: "e.g. info@example.com"
+  },
+  contact_error_category: {
+    ja: "お問い合わせ種別を選んでください。",
+    en: "Please choose a type of inquiry."
+  },
+  contact_error_message: {
+    ja: "お問い合わせ内容を入力してください。",
+    en: "Please enter your message."
+  },
+  contact_error_email: {
+    ja: "メールアドレスの形式を確認してください。",
+    en: "Please check the email address format."
+  },
+  contact_sending: {
+    ja: "送信しています…",
+    en: "Sending…"
+  },
+  contact_error_network: {
+    ja: "送信できませんでした。通信状況を確認して、もう一度お試しください。",
+    en: "We couldn't send your message. Check your connection and try again."
+  },
+  contact_label_category: {
+    ja: "お問い合わせ種別",
+    en: "Type of inquiry"
+  },
+  contact_label_name: {
+    ja: "お名前 または 店舗・施設名",
+    en: "Your name or shop / venue name"
+  },
+  contact_label_email: {
+    ja: "返信先メールアドレス",
+    en: "Email for reply"
+  },
+  contact_label_message: {
+    ja: "お問い合わせ内容",
+    en: "Message"
+  },
+  contact_privacy_note: {
+    ja: "ご記入いただいたお名前・メールアドレス・お問い合わせ内容は、お問い合わせへの対応とサービス改善のためにのみ使用し、公開されることはありません。",
+    en: "Your name, email address and message are used only to respond to your inquiry and improve the service, and are never made public."
+  },
+  contact_privacy_more_before: {
+    ja: "詳しくは",
+    en: "See the "
+  },
+  contact_privacy_link: {
+    ja: "プライバシーポリシー",
+    en: "Privacy Policy"
+  },
+  contact_privacy_more_after: {
+    ja: "をご覧ください。",
+    en: " (in Japanese) for details."
+  },
+  contact_server_busy: {
+    ja: "ただいまお問い合わせが集中しています。時間をおいて、もう一度お試しください。",
+    en: "We're receiving many inquiries right now. Please try again later."
+  },
+  contact_server_rate: {
+    ja: "短時間に続けて送信されています。3分ほど時間をおいて、もう一度お試しください。",
+    en: "You're sending too often. Please wait about 3 minutes and try again."
+  },
+  contact_error_send: {
+    ja: "送信できませんでした。時間をおいて、もう一度お試しください。",
+    en: "We couldn't send your message. Please try again later."
+  },
+  contact_error_too_long: {
+    ja: "{field}は{max}文字以内で入力してください。",
+    en: "{field} must be {max} characters or fewer."
+  },
+  contact_field_name: {
+    ja: "お名前・店舗名",
+    en: "Name"
+  },
+  contact_field_email: {
+    ja: "メールアドレス",
+    en: "Email address"
+  },
+  contact_field_message: {
+    ja: "お問い合わせ内容",
+    en: "Message"
+  },
+  contact_doc_title: {
+    ja: "お問い合わせ・ご意見｜マチナウ",
+    en: "Contact & Feedback | Machinau"
+  },
+  // サイト全体改善 第4弾｜post.html の固定の文言(英語の TOP から移っても日本語に戻らない)。
+  post_brand_caption: {
+    ja: "リアルタイム観光コンシェルジュ",
+    en: "Real-time travel concierge"
+  },
+  post_home_link: {
+    ja: "← トップへ戻る",
+    en: "← Back to top"
+  },
+  post_hero_label: {
+    ja: "街の「今」を届ける",
+    en: "Share what's happening"
+  },
+  post_hero_lead: {
+    ja: "タイムセール、限定メニュー、イベントだけでなく、 街で見つけた出来事の共有もできます。 地元の人も、旅行中の人も。",
+    en: "Not just sales, limited menus and events: you can also share things you spotted around town. Locals and travelers alike."
+  },
+  post_form_heading: {
+    ja: "今の情報を届ける",
+    en: "Share what's happening now"
+  },
+  post_form_lead: {
+    ja: "投稿後、マチナウ運営による確認を行います。 承認された情報だけがトップページに掲載されます。",
+    en: "After you post, the Machinau team reviews it. Only approved posts appear on the top page."
+  },
+  post_mode_question: {
+    ja: "どんな「今」を届けますか？",
+    en: "What would you like to share?"
+  },
+  post_shop_unavailable: {
+    ja: "店舗・施設からの投稿は現在準備中です。「街で見つけた！」からの投稿はご利用いただけます。",
+    en: "Posts from shops and venues aren't available yet. You can post with \"Spotted in town!\""
+  },
+  post_mode_shop: {
+    ja: "お店・施設からのお知らせ",
+    en: "News from a shop or venue"
+  },
+  post_mode_street: {
+    ja: "街で見つけた！",
+    en: "Spotted in town!"
+  },
+  post_mode_reselect: {
+    ja: "選び直す",
+    en: "Change"
+  },
+  post_photo_notice: {
+    ja: "写真は最大5枚まで選択できます。 1枚目の写真がトップページのメイン画像になります。 写真を付けずに投稿することもできます。",
+    en: "You can choose up to 5 photos. The first photo becomes the main image on the top page. You can also post without photos."
+  },
+  post_label_shop_name: {
+    ja: "店舗・イベント名",
+    en: "Shop or event name"
+  },
+  post_required: {
+    ja: "必須",
+    en: "Required"
+  },
+  post_optional: {
+    ja: "任意",
+    en: "Optional"
+  },
+  post_optional_photos: {
+    ja: "任意・最大5枚",
+    en: "Optional, up to 5"
+  },
+  post_shop_name_help: {
+    ja: "お客様に表示される正式な名称を入力してください。 お店・イベント名だけでなく、見つけた場所や出来事の名前でも構いません。",
+    en: "Enter the name people will see. It can be a shop or event, or the name of a place or thing you found."
+  },
+  post_select_placeholder: {
+    ja: "選択してください",
+    en: "Please choose"
+  },
+  post_duration_3: {
+    ja: "3時間",
+    en: "3 hours"
+  },
+  post_duration_6: {
+    ja: "6時間",
+    en: "6 hours"
+  },
+  post_duration_12: {
+    ja: "12時間",
+    en: "12 hours"
+  },
+  post_duration_24: {
+    ja: "24時間（今日いっぱい）",
+    en: "24 hours (the rest of today)"
+  },
+  post_label_content: {
+    ja: "内容",
+    en: "Details"
+  },
+  post_address_help: {
+    ja: "入力すると、トップページの地図ボタンから Googleマップで検索できるようになります。",
+    en: "If you enter it, people can search it on Google Maps from the map button on the top page."
+  },
+  post_location_help: {
+    ja: "現在地から設定すると、住所入力を省略できます。 ここで設定するのは「この情報がある場所」であり、投稿者本人の居場所を公開するものではありません。",
+    en: "Setting it from your location lets you skip the address. This is where the information is about, and your own location is not published."
+  },
+  post_street_location_hint: {
+    ja: "場所を入れると、近くにいる人に見つけてもらいやすくなります。",
+    en: "Adding the place helps people nearby find your post."
+  },
+  post_location_button: {
+    ja: "この場所を現在地から設定",
+    en: "Set this place from my location"
+  },
+  post_image_upload_title: {
+    ja: "写真を選択（任意）",
+    en: "Choose photos (optional)"
+  },
+  post_image_select: {
+    ja: "＋ 写真を選ぶ",
+    en: "+ Choose photos"
+  },
+  post_agreement: {
+    ja: "入力内容に虚偽がなく、第三者の権利を侵害する 写真や文章を投稿していないことを確認しました。",
+    en: "I confirm the information is true and my photos and text don't infringe anyone's rights."
+  },
+  post_street_safety_note: {
+    ja: "人の顔や子ども、車のナンバー、個人のお宅など、個人が特定できるものの掲載にはご注意ください。",
+    en: "Be careful not to post anything that identifies people, such as faces, children, license plates or private homes."
+  },
+  post_terms_link: {
+    ja: "利用規約",
+    en: "Terms of Service"
+  },
+  post_privacy_link: {
+    ja: "プライバシーポリシー",
+    en: "Privacy Policy"
+  },
+  post_submit: {
+    ja: "この内容で掲載を申し込む",
+    en: "Submit"
+  },
+  post_preparing: {
+    ja: "投稿の準備をしています…",
+    en: "Preparing your post…"
+  },
+  post_back_home: {
+    ja: "トップページへ戻る",
+    en: "Back to the top page"
+  },
+  post_new_post: {
+    ja: "続けて投稿する",
+    en: "Post another"
+  },
+  post_edit_post: {
+    ja: "内容を編集する",
+    en: "Edit post"
+  },
+  post_end_post: {
+    ja: "掲載を終了する",
+    en: "End listing"
+  },
+  post_security_note: {
+    ja: "投稿された情報は、マチナウ運営の確認後に公開されます。 API Secretや管理者情報が、このページから送信されることはありません。",
+    en: "Posts are published after the Machinau team reviews them. No API secrets or admin information are sent from this page."
+  },
+  post_hero_heading: {
+    ja: "街の「今」を、\nみんなへ届けよう。",
+    en: "Share what's happening\nin town right now."
+  },
+  post_duration_help: {
+    ja: "運営による承認後、選択した時間が経過すると、 トップページから自動で非表示になります。\n※この時間と営業時間は別です。実際のお店の営業時間は、下の「店舗の営業時間」で設定してください。",
+    en: "After approval, your post is hidden from the top page automatically once the selected time has passed.\nThis is separate from business hours."
+  },
+  post_image_upload_description: {
+    ja: "JPG・PNG・WEBPに対応しています。\n1枚につき10MB以内、最大5枚まで選択できます。\n自分で撮影した写真、または掲載する権利のある写真のみご利用ください。",
+    en: "JPG, PNG and WEBP are supported.\nUp to 10 MB each, and up to 5 photos.\nUse only photos you took or have the right to post."
+  },
+  post_footer: {
+    ja: "マチナウ\n沖縄の「今」を、みんなへ。",
+    en: "Machinau\nWhat's happening in Okinawa, for everyone."
+  },
+  post_label_duration: {
+    ja: "いつまで役立つ情報ですか？",
+    en: "How long is this useful?"
+  },
+  post_label_address: {
+    ja: "住所・場所",
+    en: "Address or place"
+  },
+  post_label_location: {
+    ja: "この情報がある場所",
+    en: "Where is this?"
+  },
+  post_label_photos: {
+    ja: "掲載写真",
+    en: "Photos"
+  },
+  post_legal_before: {
+    ja: "投稿することで、",
+    en: "By posting, you agree to the"
+  },
+  post_legal_and: {
+    ja: "および",
+    en: "and"
+  },
+  post_legal_after: {
+    ja: "に同意したものとみなされます。",
+    en: "(in Japanese)."
+  },
+  post_shop_name_placeholder: {
+    ja: "例：南国食堂",
+    en: "e.g. Nangoku Diner"
+  },
+  post_content_placeholder: {
+    ja: "例：本日限定でハマチのお刺身を半額で提供します。売り切れ次第終了です！",
+    en: "e.g. Today only: yellowtail sashimi at half price, while it lasts!"
+  },
+  post_address_placeholder: {
+    ja: "例：沖縄県那覇市〇〇1-2-3",
+    en: "e.g. 1-2-3 ○○, Naha, Okinawa"
+  },
+  post_label_street_name: {
+    ja: "何を見つけた？",
+    en: "What did you find?"
+  },
+  post_street_name_placeholder: {
+    ja: "例：きれいなハイビスカス",
+    en: "e.g. Beautiful hibiscus"
+  },
+  post_label_street_content: {
+    ja: "ひとこと",
+    en: "A few words"
+  },
+  post_selected_street: {
+    ja: "選択中：街で見つけた！",
+    en: "Selected: Spotted in town!"
+  },
+  post_selected_shop: {
+    ja: "選択中：お店・施設からのお知らせ",
+    en: "Selected: News from a shop or venue"
+  },
+  post_copy_failed: {
+    ja: "コピーできませんでした",
+    en: "Couldn't copy"
+  },
+  post_copied: {
+    ja: "コピーしました",
+    en: "Copied"
+  },
+  post_published_street: {
+    ja: "内容の安全確認後、トップページの「街の発見」に、近く（15km以内）にいる方向けに掲載されます。反映まで少し時間がかかる場合があります。",
+    en: "After a safety check, it appears in \"Spotted Nearby\" on the top page for people within 15 km. It may take a little while to show up."
+  },
+  post_published_shop: {
+    ja: "内容の安全確認後、トップページに掲載されます。",
+    en: "After a safety check, it appears on the top page."
+  },
+  post_received_html: {
+    ja: "投稿を受け付けました。<br><br>",
+    en: "Thanks! We received your post.<br><br>"
+  },
+  post_auto_end: {
+    ja: "選択した掲載時間が経過すると、自動的に掲載終了します。",
+    en: " It ends automatically once the selected time has passed."
+  },
+  post_sending: {
+    ja: "送信しています…",
+    en: "Sending…"
+  },
+  post_error_image_type: {
+    ja: "は対応していない画像形式です。",
+    en: ": this image format isn't supported."
+  },
+  post_error_image_size: {
+    ja: "は10MBを超えています。",
+    en: " is larger than 10 MB."
+  },
+  post_error_image_max: {
+    ja: "写真は最大5枚まで選択できます。",
+    en: "You can choose up to 5 photos."
+  },
+  post_image_add: {
+    ja: "＋ 写真を追加する",
+    en: "+ Add photos"
+  },
+  post_image_full: {
+    ja: "写真を5枚選択済み",
+    en: "5 photos selected"
+  },
+  post_image_alt: {
+    ja: "選択した写真",
+    en: "Selected photo "
+  },
+  post_image_first: {
+    ja: "トップ画像",
+    en: "Cover photo"
+  },
+  post_error_firebase: {
+    ja: "Firebaseへ接続できませんでした。",
+    en: "We couldn't connect. Please try again later."
+  },
+  post_error_resize: {
+    ja: "写真を軽量化できませんでした。",
+    en: "We couldn't resize the photo."
+  },
+  post_error_upload_prepare: {
+    ja: "画像アップロードの準備ができませんでした。",
+    en: "We couldn't prepare the photo upload."
+  },
+  post_error_upload_prepare_failed: {
+    ja: "画像アップロードの準備に失敗しました。",
+    en: "We couldn't prepare the photo upload."
+  },
+  post_resizing: {
+    ja: "写真を軽量化しています…",
+    en: "Resizing photos…"
+  },
+  post_error_upload_response: {
+    ja: "画像アップロードの応答を読み取れませんでした。",
+    en: "We couldn't read the upload response."
+  },
+  post_error_upload: {
+    ja: "画像をアップロードできませんでした。",
+    en: "We couldn't upload the photo."
+  },
+  post_error_upload_url: {
+    ja: "画像URLを取得できませんでした。",
+    en: "We couldn't get the photo URL."
+  },
+  post_error_maps_not_ready: {
+    ja: "地図機能の準備が完了していません。少し待ってから、もう一度お試しください。",
+    en: "The map isn't ready yet. Please wait a moment and try again."
+  },
+  post_error_address: {
+    ja: "入力された住所の場所を確認できませんでした。住所を詳しく入力してください。",
+    en: "We couldn't find that address. Please enter it in more detail."
+  },
+  post_error_no_geolocation: {
+    ja: "このブラウザでは位置情報を利用できません。",
+    en: "This browser can't use location."
+  },
+  post_locating: {
+    ja: "取得しています…",
+    en: "Getting location…"
+  },
+  post_location_retry: {
+    ja: "現在地を再取得",
+    en: "Get my location again"
+  },
+  post_error_location: {
+    ja: "位置情報を取得できませんでした。",
+    en: "We couldn't get your location."
+  },
+  post_error_location_denied: {
+    ja: "位置情報の利用が許可されませんでした。ブラウザの設定から位置情報を許可してください。",
+    en: "Location access wasn't allowed. Please allow it in your browser settings."
+  },
+  post_error_location_unavailable: {
+    ja: "現在地を取得できませんでした。電波状況の良い場所でもう一度お試しください。",
+    en: "We couldn't get your location. Please try again where the signal is better."
+  },
+  post_error_location_timeout: {
+    ja: "取得に時間がかかりました。もう一度お試しください。",
+    en: "Getting your location took too long. Please try again."
+  },
+  post_error_name: {
+    ja: "店舗・イベント名を入力してください。",
+    en: "Please enter a name."
+  },
+  post_error_title: {
+    ja: "タイトルを入力してください。",
+    en: "Please enter a title."
+  },
+  post_error_category: {
+    ja: "カテゴリーを選択してください。",
+    en: "Please choose a category."
+  },
+  post_error_duration: {
+    ja: "掲載時間を選択してください。",
+    en: "Please choose how long it's useful."
+  },
+  post_error_content: {
+    ja: "内容を入力してください。",
+    en: "Please enter the details."
+  },
+  post_error_url: {
+    ja: "ページのアドレスは「https://」または「http://」から始まる形で貼り付けてください。\nわからない場合は、空欄のままで大丈夫です。",
+    en: "Paste the page address starting with \"https://\" or \"http://\".\nIf you're not sure, leave it blank."
+  },
+  post_error_hours: {
+    ja: "営業開始時刻と営業終了時刻は両方入力するか、両方空欄にしてください。",
+    en: "Enter both opening and closing times, or leave both blank."
+  },
+  post_error_agreement: {
+    ja: "確認事項への同意が必要です。",
+    en: "Please check the confirmation box."
+  },
+  post_error_bullet: {
+    ja: "・",
+    en: "• "
+  },
+  post_error_check: {
+    ja: "入力内容を確認してください。\n",
+    en: "Please check the following:\n"
+  },
+  post_completed: {
+    ja: "投稿が完了しました。",
+    en: "Your post is complete."
+  },
+  post_sending_to_machinau: {
+    ja: "情報をマチナウへ送信しています…",
+    en: "Sending to Machinau…"
+  },
+  post_count_title: {
+    ja: "{count} / 50文字",
+    en: "{count} / 50 characters"
+  },
+  post_count_content: {
+    ja: "{count} / 300文字",
+    en: "{count} / 300 characters"
+  },
+  post_image_count: {
+    ja: "{count} / {max}枚",
+    en: "{count} / {max} photos"
+  },
+  post_image_remove: {
+    ja: "写真{number}を削除",
+    en: "Remove photo {number}"
+  },
+  post_progress_uploading: {
+    ja: "{count}枚の写真を軽量化・アップロードしています…",
+    en: "Resizing and uploading {count} photos…"
+  },
+  post_progress_uploaded: {
+    ja: "写真{done} / {total}枚のアップロードが完了しました。",
+    en: "Uploaded {done} of {total} photos."
+  },
+  post_location_done_inaccurate: {
+    ja: "現在地を取得しました(誤差 約{meters}m)。位置の誤差が大きいため、電波状況の良い場所で再取得することをおすすめします。",
+    en: "Got your location (accuracy about {meters} m). It's not very precise, so try again where the signal is better."
+  },
+  post_location_done: {
+    ja: "現在地を取得しました(誤差 約{meters}m)。",
+    en: "Got your location (accuracy about {meters} m)."
+  },
+  post_error_submit: {
+    ja: "投稿に失敗しました。もう一度お試しください。",
+    en: "We couldn't submit your post. Please try again."
+  },
+  post_server_auth: {
+    ja: "認証情報がありません。",
+    en: "We couldn't confirm your session. Reload the page and try again."
+  },
+  post_error_upload_prepare_later: {
+    ja: "画像アップロードの準備ができませんでした。時間をおいて、もう一度お試しください。",
+    en: "We couldn't prepare the photo upload. Please try again later."
+  },
+  post_doc_title: {
+    ja: "今の情報を投稿する｜マチナウ",
+    en: "Share what's happening | Machinau"
   },
   travel_box_share_limit: {
     ja: "保存した{N}件のうち、上から30件を送ります。",

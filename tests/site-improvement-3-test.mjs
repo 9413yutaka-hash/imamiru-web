@@ -251,7 +251,7 @@ try {
         v.lang === "en" && v.title === "Machinau Reads | Machinau" && v.h1 === "Find an article" && v.labels.join("|") === "Month published|Category" && v.reset === "Clear filters" &&
         v.months.join("|") === "All|October 2026|September 2026" && v.cats.join("|") === "All|Know the Town|Walk the Town|Eat & Drink" && v.catValues[3] === "食べる・飲む" &&
         v.cards.length === 2 && v.cards[0].href === "column/eat-1.html?lang=en" && v.cards[0].cat === "Eat & Drink" && v.cards[0].title === "那覇の朝ごはん" &&
-        v.note.startsWith("Article titles and summaries") && v.back === "← Back to Machinau" && v.noHScroll, v);
+        v.note.startsWith("Some titles and summaries") && v.back === "← Back to Machinau" && v.noHScroll, v);
       if (width === 390) {
         await p.ev(`document.getElementById("filterCategoryInput").value = "街を歩く"; document.getElementById("filterCategoryInput").dispatchEvent(new Event("change")); true`); await sleep(200);
         const f = await p.ev(`[...document.querySelectorAll(".article-card")].map((a) => a.getAttribute("href"))`);

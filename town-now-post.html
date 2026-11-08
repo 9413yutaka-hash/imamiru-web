@@ -287,15 +287,15 @@
 <body class="machinau-page">
 
   <header>
-    <div class="page-label">
+    <div class="page-label" data-i18n="townnow_post_heading">
       街の今スレッド
     </div>
 
-    <h1>
+    <h1 data-i18n="townnow_post_heading">
       街の今スレッド
     </h1>
 
-    <p>
+    <p data-i18n="townnow_post_lead">
       その場所について、聞きたいこと・伝えたいことを書いてください。話題の場所の近くにいる人に表示され、その日の0時に公開を終了します。
     </p>
   </header>
@@ -305,7 +305,7 @@
     <div class="panel" id="formPanel">
 
       <div class="field">
-        <span class="field-label">
+        <span class="field-label" data-i18n="townnow_post_place_label">
           どこの話？
         </span>
 
@@ -314,7 +314,7 @@
             id="useCurrentLocationButton"
             type="button"
             class="choice-button"
-          >
+           data-i18n="townnow_post_use_current_location">
             現在地を使う
           </button>
 
@@ -322,7 +322,7 @@
             id="choosePlaceButton"
             type="button"
             class="choice-button"
-          >
+           data-i18n="townnow_post_choose_place">
             場所を選ぶ
           </button>
         </div>
@@ -332,14 +332,14 @@
           class="area-picker"
           style="display:none;"
         >
-          <label for="prefectureSelect">都道府県</label>
+          <label for="prefectureSelect" data-i18n="townnow_post_prefecture_label">都道府県</label>
           <select id="prefectureSelect">
-            <option value="">選択してください</option>
+            <option value="" data-i18n="townnow_post_select_placeholder">選択してください</option>
           </select>
 
-          <label for="municipalitySelect">市区町村</label>
+          <label for="municipalitySelect" data-i18n="townnow_post_municipality_label">市区町村</label>
           <select id="municipalitySelect" disabled>
-            <option value="">先に都道府県を選んでください</option>
+            <option value="" data-i18n="townnow_post_prefecture_first">先に都道府県を選んでください</option>
           </select>
 
           <button
@@ -347,11 +347,11 @@
             type="button"
             class="secondary-button"
             disabled
-          >
+           data-i18n="townnow_post_confirm_place">
             この場所にする
           </button>
 
-          <p class="hint">
+          <p class="hint" data-i18n="townnow_post_place_hint">
             施設の場所が分からない場合は、所在地の市区町村を調べて選んでください。
           </p>
         </div>
@@ -369,14 +369,14 @@
       </div>
 
       <div class="field">
-        <label class="field-label" for="threadTextInput">
+        <label class="field-label" for="threadTextInput" data-i18n="townnow_post_text_label">
           何を聞く・伝える？
         </label>
 
         <textarea
           id="threadTextInput"
           maxlength="300"
-          placeholder="例：今から沖縄ワールド行くけど、おすすめある？"
+          placeholder="例：今から沖縄ワールド行くけど、おすすめある？" data-i18n-placeholder="townnow_post_text_placeholder"
         ></textarea>
 
         <div class="char-count">
@@ -389,7 +389,7 @@
         type="button"
         class="primary-button"
         disabled
-      >
+       data-i18n="townnow_post_submit">
         投稿する
       </button>
 
@@ -405,11 +405,11 @@
       class="completion-box"
     >
       <span id="completionText"></span>
-      <a class="primary-button" href="/index.html">マチナウTOPへ戻る</a>
+      <a class="primary-button" href="/index.html" data-i18n="townnow_post_back_top">マチナウTOPへ戻る</a>
     </div>
 
     <p class="top-back-link-row" id="topBackLinkRow">
-      <a class="top-back-link" href="/index.html">← マチナウTOPへ戻る</a>
+      <a class="top-back-link" href="/index.html" data-i18n="townnow_post_back_top_arrow">← マチナウTOPへ戻る</a>
     </p>
 
   </main>
@@ -422,6 +422,52 @@
   <!-- 全国の都道府県→市区町村(静的データ、TOPの掲示板と同じファイル) -->
   <script src="japan-municipalities.js"></script>
 
+  <script src="translations.js"></script>
+  <script>
+    // サイト全体改善 第4弾｜TOP で選んだ言語(machinauLanguage)を引き継ぐ(値が無い・不正なら日本語)。
+    // 英語の時だけ、data-i18n 系の属性が付いた固定の文言を辞書(translations.js)で差し替える。
+    // 日本語は HTML のまま。このページのスクリプトより先に動く(後から書き換える文言は tr() で引く)。
+    const PAGE_LANGUAGE = (function () {
+      let stored = null;
+      try {
+        stored = localStorage.getItem("machinauLanguage");
+      } catch (error) {
+        stored = null;
+      }
+      return typeof stored === "string" && MACHINAU_SUPPORTED_LANGUAGES.includes(stored) ? stored : MACHINAU_DEFAULT_LANGUAGE;
+    })();
+    function tr(key, params) {
+      let text = getMachinauTranslation(key, PAGE_LANGUAGE);
+      Object.keys(params || {}).forEach(function (name) {
+        text = text.split("{" + name + "}").join(String(params[name]));
+      });
+      return text;
+    }
+    (function applyPageLanguage() {
+      if (PAGE_LANGUAGE === MACHINAU_DEFAULT_LANGUAGE) {
+        return;
+      }
+      document.documentElement.lang = PAGE_LANGUAGE;
+      document.title = tr("townnow_post_doc_title");
+      document.querySelectorAll("[data-i18n]").forEach(function (element) {
+        element.textContent = tr(element.getAttribute("data-i18n"));
+      });
+      document.querySelectorAll("[data-i18n-placeholder]").forEach(function (element) {
+        element.placeholder = tr(element.getAttribute("data-i18n-placeholder"));
+      });
+      // 訳文の改行(\n)は <br> にする(辞書の固定の文言だけで、利用者の入力は入らない)。
+      document.querySelectorAll("[data-i18n-lines]").forEach(function (element) {
+        const lines = tr(element.getAttribute("data-i18n-lines")).split("\n");
+        element.textContent = "";
+        lines.forEach(function (line, index) {
+          if (index > 0) {
+            element.appendChild(document.createElement("br"));
+          }
+          element.appendChild(document.createTextNode(line));
+        });
+      });
+    })();
+  </script>
   <script>
     // 既存app.js・community-board-post.htmlと同じ公開鍵・同じ読み込みURL
     // (新しい鍵・新しいGoogle APIは使わない。使うのは既存のGeocoderのみ)。
@@ -713,7 +759,7 @@
       selectedPlace = place;
 
       if (place) {
-        selectedPlaceBox.textContent = "どこの話：" + label;
+        selectedPlaceBox.textContent = tr("townnow_post_place_selected", { place: label });
         selectedPlaceBox.style.display = "";
       } else {
         selectedPlaceBox.textContent = "";
@@ -746,18 +792,18 @@
             googlePlaceId: saved.googlePlaceId,
             countryCode: saved.countryCode
           },
-          (saved.regionName || "現在地") + "（現在地）"
+          tr("townnow_post_place_current", { place: saved.regionName || tr("townnow_post_current_location") })
         );
         return;
       }
 
       if (!navigator.geolocation) {
-        showMessage(placeMessage, "この端末では現在地を取得できません。「場所を選ぶ」をお使いください。", "error");
+        showMessage(placeMessage, tr("townnow_post_error_no_geolocation"), "error");
         return;
       }
 
       useCurrentLocationButton.disabled = true;
-      showMessage(placeMessage, "現在地を取得しています…", "");
+      showMessage(placeMessage, tr("townnow_post_locating"), "");
 
       navigator.geolocation.getCurrentPosition(
         async function (position) {
@@ -766,7 +812,7 @@
 
             if (!mapsLoaded) {
               useCurrentLocationButton.disabled = false;
-              showMessage(placeMessage, "地図情報の読み込みに失敗しました。時間をおいて、もう一度お試しください。", "error");
+              showMessage(placeMessage, tr("townnow_post_error_maps"), "error");
               return;
             }
 
@@ -783,7 +829,7 @@
                 const region = status === "OK" ? resolveRegionFromReverseGeocoderResults(results) : null;
 
                 if (!region) {
-                  showMessage(placeMessage, "現在地の市区町村を特定できませんでした。「場所を選ぶ」をお使いください。", "error");
+                  showMessage(placeMessage, tr("townnow_post_error_region"), "error");
                   return;
                 }
 
@@ -797,18 +843,18 @@
                     googlePlaceId: region.googlePlaceId,
                     countryCode: region.countryCode
                   },
-                  region.regionName + "（現在地）"
+                  tr("townnow_post_place_current", { place: region.regionName })
                 );
               }
             );
           } catch (error) {
             useCurrentLocationButton.disabled = false;
-            showMessage(placeMessage, "現在地の市区町村を特定できませんでした。「場所を選ぶ」をお使いください。", "error");
+            showMessage(placeMessage, tr("townnow_post_error_region"), "error");
           }
         },
         function () {
           useCurrentLocationButton.disabled = false;
-          showMessage(placeMessage, "現在地を取得できませんでした。位置情報の利用を許可するか、「場所を選ぶ」をお使いください。", "error");
+          showMessage(placeMessage, tr("townnow_post_error_location"), "error");
         }
       );
     });
@@ -842,7 +888,7 @@
 
       const placeholder = document.createElement("option");
       placeholder.value = "";
-      placeholder.textContent = municipalities.length > 0 ? "選択してください" : "先に都道府県を選んでください";
+      placeholder.textContent = municipalities.length > 0 ? tr("townnow_post_select_placeholder") : tr("townnow_post_prefecture_first");
       municipalitySelect.appendChild(placeholder);
 
       municipalities.forEach(function (municipalityName) {
@@ -871,14 +917,14 @@
       }
 
       confirmPlaceButton.disabled = true;
-      showMessage(placeMessage, "場所を確認しています…", "");
+      showMessage(placeMessage, tr("townnow_post_checking_place"), "");
 
       const region = await resolveRegionForPrefectureAndAreaName(prefectureName, areaName);
 
       confirmPlaceButton.disabled = municipalitySelect.value === "";
 
       if (!region) {
-        showMessage(placeMessage, "この場所を確認できませんでした。時間をおいて、もう一度お試しください。", "error");
+        showMessage(placeMessage, tr("townnow_post_error_place"), "error");
         return;
       }
 
@@ -943,7 +989,7 @@
       threadTextInput.disabled = true;
       useCurrentLocationButton.disabled = true;
       choosePlaceButton.disabled = true;
-      showMessage(submitMessage, "送信しています…", "");
+      showMessage(submitMessage, tr("townnow_post_sending"), "");
 
       const requestBody = {
         mode: "townNowThreadCreate",
@@ -993,8 +1039,8 @@
 
         completionText.textContent =
           data.status === "visible"
-            ? "投稿しました。話題の場所の近くにいる人に表示されます。"
-            : "投稿を受け付けました。確認後に公開されます。";
+            ? tr("townnow_post_done_visible")
+            : tr("townnow_post_done_review");
 
         formPanel.style.display = "none";
         topBackLinkRow.style.display = "none";
@@ -1011,10 +1057,10 @@
       showMessage(
         submitMessage,
         status === 429
-          ? "短時間に続けて投稿されています。少し待ってから、もう一度お試しください。"
+          ? tr("townnow_post_error_rate")
           : status === 400
-            ? "投稿できませんでした。場所と内容を確認して、もう一度お試しください。"
-            : "投稿できませんでした。時間をおいて、もう一度お試しください。",
+            ? tr("townnow_post_error_invalid")
+            : tr("townnow_post_error_generic"),
         "error"
       );
     });

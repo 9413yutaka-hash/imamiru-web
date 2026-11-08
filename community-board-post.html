@@ -261,15 +261,15 @@
 <body class="machinau-page">
 
   <header>
-    <div class="page-label">
+    <div class="page-label" data-i18n="board_post_label">
       街の掲示板
     </div>
 
-    <h1>
+    <h1 data-i18n="board_post_heading">
       この街を訪れる人に、知ってほしいことを残そう
     </h1>
 
-    <p>
+    <p data-i18n="board_post_lead">
       「豊見城といえばマンゴーだよ」「ここから見る夕日がきれいだよ」など、旅行者や次にこの街を訪れる人へ伝えたいひとことを投稿できます。内容を確認のうえ、街の掲示板に掲載します。
     </p>
 
@@ -286,7 +286,7 @@
     <div class="panel" id="formPanel">
 
       <div class="field" id="currentLocationField">
-        <label>
+        <label data-i18n="board_post_current_location_label">
           現在地
         </label>
 
@@ -294,7 +294,7 @@
           id="detectLocationButton"
           type="button"
           class="secondary-button"
-        >
+         data-i18n="board_post_detect_location">
           現在地から対象の街を調べる
         </button>
 
@@ -311,14 +311,14 @@
       </div>
 
       <div class="field">
-        <label for="postTextInput">
+        <label for="postTextInput" data-i18n="board_post_text_label">
           投稿内容
         </label>
 
         <textarea
           id="postTextInput"
           maxlength="300"
-          placeholder="例：豊見城といえばマンゴーだよ。ぜひ食べてみて！"
+          placeholder="例：豊見城といえばマンゴーだよ。ぜひ食べてみて！" data-i18n-placeholder="board_post_text_placeholder"
         ></textarea>
 
         <div class="char-count">
@@ -331,7 +331,7 @@
         type="button"
         class="primary-button"
         disabled
-      >
+       data-i18n="board_post_submit">
         投稿する
       </button>
 
@@ -345,13 +345,13 @@
     <div
       id="completionBox"
       class="completion-box"
-    >
+     data-i18n-lines="board_post_done">
       投稿ありがとうございます。<br>
       内容を確認後、街の掲示板に掲載します。
     </div>
 
     <p class="top-back-link-row">
-      <a class="top-back-link" href="/index.html">← マチナウTOPへ戻る</a>
+      <a class="top-back-link" href="/index.html" data-i18n="board_post_back_top_arrow">← マチナウTOPへ戻る</a>
     </p>
 
   </main>
@@ -361,7 +361,71 @@
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"></script>
   <script src="firebase.js"></script>
 
+  <script src="translations.js"></script>
   <script>
+    // サイト全体改善 第4弾｜TOP で選んだ言語(machinauLanguage)を引き継ぐ(値が無い・不正なら日本語)。
+    // 英語の時だけ、data-i18n 系の属性が付いた固定の文言を辞書(translations.js)で差し替える。
+    // 日本語は HTML のまま。このページのスクリプトより先に動く(後から書き換える文言は tr() で引く)。
+    const PAGE_LANGUAGE = (function () {
+      let stored = null;
+      try {
+        stored = localStorage.getItem("machinauLanguage");
+      } catch (error) {
+        stored = null;
+      }
+      return typeof stored === "string" && MACHINAU_SUPPORTED_LANGUAGES.includes(stored) ? stored : MACHINAU_DEFAULT_LANGUAGE;
+    })();
+    function tr(key, params) {
+      let text = getMachinauTranslation(key, PAGE_LANGUAGE);
+      Object.keys(params || {}).forEach(function (name) {
+        text = text.split("{" + name + "}").join(String(params[name]));
+      });
+      return text;
+    }
+    (function applyPageLanguage() {
+      if (PAGE_LANGUAGE === MACHINAU_DEFAULT_LANGUAGE) {
+        return;
+      }
+      document.documentElement.lang = PAGE_LANGUAGE;
+      document.title = tr("board_post_doc_title");
+      document.querySelectorAll("[data-i18n]").forEach(function (element) {
+        element.textContent = tr(element.getAttribute("data-i18n"));
+      });
+      document.querySelectorAll("[data-i18n-placeholder]").forEach(function (element) {
+        element.placeholder = tr(element.getAttribute("data-i18n-placeholder"));
+      });
+      // 訳文の改行(\n)は <br> にする(辞書の固定の文言だけで、利用者の入力は入らない)。
+      document.querySelectorAll("[data-i18n-lines]").forEach(function (element) {
+        const lines = tr(element.getAttribute("data-i18n-lines")).split("\n");
+        element.textContent = "";
+        lines.forEach(function (line, index) {
+          if (index > 0) {
+            element.appendChild(document.createElement("br"));
+          }
+          element.appendChild(document.createTextNode(line));
+        });
+      });
+    })();
+  </script>
+  <script>
+    // サイト全体改善 第4弾｜サーバーが返す利用者向けのメッセージ(日本語)を、英語の時は対応する訳にする。
+    // 知らないメッセージは汎用の案内(fallbackKey)。日本語の時はサーバーの文言のまま。
+    const SERVER_MESSAGE_KEYS = {
+      "認証情報がありません。": "board_post_server_auth",
+      "認証情報が正しくありません。": "board_post_server_auth",
+      "入力内容を確認してください。": "board_post_server_invalid",
+      "URLを含む投稿はできません。URLを除いて投稿してください。": "board_post_server_url",
+      "短時間に続けて投稿されています。少し待ってから、もう一度お試しください。": "board_post_server_rate",
+      "地域情報を確認できませんでした。時間をおいて、もう一度お試しください。": "board_post_server_region",
+      "投稿の送信中にエラーが発生しました。時間をおいて、もう一度お試しください。": "board_post_server_error"
+    };
+    function localizeServerMessage(message, fallbackKey) {
+      if (PAGE_LANGUAGE === MACHINAU_DEFAULT_LANGUAGE) {
+        return typeof message === "string" && message !== "" ? message : tr(fallbackKey);
+      }
+      return typeof message === "string" && SERVER_MESSAGE_KEYS[message] ? tr(SERVER_MESSAGE_KEYS[message]) : tr(fallbackKey);
+    }
+
     // 既存app.jsのGOOGLE_MAPS_SCRIPT_URLと同じ公開鍵(クライアント公開前提、
     // referrer制限あり)をそのまま使う。新しい鍵は発行しない。
     const GOOGLE_MAPS_SCRIPT_URL =
@@ -524,9 +588,9 @@
       }
 
       if (remoteRegionBanner && remoteRegionBannerHeading && remoteRegionBannerDescription) {
-        remoteRegionBannerHeading.textContent = remoteRegionName + "の掲示板に投稿";
+        remoteRegionBannerHeading.textContent = tr("board_post_remote_heading", { region: remoteRegionName });
         remoteRegionBannerDescription.textContent =
-          remoteRegionName + "について知っていること、今の情報、おすすめなどを教えてください。";
+          tr("board_post_remote_lead", { region: remoteRegionName });
         remoteRegionBanner.style.display = "block";
       }
 
@@ -582,7 +646,7 @@
 
     detectLocationButton.addEventListener("click", function () {
       if (!navigator.geolocation) {
-        showMessage(locationMessage, "この端末では現在地を取得できません。", "error");
+        showMessage(locationMessage, tr("board_post_error_no_geolocation"), "error");
         return;
       }
 
@@ -593,7 +657,7 @@
       resolvedCommunityBoardRegion = null;
       updateSubmitButtonEnabled();
       detectLocationButton.disabled = true;
-      showMessage(locationMessage, "現在地を取得しています…", "");
+      showMessage(locationMessage, tr("board_post_locating"), "");
       regionResultBox.style.display = "none";
 
       function finishWithError(text) {
@@ -608,7 +672,7 @@
       const geolocationGuardId = setTimeout(function () {
         if (!geolocationSettled) {
           geolocationSettled = true;
-          finishWithError("現在地を取得できませんでした（時間切れ）。もう一度お試しいただくか、TOPの「ほかの地域を見る」から地域を選んで投稿してください。");
+          finishWithError(tr("board_post_error_timeout"));
         }
       }, COMMUNITY_BOARD_GEOLOCATION_TIMEOUT_MS);
 
@@ -630,30 +694,30 @@
           }
 
           if (geocodeResult.status === "timeout") {
-            finishWithError("対象の街を確認できませんでした（応答がありません）。時間をおいてもう一度お試しいただくか、TOPの「ほかの地域を見る」から地域を選んで投稿してください。");
+            finishWithError(tr("board_post_error_no_response"));
             return;
           }
 
           if (geocodeResult.status === "maps_unavailable") {
-            finishWithError("地図情報の読み込みに失敗しました。時間をおいて、もう一度お試しください。");
+            finishWithError(tr("board_post_error_maps"));
             return;
           }
 
           if (geocodeResult.status !== "OK" || !Array.isArray(geocodeResult.results)) {
-            finishWithError("対象の街を特定できませんでした。");
+            finishWithError(tr("board_post_error_region"));
             return;
           }
 
           const region = resolveCommunityBoardRegionFromGeocoderResults(geocodeResult.results);
 
           if (!region) {
-            finishWithError("対象の街を特定できませんでした。");
+            finishWithError(tr("board_post_error_region"));
             return;
           }
 
           resolvedCommunityBoardRegion = region;
 
-          regionResultBox.textContent = "対象の街：" + region.regionName;
+          regionResultBox.textContent = tr("board_post_region_result", { region: region.regionName });
           regionResultBox.style.display = "";
 
           showMessage(locationMessage, "", "");
@@ -669,8 +733,8 @@
 
           finishWithError(
             error && error.code === 3
-              ? "現在地を取得できませんでした（時間切れ）。もう一度お試しいただくか、TOPの「ほかの地域を見る」から地域を選んで投稿してください。"
-              : "現在地を取得できませんでした。位置情報の利用を許可してください。"
+              ? tr("board_post_error_timeout")
+              : tr("board_post_error_location")
           );
         },
         {
@@ -700,7 +764,7 @@
 
         try {
           if (typeof firebase === "undefined" || !firebase.auth) {
-            throw new Error("Firebase Authenticationが利用できません。");
+            throw new Error(tr("board_post_error_auth_unavailable"));
           }
 
           auth = firebase.auth();
@@ -732,7 +796,7 @@
         };
 
         const timeoutId = setTimeout(function () {
-          finish(new Error("ログイン状態の確認が時間内に終わりませんでした。"));
+          finish(new Error(tr("board_post_error_auth_timeout")));
         }, COMMUNITY_BOARD_AUTH_READY_TIMEOUT_MS);
 
         unsubscribe = auth.onAuthStateChanged(
@@ -740,7 +804,7 @@
             finish(null);
           },
           function (error) {
-            finish(error || new Error("ログイン状態を確認できませんでした。"));
+            finish(error || new Error(tr("board_post_error_auth")));
           }
         );
 
@@ -751,7 +815,7 @@
         // 次の投稿操作で、もう一度初期化からやり直せるようにする。
         communityBoardAuthReadyPromise = null;
         console.error("街の掲示板：ログイン状態の確認に失敗しました：", error);
-        throw new Error("ログイン状態を確認できませんでした。ページを読み込み直してから、もう一度お試しください。");
+        throw new Error(tr("board_post_error_auth_reload"));
       });
 
       return communityBoardAuthReadyPromise;
@@ -762,7 +826,7 @@
 
     async function getAnonymousIdTokenForCommunityBoard() {
       if (typeof firebase === "undefined" || !firebase.auth) {
-        throw new Error("投稿の準備ができませんでした。");
+        throw new Error(tr("board_post_error_prepare"));
       }
 
       const auth = await waitForCommunityBoardAuthReady();
@@ -792,19 +856,19 @@
 
     submitButton.addEventListener("click", async function () {
       if (!resolvedCommunityBoardRegion) {
-        showMessage(submitMessage, "先に現在地から対象の街を調べてください。", "error");
+        showMessage(submitMessage, tr("board_post_error_need_region"), "error");
         return;
       }
 
       const text = postTextInput.value.trim();
 
       if (text === "") {
-        showMessage(submitMessage, "投稿内容を入力してください。", "error");
+        showMessage(submitMessage, tr("board_post_error_empty"), "error");
         return;
       }
 
       submitButton.disabled = true;
-      showMessage(submitMessage, "送信しています…", "");
+      showMessage(submitMessage, tr("board_post_sending"), "");
 
       try {
         const idToken = await getAnonymousIdTokenForCommunityBoard();
@@ -830,11 +894,11 @@
         try {
           responseData = await response.json();
         } catch (jsonError) {
-          throw new Error("投稿の送信に失敗しました。");
+          throw new Error(tr("board_post_error_send"));
         }
 
         if (!response.ok || !responseData || responseData.success !== true) {
-          throw new Error((responseData && responseData.message) || "投稿の送信に失敗しました。");
+          throw new Error(localizeServerMessage(responseData && responseData.message, "board_post_error_send"));
         }
 
         formPanel.style.display = "none";
@@ -853,7 +917,7 @@
         }
       } catch (error) {
         console.error("街の掲示板投稿エラー：", error);
-        showMessage(submitMessage, error.message || "投稿の送信に失敗しました。", "error");
+        showMessage(submitMessage, error.message || tr("board_post_error_send"), "error");
         submitButton.disabled = false;
       }
     });
