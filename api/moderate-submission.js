@@ -564,6 +564,17 @@ const REMOVED_LEGACY_MODES = Object.freeze([
   "adminStoreRegistrationReview"
 ]);
 
+// OpenAI API安全対策 STEP 2-A(2026-11-10)｜画面から使っていない AI の mode(POST で受け取ると 403)。
+//   aiConciergeChat(会話・gpt-5.6-terra＋Web検索・キャッシュなし)・aiConcierge(提案)・socialPatrol(SNS街巡回・Web検索)。
+//   画面の入口は撤去済み・呼び出しはコメント化・表示のスイッチは false で、ほかの API・定期実行・運営の画面からも呼ばれていない。
+//   匿名を含む ID トークンで外部から直接呼べ、回数の制限が無かったため、認証・リクエストの中身に関係なくここで止める
+//   (OpenAI・Firestore に触れる前)。処理のコードは残す。再開はこの一覧から外す commit(代表の承認)で行う。
+const STOPPED_AI_MODES = Object.freeze([
+  "aiConciergeChat",
+  "aiConcierge",
+  "socialPatrol"
+]);
+
 // api/admin-post.jsのFIELD_MAX_LENGTHSと同じ上限値を踏襲する(複製管理、
 // 既存のALLOWED_COLUMN_CATEGORIES等と同じ方針)。shopNameは含めない
 // (店舗token経由の投稿ではclient入力のshopNameを一切信用せず、
@@ -30985,6 +30996,18 @@ export default async function handler(
       success: false,
       reason: "legacy_feature_removed",
       message: "この機能は終了しました。店舗アカウントからご利用ください。"
+    });
+  }
+
+  // OpenAI API安全対策 STEP 2-A｜使っていない AI の mode は、認証・本文の中身に関係なく、OpenAI・Firestore に触れる前に止める。
+  if (
+    typeof requestBody.mode === "string" &&
+    STOPPED_AI_MODES.includes(requestBody.mode)
+  ) {
+    return response.status(403).json({
+      success: false,
+      reason: "ai_feature_stopped",
+      message: "この機能は現在ご利用いただけません。"
     });
   }
 
