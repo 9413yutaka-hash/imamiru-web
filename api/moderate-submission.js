@@ -4347,6 +4347,13 @@ async function handleCommunityBoardPostsListRequest(
             operatorLinksEnabled:
               data.operatorLinksEnabled === true,
 
+            // TOP・街ページ統合改善｜投稿者の属性は保存された authorType だけで決める。運営の投稿だけ "operator"、
+            // それ以外は空(一般の投稿には地元・旅行者の区別が保存されていない。投稿者の ID などは返さない)。
+            authorType:
+              data.authorType === "operator"
+                ? "operator"
+                : "",
+
             // 街の掲示板 運営専用投稿｜運営投稿の写真(許可した形のものだけ、最大3枚)。
             imageUrls:
               readCommunityBoardDisplayImageUrls(
@@ -23517,17 +23524,17 @@ const COLUMN_ARTICLE_PAGE_UI_TEXT =
     },
 
     saveButtonAriaLabel: {
-      ja: "この読みものを旅の保存箱に保存",
+      ja: "この読み物を旅の保存箱に保存",
       en: "Save this read to your Travel Box"
     },
 
     savedButtonAriaLabel: {
-      ja: "この読みものの保存を解除",
+      ja: "この読み物の保存を解除",
       en: "Remove this read from your Travel Box"
     },
 
     saveLimitReached: {
-      ja: "保存できる読みものは{MAX}件までです。旅の保存箱で保存を解除してから、もう一度お試しください。",
+      ja: "保存できる読み物は{MAX}件までです。旅の保存箱で保存を解除してから、もう一度お試しください。",
       en: "You can save up to {MAX} reads. Remove some in your Travel Box, then try again."
     },
 
@@ -23564,7 +23571,7 @@ const COLUMN_ARTICLE_PAGE_UI_TEXT =
     },
 
     relatedMoreLink: {
-      ja: "マチナウ読みものをもっと見る →",
+      ja: "マチナウ読み物をもっと見る →",
       en: "Explore more Machinau stories →"
     },
 

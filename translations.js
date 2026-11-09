@@ -38,8 +38,8 @@ const MACHINAU_TRANSLATIONS = {
   // (STEP3の旧ヒーロー由来、参照箇所なし)とは別物。
   // サイト全体改善 第5弾｜代表採用のファーストビュー(見出し・補足・主ボタン「現在地から探す」)。
   hero_main_copy: {
-    ja: "今、この街で何しよう？",
-    en: "What to do in this town, right now?"
+    ja: "街の今を知れば、<br>もっと、いい旅になる。",
+    en: "Know what's happening in town now,<br>and make your trip even better."
   },
 
   hero_lead: {
@@ -74,8 +74,169 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   today_now_empty_link_reads: {
-    ja: "街を楽しむヒント（マチナウ読みもの）",
+    ja: "街を楽しむヒント（マチナウ読み物）",
     en: "Tips for enjoying the town (Machinau Reads)"
+  },
+
+  // TOP・街ページ統合改善(ヘッダー・ヒーロー・位置情報の代替手段・街ページ・広告枠)。
+  hero_area_badge: {
+    ja: "沖縄からエリア拡大中",
+    en: "Starting in Okinawa, expanding across Japan"
+  },
+
+  hero_action_today_caption: {
+    ja: "街のスレッドへ",
+    en: "Go to town threads"
+  },
+
+  hero_board_title: {
+    ja: "街の掲示板",
+    en: "Town Board"
+  },
+
+  hero_board_caption: {
+    ja: "この街を訪れる人へ、地元のひとことを残す場所",
+    en: "Where locals leave a word for visitors to this town"
+  },
+
+  hero_card_more: {
+    ja: "見る →",
+    en: "View →"
+  },
+
+  how_to_entry_title: {
+    ja: "マチナウの楽しみ方",
+    en: "How to enjoy Machinau"
+  },
+
+  location_alternatives_toggle: {
+    ja: "位置情報が使えない場合はこちら",
+    en: "Can't use your location? Tap here"
+  },
+
+  location_alternatives_heading: {
+    ja: "位置情報を使わずに探す",
+    en: "Explore without your location"
+  },
+
+  location_retry_button: {
+    ja: "もう一度現在地を取得する",
+    en: "Try getting my location again"
+  },
+
+  shops_newest_order: {
+    ja: "新しい順",
+    en: "Newest First"
+  },
+
+  shop_imadake_chip: {
+    ja: "今だけ投稿あり・{AGO}",
+    en: "Live update · {AGO}"
+  },
+
+  shop_time_ago_now: {
+    ja: "たった今",
+    en: "just now"
+  },
+
+  shop_time_ago_minutes: {
+    ja: "{N}分前",
+    en: "{N} min ago"
+  },
+
+  shop_time_ago_hours: {
+    ja: "{N}時間前",
+    en: "{N} hr ago"
+  },
+
+  community_board_loading: {
+    ja: "掲示板を読み込んでいます…",
+    en: "Loading the community board…"
+  },
+
+  community_board_open_link: {
+    ja: "{SITE} を開く",
+    en: "Open {SITE}"
+  },
+
+  community_board_author_operator: {
+    ja: "運営",
+    en: "Machinau team"
+  },
+
+  town_now_loading: {
+    ja: "スレッドを読み込んでいます…",
+    en: "Loading threads…"
+  },
+
+  town_now_list_load_error: {
+    ja: "スレッドを読み込めませんでした。時間をおいて、もう一度お試しください。",
+    en: "Couldn't load the threads. Please try again later."
+  },
+
+  town_now_empty_region: {
+    ja: "この街では、まだ今日の会話がありません。",
+    en: "No conversations in this town yet today."
+  },
+
+  town_now_empty_hint: {
+    ja: "新しいスレッドは、下の「あなたの発見を教えて！」から立てられます。",
+    en: "You can start a new thread from \"Tell us what you've found!\" below."
+  },
+
+  town_now_area_note_prefix: {
+    ja: "選んだ街「",
+    en: "Today's threads in "
+  },
+
+  town_now_area_note_suffix: {
+    ja: "」の今日のスレッドです。",
+    en: " (the town you picked)."
+  },
+
+  column_entry_published_label: {
+    ja: "公開日",
+    en: "Published"
+  },
+
+  ad_slot_label: {
+    ja: "広告",
+    en: "Ad"
+  },
+
+  ad_house_shop_title: {
+    ja: "お店・施設を募集中",
+    en: "Calling all shops & venues"
+  },
+
+  ad_house_shop_text: {
+    ja: "旅行者に、今のお店の情報を届けませんか。",
+    en: "Share what's happening at your place with travelers nearby."
+  },
+
+  ad_house_reads_title: {
+    ja: "マチナウ読み物",
+    en: "Machinau Reads"
+  },
+
+  ad_house_reads_text: {
+    ja: "旅のヒント・ストーリーを読んでみよう。",
+    en: "Read travel tips and stories."
+  },
+
+  ad_house_how_to_title: {
+    ja: "マチナウの楽しみ方",
+    en: "How to enjoy Machinau"
+  },
+
+  ad_house_how_to_text: {
+    ja: "現在地・地域・スレッドの使い方をまとめました。",
+    en: "A quick guide to location, areas and threads."
+  },
+
+  ad_house_more: {
+    ja: "詳しく見る →",
+    en: "Learn more →"
   },
 
   hero_action_today_title: {
@@ -90,8 +251,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   hero_action_nearby_caption: {
-    ja: "今いる場所から",
-    en: "From where you are now"
+    ja: "お店・観光・体験",
+    en: "Shops, sights & experiences"
   },
 
   hero_action_area_title: {
@@ -105,7 +266,7 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   hero_action_reads_title: {
-    ja: "マチナウ読みもの",
+    ja: "マチナウ読み物",
     en: "Machinau Reads"
   },
 
@@ -321,8 +482,8 @@ const MACHINAU_TRANSLATIONS = {
   // JS側(updateLocationButtonLanguage())が切り替える(userLatitudeの有無で
   // 判定、getLocation()本体・地域判定ロジックには一切触れない)。
   location_heading: {
-    ja: "今いる街を見る",
-    en: "See the town you're in"
+    ja: "あなたの街の「今」",
+    en: "What's happening in your town"
   },
 
   // 現在地取得後の見出し。
@@ -332,8 +493,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   location_button_get: {
-    ja: "現在地から探す",
-    en: "Search near me"
+    ja: "現在地を取得する",
+    en: "Get my location"
   },
 
   location_button_update: {
@@ -675,8 +836,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   brand_caption: {
-    ja: "リアルタイム観光コンシェルジュ",
-    en: "Real-time Okinawa Travel Guide"
+    ja: "街の「今」がわかる旅の案内所",
+    en: "Your guide to what's happening in town"
   },
 
   live_chip_label: {
@@ -692,13 +853,13 @@ const MACHINAU_TRANSLATIONS = {
   // 現在地ファーストUX STEP2｜取得前の説明文。取得後はlocation_message_success
   // (既存、変更なし)へgetLocation()が切り替える。
   location_message_initial: {
-    ja: "マチナウは、今いる街の「今」をお届けします。まずは現在地ボタンを押してね。",
-    en: "Machinau shows you what's happening in your area right now. Tap the button below to get started."
+    ja: "今いる街の「今」をお届けします。まずは下のボタンを押してみてください。",
+    en: "We'll show you what's happening right now in the town you're in. Start by tapping the button below."
   },
 
   location_permission_toggle_show: {
-    ja: "📍 位置情報の設定方法を見る",
-    en: "📍 Location settings help"
+    ja: "許可し直す方法を見る",
+    en: "How to allow location again"
   },
 
   // 位置情報取得失敗時の離脱防止｜失敗時(拒否・取得不可・時間切れ)に位置情報
@@ -714,8 +875,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   location_failure_area_button: {
-    ja: "🗾 地域から探す",
-    en: "🗾 Search by area"
+    ja: "都道府県・市区町村から",
+    en: "By prefecture & city"
   },
 
   location_permission_device_pc_label: {
@@ -1043,7 +1204,7 @@ const MACHINAU_TRANSLATIONS = {
     en: "Machinau Reads"
   },
   column_list_heading: {
-    ja: "読みものを探す",
+    ja: "読み物を探す",
     en: "Find an article"
   },
   column_list_month_label: {
@@ -2208,27 +2369,27 @@ const MACHINAU_TRANSLATIONS = {
 
   // 旅の保存箱 Phase 1b｜読みもの保存の案内・ボタン文言。
   travel_box_articles_empty: {
-    ja: "まだ保存した読みものはありません。「マチナウ読みもの」の♡を押すと、ここに保存されます。",
+    ja: "まだ保存した読み物はありません。「マチナウ読み物」の♡を押すと、ここに保存されます。",
     en: "No reads saved yet. Tap ♡ on a Machinau Reads card to save it here."
   },
 
   travel_box_articles_loading: {
-    ja: "保存した読みものを読み込んでいます…",
+    ja: "保存した読み物を読み込んでいます…",
     en: "Loading your saved reads…"
   },
 
   travel_box_articles_load_failed: {
-    ja: "読みものを読み込めませんでした。時間をおいて、もう一度開いてください。",
+    ja: "読み物を読み込めませんでした。時間をおいて、もう一度開いてください。",
     en: "Couldn't load reads right now. Please try again later."
   },
 
   column_save_aria_label: {
-    ja: "この読みものを旅の保存箱に保存",
+    ja: "この読み物を旅の保存箱に保存",
     en: "Save this read to your Travel Box"
   },
 
   column_unsave_aria_label: {
-    ja: "この読みものの保存を解除",
+    ja: "この読み物の保存を解除",
     en: "Remove this read from your Travel Box"
   },
 
@@ -2238,7 +2399,7 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   saved_items_limit_reached: {
-    ja: "保存できる読みものは{MAX}件までです。旅の保存箱で保存を解除してから、もう一度お試しください。",
+    ja: "保存できる読み物は{MAX}件までです。旅の保存箱で保存を解除してから、もう一度お試しください。",
     en: "You can save up to {MAX} reads. Remove some in your Travel Box, then try again."
   },
 
@@ -2293,13 +2454,13 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   column_entry_heading: {
-    ja: "マチナウ読みもの",
+    ja: "マチナウ読み物",
     en: "Machinau Reads"
   },
 
   column_entry_lead: {
-    ja: "今いる街を楽しむためのヒント",
-    en: "Tips for enjoying the place you're in"
+    ja: "旅のヒント・ストーリー",
+    en: "Travel tips & stories"
   },
 
   // 多言語化 最終仕上げ｜「マチナウ読み物をもっと見る →」(column-list.htmlへの
@@ -5936,12 +6097,12 @@ const MACHINAU_TRANSLATIONS = {
 
   // 店主向け「この街のマチナウ利用状況」｜TOP の現在地ボタンの下の説明(計測のスイッチ ON の時だけ表示)。
   location_area_usage_note: {
-    ja: "現在地から判定した市町村名（座標は含みません）は、地域ごとの利用統計にも使います。",
+    ja: "現在地から分かった市区町村名（座標は含みません）は、地域ごとの利用統計にも使います。",
     en: "The municipality name found from your location (not your coordinates) is also used for area usage statistics."
   },
 
   location_area_usage_note_link: {
-    ja: "詳しく・停止",
+    ja: "詳しく見る／利用を停止する",
     en: "Details / turn off"
   },
 

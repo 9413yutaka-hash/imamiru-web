@@ -195,23 +195,19 @@ try {
   const errs = (p) => p.log.errors.filter((e) => !/動的一覧取得に失敗/.test(e));
 
   // ---- A. ファーストビュー
+  // TOP・街ページ統合改善(代表承認)で、第5弾の見出し・補足・入口2つは、キャッチコピー・現在地カード・4つの入口に置き換えた
+  // (文言・入口は tests/site-improvement-6-test.mjs の A で確かめる)。ここでは今も有効な点だけを見る：
+  // 現在地の主ボタンが最初の画面に入り、入口のカードより大きい・楽しみ方の入口あり・横スクロールなし・エラーなし。
   for (const lang of ["ja", "en"]) for (const width of [360, 390, 430, 1280]) {
     const p = await openAt("/", { lang, width });
     await p.ev("window.scrollTo(0, 0); true"); await sleep(200);
     const v = await p.ev(`(() => {
-      const r = (id) => { const e = document.getElementById(id); if (!e) return null; const b = e.getBoundingClientRect(); return { top: b.top, bottom: b.bottom, w: b.width, h: b.height, text: e.textContent.replace(/\\s+/g, " ").trim(), vis: getComputedStyle(e).display !== "none" }; };
-      return { h1: document.querySelector(".hero-main-copy").textContent.replace(/\\s+/g, "").trim(), lead: document.querySelector(".hero-lead").textContent.replace(/\\s+/g, "").trim(),
-        primary: r("locationButton"), area: r("heroActionArea"), msg: r("locationMessage"), howTo: r("howToEntryButton"),
-        removed: ["heroActionToday", "heroActionNearby", "heroActionReads"].filter((id) => document.getElementById(id)).length,
-        grid: document.querySelectorAll(".hero-action-grid, .hero-action-card").length,
+      const r = (id) => { const e = document.getElementById(id); if (!e) return null; const b = e.getBoundingClientRect(); return { top: b.top, bottom: b.bottom, w: b.width, h: b.height, vis: getComputedStyle(e).display !== "none" }; };
+      return { primary: r("locationButton"), area: r("heroActionArea"), howTo: r("howToEntryButton"),
         hScroll: document.documentElement.scrollWidth > innerWidth + 1, vh: innerHeight };
     })()`);
-    const ja = lang === "ja";
-    const textOk = ja ? v.h1 === "今、この街で何しよう？" && v.lead === "今だけの情報も、近くのお店も。今いる場所から見つけよう。" && v.primary.text === "現在地から探す" && v.area.text === "地域から探す"
-      : v.h1 === "Whattodointhistown,rightnow?" && /^Limited-timeupdates/.test(v.lead) && v.primary.text === "Search near me" && v.area.text === "Explore by Area";
-    t(`A1 ${lang} ${width}：見出し・補足・主ボタン「現在地から探す」・副導線「地域から探す」。旧3入口は無い`, textOk && v.removed === 0 && v.grid === 0, v);
-    t(`A2 ${lang} ${width}：主ボタンが一番大きく(高さ・幅とも副導線以上)、最初の画面に入る・取得前の案内は空で非表示・楽しみ方の入口あり・横スクロールなし・エラーなし`,
-      v.primary.h > v.area.h && v.primary.w >= v.area.w && v.primary.bottom < v.vh && !v.msg.vis && v.howTo && v.howTo.vis && !v.hScroll && errs(p).length === 0, { v, e: errs(p) });
+    t(`A1 ${lang} ${width}：現在地の主ボタンが最初の画面に入り、入口のカードより幅が広い`, v.primary && v.area && v.primary.bottom < v.vh && v.primary.w > v.area.w, v);
+    t(`A2 ${lang} ${width}：楽しみ方の入口あり・横スクロールなし・エラーなし`, v.howTo && v.howTo.vis && !v.hScroll && errs(p).length === 0, { v, e: errs(p) });
     await p.close();
   }
   for (const [width, mobile] of [[390, true], [1280, false]]) {
@@ -235,7 +231,8 @@ try {
     const p = await openAt("/");
     await p.ev(`navigator.geolocation.getCurrentPosition = (ok, ng) => setTimeout(() => ng({ code: 1, message: "denied" }), 10); getLocation(); true`); await sleep(800);
     const v = await p.ev(`(() => { const vis = (id) => { const e = document.getElementById(id); return !!e && getComputedStyle(e).display !== "none" && e.getBoundingClientRect().height > 0; }; return { msg: document.getElementById("locationMessage").textContent.trim(), guide: vis("locationPermissionGuideToggle"), failure: vis("locationFailureActions"), failureArea: vis("locationFailureAreaButton"), area: vis("heroActionArea"), btn: document.getElementById("locationButton").textContent.trim() }; })()`);
-    t("A5 位置情報を拒否：案内の文・設定方法を見る・「地域から探す」(1つだけ)・もう一度試す", v.msg !== "" && v.guide && v.failure && !v.failureArea && v.area && v.btn !== "", v);
+    // TOP・街ページ統合改善｜失敗時は代替手段のカード(都道府県・市区町村から＝#locationFailureAreaButton)を出す仕様に変わった。
+    t("A5 位置情報を拒否：案内の文・許可し直す方法・代替手段(都道府県・市区町村から)・もう一度試す", v.msg !== "" && v.guide && v.failure && v.failureArea && v.area && v.btn !== "", v);
     // 地域を選ぶ → 現在地へ戻る(既存の導線)
     await p.ev(`document.getElementById("heroActionArea").click(); true`); await sleep(500);
     await p.close();

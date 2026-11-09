@@ -69,12 +69,13 @@ try {
     gaRequests: performance.getEntriesByType("resource").filter((e) => /googletagmanager|google-analytics/.test(e.name)).length,
     firebaseReady: !!(window.machinauFirebaseTarget && window.machinauFirebaseTarget.ok && window.machinauDb),
     title: document.title,
-    hasMap: !!document.querySelector(".map-section"),
+    // TOP・街ページ統合改善で TOP の地図の欄は撤去(跡は広告枠)。ページが動いている目印として広告枠を見る。
+    hasMap: !!document.getElementById("adSlotSection") && !document.querySelector(".map-section"),
     hasImadakeModal: !!document.getElementById("imadakeDetailModal")
   })`);
   t("3 Preview-like host: gtag is not defined, no dataLayer, no gtag.js script, no request to Google Analytics", s.gtag === "undefined" && s.dataLayer === "undefined" && s.gaScripts === 0 && s.gaRequests === 0 && (p.log.ga || []).length === 0, s);
   // (127.0.0.1 uses the local static config in firebase.js; the Preview host → machinau-preview rule is covered by firebase-target-test)
-  t("3 the page still works without gtag: Firebase initialized, title, map section, 今だけ投稿 modal present", s.firebaseReady && /マチナウ/.test(s.title) && s.hasMap && s.hasImadakeModal, s);
+  t("3 the page still works without gtag: Firebase initialized, title, ad slot (map section removed), 今だけ投稿 modal present", s.firebaseReady && /マチナウ/.test(s.title) && s.hasMap && s.hasImadakeModal, s);
   const r = await p.ev(`(() => { try { sendMachinauAnalyticsEvent("test_event", { a: 1 }); return "ok"; } catch (e) { return "threw " + e.message; } })()`);
   t("3 analytics helper without gtag: does nothing and does not throw (CV / posting code paths call it)", r === "ok", r);
   const errors = [...new Set(p.log.errors)].filter((e) => !/RefererNotAllowedMapError|Google Maps|anonymous auth failed|Failed to load resource/.test(e));

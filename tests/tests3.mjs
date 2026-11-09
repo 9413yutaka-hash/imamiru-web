@@ -90,7 +90,10 @@ if (!only || only === "1") {
   let s = await section(p);
   t("1 before location: section hidden, no list request", s.hidden && s.display === "none" && !(p.log.imadakeList || []).length, { s, req: p.log.imadakeList });
   const order = await p.ev(`(()=>{const s=document.getElementById('imadakeSection'); const main=document.querySelector('main'); const a=document.getElementById('areaInfoSection'); return {prev:s.previousElementSibling&&s.previousElementSibling.id, next:s.nextElementSibling&&s.nextElementSibling.id, firstInMain: main.firstElementChild===s, mainPrevIsHero: !!(main.previousElementSibling && main.previousElementSibling.classList.contains('opening-visual')), areaNext: a.nextElementSibling&&a.nextElementSibling.id, hidden:s.hidden, display:getComputedStyle(s).display}})()`);
-  t("1 placed right below the hero (first in <main>); 気になる情報を見る -> 今、近くで楽しめる場所 adjacent again", order.firstInMain && order.mainPrevIsHero && order.areaNext === "shopsSection", order);
+  // TOP・街ページ統合改善(代表承認)｜今だけ投稿(ゲリラ情報)は「近くで楽しめる場所」の直前(間は0件の日の「今日の今」だけ)。
+  // 2026-10-13 の「<main>の先頭」は、この新しい決定で置き換えた。
+  const nextNext = await p.ev(`(()=>{const e=document.getElementById('todayNowEmptySection'); return e && e.nextElementSibling && e.nextElementSibling.id})()`);
+  t("1 placed right before 今、近くで楽しめる場所 (only 今日の今 in between)", order.next === "todayNowEmptySection" && nextNext === "shopsSection" && order.mainPrevIsHero, { order, nextNext });
   await setLocation(p, A); await p.waitFor("userLatitude!==null", 10000); await sleep(1500);
   s = await section(p);
   t("1 location known: request sent with 3-decimal coords", JSON.stringify(p.log.imadakeList) === JSON.stringify([A.key]), p.log.imadakeList);

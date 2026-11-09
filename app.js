@@ -2419,13 +2419,9 @@ if (selectedCategory === "お気に入り") {
             );
           }
 
-          return (
-            getDateValue(
-              secondShop.createdAt
-            ) -
-            getDateValue(
-              firstShop.createdAt
-            )
+          return compareShopsForStableTie(
+            firstShop,
+            secondShop
           );
         }
 
@@ -2445,13 +2441,48 @@ if (selectedCategory === "お気に入り") {
 
         return (
           firstShop.distanceKm -
-          secondShop.distanceKm
+            secondShop.distanceKm ||
+          compareShopsForStableTie(
+            firstShop,
+            secondShop
+          )
         );
       }
     );
   }
 
   return visibleShops;
+}
+
+// TOP・街ページ統合改善｜距離(または新しさ)が同じ店舗同士の並びを、読み込みのたびに変えない補助の順。
+// 新しい順 → ID の順。距離順・15km の判定そのものは変えない(距離が違えば常に距離が優先)。
+function compareShopsForStableTie(
+  firstShop,
+  secondShop
+) {
+  const dateDifference =
+    getDateValue(
+      secondShop.createdAt
+    ) -
+    getDateValue(
+      firstShop.createdAt
+    );
+
+  if (dateDifference) {
+    return dateDifference;
+  }
+
+  const firstId =
+    String(firstShop.firestoreId || "");
+
+  const secondId =
+    String(secondShop.firestoreId || "");
+
+  return firstId < secondId
+    ? -1
+    : firstId > secondId
+      ? 1
+      : 0;
 }
 
 // 2026-10-14 本部指示(代表承認)｜TOPヒーロー直下の実投稿写真枠(#heroPhotoWrapper)を撤去した
@@ -2943,6 +2974,9 @@ function clearSelectedShopRegion() {
     false;
 
   renderShops();
+
+  // TOP・街ページ統合改善｜選んだ街のスレッドを出していたら、現在地の近くのスレッドへ戻す。
+  restoreTownNowThreadsAfterRegionView();
 }
 
 // 店舗セクションの見出し・並び順ラベル・地域検索バーを状態に合わせる。
@@ -3000,10 +3034,14 @@ function updateShopsSectionRegionUi() {
   }
 
   if (shopsOrderLabelElement) {
+    // TOP・街ページ統合改善｜表示と実際の並びを一致させる：地域の選択中・現在地なしは新しい順
+    // (mergeStoreProfilesIntoShopCardList の並べ替え)、現在地ありは距離順(15km)。
     const orderLabelKey =
       selectedShopRegion
         ? "shops_region_order"
-        : "shops_current_location_order";
+        : isMachinauLocationAcquired()
+          ? "shops_current_location_order"
+          : "shops_newest_order";
 
     shopsOrderLabelElement.setAttribute(
       "data-i18n",
@@ -3808,13 +3846,12 @@ function mergeStoreProfilesIntoShopCardList(cardShops) {
       if (!secondHasDistance) {
         return -1;
       }
-      return firstShop.distanceKm - secondShop.distanceKm;
+      // 距離が同じ時は新しい順 → ID の順(読み込みのたびに入れ替わらない)。
+      return firstShop.distanceKm - secondShop.distanceKm || compareShopsForStableTie(firstShop, secondShop);
     });
   } else if (!selectedShopRegion) {
-    // 現在地なし：既存どおり新しい順(無料掲載同士の並びは安定ソートで変わらない)。
-    merged.sort(function(firstShop, secondShop) {
-      return getDateValue(secondShop.createdAt) - getDateValue(firstShop.createdAt);
-    });
+    // 現在地なし：既存どおり新しい順(同じ日時は ID の順)。
+    merged.sort(compareShopsForStableTie);
   }
 
   return merged;
@@ -3918,6 +3955,75 @@ function getShopCardSummaryHtml(
 // ⚡見出し・🆕新着・営業中/閉店まで・時間文言・お気に入りは出さない(お気に入り・地図は
 // STEP 4C)。カード本体と「詳細を見る」は STEP 4B から詳細表示(openShopModal)へつなぐ。
 // 本文は店舗が保存した原文のまま。
+// TOP・街ページ統合改善｜正式店舗のカードの鮮度の表示は、根拠がある時だけ：取得済みの近くの今だけ投稿のうち、
+// 同じ店舗(カードの ID sp_{storeId} と投稿の storeId が一致)・期限内の投稿がある時だけ「今だけ投稿あり・◯時間前」
+// (公開日時 publishedAt から)。無料掲載・投稿の無い店舗には何も出さない。今だけ投稿の CV・課金・表示条件には触れない。
+function getStoreImadakeChipHtml(shop, language) {
+  let nearbyPosts =
+    null;
+
+  try {
+    // 一覧の描画が今だけ投稿の状態の初期化より先に走った時も、例外を出さず何も出さない。
+    nearbyPosts =
+      imadakeNearbyPosts;
+  } catch (error) {
+    return "";
+  }
+
+  if (
+    !shop ||
+    typeof shop.firestoreId !== "string" ||
+    shop.firestoreId.indexOf("sp_") !== 0 ||
+    !Array.isArray(nearbyPosts)
+  ) {
+    return "";
+  }
+
+  const storeId =
+    shop.firestoreId.slice(3);
+  const now =
+    Date.now();
+  let latestPublishedAt =
+    0;
+
+  nearbyPosts.forEach(function(post) {
+    if (!post || post.storeId !== storeId) {
+      return;
+    }
+    const expiresAt =
+      Date.parse(post.expiresAt || "");
+    const publishedAt =
+      Date.parse(post.publishedAt || "");
+    if (
+      Number.isFinite(expiresAt) &&
+      expiresAt > now &&
+      Number.isFinite(publishedAt) &&
+      publishedAt <= now &&
+      publishedAt > latestPublishedAt
+    ) {
+      latestPublishedAt =
+        publishedAt;
+    }
+  });
+
+  if (latestPublishedAt === 0) {
+    return "";
+  }
+
+  const minutesAgo =
+    Math.floor((now - latestPublishedAt) / 60000);
+  const agoText =
+    minutesAgo < 1
+      ? getMachinauTranslation("shop_time_ago_now", language)
+      : minutesAgo < 60
+        ? getMachinauTranslation("shop_time_ago_minutes", language).replace("{N}", String(minutesAgo))
+        : getMachinauTranslation("shop_time_ago_hours", language).replace("{N}", String(Math.floor(minutesAgo / 60)));
+
+  return `<span class="info-chip info-chip-time info-chip-imadake">${escapeHtml(
+    getMachinauTranslation("shop_imadake_chip", language).replace("{AGO}", agoText)
+  )}</span>`;
+}
+
 function buildStoreProfileShopCardHtml(shop, shopCardIndex) {
   const language =
     getCurrentMachinauLanguage();
@@ -3975,6 +4081,7 @@ function buildStoreProfileShopCardHtml(shop, shopCardIndex) {
                 <span class="info-chip">🚶 ${estimateWalkingTime(shop.distanceKm)}</span>
               `
           }
+          ${getStoreImadakeChipHtml(shop, language)}
           ${
             shop.takeout === true
               ? `<span class="info-chip">${getMachinauTranslation("shop_takeout_ok", language)}</span>`
@@ -10762,6 +10869,11 @@ function applyPendingRestoredUserLocation() {
           error
         );
       }
+
+      // 復元を待って一覧の描画を後回しにしたため、復元できなかった時はここで描く。
+      if (!isMachinauLocationAcquired()) {
+        renderShops();
+      }
     },
     0
   );
@@ -11646,6 +11758,10 @@ function resetLocationPermissionGuide() {
       "none";
   }
 
+  setLocationAlternativesExpanded(
+    false
+  );
+
   document
     .querySelectorAll(
       ".location-permission-device-panel, .location-permission-os-panel"
@@ -11682,6 +11798,83 @@ function showLocationFailureActions() {
     locationFailureActions.style.display =
       "";
   }
+
+  setLocationAlternativesExpanded(
+    true
+  );
+}
+
+// TOP・街ページ統合改善｜「位置情報が使えない場合はこちら」の開閉の状態(aria-expanded)。
+function setLocationAlternativesExpanded(
+  isExpanded
+) {
+  const toggle =
+    document.getElementById(
+      "locationAlternativesToggle"
+    );
+
+  if (toggle) {
+    toggle.setAttribute(
+      "aria-expanded",
+      isExpanded ? "true" : "false"
+    );
+  }
+}
+
+// 通常時は小さなリンクだけを出し、押した時に代替手段(都道府県・市区町村から／もう一度現在地を取得する／
+// 許可し直す方法)を開く。もう一度押すと閉じる。取得の失敗時は getLocation() が同じ枠を開く。
+const locationAlternativesToggleElement =
+  document.getElementById(
+    "locationAlternativesToggle"
+  );
+
+if (locationAlternativesToggleElement) {
+  locationAlternativesToggleElement.addEventListener(
+    "click",
+    function() {
+      const locationFailureActions =
+        document.getElementById(
+          "locationFailureActions"
+        );
+
+      if (!locationFailureActions) {
+        return;
+      }
+
+      if (locationFailureActions.style.display !== "none") {
+        resetLocationPermissionGuide();
+        return;
+      }
+
+      showLocationPermissionGuideToggle();
+      showLocationFailureActions();
+    }
+  );
+}
+
+// 「もう一度現在地を取得する」は既存の現在地ボタンと同じ処理(押せない間は何もしない)。
+const locationRetryButtonElement =
+  document.getElementById(
+    "locationRetryButton"
+  );
+
+if (locationRetryButtonElement) {
+  locationRetryButtonElement.addEventListener(
+    "click",
+    function() {
+      const locationButtonElement =
+        document.getElementById(
+          "locationButton"
+        );
+
+      if (
+        locationButtonElement &&
+        !locationButtonElement.disabled
+      ) {
+        locationButtonElement.click();
+      }
+    }
+  );
 }
 
 // 失敗時の「🗾 地域から探す」はヒーローの既存入口(#heroActionArea)と同じ処理
@@ -11928,7 +12121,10 @@ const mapSection =
   }
 
   shopsSection.style.display = "none";
-  mapSection.style.display = "none";
+  // TOP・街ページ統合改善｜TOPの地図の欄は撤去したため、無い時は何もしない(マイページ・お気に入りを止めない)。
+  if (mapSection) {
+    mapSection.style.display = "none";
+  }
   myPageSection.style.display = "block";
 
   // 旅の保存箱 Phase 1a｜開いた時点で保存済みのお店・施設を表示する
@@ -12200,7 +12396,11 @@ function applyLoadedSubmissions(
 
   hideSampleNotice();
 
-  renderShops();
+  // TOP・街ページ統合改善｜30分以内の現在地を復元する時は、先に新しい順で描いてから距離順に並べ替わる
+  // (開くたびに順番が入れ替わって見える)のを避け、復元後の描画(applyUserLocation)だけにする。
+  if (!pendingRestoredUserLocation) {
+    renderShops();
+  }
 
   // 旅の保存箱｜保存箱を先に開いていても、届いた無料掲載で保存済み一覧を描き直す(通信なし)。
   renderFavoriteList();
@@ -12596,6 +12796,61 @@ function buildColumnArticleUrlForLanguage(
 let latestDynamicColumnEntriesRequestId =
   0;
 
+// TOP・街ページ統合改善｜読み物のカードの公開日。サーバーの publishedDate(publishedAt＝初回公開日、記事ページの
+// 「公開日」・読み物一覧のカードと同じ日付)だけを使う。無い・形が違う時は日付を出さない(保存・更新の日時で補わない)。
+function buildColumnEntryPublishedDateHtml(
+  publishedDate,
+  language
+) {
+  const match =
+    typeof publishedDate === "string"
+      ? publishedDate.match(/^(\d{4})年(\d{1,2})月(\d{1,2})日$/)
+      : null;
+
+  if (!match) {
+    return "";
+  }
+
+  const isoDate =
+    match[1] + "-" + match[2].padStart(2, "0") + "-" + match[3].padStart(2, "0");
+
+  let dateText =
+    publishedDate;
+
+  if (language !== MACHINAU_DEFAULT_LANGUAGE) {
+    try {
+      dateText =
+        new Intl.DateTimeFormat(
+          "en-US",
+          {
+            timeZone: "UTC",
+            year: "numeric",
+            month: "short",
+            day: "numeric"
+          }
+        ).format(new Date(isoDate + "T00:00:00Z"));
+    } catch (error) {
+      dateText =
+        publishedDate;
+    }
+  }
+
+  return (
+    '<p class="column-entry-date">' +
+    escapeHtml(
+      getMachinauTranslation(
+        "column_entry_published_label",
+        language
+      )
+    ) +
+    ' <time datetime="' +
+    isoDate +
+    '">' +
+    escapeHtml(dateText) +
+    "</time></p>"
+  );
+}
+
 async function loadDynamicColumnEntries(
   viewerLocation
 ) {
@@ -12804,6 +13059,10 @@ function renderDynamicColumnEntries() {
                 displayDescription
               )}
             </p>
+            ${buildColumnEntryPublishedDateHtml(
+              article.publishedDate,
+              currentLanguage
+            )}
             <a
               class="region-recommendation-card-link"
               href="${escapeHtml(
@@ -14654,19 +14913,13 @@ function buildCommunityBoardPostTextHtml(
         )
       );
 
+    // TOP・街ページ統合改善｜生の長い URL を本文に出さず、本文の下のリンクのボタン
+    // (buildCommunityBoardPostLinksHtml)にまとめる。条件に合わない URL は従来どおり文字のまま。
     html +=
       isSafeCommunityBoardTextUrl(
         url
       )
-        ? '<a class="community-board-text-link" href="' +
-          escapeHtmlForCommunityBoard(
-            url
-          ) +
-          '" target="_blank" rel="noopener noreferrer">' +
-          escapeHtmlForCommunityBoard(
-            url
-          ) +
-          '</a>'
+        ? ""
         : escapeHtmlForCommunityBoard(
             url
           );
@@ -14688,6 +14941,148 @@ function buildCommunityBoardPostTextHtml(
         lastIndex
       )
     )
+  );
+}
+
+// TOP・街ページ統合改善｜運営の URL 付き投稿(operatorLinksEnabled)の本文中の https URL を、サイト名を出した
+// リンクのボタンにする(同じ URL は1つ)。リンク先の取得・サムネイルの生成はしない(外部への通信なし)。
+function buildCommunityBoardPostLinksHtml(
+  post
+) {
+  if (
+    post.operatorLinksEnabled !== true ||
+    typeof post.text !== "string"
+  ) {
+    return "";
+  }
+
+  const urls =
+    [];
+
+  (post.text.match(COMMUNITY_BOARD_TEXT_HTTPS_URL_PATTERN) || []).forEach(
+    function(rawUrl) {
+      const url =
+        rawUrl.replace(/[.,!?;:]+$/, "");
+
+      if (
+        isSafeCommunityBoardTextUrl(url) &&
+        urls.indexOf(url) === -1
+      ) {
+        urls.push(url);
+      }
+    }
+  );
+
+  if (urls.length === 0) {
+    return "";
+  }
+
+  const language =
+    getCurrentMachinauLanguage();
+
+  return (
+    '<div class="community-board-link-buttons">' +
+    urls
+      .map(
+        function(url) {
+          const siteName =
+            new URL(url).hostname.replace(/^www\./, "");
+
+          return (
+            '<a class="community-board-link-button" href="' +
+            escapeHtmlForCommunityBoard(url) +
+            '" target="_blank" rel="noopener noreferrer">' +
+            escapeHtmlForCommunityBoard(
+              getMachinauTranslation(
+                "community_board_open_link",
+                language
+              ).replace(
+                "{SITE}",
+                siteName
+              )
+            ) +
+            "</a>"
+          );
+        }
+      )
+      .join("") +
+    "</div>"
+  );
+}
+
+// TOP・街ページ統合改善｜投稿日(サーバーの createdAt、日本時間の日付)と投稿者の属性。属性は保存された情報だけで
+// 決める：運営の投稿(authorType "operator")だけ「運営」。一般の投稿には地元・旅行者の区別が保存されていないため、
+// 推測で分類せず何も出さない。
+function buildCommunityBoardPostMetaHtml(
+  post
+) {
+  const language =
+    getCurrentMachinauLanguage();
+
+  const createdAtMillis =
+    typeof post.createdAtMillis === "number" &&
+    Number.isFinite(post.createdAtMillis) &&
+    post.createdAtMillis > 0
+      ? post.createdAtMillis
+      : 0;
+
+  let dateHtml =
+    "";
+
+  if (createdAtMillis > 0) {
+    const date =
+      new Date(createdAtMillis);
+
+    let dateText =
+      "";
+
+    try {
+      dateText =
+        new Intl.DateTimeFormat(
+          language === "ja" ? "ja-JP" : "en-US",
+          {
+            timeZone: "Asia/Tokyo",
+            year: "numeric",
+            month: language === "ja" ? "long" : "short",
+            day: "numeric"
+          }
+        ).format(date);
+    } catch (error) {
+      dateText =
+        "";
+    }
+
+    if (dateText !== "") {
+      dateHtml =
+        '<time class="community-board-post-date" datetime="' +
+        escapeHtmlForCommunityBoard(date.toISOString()) +
+        '">' +
+        escapeHtmlForCommunityBoard(dateText) +
+        "</time>";
+    }
+  }
+
+  const authorHtml =
+    post.authorType === "operator"
+      ? '<span class="community-board-author-badge" data-i18n="community_board_author_operator">' +
+        escapeHtmlForCommunityBoard(
+          getMachinauTranslation(
+            "community_board_author_operator",
+            language
+          )
+        ) +
+        "</span>"
+      : "";
+
+  if (dateHtml === "" && authorHtml === "") {
+    return "";
+  }
+
+  return (
+    '<p class="community-board-post-meta">' +
+    authorHtml +
+    dateHtml +
+    "</p>"
   );
 }
 
@@ -14788,11 +15183,17 @@ function buildCommunityBoardPostItemHtml(
 
   return (
     '<div class="community-board-post-item">' +
+      buildCommunityBoardPostMetaHtml(
+        post
+      ) +
       '<p class="community-board-post-text">' +
       buildCommunityBoardPostTextHtml(
         post
       ) +
       '</p>' +
+      buildCommunityBoardPostLinksHtml(
+        post
+      ) +
       buildCommunityBoardPostImagesHtml(
         post
       ) +
@@ -14897,6 +15298,113 @@ async function fetchCommunityBoardPostsForCurrentArea(
 // が空文字へ戻す)。
 let communityBoardDisplayedAreaName =
   "";
+
+// 掲示板の読み込みの順番(現在地・地域の選択で共通)。新しい読み込みを始めたら、それより前の応答では描かない。
+let communityBoardLoadSequence =
+  0;
+
+// 地域を選んだ直後：前の街の投稿・地域の画像を消し、選んだ街の名前で読み込み中の案内を出す。
+// この間は掲示板が表示されていない扱い(communityBoardDisplayedAreaName は空)にし、前の街への投稿リンクも隠す。
+function showCommunityBoardLoading(
+  areaName
+) {
+  const section =
+    document.getElementById(
+      "regionRecommendationSection"
+    );
+
+  const heading =
+    document.getElementById(
+      "regionRecommendationHeading"
+    );
+
+  const imageBox =
+    document.getElementById(
+      "communityBoardRegionImageBox"
+    );
+
+  const list =
+    document.getElementById(
+      "regionRecommendationList"
+    );
+
+  const postLink =
+    document.getElementById(
+      "communityBoardPostLink"
+    );
+
+  communityBoardDisplayedAreaName =
+    "";
+
+  if (heading) {
+    heading.textContent =
+      getMachinauTranslation(
+        "community_board_heading_dynamic",
+        getCurrentMachinauLanguage()
+      ).replace(
+        "{AREA}",
+        typeof areaName === "string" ? areaName : ""
+      );
+  }
+
+  if (imageBox) {
+    imageBox.innerHTML =
+      "";
+  }
+
+  if (list) {
+    list.innerHTML =
+      '<p class="region-recommendation-empty-message community-board-loading" role="status" data-i18n="community_board_loading">' +
+      escapeHtmlForCommunityBoard(
+        getMachinauTranslation(
+          "community_board_loading",
+          getCurrentMachinauLanguage()
+        )
+      ) +
+      "</p>";
+  }
+
+  if (postLink) {
+    postLink.style.display =
+      "none";
+  }
+
+  if (section) {
+    section.style.display =
+      "";
+  }
+}
+
+// 選んだ地域を確認できなかった時：読み込み中の案内を消す(前の街の投稿は戻さない。誤った街の掲示板を見せない)。
+function clearCommunityBoardLoading() {
+  const list =
+    document.getElementById(
+      "regionRecommendationList"
+    );
+
+  const heading =
+    document.getElementById(
+      "regionRecommendationHeading"
+    );
+
+  if (list) {
+    list.innerHTML =
+      "";
+  }
+
+  if (heading) {
+    heading.setAttribute(
+      "data-i18n",
+      "region_recommendation_heading_default"
+    );
+
+    heading.textContent =
+      getMachinauTranslation(
+        "region_recommendation_heading_default",
+        getCurrentMachinauLanguage()
+      );
+  }
+}
 
 // 言語切替時に、掲示板の見出し(📌 ○○の掲示板)と投稿リンク(○○について
 // 投稿する)を現在の言語で組み立て直す。見出し要素は静的なdata-i18nを
@@ -15233,11 +15741,19 @@ async function loadCommunityBoardForCurrentArea(
   currentCommunityBoardRegionName =
     regionName;
 
+  const requestSequence =
+    ++communityBoardLoadSequence;
+
   const fetchResult =
     await fetchCommunityBoardPostsForCurrentArea(
       googlePlaceId,
       countryCode
     );
+
+  // 読み込みの間に別の街(地域の選択・現在地の取り直し)へ切り替わっていたら、古い街の結果では描かない。
+  if (requestSequence !== communityBoardLoadSequence) {
+    return;
+  }
 
   renderCommunityBoardForCurrentArea(
     regionName,
@@ -15408,6 +15924,17 @@ async function loadTownNowThreadsForCurrentLocation(
   const requestSequence =
     ++townNowThreadsRequestSequence;
 
+  // 現在地の近くのスレッドを表示する(地域の選択の表示から戻る時に同じ地域階層で読み直せるよう覚えておく)。
+  townNowThreadsViewMode =
+    "nearby";
+
+  lastTownNowLocationHierarchy =
+    locationHierarchy || null;
+
+  setTownNowThreadsAreaNote(
+    ""
+  );
+
   const params =
     {
       mode: "townNowThreadsNearby",
@@ -15503,6 +16030,219 @@ async function loadTownNowThreadsForCurrentLocation(
 
   section.style.display =
     "";
+}
+
+// TOP・街ページ統合改善｜「地域から探す」で選んだ街のスレッド。既存の townNowThreadsList(選んだ市区町村の
+// 今日・公開中・期限内のスレッドだけ、新しい順。地域は googlePlaceId＋countryCode からサーバーが既存の地域台帳で
+// 引く)を使い、ほかの地域のスレッドは混ぜない。座標は送らない。現在地の時と同じ townNowThreadsRequestSequence で、
+// 後から始めた読み込みだけを描く。取得に失敗した時は、壊れた欄や0件と誤解される表示にせず、失敗の案内を出す。
+let townNowThreadsViewMode =
+  "nearby";
+
+let lastTownNowLocationHierarchy =
+  null;
+
+async function loadTownNowThreadsForSelectedArea(
+  resolvedRegion
+) {
+  const section =
+    document.getElementById(
+      "townNowThreadsSection"
+    );
+
+  const list =
+    document.getElementById(
+      "townNowThreadsList"
+    );
+
+  if (
+    !section ||
+    !list ||
+    !resolvedRegion ||
+    typeof resolvedRegion.googlePlaceId !== "string" ||
+    resolvedRegion.googlePlaceId === "" ||
+    typeof resolvedRegion.countryCode !== "string" ||
+    resolvedRegion.countryCode === ""
+  ) {
+    return;
+  }
+
+  const requestSequence =
+    ++townNowThreadsRequestSequence;
+
+  townNowThreadsViewMode =
+    "region";
+
+  setTownNowThreadsAreaNote(
+    typeof resolvedRegion.regionName === "string"
+      ? resolvedRegion.regionName
+      : ""
+  );
+
+  list.innerHTML =
+    '<p class="town-now-empty" role="status" data-i18n="town_now_loading">' +
+    escapeHtml(
+      getTownNowTranslation(
+        "town_now_loading"
+      )
+    ) +
+    "</p>";
+
+  section.style.display =
+    "";
+
+  const params =
+    {
+      mode: "townNowThreadsList",
+      googlePlaceId: resolvedRegion.googlePlaceId,
+      countryCode: resolvedRegion.countryCode
+    };
+
+  if (
+    isTownNowFreshFetchNeeded(
+      readTownNowJustPostedAt()
+    )
+  ) {
+    params.fresh =
+      String(Date.now());
+  }
+
+  let result;
+
+  try {
+    result =
+      await fetchTownNowJson(
+        params
+      );
+  } catch (error) {
+    result =
+      null;
+  }
+
+  if (
+    requestSequence !==
+    townNowThreadsRequestSequence
+  ) {
+    return;
+  }
+
+  if (
+    !result ||
+    result.status !== 200 ||
+    !result.data ||
+    result.data.success !== true ||
+    !Array.isArray(
+      result.data.threads
+    )
+  ) {
+    list.innerHTML =
+      '<p class="town-now-empty" data-i18n="town_now_list_load_error">' +
+      escapeHtml(
+        getTownNowTranslation(
+          "town_now_list_load_error"
+        )
+      ) +
+      "</p>";
+    return;
+  }
+
+  renderTownNowThreads(
+    result.data.threads.filter(
+      function(thread) {
+        return (
+          thread &&
+          typeof thread.threadId === "string" &&
+          thread.threadId !== ""
+        );
+      }
+    )
+  );
+}
+
+// 地域の選択の表示をやめた時(現在地の近くに戻る・現在地を取り直す)：現在地があれば近くのスレッドを読み直し、
+// 無ければ欄を隠す(選んだ街のスレッドを現在地の近くのものとして残さない)。
+function restoreTownNowThreadsAfterRegionView() {
+  if (townNowThreadsViewMode !== "region") {
+    return;
+  }
+
+  townNowThreadsViewMode =
+    "nearby";
+
+  setTownNowThreadsAreaNote(
+    ""
+  );
+
+  if (isMachinauLocationAcquired()) {
+    loadTownNowThreadsForCurrentLocation(
+      lastTownNowLocationHierarchy
+    );
+    return;
+  }
+
+  ++townNowThreadsRequestSequence;
+
+  const section =
+    document.getElementById(
+      "townNowThreadsSection"
+    );
+
+  if (section) {
+    section.style.display =
+      "none";
+  }
+}
+
+// 選んだ街の名前の注記(現在地の時は隠す)。街の名前は日本語の正式名のまま、前後の文だけ翻訳する。
+function setTownNowThreadsAreaNote(
+  regionName
+) {
+  const note =
+    document.getElementById(
+      "townNowThreadsAreaNote"
+    );
+
+  if (!note) {
+    return;
+  }
+
+  if (
+    typeof regionName !== "string" ||
+    regionName === ""
+  ) {
+    note.hidden =
+      true;
+    note.innerHTML =
+      "";
+    return;
+  }
+
+  const language =
+    getCurrentMachinauLanguage();
+
+  note.innerHTML =
+    '<span data-i18n="town_now_area_note_prefix">' +
+    escapeHtml(
+      getMachinauTranslation(
+        "town_now_area_note_prefix",
+        language
+      )
+    ) +
+    "</span><strong>" +
+    escapeHtml(
+      regionName
+    ) +
+    '</strong><span data-i18n="town_now_area_note_suffix">' +
+    escapeHtml(
+      getMachinauTranslation(
+        "town_now_area_note_suffix",
+        language
+      )
+    ) +
+    "</span>";
+
+  note.hidden =
+    false;
 }
 
 // 近くのスレッドと自分のスレッドを、同じスレッドが2件にならないよう
@@ -15700,11 +16440,26 @@ function renderTownNowThreads(
   }
 
   if (threads.length === 0) {
+    // 0件でも空白にしない。新しいスレッドは投稿の入口の枠(1か所に統一)から立てられることを添える。
+    const emptyKey =
+      townNowThreadsViewMode === "region"
+        ? "town_now_empty_region"
+        : "town_now_empty";
+
     list.innerHTML =
-      '<p class="town-now-empty" data-i18n="town_now_empty">' +
+      '<p class="town-now-empty" data-i18n="' +
+      emptyKey +
+      '">' +
       escapeHtml(
         getTownNowTranslation(
-          "town_now_empty"
+          emptyKey
+        )
+      ) +
+      "</p>" +
+      '<p class="town-now-empty-hint" data-i18n="town_now_empty_hint">' +
+      escapeHtml(
+        getTownNowTranslation(
+          "town_now_empty_hint"
         )
       ) +
       "</p>";
@@ -16804,25 +17559,49 @@ function resolveGooglePlaceIdForPrefectureAndAreaName(
 // 全国自由入力では誤った街の掲示板を開いたと誤解されるリスクがあるため、
 // 掲示板側には一切進まず、呼び出し元(検索フォーム)がエラー文言を表示できる
 // よう戻り値で成否を返すだけにする(本部指示)。
+// TOP・街ページ統合改善｜街を切り替えた瞬間に前の街の掲示板が見えないよう、始めに前の街の表示を消して
+// 読み込み中の案内を出す。読み込みの順番が前後しても古い街の結果で上書きしないよう、communityBoardLoadSequence
+// (現在地側の読み込みと共通)で最新の読み込みだけを描く(古い結果の時は "stale" を返し、呼び出し元は何もしない)。
+// 選んだ街のスレッド(townNowThreadsList)も、ここで同じ街について読み込む。
 async function loadCommunityBoardForSelectedArea(
   prefectureName,
   areaName
 ) {
+  const requestSequence =
+    ++communityBoardLoadSequence;
+
+  showCommunityBoardLoading(
+    areaName
+  );
+
   const resolvedRegion =
     await resolveGooglePlaceIdForPrefectureAndAreaName(
       prefectureName,
       areaName
     );
 
+  if (requestSequence !== communityBoardLoadSequence) {
+    return "stale";
+  }
+
   if (!resolvedRegion) {
+    clearCommunityBoardLoading();
     return false;
   }
+
+  loadTownNowThreadsForSelectedArea(
+    resolvedRegion
+  );
 
   const fetchResult =
     await fetchCommunityBoardPostsForCurrentArea(
       resolvedRegion.googlePlaceId,
       resolvedRegion.countryCode
     );
+
+  if (requestSequence !== communityBoardLoadSequence) {
+    return "stale";
+  }
 
   renderCommunityBoardForCurrentArea(
     resolvedRegion.regionName,
@@ -19663,6 +20442,11 @@ if (regionRecommendationAreaPickerElement) {
     communityBoardAreaSearchButtonElement.disabled =
       false;
 
+    // 読み込みの間に別の街へ切り替わった(古い結果)時は、画面に触れない。
+    if (succeeded === "stale") {
+      return;
+    }
+
     if (succeeded) {
       regionRecommendationAreaPickerElement.style.display =
         "none";
@@ -19670,9 +20454,19 @@ if (regionRecommendationAreaPickerElement) {
       // まずその街の店舗・施設を見せる(掲示板はその下に既存どおり表示)。
       // 見出し「○○で楽しめる場所」が固定ヘッダー(.top-bar)に隠れない
       // よう、ヘッダーの高さ分だけ上に余白を取ってスクロールする。
+      // TOP・街ページ統合改善｜街のスレッドへの入口(楽しみ方の④・ヒーロー「今いる街の情報」)から
+      // 開いた時は、選んだ街のスレッド(#townNowThreadsSection)へ移る。
+      const scrollTargetIdForRegion =
+        pendingTownNowThreadsAfterAreaSelection
+          ? "townNowThreadsSection"
+          : "shopsSection";
+
+      pendingTownNowThreadsAfterAreaSelection =
+        false;
+
       const shopsSectionForRegion =
         document.getElementById(
-          "shopsSection"
+          scrollTargetIdForRegion
         );
 
       if (shopsSectionForRegion) {
@@ -20003,7 +20797,50 @@ function scrollToHeroActionSection(
   );
 }
 
-// 1. 今いる街の情報 → 「この街の情報」(#cityInfoSection)。現在地必須。
+// TOP・街ページ統合改善｜街のスレッドへの入口(ヒーロー「今いる街の情報」・楽しみ方の④「近くのスレッドを見る」)。
+// 現在地があれば近くのスレッド(#townNowThreadsSection)へ。現在地が無い時は、以前は現在地のボタンへ案内する
+// だけで先へ進めなかったため、「地域から探す」を開き、街を選んだ後にその街のスレッドへ移る
+// (pendingTownNowThreadsAfterAreaSelection を地域の選択の完了時に見る)。GPS は勝手に取り直さない。
+let pendingTownNowThreadsAfterAreaSelection =
+  false;
+
+function openTownThreadsEntry() {
+  if (isMachinauLocationAcquired()) {
+    pendingTownNowThreadsAfterAreaSelection =
+      false;
+
+    // 地域を選んで別の街のスレッドを見ている時は、現在地の近くのスレッドに戻す。
+    clearSelectedShopRegion();
+
+    scrollToHeroActionSection(
+      "townNowThreadsSection"
+    );
+    return;
+  }
+
+  const areaButtonElement =
+    document.getElementById(
+      "heroActionArea"
+    );
+
+  if (areaButtonElement) {
+    // 「地域から探す」のクリック処理(同期)が、この入口から開かれたことを読み取る。
+    isOpeningAreaForTownThreads =
+      true;
+
+    try {
+      areaButtonElement.click();
+    } finally {
+      isOpeningAreaForTownThreads =
+        false;
+    }
+  }
+}
+
+let isOpeningAreaForTownThreads =
+  false;
+
+// 1. 今いる街の情報 → 街のスレッド(#townNowThreadsSection)。
 const heroActionTodayElement =
   document.getElementById(
     "heroActionToday"
@@ -20012,15 +20849,55 @@ const heroActionTodayElement =
 if (heroActionTodayElement) {
   heroActionTodayElement.addEventListener(
     "click",
+    openTownThreadsEntry
+  );
+}
+
+// 街の掲示板のカード → 現在地の掲示板が表示中ならそこへ。表示されていない時(現在地なし)は、掲示板の枠の中の
+// 地域の選択を開く(「地域から探す」と同じ処理。community_board_view もそちらで1回だけ送る)。
+const heroActionBoardElement =
+  document.getElementById(
+    "heroActionBoard"
+  );
+
+if (heroActionBoardElement) {
+  heroActionBoardElement.addEventListener(
+    "click",
     function() {
-      if (!isMachinauLocationAcquired()) {
-        guideToMachinauLocationButton();
+      pendingTownNowThreadsAfterAreaSelection =
+        false;
+
+      const boardSection =
+        document.getElementById(
+          "regionRecommendationSection"
+        );
+
+      if (
+        boardSection &&
+        boardSection.style.display !== "none" &&
+        communityBoardDisplayedAreaName !== ""
+      ) {
+        sendMachinauAnalyticsEvent(
+          "community_board_view"
+        );
+
+        boardSection.scrollIntoView(
+          {
+            behavior: "smooth",
+            block: "start"
+          }
+        );
         return;
       }
 
-      scrollToHeroActionSection(
-        "cityInfoSection"
-      );
+      const areaButtonElement =
+        document.getElementById(
+          "heroActionArea"
+        );
+
+      if (areaButtonElement) {
+        areaButtonElement.click();
+      }
     }
   );
 }
@@ -20149,6 +21026,11 @@ if (heroActionAreaElement) {
   heroActionAreaElement.addEventListener(
     "click",
     function() {
+      // 街のスレッドへの入口(openTownThreadsEntry)から開いた時だけ、街を選んだ後にスレッドへ移る。
+      // ほかの入口から開いた時は従来どおり(選んだ後は店舗へ)。
+      pendingTownNowThreadsAfterAreaSelection =
+        isOpeningAreaForTownThreads;
+
       // 広告実証前 GA4最低限行動計測｜掲示板(地域選択)を見る操作として
       // 従来どおり計測する。
       sendMachinauAnalyticsEvent(
@@ -20361,14 +21243,8 @@ function runHowToAction(
   }
 
   if (action === "threads") {
-    if (!isMachinauLocationAcquired()) {
-      guideToMachinauLocationButton();
-      return;
-    }
-
-    scrollToHeroActionSection(
-      "townNowThreadsSection"
-    );
+    // 現在地が無い時は「地域から探す」→ 選んだ街のスレッドへ(openTownThreadsEntry)。
+    openTownThreadsEntry();
   }
 }
 
@@ -21203,6 +22079,12 @@ async function loadImadakeNearbyPosts(
     loadedOk ? "ok" : "error";
 
   renderImadakeSection();
+
+  // TOP・街ページ統合改善｜同じ店舗の正式店舗カードに「今だけ投稿あり・◯時間前」を付けるため、
+  // 投稿が届いた時だけ一覧を描き直す(0件の時は描き直さない)。
+  if (posts.length > 0) {
+    renderShops();
+  }
 
   // 収益化 STEP 3｜この旅行者が以前に開いた投稿があれば、サーバー記録で確かめて全文表示にする。
   refreshImadakeViewedPosts();
@@ -23652,7 +24534,7 @@ document.addEventListener(
     // 置き場所(placement)を分けて数える。1回の押下で1件だけ送る。
     const link =
       event.target && event.target.closest
-        ? event.target.closest(".contribute-cta-button, .contribute-cta-shop-link, footer a[href=\"shop.html\"], #howToModal a[href=\"shop.html\"]")
+        ? event.target.closest(".contribute-cta-button, .contribute-cta-shop-link, footer a[href=\"shop.html\"], #howToModal a[href=\"shop.html\"], #adSlotSection a[href=\"shop.html\"]")
         : null;
     if (!link) {
       return;
@@ -23669,7 +24551,9 @@ document.addEventListener(
             ? "top_cta"
             : link.closest("#howToModal")
               ? "how_to"
-              : "footer"
+              : link.closest("#adSlotSection")
+                ? "ad_slot"
+                : "footer"
       }
     );
   }
@@ -23961,12 +24845,15 @@ function openAreaSearchFromShopsEmpty() {
 // サイト全体改善 第3弾｜ヒーローの4入口のクリック数(GA4 hero_action_click {action})。2入口案の判断のための計測。
 // 利用者が押した時だけ送る(isTrusted)。ほかの導線(店舗一覧の「ほかの地域を選ぶ」・位置の失敗時・掲載なしの案内)が
 // 内部で押す「地域から探す」は数えない。既存のクリック処理(移動・現在地の案内・community_board_view)は変えない。
-// 第5弾｜ヒーローの入口は「現在地から探す」(#locationButton、既存の location_button_click で数える。同じ押下を
-// hero_action_click でも送ると二重になるため送らない)と「地域から探す」の2つになった。外した入口
-// (today・nearby・reads)はページに無いため、この計測からも外す(過去の集計は GA4 にそのまま残る)。
+// TOP・街ページ統合改善｜4つの入口(第3弾と同じ action の値)と街の掲示板のカード(board)を数える。現在地のボタンは
+// 既存の location_button_click で数える(同じ押下を hero_action_click でも送ると二重になるため送らない)。
 const HERO_ACTION_ANALYTICS_ACTIONS =
   {
-    heroActionArea: "area"
+    heroActionToday: "today",
+    heroActionNearby: "nearby",
+    heroActionArea: "area",
+    heroActionReads: "reads",
+    heroActionBoard: "board"
   };
 Object.keys(HERO_ACTION_ANALYTICS_ACTIONS).forEach(function(elementId) {
   const element =
@@ -23987,3 +24874,96 @@ Object.keys(HERO_ACTION_ANALYTICS_ACTIONS).forEach(function(elementId) {
     }
   );
 });
+
+// TOP・街ページ統合改善｜街ページの末尾の広告枠(#adSlotSection、地図の欄の跡)。広告は未販売のため、固定の自社告知を
+// 表示のたびに1つずつ入れ替える(同じタブで開くたびに次の告知。時間での自動切替はしない＝動きなし・高さは CSS で確保)。
+// 通常の店舗一覧とはデータ・表示・並びを分け、店舗の掲載順位には一切関わらない。料金・申込み・計測の追加はしない
+// (店舗向け案内への移動は既存の shop_guide_click の placement "ad_slot" で数える)。
+const AD_SLOT_HOUSE_NOTICES = [
+  {
+    id: "shop",
+    href: "shop.html",
+    titleKey: "ad_house_shop_title",
+    textKey: "ad_house_shop_text"
+  },
+  {
+    id: "reads",
+    href: "column-list.html",
+    titleKey: "ad_house_reads_title",
+    textKey: "ad_house_reads_text"
+  },
+  {
+    id: "how_to",
+    href: "",
+    titleKey: "ad_house_how_to_title",
+    textKey: "ad_house_how_to_text"
+  }
+];
+
+const AD_SLOT_ROTATION_STORAGE_KEY =
+  "machinauAdSlotHouseIndex";
+
+function pickAdSlotHouseNoticeIndex() {
+  let nextIndex =
+    Math.floor(Math.random() * AD_SLOT_HOUSE_NOTICES.length);
+
+  try {
+    const previous =
+      Number(sessionStorage.getItem(AD_SLOT_ROTATION_STORAGE_KEY));
+
+    if (Number.isInteger(previous) && previous >= 0) {
+      nextIndex =
+        (previous + 1) % AD_SLOT_HOUSE_NOTICES.length;
+    }
+
+    sessionStorage.setItem(
+      AD_SLOT_ROTATION_STORAGE_KEY,
+      String(nextIndex)
+    );
+  } catch (error) {
+    // 保存できない環境では、入れ替えの順番を覚えないだけ(表示は続ける)。
+  }
+
+  return nextIndex;
+}
+
+function renderAdSlotHouseNotice() {
+  const body =
+    document.getElementById("adSlotBody");
+
+  if (!body) {
+    return;
+  }
+
+  const notice =
+    AD_SLOT_HOUSE_NOTICES[pickAdSlotHouseNoticeIndex()];
+  const language =
+    getCurrentMachinauLanguage();
+  const innerHtml =
+    '<span class="ad-slot-house-title" data-i18n="' + notice.titleKey + '">' +
+    escapeHtml(getMachinauTranslation(notice.titleKey, language)) +
+    "</span>" +
+    '<span class="ad-slot-house-text" data-i18n="' + notice.textKey + '">' +
+    escapeHtml(getMachinauTranslation(notice.textKey, language)) +
+    "</span>" +
+    '<span class="ad-slot-house-more" data-i18n="ad_house_more">' +
+    escapeHtml(getMachinauTranslation("ad_house_more", language)) +
+    "</span>";
+
+  body.innerHTML =
+    notice.href !== ""
+      ? '<a class="ad-slot-house" href="' + notice.href + '" data-ad-house="' + notice.id + '">' + innerHtml + "</a>"
+      : '<button type="button" class="ad-slot-house" data-ad-house="' + notice.id + '">' + innerHtml + "</button>";
+
+  const howToButton =
+    body.querySelector('button[data-ad-house="how_to"]');
+
+  if (howToButton) {
+    howToButton.addEventListener(
+      "click",
+      openHowToModal
+    );
+  }
+}
+
+renderAdSlotHouseNotice();
