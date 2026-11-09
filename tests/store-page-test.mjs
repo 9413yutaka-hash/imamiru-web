@@ -329,7 +329,7 @@ seedStore("M2", "um", "published", { latitude: 26.40, longitude: 127.90 }); mont
   t("F3 TOP の「近くの店舗」の15kmは変えていない", /const NEARBY_SHOP_CARD_RADIUS_KM =\s*15;/.test(app));
   const vercel = JSON.parse(readFileSync(join(REPO_ROOT, "vercel.json"), "utf8"));
   const rw = (src) => (vercel.rewrites.find((r) => r.source === src) || {}).destination;
-  t("F4 vercel.json：/shop/:storeId を店舗ページへ・既存の rewrite はそのまま", rw("/shop/:storeId") === "/api/moderate-submission?mode=renderStorePage&storeId=:storeId" && rw("/share/shop/:shopId") === "/api/moderate-submission?mode=renderShareShop&shopId=:shopId" && rw("/sitemap.xml") === "/api/moderate-submission?mode=renderSitemap" && vercel.rewrites.length === 6);
+  t("F4 vercel.json：/shop/:storeId を店舗ページへ・既存の rewrite はそのまま", rw("/shop/:storeId") === "/api/moderate-submission?mode=renderStorePage&storeId=:storeId" && rw("/share/shop/:shopId") === "/api/moderate-submission?mode=renderShareShop&shopId=:shopId" && rw("/sitemap.xml") === "/api/moderate-submission?mode=renderSitemap" && rw("/column-list.html") === "/api/moderate-submission?mode=renderColumnList" && vercel.rewrites.length === 7);
   t("F5 PG.buildStorePageUrl は店舗 ID だけから作る(形の違う ID は空)", PG.buildStorePageUrl("SN") === "https://machinau.jp/shop/SN" && PG.buildStorePageUrl("a/b") === "" && PG.buildStorePageUrl("") === "");
 }
 

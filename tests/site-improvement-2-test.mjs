@@ -176,7 +176,9 @@ const PII = /lat|lng|lon|email|uid|address|phone/i;
 
 try {
   const fsx = await import("node:fs");
-  const read = (f) => fsx.readFileSync(REPO_ROOT + "/" + f, "utf8");
+  // SEO改善 STEP 2｜column-list.html は api/_lib/column-list-page.js へ移した(サーバーが記事のカードを入れて返す)。カード無しの形で読む。
+  const { buildColumnListPageHtml } = await import(REPO_URL + "/api/_lib/column-list-page.js");
+  const read = (f) => (f === "column-list.html" ? buildColumnListPageHtml("", "") : fsx.readFileSync(REPO_ROOT + "/" + f, "utf8"));
   const PUBLIC = ["shop-guide", "shop-apply", "store-account", "store-profile", "contribute", "post", "imadake-post", "town-now-post", "community-board-post", "column-list", "contact", "privacy", "end", "edit", "404", "shop"];
   const ACCOUNT = ["store-account", "store-profile", "imadake-post"];
   const ADMIN = ["terms", "tokushoho", "admin", "admin-post", "admin-shops", "admin-billing", "editor", "ai-editor", "ai-sources", "store-receipt", "index"];

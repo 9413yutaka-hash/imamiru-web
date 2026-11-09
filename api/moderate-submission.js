@@ -248,6 +248,11 @@ import {
   isVerifiedAdminToken
 } from "./_lib/submission-safety.js";
 
+// SEO改善 STEP 2｜読み物一覧(/column-list.html)のページ。公開中の記事のカードを入れて返す(renderColumnList)。
+import {
+  buildColumnListPageHtml
+} from "./_lib/column-list-page.js";
+
 
 function getFirebaseAdminApp() {
   if (getApps().length > 0) {
@@ -5262,6 +5267,13 @@ const COLUMN_CUSTOM_SLUG_MAX_LENGTH =
 
 const COLUMN_LIST_MAX_COUNT =
   200;
+
+// SEO改善 STEP 2｜旅行者に見せる公開記事の取得(一覧の API・一覧のページ・sitemap・関連記事)の上限。
+// 200件では記事が増えた時に一覧・sitemap から古い記事が黙って落ちるため広げた。条件は status(＋カテゴリー)の
+// 一致だけ＝Firestore の複合インデックスは不要で、並び順(公開日の新しい順)は読み込んだ後に決める。
+// 運営の管理画面の一覧(COLUMN_LIST_MAX_COUNT)は変えない。
+const COLUMN_PUBLIC_MAX_COUNT =
+  1000;
 
 // ==========================================================================
 // マチナウ読み物投稿機能(Phase2)｜地域連動基盤
@@ -27309,7 +27321,7 @@ async function loadRelatedColumnArticlesForRender(
           category
         )
         .limit(
-          COLUMN_LIST_MAX_COUNT
+          COLUMN_PUBLIC_MAX_COUNT
         )
         .get();
 
@@ -27820,7 +27832,7 @@ async function handlePublicListPublishedColumnArticlesRequest(
     const articlesSnapshot =
       await firestoreQuery
         .limit(
-          COLUMN_LIST_MAX_COUNT
+          COLUMN_PUBLIC_MAX_COUNT
         )
         .get();
 
@@ -28000,6 +28012,238 @@ async function handlePublicListPublishedColumnArticlesRequest(
 }
 
 
+// SEO改善 STEP 2｜読み物一覧(/column-list.html、vercel.json の書き換えでここへ届く)。公開中(status "published")の
+// 記事だけを公開日(publishedAt＝初回公開日)の新しい順に、題名・記事へのリンク・紹介文・公開日のカードと、
+// 一覧の構造化データ(CollectionPage＋ItemList)を最初の HTML に入れる。カードの形は画面のスクリプト(renderArticleCard)と
+// 同じで、読み込み後はスクリプトが同じ一覧で描き直す(絞り込み・英語の表示)。日本語だけを作る(言語は端末の設定で、
+// URL は1つ＝canonical も1つ)。記事を読めない時は、従来の「読み込んでいます…」のページを短いキャッシュで返す
+// (一覧はスクリプトが読み込む)。翻訳の生成・書き込みはしない。
+async function handleRenderColumnListRequest(
+  request,
+  response
+) {
+  let articles =
+    null;
+
+  try {
+    const database =
+      getFirestore(
+        getFirebaseAdminApp()
+      );
+
+    const articlesSnapshot =
+      await database
+        .collection(
+          COLUMN_ARTICLES_COLLECTION
+        )
+        .where(
+          "status",
+          "==",
+          COLUMN_STATUS_PUBLISHED
+        )
+        .limit(
+          COLUMN_PUBLIC_MAX_COUNT
+        )
+        .get();
+
+    articles =
+      articlesSnapshot.docs
+        .map(
+          function(documentSnapshot) {
+            const data =
+              documentSnapshot.data() ||
+              {};
+
+            const publishedAtDate =
+              toDateFromFirestoreValue(
+                data.publishedAt
+              );
+
+            return {
+              slug:
+                documentSnapshot.id,
+              status:
+                data.status,
+              title:
+                typeof data.title === "string"
+                  ? data.title.trim()
+                  : "",
+              description:
+                typeof data.description === "string"
+                  ? data.description
+                  : "",
+              category:
+                typeof data.category === "string"
+                  ? data.category
+                  : "",
+              imageUrl:
+                typeof data.imageUrl === "string"
+                  ? data.imageUrl
+                  : "",
+              publishedDate:
+                formatDateForDisplay(
+                  publishedAtDate
+                ),
+              publishedAtMillis:
+                publishedAtDate
+                  ? publishedAtDate.getTime()
+                  : 0
+            };
+          }
+        )
+        .filter(
+          function(article) {
+            // 念のため公開中・題名のある記事だけ(下書きを出さない)。
+            return (
+              article.status === COLUMN_STATUS_PUBLISHED &&
+              article.slug !== "" &&
+              article.title !== ""
+            );
+          }
+        )
+        .sort(
+          function(firstArticle, secondArticle) {
+            return (
+              secondArticle.publishedAtMillis -
+                firstArticle.publishedAtMillis ||
+              (firstArticle.slug < secondArticle.slug ? -1 : 1)
+            );
+          }
+        );
+  } catch (error) {
+    console.error(
+      "読み物一覧のページの生成で記事を読めませんでした(スクリプトの読み込みに任せます)：",
+      error
+    );
+
+    articles =
+      null;
+  }
+
+  const articleCardsHtml =
+    articles && articles.length > 0
+      ? articles
+          .map(
+            function(article) {
+              const articleUrl =
+                "column/" +
+                encodeURIComponent(article.slug) +
+                ".html";
+
+              // 画像は運営が保存した URL(記事ページと同じ)。https のものだけ出す。
+              const safeImageUrl =
+                article.imageUrl.indexOf("https://") === 0
+                  ? article.imageUrl
+                  : "";
+
+              return (
+                '      <a class="card article-card" data-ssr-article href="' +
+                escapeHtmlForRender(articleUrl) +
+                '">' +
+                (safeImageUrl !== ""
+                  ? '<img class="article-card-image" src="' +
+                    escapeHtmlForRender(
+                      buildOptimizedImageUrl(
+                        safeImageUrl,
+                        { width: 600 }
+                      )
+                    ) +
+                    '" alt="" loading="lazy">'
+                  : "") +
+                '<div class="article-card-body">' +
+                (article.category !== ""
+                  ? '<span class="article-card-category">' +
+                    escapeHtmlForRender(
+                      getColumnCategoryDisplayLabel(
+                        article.category,
+                        "ja"
+                      )
+                    ) +
+                    "</span>"
+                  : "") +
+                '<p class="article-card-title">' +
+                escapeHtmlForRender(article.title) +
+                "</p>" +
+                '<p class="article-card-description">' +
+                escapeHtmlForRender(article.description) +
+                "</p>" +
+                (article.publishedDate !== ""
+                  ? '<p class="article-card-date">' +
+                    escapeHtmlForRender(article.publishedDate) +
+                    "</p>"
+                  : "") +
+                "</div>" +
+                "</a>"
+              );
+            }
+          )
+          .join("\n")
+      : "";
+
+  // 一覧の構造化データ。JSON の中の "<" は \u003c にして、本文の文字列が </script> を閉じないようにする。
+  const structuredDataHtml =
+    articles && articles.length > 0
+      ? '  <script type="application/ld+json">' +
+        JSON.stringify(
+          {
+            "@context": "https://schema.org",
+            "@type": "CollectionPage",
+            name: "マチナウ読み物 一覧",
+            url: "https://machinau.jp/column-list.html",
+            inLanguage: "ja",
+            isPartOf: {
+              "@type": "WebSite",
+              name: "マチナウ",
+              url: "https://machinau.jp/"
+            },
+            mainEntity: {
+              "@type": "ItemList",
+              numberOfItems: articles.length,
+              itemListElement:
+                articles.map(
+                  function(article, index) {
+                    return {
+                      "@type": "ListItem",
+                      position: index + 1,
+                      url:
+                        "https://machinau.jp/column/" +
+                        encodeURIComponent(article.slug) +
+                        ".html",
+                      name: article.title
+                    };
+                  }
+                )
+            }
+          }
+        ).replace(/</g, "\\u003c") +
+        "</script>\n"
+      : "";
+
+  response.setHeader(
+    "Content-Type",
+    "text/html; charset=utf-8"
+  );
+
+  // 記事を入れられた時は一覧の API と同じキャッシュ(公開・非公開の反映は最長おおむね15分)。
+  // 入れられなかった時は、記事の無いページを長く保存させない。
+  response.setHeader(
+    "Cache-Control",
+    articles !== null
+      ? "public, max-age=0, s-maxage=" +
+          COLUMN_LIST_SHARED_CACHE_MAX_AGE_SECONDS +
+          ", stale-while-revalidate=" +
+          COLUMN_LIST_STALE_WHILE_REVALIDATE_SECONDS
+      : "public, max-age=0, s-maxage=60"
+  );
+
+  return response.status(200).send(
+    buildColumnListPageHtml(
+      structuredDataHtml,
+      articleCardsHtml
+    )
+  );
+}
+
 // sitemap.xmlを動的生成する(vercel.jsonのrewriteで/sitemap.xml自体を
 // このFunctionへ向ける)。TOP・読み物一覧のURLはこの関数内に固定で含め、
 // 公開済みのFirestore記事を自動で追加する。
@@ -28040,7 +28284,7 @@ async function handleRenderSitemapRequest(
             COLUMN_STATUS_PUBLISHED
           )
           .limit(
-            COLUMN_LIST_MAX_COUNT
+            COLUMN_PUBLIC_MAX_COUNT
           )
           .get();
 
@@ -30521,6 +30765,16 @@ export default async function handler(
       request.query.mode === "renderColumn"
     ) {
       return handleRenderColumnArticleRequest(
+        request,
+        response
+      );
+    }
+
+    // SEO改善 STEP 2｜読み物一覧(/column-list.html)。vercel.json の書き換えでここへ届く。
+    if (
+      request.query.mode === "renderColumnList"
+    ) {
+      return handleRenderColumnListRequest(
         request,
         response
       );

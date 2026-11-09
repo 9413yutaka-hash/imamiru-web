@@ -41,12 +41,19 @@
 
   <meta
     name="description"
-    content="沖縄の今だけ楽しめる店舗情報、イベント、タイムセールを見つけられるリアルタイム観光コンシェルジュです。"
+    content="街の「今」がわかる旅の案内所。今いる場所の近くで楽しめるお店・観光・体験、今だけの情報、街のスレッドと掲示板、旅のヒントになる読み物まで。沖縄からエリア拡大中。"
   >
 
   <title>
     マチナウ｜今、何が起きているかを見つけよう
   </title>
+
+  <!-- SEO改善 STEP 2｜正規の URL は https://machinau.jp/ 。/index.html・imamiru-web.vercel.app で開かれても
+       検索エンジンにはこの URL を1つとして伝える(リダイレクトはしない＝既存のリンク・PWA の開始 URL に影響しない)。 -->
+  <link
+    rel="canonical"
+    href="https://machinau.jp/"
+  >
 
   <link
     rel="icon"
@@ -94,7 +101,7 @@
 
   <meta
     property="og:description"
-    content="沖縄の今だけ楽しめる店舗情報、イベント、タイムセールを見つけられるリアルタイム観光コンシェルジュです。"
+    content="街の「今」がわかる旅の案内所。今いる場所の近くで楽しめるお店・観光・体験、今だけの情報、街のスレッドと掲示板、旅のヒントになる読み物まで。沖縄からエリア拡大中。"
   >
 
   <meta
@@ -102,15 +109,47 @@
     content="https://machinau.jp/"
   >
 
-  <!-- マチナウ正式ロゴ・アイコン統一｜以前は未設定だったTOPのog:imageを、
-       正式ロゴ原本の派生画像(icon-512.png)を使って追加する。SNS専用の
-       新規デザイン画像は作らない。 -->
+  <!-- SEO改善 STEP 2｜SNS の横長のカード(summary_large_image)に合わせ、og:image を正方形のロゴ(icon-512.png)から、
+       TOP のヒーローの背景として承認済みの横長の写真(文字の入っていない machinau-hero-bg.png)へ変えた。
+       SNS 専用の新しい画像は作らない(作る場合は代表の判断)。 -->
   <meta
     property="og:image"
-    content="https://machinau.jp/icon-512.png?v=2"
+    content="https://machinau.jp/machinau-hero-bg.png"
   >
-
+  <meta property="og:image:width" content="2035">
+  <meta property="og:image:height" content="773">
+  <meta property="og:image:alt" content="沖縄の海と橋を眺める旅行者">
   <meta name="twitter:card" content="summary_large_image">
+
+  <!-- SEO改善 STEP 2｜サイト(WebSite)と運営(Organization)の構造化データ。値は画面・記事ページと同じ公開の情報だけ。 -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "https://machinau.jp/#website",
+        "url": "https://machinau.jp/",
+        "name": "マチナウ",
+        "description": "街の「今」がわかる旅の案内所。今いる場所の近くで楽しめるお店・観光・体験、今だけの情報、街のスレッドと掲示板、旅のヒントになる読み物まで。沖縄からエリア拡大中。",
+        "inLanguage": ["ja", "en"],
+        "publisher": { "@id": "https://machinau.jp/#organization" }
+      },
+      {
+        "@type": "Organization",
+        "@id": "https://machinau.jp/#organization",
+        "name": "マチナウ",
+        "url": "https://machinau.jp/",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://machinau.jp/icon-512.png",
+          "width": 512,
+          "height": 512
+        }
+      }
+    ]
+  }
+  </script>
 
   <link
     rel="stylesheet"

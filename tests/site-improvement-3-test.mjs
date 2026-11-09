@@ -173,7 +173,9 @@ const PII = /lat|lng|lon|email|uid|address|phone/i;
 
 try {
   const fsx = await import("node:fs");
-  const read = (f) => fsx.readFileSync(REPO_ROOT + "/" + f, "utf8");
+  // SEO改善 STEP 2｜column-list.html は api/_lib/column-list-page.js へ移した(サーバーが記事のカードを入れて返す)。カード無しの形で読む。
+  const { buildColumnListPageHtml } = await import(REPO_URL + "/api/_lib/column-list-page.js");
+  const read = (f) => (f === "column-list.html" ? buildColumnListPageHtml("", "") : fsx.readFileSync(REPO_ROOT + "/" + f, "utf8"));
   // 利用者の操作と同じ入力(isTrusted)で押す。
   async function tap(p, selector, mobile) {
     // 前の操作のなめらかなスクロールが止まるのを待ち、狙った要素がその位置にあることを確かめてから押す。

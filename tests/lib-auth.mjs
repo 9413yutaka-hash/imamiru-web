@@ -5,6 +5,7 @@ import { extname, join, normalize } from "node:path";
 import { spawn } from "node:child_process";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { pathToFileURL } from "node:url";
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json", ".png": "image/png", ".svg": "image/svg+xml", ".ico": "image/x-icon", ".webmanifest": "application/manifest+json" };
@@ -13,6 +14,14 @@ export function serve(root, port) {
   const server = http.createServer(async (req, res) => {
     let p = decodeURIComponent(new URL(req.url, "http://x").pathname);
     if (p.endsWith("/")) p += "index.html";
+    // SEO改善 STEP 2｜/column-list.html は本番では vercel.json の書き換えでサーバーが作る。ここでは記事のカードを入れない形
+    // (サーバーで記事を読めなかった時と同じ＝ページのスクリプトが一覧を読み込む)で返す。カード入りの形は seo-2 の試験で確かめる。
+    if (p === "/column-list.html") {
+      const { buildColumnListPageHtml } = await import(pathToFileURL(join(root, "api/_lib/column-list-page.js")).href);
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+      res.end(buildColumnListPageHtml("", ""));
+      return;
+    }
     const file = normalize(join(root, p));
     try { const body = await readFile(file); res.writeHead(200, { "Content-Type": MIME[extname(file)] || "application/octet-stream", "Cache-Control": "no-store" }); res.end(body); }
     catch { res.writeHead(404, { "Content-Type": "text/html" }); res.end("<h1>404 local</h1>"); }

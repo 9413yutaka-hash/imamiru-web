@@ -1,4 +1,16 @@
-<!DOCTYPE html>
+// マチナウ読み物 一覧(/column-list.html)のページ。SEO改善 STEP 2 で静的な column-list.html から移した。
+// vercel.json の書き換えで /column-list.html は api/moderate-submission.js の renderColumnList へ届き、そこで
+// buildColumnListPageHtml() が公開中の記事のカード(題名・記事へのリンク・公開日)と一覧の構造化データを入れて返す
+// (JavaScript を実行しない検索エンジン・SNS・AI でも記事の一覧が読める)。画面の見た目・絞り込み・英語の表示・
+// 記事の URL は従来の column-list.html と同じ(ページ内のスクリプトがそのまま一覧を描き直す)。
+// ページの文言・スタイル・スクリプトを変える時は、このファイルを編集する。
+
+// サーバーで記事を読めなかった時の一覧の中身(従来の column-list.html と同じ「読み込んでいます…」)。
+export const COLUMN_LIST_LOADING_HTML =
+  '      <div class="empty-state" data-i18n="column_list_loading">読み込んでいます…</div>';
+
+const PAGE_BEFORE_STRUCTURED_DATA =
+  String.raw`<!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
@@ -26,6 +38,22 @@
     rel="canonical"
     href="https://machinau.jp/column-list.html"
   >
+
+  <!-- SEO改善 STEP 2｜SNS のプレビュー(OGP)。画像は TOP と同じ承認済みの横長の写真(文字なし)。 -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="マチナウ">
+  <meta property="og:title" content="マチナウ読み物 一覧｜マチナウ">
+  <meta property="og:description" content="マチナウ読み物の一覧です。掲載年月とカテゴリーから、旅や街をもっと楽しむための読み物を探せます。">
+  <meta property="og:url" content="https://machinau.jp/column-list.html">
+  <meta property="og:image" content="https://machinau.jp/machinau-hero-bg.png">
+  <meta property="og:image:width" content="2035">
+  <meta property="og:image:height" content="773">
+  <meta property="og:image:alt" content="沖縄の海と橋を眺める旅行者">
+  <meta name="twitter:card" content="summary_large_image">
+`;
+
+const PAGE_BEFORE_ARTICLE_CARDS =
+  String.raw`
 
   <link
     rel="icon"
@@ -290,8 +318,14 @@
       </form>
     </div>
 
+    <!-- SEO改善 STEP 2｜サーバー(renderColumnList)が公開中の記事のカード(題名・記事へのリンク・公開日)を最初から入れる
+         (JavaScript なしでも読める・検索エンジンが記事へのリンクをたどれる)。読み込み後は下のスクリプトが同じ一覧で描き直し、
+         絞り込み・英語の表示を行う。サーバーで記事を読めなかった時は従来どおり「読み込んでいます…」から始まる。 -->
     <div id="articleList">
-      <div class="empty-state" data-i18n="column_list_loading">読み込んでいます…</div>
+`;
+
+const PAGE_AFTER_ARTICLE_CARDS =
+  String.raw`
     </div>
 
     <p class="list-language-note" id="listLanguageNote" hidden data-i18n="column_list_language_note"></p>
@@ -471,7 +505,11 @@
     }
 
     async function loadArticles() {
-      articleList.innerHTML = '<div class="empty-state">' + escapeHtml(t("column_list_loading")) + '</div>';
+      // SEO改善 STEP 2｜サーバーが入れた記事のカード(data-ssr-article)があれば、読み込み中の表示に置き換えない。
+      const hasServerCards = !!articleList.querySelector("[data-ssr-article]");
+      if (!hasServerCards) {
+        articleList.innerHTML = '<div class="empty-state">' + escapeHtml(t("column_list_loading")) + '</div>';
+      }
 
       const searchParams = new URLSearchParams({ mode: "publicListPublishedColumns" });
 
@@ -489,7 +527,10 @@
         renderFilteredArticles();
       } catch (error) {
         console.error("読み物一覧の取得に失敗しました：", error);
-        articleList.innerHTML = '<div class="empty-state">' + escapeHtml(t("column_list_load_error")) + '</div>';
+        // サーバーのカードがある時は、それを残す(題名・リンクは読める)。
+        if (!hasServerCards) {
+          articleList.innerHTML = '<div class="empty-state">' + escapeHtml(t("column_list_load_error")) + '</div>';
+        }
       }
     }
 
@@ -512,3 +553,18 @@
 
 </body>
 </html>
+`;
+
+// structuredDataHtml：head に入れる構造化データ(無ければ空)。articleCardsHtml：#articleList の中身(エスケープ済み)。
+export function buildColumnListPageHtml(
+  structuredDataHtml,
+  articleCardsHtml
+) {
+  return (
+    PAGE_BEFORE_STRUCTURED_DATA +
+    (structuredDataHtml || "") +
+    PAGE_BEFORE_ARTICLE_CARDS +
+    (articleCardsHtml || COLUMN_LIST_LOADING_HTML) +
+    PAGE_AFTER_ARTICLE_CARDS
+  );
+}

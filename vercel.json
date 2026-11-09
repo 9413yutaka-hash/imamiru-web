@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/column-list.html",
+      "destination": "/api/moderate-submission?mode=renderColumnList"
+    },
+    {
       "source": "/column/:slug.html",
       "destination": "/api/moderate-submission?mode=renderColumn&slug=:slug"
     },

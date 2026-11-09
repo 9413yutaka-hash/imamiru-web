@@ -127,7 +127,7 @@ for (const [id, label] of [["sp_SDRAFT", "下書きの正式店舗"], ["sp_SOFF"
 }
 const vercel = JSON.parse(readFileSync(REPO_ROOT + "/vercel.json", "utf8"));
 const rw = (src) => (vercel.rewrites.find((r) => r.source === src) || {}).destination;
-t("O14 vercel.json：/share/imadake/:postId・/share/shop/:shopId・/shop/:storeId（STEP 56）を既存の Function（moderate-submission）へ（読みもの・sitemap の rewrite はそのまま）", rw("/share/imadake/:postId") === "/api/moderate-submission?mode=renderShareImadake&postId=:postId" && rw("/share/shop/:shopId") === "/api/moderate-submission?mode=renderShareShop&shopId=:shopId" && rw("/column/:slug.html") === "/api/moderate-submission?mode=renderColumn&slug=:slug" && rw("/sitemap.xml") === "/api/moderate-submission?mode=renderSitemap" && rw("/share/post/:postId") === "/api/moderate-submission?mode=renderSharePost&postId=:postId" && rw("/shop/:storeId") === "/api/moderate-submission?mode=renderStorePage&storeId=:storeId" && vercel.rewrites.length === 6, vercel);
+t("O14 vercel.json：/share/imadake/:postId・/share/shop/:shopId・/shop/:storeId（STEP 56）を既存の Function（moderate-submission）へ（読みもの・sitemap の rewrite はそのまま）", rw("/share/imadake/:postId") === "/api/moderate-submission?mode=renderShareImadake&postId=:postId" && rw("/share/shop/:shopId") === "/api/moderate-submission?mode=renderShareShop&shopId=:shopId" && rw("/column/:slug.html") === "/api/moderate-submission?mode=renderColumn&slug=:slug" && rw("/sitemap.xml") === "/api/moderate-submission?mode=renderSitemap" && rw("/share/post/:postId") === "/api/moderate-submission?mode=renderSharePost&postId=:postId" && rw("/shop/:storeId") === "/api/moderate-submission?mode=renderStorePage&storeId=:storeId" && rw("/column-list.html") === "/api/moderate-submission?mode=renderColumnList" && vercel.rewrites.length === 7, vercel);
 const pg = await get({ mode: "imadakePostGet", postId: "SHB" });
 t("O15 公開GET（課金対象）：本文は空のまま・カードと同じ紹介文（excerpt 80文字・続きあり）", pg.code === 200 && pg.body.bodyProtected === true && pg.body.post.body === "" && pg.body.post.excerpt + "…" === EXCERPT80 && pg.body.post.excerptTruncated === true, pg.body.post && { excerpt: pg.body.post.excerpt, t: pg.body.post.excerptTruncated });
 // STEP 48-C｜課金対象の公開GETは、公開カードと同じ範囲の項目だけ(許可リスト)
@@ -508,7 +508,8 @@ try {
   await shot(p, "site-share-footer-1280-en", "footer");
   await p.close();
   const indexHtml = readFileSync(REPO_ROOT + "/index.html", "utf8");
-  t("M9 TOP の OGP：正式な名称（og:site_name マチナウ）・説明・URL https://machinau.jp/・正式なアイコン画像（新しい画像は作らない）", /property="og:site_name" content="マチナウ"/.test(indexHtml) && /property="og:url"\s+content="https:\/\/machinau\.jp\/"/.test(indexHtml) && /property="og:image"\s+content="https:\/\/machinau\.jp\/icon-512\.png\?v=2"/.test(indexHtml) && /property="og:title"\s+content="マチナウ｜今、何が起きているかを見つけよう"/.test(indexHtml));
+  // SEO改善 STEP 2(代表承認)｜og:image は SNS の横長のカードに合わせ、承認済みの TOP のヒーローの写真(既存の画像、新しい画像は作らない)へ変えた。
+  t("M9 TOP の OGP：正式な名称（og:site_name マチナウ）・説明・URL https://machinau.jp/・既存の横長の写真（新しい画像は作らない）", /property="og:site_name" content="マチナウ"/.test(indexHtml) && /property="og:url"\s+content="https:\/\/machinau\.jp\/"/.test(indexHtml) && /property="og:image"\s+content="https:\/\/machinau\.jp\/machinau-hero-bg\.png"/.test(indexHtml) && /property="og:title"\s+content="マチナウ｜今、何が起きているかを見つけよう"/.test(indexHtml));
 
   // 15km rule unchanged: Tokyo listing is not in the Naha card list, but its shared link still opens (like favorites)
   p = await top("/?shop=LT");
