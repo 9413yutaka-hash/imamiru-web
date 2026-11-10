@@ -2417,6 +2417,58 @@
       flex: 1;
     }
 
+    /* 16項目⑮｜募集の1枠は横幅いっぱい(縦に並べる)。 */
+    .ad-slot {
+      box-sizing: border-box;
+      width: 100%;
+    }
+
+    .ad-slot-recruit {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .ad-slot-recruit .ad-slot-house-title {
+      margin: 0;
+      color: var(--navy);
+      text-wrap: balance;
+    }
+
+    .ad-slot-recruit .ad-slot-house-text {
+      margin: 0;
+    }
+
+    /* 16項目⑨｜店舗の詳細から移ってきた今だけ投稿のカードを少しの間だけ目立たせる。 */
+    .imadake-card-highlight {
+      outline: 3px solid #f08a24;
+      outline-offset: 2px;
+      transition: outline-color 0.3s;
+    }
+
+    .ad-slot-tag {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 999px;
+      background: #e8f4fb;
+      color: #066fa6;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .ad-slot-button {
+      display: inline-block;
+      margin-top: 6px;
+      padding: 10px 16px;
+      border-radius: 999px;
+      background: var(--navy);
+      color: var(--white);
+      font-size: 14px;
+      font-weight: 900;
+      text-decoration: none;
+    }
+
     .ad-slot-house {
       display: flex;
       flex: 1;
@@ -2716,7 +2768,7 @@
             <!-- 店主向け「この街のマチナウ利用状況」｜現在地から判定した市町村を利用統計に使うことの説明(app.js が表示を決める)。
                  停止のボタンは privacy.html#area-usage にあるため、「詳しく見る／利用を停止する」は1つのリンクにする。 -->
             <p id="areaUsageLocationNote" class="location-area-usage-note" hidden>
-              <span data-i18n="location_area_usage_note">現在地から分かった市区町村名（座標は含みません）は、地域ごとの利用統計にも使います。</span>
+              <span data-i18n="location_area_usage_note">現在地から分かった市区町村名（座標は残しません）は、地域ごとの利用統計にも使います。</span>
               <a href="privacy.html#area-usage" data-i18n="location_area_usage_note_link">詳しく見る／利用を停止する</a>
             </p>
 
@@ -3268,13 +3320,12 @@
       aria-labelledby="todayNowEmptyHeading"
       hidden
     >
-      <h2 id="todayNowEmptyHeading" data-i18n="today_now_empty_heading">今日の今</h2>
-      <p class="imadake-lead" data-i18n="today_now_empty_text">今、近くで掲載中の「今だけ投稿」はありません。近くのこんな情報から探してみよう。</p>
+      <h2 id="todayNowEmptyHeading" data-i18n="today_now_empty_heading">今日の今だけ投稿</h2>
+      <p class="imadake-lead" data-i18n="today_now_empty_text">近くでは、まだ掲載中の「今だけ投稿」がありません。</p>
       <div class="today-now-empty-links">
         <button type="button" class="today-now-empty-link" data-today-now-target="regionTodayInfoSection" data-i18n="today_now_empty_link_region" hidden>今日、この地域で起きていること</button>
         <button type="button" class="today-now-empty-link" data-today-now-target="shopsSection" data-i18n="today_now_empty_link_shops" hidden>近くで楽しめるお店・施設</button>
         <button type="button" class="today-now-empty-link" data-today-now-target="townNowThreadsSection" data-i18n="today_now_empty_link_threads" hidden>近くの人の今日の会話（街の今スレッド）</button>
-        <button type="button" class="today-now-empty-link" data-today-now-target="columnEntrySection" data-i18n="today_now_empty_link_reads" hidden>街を楽しむヒント（マチナウ読み物）</button>
       </div>
     </section>
 
@@ -3292,13 +3343,13 @@
           </h2>
 
           <p data-i18n="shops_description">
-            気になるカテゴリーを選んでください。
+            お店・観光・体験
           </p>
 
         </div>
 
         <span id="shopsOrderLabel" class="section-link" data-i18n="shops_current_location_order">
-          現在地順
+          現在地から近い順
         </span>
 
       </div>
@@ -3699,14 +3750,15 @@
     <!-- 広告枠(街ページの6番目・地図の欄の跡)｜通常の店舗一覧とは別のデータ・表示・並び。広告の購入で店舗の掲載順位は
          変わらない。未販売の今は、固定の自社告知を表示のたびに入れ替えて出す(空白にしない)。料金・申込み・決済・
          管理画面は無い(未決定)。高さは先に確保し、入れ替えでレイアウトがずれないようにする。 -->
-    <aside id="adSlotSection" class="ad-slot" aria-labelledby="adSlotLabel">
+    <aside id="adSlotSection" class="ad-slot" aria-labelledby="adSlotHeading">
       <span id="adSlotLabel" class="ad-slot-label" data-i18n="ad_slot_label">広告</span>
-      <div id="adSlotBody" class="ad-slot-body">
-        <a class="ad-slot-house" href="shop.html" data-ad-house="shop">
-          <span class="ad-slot-house-title" data-i18n="ad_house_shop_title">お店・施設を募集中</span>
-          <span class="ad-slot-house-text" data-i18n="ad_house_shop_text">旅行者に、今のお店の情報を届けませんか。</span>
-          <span class="ad-slot-house-more" data-i18n="ad_house_more">詳しく見る →</span>
-        </a>
+      <!-- 16項目⑮(代表の確定文言)｜横幅いっぱいの募集の1枠。料金は書かない・広告の配信や課金の機能は無い。 -->
+      <div id="adSlotBody" class="ad-slot-body ad-slot-recruit">
+        <span class="ad-slot-tag" data-i18n="ad_slot_recruit_tag">広告主募集中</span>
+        <h2 id="adSlotHeading" class="ad-slot-house-title" data-i18n="ad_slot_recruit_title">この街のお店を、募集中。</h2>
+        <p class="ad-slot-house-text" data-i18n="ad_slot_recruit_text_audience">このページは、旅行者も、この街に住む人も見ています。</p>
+        <p class="ad-slot-house-text" data-i18n="ad_slot_recruit_text_order">現在地から近い順の表示で、あなたのお店も届きます。</p>
+        <a class="ad-slot-button" href="shop.html" data-ad-house="shop" data-i18n="ad_slot_recruit_button">お店・施設の方へ →</a>
       </div>
     </aside>
 
@@ -3774,11 +3826,6 @@
 
     <p class="travel-box-note" data-i18n="travel_box_storage_note">保存した内容は、この端末のブラウザに保存されます。別の端末やブラウザには表示されず、閲覧履歴を消すと消えることがあります。</p>
 
-      <!-- マチナウ自体のシェア(旅の保存箱)。共有するのは https://machinau.jp/ と紹介文だけ(位置情報・利用者の情報は含めない)。 -->
-      <div class="machinau-share machinau-site-share">
-        <button class="machinau-share-button" type="button" data-i18n="site_share_button" onclick="shareMachinauSite(this)">🔗 マチナウをシェア</button>
-        <div class="machinau-share-status" role="status" aria-live="polite"></div>
-      </div>
   </div>
 </section>
 
@@ -3793,7 +3840,7 @@
 
     <span data-i18n="footer_brand">マチナウ</span>
     <br>
-    <span data-i18n="footer_tagline">今、何が起きているかを見つけよう。</span>
+    <span data-i18n="footer_tagline">街の今を知れば、もっと、いい旅になる。</span>
 
     <div class="footer-links">
       <a href="terms.html" data-i18n="footer_terms_link">利用規約</a>
@@ -4136,6 +4183,9 @@
           </p>
           <p class="how-to-step-text" data-i18n="how_to_step4_closing">
             <strong>今いる人と、これから行く人をつなぐ。</strong><br>それが「街の今スレッド」です。
+          </p>
+          <p class="how-to-step-note" data-i18n="how_to_threads_board_note">
+            ※スレッドと掲示板は、現在地を取得するか、「地域から探す」で街を選ぶと表示されます。
           </p>
           <button type="button" class="how-to-step-link" data-how-to-action="threads" data-i18n="how_to_step4_link">
             近くのスレッドを見る →

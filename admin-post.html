@@ -1049,6 +1049,30 @@
             旅行者向けの店舗の詳細に表示します。どれも選ばなければ表示しません。
           </p>
 
+          <!-- 16項目⑥｜電話番号(任意)。店舗の詳細に表示する(押すと電話をかけられる)。 -->
+          <label
+            class="form-label"
+            for="permanentAdPhone"
+            style="margin-top: 16px;"
+          >
+            電話番号
+            <span class="optional">任意</span>
+          </label>
+
+          <input
+            id="permanentAdPhone"
+            name="permanentAdPhone"
+            type="tel"
+            inputmode="tel"
+            maxlength="20"
+            autocomplete="off"
+            placeholder="例：098-000-0000"
+          >
+
+          <p class="form-help">
+            旅行者向けの店舗の詳細に表示します。空欄なら表示しません。
+          </p>
+
         </div>
 
         <div
@@ -1508,6 +1532,7 @@
     const businessEndTimeInput = document.getElementById("businessEndTime");
     const closedDayInputs = Array.prototype.slice.call(document.querySelectorAll("[data-closed-day]"));
     const irregularClosedInput = document.getElementById("irregularClosed");
+    const permanentAdPhoneInput = document.getElementById("permanentAdPhone");
 
     // 開店・閉店の選択肢(00:00〜23:30、30分刻み)。
     [businessStartTimeInput, businessEndTimeInput].forEach(function(select) {
@@ -2521,6 +2546,7 @@
           payload.businessEndTime = businessEndTimeInput.value;
           payload.closedDays = readClosedDays();
           payload.irregularClosed = irregularClosedInput.checked;
+          payload.permanentAdPhone = permanentAdPhoneInput.value.trim();
 
           if (!isEditMode) {
             payload.isPermanentAd = true;
@@ -2704,6 +2730,7 @@
         input.checked = existingClosedDays.includes(input.value);
       });
       irregularClosedInput.checked = submission.irregularClosed === true;
+      permanentAdPhoneInput.value = typeof submission.permanentAdPhone === "string" ? submission.permanentAdPhone : "";
 
       // Ver1.8 Phase2 STEP7-G2A｜このAPI追加より前に作成された投稿(area
       // フィールド自体が存在しない)でも編集画面が壊れないよう、文字列以外は

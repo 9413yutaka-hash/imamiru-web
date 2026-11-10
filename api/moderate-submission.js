@@ -21137,6 +21137,8 @@ const PUBLIC_SUBMISSION_FIELD_ALLOWLIST =
     "name",
     "openingHours",
     "paymentMethods",
+    // 16項目⑥｜常設店舗広告の電話番号(運営が入力・TOPの詳細に表示)。常設店舗広告以外は保存しない。
+    "permanentAdPhone",
     "period",
     "postType",
     "publisherType",

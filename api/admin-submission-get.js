@@ -227,7 +227,11 @@ export default async function handler(
             : [],
 
         irregularClosed:
-          data.irregularClosed === true
+          data.irregularClosed === true,
+
+        // 16項目⑥｜電話番号(常設店舗広告だけ)。
+        permanentAdPhone:
+          data.isPermanentAd === true && typeof data.permanentAdPhone === "string" ? data.permanentAdPhone : ""
       }
     });
   } catch (error) {

@@ -941,6 +941,9 @@ export default async function handler(
         postFields.permanentAdHours.closedDays;
       submissionData.irregularClosed =
         postFields.permanentAdHours.irregularClosed;
+      // 16項目⑥｜電話番号(任意)。
+      submissionData.permanentAdPhone =
+        postFields.permanentAdHours.permanentAdPhone;
     } else {
       submissionData.postType =
         "admin";

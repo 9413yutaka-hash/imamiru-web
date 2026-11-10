@@ -223,7 +223,7 @@ try {
       t(`${tag} catch copy (いい旅, not いいい旅)`, v.h1 === "街の今を知れば、もっと、いい旅になる。", v.h1);
       t(`${tag} badge 沖縄からエリア拡大中`, v.badge === "沖縄からエリア拡大中", v.badge);
       t(`${tag} location card texts`, v.heading === "あなたの街の「今」" && v.msg === "今いる街の「今」をお届けします。まずは下のボタンを押してみてください。" && v.btn === "現在地を取得する" && v.alt === "位置情報が使えない場合はこちら", v);
-      t(`${tag} privacy note (verified wording) + one link`, v.note === "現在地から分かった市区町村名（座標は含みません）は、地域ごとの利用統計にも使います。 詳しく見る／利用を停止する", v.note);
+      t(`${tag} privacy note (verified wording) + one link`, v.note === "現在地から分かった市区町村名（座標は残しません）は、地域ごとの利用統計にも使います。 詳しく見る／利用を停止する", v.note);
       t(`${tag} entry titles & captions`, JSON.stringify(v.cards.map((c) => [c.t, c.c])) === JSON.stringify([["今いる街の情報", "街のスレッドへ"], ["近くで楽しめる場所", "お店・観光・体験"], ["地域から探す", "都道府県・市区町村で"], ["マチナウ読み物", "旅のヒント・ストーリー"]]), v.cards);
       t(`${tag} board card & how-to card`, v.board === "街の掲示板 この街を訪れる人へ、地元のひとことを残す場所 見る →" && v.howTo === "はじめての方へ マチナウの楽しみ方 見る →", [v.board, v.howTo]);
       t(`${tag} round 5 lead removed`, v.lead === false, v);
@@ -352,12 +352,12 @@ try {
     t("E5 reads heading / lead", reads.h === "マチナウ読み物" && reads.lead === "旅のヒント・ストーリー", reads);
     t("E6 published date only when known", reads.dates.length === 2 && reads.dates[0].replace(/\s+/g, " ").trim() === "公開日 2026年10月7日" && reads.dates[1] === "", reads.dates);
     await p.close();
-    // 広告は開くたびに入れ替わる(同じタブ)
+    // 16項目⑮｜広告は入れ替えず、固定の募集の1枠(開き直しても同じ)
     const q = await openAt("/", { lang: "ja", width: 390 });
     const first = await q.ev(`document.querySelector("#adSlotBody [data-ad-house]").getAttribute("data-ad-house")`);
     await q.ev(`location.reload(); true`); await sleep(2500);
     const second = await q.ev(`document.querySelector("#adSlotBody [data-ad-house]").getAttribute("data-ad-house")`);
-    t("E7 house notices rotate per page view", first && second && first !== second, [first, second]);
+    t("E7 one fixed recruitment slot (no rotation)", first === "shop" && second === "shop", [first, second]);
     await q.ev(`switchMachinauLanguage("en"); true`); await sleep(300);
     t("E8 English ad label / reads date", await q.ev(`document.querySelector(".ad-slot-label").textContent.trim() === "Ad" && /Published Oct 7, 2026/.test(document.getElementById("columnEntryCardList").textContent.replace(/\\s+/g, " "))`), await q.ev(text("#columnEntryCardList")));
     await q.close();
@@ -377,7 +377,7 @@ try {
     const q = await openAt("/", { lang: "ja", width: 390, geo: NAHA });
     await sleep(1500);
     const v = await q.ev(`(() => { const cards = [...document.querySelectorAll("#shopsList .shop-card")]; const km = (c) => { const t = (c.querySelector(".info-chip-distance") || {}).textContent || ""; const m = t.match(/([\\d.]+)\\s*(km|m)/); return m ? (m[2] === "km" ? +m[1] * 1000 : +m[1]) : NaN; }; return { label: ${text("#shopsOrderLabel")}, ids: cards.map((c) => c.getAttribute("data-shop-id")), d: cards.map(km), chips: cards.map((c) => [c.getAttribute("data-shop-id"), [...c.querySelectorAll(".info-chip-imadake")].map((e) => e.textContent.trim())]) }; })()`);
-    t("F3 with location: label 現在地順", v.label === "現在地順", v.label);
+    t("F3 with location: label 現在地から近い順", v.label === "現在地から近い順", v.label);
     t("F4 distance order kept", v.d.every((x, i) => i === 0 || x >= v.d[i - 1]), v.d);
     t("F5 15km kept (名護の店 not shown)", !v.ids.includes("L3"), v.ids);
     const chipS1 = v.chips.find((c) => c[0] === "sp_S1"), others = v.chips.filter((c) => c[0] !== "sp_S1");
@@ -392,7 +392,7 @@ try {
     await r.ev(`window.__orders = []; true`);
     await r.ev(`location.reload(); true`);
     await r.waitFor("typeof shops !== 'undefined' && shops.length > 0 && userLatitude !== null", 20000); await sleep(1500);
-    t("F9 restored location: label 現在地順 and distance order", (await r.ev(text("#shopsOrderLabel"))) === "現在地順", await r.ev(text("#shopsOrderLabel")));
+    t("F9 restored location: label 現在地から近い順 and distance order", (await r.ev(text("#shopsOrderLabel"))) === "現在地から近い順", await r.ev(text("#shopsOrderLabel")));
     await r.close();
     imadakeReply = null;
   }

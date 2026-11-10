@@ -1404,11 +1404,22 @@ function readPermanentAdHoursForDisplay(
         })
       : [];
 
+  // 16項目⑥｜電話番号。保存の時と同じ条件をもう一度確かめ、通らない値は出さない。
+  const phoneText =
+    typeof data.permanentAdPhone === "string" ? data.permanentAdPhone.trim() : "";
+  const phoneDigitCount =
+    phoneText.replace(/[^0-9]/g, "").length;
+  const phone =
+    phoneText.length <= 20 && /^\+?[0-9()\-\s]+$/.test(phoneText) && phoneDigitCount >= 9 && phoneDigitCount <= 15
+      ? phoneText
+      : "";
+
   return {
     startTime: startTime,
     endTime: endTime,
     closedDays: closedDays,
-    irregularClosed: data.irregularClosed === true
+    irregularClosed: data.irregularClosed === true,
+    phone: phone
   };
 }
 
@@ -3958,7 +3969,9 @@ function getShopCardSummaryHtml(
 // TOP・街ページ統合改善｜正式店舗のカードの鮮度の表示は、根拠がある時だけ：取得済みの近くの今だけ投稿のうち、
 // 同じ店舗(カードの ID sp_{storeId} と投稿の storeId が一致)・期限内の投稿がある時だけ「今だけ投稿あり・◯時間前」
 // (公開日時 publishedAt から)。無料掲載・投稿の無い店舗には何も出さない。今だけ投稿の CV・課金・表示条件には触れない。
-function getStoreImadakeChipHtml(shop, language) {
+// 16項目⑨｜正式店舗(sp_{storeId})の、取得済みの近くの今だけ投稿のうち期限内で最新のもの(無ければ null)。
+// 無料掲載(sp_ でない)には紐付けない。今だけ投稿の一覧・CV・課金の判定には触れない(読むだけ)。
+function findLatestActiveStoreImadakePost(shop) {
   let nearbyPosts =
     null;
 
@@ -3967,7 +3980,7 @@ function getStoreImadakeChipHtml(shop, language) {
     nearbyPosts =
       imadakeNearbyPosts;
   } catch (error) {
-    return "";
+    return null;
   }
 
   if (
@@ -3976,13 +3989,15 @@ function getStoreImadakeChipHtml(shop, language) {
     shop.firestoreId.indexOf("sp_") !== 0 ||
     !Array.isArray(nearbyPosts)
   ) {
-    return "";
+    return null;
   }
 
   const storeId =
     shop.firestoreId.slice(3);
   const now =
     Date.now();
+  let latestPost =
+    null;
   let latestPublishedAt =
     0;
 
@@ -4003,12 +4018,50 @@ function getStoreImadakeChipHtml(shop, language) {
     ) {
       latestPublishedAt =
         publishedAt;
+      latestPost =
+        post;
     }
   });
 
-  if (latestPublishedAt === 0) {
+  return latestPost;
+}
+
+// 16項目⑨｜店舗の詳細から、TOP の今だけ投稿の枠のその投稿のカードへ移る(カードが無ければ枠へ)。
+function scrollToImadakeCardFromShopModal(postId) {
+  closeShopModal();
+
+  const cards =
+    Array.prototype.slice.call(
+      document.querySelectorAll("#imadakeCardList .imadake-card[data-imadake-post-id]")
+    );
+  const card =
+    cards.find(function(element) {
+      return element.getAttribute("data-imadake-post-id") === postId;
+    }) || document.getElementById("imadakeSection");
+
+  if (!card) {
+    return;
+  }
+
+  card.scrollIntoView({ behavior: "smooth", block: "center" });
+  card.classList.add("imadake-card-highlight");
+  setTimeout(function() {
+    card.classList.remove("imadake-card-highlight");
+  }, 2400);
+}
+
+function getStoreImadakeChipHtml(shop, language) {
+  const latestPost =
+    findLatestActiveStoreImadakePost(shop);
+
+  if (!latestPost) {
     return "";
   }
+
+  const now =
+    Date.now();
+  const latestPublishedAt =
+    Date.parse(latestPost.publishedAt);
 
   const minutesAgo =
     Math.floor((now - latestPublishedAt) / 60000);
@@ -6475,6 +6528,25 @@ function openShopModal(
         .join("<br>");
   }
 
+  // 16項目⑥｜常設店舗広告の電話番号(未設定なら何も出さない)。押すと電話をかけられる。
+  const modalPermanentAdPhone =
+    isAdminPost || isStoreProfileShop || !selectedShop.permanentAdHours
+      ? ""
+      : selectedShop.permanentAdHours.phone;
+
+  if (modalPermanentAdPhone) {
+    modalText +=
+      "<br><br>" +
+      escapeHtml(
+        getMachinauTranslation("shop_phone_label", getCurrentMachinauLanguage())
+      ) +
+      '<a class="shop-modal-phone-link" href="tel:' +
+      escapeHtml(modalPermanentAdPhone.replace(/[^0-9+]/g, "")) +
+      '">' +
+      escapeHtml(modalPermanentAdPhone) +
+      "</a>";
+  }
+
   const modalExpiryDisplayText =
     isStoreProfileShop
       ? ""
@@ -6527,6 +6599,24 @@ function openShopModal(
         selectedShop.custom,
         modalCurrentLanguage
       );
+  }
+
+  // 16項目⑨｜正式店舗に期限内の今だけ投稿がある時だけ、TOP の今だけ投稿の枠のその投稿へ移るボタン。
+  // 詳細(全文)は開かない＝「続きを見る」の CV・料金台帳はこれまでどおり枠のボタンだけで起きる。
+  const modalStoreImadakePost =
+    isStoreProfileShop
+      ? findLatestActiveStoreImadakePost(selectedShop)
+      : null;
+
+  if (modalStoreImadakePost && typeof modalStoreImadakePost.postId === "string") {
+    modalText +=
+      '<br><br><button type="button" class="secondary-link-button shop-modal-imadake-link" data-imadake-post-id="' +
+      escapeHtml(modalStoreImadakePost.postId) +
+      '" onclick="scrollToImadakeCardFromShopModal(this.getAttribute(\'data-imadake-post-id\'))">' +
+      escapeHtml(
+        getMachinauTranslation("shop_modal_imadake_link", modalCurrentLanguage)
+      ) +
+      "</button>";
   }
 
   modalMessage.innerHTML =
@@ -11245,6 +11335,8 @@ function getLocation() {
           "location_result",
           { result: "success" }
         );
+        // 地域から探す｜取得できた時だけ、選んでいた街をやめて現在地(15km)側へ戻す。
+        clearSelectedShopRegion();
         applyUserLocation(
           position.coords.latitude,
           position.coords.longitude,
@@ -20456,13 +20548,12 @@ if (regionRecommendationAreaPickerElement) {
       // よう、ヘッダーの高さ分だけ上に余白を取ってスクロールする。
       // TOP・街ページ統合改善｜街のスレッドへの入口(楽しみ方の④・ヒーロー「今いる街の情報」)から
       // 開いた時は、選んだ街のスレッド(#townNowThreadsSection)へ移る。
+      // 16項目④｜街の掲示板のカードから開いた時は、選んだ街の掲示板(#regionRecommendationSection)へ移る。
       const scrollTargetIdForRegion =
-        pendingTownNowThreadsAfterAreaSelection
-          ? "townNowThreadsSection"
-          : "shopsSection";
+        pendingAreaSelectionScrollTargetId || "shopsSection";
 
-      pendingTownNowThreadsAfterAreaSelection =
-        false;
+      pendingAreaSelectionScrollTargetId =
+        "";
 
       const shopsSectionForRegion =
         document.getElementById(
@@ -20600,7 +20691,7 @@ if (regionRecommendationBackToCurrentButtonElement) {
 // 直後に1回だけ実行する(ReferenceErrorを出さず、早押しも捨てない)。
 function machinauStartLocation() {
   // 地域から探す｜現在地を押したら店舗カードを現在地(15km)側へ戻す。
-  clearSelectedShopRegion();
+  // 戻すのは取得に成功した時だけ(getLocation() の成功時)。失敗した時は選んでいた街(店舗・スレッド・掲示板)をそのまま残す。
   ensureGoogleMapsLoaded();
   getLocation();
 }
@@ -20800,14 +20891,16 @@ function scrollToHeroActionSection(
 // TOP・街ページ統合改善｜街のスレッドへの入口(ヒーロー「今いる街の情報」・楽しみ方の④「近くのスレッドを見る」)。
 // 現在地があれば近くのスレッド(#townNowThreadsSection)へ。現在地が無い時は、以前は現在地のボタンへ案内する
 // だけで先へ進めなかったため、「地域から探す」を開き、街を選んだ後にその街のスレッドへ移る
-// (pendingTownNowThreadsAfterAreaSelection を地域の選択の完了時に見る)。GPS は勝手に取り直さない。
-let pendingTownNowThreadsAfterAreaSelection =
-  false;
+// (pendingAreaSelectionScrollTargetId を地域の選択の完了時に見る)。GPS は勝手に取り直さない。
+// 16項目④｜街の掲示板のカード(現在地なし)からも同じ仕組みで、街を選んだ後にその街の掲示板へ移る。
+// 値は移動先の枠の id(""＝従来どおり店舗へ)。
+let pendingAreaSelectionScrollTargetId =
+  "";
 
 function openTownThreadsEntry() {
   if (isMachinauLocationAcquired()) {
-    pendingTownNowThreadsAfterAreaSelection =
-      false;
+    pendingAreaSelectionScrollTargetId =
+      "";
 
     // 地域を選んで別の街のスレッドを見ている時は、現在地の近くのスレッドに戻す。
     clearSelectedShopRegion();
@@ -20818,27 +20911,36 @@ function openTownThreadsEntry() {
     return;
   }
 
+  openAreaSelectionThenScrollTo(
+    "townNowThreadsSection"
+  );
+}
+
+// 「地域から探す」を開き、街を選んだ後に targetSectionId の枠へ移る(スレッド・掲示板の入口から使う)。
+function openAreaSelectionThenScrollTo(
+  targetSectionId
+) {
   const areaButtonElement =
     document.getElementById(
       "heroActionArea"
     );
 
   if (areaButtonElement) {
-    // 「地域から探す」のクリック処理(同期)が、この入口から開かれたことを読み取る。
-    isOpeningAreaForTownThreads =
-      true;
+    // 「地域から探す」のクリック処理(同期)が、どの入口から開かれたかを読み取る。
+    openingAreaScrollTargetId =
+      targetSectionId;
 
     try {
       areaButtonElement.click();
     } finally {
-      isOpeningAreaForTownThreads =
-        false;
+      openingAreaScrollTargetId =
+        "";
     }
   }
 }
 
-let isOpeningAreaForTownThreads =
-  false;
+let openingAreaScrollTargetId =
+  "";
 
 // 1. 今いる街の情報 → 街のスレッド(#townNowThreadsSection)。
 const heroActionTodayElement =
@@ -20864,8 +20966,8 @@ if (heroActionBoardElement) {
   heroActionBoardElement.addEventListener(
     "click",
     function() {
-      pendingTownNowThreadsAfterAreaSelection =
-        false;
+      pendingAreaSelectionScrollTargetId =
+        "";
 
       const boardSection =
         document.getElementById(
@@ -20890,14 +20992,11 @@ if (heroActionBoardElement) {
         return;
       }
 
-      const areaButtonElement =
-        document.getElementById(
-          "heroActionArea"
-        );
-
-      if (areaButtonElement) {
-        areaButtonElement.click();
-      }
+      // 16項目④｜現在地が無い時は「地域から探す」を開き、街を選んだ後にその街の掲示板へ移る
+      // (以前は選んだ後に店舗の一覧へ移り、掲示板へ進めなかった)。
+      openAreaSelectionThenScrollTo(
+        "regionRecommendationSection"
+      );
     }
   );
 }
@@ -21026,10 +21125,10 @@ if (heroActionAreaElement) {
   heroActionAreaElement.addEventListener(
     "click",
     function() {
-      // 街のスレッドへの入口(openTownThreadsEntry)から開いた時だけ、街を選んだ後にスレッドへ移る。
+      // 街のスレッドの入口(openTownThreadsEntry)・街の掲示板のカードから開いた時だけ、街を選んだ後にその枠へ移る。
       // ほかの入口から開いた時は従来どおり(選んだ後は店舗へ)。
-      pendingTownNowThreadsAfterAreaSelection =
-        isOpeningAreaForTownThreads;
+      pendingAreaSelectionScrollTargetId =
+        openingAreaScrollTargetId;
 
       // 広告実証前 GA4最低限行動計測｜掲示板(地域選択)を見る操作として
       // 従来どおり計測する。
@@ -24875,95 +24974,8 @@ Object.keys(HERO_ACTION_ANALYTICS_ACTIONS).forEach(function(elementId) {
   );
 });
 
-// TOP・街ページ統合改善｜街ページの末尾の広告枠(#adSlotSection、地図の欄の跡)。広告は未販売のため、固定の自社告知を
-// 表示のたびに1つずつ入れ替える(同じタブで開くたびに次の告知。時間での自動切替はしない＝動きなし・高さは CSS で確保)。
-// 通常の店舗一覧とはデータ・表示・並びを分け、店舗の掲載順位には一切関わらない。料金・申込み・計測の追加はしない
-// (店舗向け案内への移動は既存の shop_guide_click の placement "ad_slot" で数える)。
-const AD_SLOT_HOUSE_NOTICES = [
-  {
-    id: "shop",
-    href: "shop.html",
-    titleKey: "ad_house_shop_title",
-    textKey: "ad_house_shop_text"
-  },
-  {
-    id: "reads",
-    href: "column-list.html",
-    titleKey: "ad_house_reads_title",
-    textKey: "ad_house_reads_text"
-  },
-  {
-    id: "how_to",
-    href: "",
-    titleKey: "ad_house_how_to_title",
-    textKey: "ad_house_how_to_text"
-  }
-];
-
-const AD_SLOT_ROTATION_STORAGE_KEY =
-  "machinauAdSlotHouseIndex";
-
-function pickAdSlotHouseNoticeIndex() {
-  let nextIndex =
-    Math.floor(Math.random() * AD_SLOT_HOUSE_NOTICES.length);
-
-  try {
-    const previous =
-      Number(sessionStorage.getItem(AD_SLOT_ROTATION_STORAGE_KEY));
-
-    if (Number.isInteger(previous) && previous >= 0) {
-      nextIndex =
-        (previous + 1) % AD_SLOT_HOUSE_NOTICES.length;
-    }
-
-    sessionStorage.setItem(
-      AD_SLOT_ROTATION_STORAGE_KEY,
-      String(nextIndex)
-    );
-  } catch (error) {
-    // 保存できない環境では、入れ替えの順番を覚えないだけ(表示は続ける)。
-  }
-
-  return nextIndex;
-}
-
-function renderAdSlotHouseNotice() {
-  const body =
-    document.getElementById("adSlotBody");
-
-  if (!body) {
-    return;
-  }
-
-  const notice =
-    AD_SLOT_HOUSE_NOTICES[pickAdSlotHouseNoticeIndex()];
-  const language =
-    getCurrentMachinauLanguage();
-  const innerHtml =
-    '<span class="ad-slot-house-title" data-i18n="' + notice.titleKey + '">' +
-    escapeHtml(getMachinauTranslation(notice.titleKey, language)) +
-    "</span>" +
-    '<span class="ad-slot-house-text" data-i18n="' + notice.textKey + '">' +
-    escapeHtml(getMachinauTranslation(notice.textKey, language)) +
-    "</span>" +
-    '<span class="ad-slot-house-more" data-i18n="ad_house_more">' +
-    escapeHtml(getMachinauTranslation("ad_house_more", language)) +
-    "</span>";
-
-  body.innerHTML =
-    notice.href !== ""
-      ? '<a class="ad-slot-house" href="' + notice.href + '" data-ad-house="' + notice.id + '">' + innerHtml + "</a>"
-      : '<button type="button" class="ad-slot-house" data-ad-house="' + notice.id + '">' + innerHtml + "</button>";
-
-  const howToButton =
-    body.querySelector('button[data-ad-house="how_to"]');
-
-  if (howToButton) {
-    howToButton.addEventListener(
-      "click",
-      openHowToModal
-    );
-  }
-}
-
-renderAdSlotHouseNotice();
+// TOP・街ページ統合改善｜街ページの末尾の広告枠(#adSlotSection、地図の欄の跡)。
+// 16項目⑮(代表の確定文言)｜表示のたびに入れ替える自社告知をやめ、横幅いっぱいの「広告主募集中」の1枠に固定した
+// (中身は index.html の固定の文言・日英は data-i18n。ここで描き直す処理は無い)。通常の店舗一覧とはデータ・表示・並びを分け、
+// 店舗の掲載順位には一切関わらない。料金・申込み・広告の配信・課金は無い(店舗向け案内への移動は既存の
+// shop_guide_click の placement "ad_slot" で数える)。

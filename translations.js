@@ -49,13 +49,13 @@ const MACHINAU_TRANSLATIONS = {
 
   // 今だけ投稿が0件の日の「今日の今」(ページ内の既存の枠への移動だけ)。
   today_now_empty_heading: {
-    ja: "今日の今",
-    en: "Today, right now"
+    ja: "今日の今だけ投稿",
+    en: "Today's limited-time posts"
   },
 
   today_now_empty_text: {
-    ja: "今、近くで掲載中の「今だけ投稿」はありません。近くのこんな情報から探してみよう。",
-    en: "There are no limited-time posts nearby right now. Try these instead."
+    ja: "近くでは、まだ掲載中の「今だけ投稿」がありません。",
+    en: "There are no limited-time posts nearby yet."
   },
 
   today_now_empty_link_region: {
@@ -212,6 +212,32 @@ const MACHINAU_TRANSLATIONS = {
   ad_house_shop_text: {
     ja: "旅行者に、今のお店の情報を届けませんか。",
     en: "Share what's happening at your place with travelers nearby."
+  },
+
+  // 16項目⑮(代表の確定文言)｜TOP の末尾の広告の募集の1枠。
+  ad_slot_recruit_tag: {
+    ja: "広告主募集中",
+    en: "Advertisers wanted"
+  },
+
+  ad_slot_recruit_title: {
+    ja: "この街のお店を、募集中。",
+    en: "We're looking for shops in this town."
+  },
+
+  ad_slot_recruit_text_audience: {
+    ja: "このページは、旅行者も、この街に住む人も見ています。",
+    en: "This page is seen by travelers and by people who live in this town."
+  },
+
+  ad_slot_recruit_text_order: {
+    ja: "現在地から近い順の表示で、あなたのお店も届きます。",
+    en: "Places are shown nearest first, so your shop can reach them too."
+  },
+
+  ad_slot_recruit_button: {
+    ja: "お店・施設の方へ →",
+    en: "For shops & venues →"
   },
 
   ad_house_reads_title: {
@@ -394,6 +420,23 @@ const MACHINAU_TRANSLATIONS = {
     en: "If you started a thread, you can still check it even when you're somewhere else."
   },
 
+  // 16項目⑥｜店舗の詳細の電話番号(常設店舗広告、運営が入力)。
+  // 16項目⑨｜正式店舗の詳細から、その店舗の今だけ投稿(TOP の枠のカード)へ移るボタン。
+  shop_modal_imadake_link: {
+    ja: "この店舗の今だけ投稿を見る →",
+    en: "See this shop's limited-time post →"
+  },
+
+  shop_phone_label: {
+    ja: "電話：",
+    en: "Phone: "
+  },
+
+  how_to_threads_board_note: {
+    ja: "※スレッドと掲示板は、現在地を取得するか、「地域から探す」で街を選ぶと表示されます。",
+    en: "* Threads and the board appear once you get your location or pick a town in “Explore by Area.”"
+  },
+
   how_to_step4_closing: {
     ja: "<strong>今いる人と、これから行く人をつなぐ。</strong><br>それが「街の今スレッド」です。",
     en: "<strong>Connecting people who are there with people on their way.</strong><br>That's what Town Now Threads are for."
@@ -508,8 +551,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   shops_description: {
-    ja: "気になるカテゴリーを選んでください。",
-    en: "Choose a category to explore."
+    ja: "お店・観光・体験",
+    en: "Shops, sightseeing & experiences"
   },
 
   // 投稿玄関Phase1｜旧shops_general_post_entry_link(👀今ここで見つけた？
@@ -1120,8 +1163,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   shops_current_location_order: {
-    ja: "現在地順",
-    en: "Sorted by Distance"
+    ja: "現在地から近い順",
+    en: "Nearest First"
   },
 
   // 地域から探す｜市区町村を選んだ時の店舗セクション。{AREA}は
@@ -2507,8 +2550,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   footer_tagline: {
-    ja: "今、何が起きているかを見つけよう。",
-    en: "Discover what's happening right now."
+    ja: "街の今を知れば、もっと、いい旅になる。",
+    en: "Know what's happening in town now, and make your trip even better."
   },
 
   // サイト全体改善 F｜フッターの出典のラベル(データの名前「Geolonia 住所データ」は出典の表記のまま)。
@@ -6097,8 +6140,8 @@ const MACHINAU_TRANSLATIONS = {
 
   // 店主向け「この街のマチナウ利用状況」｜TOP の現在地ボタンの下の説明(計測のスイッチ ON の時だけ表示)。
   location_area_usage_note: {
-    ja: "現在地から分かった市区町村名（座標は含みません）は、地域ごとの利用統計にも使います。",
-    en: "The municipality name found from your location (not your coordinates) is also used for area usage statistics."
+    ja: "現在地から分かった市区町村名（座標は残しません）は、地域ごとの利用統計にも使います。",
+    en: "The municipality name found from your location (your coordinates are not kept) is also used for area usage statistics."
   },
 
   location_area_usage_note_link: {

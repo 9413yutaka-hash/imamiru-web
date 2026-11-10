@@ -9,6 +9,8 @@
 //                                        開店・閉店は30分刻み。両方空(未設定)か両方入力。閉店が開店より前なら翌日まで(日跨ぎ)。
 //   closedDays                            定休日。曜日コード(mon..sun)の配列。月→日の順・重複なし。空配列は未設定。
 //   irregularClosed                       不定休なら true。
+//   permanentAdPhone                      16項目⑥｜電話番号(店舗の詳細に表示)。数字・+・-・括弧・空白で9〜15桁・20文字まで
+//                                        (店舗ページの電話 STEP 57 と同じ条件)。投稿の他の種類と混ざらないよう専用の名前にする。
 // どれも任意。未設定(空)の項目は旅行者側に表示しない。
 // ==========================================================================
 
@@ -29,6 +31,19 @@ function readTime(value, label) {
     throw new Error(label + "の時刻が正しくありません。");
   }
 
+  return text;
+}
+
+// 16項目⑥｜電話番号。空は未設定。形の違う値は保存しない(例外のメッセージを画面に返す)。
+export function readPermanentAdPhone(value) {
+  const text = typeof value === "string" ? value.trim() : "";
+  if (text === "") {
+    return "";
+  }
+  const digitCount = text.replace(/[^0-9]/g, "").length;
+  if (text.length > 20 || !/^\+?[0-9()\-\s]+$/.test(text) || digitCount < 9 || digitCount > 15) {
+    throw new Error("電話番号は、数字・+・-・括弧で9〜15桁を入力してください（未設定なら空欄）。");
+  }
   return text;
 }
 
@@ -56,6 +71,7 @@ export function readPermanentAdHours(requestBody) {
     businessStartTime: businessStartTime,
     businessEndTime: businessEndTime,
     closedDays: closedDays,
-    irregularClosed: source.irregularClosed === true
+    irregularClosed: source.irregularClosed === true,
+    permanentAdPhone: readPermanentAdPhone(source.permanentAdPhone)
   };
 }

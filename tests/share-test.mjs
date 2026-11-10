@@ -492,10 +492,9 @@ try {
   t("M5 スマートフォンで横スクロールなし・JSエラーなし", hscroll360 && p.log.errors.length === 0, p.log.errors);
   await p.ev(`showMyPage(); true`);
   await sleep(300);
-  const MYPAGE_BTN = "#myPageSection .machinau-site-share .machinau-share-button";
-  const myVisible = await p.ev(`(() => { const b = document.querySelector(${JSON.stringify(MYPAGE_BTN)}); return !!b && b.offsetHeight > 0 && b.textContent.trim() === "🔗 マチナウをシェア"; })()`);
-  siteShare = await clickShare(p, MYPAGE_BTN, "share");
-  t("M6 旅の保存箱（マイページ）にも同じボタン・同じ共有内容", myVisible && (siteShare.shared || [])[0] && siteShare.shared[0].url === "https://machinau.jp/" && siteShare.shared[0].text === SITE_JA_TEXT, { myVisible, siteShare });
+  // 16項目⑩｜旅の保存箱の中の「マチナウをシェア」は、すぐ下のフッターと重複のため外した＝ページ全体で1つ(フッター)。
+  const siteShareCount = await p.ev(`({ inMyPage: document.querySelectorAll("#myPageSection .machinau-site-share").length, all: document.querySelectorAll(".machinau-site-share .machinau-share-button").length, footer: document.querySelectorAll("footer .machinau-site-share .machinau-share-button").length })`);
+  t("M6 マチナウをシェアはフッターの1つだけ(旅の保存箱の中には無い)", siteShareCount.inMyPage === 0 && siteShareCount.all === 1 && siteShareCount.footer === 1, siteShareCount);
   await shot(p, "site-share-mypage-390", "#myPageSection");
   await p.close();
   p = await top("/", { lang: "en", width: 1280 });

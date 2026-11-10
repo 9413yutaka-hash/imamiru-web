@@ -639,6 +639,9 @@ export default async function handler(
         postFields.permanentAdHours.closedDays;
       updateData.irregularClosed =
         postFields.permanentAdHours.irregularClosed;
+      // 16項目⑥｜電話番号(任意)。
+      updateData.permanentAdPhone =
+        postFields.permanentAdHours.permanentAdPhone;
     }
 
     await documentReference.update(

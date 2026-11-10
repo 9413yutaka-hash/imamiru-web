@@ -303,13 +303,13 @@ try {
       const p = await openAt("/", { lang, geo: NAHA }); await sleep(800);
       const v = await p.ev(`(() => { const s = document.getElementById("todayNowEmptySection"); return { empty: !s.hidden, imadake: !document.getElementById("imadakeSection").hidden, heading: s.querySelector("h2").textContent.trim(), links: [...s.querySelectorAll("[data-today-now-target]")].filter((b) => !b.hidden && getComputedStyle(b).display !== "none").map((b) => b.getAttribute("data-today-now-target")), labels: [...s.querySelectorAll("[data-today-now-target]")].filter((b) => !b.hidden).map((b) => b.textContent.trim()) }; })()`);
       if (label === "ok0") {
-        t(`D1 ${lang}：取得に成功して0件の時だけ「今日の今」を出し、表示中の枠(近くのお店)への移動だけを並べる(空の枠・非表示の枠へのボタンは出さない)`, v.empty && !v.imadake && v.heading === (lang === "ja" ? "今日の今" : "Today, right now") && JSON.stringify(v.links) === '["shopsSection"]', v);
-        // 読みものの枠に記事が出たら、そのボタンも出る。押すとその枠へ移動する。
+        t(`D1 ${lang}：取得に成功して0件の時だけ「今日の今」を出し、表示中の枠(近くのお店)への移動だけを並べる(空の枠・非表示の枠へのボタンは出さない)`, v.empty && !v.imadake && v.heading === (lang === "ja" ? "今日の今だけ投稿" : "Today's limited-time posts") && JSON.stringify(v.links) === '["shopsSection"]', v);
+        // 16項目⑯｜読みものの枠に記事が出ても、読み物の行は出さない(削除済み)。お店のボタンを押すとその枠へ移動する。
         await p.ev(`document.getElementById("columnEntryCardList").insertAdjacentHTML("beforeend", "<article>記事</article>"); true`); await sleep(300);
         const links2 = await p.ev(`[...document.querySelectorAll("#todayNowEmptySection [data-today-now-target]")].filter((b) => !b.hidden).map((b) => b.getAttribute("data-today-now-target"))`);
         await p.ev(`document.documentElement.style.scrollBehavior = "auto"; document.querySelector('#todayNowEmptySection [data-today-now-target="shopsSection"]').click(); true`); await sleep(900);
         const top = await p.ev(`(() => { const r = document.getElementById("shopsSection").getBoundingClientRect(); return Math.round(r.top) + 0; })()`); // -0 は CDP で値として返らないため 0 にそろえる
-        t(`D2 ${lang}：表示中の枠が増えたらボタンも増える・押すとその枠へ移動・今だけ投稿の CV・詳細の通信なし`, JSON.stringify(links2) === '["shopsSection","columnEntrySection"]' && top < 250 && !posts.some((m) => /imadake/i.test(m)), { links2, top, posts });
+        t(`D2 ${lang}：表示中の枠が増えたらボタンも増える・押すとその枠へ移動・今だけ投稿の CV・詳細の通信なし`, JSON.stringify(links2) === '["shopsSection"]' && top < 250 && !posts.some((m) => /imadake/i.test(m)), { links2, top, posts });
       } else if (label === "fail") {
         t("D3 取得に失敗した時は「今日の今」を出さない(掲載が無いと言わない)・今だけ投稿の枠も出さない", !v.empty && !v.imadake, v);
       } else {
