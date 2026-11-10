@@ -2011,7 +2011,8 @@ export async function handleImadakePostGet(
 // 3. 投稿本体で「公開中かつ期限内」「枠と同じ店舗」「15km以内」を再確認する
 //    (枠の情報が古くても、公開していない投稿は返さない)。
 // 返すのはカードに必要な項目だけ(本文は冒頭80文字の紹介文のみ。本文全文・
-// 店舗ID・正確な座標・審査情報・token等は返さない)。詳細はimadakePostGet。
+// 正確な座標・連絡先・審査情報・token等は返さない)。詳細はimadakePostGet。
+// 店舗ID(storeId)は 2026-11-10 の16項目の最終検証から返す(imadakePostGet と同じ値。店舗のカード・詳細との結び付けに使う)。
 // ==========================================================================
 
 // 返すカードの最大件数(街の今スレッドの一覧上限20件と同じ)。
@@ -2175,6 +2176,10 @@ export function buildImadakeCardPost(
 
   return {
     postId: postId,
+    // 16項目 最終検証｜投稿した店舗の ID。TOP の正式店舗(sp_{storeId})のカードの「今だけ投稿あり」と、
+    // 店舗詳細の「この店舗の今だけ投稿を見る」が、投稿と店舗を結ぶのに使う(以前は返さず、どちらも表示されなかった)。
+    // 同じ投稿の公開の詳細(imadakePostGet・認証不要)が既に返している値で、新しく公開する情報・追加の読み取りは無い。
+    storeId: typeof post.storeId === "string" ? post.storeId : "",
     storeName: post.storeNameSnapshot,
     categoryCode: post.categoryCode,
     headline: post.headline,

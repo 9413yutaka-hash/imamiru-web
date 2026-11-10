@@ -102,9 +102,11 @@ const Q = { mode: "imadakePostsNearby", latitude: String(BASE.lat), longitude: S
   // output whitelist
   const p = r.body.posts[0];
   const keys = Object.keys(p).sort().join(",");
-  t("card fields only (whitelist)", keys === ["availableUntil", "cardTranslations", "categoryCode", "distanceKm", "excerpt", "excerptTruncated", "expiresAt", "headline", "imageCount", "imageUrl", "liveState", "postId", "publishedAt", "sourceLanguage", "storeName"].sort().join(","), keys);
-  const json = JSON.stringify(r.body);
-  t("no body / storeId / coords / moderation / token / ids leaked", !/"body"|storeId|latitude|longitude|geohash|moderation|imagePublicIds|token|actionTargets|phone|098-000/.test(json), json.slice(0, 200));
+  // 2026-11-10 16項目の最終検証：storeId を追加(店舗のカード・詳細との結び付け。imadakePostGet が既に返す値と同じ)。
+  t("card fields only (whitelist)", keys === ["availableUntil", "cardTranslations", "categoryCode", "distanceKm", "excerpt", "excerptTruncated", "expiresAt", "headline", "imageCount", "imageUrl", "liveState", "postId", "publishedAt", "sourceLanguage", "storeId", "storeName"].sort().join(","), keys);
+  t("storeId is the posting store (same value as public imadakePostGet)", r.body.posts.every((x) => typeof x.storeId === "string" && x.storeId !== "" && fx.posts[x.postId] && fx.posts[x.postId].storeId === x.storeId), r.body.posts.map((x) => [x.postId, x.storeId]));
+  const json = JSON.stringify(r.body.posts.map(({ storeId, ...rest }) => rest));
+  t("no body / coords / moderation / token / ids leaked (storeId checked above)", !/"body"|storeId|latitude|longitude|geohash|moderation|imagePublicIds|token|actionTargets|phone|098-000/.test(json), json.slice(0, 200));
   t("cardTranslations empty when no translation", JSON.stringify(p.cardTranslations) === "{}");
   t("liveState without updatedAt, first image, imageCount", p.liveState.type === "seats" && p.liveState.quantity === 3 && !("updatedAt" in p.liveState) && p.imageUrl.endsWith("a.jpg") && p.imageCount === 2);
   t("excerpt = first 80 chars, truncated flag", Array.from(p.excerpt).length === 80 && p.excerptTruncated === true);
