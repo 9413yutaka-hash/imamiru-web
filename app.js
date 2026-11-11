@@ -10522,6 +10522,45 @@ function getSignedInOrAnonymousMachinauUser() {
 let cityInfoCurrentAreaName =
   null;
 
+// OpenAI API安全対策 STEP 2-B 修正(2026-11-12・代表決定：全国対応)｜現在地の地域階層(国コード・都道府県)。
+// 「この街の情報」の生成は、サーバーで実在の都道府県・市区町村と確かめられた時だけ行う。
+// 都道府県は推測しない：地域階層の市区町村名(city)がボタンの地域名と同じ時だけ送る(違えば送らない＝保存済みの表示だけ)。
+let cityInfoCurrentLocationHierarchy =
+  null;
+
+// サーバーが生成しなかった理由 → 画面の案内(自動で呼び直さない。もう一度押すかは利用者が決める)。
+const CITY_INFO_REASON_MESSAGE_KEYS = {
+  ai_generation_limited: "city_info_status_limited",
+  ai_generation_stopped: "city_info_status_paused",
+  ai_generation_in_progress: "city_info_status_preparing",
+  unsupported_area: "city_info_status_unsupported"
+};
+
+function buildCityInfoLocationPayload(
+  areaName
+) {
+  const hierarchy =
+    cityInfoCurrentLocationHierarchy;
+
+  if (
+    !hierarchy ||
+    typeof hierarchy.countryCode !== "string" ||
+    hierarchy.countryCode === "" ||
+    typeof hierarchy.city !== "string" ||
+    hierarchy.city !== areaName
+  ) {
+    return {};
+  }
+
+  return {
+    countryCode: hierarchy.countryCode,
+    prefecture:
+      typeof hierarchy.prefecture === "string"
+        ? hierarchy.prefecture
+        : ""
+  };
+}
+
 function showCityInfoSection(
   areaName
 ) {
@@ -10620,15 +10659,22 @@ async function handleCityInfoButtonClick() {
             "Authorization": "Bearer " + idToken
           },
 
-          body: JSON.stringify({
-            mode: "cityInfoGet",
-            targetArea: cityInfoCurrentAreaName,
+          body: JSON.stringify(
+            Object.assign(
+              {
+                mode: "cityInfoGet",
+                targetArea: cityInfoCurrentAreaName,
 
-            // 多言語化 Phase C｜独自の言語状態は作らず、既存の
-            // getCurrentMachinauLanguage()をそのまま使う(本部指示)。
-            language:
-              getCurrentMachinauLanguage()
-          })
+                // 多言語化 Phase C｜独自の言語状態は作らず、既存の
+                // getCurrentMachinauLanguage()をそのまま使う(本部指示)。
+                language:
+                  getCurrentMachinauLanguage()
+              },
+              buildCityInfoLocationPayload(
+                cityInfoCurrentAreaName
+              )
+            )
+          )
         }
       );
 
@@ -10640,6 +10686,25 @@ async function handleCityInfoButtonClick() {
         await response.json();
     } catch (jsonError) {
       throw new Error("応答を読み取れませんでした。");
+    }
+
+    // STEP 2-B 修正｜上限・休止・準備中・対象外は、理由ごとの案内を出す(エラーにしない・自動で呼び直さない)。
+    if (
+      responseData &&
+      responseData.success !== true &&
+      typeof responseData.reason === "string" &&
+      Object.prototype.hasOwnProperty.call(
+        CITY_INFO_REASON_MESSAGE_KEYS,
+        responseData.reason
+      )
+    ) {
+      cityInfoStatus.textContent =
+        getMachinauTranslation(
+          CITY_INFO_REASON_MESSAGE_KEYS[responseData.reason],
+          getCurrentMachinauLanguage()
+        );
+
+      return;
     }
 
     if (
@@ -11617,6 +11682,15 @@ function applyUserLocation(
 
         if (!locationHierarchy) {
           return;
+        }
+
+        // STEP 2-B 修正｜「この街の情報」に国コード・都道府県を添えるため(新しい Geocoder の呼び出しはしない)。
+        if (
+          suggestionGpsSessionId ===
+          machinauSuggestionGpsSessionId
+        ) {
+          cityInfoCurrentLocationHierarchy =
+            locationHierarchy;
         }
 
         // 店主向け「この街のマチナウ利用状況」｜GPS で新しく取得した時だけ(30分の復元では送らない)。
@@ -18487,6 +18561,21 @@ async function fetchRegionTodayInfoOnce(
       null;
   }
 
+  // STEP 2-B 修正｜休止中・1日の上限は、理由だけを返す(画面は短い案内。自動で呼び直さない)。
+  if (
+    responseData &&
+    responseData.success !== true &&
+    (
+      responseData.reason === "ai_generation_stopped" ||
+      responseData.reason === "ai_generation_limited"
+    )
+  ) {
+    return {
+      status: "paused",
+      reason: responseData.reason
+    };
+  }
+
   if (
     !response.ok ||
     !responseData ||
@@ -18644,6 +18733,17 @@ async function triggerRegionTodayInfo(
         // 表示せず、このセクションだけ静かに非表示にする(本部指示)。
         currentRegionTodayInfoStatus =
           "error";
+
+        renderRegionTodayInfo();
+        renderCityNowGuidance();
+
+        return;
+      }
+
+      // STEP 2-B 修正｜休止中・1日の上限：短い案内を出して終わる(呼び直さない)。
+      if (responseData.status === "paused") {
+        currentRegionTodayInfoStatus =
+          "paused";
 
         renderRegionTodayInfo();
         renderCityNowGuidance();
@@ -19711,13 +19811,23 @@ function renderRegionTodayInfo() {
 
   if (
     currentRegionTodayInfoStatus === "loading" ||
-    currentRegionTodayInfoStatus === "generating"
+    currentRegionTodayInfoStatus === "generating" ||
+    currentRegionTodayInfoStatus === "paused"
   ) {
     section.style.display =
       "";
 
     loadingElement.style.display =
       "";
+
+    // STEP 2-B 修正｜休止中・1日の上限の時は、読み込み中の文の代わりに短い案内を出す。
+    loadingElement.textContent =
+      getMachinauTranslation(
+        currentRegionTodayInfoStatus === "paused"
+          ? "region_today_info_paused"
+          : "region_today_info_loading",
+        getCurrentMachinauLanguage()
+      );
 
     listElement.innerHTML =
       "";

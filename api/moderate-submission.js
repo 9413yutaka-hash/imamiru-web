@@ -11,9 +11,12 @@ import {
 import {
   claimAiGenerationWithLock,
   evaluateAiGenerationGateInTransaction,
+  isIsoCountryCode,
+  readAiGenerationControlForAdmin,
   releaseAiGenerationLock,
   resolveJapanMunicipality,
-  resolveJapanPrefecture
+  resolveJapanPrefecture,
+  updateAiGenerationControlByAdmin
 } from "./_lib/ai-generation-guard.js";
 
 import {
@@ -11440,7 +11443,7 @@ async function callOpenAiCityInfoTranslation(
 
             body: JSON.stringify({
               model: CITY_INFO_TRANSLATION_MODEL,
-              max_tokens: CITY_INFO_TRANSLATION_MAX_TOKENS,
+              max_completion_tokens: CITY_INFO_TRANSLATION_MAX_TOKENS,
               response_format: { type: "json_object" },
 
               messages: [
@@ -12058,28 +12061,94 @@ async function handleCityInfoGetRequest(
       });
     }
 
-    // OpenAI API安全対策 STEP 2-B｜地域名を実在する市町村の正式名にそろえる(この機能は沖縄県が対象：CITY_INFO_PREFECTURE)。
-    // 英語の画面の表記(例：Naha)・全角半角・郡名つきも同じ正式名(那覇市)になり、言語に関係なく同じ保存先を使う。
-    const canonicalArea =
-      resolveJapanMunicipality(
-        CITY_INFO_PREFECTURE,
-        targetArea
+    // OpenAI API安全対策 STEP 2-B 修正(2026-11-12・代表決定：全国対応)｜画面は現在地の国コード(countryCode)と
+    // 都道府県名(prefecture、Google の administrative_area_level_1)を送る。国が日本で、都道府県が実在する時だけ、
+    // その都道府県の実在の市区町村の正式名にそろえて保存先・AI への指示に使う(日本語・英語の画面で同じ保存先)。
+    //   ・都道府県が送られない(古い画面・地域階層の取得に失敗)：都道府県を推測しない＝新しく生成しない。
+    //     保存済みの表示だけは以前どおり(沖縄県の保存先)。
+    //   ・日本以外・実在しない地名：新しく生成しない(保存済みも、沖縄県として作られた以前の物は出さない)。
+    const requestedCountryCode =
+      typeof requestBody.countryCode === "string"
+        ? requestBody.countryCode.trim().toUpperCase()
+        : "";
+
+    const requestedPrefecture =
+      sanitizeRegionEditorialText(
+        requestBody.prefecture,
+        CITY_INFO_TARGET_AREA_MAX_LENGTH
       );
 
-    // 以前の保存先(送られた文字列そのまま)。正式名の保存先に無い時だけ読む(既存の保存済みを引き続き表示するため)。
+    const isLocationUnspecified =
+      requestedCountryCode === "" &&
+      requestedPrefecture === "";
+
+    const cityInfoPrefectureEntry =
+      requestedCountryCode === "JP"
+        ? resolveJapanPrefecture(
+            requestedPrefecture
+          )
+        : null;
+
+    const cityInfoPrefectureName =
+      cityInfoPrefectureEntry
+        ? cityInfoPrefectureEntry.name
+        : CITY_INFO_PREFECTURE;
+
+    // 新しく生成してよい正式名(都道府県が確かな時だけ)。
+    const canonicalArea =
+      cityInfoPrefectureEntry
+        ? resolveJapanMunicipality(
+            cityInfoPrefectureEntry.name,
+            targetArea
+          )
+        : "";
+
+    // 保存済みを読むだけの正式名(都道府県が送られない時は、以前どおり沖縄県の保存先を読む)。
+    const cacheOnlyArea =
+      isLocationUnspecified
+        ? resolveJapanMunicipality(
+            CITY_INFO_PREFECTURE,
+            targetArea
+          )
+        : "";
+
+    // 以前の保存先(送られた文字列そのまま、沖縄県)。都道府県が沖縄県と確かな時・都道府県が送られない時だけ読む。
     const legacyRegionKey =
-      buildCityInfoRegionKey(
-        CITY_INFO_PREFECTURE,
-        targetArea
-      );
+      isLocationUnspecified ||
+      (
+        cityInfoPrefectureEntry &&
+        cityInfoPrefectureEntry.name === CITY_INFO_PREFECTURE
+      )
+        ? buildCityInfoRegionKey(
+            CITY_INFO_PREFECTURE,
+            targetArea
+          )
+        : null;
 
     const regionKey =
       canonicalArea !== ""
         ? buildCityInfoRegionKey(
-            CITY_INFO_PREFECTURE,
+            cityInfoPrefectureName,
             canonicalArea
           )
-        : legacyRegionKey;
+        : cacheOnlyArea !== ""
+          ? buildCityInfoRegionKey(
+              CITY_INFO_PREFECTURE,
+              cacheOnlyArea
+            )
+          : legacyRegionKey;
+
+    if (
+      !regionKey &&
+      !isLocationUnspecified &&
+      targetArea !== ""
+    ) {
+      return response.status(200).json({
+        success: false,
+        reason: "unsupported_area",
+        message: "この地域の情報はまだ用意していません。"
+      });
+    }
 
     if (!regionKey) {
       return response.status(400).json({
@@ -12156,7 +12225,8 @@ async function handleCityInfoGetRequest(
       });
     }
 
-    // STEP 2-B｜実在する市町村でなければ新しく生成しない(文字を変えて保存先を素通りする呼び出しを止める)。
+    // STEP 2-B｜都道府県が確かで、実在する市区町村でなければ新しく生成しない(文字を変えて保存先を素通りする呼び出し・
+    // 推測した都道府県での生成を止める)。
     if (canonicalArea === "") {
       return response.status(200).json({
         success: false,
@@ -12200,7 +12270,7 @@ async function handleCityInfoGetRequest(
           await callOpenAiCityInfo(
             {
               targetArea: canonicalArea,
-              prefecture: CITY_INFO_PREFECTURE
+              prefecture: cityInfoPrefectureName
             }
           );
       } catch (aiError) {
@@ -12232,7 +12302,7 @@ async function handleCityInfoGetRequest(
           regionKey,
           {
             regionName: canonicalArea,
-            prefecture: CITY_INFO_PREFECTURE,
+            prefecture: cityInfoPrefectureName,
             title: generatedArticle.title,
             content: generatedArticle.content
           }
@@ -14420,7 +14490,7 @@ async function callOpenAiRegionTodayInfoTranslation(
 
             body: JSON.stringify({
               model: REGION_TODAY_INFO_TRANSLATION_MODEL,
-              max_tokens: REGION_TODAY_INFO_TRANSLATION_MAX_TOKENS,
+              max_completion_tokens: REGION_TODAY_INFO_TRANSLATION_MAX_TOKENS,
               response_format: { type: "json_object" },
 
               messages: [
@@ -14982,7 +15052,7 @@ async function handleRegionTodayInfoGetRequest(
           municipality
         );
     } else if (
-      !/^[A-Z]{2}$/.test(countryCode) ||
+      !isIsoCountryCode(countryCode) ||
       !/^[A-Za-z0-9_-]{10,300}$/.test(regionKey)
     ) {
       return response.status(400).json({
@@ -15008,7 +15078,7 @@ async function handleRegionTodayInfoGetRequest(
       });
     }
 
-    const documentId =
+    let documentId =
       buildRegionTodayInfoDocumentId(
         countryCode,
         cacheRegionKey,
@@ -15020,6 +15090,62 @@ async function handleRegionTodayInfoGetRequest(
         success: false,
         message: "地域情報を正しく処理できませんでした。"
       });
+    }
+
+    // STEP 2-B 修正(2026-11-12)｜日本の保存先を都道府県コードへ変えた日に、その日の以前の保存先(place_id の鍵)に
+    // 出来上がった結果があれば、それを表示する(作り直さない)。読むだけで、以前の保存先へ新しく生成はしない。
+    if (
+      japanPrefecture &&
+      /^[A-Za-z0-9_-]{10,300}$/.test(regionKey)
+    ) {
+      const legacyDocumentId =
+        buildRegionTodayInfoDocumentId(
+          countryCode,
+          regionKey,
+          localDateResult.localDate
+        );
+
+      if (
+        legacyDocumentId &&
+        legacyDocumentId !== documentId
+      ) {
+        const currentSnapshot =
+          await database
+            .collection(
+              REGION_TODAY_INFO_RESULTS_COLLECTION
+            )
+            .doc(
+              documentId
+            )
+            .get();
+
+        const currentData =
+          currentSnapshot.exists
+            ? currentSnapshot.data() || {}
+            : {};
+
+        if (currentData.status !== "ready") {
+          const legacySnapshot =
+            await database
+              .collection(
+                REGION_TODAY_INFO_RESULTS_COLLECTION
+              )
+              .doc(
+                legacyDocumentId
+              )
+              .get();
+
+          const legacyData =
+            legacySnapshot.exists
+              ? legacySnapshot.data() || {}
+              : {};
+
+          if (legacyData.status === "ready") {
+            documentId =
+              legacyDocumentId;
+          }
+        }
+      }
     }
 
     const claimResult =
@@ -15042,7 +15168,7 @@ async function handleRegionTodayInfoGetRequest(
       );
 
     // OpenAI API安全対策 STEP 2-B｜保存済みが無く、緊急停止中・1日の上限に達した時は生成しない
-    // (画面は既存の失敗時と同じく、この枠を出さない)。
+    // (画面は「休止中・混み合っています」の短い案内を出す。自動で何度も呼び直さない)。
     if (
       claimResult.outcome === "stopped" ||
       claimResult.outcome === "limited"
@@ -30557,6 +30683,128 @@ async function handleContactInquiryCreateRequest(
 }
 
 // 管理者のみ：問い合わせ一覧(新しい順)。
+// ============================================================
+// OpenAI API安全対策 STEP 2-B 修正(2026-11-12)｜AI の新しい生成の緊急停止・再開(運営画面)
+// ============================================================
+// 対象：この街の情報・今日の地域情報の「新しい生成」だけ(保存済みの表示は止めない)。
+// 権限：代表(requireAdmin＝ADMIN_EMAIL・メール確認済み)だけ。Editor・店舗・一般の利用者は 403。
+// 誤操作の防止・履歴：api/_lib/ai-generation-guard.js の updateAiGenerationControlByAdmin を参照
+// (画面の確認・版の一致・同じ状態への変更は無視・aiGenerationControlLog へ記録)。
+async function handleAdminAiGenerationControlGetRequest(
+  request,
+  response
+) {
+  try {
+    const authResult =
+      await requireAdmin(
+        request
+      );
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({
+        success: false,
+        message: authResult.message
+      });
+    }
+
+    const control =
+      await readAiGenerationControlForAdmin(
+        authResult.database
+      );
+
+    return response.status(200).json(
+      Object.assign(
+        {
+          success: true
+        },
+        control
+      )
+    );
+  } catch (error) {
+    console.error(
+      "AI生成の停止設定の読み取りに失敗：",
+      error && error.message
+    );
+
+    return response.status(500).json({
+      success: false,
+      message: "設定を読み取れませんでした。時間をおいて、もう一度お試しください。"
+    });
+  }
+}
+
+async function handleAdminAiGenerationControlUpdateRequest(
+  request,
+  response
+) {
+  try {
+    const authResult =
+      await requireAdmin(
+        request
+      );
+
+    if (!authResult.ok) {
+      return response.status(authResult.status).json({
+        success: false,
+        message: authResult.message
+      });
+    }
+
+    const requestBody =
+      readRequestBody(
+        request
+      );
+
+    const result =
+      await updateAiGenerationControlByAdmin(
+        authResult.database,
+        {
+          target: requestBody.target,
+          stop: requestBody.stop,
+          confirmed: requestBody.confirmed,
+          expectedVersion: requestBody.expectedVersion,
+          reason: requestBody.reason,
+          actor: authResult.actor
+        }
+      );
+
+    if (result.outcome === "invalid") {
+      return response.status(400).json({
+        success: false,
+        reason: "invalid",
+        message: result.message
+      });
+    }
+
+    if (result.outcome === "conflict") {
+      return response.status(409).json({
+        success: false,
+        reason: "conflict",
+        message: result.message
+      });
+    }
+
+    return response.status(200).json({
+      success: true,
+      outcome: result.outcome,
+      message: result.message || "",
+      state: result.state,
+      version: result.version
+    });
+  } catch (error) {
+    console.error(
+      "AI生成の停止設定の変更に失敗：",
+      error && error.message
+    );
+
+    return response.status(500).json({
+      success: false,
+      message: "設定を変更できませんでした。時間をおいて、もう一度お試しください。"
+    });
+  }
+}
+
+
 async function handleAdminListContactInquiriesRequest(
   request,
   response
@@ -31858,6 +32106,25 @@ export default async function handler(
     requestBody.mode === "adminDeleteContactInquiry"
   ) {
     return handleAdminDeleteContactInquiryRequest(
+      request,
+      response
+    );
+  }
+
+  // OpenAI API安全対策 STEP 2-B 修正(2026-11-12)｜AI の新しい生成の緊急停止・再開(運営画面 admin-ai-generation.html)。
+  if (
+    requestBody.mode === "adminAiGenerationControlGet"
+  ) {
+    return handleAdminAiGenerationControlGetRequest(
+      request,
+      response
+    );
+  }
+
+  if (
+    requestBody.mode === "adminAiGenerationControlUpdate"
+  ) {
+    return handleAdminAiGenerationControlUpdateRequest(
       request,
       response
     );

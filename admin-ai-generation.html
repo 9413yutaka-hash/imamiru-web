@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <meta name="robots" content="noindex, nofollow">
+
+  <title>
+    AIの新しい作成の停止・再開｜マチナウ運営
+  </title>
+
+  <!-- OpenAI API安全対策 STEP 2-B 修正(2026-11-12・代表決定)｜「この街の情報」「今日の地域情報」の
+       新しい AI 生成を、代表が Firestore を直接編集せずに止める・再開する画面。
+       ・認証・画面構成は admin-contact.html と同じ(管理者ログイン＋サーバー側の requireAdmin)。
+       ・止めるのは新しい作成だけ。保存済みの情報は表示され続ける。
+       ・誤操作の防止：押した操作を確認の画面で確かめる／画面を読んだ時の版と違えば変えない(読み直し)。
+       ・操作はすべて履歴に残る(サーバーの aiGenerationControlLog)。
+       ・表示はすべて textContent(innerHTML へ値を入れない)。 -->
+
+  <style>
+    :root {
+      --navy: #071a33;
+      --blue: #0788c9;
+      --sky: #dff7ff;
+      --green: #19a96b;
+      --red: #ef5a67;
+      --orange: #e88932;
+      --white: #ffffff;
+      --text: #15233a;
+      --subtext: #697386;
+      --border: #e2eaf1;
+      --background: #f4f8fb;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Yu Gothic", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+      background: var(--background);
+      color: var(--text);
+    }
+
+    header {
+      background: var(--navy);
+      color: var(--white);
+      padding: 18px 20px;
+    }
+
+    header .page-label {
+      font-size: 12px;
+      opacity: 0.8;
+    }
+
+    header h1 {
+      margin: 4px 0 0;
+      font-size: 20px;
+    }
+
+    header a {
+      display: inline-block;
+      margin-top: 10px;
+      color: var(--sky);
+      font-size: 13px;
+      text-decoration: none;
+    }
+
+    main {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 20px 16px 60px;
+    }
+
+    .panel {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .panel h2 {
+      margin: 0 0 14px;
+      font-size: 16px;
+    }
+
+    .panel p {
+      margin: 0 0 10px;
+      font-size: 13px;
+      line-height: 1.8;
+    }
+
+    .field {
+      margin-bottom: 16px;
+    }
+
+    .field label {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .field input[type="text"],
+    .field input[type="password"] {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    .primary-button {
+      background: linear-gradient(135deg, var(--blue), #04b7d7);
+      color: var(--white);
+      border: none;
+      border-radius: 12px;
+      padding: 11px 18px;
+      font-size: 14px;
+      font-weight: 900;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .secondary-button,
+    .stop-button,
+    .resume-button {
+      background: var(--white);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 9px 14px;
+      font-size: 13px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .stop-button {
+      border-color: #f3c7c7;
+      color: #b23b3b;
+    }
+
+    .resume-button {
+      border-color: #bfe8d4;
+      color: #137a4e;
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+    .message-box {
+      font-size: 13px;
+      margin-top: 10px;
+      min-height: 1em;
+    }
+
+    .message-box.error {
+      color: var(--red);
+    }
+
+    .message-box.success {
+      color: var(--green);
+    }
+
+    #adminArea {
+      display: none;
+    }
+
+    #adminArea.visible {
+      display: block;
+    }
+
+    .control-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 10px;
+    }
+
+    .control-row.is-stopped {
+      border-left: 5px solid var(--red);
+      background: #fff6f6;
+    }
+
+    .control-name {
+      font-size: 15px;
+      font-weight: 900;
+    }
+
+    .control-note {
+      margin-top: 4px;
+      color: var(--subtext);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .status-badge {
+      display: inline-block;
+      margin-left: 6px;
+      padding: 2px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 900;
+      vertical-align: middle;
+    }
+
+    .status-badge.running {
+      background: #e3f7ee;
+      color: #137a4e;
+    }
+
+    .status-badge.stopped {
+      background: #fde2e2;
+      color: #a12a2a;
+    }
+
+    .history-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      font-size: 13px;
+    }
+
+    .history-list li {
+      border-bottom: 1px solid var(--border);
+      padding: 8px 0;
+      line-height: 1.6;
+      overflow-wrap: anywhere;
+    }
+
+    .history-list .history-sub {
+      color: var(--subtext);
+      font-size: 12px;
+    }
+
+    .empty-state {
+      color: var(--subtext);
+      font-size: 13px;
+      padding: 8px 0;
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <div class="page-label">
+      マチナウ運営
+    </div>
+
+    <h1>
+      AIの新しい作成の停止・再開
+    </h1>
+
+    <a href="admin.html">
+      ← 管理本部へ戻る
+    </a>
+  </header>
+
+  <main>
+    <section id="loginPanel" class="panel">
+      <h2>
+        管理者ログイン
+      </h2>
+
+      <form id="loginForm" novalidate>
+        <div class="field">
+          <label for="adminEmail">
+            メールアドレス
+          </label>
+
+          <input
+            id="adminEmail"
+            type="text"
+            autocomplete="email"
+            required
+          >
+        </div>
+
+        <div class="field">
+          <label for="adminPassword">
+            パスワード
+          </label>
+
+          <input
+            id="adminPassword"
+            type="password"
+            autocomplete="current-password"
+            required
+          >
+        </div>
+
+        <button id="loginButton" class="primary-button" type="submit">
+          管理画面へログイン
+        </button>
+      </form>
+
+      <div id="loginMessage" class="message-box" role="status" aria-live="polite"></div>
+    </section>
+
+    <section id="adminArea">
+      <div class="panel">
+        <h2>
+          この画面でできること
+        </h2>
+
+        <p>
+          「この街の情報」「今日の地域情報」の<strong>新しいAIの作成</strong>を止めます。止めている間も、保存済みの情報はそのまま表示されます。止めたものは、ここから再開できます。
+        </p>
+
+        <p>
+          操作は押した直後に効きます。操作した日時・内容・操作した人は、下の履歴に残ります。
+        </p>
+
+        <div id="envNotice" class="message-box error" role="status"></div>
+
+        <button id="refreshButton" class="secondary-button" type="button">
+          🔄 最新の状態を読み直す
+        </button>
+
+        <div id="pageMessage" class="message-box" role="status" aria-live="polite"></div>
+      </div>
+
+      <div class="panel">
+        <h2>
+          停止・再開
+        </h2>
+
+        <div id="controlRows"></div>
+
+        <div class="field">
+          <label for="reasonInput">
+            操作のメモ（任意・200字まで・履歴に残ります）
+          </label>
+
+          <input id="reasonInput" type="text" maxlength="200" autocomplete="off">
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>
+          今日の新しい作成の回数（日本時間）
+        </h2>
+
+        <div id="usageList"></div>
+      </div>
+
+      <div class="panel">
+        <h2>
+          操作の履歴（新しい順・20件まで）
+        </h2>
+
+        <ul id="historyList" class="history-list"></ul>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore-compat.js"></script>
+  <script src="firebase.js"></script>
+
+  <script>
+    const ADMIN_EMAIL =
+      "9413yutaka@gmail.com";
+
+    // サーバー(api/_lib/ai-generation-guard.js)の対象・項目名と同じ。
+    const CONTROL_TARGETS = [
+      {
+        target: "all",
+        field: "stopAll",
+        name: "すべて（この街の情報・今日の地域情報）",
+        note: "両方の新しい作成をまとめて止めます。"
+      },
+      {
+        target: "cityInfo",
+        field: "stopCityInfo",
+        name: "この街の情報",
+        note: "TOP の「この街の情報」ボタンで作る紹介記事。"
+      },
+      {
+        target: "regionTodayInfo",
+        field: "stopRegionTodayInfo",
+        name: "今日の地域情報",
+        note: "TOP の「今日、この地域で起きていること」。"
+      }
+    ];
+
+    const TARGET_NAMES = {
+      all: "すべて",
+      cityInfo: "この街の情報",
+      regionTodayInfo: "今日の地域情報"
+    };
+
+    const FEATURE_NAMES = {
+      cityInfo: "この街の情報",
+      regionTodayInfo: "今日の地域情報"
+    };
+
+    const loginPanel = document.getElementById("loginPanel");
+    const adminArea = document.getElementById("adminArea");
+    const loginForm = document.getElementById("loginForm");
+    const loginButton = document.getElementById("loginButton");
+    const loginMessage = document.getElementById("loginMessage");
+    const refreshButton = document.getElementById("refreshButton");
+    const pageMessage = document.getElementById("pageMessage");
+    const envNotice = document.getElementById("envNotice");
+    const controlRows = document.getElementById("controlRows");
+    const reasonInput = document.getElementById("reasonInput");
+    const usageList = document.getElementById("usageList");
+    const historyList = document.getElementById("historyList");
+
+    // 画面を読んだ時の設定の版。操作の時にサーバーへ送り、違えば(別の操作で変わっていれば)変えない。
+    let currentVersion = null;
+    let isBusy = false;
+
+    function showMessage(element, text, type) {
+      element.textContent = text;
+      element.className = "message-box" + (type ? " " + type : "");
+    }
+
+    function formatDateTime(millis) {
+      if (typeof millis !== "number") {
+        return "-";
+      }
+
+      return new Date(millis).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
+    }
+
+    async function getAdminIdToken() {
+      const currentUser = firebase.auth().currentUser;
+
+      if (!currentUser) {
+        throw new Error("ログイン状態を確認できませんでした。再度ログインしてください。");
+      }
+
+      return currentUser.getIdToken();
+    }
+
+    async function callControlApi(mode, payload) {
+      const idToken = await getAdminIdToken();
+
+      const response = await fetch("/api/moderate-submission", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + idToken
+        },
+        body: JSON.stringify(Object.assign({ mode: mode }, payload || {}))
+      });
+
+      let responseData = null;
+
+      try {
+        responseData = await response.json();
+      } catch (jsonError) {
+        throw new Error("応答を読み取れませんでした。");
+      }
+
+      if (!response.ok || !responseData || responseData.success !== true) {
+        const error = new Error((responseData && responseData.message) || "処理に失敗しました。");
+        error.reason = responseData && responseData.reason;
+        throw error;
+      }
+
+      return responseData;
+    }
+
+    function setButtonsDisabled(disabled) {
+      isBusy = disabled;
+      refreshButton.disabled = disabled;
+
+      controlRows.querySelectorAll("button").forEach(function(button) {
+        button.disabled = disabled;
+      });
+    }
+
+    function renderControls(data) {
+      controlRows.textContent = "";
+
+      const state = data.state || {};
+
+      CONTROL_TARGETS.forEach(function(item) {
+        const isStopped = state[item.field] === true;
+
+        const row = document.createElement("div");
+        row.className = "control-row" + (isStopped ? " is-stopped" : "");
+
+        const textBox = document.createElement("div");
+
+        const name = document.createElement("div");
+        name.className = "control-name";
+        name.textContent = item.name;
+
+        const badge = document.createElement("span");
+        badge.className = "status-badge " + (isStopped ? "stopped" : "running");
+        badge.textContent = isStopped ? "停止中" : "動作中";
+        name.appendChild(badge);
+
+        const note = document.createElement("div");
+        note.className = "control-note";
+        note.textContent = item.note;
+
+        textBox.appendChild(name);
+        textBox.appendChild(note);
+
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = isStopped ? "resume-button" : "stop-button";
+        button.textContent = isStopped ? "再開する" : "止める";
+        button.addEventListener("click", function() {
+          changeControl(item.target, !isStopped);
+        });
+
+        row.appendChild(textBox);
+        row.appendChild(button);
+        controlRows.appendChild(row);
+      });
+
+      // 環境変数(AI_GENERATION_STOP)で止めている時は、この画面では再開できないことを知らせる。
+      const envStopped = data.envStopped || {};
+      const envStoppedNames = Object.keys(FEATURE_NAMES).filter(function(feature) {
+        return envStopped[feature] === true;
+      }).map(function(feature) {
+        return FEATURE_NAMES[feature];
+      });
+
+      envNotice.textContent = envStoppedNames.length > 0
+        ? "サーバーの設定（環境変数）で止めているもの：" + envStoppedNames.join("・") + "。この画面の「再開する」では再開しません。"
+        : "";
+    }
+
+    function renderUsage(data) {
+      usageList.textContent = "";
+
+      const usageToday = data.usageToday || {};
+
+      Object.keys(FEATURE_NAMES).forEach(function(feature) {
+        const usage = usageToday[feature] || {};
+        const line = document.createElement("p");
+
+        line.textContent =
+          FEATURE_NAMES[feature] + "：" +
+          (typeof usage.count === "number" ? usage.count : 0) + " 回 ／ 上限 " +
+          (typeof usage.limit === "number" ? usage.limit : "-") + " 回" +
+          "（1人 " + (typeof usage.perUser === "number" ? usage.perUser : "-") + " 回・" +
+          "同じ回線 " + (typeof usage.perIp === "number" ? usage.perIp : "-") + " 回まで）";
+
+        usageList.appendChild(line);
+      });
+
+      const dateLine = document.createElement("p");
+      dateLine.className = "control-note";
+      dateLine.textContent = "対象日：" + (data.date || "-") + "。保存済みの情報の表示は数えません。";
+      usageList.appendChild(dateLine);
+    }
+
+    function renderHistory(data) {
+      historyList.textContent = "";
+
+      const history = Array.isArray(data.history) ? data.history : [];
+
+      if (history.length === 0) {
+        const empty = document.createElement("li");
+        empty.className = "empty-state";
+        empty.textContent = "まだ操作はありません。";
+        historyList.appendChild(empty);
+        return;
+      }
+
+      history.forEach(function(entry) {
+        const item = document.createElement("li");
+
+        const main = document.createElement("div");
+        main.textContent =
+          formatDateTime(entry.at) + "　" +
+          (TARGET_NAMES[entry.target] || entry.target) + "を" +
+          (entry.stop ? "止めた" : "再開した");
+
+        const sub = document.createElement("div");
+        sub.className = "history-sub";
+        sub.textContent =
+          "操作：" + (entry.actorEmail || "-") +
+          (entry.reason ? "　メモ：" + entry.reason : "");
+
+        item.appendChild(main);
+        item.appendChild(sub);
+        historyList.appendChild(item);
+      });
+    }
+
+    async function loadControl() {
+      setButtonsDisabled(true);
+      showMessage(pageMessage, "読み込んでいます…", "");
+
+      try {
+        const data = await callControlApi("adminAiGenerationControlGet");
+
+        currentVersion = typeof data.version === "number" ? data.version : 0;
+
+        renderControls(data);
+        renderUsage(data);
+        renderHistory(data);
+
+        showMessage(
+          pageMessage,
+          "最終更新：" + formatDateTime(data.updatedAt) +
+            (data.updatedByEmail ? "（" + data.updatedByEmail + "）" : ""),
+          ""
+        );
+      } catch (error) {
+        console.error("AIの作成の停止設定を読み込めませんでした", error);
+        showMessage(pageMessage, error.message || "読み込めませんでした。", "error");
+      } finally {
+        setButtonsDisabled(false);
+      }
+    }
+
+    async function changeControl(target, stop) {
+      if (isBusy || currentVersion === null) {
+        return;
+      }
+
+      const targetName = TARGET_NAMES[target] || target;
+
+      // 誤操作の防止：何を止める(再開する)のかを確認してから送る。
+      const confirmed = window.confirm(
+        stop
+          ? "「" + targetName + "」の新しいAIの作成を止めます。\n保存済みの情報は表示され続けます。\nよろしいですか？"
+          : "「" + targetName + "」の新しいAIの作成を再開します。\nOpenAI の利用（費用）が再び発生します。\nよろしいですか？"
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      setButtonsDisabled(true);
+      showMessage(pageMessage, stop ? "止めています…" : "再開しています…", "");
+
+      try {
+        const result = await callControlApi("adminAiGenerationControlUpdate", {
+          target: target,
+          stop: stop,
+          confirmed: true,
+          expectedVersion: currentVersion,
+          reason: reasonInput.value
+        });
+
+        reasonInput.value = "";
+
+        await loadControl();
+
+        showMessage(
+          pageMessage,
+          result.outcome === "unchanged"
+            ? (result.message || "変更はありませんでした。")
+            : "「" + targetName + "」を" + (stop ? "止めました。" : "再開しました。"),
+          "success"
+        );
+      } catch (error) {
+        console.error("AIの作成の停止設定を変更できませんでした", error);
+
+        if (error.reason === "conflict") {
+          await loadControl();
+        }
+
+        showMessage(pageMessage, error.message || "変更できませんでした。", "error");
+      } finally {
+        setButtonsDisabled(false);
+      }
+    }
+
+    refreshButton.addEventListener("click", function() {
+      loadControl();
+    });
+
+    loginForm.addEventListener("submit", async function(event) {
+      event.preventDefault();
+
+      showMessage(loginMessage, "", "");
+
+      const email = document.getElementById("adminEmail").value.trim().toLowerCase();
+      const password = document.getElementById("adminPassword").value;
+
+      if (email !== ADMIN_EMAIL.toLowerCase()) {
+        showMessage(loginMessage, "このメールアドレスには管理者権限がありません。", "error");
+        return;
+      }
+
+      loginButton.disabled = true;
+      loginButton.textContent = "ログインしています…";
+
+      try {
+        await firebase.auth().signInWithEmailAndPassword(email, password);
+      } catch (error) {
+        console.error("❌ 管理者ログインに失敗しました", error);
+        showMessage(loginMessage, "ログインできませんでした。メールアドレスとパスワードを確認してください。", "error");
+      } finally {
+        loginButton.disabled = false;
+        loginButton.textContent = "管理画面へログイン";
+      }
+    });
+
+    // admin.html・admin-contact.html の管理者判定と同じ(最終的な権限確認はサーバー側の requireAdmin で行う)。
+    firebase.auth().onAuthStateChanged(async function(user) {
+      showMessage(loginMessage, "", "");
+
+      if (user && user.email && user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+        loginPanel.style.display = "none";
+        adminArea.classList.add("visible");
+
+        await loadControl();
+        return;
+      }
+
+      if (user) {
+        try {
+          await firebase.auth().signOut();
+        } catch (error) {
+          console.error("管理者以外のユーザーをログアウトできませんでした", error);
+        }
+
+        showMessage(loginMessage, "このアカウントには管理者権限がありません。", "error");
+      }
+
+      loginPanel.style.display = "block";
+      adminArea.classList.remove("visible");
+    });
+  </script>
+
+</body>
+</html>

@@ -1,4 +1,4 @@
-// OpenAI API安全対策 STEP 2-B(2026-11-11)。「この街の情報」(cityInfoGet)と「今日の地域情報」(regionTodayInfoGet)の
+// OpenAI API安全対策 STEP 2-B(2026-11-11)・STEP 2-B 修正(2026-11-12：全国対応・運営画面の緊急停止)。「この街の情報」(cityInfoGet)と「今日の地域情報」(regionTodayInfoGet)の
 // 新しい AI 生成だけを守る：地域名の正規化(実在の市区町村・都道府県)・1日の回数の制限(全体・利用者・IP、同時実行でも超えない)・
 // 緊急停止(Firestore・環境変数)・同じ地域の同時生成の防止・出力の上限と途中で切れた応答の扱い。保存済みの表示・翻訳・投稿の審査は止めない。
 // REAL moderate-submission handler on mocked firebase-admin. OpenAI は模擬(実際の API は呼ばない)。
@@ -73,9 +73,187 @@ const usage = (feature, scope) => { const all = docs("aiGenerationUsage/" + feat
 const nestDotted = (path) => { const d = S.docs.get(path); if (!d) return; const out = {}; for (const [k, v] of Object.entries(d)) { if (k.includes(".")) { const [a, b] = k.split("."); out[a] = { ...(out[a] || d[a] || {}), [b]: v }; } else if (!(k in out)) out[k] = v; } S.docs.set(path, out); };
 const openaiCount = (path = "/v1/responses") => calls.filter((c) => c.path === path).length;
 const resetDb = () => { S.docs.clear(); S.writes.length = 0; calls.length = 0; globalThis.__OPENAI = { mode: "ok", delayMs: 0, trFinish: "stop" }; delete process.env.AI_GENERATION_STOP; };
-const city = (targetArea, opts = {}) => post({ mode: "cityInfoGet", targetArea, language: opts.language || "ja" }, opts.uid, opts.ip);
+// 新しい画面は現在地の国コード・都道府県を添える(STEP 2-B 修正・全国対応)。opts.noLocation で古い画面(添えない)をまねる。
+const city = (targetArea, opts = {}) => post(Object.assign({ mode: "cityInfoGet", targetArea, language: opts.language || "ja" }, opts.noLocation ? {} : { countryCode: opts.countryCode || "JP", prefecture: opts.prefecture || "沖縄県" }), opts.uid, opts.ip);
 const OKINAWA = { latitude: 26.212, longitude: 127.679 };
 const region = (fields, opts = {}) => post({ mode: "regionTodayInfoGet", language: opts.language || "ja", ...OKINAWA, countryCode: "JP", countryName: "日本", regionKey: "ChIJ-okinawa-pref-0001", regionName: "沖縄県", municipality: "那覇市", ...fields }, opts.uid, opts.ip);
+
+// ============================================================
+// STEP 2-B 修正(2026-11-12・代表決定)の試験：全国対応・地域の確認・今日の地域情報の以前の保存先・緊急停止の運営画面・画面の案内。
+// ============================================================
+const postAs = (body, token, ip = "198.51.100.250") => quiet(async () => { const r = res(); await handler({ method: "POST", headers: { "content-type": "application/json", "x-forwarded-for": ip, authorization: "Bearer " + token }, body, query: {} }, r); return r; });
+function adminToken() { TOKENS["tok-admin"] = { uid: "admin-uid", email: "admin@example.com", email_verified: true }; return "tok-admin"; }
+async function runStep2bRevisionTests() {
+  let r;
+  // ---- 12. この街の情報：全国対応
+  resetDb();
+  r = await city("渋谷区", { uid: "n1", ip: "203.0.113.101", prefecture: "東京都" });
+  const tokyoCall = calls.find((c) => c.path === "/v1/responses");
+  const tokyoPrompt = JSON.stringify(tokyoCall && tokyoCall.body.input);
+  t("12a 東京都・渋谷区：生成する・保存先は「東京都-渋谷区」・保存の都道府県は東京都", r.body.success === true && get("cityInfoArticles/東京都-渋谷区") && get("cityInfoArticles/東京都-渋谷区").prefecture === "東京都" && get("cityInfoArticles/東京都-渋谷区").regionName === "渋谷区", { body: r.body, docs: docs("cityInfoArticles/") });
+  t("12b AI への指示は東京都・渋谷区(沖縄県と書かない)", tokyoPrompt.includes("東京都") && tokyoPrompt.includes("渋谷区") && !tokyoPrompt.includes("沖縄県"), tokyoPrompt.slice(0, 400));
+  r = await city("Shibuya City", { uid: "n2", ip: "203.0.113.102", prefecture: "Tokyo", language: "en" });
+  t("12c 英語の画面(Tokyo・Shibuya City)：同じ保存先を英訳して表示・新しい生成なし", r.body.success === true && r.body.title === "How to walk the town" && openaiCount() === 1, r.body);
+  r = await city("Yokohama", { uid: "n3", ip: "203.0.113.103", prefecture: "Kanagawa", language: "en" });
+  t("12d 英語の画面(Kanagawa・Yokohama)：横浜市として生成(保存先「神奈川県-横浜市」)", r.body.success === true && !!get("cityInfoArticles/神奈川県-横浜市"), docs("cityInfoArticles/"));
+  r = await city("札幌市", { uid: "n4", ip: "203.0.113.104", prefecture: "北海道" });
+  t("12e 政令指定都市(北海道・札幌市)：生成する", r.body.success === true && !!get("cityInfoArticles/北海道-札幌市"), docs("cityInfoArticles/"));
+  const before12 = { calls: calls.length, docs: S.docs.size };
+  for (const [label, area, opts] of [
+    ["同じローマ字が2つ(北海道・Kushiro＝釧路市／釧路町)", "Kushiro", { prefecture: "Hokkaido" }],
+    ["都道府県と市区町村が合わない(東京都・那覇市)", "那覇市", { prefecture: "東京都" }],
+    ["実在しない都道府県(Narnia)", "Naha", { prefecture: "Narnia" }],
+    ["都道府県が空(国は日本)", "那覇市", { prefecture: " " }],
+    ["日本以外(KR・Seoul)", "Seoul", { countryCode: "KR", prefecture: "Seoul" }],
+    ["日本以外(US・San Francisco)", "San Francisco", { countryCode: "US", prefecture: "California" }],
+    ["実在しない市区町村(東京都・渋谷市)", "渋谷市", { prefecture: "東京都" }]
+  ]) {
+    r = await city(area, { uid: "n5", ip: "203.0.113.105", ...opts });
+    t(`12f ${label}：生成しない(unsupported_area)`, r.body.success === false && r.body.reason === "unsupported_area", r.body);
+  }
+  t("12g 生成しなかった時は OpenAI 0回・保存も回数も増えない", calls.length === before12.calls && S.docs.size === before12.docs, { calls: calls.length - before12.calls, docs: S.docs.size - before12.docs });
+  r = await city("Kushiro-shi", { uid: "n6", ip: "203.0.113.106", prefecture: "Hokkaido" });
+  t("12h 末尾の語で見分けられる(Kushiro-shi＝釧路市)：生成する", r.body.success === true && !!get("cityInfoArticles/北海道-釧路市"), docs("cityInfoArticles/"));
+  r = await city("渋谷区", { uid: "n7", ip: "203.0.113.107", countryCode: "jp", prefecture: "東京都" });
+  t("12i 国コードの小文字(jp)も日本として扱う・保存済みを表示", r.body.success === true && r.body.cached === true, r.body);
+
+  // 都道府県を送らない(古い画面・地域階層の取得に失敗)：推測しない＝新しく生成しない。保存済みの表示は以前どおり(沖縄県)。
+  resetDb();
+  S.docs.set("cityInfoArticles/沖縄県-那覇市", { title: "保存済みの那覇", content: "本文", expiresAt: Timestamp.fromMillis(Date.now() + 86400000) });
+  S.docs.set("cityInfoArticles/沖縄県-Ishigaki", { title: "旧い英語の保存", content: "本文", expiresAt: Timestamp.fromMillis(Date.now() + 86400000) });
+  r = await city("那覇市", { uid: "o1", ip: "203.0.113.111", noLocation: true });
+  t("12j 都道府県なし：沖縄県の保存済み(那覇市)は表示", r.body.success === true && r.body.title === "保存済みの那覇", r.body);
+  r = await city("Ishigaki", { uid: "o1", ip: "203.0.113.111", noLocation: true });
+  t("12k 都道府県なし：以前の保存先(沖縄県-Ishigaki)も表示", r.body.success === true && r.body.title === "旧い英語の保存", r.body);
+  r = await city("名護市", { uid: "o1", ip: "203.0.113.111", noLocation: true });
+  t("12l 都道府県なし：保存済みが無ければ生成しない(推測しない)・OpenAI 0回・回数0", r.body.success === false && r.body.reason === "unsupported_area" && openaiCount() === 0 && usage("cityInfo", "all").length === 0, r.body);
+  // 沖縄県として作られた以前の保存(県外の地名)は、県外・海外の画面では出さない。
+  S.docs.set("cityInfoArticles/沖縄県-Seoul", { title: "沖縄県として作られた旧い保存", content: "x", expiresAt: Timestamp.fromMillis(Date.now() + 86400000) });
+  S.docs.set("cityInfoArticles/沖縄県-新宿区", { title: "沖縄県として作られた旧い保存", content: "x", expiresAt: Timestamp.fromMillis(Date.now() + 86400000) });
+  r = await city("Seoul", { uid: "o2", ip: "203.0.113.112", countryCode: "KR", prefecture: "Seoul" });
+  t("12m 海外(KR)：沖縄県として作られた以前の保存は出さない", r.body.success === false && r.body.reason === "unsupported_area", r.body);
+  r = await city("新宿区", { uid: "o2", ip: "203.0.113.112", prefecture: "東京都" });
+  t("12n 東京都・新宿区：沖縄県の以前の保存は使わず、東京都として新しく生成", r.body.success === true && r.body.title === "街の歩き方" && !!get("cityInfoArticles/東京都-新宿区") && openaiCount() === 1, r.body);
+  r = await city("那覇市", { uid: "o3", ip: "203.0.113.113" });
+  t("12o 沖縄県の既存の保存先(沖縄県-那覇市)はそのまま使う(作り直さない)", r.body.success === true && r.body.title === "保存済みの那覇" && openaiCount() === 1, r.body);
+
+  // ---- 13. 部品：全国の市区町村のローマ字
+  const { JAPAN_MUNICIPALITY_ROMAJI_BY_PREFECTURE: ROMAJI } = await import(REPO_URL + "/api/_lib/japan-municipality-romaji.js");
+  const romajiCount = Object.values(ROMAJI).reduce((n, rows) => n + rows.length, 0);
+  const allInList = Object.entries(ROMAJI).every(([p, rows]) => rows.every(([name]) => SERVER_LIST[p].includes(name) || (name.endsWith("市") && SERVER_LIST[p].some((x) => x.startsWith(name) && x.endsWith("区")))));
+  t("13a ローマ字の表：47都道府県・正式名はすべて市区町村の一覧にある", Object.keys(ROMAJI).length === 47 && allInList && romajiCount > 1700, { prefs: Object.keys(ROMAJI).length, romajiCount });
+  const okinawaRomaji = { "那覇市": "naha", "南城市": "nanjo", "読谷村": "yomitan", "北谷町": "chatan", "東村": "higashi", "八重瀬町": "yaese", "久米島町": "kumejima", "宮古島市": "miyakojima" };
+  t("13b 沖縄県の41市町村はすべてローマ字の表にある(以前の沖縄だけの表と同じ読み)", ROMAJI["沖縄県"].length === 41 && Object.entries(okinawaRomaji).every(([n, l]) => ROMAJI["沖縄県"].some((row) => row[0] === n && row[1] === l)), ROMAJI["沖縄県"].length);
+  for (const [pref, input, want] of [
+    ["東京都", "Shibuya City", "渋谷区"], ["東京都", "Chūō City", "中央区"], ["大阪府", "Osaka", "大阪市"], ["京都府", "Kyoto", "京都市"],
+    ["北海道", "Kushiro Town", "釧路町"], ["北海道", "Kushiro", ""], ["北海道", "Esashi", ""], ["広島県", "Fuchū Town", "府中町"], ["広島県", "Fuchu", ""],
+    ["長野県", "Kiso Village", "木祖村"], ["長野県", "Kiso Town", "木曽町"], ["東京都", "Naha", ""], ["東京都", "Shibuya<script>", ""], ["福岡県", "Fukuoka", "福岡市"]
+  ]) t(`13c ${pref}「${input}」→「${want || "(生成しない)"}」`, G.resolveJapanMunicipality(pref, input) === want, G.resolveJapanMunicipality(pref, input));
+  t("13d 国コードの確認(ISO 3166-1)：JP・US・KR は実在、ZZ・XX・jp・空は実在しない", ["JP", "US", "KR", "TW", "FR"].every(G.isIsoCountryCode) && !["ZZ", "XX", "jp", "", "JPN", null].some(G.isIsoCountryCode), "");
+
+  // ---- 14. 今日の地域情報：日本の以前の保存先(place_id の鍵)との互換
+  resetDb();
+  const legacyKey = "regionTodayInfoResults/JP_ChIJ-okinawa-pref-0001_" + date;
+  S.docs.set(legacyKey, { status: "ready", checked: true, findings: [{ area: "那覇市", name: "以前の保存", time: "", place: "", description: "以前の鍵の結果", source: "", isOfficial: true, isDateValid: true }], countryCode: "JP", regionKey: "ChIJ-okinawa-pref-0001", localDate: date });
+  r = await region({}, { uid: "l1", ip: "198.51.100.201" });
+  t("14a 都道府県コードの保存先が無く、その日の以前の保存先が出来上がっていれば表示・作り直さない・数えない", r.body.success === true && r.body.status === "ready" && r.body.findings[0].name === "以前の保存" && openaiCount() === 0 && usage("regionTodayInfo", "all").length === 0, r.body);
+  r = await region({ regionKey: "ChIJ-some-other-id-001" }, { uid: "l2", ip: "198.51.100.202" });
+  t("14b 別の place_id(以前の保存先なし)：都道府県コードの保存先で1回だけ生成", r.body.success === true && openaiCount() === 1 && docs("regionTodayInfoResults/JP_JP-47_").length === 1, { body: r.body, docs: docs("regionTodayInfoResults/") });
+  r = await region({}, { uid: "l3", ip: "198.51.100.203" });
+  t("14c 都道府県コードの保存先が出来上がった後は、そちらを表示", r.body.success === true && r.body.findings[0].name === "テストの祭り" && openaiCount() === 1, r.body);
+  resetDb();
+  S.docs.set(legacyKey, { status: "generating", generatingStartedAt: Timestamp.fromMillis(Date.now()) });
+  r = await region({}, { uid: "l4", ip: "198.51.100.204" });
+  t("14d 以前の保存先が出来上がっていなければ(生成中・失敗)、都道府県コードの保存先で生成", r.body.success === true && openaiCount() === 1 && docs("regionTodayInfoResults/JP_JP-47_").length === 1, r.body);
+  resetDb();
+  S.docs.set("aiGenerationControl/settings", { stopRegionTodayInfo: true });
+  S.docs.set(legacyKey, { status: "ready", checked: true, findings: [{ area: "那覇市", name: "以前の保存", time: "", place: "", description: "x", source: "", isOfficial: true, isDateValid: true }] });
+  r = await region({}, { uid: "l5", ip: "198.51.100.205" });
+  t("14e 停止中も、以前の保存先の出来上がった結果は表示", r.body.success === true && r.body.findings[0].name === "以前の保存" && openaiCount() === 0, r.body);
+
+  // ---- 15. 緊急停止の運営操作(admin-ai-generation.html の API)
+  resetDb();
+  const anon = tokenFor("anon-user");
+  for (const mode of ["adminAiGenerationControlGet", "adminAiGenerationControlUpdate"]) {
+    r = await postAs({ mode, target: "all", stop: true, confirmed: true, expectedVersion: 0 }, anon);
+    t(`15a ${mode}：一般の利用者(匿名)は 403`, r.code === 403 && r.body.success === false, { code: r.code, body: r.body });
+  }
+  TOKENS["tok-unverified"] = { uid: "admin-uid-2", email: "admin@example.com", email_verified: false };
+  r = await postAs({ mode: "adminAiGenerationControlUpdate", target: "all", stop: true, confirmed: true, expectedVersion: 0 }, "tok-unverified");
+  t("15b 代表のメールでも、メール未確認なら 403", r.code === 403, { code: r.code, body: r.body });
+  S.docs.set("operators/editor-uid", { role: "editor", active: true, email: "editor@example.com" });
+  TOKENS["tok-editor"] = { uid: "editor-uid", email: "editor@example.com", email_verified: true };
+  r = await postAs({ mode: "adminAiGenerationControlUpdate", target: "all", stop: true, confirmed: true, expectedVersion: 0 }, "tok-editor");
+  t("15c 編集者(Editor)は 403(代表だけ)", r.code === 403, { code: r.code, body: r.body });
+  t("15d 権限の無い操作では設定も履歴も作られない", !get("aiGenerationControl/settings") && docs("aiGenerationControlLog/").length === 0, docs("aiGeneration"));
+  const admin = adminToken();
+  r = await postAs({ mode: "adminAiGenerationControlGet" }, admin);
+  t("15e 代表：今の状態を読める(すべて動作中・版0・今日の回数と上限・履歴なし)", r.code === 200 && r.body.success === true && r.body.state.stopAll === false && r.body.state.stopCityInfo === false && r.body.version === 0 && r.body.usageToday.cityInfo.limit === 30 && r.body.usageToday.regionTodayInfo.limit === 60 && r.body.history.length === 0, r.body);
+  for (const [label, body] of [
+    ["確認なし(confirmed なし)", { target: "cityInfo", stop: true, expectedVersion: 0 }],
+    ["対象が不正", { target: "aiConciergeChat", stop: true, confirmed: true, expectedVersion: 0 }],
+    ["stop が真偽値でない", { target: "cityInfo", stop: "true", confirmed: true, expectedVersion: 0 }],
+    ["版が無い", { target: "cityInfo", stop: true, confirmed: true }]
+  ]) {
+    r = await postAs({ mode: "adminAiGenerationControlUpdate", ...body }, admin);
+    t(`15f ${label}：変えない(400)`, r.code === 400 && !get("aiGenerationControl/settings"), { code: r.code, body: r.body });
+  }
+  r = await postAs({ mode: "adminAiGenerationControlUpdate", target: "cityInfo", stop: true, confirmed: true, expectedVersion: 0, reason: "費用の確認のため" }, admin);
+  const setAfter = get("aiGenerationControl/settings") || {};
+  const log1 = docs("aiGenerationControlLog/").map(get);
+  t("15g 代表：この街の情報を止める→設定 stopCityInfo=true・版1・履歴1件(操作した人・前後・メモ)", r.code === 200 && r.body.outcome === "updated" && setAfter.stopCityInfo === true && setAfter.version === 1 && setAfter.updatedByEmail === "admin@example.com" && log1.length === 1 && log1[0].target === "cityInfo" && log1[0].stop === true && log1[0].actorEmail === "admin@example.com" && log1[0].before.stopCityInfo === false && log1[0].after.stopCityInfo === true && log1[0].reason === "費用の確認のため", { body: r.body, setAfter, log1 });
+  S.docs.set("cityInfoArticles/沖縄県-那覇市", { title: "保存済み", content: "本文", expiresAt: Timestamp.fromMillis(Date.now() + 86400000) });
+  r = await city("名護市", { uid: "a1", ip: "203.0.113.121" });
+  const r15b = await city("那覇市", { uid: "a1", ip: "203.0.113.121" });
+  t("15h 運営画面で止めた後：新しい生成はしない・保存済みは表示", r.body.reason === "ai_generation_stopped" && r15b.body.success === true && openaiCount() === 0, { r: r.body, r2: r15b.body });
+  r = await postAs({ mode: "adminAiGenerationControlUpdate", target: "cityInfo", stop: false, confirmed: true, expectedVersion: 0 }, admin);
+  t("15i 古い版(0)で操作：変えない(409・読み直し)", r.code === 409 && r.body.reason === "conflict" && get("aiGenerationControl/settings").stopCityInfo === true && docs("aiGenerationControlLog/").length === 1, { code: r.code, body: r.body });
+  r = await postAs({ mode: "adminAiGenerationControlUpdate", target: "cityInfo", stop: true, confirmed: true, expectedVersion: 1 }, admin);
+  t("15j すでに止めている物を止める：変えない・履歴も増やさない", r.code === 200 && r.body.outcome === "unchanged" && get("aiGenerationControl/settings").version === 1 && docs("aiGenerationControlLog/").length === 1, r.body);
+  r = await postAs({ mode: "adminAiGenerationControlUpdate", target: "cityInfo", stop: false, confirmed: true, expectedVersion: 1 }, admin);
+  const r15k = await city("名護市", { uid: "a2", ip: "203.0.113.122" });
+  t("15k 再開→生成できる・版2・履歴2件", r.body.outcome === "updated" && get("aiGenerationControl/settings").stopCityInfo === false && get("aiGenerationControl/settings").version === 2 && docs("aiGenerationControlLog/").length === 2 && r15k.body.success === true && openaiCount() === 1, { r: r.body, city: r15k.body });
+  r = await postAs({ mode: "adminAiGenerationControlUpdate", target: "all", stop: true, confirmed: true, expectedVersion: 2, reason: "line1\nline2<script>" }, admin);
+  const r15l = await region({}, { uid: "a3", ip: "203.0.113.123" });
+  t("15l すべてを止める→今日の地域情報の新しい生成も止まる", r.body.outcome === "updated" && r15l.body.reason === "ai_generation_stopped" && openaiCount() === 1, { r: r.body, region: r15l.body });
+  r = await postAs({ mode: "adminAiGenerationControlGet" }, admin);
+  t("15m 読み取り：履歴は新しい順(すべて→再開→停止)・今日の回数(この街の情報 1)", r.body.history.length === 3 && r.body.history[0].target === "all" && r.body.history[0].stop === true && r.body.history[1].stop === false && r.body.history[2].stop === true && r.body.usageToday.cityInfo.count === 1 && r.body.state.stopAll === true && r.body.version === 3, r.body);
+  t("15n メモの改行などの制御文字は空白に置き換えて保存", r.body.history[0].reason === "line1 line2<script>", r.body.history[0]);
+  process.env.AI_GENERATION_STOP = "regionTodayInfo";
+  r = await postAs({ mode: "adminAiGenerationControlGet" }, admin);
+  delete process.env.AI_GENERATION_STOP;
+  t("15o 環境変数で止めている時は、そのことを画面に返す", r.body.envStopped.regionTodayInfo === true && r.body.envStopped.cityInfo === false, r.body.envStopped);
+  t("15p 応答に秘密の値を含めない", !JSON.stringify(r.body).includes(FAKE_KEY) && !JSON.stringify(r.body).includes("fake"), "");
+
+  // ---- 16. 画面(app.js・translations.js・運営画面)
+  const appSrc = fs.readFileSync(new URL(REPO_URL + "/app.js"), "utf8");
+  const fnMatch = appSrc.match(/function buildCityInfoLocationPayload\([\s\S]*?\r?\n}\r?\n/);
+  const vctx = { cityInfoCurrentLocationHierarchy: null }; vm.createContext(vctx);
+  vm.runInContext((fnMatch ? fnMatch[0] : "") + "\n;globalThis.__f=buildCityInfoLocationPayload;", vctx);
+  const f = vctx.__f;
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  vctx.cityInfoCurrentLocationHierarchy = { countryCode: "JP", prefecture: "東京都", city: "渋谷区" };
+  const p1 = f("渋谷区");
+  const p2 = f("新宿区");
+  vctx.cityInfoCurrentLocationHierarchy = null;
+  const p3 = f("渋谷区");
+  vctx.cityInfoCurrentLocationHierarchy = { countryCode: "", prefecture: "", city: "" };
+  const p4 = f("");
+  t("16a 画面：地域階層の市区町村がボタンの地域名と同じ時だけ国コード・都道府県を送る(違う・無い時は送らない＝推測しない)", typeof f === "function" && same(p1, { countryCode: "JP", prefecture: "東京都" }) && same(p2, {}) && same(p3, {}) && same(p4, {}), { p1, p2, p3, p4 });
+  t("16b 画面：この街の情報の要求に国コード・都道府県を添える", /buildCityInfoLocationPayload\(\s*cityInfoCurrentAreaName\s*\)/.test(appSrc) && /cityInfoCurrentLocationHierarchy =\s*locationHierarchy;/.test(appSrc), "");
+  const TR = {}; const tctx = {}; vm.createContext(tctx);
+  vm.runInContext(fs.readFileSync(new URL(REPO_URL + "/translations.js"), "utf8") + "\n;globalThis.__T=typeof MACHINAU_TRANSLATIONS!=='undefined'?MACHINAU_TRANSLATIONS:null;", tctx);
+  const T = tctx.__T || {};
+  const keys = ["city_info_status_limited", "city_info_status_paused", "city_info_status_preparing", "city_info_status_unsupported", "region_today_info_paused"];
+  t("16c 案内の文(日本語・英語)がある", keys.every((k) => T[k] && typeof T[k].ja === "string" && T[k].ja !== "" && typeof T[k].en === "string" && T[k].en !== ""), keys.filter((k) => !(T[k] && T[k].ja && T[k].en)));
+  t("16d 画面：理由ごとの案内(上限・休止・準備中・対象外)を出し、自動で呼び直さない", /ai_generation_limited:\s*"city_info_status_limited"/.test(appSrc) && /ai_generation_stopped:\s*"city_info_status_paused"/.test(appSrc) && /ai_generation_in_progress:\s*"city_info_status_preparing"/.test(appSrc) && /unsupported_area:\s*"city_info_status_unsupported"/.test(appSrc), "");
+  t("16e 画面：今日の地域情報は休止中・上限の時に短い案内(paused)を出して終わる", /status: "paused"/.test(appSrc) && /currentRegionTodayInfoStatus === "paused"/.test(appSrc) && /"region_today_info_paused"/.test(appSrc), "");
+  const adminHtml = fs.readFileSync(new URL(REPO_URL + "/admin-ai-generation.html"), "utf8");
+  t("16f 運営画面：管理者ログイン・確認の画面・版を送る・innerHTML を使わない・検索除外", /signInWithEmailAndPassword/.test(adminHtml) && /window\.confirm\(/.test(adminHtml) && /expectedVersion: currentVersion/.test(adminHtml) && /confirmed: true/.test(adminHtml) && !/\.innerHTML\s*[+]?=|insertAdjacentHTML|document\.write/.test(adminHtml) && /noindex, nofollow/.test(adminHtml) && /adminAiGenerationControlUpdate/.test(adminHtml), "");
+  const adminMenu = fs.readFileSync(new URL(REPO_URL + "/admin.html"), "utf8");
+  t("16g 管理本部(admin.html)から運営画面へ行ける", adminMenu.includes('href="admin-ai-generation.html"'), "");
+  t("16h 停止の履歴のコレクションも firestore.rules で許可していない(サーバーだけ)", !/aiGenerationControlLog|aiGeneration/.test(fs.readFileSync(new URL(REPO_URL + "/firestore.rules"), "utf8")), "");
+}
 
 try {
   // ---- 1. 地域名の正規化(部品)
@@ -106,7 +284,7 @@ try {
   r = await city("Naha", { uid: "c3", ip: "203.0.113.3", language: "en" });
   const trBody = calls.find((c) => c.path === "/v1/chat/completions");
   t("2h 英語の画面の「Naha」：同じ保存済み(那覇市)を英訳して表示・新しい生成なし", r.body.success === true && r.body.title === "How to walk the town" && openaiCount() === 1, r.body);
-  t("2i 翻訳の呼び出しに出力の上限(max_tokens 4000)", trBody && trBody.body.max_tokens === 4000, trBody && trBody.body.max_tokens);
+  t("2i 翻訳の呼び出しに出力の上限(max_completion_tokens 4000・本番の今だけ投稿の翻訳と同じ指定)", trBody && trBody.body.max_completion_tokens === 4000 && !("max_tokens" in trBody.body), trBody && trBody.body);
   nestDotted("cityInfoArticles/沖縄県-那覇市");
   r = await city("Naha", { uid: "c4", ip: "203.0.113.4", language: "en" });
   t("2j 2回目の英語：保存済みの翻訳を表示(OpenAI を呼ばない)", r.body.success === true && calls.length === 2, { calls: calls.length });
@@ -222,10 +400,12 @@ try {
   r = await region({ regionName: "Okinawa", countryName: "Japan", regionKey: "ChIJ-other-language-id", municipality: "Naha" }, { uid: "r2", ip: "198.51.100.52", language: "en" });
   t("9c 英語の画面(Okinawa・別の place_id)：同じ保存済みを英訳して表示・新しい調査なし", r.body.success === true && r.body.findings && r.body.findings[0].name === "Test festival" && openaiCount() === 1, r.body);
   const rtr = calls.find((c) => c.path === "/v1/chat/completions");
-  t("9d 今日の地域情報の翻訳に出力の上限(max_tokens 16000)", rtr && rtr.body.max_tokens === 16000, rtr && rtr.body.max_tokens);
+  t("9d 今日の地域情報の翻訳に出力の上限(max_completion_tokens 16000)", rtr && rtr.body.max_completion_tokens === 16000 && !("max_tokens" in rtr.body), rtr && rtr.body);
   const before9 = { calls: calls.length, docs: S.docs.size };
   for (const [label, f] of [
     ["国コードが小文字", { countryCode: "us", regionName: "California", regionKey: "ChIJ-california-0001" }],
+    ["実在しない国コード(ZZ)", { countryCode: "ZZ", regionName: "Nowhere", regionKey: "ChIJ-nowhere-000001" }],
+    ["実在しない国コード(XX)", { countryCode: "XX", regionName: "Nowhere", regionKey: "ChIJ-nowhere-000002" }],
     ["place_id の形でない", { countryCode: "US", regionName: "California", regionKey: "x/y" }],
     ["place_id が短すぎる", { countryCode: "US", regionName: "California", regionKey: "abc" }],
     ["日本で読めない都道府県名＋形の違う鍵", { regionName: "Narnia", regionKey: "JP-47-201" }]
@@ -277,7 +457,9 @@ try {
   const src = fs.readFileSync(new URL(REPO_URL + "/api/moderate-submission.js"), "utf8");
   t("11c 応答に鍵・内部の情報を含めない(停止・上限の応答)", !JSON.stringify(userResults).includes(FAKE_KEY), "");
   t("11d 新しい集計・停止のコレクションは firestore.rules で許可していない(サーバーだけ)", !/aiGeneration/.test(fs.readFileSync(new URL(REPO_URL + "/firestore.rules"), "utf8")), "");
-  t("11e 出力の上限の定数が4つの呼び出しにある", ["max_output_tokens: CITY_INFO_MAX_OUTPUT_TOKENS", "max_output_tokens: REGION_TODAY_INFO_MAX_OUTPUT_TOKENS", "max_tokens: CITY_INFO_TRANSLATION_MAX_TOKENS", "max_tokens: REGION_TODAY_INFO_TRANSLATION_MAX_TOKENS"].every((s) => src.includes(s)), "");
+  t("11e 出力の上限の定数が4つの呼び出しにある", ["max_output_tokens: CITY_INFO_MAX_OUTPUT_TOKENS", "max_output_tokens: REGION_TODAY_INFO_MAX_OUTPUT_TOKENS", "max_completion_tokens: CITY_INFO_TRANSLATION_MAX_TOKENS", "max_completion_tokens: REGION_TODAY_INFO_TRANSLATION_MAX_TOKENS"].every((s) => src.includes(s)) && !/max_tokens:/.test(src), "");
+  // ---- 12〜16 は STEP 2-B 修正(2026-11-12)の試験(別ファイルに分けず続ける)
+  await runStep2bRevisionTests();
 } catch (error) {
   t("unexpected", false, String(error && error.stack || error));
 } finally {

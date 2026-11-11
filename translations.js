@@ -700,6 +700,12 @@ const MACHINAU_TRANSLATIONS = {
     en: "Checking today's local information…"
   },
 
+  // OpenAI API安全対策 STEP 2-B 修正(2026-11-12)｜新しい作成の休止中・1日の上限の時の案内。
+  region_today_info_paused: {
+    ja: "今日の地域情報は、ただいま新しい作成を受け付けていません。時間をおいてご覧ください。",
+    en: "Today's local information isn't being updated right now. Please check back later."
+  },
+
   region_today_info_show_more: {
     ja: "今日の情報をもっと見る",
     en: "See more of today's updates"
@@ -2494,6 +2500,27 @@ const MACHINAU_TRANSLATIONS = {
   city_info_status_error: {
     ja: "この街の情報を取得できませんでした。時間をおいて、もう一度お試しください。",
     en: "Couldn't load city info. Please try again later."
+  },
+
+  // OpenAI API安全対策 STEP 2-B 修正(2026-11-12)｜新しい作成をしなかった理由ごとの案内。
+  city_info_status_limited: {
+    ja: "今日は「この街の情報」の新しい作成の受付を終了しました。明日、もう一度お試しください。",
+    en: "We've reached today's limit for new city info. Please try again tomorrow."
+  },
+
+  city_info_status_paused: {
+    ja: "ただいま「この街の情報」の新しい作成を休止しています。時間をおいて、もう一度お試しください。",
+    en: "Creating new city info is paused right now. Please try again later."
+  },
+
+  city_info_status_preparing: {
+    ja: "この街の情報を準備しています。1〜2分ほどおいて、もう一度お試しください。",
+    en: "We're preparing info for this city. Please try again in a minute or two."
+  },
+
+  city_info_status_unsupported: {
+    ja: "この地域の「この街の情報」は、まだご用意できていません。",
+    en: "City info for this area isn't available yet."
   },
 
   column_entry_heading: {
