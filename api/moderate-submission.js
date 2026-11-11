@@ -7,6 +7,15 @@ import {
   isPreviewStoreCustomPlanTrialEnabled
 } from "./_lib/firebase-target.js";
 
+// OpenAI API安全対策 STEP 2-B｜この街の情報・今日の地域情報の新しい生成だけを守る(地域名の正規化・回数の制限・緊急停止)。
+import {
+  claimAiGenerationWithLock,
+  evaluateAiGenerationGateInTransaction,
+  releaseAiGenerationLock,
+  resolveJapanMunicipality,
+  resolveJapanPrefecture
+} from "./_lib/ai-generation-guard.js";
+
 import {
   cert,
   getApps,
@@ -10680,6 +10689,12 @@ const CITY_INFO_CONTENT_MAX_LENGTH =
 const CITY_INFO_SCHEMA_VERSION =
   1;
 
+// OpenAI API安全対策 STEP 2-B｜出力の上限(推論のトークンを含む)。目安の本文(600〜800字・上限1600字)の数倍の余裕をとり、
+// 正常な生成は切らずに、暴走した時の1回の費用だけを抑える(terra の出力単価で最大 約 $0.14)。
+// 上限で途中で終わった応答(status:"incomplete")は使わず・保存しない(生成の失敗として扱う)。
+const CITY_INFO_MAX_OUTPUT_TOKENS =
+  12000;
+
 const CITY_INFO_EXPIRES_AFTER_MILLISECONDS =
   90 * 24 * 60 * 60 * 1000;
 
@@ -10940,6 +10955,7 @@ async function callOpenAiCityInfo(
 
             body: JSON.stringify({
               model: CITY_INFO_MODEL,
+              max_output_tokens: CITY_INFO_MAX_OUTPUT_TOKENS,
               instructions: instructions,
               input: inputItems,
 
@@ -11030,6 +11046,20 @@ async function callOpenAiCityInfo(
       true;
 
     throw parseError;
+  }
+
+  // OpenAI API安全対策 STEP 2-B｜出力の上限で途中で終わった応答は使わない(保存しない)。
+  if (
+    responseData &&
+    responseData.status === "incomplete"
+  ) {
+    const incompleteError =
+      new Error("この街の情報の生成が出力の上限で途中で終わりました。");
+
+    incompleteError.isIncomplete =
+      true;
+
+    throw incompleteError;
   }
 
   const outputItems =
@@ -11243,6 +11273,10 @@ const CITY_INFO_TRANSLATED_TITLE_MAX_LENGTH =
 const CITY_INFO_TRANSLATED_CONTENT_MAX_LENGTH =
   2400;
 
+// STEP 2-B｜翻訳の出力の上限(英訳の本文2400字までに十分な量)。上限で切れた翻訳(finish_reason:"length")は保存しない。
+const CITY_INFO_TRANSLATION_MAX_TOKENS =
+  4000;
+
 // 日本語原文(title＋content)から決定論的sourceHashを作る(AI不使用、
 // Node標準のnode:cryptoのみ)。computeRegionTodayInfoFindingsHash()と
 // 同じくJSON.stringify()で構造化してからハッシュ化する(単純な文字列連結
@@ -11406,6 +11440,7 @@ async function callOpenAiCityInfoTranslation(
 
             body: JSON.stringify({
               model: CITY_INFO_TRANSLATION_MODEL,
+              max_tokens: CITY_INFO_TRANSLATION_MAX_TOKENS,
               response_format: { type: "json_object" },
 
               messages: [
@@ -11499,6 +11534,21 @@ async function callOpenAiCityInfoTranslation(
     typeof responseData.choices[0].message.content === "string"
       ? responseData.choices[0].message.content
       : "";
+
+  // OpenAI API安全対策 STEP 2-B｜出力の上限で途中で切れた翻訳は使わない(保存しない)。
+  if (
+    Array.isArray(responseData.choices) &&
+    responseData.choices[0] &&
+    responseData.choices[0].finish_reason === "length"
+  ) {
+    const incompleteError =
+      new Error("この街の情報の翻訳が出力の上限で途中で終わりました。");
+
+    incompleteError.isIncomplete =
+      true;
+
+    throw incompleteError;
+  }
 
   if (messageContent === "") {
     const shapeError =
@@ -11901,6 +11951,57 @@ async function resolveCityInfoTranslatedResponse(
 // を持つユーザーなら誰でも可、匿名認証も許可、管理者/Editor限定にしない)
 // を採用する。regionEditorial/regionProfile系のrequireAdminOrEditor()は
 // ここでは使わない(旅行者本人がボタンを押す機能のため)。
+// OpenAI API安全対策 STEP 2-B｜新しい AI 生成の回数の制限・緊急停止に使う識別子(uid・IP は HMAC で伏せて数える)。
+// 秘密値が無い等で作れない時は、生成しない(hashUnavailable)。保存済みの表示には影響しない。
+function buildAiGenerationGate(
+  feature,
+  request,
+  decodedToken
+) {
+  const uid =
+    decodedToken && typeof decodedToken.uid === "string"
+      ? decodedToken.uid
+      : "";
+
+  try {
+    return {
+      feature: feature,
+      uidHash:
+        uid !== ""
+          ? computeRateLimitIdentifier("aiGenerationUid", uid)
+          : "",
+      ipHash:
+        hashClientIpAddress(
+          request
+        ),
+      hashUnavailable: uid === ""
+    };
+  } catch (identifierError) {
+    return {
+      feature: feature,
+      uidHash: "",
+      ipHash: "",
+      hashUnavailable: true
+    };
+  }
+}
+
+// STEP 2-B｜生成しなかった理由ごとの返し方(画面は理由に関係なく既存の「取得できませんでした」の表示)。
+const AI_GENERATION_BLOCKED_RESPONSES = {
+  stopped: {
+    reason: "ai_generation_stopped",
+    message: "ただいま新しい情報の作成を休止しています。時間をおいて、もう一度お試しください。"
+  },
+  limited: {
+    reason: "ai_generation_limited",
+    message: "ただいま混み合っています。時間をおいて、もう一度お試しください。"
+  },
+  generating: {
+    reason: "ai_generation_in_progress",
+    message: "この地域の情報を準備しています。少し時間をおいて、もう一度お試しください。"
+  }
+};
+
 async function handleCityInfoGetRequest(
   request,
   response
@@ -11921,11 +12022,14 @@ async function handleCityInfoGetRequest(
     const app =
       getFirebaseAdminApp();
 
+    let decodedToken;
+
     try {
-      await getAuth(app)
-        .verifyIdToken(
-          idToken
-        );
+      decodedToken =
+        await getAuth(app)
+          .verifyIdToken(
+            idToken
+          );
     } catch (verifyError) {
       return response.status(401).json({
         success: false,
@@ -11954,11 +12058,28 @@ async function handleCityInfoGetRequest(
       });
     }
 
-    const regionKey =
+    // OpenAI API安全対策 STEP 2-B｜地域名を実在する市町村の正式名にそろえる(この機能は沖縄県が対象：CITY_INFO_PREFECTURE)。
+    // 英語の画面の表記(例：Naha)・全角半角・郡名つきも同じ正式名(那覇市)になり、言語に関係なく同じ保存先を使う。
+    const canonicalArea =
+      resolveJapanMunicipality(
+        CITY_INFO_PREFECTURE,
+        targetArea
+      );
+
+    // 以前の保存先(送られた文字列そのまま)。正式名の保存先に無い時だけ読む(既存の保存済みを引き続き表示するため)。
+    const legacyRegionKey =
       buildCityInfoRegionKey(
         CITY_INFO_PREFECTURE,
         targetArea
       );
+
+    const regionKey =
+      canonicalArea !== ""
+        ? buildCityInfoRegionKey(
+            CITY_INFO_PREFECTURE,
+            canonicalArea
+          )
+        : legacyRegionKey;
 
     if (!regionKey) {
       return response.status(400).json({
@@ -11983,11 +12104,31 @@ async function handleCityInfoGetRequest(
         ? requestedLanguage
         : REGION_TODAY_INFO_SOURCE_LANGUAGE;
 
-    const cachedArticle =
+    let cachedRegionKey =
+      regionKey;
+
+    let cachedArticle =
       await fetchCityInfoArticleOrNull(
         database,
         regionKey
       );
+
+    if (
+      !cachedArticle &&
+      legacyRegionKey &&
+      legacyRegionKey !== regionKey
+    ) {
+      cachedArticle =
+        await fetchCityInfoArticleOrNull(
+          database,
+          legacyRegionKey
+        );
+
+      if (cachedArticle) {
+        cachedRegionKey =
+          legacyRegionKey;
+      }
+    }
 
     if (cachedArticle) {
       if (language === REGION_TODAY_INFO_SOURCE_LANGUAGE) {
@@ -12002,7 +12143,7 @@ async function handleCityInfoGetRequest(
       const translatedResponse =
         await resolveCityInfoTranslatedResponse(
           database,
-          regionKey,
+          cachedRegionKey,
           cachedArticle,
           language
         );
@@ -12015,57 +12156,100 @@ async function handleCityInfoGetRequest(
       });
     }
 
+    // STEP 2-B｜実在する市町村でなければ新しく生成しない(文字を変えて保存先を素通りする呼び出しを止める)。
+    if (canonicalArea === "") {
+      return response.status(200).json({
+        success: false,
+        reason: "unsupported_area",
+        message: "この地域の情報はまだ用意していません。"
+      });
+    }
+
+    // STEP 2-B｜同じ地域の生成中の印・緊急停止・1日の回数を1つのトランザクションで確かめる。
+    const generationLockId =
+      "cityInfo_" + regionKey;
+
+    const generationClaim =
+      await claimAiGenerationWithLock(
+        database,
+        buildAiGenerationGate(
+          "cityInfo",
+          request,
+          decodedToken
+        ),
+        generationLockId
+      );
+
+    if (generationClaim.outcome !== "claimed") {
+      const blocked =
+        AI_GENERATION_BLOCKED_RESPONSES[generationClaim.outcome] ||
+        AI_GENERATION_BLOCKED_RESPONSES.stopped;
+
+      return response.status(200).json({
+        success: false,
+        reason: blocked.reason,
+        message: blocked.message
+      });
+    }
+
     let generatedArticle;
 
     try {
-      generatedArticle =
-        await callOpenAiCityInfo(
+      try {
+        generatedArticle =
+          await callOpenAiCityInfo(
+            {
+              targetArea: canonicalArea,
+              prefecture: CITY_INFO_PREFECTURE
+            }
+          );
+      } catch (aiError) {
+        console.error(
+          "この街の情報：生成エラー：",
+          aiError
+        );
+
+        return response.status(200).json({
+          success: false,
+          message:
+            "この街の情報の生成中にエラーが発生しました。時間をおいて、もう一度お試しください。"
+        });
+      }
+
+      if (
+        generatedArticle.title === "" ||
+        generatedArticle.content === ""
+      ) {
+        return response.status(200).json({
+          success: false,
+          message: "この街の情報を生成できませんでした。"
+        });
+      }
+
+      try {
+        await saveCityInfoArticle(
+          database,
+          regionKey,
           {
-            targetArea: targetArea,
-            prefecture: CITY_INFO_PREFECTURE
+            regionName: canonicalArea,
+            prefecture: CITY_INFO_PREFECTURE,
+            title: generatedArticle.title,
+            content: generatedArticle.content
           }
         );
-    } catch (aiError) {
-      console.error(
-        "この街の情報：生成エラー：",
-        aiError
-      );
-
-      return response.status(200).json({
-        success: false,
-        message:
-          "この街の情報の生成中にエラーが発生しました。時間をおいて、もう一度お試しください。"
-      });
-    }
-
-    if (
-      generatedArticle.title === "" ||
-      generatedArticle.content === ""
-    ) {
-      return response.status(200).json({
-        success: false,
-        message: "この街の情報を生成できませんでした。"
-      });
-    }
-
-    try {
-      await saveCityInfoArticle(
+      } catch (saveError) {
+        // 保存に失敗しても、今回生成できた記事はそのままこの旅行者へ
+        // 返す(体験を優先する)。次回アクセス時は未保存のため再生成される
+        // だけで、データ不整合等の実害は無い。
+        console.error(
+          "この街の情報：保存エラー：",
+          saveError
+        );
+      }
+    } finally {
+      await releaseAiGenerationLock(
         database,
-        regionKey,
-        {
-          regionName: targetArea,
-          prefecture: CITY_INFO_PREFECTURE,
-          title: generatedArticle.title,
-          content: generatedArticle.content
-        }
-      );
-    } catch (saveError) {
-      // 保存に失敗しても、今回生成できた記事はそのままこの旅行者へ
-      // 返す(体験を優先する)。次回アクセス時は未保存のため再生成される
-      // だけで、データ不整合等の実害は無い。
-      console.error(
-        "この街の情報：保存エラー：",
-        saveError
+        generationLockId
       );
     }
 
@@ -12973,6 +13157,15 @@ const REGION_TODAY_INFO_TIMEOUT_MS =
 const REGION_TODAY_INFO_MAX_FINDINGS =
   60;
 
+// OpenAI API安全対策 STEP 2-B｜出力の上限(推論を含む)。最大60件の見つけた情報を切らない量をとる
+// (luna の出力単価で最大 約 $0.04)。上限で途中で終わった応答は使わず・保存しない。
+const REGION_TODAY_INFO_MAX_OUTPUT_TOKENS =
+  32000;
+
+// STEP 2-B｜翻訳の出力の上限(gpt-4o-mini の出力の最大に近い量。最大60件の翻訳を切らない)。上限で切れた翻訳は保存しない。
+const REGION_TODAY_INFO_TRANSLATION_MAX_TOKENS =
+  16000;
+
 // 生成中(status:"generating")ロックが古すぎる場合は次のリクエストが
 // 再取得できるようにする閾値。Luna呼び出し自体のタイムアウト(90秒)に、
 // Firestore往復・ネットワーク遅延の余裕を持たせた3分とする(極端に長い
@@ -13568,6 +13761,7 @@ async function callOpenAiRegionTodayInfoResearch(
 
             body: JSON.stringify({
               model: REGION_TODAY_INFO_MODEL,
+              max_output_tokens: REGION_TODAY_INFO_MAX_OUTPUT_TOKENS,
               instructions: instructions,
               input: inputItems,
 
@@ -13658,6 +13852,20 @@ async function callOpenAiRegionTodayInfoResearch(
       true;
 
     throw parseError;
+  }
+
+  // OpenAI API安全対策 STEP 2-B｜出力の上限で途中で終わった応答は使わない(保存しない)。
+  if (
+    responseData &&
+    responseData.status === "incomplete"
+  ) {
+    const incompleteError =
+      new Error("今日の地域情報の生成が出力の上限で途中で終わりました。");
+
+    incompleteError.isIncomplete =
+      true;
+
+    throw incompleteError;
   }
 
   const outputItems =
@@ -13784,7 +13992,8 @@ async function callOpenAiRegionTodayInfoResearch(
 async function claimRegionTodayInfoGeneration(
   database,
   documentId,
-  locationContext
+  locationContext,
+  generationGate
 ) {
   const documentRef =
     database
@@ -13838,6 +14047,29 @@ async function claimRegionTodayInfoGeneration(
         }
 
         // status:"error"も再取得可能として扱う(下へ続く)。
+      }
+
+      // OpenAI API安全対策 STEP 2-B｜保存済み(ready)・生成中はここまでで返している。新しく生成する時だけ、
+      // 緊急停止と1日の回数を同じトランザクションの中で確かめて数える(同時に呼ばれても上限を超えない)。
+      if (generationGate) {
+        const gateResult =
+          await evaluateAiGenerationGateInTransaction(
+            transaction,
+            database,
+            generationGate
+          );
+
+        if (gateResult.outcome !== "allowed") {
+          return {
+            outcome: gateResult.outcome,
+            scope: gateResult.scope,
+            reason: gateResult.reason
+          };
+        }
+
+        gateResult.apply(
+          transaction
+        );
       }
 
       transaction.set(
@@ -14188,6 +14420,7 @@ async function callOpenAiRegionTodayInfoTranslation(
 
             body: JSON.stringify({
               model: REGION_TODAY_INFO_TRANSLATION_MODEL,
+              max_tokens: REGION_TODAY_INFO_TRANSLATION_MAX_TOKENS,
               response_format: { type: "json_object" },
 
               messages: [
@@ -14281,6 +14514,21 @@ async function callOpenAiRegionTodayInfoTranslation(
     typeof responseData.choices[0].message.content === "string"
       ? responseData.choices[0].message.content
       : "";
+
+  // OpenAI API安全対策 STEP 2-B｜出力の上限で途中で切れた翻訳は使わない(保存しない)。
+  if (
+    Array.isArray(responseData.choices) &&
+    responseData.choices[0] &&
+    responseData.choices[0].finish_reason === "length"
+  ) {
+    const incompleteError =
+      new Error("今日の地域情報の翻訳が出力の上限で途中で終わりました。");
+
+    incompleteError.isIncomplete =
+      true;
+
+    throw incompleteError;
+  }
 
   if (messageContent === "") {
     const shapeError =
@@ -14586,11 +14834,14 @@ async function handleRegionTodayInfoGetRequest(
     const app =
       getFirebaseAdminApp();
 
+    let decodedToken;
+
     try {
-      await getAuth(app)
-        .verifyIdToken(
-          idToken
-        );
+      decodedToken =
+        await getAuth(app)
+          .verifyIdToken(
+            idToken
+          );
     } catch (verifyError) {
       return response.status(401).json({
         success: false,
@@ -14691,6 +14942,57 @@ async function handleRegionTodayInfoGetRequest(
       });
     }
 
+    // OpenAI API安全対策 STEP 2-B｜保存先と AI への指示に使う地域を確かめる。
+    //   日本(JP)：都道府県名(日本語・英語)を実在の都道府県にそろえ、保存先の鍵を都道府県コード(例：JP-47)にする
+    //   (言語に関係なく同じ保存先・文字を変えて保存先を素通りできない)。市区町村は実在の正式名だけ指示に使う(無ければ空)。
+    //   それ以外(日本で都道府県名が読み取れない表記を含む)：国コードは英大文字2字・regionKey は Google の place_id の形だけ受け付ける。
+    //   どちらも、新しく生成する回数は1日の上限(サービス全体・利用者・IP)で抑える。
+    let cacheRegionKey =
+      regionKey;
+
+    let promptCountryName =
+      countryName;
+
+    let promptRegionName =
+      regionName;
+
+    let promptMunicipality =
+      municipality;
+
+    const japanPrefecture =
+      countryCode === "JP"
+        ? resolveJapanPrefecture(
+            regionName
+          )
+        : null;
+
+    if (japanPrefecture) {
+      cacheRegionKey =
+        japanPrefecture.code;
+
+      promptCountryName =
+        "日本";
+
+      promptRegionName =
+        japanPrefecture.name;
+
+      promptMunicipality =
+        resolveJapanMunicipality(
+          japanPrefecture.name,
+          municipality
+        );
+    } else if (
+      !/^[A-Z]{2}$/.test(countryCode) ||
+      !/^[A-Za-z0-9_-]{10,300}$/.test(regionKey)
+    ) {
+      return response.status(400).json({
+        success: false,
+        status: "error",
+        reason: "unsupported_area",
+        message: "地域情報を正しく特定できませんでした。"
+      });
+    }
+
     // localDateは必ずサーバー側で緯度経度から確定する(クライアント入力を
     // 信用しない、本部指示)。
     const localDateResult =
@@ -14709,7 +15011,7 @@ async function handleRegionTodayInfoGetRequest(
     const documentId =
       buildRegionTodayInfoDocumentId(
         countryCode,
-        regionKey,
+        cacheRegionKey,
         localDateResult.localDate
       );
 
@@ -14726,13 +15028,35 @@ async function handleRegionTodayInfoGetRequest(
         documentId,
         {
           countryCode: countryCode,
-          countryName: countryName,
-          regionKey: regionKey,
-          regionName: regionName,
+          countryName: promptCountryName,
+          regionKey: cacheRegionKey,
+          regionName: promptRegionName,
           timezone: localDateResult.timeZoneId,
           localDate: localDateResult.localDate
-        }
+        },
+        buildAiGenerationGate(
+          "regionTodayInfo",
+          request,
+          decodedToken
+        )
       );
+
+    // OpenAI API安全対策 STEP 2-B｜保存済みが無く、緊急停止中・1日の上限に達した時は生成しない
+    // (画面は既存の失敗時と同じく、この枠を出さない)。
+    if (
+      claimResult.outcome === "stopped" ||
+      claimResult.outcome === "limited"
+    ) {
+      const blocked =
+        AI_GENERATION_BLOCKED_RESPONSES[claimResult.outcome];
+
+      return response.status(200).json({
+        success: false,
+        status: "error",
+        reason: blocked.reason,
+        message: blocked.message
+      });
+    }
 
     // 日本語(readyJaChecked/readyJaFindings)を確定させるまでは、既存の
     // ja専用ロジック(claimRegionTodayInfoGeneration()・
@@ -14766,12 +15090,12 @@ async function handleRegionTodayInfoGetRequest(
           await callOpenAiRegionTodayInfoResearch(
             {
               countryName:
-                countryName !== ""
-                  ? countryName
+                promptCountryName !== ""
+                  ? promptCountryName
                   : countryCode,
 
-              regionName: regionName,
-              municipality: municipality,
+              regionName: promptRegionName,
+              municipality: promptMunicipality,
               localDate: localDateResult.localDate
             }
           );
