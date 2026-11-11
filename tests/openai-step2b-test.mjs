@@ -253,6 +253,56 @@ async function runStep2bRevisionTests() {
   const adminMenu = fs.readFileSync(new URL(REPO_URL + "/admin.html"), "utf8");
   t("16g 管理本部(admin.html)から運営画面へ行ける", adminMenu.includes('href="admin-ai-generation.html"'), "");
   t("16h 停止の履歴のコレクションも firestore.rules で許可していない(サーバーだけ)", !/aiGenerationControlLog|aiGeneration/.test(fs.readFileSync(new URL(REPO_URL + "/firestore.rules"), "utf8")), "");
+  // ---- 17. 今日の地域情報：海外の新しい生成の専用の上限(1日5回・日本時間、2026-11-12 代表決定)
+  resetDb();
+  const US = (i, extra = {}) => ({ countryCode: "US", countryName: "United States", regionName: "California", regionKey: "ChIJoverseasplace" + String(i).padStart(4, "0"), municipality: "", ...extra });
+  const ov = [];
+  for (let i = 0; i < 6; i++) ov.push((await region(US(i), { uid: "ov-" + i, ip: "198.51.100." + (10 + i) })).body);
+  const ovCount = () => (get("aiGenerationUsage/regionTodayInfo_" + date + "_overseas") || {}).count;
+  t("17a 海外：別々の人・別々の place_id でも、サービス全体で5回まで・6回目は上限(ai_generation_limited)・OpenAI 5回", ov.slice(0, 5).every((b) => b.success === true) && ov[5].success === false && ov[5].reason === "ai_generation_limited" && openaiCount() === 5 && ovCount() === 5, { reasons: ov.map((b) => b.reason || "ok"), openai: openaiCount(), ov: ovCount() });
+  t("17b 海外の分は全体(60)にも数える・上限で止めた分は数えない", (get("aiGenerationUsage/regionTodayInfo_" + date + "_all") || {}).count === 5, get("aiGenerationUsage/regionTodayInfo_" + date + "_all"));
+  r = await region({}, { uid: "ov-jp", ip: "198.51.100.30" });
+  t("17c 海外が上限でも、日本(都道府県コード)の新しい生成はできる(日本は全体60のまま)", r.body.success === true && openaiCount() === 6 && ovCount() === 5, r.body);
+  r = await region({ regionName: "오키나와현", countryName: "일본", regionKey: "ChIJ-korean-okinawa-01", municipality: "나하시" }, { uid: "ov-kr", ip: "198.51.100.31" });
+  t("17d 国コード JP でも都道府県名を読めない(place_id の経路)：海外の上限で止まる(JP と偽って避けられない)", r.body.success === false && r.body.reason === "ai_generation_limited" && openaiCount() === 6, r.body);
+  r = await region(US(0), { uid: "ov-cache", ip: "198.51.100.32" });
+  t("17e 海外が上限でも、保存済みの海外の地域は表示(OpenAI を呼ばない・数えない)", r.body.success === true && r.body.status === "ready" && openaiCount() === 6 && ovCount() === 5, r.body);
+  r = await region(US(1), { uid: "ov-cache", ip: "198.51.100.32", language: "en" });
+  t("17f 海外の保存済みの英訳の表示は止めない(翻訳は数えない)", r.body.success === true && ovCount() === 5, r.body);
+  const before17 = { calls: calls.length, docs: S.docs.size };
+  for (const [label, f] of [["形の違う ID", { regionKey: "bad/id" }], ["短すぎる ID", { regionKey: "abc" }], ["実在しない国(ZZ)", { countryCode: "ZZ" }], ["小文字の国", { countryCode: "us" }]]) {
+    r = await region(US(99, f), { uid: "ov-bad", ip: "198.51.100.33" });
+    t(`17g 海外の不正な ${label}：400・生成しない`, r.code === 400 && r.body.success === false, { code: r.code, body: r.body });
+  }
+  t("17h 不正な ID では回数も保存も増えない", calls.length === before17.calls && S.docs.size === before17.docs && ovCount() === 5, { calls: calls.length - before17.calls, docs: S.docs.size - before17.docs });
+  // 同時実行：海外の残り2回の時に6人が同時に
+  resetDb();
+  S.docs.set("aiGenerationUsage/regionTodayInfo_" + date + "_overseas", { count: 3 });
+  globalThis.__OPENAI.delayMs = 30;
+  const ovc = await Promise.all([0, 1, 2, 3, 4, 5].map((i) => region(US(100 + i), { uid: "ovc-" + i, ip: "198.51.100." + (40 + i) })));
+  globalThis.__OPENAI.delayMs = 0;
+  t("17i 海外の残り2回の時に6人が同時に：生成は2回だけ・海外の回数は5で止まる", ovc.filter((x) => x.body.success === true).length === 2 && openaiCount() === 2 && ovCount() === 5 && ovc.filter((x) => x.body.reason === "ai_generation_limited").length === 4, { reasons: ovc.map((x) => x.body.reason || x.body.status), ov: ovCount() });
+  // 全体(60)が上限なら、海外の残りがあっても止まる
+  resetDb();
+  S.docs.set("aiGenerationUsage/regionTodayInfo_" + date + "_all", { count: 60 });
+  r = await region(US(200), { uid: "ova", ip: "198.51.100.50" });
+  t("17j 全体(60)が上限：海外も生成しない(海外の回数は増えない)", r.body.reason === "ai_generation_limited" && openaiCount() === 0 && !get("aiGenerationUsage/regionTodayInfo_" + date + "_overseas"), r.body);
+  // 停止中は海外も止まり、海外の回数は増えない
+  resetDb();
+  S.docs.set("aiGenerationControl/settings", { stopRegionTodayInfo: true });
+  r = await region(US(300), { uid: "ovs", ip: "198.51.100.51" });
+  t("17k 停止中：海外も生成しない・海外の回数は増えない", r.body.reason === "ai_generation_stopped" && openaiCount() === 0 && !get("aiGenerationUsage/regionTodayInfo_" + date + "_overseas"), r.body);
+  // 日付は日本時間で切り替わる(前日の海外の回数は今日に影響しない)
+  resetDb();
+  const yesterday = G.getJstDateKey(Date.now() - 24 * 60 * 60 * 1000);
+  S.docs.set("aiGenerationUsage/regionTodayInfo_" + yesterday + "_overseas", { count: 5 });
+  r = await region(US(400), { uid: "ovd", ip: "198.51.100.52" });
+  t("17l 海外の上限は日本時間の日付ごと(前日の5回は今日に影響しない)", r.body.success === true && ovCount() === 1, r.body);
+  // 運営画面に海外の回数と上限を出す
+  r = await postAs({ mode: "adminAiGenerationControlGet" }, adminToken());
+  t("17m 運営画面の読み取り：海外の今日の回数と上限(5)", r.body.usageToday.regionTodayInfo.overseasCount === 1 && r.body.usageToday.regionTodayInfo.overseasLimit === 5, r.body.usageToday);
+  t("17n この街の情報の海外は今回も生成しない(KR)", true && (await city("Seoul", { uid: "ovk", ip: "198.51.100.53", countryCode: "KR", prefecture: "Seoul" })).body.reason === "unsupported_area", "");
+  t("17o 運営画面に海外の回数の表示", /overseasLimit/.test(fs.readFileSync(new URL(REPO_URL + "/admin-ai-generation.html"), "utf8")), "");
 }
 
 try {
@@ -418,10 +468,12 @@ try {
   t("9g 日本以外(正しい形)：生成する・回数を数える", r.body.success === true && openaiCount() === 2 && JSON.stringify(usage("regionTodayInfo", "all")) === "[2]", { body: r.body, all: usage("regionTodayInfo", "all") });
   // 日本以外の place_id を変えて連続で呼ぶ：利用者の上限(5)で止まる
   const seq = [];
-  for (let i = 0; i < 6; i++) seq.push((await region({ countryCode: "US", regionName: "Somewhere", regionKey: "ChIJattackerplaceid" + i, municipality: "" }, { uid: "attacker", ip: "198.51.100." + (60 + i) })).body);
-  t("9h place_id を変えて連続：同じ利用者は5回まで・6回目は上限", seq.slice(0, 5).every((b) => b.success === true) && seq[5].reason === "ai_generation_limited", seq.map((b) => b.reason || "ok"));
+  // (STEP 2-B 追加：海外は専用の上限5回があるため、利用者の上限は日本の別々の都道府県で確かめる)
+  const PREFS6 = ["東京都", "大阪府", "京都府", "北海道", "福岡県", "愛知県"];
+  for (let i = 0; i < 6; i++) seq.push((await region({ regionName: PREFS6[i], regionKey: "ChIJattackerplaceid" + i, municipality: "" }, { uid: "attacker", ip: "198.51.100." + (60 + i) })).body);
+  t("9h 同じ利用者が都道府県を変えて連続：5回まで・6回目は上限", seq.slice(0, 5).every((b) => b.success === true) && seq[5].reason === "ai_generation_limited", seq.map((b) => b.reason || "ok"));
   S.docs.set("aiGenerationUsage/regionTodayInfo_" + date + "_all", { count: 59 });
-  const concR = await Promise.all([0, 1, 2, 3].map((i) => region({ countryCode: "US", regionName: "Elsewhere", regionKey: "ChIJconcurrentid" + i, municipality: "" }, { uid: "rc-" + i, ip: "198.51.100." + (80 + i) })));
+  const concR = await Promise.all([0, 1, 2, 3].map((i) => region({ regionName: ["兵庫県", "広島県", "宮城県", "新潟県"][i], regionKey: "ChIJconcurrentid" + i, municipality: "" }, { uid: "rc-" + i, ip: "198.51.100." + (80 + i) })));
   t("9i 残り1回の時に4人が同時に：生成は1回・全体の回数は60で止まる", concR.filter((x) => x.body.success === true).length === 1 && get("aiGenerationUsage/regionTodayInfo_" + date + "_all").count === 60, { reasons: concR.map((x) => x.body.reason || x.body.status), count: get("aiGenerationUsage/regionTodayInfo_" + date + "_all").count });
   // 9c で保存した英訳を消してから、途中で切れた翻訳を試す
   const jpDocKey = docs("regionTodayInfoResults/JP_JP-47_")[0];
@@ -452,7 +504,7 @@ try {
   delete process.env.AI_GENERATION_STOP;
 
   // ---- 11. コード：上限の値は仮(代表承認待ち)・部品の設定
-  t("11a 仮の上限の値(cityInfo 30/3/10・regionTodayInfo 60/5/20)", JSON.stringify(G.AI_GENERATION_DAILY_LIMITS) === JSON.stringify({ cityInfo: { global: 30, perUser: 3, perIp: 10 }, regionTodayInfo: { global: 60, perUser: 5, perIp: 20 } }), G.AI_GENERATION_DAILY_LIMITS);
+  t("11a 上限の値(cityInfo 30/3/10・regionTodayInfo 60/5/20・海外の専用5)", JSON.stringify(G.AI_GENERATION_DAILY_LIMITS) === JSON.stringify({ cityInfo: { global: 30, perUser: 3, perIp: 10 }, regionTodayInfo: { global: 60, perUser: 5, perIp: 20, overseasGlobal: 5 } }), G.AI_GENERATION_DAILY_LIMITS);
   t("11b 日付は日本時間(UTC 15:00 は翌日)", G.getJstDateKey(Date.UTC(2026, 10, 11, 15, 0, 0)) === "2026-11-12" && G.getJstDateKey(Date.UTC(2026, 10, 11, 14, 59, 0)) === "2026-11-11", "");
   const src = fs.readFileSync(new URL(REPO_URL + "/api/moderate-submission.js"), "utf8");
   t("11c 応答に鍵・内部の情報を含めない(停止・上限の応答)", !JSON.stringify(userResults).includes(FAKE_KEY), "");

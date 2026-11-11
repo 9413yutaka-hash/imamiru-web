@@ -15160,10 +15160,17 @@ async function handleRegionTodayInfoGetRequest(
           timezone: localDateResult.timeZoneId,
           localDate: localDateResult.localDate
         },
-        buildAiGenerationGate(
-          "regionTodayInfo",
-          request,
-          decodedToken
+        Object.assign(
+          buildAiGenerationGate(
+            "regionTodayInfo",
+            request,
+            decodedToken
+          ),
+          {
+            // STEP 2-B 追加(2026-11-12 代表決定)｜都道府県コードにそろえられない呼び出し(海外・都道府県名を読めない日本)は、
+            // 海外の専用の上限(1日5回・日本時間)でも数える。地域 ID の形の確認(上)は続ける。
+            overseas: !japanPrefecture
+          }
         )
       );
 

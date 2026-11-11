@@ -563,6 +563,16 @@
           "同じ回線 " + (typeof usage.perIp === "number" ? usage.perIp : "-") + " 回まで）";
 
         usageList.appendChild(line);
+
+        // 今日の地域情報の海外の分(専用の上限)。
+        if (feature === "regionTodayInfo" && typeof usage.overseasLimit === "number") {
+          const overseasLine = document.createElement("p");
+          overseasLine.className = "control-note";
+          overseasLine.textContent =
+            "　うち海外（都道府県を確かめられない分を含む）：" +
+            (typeof usage.overseasCount === "number" ? usage.overseasCount : 0) + " 回 ／ 上限 " + usage.overseasLimit + " 回";
+          usageList.appendChild(overseasLine);
+        }
       });
 
       const dateLine = document.createElement("p");

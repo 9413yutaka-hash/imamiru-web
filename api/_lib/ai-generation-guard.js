@@ -15,7 +15,10 @@ export const AI_GENERATION_FEATURES = Object.freeze(["cityInfo", "regionTodayInf
 // 仮の上限(1日・日本時間)。根拠は Obsidian「OpenAI API安全対策 STEP2-B」の記録を参照。
 export const AI_GENERATION_DAILY_LIMITS = Object.freeze({
   cityInfo: Object.freeze({ global: 30, perUser: 3, perIp: 10 }),
-  regionTodayInfo: Object.freeze({ global: 60, perUser: 5, perIp: 20 })
+  // overseasGlobal：今日の地域情報の海外の新しい生成だけの、サービス全体の1日の上限(2026-11-12 代表決定：5回)。
+  // 海外の分は全体(60)にも数える。対象は都道府県コードにそろえられない呼び出し(place_id の鍵)＝海外と、
+  // 都道府県名を読み取れない日本の呼び出し(同じ place_id の経路。国コードを JP と偽って海外の上限を避けられないように)。
+  regionTodayInfo: Object.freeze({ global: 60, perUser: 5, perIp: 20, overseasGlobal: 5 })
 });
 
 export const AI_GENERATION_USAGE_COLLECTION = "aiGenerationUsage";
@@ -53,7 +56,8 @@ export function getJstDateKey(nowMs = Date.now()) {
 }
 
 // トランザクションの中で、停止・回数を確かめる(読み取りだけ)。許可する時は apply(transaction) で回数を1つ加える。
-// gate = { feature, uidHash, ipHash, hashUnavailable }
+// gate = { feature, uidHash, ipHash, hashUnavailable, overseas }
+//   overseas：true の時は、海外の専用の上限(limits.overseasGlobal)も同じトランザクションで確かめて数える。
 //   hashUnavailable：利用者・IP の識別に使う秘密値が無い等で数えられない時は、生成しない(安全側)。
 export async function evaluateAiGenerationGateInTransaction(transaction, database, gate) {
   const feature = gate && gate.feature;
@@ -70,6 +74,11 @@ export async function evaluateAiGenerationGateInTransaction(transaction, databas
   const nowMs = Date.now();
   const date = getJstDateKey(nowMs);
   const scopes = [{ scope: "all", id: `${feature}_${date}_all`, limit: limits.global }];
+  if (gate.overseas === true) {
+    // 海外の専用の上限が決まっていない機能では、海外の生成をしない(安全側)。
+    if (!Number.isInteger(limits.overseasGlobal)) return { outcome: "limited", scope: "overseas" };
+    scopes.push({ scope: "overseas", id: `${feature}_${date}_overseas`, limit: limits.overseasGlobal });
+  }
   if (typeof gate.uidHash === "string" && gate.uidHash !== "") {
     scopes.push({ scope: "user", id: `${feature}_${date}_u_${gate.uidHash}`, limit: limits.perUser });
   }
@@ -316,6 +325,12 @@ export async function readAiGenerationControlForAdmin(database, nowMs = Date.now
       perIp: AI_GENERATION_DAILY_LIMITS[feature].perIp
     };
   }
+  // 今日の地域情報の海外の分(専用の上限)。
+  const overseasSnapshot = await database
+    .collection(AI_GENERATION_USAGE_COLLECTION).doc(`regionTodayInfo_${date}_overseas`).get();
+  const overseasData = overseasSnapshot.exists ? overseasSnapshot.data() || {} : {};
+  usageToday.regionTodayInfo.overseasCount = Number.isFinite(Number(overseasData.count)) ? Number(overseasData.count) : 0;
+  usageToday.regionTodayInfo.overseasLimit = AI_GENERATION_DAILY_LIMITS.regionTodayInfo.overseasGlobal;
   const historySnapshot = await database
     .collection(AI_GENERATION_CONTROL_LOG_COLLECTION)
     .orderBy("version", "desc").limit(AI_GENERATION_CONTROL_HISTORY_LIMIT).get();
