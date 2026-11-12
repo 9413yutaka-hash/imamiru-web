@@ -10557,6 +10557,12 @@ function buildCityInfoLocationPayload(
     prefecture:
       typeof hierarchy.prefecture === "string"
         ? hierarchy.prefecture
+        : "",
+
+    // STEP 2-B 最終修正｜都道府県の place_id(言語に関係しない)。サーバーが既知の47件と照らして都道府県を確かめる。
+    prefecturePlaceId:
+      typeof hierarchy.regionKey === "string"
+        ? hierarchy.regionKey
         : ""
   };
 }

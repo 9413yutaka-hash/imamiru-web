@@ -74,7 +74,7 @@ const nestDotted = (path) => { const d = S.docs.get(path); if (!d) return; const
 const openaiCount = (path = "/v1/responses") => calls.filter((c) => c.path === path).length;
 const resetDb = () => { S.docs.clear(); S.writes.length = 0; calls.length = 0; globalThis.__OPENAI = { mode: "ok", delayMs: 0, trFinish: "stop" }; delete process.env.AI_GENERATION_STOP; };
 // 新しい画面は現在地の国コード・都道府県を添える(STEP 2-B 修正・全国対応)。opts.noLocation で古い画面(添えない)をまねる。
-const city = (targetArea, opts = {}) => post(Object.assign({ mode: "cityInfoGet", targetArea, language: opts.language || "ja" }, opts.noLocation ? {} : { countryCode: opts.countryCode || "JP", prefecture: opts.prefecture || "沖縄県" }), opts.uid, opts.ip);
+const city = (targetArea, opts = {}) => post(Object.assign({ mode: "cityInfoGet", targetArea, language: opts.language || "ja" }, opts.noLocation ? {} : { countryCode: opts.countryCode || "JP", prefecture: opts.prefecture || "沖縄県" }, opts.placeId ? { prefecturePlaceId: opts.placeId } : {}), opts.uid, opts.ip);
 const OKINAWA = { latitude: 26.212, longitude: 127.679 };
 const region = (fields, opts = {}) => post({ mode: "regionTodayInfoGet", language: opts.language || "ja", ...OKINAWA, countryCode: "JP", countryName: "日本", regionKey: "ChIJ-okinawa-pref-0001", regionName: "沖縄県", municipality: "那覇市", ...fields }, opts.uid, opts.ip);
 
@@ -232,14 +232,14 @@ async function runStep2bRevisionTests() {
   vm.runInContext((fnMatch ? fnMatch[0] : "") + "\n;globalThis.__f=buildCityInfoLocationPayload;", vctx);
   const f = vctx.__f;
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-  vctx.cityInfoCurrentLocationHierarchy = { countryCode: "JP", prefecture: "東京都", city: "渋谷区" };
+  vctx.cityInfoCurrentLocationHierarchy = { countryCode: "JP", prefecture: "東京都", city: "渋谷区", regionKey: "ChIJ51cu8IcbXWARiRtXIothAS4" };
   const p1 = f("渋谷区");
   const p2 = f("新宿区");
   vctx.cityInfoCurrentLocationHierarchy = null;
   const p3 = f("渋谷区");
   vctx.cityInfoCurrentLocationHierarchy = { countryCode: "", prefecture: "", city: "" };
   const p4 = f("");
-  t("16a 画面：地域階層の市区町村がボタンの地域名と同じ時だけ国コード・都道府県を送る(違う・無い時は送らない＝推測しない)", typeof f === "function" && same(p1, { countryCode: "JP", prefecture: "東京都" }) && same(p2, {}) && same(p3, {}) && same(p4, {}), { p1, p2, p3, p4 });
+  t("16a 画面：地域階層の市区町村がボタンの地域名と同じ時だけ国コード・都道府県を送る(違う・無い時は送らない＝推測しない)", typeof f === "function" && same(p1, { countryCode: "JP", prefecture: "東京都", prefecturePlaceId: "ChIJ51cu8IcbXWARiRtXIothAS4" }) && same(p2, {}) && same(p3, {}) && same(p4, {}), { p1, p2, p3, p4 });
   t("16b 画面：この街の情報の要求に国コード・都道府県を添える", /buildCityInfoLocationPayload\(\s*cityInfoCurrentAreaName\s*\)/.test(appSrc) && /cityInfoCurrentLocationHierarchy =\s*locationHierarchy;/.test(appSrc), "");
   const TR = {}; const tctx = {}; vm.createContext(tctx);
   vm.runInContext(fs.readFileSync(new URL(REPO_URL + "/translations.js"), "utf8") + "\n;globalThis.__T=typeof MACHINAU_TRANSLATIONS!=='undefined'?MACHINAU_TRANSLATIONS:null;", tctx);
@@ -303,6 +303,88 @@ async function runStep2bRevisionTests() {
   t("17m 運営画面の読み取り：海外の今日の回数と上限(5)", r.body.usageToday.regionTodayInfo.overseasCount === 1 && r.body.usageToday.regionTodayInfo.overseasLimit === 5, r.body.usageToday);
   t("17n この街の情報の海外は今回も生成しない(KR)", true && (await city("Seoul", { uid: "ovk", ip: "198.51.100.53", countryCode: "KR", prefecture: "Seoul" })).body.reason === "unsupported_area", "");
   t("17o 運営画面に海外の回数の表示", /overseasLimit/.test(fs.readFileSync(new URL(REPO_URL + "/admin-ai-generation.html"), "utf8")), "");
+
+  // ---- 18. 多言語の地域判定(2026-11-12 代表判断：表示言語で日本・海外を判定しない)
+  // 都道府県の place_id は 2026-11-12 に本番の TOP(読み取りだけ)で、日本語・英語の逆引きで集めた実際の値(47件一致・重複なし)。
+  const PID = { okinawa: "ChIJ51ur7mJw9TQR79H9hnJhuzU", tokyo: "ChIJ51cu8IcbXWARiRtXIothAS4", hokkaido: "ChIJi4hsnyBZn18RjwPOT1bDPBw" };
+  const guardSrc = fs.readFileSync(new URL(REPO_URL + "/api/_lib/ai-generation-guard.js"), "utf8");
+  const pidRows = [...guardSrc.matchAll(/\["(JP-\d\d)", "(ChIJ[A-Za-z0-9_-]+)"\]/g)];
+  t("18a 都道府県の place_id の一覧：47件・都道府県コードの重複なし・place_id の重複なし", pidRows.length === 47 && new Set(pidRows.map((m) => m[1])).size === 47 && new Set(pidRows.map((m) => m[2])).size === 47, pidRows.length);
+  t("18b 一覧のすべての place_id が、その都道府県コードに戻る", pidRows.every((m) => { const p = G.resolveJapanPrefectureByPlaceId(m[2]); return p && p.code === m[1]; }), "");
+  const RQ = G.resolveJapanPrefectureForRequest;
+  const langCases = [["日本語", "沖縄県"], ["英語", "Okinawa"], ["韓国語", "오키나와현"], ["中国語(簡体)", "冲绳县"], ["中国語(繁体)", "沖繩縣"], ["タイ語", "โอกินาวะ"], ["名前なし", ""]];
+  for (const [label, name] of langCases) { const p = RQ("JP", name, PID.okinawa); t(`18c 表示言語が${label}(「${name}」)でも、国コード JP＋沖縄県の place_id → JP-47`, p && p.code === "JP-47" && p.name === "沖縄県", p); }
+  t("18d 都道府県名と place_id が食い違う時は place_id(名前は使わない)", (RQ("JP", "Okinawa", PID.tokyo) || {}).code === "JP-13", RQ("JP", "Okinawa", PID.tokyo));
+  t("18e 国コードが JP 以外なら、日本の place_id でも日本扱いしない(KR・空・小文字 jp)", RQ("KR", "Okinawa", PID.okinawa) === null && RQ("", "沖縄県", PID.okinawa) === null && RQ("jp", "沖縄県", PID.okinawa) === null, "");
+  t("18f 一覧に無い place_id＋読めない名前は推測しない(null)", RQ("JP", "오키나와현", "ChIJ-unknown-place-0001") === null && RQ("JP", "오키나와현", "") === null && RQ("JP", "冲绳县", null) === null && RQ("JP", "冲绳县", { x: 1 }) === null, "");
+  t("18g place_id は完全一致だけ(大小文字違い・付け足しは一致しない。前後の空白だけ除く)", RQ("JP", "", PID.okinawa.toLowerCase()) === null && RQ("JP", "", PID.okinawa + "x") === null && RQ("JP", "", " " + PID.okinawa + " ") !== null, "");
+
+  // 今日の地域情報：日本語・英語・韓国語・中国語の画面で、同じ都道府県コードの保存先を使い、海外の上限を使わない
+  resetDb();
+  const ovNow = () => (get("aiGenerationUsage/regionTodayInfo_" + date + "_overseas") || {}).count || 0;
+  const allNow = () => (get("aiGenerationUsage/regionTodayInfo_" + date + "_all") || {}).count || 0;
+  r = await region({ regionKey: PID.okinawa, regionName: "오키나와현", countryName: "일본", municipality: "나하시" }, { uid: "ml-ko", ip: "198.51.100.60", language: "en" });
+  t("18h 韓国語の名前＋沖縄県の place_id：日本(JP-47)として生成・海外の回数は0・全体は1", r.body.success === true && openaiCount() === 1 && docs("regionTodayInfoResults/JP_JP-47_").length === 1 && ovNow() === 0 && allNow() === 1, { body: r.body, docs: docs("regionTodayInfoResults/"), ov: ovNow() });
+  const firstInput = JSON.stringify(calls.find((c) => c.path === "/v1/responses").body || "");
+  t("18i AI への指示は正式名(沖縄県)で、読めない名前(오키나와현)は使わない", firstInput.includes("沖縄県") && !firstInput.includes("오키나와현"), firstInput.slice(0, 300));
+  const sameDoc = [];
+  for (const [i, nm, cn] of [[1, "沖縄県", "日本"], [2, "Okinawa", "Japan"], [3, "冲绳县", "日本"], [4, "沖繩縣", "日本"]]) {
+    r = await region({ regionKey: PID.okinawa, regionName: nm, countryName: cn, municipality: "" }, { uid: "ml-" + i, ip: "198.51.100.6" + i, language: i === 1 ? "ja" : "en" });
+    sameDoc.push(r.body.success === true && r.body.status === "ready");
+  }
+  t("18j 日本語・英語・中国語(簡体・繁体)：同じ保存済み(JP-47)を表示・新しい生成なし・回数は増えない", sameDoc.every(Boolean) && openaiCount() === 1 && docs("regionTodayInfoResults/").length === 1 && allNow() === 1 && ovNow() === 0, { sameDoc, openai: openaiCount(), docs: docs("regionTodayInfoResults/") });
+  // 海外が上限(5)でも、韓国語の画面の日本の地域は日本として生成できる
+  S.docs.set("aiGenerationUsage/regionTodayInfo_" + date + "_overseas", { count: 5, date });
+  r = await region({ regionKey: PID.tokyo, regionName: "도쿄도", countryName: "일본", municipality: "", latitude: 35.69, longitude: 139.75 }, { uid: "ml-tokyo", ip: "198.51.100.70", language: "en" });
+  t("18k 海外が上限(5)でも、韓国語の名前＋東京都の place_id は日本(JP-13)として生成", r.body.success === true && openaiCount() === 2 && docs("regionTodayInfoResults/JP_JP-13_").length === 1 && ovNow() === 5, { body: r.body, ov: ovNow() });
+  // 偽装・不正な ID
+  r = await region({ regionKey: "ChIJ-fake-japan-0001", regionName: "오키나와현", countryName: "일본" }, { uid: "ml-fake", ip: "198.51.100.71" });
+  t("18l 一覧に無い place_id＋読めない名前(JP)：日本扱いしない＝海外の上限で止まる", r.body.success === false && r.body.reason === "ai_generation_limited" && openaiCount() === 2 && ovNow() === 5, r.body);
+  const beforeBad = { calls: calls.length, docs: S.docs.size };
+  for (const bad of ["../JP-47", "JP-47", "ChIJ51ur7mJw9TQR79H9hnJhuzU/../x", "<script>"]) {
+    r = await region({ regionKey: bad, regionName: "오키나와현", countryName: "일본" }, { uid: "ml-bad", ip: "198.51.100.72" });
+  }
+  t("18m 形の正しくない地域 ID は受け付けない(回数・保存・呼び出しが増えない)", calls.length === beforeBad.calls && S.docs.size === beforeBad.docs, { calls: calls.length - beforeBad.calls, docs: S.docs.size - beforeBad.docs });
+  r = await region({ regionKey: PID.tokyo, regionName: "Okinawa", countryName: "Japan", latitude: 35.69, longitude: 139.75 }, { uid: "ml-mix", ip: "198.51.100.73" });
+  t("18n 名前(沖縄)と place_id(東京)が食い違う：東京(JP-13)の保存済みを表示・JP_{place_id} の保存先は作らない", r.body.success === true && openaiCount() === 2 && docs("regionTodayInfoResults/JP_ChIJ").length === 0, { body: r.body, docs: docs("regionTodayInfoResults/") });
+  r = await region({ countryCode: "KR", regionKey: PID.okinawa, regionName: "Okinawa", countryName: "Korea" }, { uid: "ml-kr", ip: "198.51.100.74" });
+  t("18o 国コード KR＋日本の place_id：日本扱いしない(海外の上限で止まる)", r.body.success === false && r.body.reason === "ai_generation_limited" && openaiCount() === 2, r.body);
+  // 同時実行：韓国語・中国語・英語・日本語の画面から同じ都道府県へ同時に → 生成は1回・同じ保存先
+  resetDb();
+  const conc = await Promise.all([["오키나와현", "en"], ["冲绳县", "en"], ["Okinawa", "en"], ["沖縄県", "ja"], ["沖繩縣", "en"], ["오키나와현", "en"]].map(([nm, lang], i) => region({ regionKey: PID.okinawa, regionName: nm, countryName: "x" }, { uid: "mc-" + i, ip: "198.51.100.8" + i, language: lang })));
+  t("18p 4言語の画面から同時に6人：新しい生成は1回だけ・保存先は JP-47 だけ・海外の回数は0", openaiCount() === 1 && docs("regionTodayInfoResults/").length === 1 && docs("regionTodayInfoResults/JP_JP-47_").length === 1 && ovNow() === 0 && allNow() === 1, { st: conc.map((x) => x.body.status || x.body.reason), openai: openaiCount(), docs: docs("regionTodayInfoResults/") });
+
+  // この街の情報：place_id で都道府県を確かめる(市区町村は実在の正式名にそろえられる時だけ)
+  resetDb();
+  r = await city("Naha", { uid: "ci-ko", ip: "203.0.113.80", language: "en", prefecture: "오키나와현", placeId: PID.okinawa });
+  t("18q この街の情報：韓国語の都道府県名＋place_id、市区町村 Naha → 那覇市として生成", r.body.success === true && openaiCount() === 1 && !!get("cityInfoArticles/沖縄県-那覇市"), { body: r.body, docs: docs("cityInfoArticles/") });
+  r = await city("Naha", { uid: "ci-zh", ip: "203.0.113.81", language: "en", prefecture: "冲绳县", placeId: PID.okinawa });
+  t("18r 中国語の都道府県名＋place_id：同じ保存済み(沖縄県-那覇市)・新しい生成なし", r.body.success === true && openaiCount() === 1, r.body);
+  r = await city("Sapporo", { uid: "ci-hk", ip: "203.0.113.82", language: "en", prefecture: "홋카이도", placeId: PID.hokkaido });
+  t("18s 北海道の place_id＋Sapporo → 札幌市として生成(沖縄以外も)", r.body.success === true && openaiCount() === 2 && !!get("cityInfoArticles/北海道-札幌市"), { body: r.body, docs: docs("cityInfoArticles/") });
+  r = await city("那霸市", { uid: "ci-zh2", ip: "203.0.113.83", language: "en", prefecture: "冲绳县", placeId: PID.okinawa });
+  t("18t 市区町村名を正式名にそろえられない(那霸市・簡体字)：推測で生成しない(unsupported_area)", r.body.success === false && r.body.reason === "unsupported_area" && openaiCount() === 2, r.body);
+  r = await city("Naha", { uid: "ci-fake", ip: "203.0.113.84", language: "en", prefecture: "오키나와현", placeId: "ChIJ-unknown-place-0001" });
+  t("18u 一覧に無い place_id＋読めない都道府県名：推測しない(unsupported_area・生成なし)", r.body.success === false && r.body.reason === "unsupported_area" && openaiCount() === 2, r.body);
+  r = await city("Naha", { uid: "ci-kr", ip: "203.0.113.85", language: "en", countryCode: "KR", prefecture: "Okinawa", placeId: PID.okinawa });
+  t("18v この街の情報：国コード KR は日本の place_id でも生成しない(海外は今回生成しない)", r.body.success === false && r.body.reason === "unsupported_area" && openaiCount() === 2, r.body);
+  r = await city("Naha", { uid: "ci-bad", ip: "203.0.113.86", language: "en", prefecture: "오키나와현", placeId: "../" + PID.okinawa });
+  t("18w 形の正しくない place_id は無視(推測しない)", r.body.success === false && r.body.reason === "unsupported_area" && openaiCount() === 2, r.body);
+  t("18x 画面：この街の情報の要求に都道府県の place_id(regionKey)を添える", /prefecturePlaceId:\s*\r?\n\s*typeof hierarchy\.regionKey === "string"/.test(appSrc), "");
+
+  // ---- 18y〜 TTL(expireAt の自動削除)が無くても上限・ロックが正しく動く(2026-11-12 代表指示：TTL の設定は変えずに再確認)
+  resetDb();
+  const yday = G.getJstDateKey(Date.now() - 24 * 60 * 60 * 1000);
+  const past = Timestamp.fromMillis(Date.now() - 5 * 24 * 60 * 60 * 1000);
+  for (const [k, c] of [["cityInfo_" + yday + "_all", 30], ["regionTodayInfo_" + yday + "_all", 60], ["regionTodayInfo_" + yday + "_overseas", 5]]) S.docs.set("aiGenerationUsage/" + k, { count: c, date: yday, expireAt: past });
+  r = await city("Naha", { uid: "ttl-1", ip: "203.0.113.90", language: "en", prefecture: "Okinawa", placeId: PID.okinawa });
+  const r2 = await region({ regionKey: PID.okinawa, regionName: "Okinawa" }, { uid: "ttl-2", ip: "203.0.113.91" });
+  const r3 = await region(US(900), { uid: "ttl-3", ip: "203.0.113.92" });
+  t("18y TTL 無し：前日の満杯の回数(期限切れのまま残る)は今日に影響しない(この街の情報・今日の地域情報・海外)", r.body.success === true && r2.body.success === true && r3.body.success === true && !!get("aiGenerationUsage/cityInfo_" + yday + "_all"), { a: r.body.reason, b: r2.body.reason, c: r3.body.reason });
+  resetDb();
+  const lockKeys0 = docs("aiGenerationLocks/");
+  r = await city("Naha", { uid: "ttl-4", ip: "203.0.113.93", language: "en", prefecture: "Okinawa", placeId: PID.okinawa });
+  t("18z 生成が終わった印は TTL を待たずに消す(残るのは消せなかった時だけ・2分で無効)", r.body.success === true && lockKeys0.length === 0 && docs("aiGenerationLocks/").length === 0 && G.AI_GENERATION_LOCK_STALE_MS === 120000, docs("aiGenerationLocks/"));
 }
 
 try {

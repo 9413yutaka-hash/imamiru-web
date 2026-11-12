@@ -210,6 +210,50 @@ export function resolveJapanPrefecture(rawName) {
   return matchLatinName(normalizeLatinText(rawName), PREFECTURE_BY_LATIN, PREFECTURE_LATIN_SUFFIXES);
 }
 
+// STEP 2-B 最終修正(2026-11-12・代表判断：表示言語で日本・海外を判定しない)｜都道府県を表す Google の結果の place_id
+// (アプリの regionKey。administrative_area_level_1 の結果自身の place_id)。表示言語に関係なく同じ値になる。
+// 2026-11-12 に本番の TOP(読み取りだけ)で、各都道府県の代表地点を日本語・英語で逆引きして集め、47件すべて一致・重複なしを確認。
+// 韓国語・中国語(簡体・繁体)・タイ語でも、主要5地点で同じ値を確認。一覧に無い値は推測しない(都道府県が分からない扱い)。
+const JAPAN_PREFECTURE_PLACE_IDS = Object.freeze([
+  ["JP-01", "ChIJi4hsnyBZn18RjwPOT1bDPBw"], ["JP-02", "ChIJR60vIL2bm18Ro_kApp-uBak"], ["JP-03", "ChIJIzoJ7dCQhV8RbEB_6H6BLGY"],
+  ["JP-04", "ChIJcdzg-92SiF8RraQHUTi5b84"], ["JP-05", "ChIJv_Eu0V7rj18REhxcYOz7fZo"], ["JP-06", "ChIJbeLoh3fsi18RXo9kabDE3OY"],
+  ["JP-07", "ChIJL9XcbYEEIGARXEbW0MGmHzQ"], ["JP-08", "ChIJF8In71sYImARgMV4m4P7Spo"], ["JP-09", "ChIJ7RWXa1VwH2ARB9AguZ5FZW0"],
+  ["JP-10", "ChIJWa42yIVgHmARknJxiWg1mdc"], ["JP-11", "ChIJ6QF7R40qGWARbFKAqmcS2f4"], ["JP-12", "ChIJEZUb1l-bImARvnvg_9t3thw"],
+  ["JP-13", "ChIJ51cu8IcbXWARiRtXIothAS4"], ["JP-14", "ChIJq9Rn-8dUGGARViMnQtCc9xE"], ["JP-15", "ChIJATtK2PaFjF8RSPPdfITZi7Q"],
+  ["JP-16", "ChIJSca2CRSS918Rc1GBWMBBk3w"], ["JP-17", "ChIJ7xq8wV5-8V8RtJoYjRM81Es"], ["JP-18", "ChIJEb6scKhV_18RYA7nHjFfIQo"],
+  ["JP-19", "ChIJIe5Ck3LjG2ARqm6fj-ToBHM"], ["JP-20", "ChIJa4zJGCMBHWARlAu_BE8rXAI"], ["JP-21", "ChIJi8OICvLxAmARZ9bM7q0UJ68"],
+  ["JP-22", "ChIJL8OwjM62G2ARVRZv3-tm-vw"], ["JP-23", "ChIJ5zKTSdW6BGARp0EVGF2mX-s"], ["JP-24", "ChIJY0FHSvU9BGARKIc4ff5ynkI"],
+  ["JP-25", "ChIJfRcKhFR_AWAR0Ih82zbkEkQ"], ["JP-26", "ChIJYRsf-SB0_18ROJWxOMJ7Clk"], ["JP-27", "ChIJ13DMKmvoAGARbVkfgUj_maM"],
+  ["JP-28", "ChIJoa4nX2HyVDURoQquLKTzHh8"], ["JP-29", "ChIJ0yeFNyrHBmARcsHp9gNgR-o"], ["JP-30", "ChIJ1wKhtPIEB2ARnU_gb_EzSNQ"],
+  ["JP-31", "ChIJB0-MsELXVTUR7pLgQAxBLzs"], ["JP-32", "ChIJocsETn0DWzURzBYpE2fXNC0"], ["JP-33", "ChIJh5W24jhmVDURU20vGB0GIdI"],
+  ["JP-34", "ChIJa_O3GdGJUDURv90VFtIkjqU"], ["JP-35", "ChIJ_Y9adhnHRDURcOJUU8K8DEk"], ["JP-36", "ChIJszfXrltNUjURDDHPZPlj3f0"],
+  ["JP-37", "ChIJr363rNTcUzURsdqbibLWgS0"], ["JP-38", "ChIJraqWR5CVTzUR272f78CTlP8"], ["JP-39", "ChIJa2Hq0TSpSDURow2-nqQtVKA"],
+  ["JP-40", "ChIJJbF-93qBQTURTThRSvsPopc"], ["JP-41", "ChIJVVXx4qHSQTUR2vEeH2zUCzA"], ["JP-42", "ChIJC46vsRChaTURlUoIqR4qlSQ"],
+  ["JP-43", "ChIJpzy0q613QDUR8fFMMDKVF_I"], ["JP-44", "ChIJk0fY45VcRDUR4r42cPK3Fz8"], ["JP-45", "ChIJYfx_FietODURKhlreMr3-Cg"],
+  ["JP-46", "ChIJA4AW0cJbGDURcNZa6PLRr40"], ["JP-47", "ChIJ51ur7mJw9TQR79H9hnJhuzU"]
+]);
+
+const PREFECTURE_BY_CODE = new Map();
+for (const [code, name] of JAPAN_PREFECTURES) PREFECTURE_BY_CODE.set(code, Object.freeze({ code, name }));
+const PREFECTURE_BY_PLACE_ID = new Map();
+for (const [code, placeId] of JAPAN_PREFECTURE_PLACE_IDS) PREFECTURE_BY_PLACE_ID.set(placeId, PREFECTURE_BY_CODE.get(code));
+
+// 都道府県の place_id → { code, name }。一覧に無ければ null。
+export function resolveJapanPrefectureByPlaceId(rawPlaceId) {
+  if (typeof rawPlaceId !== "string") return null;
+  return PREFECTURE_BY_PLACE_ID.get(rawPlaceId.trim()) || null;
+}
+
+// 生成の対象を日本のどの都道府県と確かめる。国コードが JP の時だけ。
+//   1. 都道府県の place_id が一覧にあれば、その都道府県(言語に関係しない。名前は使わない)。
+//      本物の都道府県の place_id は必ず都道府県コードの保存先・正式名の指示になり、海外の扱いの保存先
+//      (JP_{place_id}_日付。以前の保存先として日本の利用者にも読まれる)へは書けない。
+//   2. 一覧に無ければ、都道府県名(日本語・英語)。どちらでも分からなければ null(推測で日本扱いしない)。
+export function resolveJapanPrefectureForRequest(countryCode, prefectureName, prefecturePlaceId) {
+  if (countryCode !== "JP") return null;
+  return resolveJapanPrefectureByPlaceId(prefecturePlaceId) || resolveJapanPrefecture(prefectureName) || null;
+}
+
 // STEP 2-B 修正(2026-11-12)｜英語の画面の市区町村名を、全国の市区町村のローマ字の表(japan-municipality-romaji.js)で正式名にそろえる。
 // 同じローマ字の市区町村が同じ都道府県に2つ以上ある時(例：釧路市・釧路町)は、末尾の語(City・Town 等)で見分ける。見分けられなければ "" (生成しない)。
 const MUNICIPALITY_LATIN_SUFFIX_TYPES = Object.freeze([

@@ -15,7 +15,7 @@ import {
   readAiGenerationControlForAdmin,
   releaseAiGenerationLock,
   resolveJapanMunicipality,
-  resolveJapanPrefecture,
+  resolveJapanPrefectureForRequest,
   updateAiGenerationControlByAdmin
 } from "./_lib/ai-generation-guard.js";
 
@@ -12078,16 +12078,24 @@ async function handleCityInfoGetRequest(
         CITY_INFO_TARGET_AREA_MAX_LENGTH
       );
 
+    // STEP 2-B 最終修正(2026-11-12・代表判断)｜都道府県の place_id(言語に関係しない)も受け取り、表示言語で判定しない。
+    const requestedPrefecturePlaceId =
+      typeof requestBody.prefecturePlaceId === "string" &&
+      /^[A-Za-z0-9_-]{10,300}$/.test(requestBody.prefecturePlaceId.trim())
+        ? requestBody.prefecturePlaceId.trim()
+        : "";
+
     const isLocationUnspecified =
       requestedCountryCode === "" &&
-      requestedPrefecture === "";
+      requestedPrefecture === "" &&
+      requestedPrefecturePlaceId === "";
 
     const cityInfoPrefectureEntry =
-      requestedCountryCode === "JP"
-        ? resolveJapanPrefecture(
-            requestedPrefecture
-          )
-        : null;
+      resolveJapanPrefectureForRequest(
+        requestedCountryCode,
+        requestedPrefecture,
+        requestedPrefecturePlaceId
+      );
 
     const cityInfoPrefectureName =
       cityInfoPrefectureEntry
@@ -15029,12 +15037,15 @@ async function handleRegionTodayInfoGetRequest(
     let promptMunicipality =
       municipality;
 
+    // STEP 2-B 最終修正(2026-11-12・代表判断)｜表示言語で日本・海外を判定しない。国コードが JP の時、都道府県の
+    // place_id(regionKey、言語に関係しない)が既知の47件にあればその都道府県、無ければ都道府県名(日本語・英語)で確かめる。
+    // 両方が食い違う時は place_id。どちらでも確かめられない時は、推測で日本扱いしない(下の海外の扱い＝形の確認と海外の上限)。
     const japanPrefecture =
-      countryCode === "JP"
-        ? resolveJapanPrefecture(
-            regionName
-          )
-        : null;
+      resolveJapanPrefectureForRequest(
+        countryCode,
+        regionName,
+        regionKey
+      );
 
     if (japanPrefecture) {
       cacheRegionKey =
