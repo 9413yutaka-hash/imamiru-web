@@ -38,13 +38,15 @@ const MACHINAU_TRANSLATIONS = {
   // (STEP3の旧ヒーロー由来、参照箇所なし)とは別物。
   // サイト全体改善 第5弾｜代表採用のファーストビュー(見出し・補足・主ボタン「現在地から探す」)。
   hero_main_copy: {
-    ja: "街の今を知れば、<br>もっと、いい旅になる。",
-    en: "Know what's happening in town now,<br>and make your trip even better."
+    ja: "もっと、いい旅になる。",
+    en: "Make your trip even better."
   },
 
+  // トップページ改修フェーズ1(モカ案ブレンド)｜主文と分けたサブコピーを
+  // ヒーローの <p class="hero-sub-copy" data-i18n="hero_lead"> で復活使用する。
   hero_lead: {
-    ja: "今だけの情報も、近くのお店も。<br>今いる場所から見つけよう。",
-    en: "Limited-time updates and nearby places. Find them from where you are."
+    ja: "街の今を知れば、もっと、いい旅になる。",
+    en: "Discover what's happening in town right now."
   },
 
   // 今だけ投稿が0件の日の「今日の今」(ページ内の既存の枠への移動だけ)。
@@ -885,7 +887,7 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   brand_caption: {
-    ja: "街の「今」がわかる旅の案内所",
+    ja: "街の「今」がわかる案内所",
     en: "Your guide to what's happening in town"
   },
 

@@ -2035,8 +2035,8 @@
       margin: 0 0 16px;
       padding: 5px 12px;
       border-radius: 999px;
-      background: rgba(255, 255, 255, 0.92);
-      color: #066fa6;
+      background: var(--yellow);
+      color: var(--navy);
       font-size: 12px;
       font-weight: 900;
       letter-spacing: 0.04em;
@@ -2048,7 +2048,7 @@
       width: 7px;
       height: 7px;
       border-radius: 50%;
-      background: var(--cyan);
+      background: var(--navy);
     }
 
     .hero-entry-card {
@@ -2652,7 +2652,7 @@
 
         <div>
           <p class="brand-caption" data-i18n="brand_caption">
-            街の「今」がわかる旅の案内所
+            街の「今」がわかる案内所
           </p>
         </div>
 
@@ -2724,11 +2724,15 @@
         <!-- TOP・街ページ統合改善(代表承認・ミューズの仕様とスマホの完成イメージ)｜キャッチコピー・
              「沖縄からエリア拡大中」・現在地カード・4つの入口・街の掲示板・マチナウの楽しみ方。
              第5弾のファーストビュー(見出し「今、この街で何しよう？」・入口2つ)はこの仕様で置き換えた。 -->
+        <p class="hero-area-badge" data-i18n="hero_area_badge">沖縄からエリア拡大中</p>
+
         <h1 class="hero-main-copy" data-i18n="hero_main_copy">
-          街の今を知れば、<br>もっと、いい旅になる。
+          もっと、いい旅になる。
         </h1>
 
-        <p class="hero-area-badge" data-i18n="hero_area_badge">沖縄からエリア拡大中</p>
+        <p class="hero-sub-copy" data-i18n="hero_lead">
+          街の今を知れば、もっと、いい旅になる。
+        </p>
 
         <section class="location-card hero-entry-card" aria-labelledby="locationHeading">
 
@@ -3634,28 +3638,6 @@
 
     </section>
 
-    <!-- 街の発見の分離｜post.html?mode=street(街の「今」を投稿する)の投稿を、
-         店舗カード(今、近くで楽しめる場所)から分けてここに出す。現在地から
-         15km以内の投稿が1件も無い間はapp.jsのrenderStreetDiscoverySection()が
-         セクションごと非表示にする。見出しは仮名称(代表が最終決定)。 -->
-    <section
-      id="streetDiscoverySection"
-      class="region-recommendation-section"
-      style="display:none;"
-    >
-
-      <h2 data-i18n="street_discovery_heading">
-        街の発見
-      </h2>
-
-      <p class="column-entry-lead" data-i18n="street_discovery_lead">
-        近くの人が見つけた、今の街の様子です。
-      </p>
-
-      <div id="streetDiscoveryList"></div>
-
-    </section>
-
     <!-- 投稿の入口(TOP・街ページ統合改善で1か所に統一)｜街ページの4番目。旧来の「見つけた「今」を投稿する」
          (contribute.html)・街の今スレッドを立てる(#townNowNewThreadLink、town-now-post.html)・掲示板に投稿する
          (#communityBoardPostLink、表示中の街に合わせて app.js が文言・行き先を変える)を、ここにまとめた。
@@ -3715,6 +3697,28 @@
       >
         お店・施設の方へ｜店舗カード・今だけ投稿のご案内 →
       </a>
+
+    </section>
+
+    <!-- 街の発見の分離｜post.html?mode=street(街の「今」を投稿する)の投稿を、
+         店舗カード(今、近くで楽しめる場所)から分けてここに出す。現在地から
+         15km以内の投稿が1件も無い間はapp.jsのrenderStreetDiscoverySection()が
+         セクションごと非表示にする。見出しは仮名称(代表が最終決定)。 -->
+    <section
+      id="streetDiscoverySection"
+      class="region-recommendation-section"
+      style="display:none;"
+    >
+
+      <h2 data-i18n="street_discovery_heading">
+        街の発見
+      </h2>
+
+      <p class="column-entry-lead" data-i18n="street_discovery_lead">
+        近くの人が見つけた、今の街の様子です。
+      </p>
+
+      <div id="streetDiscoveryList"></div>
 
     </section>
 
