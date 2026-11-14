@@ -2724,10 +2724,12 @@ body:has(#todayFeedSection) .hero-action-grid {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .today-ticker {
+    overflow-x: auto;
+  }
+
   .today-ticker-track {
     animation: none;
-    flex-wrap: wrap;
-    width: auto;
   }
 }
 
@@ -2774,6 +2776,7 @@ body:has(#todayFeedSection) .hero-action-grid {
 
 .today-hero-date {
   line-height: 1.05;
+  min-width: 0;
 }
 
 .today-hero-dow {
@@ -2791,8 +2794,8 @@ body:has(#todayFeedSection) .hero-action-grid {
 }
 
 .today-hero-copy {
-  flex: 1;
-  min-width: 220px;
+  flex: 1 1 220px;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -2814,6 +2817,7 @@ body:has(#todayFeedSection) .hero-action-grid {
   flex-direction: column;
   justify-content: center;
   align-items: flex-end;
+  flex-shrink: 0;
   gap: 4px;
   font-weight: 800;
   font-size: 13.5px;
