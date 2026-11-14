@@ -90,7 +90,7 @@ try {
   const top = fs.readFileSync(REPO_ROOT + "/index.html", "utf8").replace(/\s+/g, " ");
   const topHead = top.slice(0, top.indexOf("</head>"));
   t("T1 canonical は https://machinau.jp/", /<link rel="canonical" href="https:\/\/machinau\.jp\/" >/.test(topHead), "");
-  t("T2 description・og:description は今のマチナウ(旧文言なし)", (topHead.match(/街の「今」がわかる旅の案内所。今いる場所の近くで楽しめるお店・観光・体験/g) || []).length === 3 && !/タイムセール|リアルタイム観光コンシェルジュです/.test(topHead), "");
+  t("T2 description・og:description は今のマチナウ(旧文言なし)", (topHead.match(/街の「今」がわかる案内所。今いる場所の近くで楽しめるお店・観光・体験/g) || []).length === 3 && !/タイムセール|リアルタイム観光コンシェルジュです/.test(topHead), "");
   t("T3 og:image は横長の写真(正方形のロゴではない)", /property="og:image" content="https:\/\/machinau\.jp\/machinau-hero-bg\.png"/.test(topHead) && /og:image:width" content="2035"/.test(topHead) && !/og:image" content="https:\/\/machinau\.jp\/icon-512/.test(topHead), "");
   const topLd = topHead.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
   let g = null; try { g = JSON.parse(topLd[1]); } catch (e) {}

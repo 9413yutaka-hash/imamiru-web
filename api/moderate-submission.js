@@ -26163,6 +26163,31 @@ function buildColumnArticleParagraphsHtml(
         }
       );
 
+  // 署名の重複を防ぐ(2026-11-15 運営決定)。記事本文の末尾に署名「マチナウ運営」が
+  // 入っている記事では、ページ側の署名(byline)と合わせて2か所に出てしまうため、
+  // 本文末尾の署名だけを取り除き、署名はページ側の1か所に統一する。
+  if (paragraphs.length > 1) {
+    const lastIndex =
+      paragraphs.length - 1;
+
+    if (paragraphs[lastIndex] === "マチナウ運営") {
+      paragraphs.pop();
+    } else {
+      const lastLines =
+        paragraphs[lastIndex].split("\n");
+
+      if (
+        lastLines.length > 1 &&
+        lastLines[lastLines.length - 1].trim() === "マチナウ運営"
+      ) {
+        lastLines.pop();
+
+        paragraphs[lastIndex] =
+          lastLines.join("\n");
+      }
+    }
+  }
+
   return paragraphs
     .map(
       function(paragraph) {

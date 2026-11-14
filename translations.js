@@ -51,7 +51,7 @@ const MACHINAU_TRANSLATIONS = {
 
   // トップページ改修(モカ案ブレンド・見た目)｜ヒーローのリード文。
   hero_lead2: {
-    ja: "店の今、今日の行事、地元の声。今いる街の「今」を、近い順に1本で届けます。",
+    ja: "店の今、今日のイベント、地元の声。今いる街の「今」を、近い順に1本で届けます。",
     en: "Shop updates, today's events, local voices — the town's “now”, in one feed, closest first."
   },
 
@@ -111,8 +111,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   feed_today_copy_text: {
-    ja: "店の今・今日の行事・地元の声を混ぜた1本のフィード。開いた瞬間に「いま出かける理由」が伝わるように、日付を主役にしています。",
-    en: "One feed mixing shop updates, today's events and local voices — led by the date, so you instantly see a reason to head out."
+    ja: "店の今・今日のイベント・地元の声を混ぜた1本のフィードです。",
+    en: "One feed mixing shop updates, today's events, and local voices."
   },
 
   feed_radius_label: {
@@ -171,7 +171,7 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   feed_filter_event: {
-    ja: "行事",
+    ja: "イベント",
     en: "Events"
   },
 
@@ -1073,8 +1073,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   nav_find: {
-    ja: "見つける",
-    en: "Explore"
+    ja: "お店・施設",
+    en: "Shops & Spots"
   },
 
   nav_location: {
@@ -1083,8 +1083,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   nav_mypage: {
-    ja: "マイページ",
-    en: "My Page"
+    ja: "保存箱",
+    en: "Saved"
   },
 
   brand_caption: {
@@ -1528,8 +1528,8 @@ const MACHINAU_TRANSLATIONS = {
     en: "Found something in town? | Machinau"
   },
   contribute_brand_caption: {
-    ja: "リアルタイム観光コンシェルジュ",
-    en: "Real-time travel concierge"
+    ja: "街の「今」がわかる案内所",
+    en: "Your guide to what's happening in town"
   },
   contribute_home_link: {
     ja: "← トップへ戻る",
@@ -1915,8 +1915,8 @@ const MACHINAU_TRANSLATIONS = {
   },
   // サイト全体改善 第4弾｜contact.html の固定の文言(英語の TOP から移っても日本語に戻らない)。
   contact_brand_caption: {
-    ja: "リアルタイム観光コンシェルジュ",
-    en: "Real-time travel concierge"
+    ja: "街の「今」がわかる案内所",
+    en: "Your guide to what's happening in town"
   },
   contact_home_link: {
     ja: "← マチナウTOPへ",
@@ -2100,8 +2100,8 @@ const MACHINAU_TRANSLATIONS = {
   },
   // サイト全体改善 第4弾｜post.html の固定の文言(英語の TOP から移っても日本語に戻らない)。
   post_brand_caption: {
-    ja: "リアルタイム観光コンシェルジュ",
-    en: "Real-time travel concierge"
+    ja: "街の「今」がわかる案内所",
+    en: "Your guide to what's happening in town"
   },
   post_home_link: {
     ja: "← トップへ戻る",
@@ -2593,8 +2593,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   mypage_heading: {
-    ja: "旅の保存箱",
-    en: "Travel Box"
+    ja: "保存箱",
+    en: "Saved Box"
   },
 
   mypage_description: {
@@ -3021,6 +3021,13 @@ const MACHINAU_TRANSLATIONS = {
   shop_walking_distance_unknown: {
     ja: "距離を確認",
     en: "Check Distance"
+  },
+
+  // 距離が分からない時(現在地が未取得)の表示。ボタンの文言(現在地を取得する)を
+  // 流用すると押せるものに見えるため、状態を表す言葉にする(2026-11-15 運営決定)。
+  shop_distance_unknown: {
+    ja: "現在地未取得",
+    en: "Location not set"
   },
 
   shop_walking_car_recommended: {

@@ -52,7 +52,7 @@ const SHARE_PREVIEW_DESCRIPTION_LENGTH =
 // TOP(index.html)の OGP と同じ共通の表示。
 export const SHARE_PREVIEW_DEFAULT = {
   title: "マチナウ｜今、何が起きているかを見つけよう",
-  description: "沖縄の今だけ楽しめる店舗情報、イベント、タイムセールを見つけられるリアルタイム観光コンシェルジュです。",
+  description: "沖縄の今だけ楽しめる店舗情報、イベント、タイムセールを見つけられる、街の「今」がわかる案内所です。",
   image: "https://machinau.jp/icon-512.png?v=2"
 };
 

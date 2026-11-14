@@ -41,7 +41,7 @@
 
   <meta
     name="description"
-    content="街の「今」がわかる旅の案内所。今いる場所の近くで楽しめるお店・観光・体験、今だけの情報、街のスレッドと掲示板、旅のヒントになる読み物まで。沖縄からエリア拡大中。"
+    content="街の「今」がわかる案内所。今いる場所の近くで楽しめるお店・観光・体験、今だけの情報、街のスレッドと掲示板、旅のヒントになる読み物まで。沖縄からエリア拡大中。"
   >
 
   <title>
@@ -101,7 +101,7 @@
 
   <meta
     property="og:description"
-    content="街の「今」がわかる旅の案内所。今いる場所の近くで楽しめるお店・観光・体験、今だけの情報、街のスレッドと掲示板、旅のヒントになる読み物まで。沖縄からエリア拡大中。"
+    content="街の「今」がわかる案内所。今いる場所の近くで楽しめるお店・観光・体験、今だけの情報、街のスレッドと掲示板、旅のヒントになる読み物まで。沖縄からエリア拡大中。"
   >
 
   <meta
@@ -131,7 +131,7 @@
         "@id": "https://machinau.jp/#website",
         "url": "https://machinau.jp/",
         "name": "マチナウ",
-        "description": "街の「今」がわかる旅の案内所。今いる場所の近くで楽しめるお店・観光・体験、今だけの情報、街のスレッドと掲示板、旅のヒントになる読み物まで。沖縄からエリア拡大中。",
+        "description": "街の「今」がわかる案内所。今いる場所の近くで楽しめるお店・観光・体験、今だけの情報、街のスレッドと掲示板、旅のヒントになる読み物まで。沖縄からエリア拡大中。",
         "inLanguage": ["ja", "en"],
         "publisher": { "@id": "https://machinau.jp/#organization" }
       },
@@ -2677,16 +2677,16 @@
           <span data-i18n="nav_home">ホーム</span>
         </button>
         <button class="top-pc-nav-button" type="button" onclick="showAllShopCardsAndScrollToShops()">
-          <span class="top-pc-nav-icon" aria-hidden="true">🔍</span>
-          <span data-i18n="nav_find">見つける</span>
+          <span class="top-pc-nav-icon" aria-hidden="true">🏬</span>
+          <span data-i18n="nav_find">お店・施設</span>
         </button>
         <button class="top-pc-nav-button" type="button" data-location-trigger>
           <span class="top-pc-nav-icon" aria-hidden="true">📍</span>
           <span data-i18n="nav_location">現在地</span>
         </button>
         <button class="top-pc-nav-button" type="button" onclick="showMyPage()">
-          <span class="top-pc-nav-icon" aria-hidden="true">👤</span>
-          <span data-i18n="nav_mypage">マイページ</span>
+          <span class="top-pc-nav-icon" aria-hidden="true">🔖</span>
+          <span data-i18n="nav_mypage">保存箱</span>
         </button>
       </nav>
 
@@ -2727,7 +2727,7 @@
          非表示中の枠へのリンクは、表示されるまで移動しない。 -->
     <nav class="top-section-nav" aria-label="セクション移動">
       <a href="#todayFeedSection" data-i18n="nav_feed">今日のフィード</a>
-      <a href="#imadakeSection" data-i18n="imadake_heading">今だけ投稿</a>
+      <a href="#todayFeedSection" id="topNavImadake" data-i18n="imadake_heading">今だけ投稿</a>
       <a href="#regionRecommendationSection" data-i18n="nav_board">掲示板</a>
       <a href="#shopsSection" data-i18n="nav_shops">お店</a>
       <a href="#columnEntrySection" data-i18n="nav_columns">読みもの</a>
@@ -2767,7 +2767,7 @@
         </p>
 
         <p class="hero-lead2" data-i18n="hero_lead2">
-          店の今、今日の行事、地元の声。今いる街の「今」を、近い順に1本で届けます。
+          店の今、今日のイベント、地元の声。今いる街の「今」を、近い順に1本で届けます。
         </p>
 
         <!-- ヒーロー検索(モック準拠の白ピル+クイックチップ)｜新しい検索基盤は作らず、
@@ -2786,13 +2786,8 @@
           <button class="hero-search-button" type="submit" data-i18n="hero_search_button">探す</button>
         </form>
 
-        <div class="hero-search-chips" id="heroSearchChips" role="group" aria-label="人気のキーワード">
-          <button type="button" data-hero-search-term="糸満">糸満</button>
-          <button type="button" data-hero-search-term="那覇">那覇</button>
-          <button type="button" data-hero-search-term="祭り">祭り</button>
-          <button type="button" data-hero-search-term="夕日">夕日</button>
-          <button type="button" data-hero-search-term="そば">そば</button>
-        </div>
+        <!-- 人気キーワードのチップは運営決定で撤去(2026-11-15)。検索窓と窓内の
+             例示(糸満、そば、祭り)は残す。 -->
 
         <section class="location-card hero-entry-card" aria-labelledby="locationHeading">
 
@@ -2850,9 +2845,8 @@
               <button type="button" id="locationFailureAreaButton" class="location-alternative-button" data-i18n="location_failure_area_button">
                 都道府県・市区町村から
               </button>
-              <button type="button" id="locationRetryButton" class="location-alternative-button" data-i18n="location_retry_button">
-                もう一度現在地を取得する
-              </button>
+              <!-- 「もう一度現在地を取得する」の行は、すぐ上に同じ働きのボタンがあるため
+                   運営決定で削除(2026-11-15)。app.js のバインドは null ガード済み。 -->
             </div>
             <button
               id="locationPermissionGuideToggle"
@@ -3231,17 +3225,9 @@
          既存のnullガードにより安全に何もしなくなるだけにとどめる
          (本部指示：関係するJS/APIを推測で大規模削除しない)。表示/非表示は
          既存2枠と同じくGPS取得後にだけrenderCityNowGuidance()で切り替える。 -->
-    <section
-      id="cityNowGuidanceSection"
-      class="suggestion-highlight-section"
-      style="display:none;"
-    >
-
-      <span class="suggestion-highlight-heading" data-i18n="city_now_guidance_message">
-        この街の「今」が届いているよ！下をチェック！
-      </span>
-
-    </section>
+    <!-- 「この街の『今』が届いているよ！下をチェック！」の案内枠(#cityNowGuidanceSection)は
+         運営決定で撤去(2026-11-15)。下のフィード自体が中身で、この枠には情報が無いため。
+         renderCityNowGuidance() は対象DOMが無い場合は何もしない(nullガード済み)。 -->
 
     <!-- マチナウAI一本化 Phase1｜旧「✨マチナウAI『今どうする？』」は
          「💬マチナウAIと話す」(#aiConciergeChatSection)へ一本化したため
@@ -3300,12 +3286,11 @@
 
       <div class="today-hero-card">
         <div class="today-hero-date">
-          <span class="today-hero-dow" data-i18n="feed_today_label">TODAY — 今日できること</span>
           <span class="today-hero-md" id="todayFeedDate"></span>
         </div>
         <div class="today-hero-copy">
           <b data-i18n="feed_today_copy_title">今日の街を、近い順に。</b>
-          <p data-i18n="feed_today_copy_text">店の今・今日の行事・地元の声を混ぜた1本のフィード。開いた瞬間に「いま出かける理由」が伝わるように、日付を主役にしています。</p>
+          <p data-i18n="feed_today_copy_text">店の今・今日のイベント・地元の声を混ぜた1本のフィードです。</p>
         </div>
         <div class="today-hero-radius">
           <span data-i18n="feed_radius_label">表示範囲</span>
@@ -3329,7 +3314,7 @@
         <div class="feed-chips feed-filter-chips" id="todayFeedFilterChips">
           <button type="button" data-feed-filter="all" aria-pressed="true" data-i18n="feed_filter_all">すべて</button>
           <button type="button" data-feed-filter="imadake" aria-pressed="false" data-i18n="feed_filter_imadake">今だけ投稿</button>
-          <button type="button" data-feed-filter="event" aria-pressed="false" data-i18n="feed_filter_event">行事</button>
+          <button type="button" data-feed-filter="event" aria-pressed="false" data-i18n="feed_filter_event">イベント</button>
           <button type="button" data-feed-filter="voice" aria-pressed="false" data-i18n="feed_filter_voice">地元の声</button>
           <button type="button" data-feed-filter="discovery" aria-pressed="false" data-i18n="feed_filter_discovery">街の発見</button>
         </div>
@@ -3480,8 +3465,8 @@
 
         </div>
 
-        <span id="shopsOrderLabel" class="section-link" data-i18n="shops_current_location_order">
-          現在地から近い順
+        <span id="shopsOrderLabel" class="section-link" data-i18n="shops_newest_order">
+          新しい順
         </span>
 
       </div>
@@ -3925,7 +3910,7 @@
     <section id="myPageSection" class="travel-box" style="display:none;">
   <div class="section-header">
     <div class="section-title-area">
-      <h2 data-i18n="mypage_heading">旅の保存箱</h2>
+      <h2 data-i18n="mypage_heading">保存箱</h2>
       <p data-i18n="mypage_description">旅先で見つけた情報を保存して、旅の途中や旅のあとに振り返れます。</p>
     </div>
   </div>
@@ -4010,10 +3995,10 @@
       onclick="showAllShopCardsAndScrollToShops()"
     >
       <span class="nav-icon">
-        🔍
+        🏬
       </span>
 
-      <span data-i18n="nav_find">見つける</span>
+      <span data-i18n="nav_find">お店・施設</span>
     </button>
 
     <button
@@ -4034,10 +4019,10 @@
       onclick="showMyPage()"
     >
       <span class="nav-icon">
-        👤
+        🔖
       </span>
 
-      <span data-i18n="nav_mypage">マイページ</span>
+      <span data-i18n="nav_mypage">保存箱</span>
     </button>
 
   </nav>
@@ -4407,7 +4392,7 @@
   <script src="firebase.js?v=20261115"></script>
 
   <!-- 固定UI文言専用の翻訳辞書(投稿本文は扱わない)。app.jsより先に読み込む -->
-  <script src="translations.js?v=20261115"></script>
+  <script src="translations.js?v=20261115c"></script>
 
   <!-- 街の掲示板：全国市区町村の選択肢データ(静的・出典クレジットはフッター参照)。app.jsより先に読み込む -->
   <script src="japan-municipalities.js?v=20261115"></script>
@@ -4416,7 +4401,7 @@
   <script src="saved-items.js?v=20261115"></script>
 
   <!-- トップページの動き -->
-  <script src="app.js?v=20261115b"></script>
+  <script src="app.js?v=20261115c"></script>
   <!-- Google Maps JavaScript APIは常時読み込まず、地図セクション到達時または
        GPS/トイレ検索操作時にapp.jsのensureGoogleMapsLoaded()が動的に読み込む -->
 </body>
