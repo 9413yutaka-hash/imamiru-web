@@ -25760,11 +25760,13 @@ function renderTodayTicker(
             : (item.title !== "" ? item.title : item.body);
 
         return (
-          "<span><b>" +
+          "<a href=\"#" +
+          escapeHtml(item.targetId) +
+          "\"><b>" +
           escapeHtml(label) +
           "</b>" +
           escapeHtml(truncateTodayFeedText(headline, 60)) +
-          "</span>"
+          "</a>"
         );
       })
       .join("");

@@ -2701,14 +2701,16 @@ body:has(#todayFeedSection) .hero-action-grid {
   animation: today-ticker-scroll 38s linear infinite;
 }
 
-.today-ticker-track span {
+.today-ticker-track a {
   font-weight: 700;
   font-size: 14px;
   white-space: nowrap;
   padding: 0 26px;
+  color: inherit;
+  text-decoration: none;
 }
 
-.today-ticker-track span b {
+.today-ticker-track a b {
   background: var(--white);
   color: #e83e2c;
   border-radius: 6px;
