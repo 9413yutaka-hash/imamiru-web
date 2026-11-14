@@ -1196,7 +1196,9 @@
 
       <!-- 管理本部 再構成（2026-11-14 代表承認）｜管理メニューを5グループに再編した。
       リンク先・要素ID・既存JSは変更していない。「→」は別画面、「↓」は
-      このページ内の既存セクションへの移動。 -->
+      このページ内の既存セクションへの移動。
+      第2弾（2026-11-14 代表承認）｜グループ名と説明文をふつうの言葉に作り替えた。
+      テストで固定されている文言（店舗の登録・管理の説明／オーナー申請の説明）は維持している。 -->
       <nav
         class="admin-menu"
         aria-label="管理メニュー"
@@ -1204,7 +1206,7 @@
 
         <section class="admin-menu-group">
           <h3 class="admin-menu-group-title">
-            受付・審査
+            届いた投稿の確認
           </h3>
 
           <a
@@ -1212,7 +1214,7 @@
             href="#submissionReviewSection"
           >
             <span class="admin-menu-link-title">投稿を確認する</span>
-            <span class="admin-menu-link-note">一般投稿の採用・却下・掲載終了</span>
+            <span class="admin-menu-link-note">一般の人が送った投稿を、公開してよいか確認します。OKしたものだけがサイトに出ます</span>
           </a>
 
           <!-- 今だけ投稿 STEP 3.5｜安全重大語等で自動公開しなかった今だけ投稿の審査。 -->
@@ -1220,8 +1222,8 @@
             class="admin-menu-link"
             href="admin-imadake.html"
           >
-            <span class="admin-menu-link-title">今だけ投稿 審査待ち</span>
-            <span class="admin-menu-link-note">自動で公開しなかった今だけ投稿の承認・却下</span>
+            <span class="admin-menu-link-title">今だけ投稿の確認待ち</span>
+            <span class="admin-menu-link-note">お店の『今だけ投稿』で、公開の確認を待っているもの</span>
           </a>
 
           <!-- 店舗・施設申込み Phase1｜shop-apply.htmlからの申込みを確認する。
@@ -1237,7 +1239,7 @@
                 class="admin-count-badge"
               >未対応 -件</span>
             </span>
-            <span class="admin-menu-link-note">新しい申込みの確認・対応状況の管理</span>
+            <span class="admin-menu-link-note">サイトに載せたいお店からの申込み</span>
           </a>
 
           <!-- 運営無料掲載 → 店舗オーナー化 MVP-1｜店舗からのオーナー申請の確認・承認・却下・紐付け解除。
@@ -1261,7 +1263,7 @@
             href="admin-contact.html"
           >
             <span class="admin-menu-link-title">お問い合わせ</span>
-            <span class="admin-menu-link-note">お問い合わせ・ご意見の確認・対応後の削除</span>
+            <span class="admin-menu-link-note">サイトのお問い合わせフォームに届いた内容</span>
           </a>
         </section>
 
@@ -1283,7 +1285,7 @@
             href="admin-community-board.html"
           >
             <span class="admin-menu-link-title">街の掲示板 管理</span>
-            <span class="admin-menu-link-note">掲示板投稿の採用・却下／地域代表画像の設定</span>
+            <span class="admin-menu-link-note">街の掲示板に届いた投稿を、載せてよいか確認します。地域の代表画像もここで設定します</span>
           </a>
 
           <!-- 地域のおすすめ｜旧「旧機能」ブロックにあった入口を、再構成でこのグループへ移した。
@@ -1293,7 +1295,7 @@
             href="admin-region-picks.html"
           >
             <span class="admin-menu-link-title">地域のおすすめ管理</span>
-            <span class="admin-menu-link-note">一部画面で使われている「地域のおすすめ」の管理</span>
+            <span class="admin-menu-link-note">サイトの一部に出ている「地域のおすすめ」を編集する場所です</span>
           </a>
 
           <!-- 地域プロフィール（街の記憶）｜STEP 39-Bで管理メニューから外していたが、
@@ -1304,13 +1306,13 @@
             href="admin-region-profiles.html"
           >
             <span class="admin-menu-link-title">地域プロフィール(街の記憶)管理</span>
-            <span class="admin-menu-link-note">街の記憶（地域プロフィール）の作成・編集</span>
+            <span class="admin-menu-link-note">地域の紹介文（街の記憶）を書く・直す場所です</span>
           </a>
         </section>
 
         <section class="admin-menu-group">
           <h3 class="admin-menu-group-title">
-            発信
+            自分で発信する
           </h3>
 
           <a
@@ -1319,7 +1321,7 @@
             href="admin-post.html"
           >
             <span class="admin-menu-link-title">地域情報を投稿する</span>
-            <span class="admin-menu-link-note">街の「今」を運営から投稿</span>
+            <span class="admin-menu-link-note">運営（あなた）から街の「今」を投稿する場所です</span>
           </a>
 
           <a
@@ -1328,7 +1330,7 @@
             href="admin-column.html"
           >
             <span class="admin-menu-link-title">マチナウ読み物を書く</span>
-            <span class="admin-menu-link-note">記事の作成・編集・公開</span>
+            <span class="admin-menu-link-note">読み物の記事を書く・直す・公開する場所です</span>
           </a>
 
           <a
@@ -1336,7 +1338,7 @@
             href="#commentAdminSection"
           >
             <span class="admin-menu-link-title">コメント管理</span>
-            <span class="admin-menu-link-note">読み物コメントの確認・非表示</span>
+            <span class="admin-menu-link-note">読み物についたコメントの確認・非表示</span>
           </a>
         </section>
 
@@ -1351,7 +1353,7 @@
             href="admin-billing.html"
           >
             <span class="admin-menu-link-title">今だけ投稿の請求確認</span>
-            <span class="admin-menu-link-note">月次請求で対応が必要なものの確認（確認専用・操作なし）</span>
+            <span class="admin-menu-link-note">お店への請求の内容を見る画面です（見るだけで、操作はしません）</span>
           </a>
 
           <!-- OpenAI API安全対策 STEP 2-B 修正(2026-11-12)｜「この街の情報」「今日の地域情報」の
@@ -1361,13 +1363,13 @@
             href="admin-ai-generation.html"
           >
             <span class="admin-menu-link-title">AIの新しい作成の停止・再開</span>
-            <span class="admin-menu-link-note">この街の情報・今日の地域情報の緊急停止・今日の回数・操作の履歴</span>
+            <span class="admin-menu-link-note">AIがおかしな内容を作った時に止めるための場所。ふだんは触りません</span>
           </a>
         </section>
 
         <section class="admin-menu-group">
           <h3 class="admin-menu-group-title">
-            管理
+            その他（ふだん触りません）
           </h3>
 
           <a
@@ -1375,7 +1377,7 @@
             href="#editorAdminSection"
           >
             <span class="admin-menu-link-title">運営投稿担当（Editor）の管理</span>
-            <span class="admin-menu-link-note">担当者アカウントの作成・停止</span>
+            <span class="admin-menu-link-note">投稿を手伝う人用のアカウントを作る・止める場所。いまは使っていません</span>
           </a>
         </section>
 
