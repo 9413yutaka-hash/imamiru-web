@@ -534,8 +534,10 @@ function formatDistance(distanceKm) {
     distanceKm === null ||
     !Number.isFinite(distanceKm)
   ) {
+    // 距離が無い時はボタンの文言(現在地を取得する)を流用しない。押せるものと
+    // 誤解されるため、状態を表す言葉にする(2026-11-15 運営決定)。
     return getMachinauTranslation(
-      "location_button_get",
+      "shop_distance_unknown",
       getCurrentMachinauLanguage()
     );
   }
@@ -2960,6 +2962,39 @@ function countShopsInSelectedShopRegion() {
   ).length;
 }
 
+// 選んだ街をURLに持たせる(2026-11-15 運営決定)。再読み込みで選択が消えず、
+// 街のURLをそのまま共有できるようにする。履歴は増やさない(replaceState)。
+function syncShopRegionUrl() {
+  try {
+    const url =
+      new URL(window.location.href);
+
+    if (selectedShopRegion) {
+      url.searchParams.set(
+        "pref",
+        selectedShopRegion.prefectureName
+      );
+
+      url.searchParams.set(
+        "city",
+        selectedShopRegion.municipalityName
+      );
+    } else {
+      url.searchParams.delete("pref");
+
+      url.searchParams.delete("city");
+    }
+
+    window.history.replaceState(
+      null,
+      "",
+      url.toString()
+    );
+  } catch (error) {
+    // URLの同期に失敗しても、街の選択そのものは続ける。
+  }
+}
+
 function setSelectedShopRegion(
   prefectureName,
   municipalityName
@@ -2974,6 +3009,8 @@ function setSelectedShopRegion(
     false;
 
   renderShops();
+
+  syncShopRegionUrl();
 }
 
 // 地域検索をやめて現在地(15km)側の表示へ戻す。地域検索中でなければ
@@ -2990,6 +3027,8 @@ function clearSelectedShopRegion() {
     false;
 
   renderShops();
+
+  syncShopRegionUrl();
 
   // TOP・街ページ統合改善｜選んだ街のスレッドを出していたら、現在地の近くのスレッドへ戻す。
   restoreTownNowThreadsAfterRegionView();
@@ -20862,6 +20901,21 @@ function machinauStartLocation() {
   // 戻すのは取得に成功した時だけ(getLocation() の成功時)。失敗した時は選んでいた街(店舗・スレッド・掲示板)をそのまま残す。
   ensureGoogleMapsLoaded();
   getLocation();
+
+  // 押した反応が目に見えるように、位置情報パネル(ヒーローの現在地カード)へ
+  // 移動する(2026-11-15 運営決定)。取得だけが裏で始まると、何も起きていない
+  // ように見えるため。
+  const locationHeading =
+    document.getElementById("locationHeading");
+
+  if (locationHeading) {
+    locationHeading.scrollIntoView(
+      {
+        behavior: "smooth",
+        block: "start"
+      }
+    );
+  }
 }
 
 document
@@ -24818,6 +24872,66 @@ document.addEventListener(
   }
 );
 
+// 街のURL(?pref=都道府県&city=市区町村)からの復元(2026-11-15 運営決定)。
+// 街を選ぶと syncShopRegionUrl() がURLに残すので、再読み込みや共有でも
+// 選択が消えない。市区町村データに実在する組み合わせだけを受け付ける。
+document.addEventListener(
+  "DOMContentLoaded",
+  function() {
+    let params =
+      null;
+
+    try {
+      params =
+        new URLSearchParams(window.location.search);
+    } catch (error) {
+      return;
+    }
+
+    const prefectureName =
+      params.get("pref");
+
+    const municipalityName =
+      params.get("city");
+
+    if (
+      typeof prefectureName !== "string" ||
+      prefectureName === "" ||
+      typeof municipalityName !== "string" ||
+      municipalityName === ""
+    ) {
+      return;
+    }
+
+    if (
+      typeof JAPAN_MUNICIPALITIES_BY_PREFECTURE === "undefined" ||
+      !JAPAN_MUNICIPALITIES_BY_PREFECTURE
+    ) {
+      return;
+    }
+
+    const municipalities =
+      JAPAN_MUNICIPALITIES_BY_PREFECTURE[prefectureName];
+
+    if (
+      !Array.isArray(municipalities) ||
+      !municipalities.includes(municipalityName)
+    ) {
+      return;
+    }
+
+    setSelectedShopRegion(
+      prefectureName,
+      municipalityName
+    );
+
+    loadCommunityBoardForSelectedArea(
+      prefectureName,
+      municipalityName
+    );
+  }
+);
+
 // サイト全体改善 H｜TOP の「投稿する」と「お店・施設の方へ」の導線を押した時の計測(リンク先・移動は変えない)。
 document.addEventListener(
   "click",
@@ -25880,6 +25994,52 @@ function renderTodayFeed() {
 
 function initTodayFeedUi() {
   updateTodayFeedDateLabel();
+
+  // セクション移動チップの「今だけ投稿」は、今日のフィードを今だけ投稿だけに
+  // 絞って見せる(2026-11-15 運営決定)。#imadakeSection は投稿が無い間は
+  // 非表示で、素のアンカーでは何も起きなかったため、絞り込み+移動にする。
+  const topNavImadake =
+    document.getElementById("topNavImadake");
+
+  if (topNavImadake) {
+    topNavImadake.addEventListener(
+      "click",
+      function(event) {
+        event.preventDefault();
+
+        todayFeedFilter =
+          "imadake";
+
+        const filterChipsElement =
+          document.getElementById("todayFeedFilterChips");
+
+        if (filterChipsElement) {
+          filterChipsElement
+            .querySelectorAll("button")
+            .forEach(function(chipButton) {
+              chipButton.setAttribute(
+                "aria-pressed",
+                String(chipButton.getAttribute("data-feed-filter") === "imadake")
+              );
+            });
+        }
+
+        renderTodayFeed();
+
+        const feedSection =
+          document.getElementById("todayFeedSection");
+
+        if (feedSection) {
+          feedSection.scrollIntoView(
+            {
+              behavior: "smooth",
+              block: "start"
+            }
+          );
+        }
+      }
+    );
+  }
 
   const filterChips =
     document.getElementById("todayFeedFilterChips");
