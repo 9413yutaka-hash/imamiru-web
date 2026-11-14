@@ -484,6 +484,23 @@
       font-size: 10px;
     }
 
+    /* 管理本部 再構成｜旧機能は details で折りたたむ。見出しは summary が担う。 */
+    details.admin-legacy-links > summary.admin-legacy-title {
+      cursor: pointer;
+      margin-bottom: 0;
+    }
+
+    details.admin-legacy-links[open] > summary.admin-legacy-title {
+      margin-bottom: 8px;
+    }
+
+    .admin-legacy-note {
+      margin: 0;
+      color: var(--subtext);
+      font-size: 11px;
+      line-height: 1.6;
+    }
+
     .logout-button {
       display: none;
       min-height: 40px;
@@ -1177,6 +1194,9 @@
         ></span>
       </a>
 
+      <!-- 管理本部 再構成（2026-11-14 代表承認）｜管理メニューを5グループに再編した。
+      リンク先・要素ID・既存JSは変更していない。「→」は別画面、「↓」は
+      このページ内の既存セクションへの移動。 -->
       <nav
         class="admin-menu"
         aria-label="管理メニュー"
@@ -1184,7 +1204,7 @@
 
         <section class="admin-menu-group">
           <h3 class="admin-menu-group-title">
-            投稿
+            受付・審査
           </h3>
 
           <a
@@ -1195,45 +1215,13 @@
             <span class="admin-menu-link-note">一般投稿の採用・却下・掲載終了</span>
           </a>
 
-          <a
-            id="adminPostLink"
-            class="admin-menu-link"
-            href="admin-post.html"
-          >
-            <span class="admin-menu-link-title">地域情報を投稿する</span>
-            <span class="admin-menu-link-note">街の「今」を運営から投稿</span>
-          </a>
-        </section>
-
-        <section class="admin-menu-group">
-          <h3 class="admin-menu-group-title">
-            地域
-          </h3>
-
-          <a
-            class="admin-menu-link is-featured"
-            href="admin-community-board.html"
-          >
-            <span class="admin-menu-link-title">地域の掲示板を確認する</span>
-            <span class="admin-menu-link-note">掲示板投稿の採用・却下／地域代表画像の設定</span>
-          </a>
-
-          <!-- STEP 39-B｜「地域プロフィール（街の記憶）」は現在使っていないため、管理メニューから外した。
-               画面（admin-region-profiles.html）・API・Firestoreの regionProfiles／regionEditorial は削除していない。
-               再び使う時は、ここに admin-region-profiles.html へのリンクを戻す。 -->
-        </section>
-
-        <section class="admin-menu-group">
-          <h3 class="admin-menu-group-title">
-            店舗・施設
-          </h3>
-
+          <!-- 今だけ投稿 STEP 3.5｜安全重大語等で自動公開しなかった今だけ投稿の審査。 -->
           <a
             class="admin-menu-link"
-            href="admin-shops.html"
+            href="admin-imadake.html"
           >
-            <span class="admin-menu-link-title">店舗・施設を管理する</span>
-            <span class="admin-menu-link-note">店舗の登録・管理</span>
+            <span class="admin-menu-link-title">今だけ投稿 審査待ち</span>
+            <span class="admin-menu-link-note">自動で公開しなかった今だけ投稿の承認・却下</span>
           </a>
 
           <!-- 店舗・施設申込み Phase1｜shop-apply.htmlからの申込みを確認する。
@@ -1266,32 +1254,8 @@
             <span class="admin-menu-link-note">店舗の自動引き継ぎ履歴の確認・紐付け解除</span>
           </a>
 
-          <!-- 今だけ投稿 STEP 3.5｜安全重大語等で自動公開しなかった今だけ投稿の審査。 -->
-          <a
-            class="admin-menu-link"
-            href="admin-imadake.html"
-          >
-            <span class="admin-menu-link-title">今だけ投稿 審査待ち</span>
-            <span class="admin-menu-link-note">自動で公開しなかった今だけ投稿の承認・却下</span>
-          </a>
-
-          <!-- 今だけ投稿 決済 STEP 32-D⑥｜月次請求の運営確認(読み取り専用)。 -->
-          <a
-            class="admin-menu-link"
-            href="admin-billing.html"
-          >
-            <span class="admin-menu-link-title">今だけ投稿 請求確認</span>
-            <span class="admin-menu-link-note">月次請求で対応が必要なものの確認（確認専用・操作なし）</span>
-          </a>
-        </section>
-
-        <!-- お問い合わせ・ご意見窓口｜contact.htmlから届いたお問い合わせを
-        確認し、対応後に削除する。 -->
-        <section class="admin-menu-group">
-          <h3 class="admin-menu-group-title">
-            お問い合わせ
-          </h3>
-
+          <!-- お問い合わせ・ご意見窓口｜contact.htmlから届いたお問い合わせを
+          確認し、対応後に削除する。 -->
           <a
             class="admin-menu-link"
             href="admin-contact.html"
@@ -1301,13 +1265,97 @@
           </a>
         </section>
 
-        <!-- OpenAI API安全対策 STEP 2-B 修正(2026-11-12)｜「この街の情報」「今日の地域情報」の
-        新しい AI の作成の緊急停止・再開(保存済みの表示は止めない)。 -->
         <section class="admin-menu-group">
           <h3 class="admin-menu-group-title">
-            AIの費用の安全
+            店舗と地域
           </h3>
 
+          <a
+            class="admin-menu-link"
+            href="admin-shops.html"
+          >
+            <span class="admin-menu-link-title">店舗の登録・管理</span>
+            <span class="admin-menu-link-note">店舗の登録・管理</span>
+          </a>
+
+          <a
+            class="admin-menu-link is-featured"
+            href="admin-community-board.html"
+          >
+            <span class="admin-menu-link-title">街の掲示板 管理</span>
+            <span class="admin-menu-link-note">掲示板投稿の採用・却下／地域代表画像の設定</span>
+          </a>
+
+          <!-- 地域のおすすめ｜旧「旧機能」ブロックにあった入口を、再構成でこのグループへ移した。
+          画面（admin-region-picks.html）自体は変更していない。 -->
+          <a
+            class="admin-menu-link"
+            href="admin-region-picks.html"
+          >
+            <span class="admin-menu-link-title">地域のおすすめ管理</span>
+            <span class="admin-menu-link-note">一部画面で使われている「地域のおすすめ」の管理</span>
+          </a>
+
+          <!-- 地域プロフィール（街の記憶）｜STEP 39-Bで管理メニューから外していたが、
+          再構成（2026-11-14 代表承認）で入口を戻した。画面・API・Firestoreの
+          regionProfiles／regionEditorial は従来どおり残っている。 -->
+          <a
+            class="admin-menu-link"
+            href="admin-region-profiles.html"
+          >
+            <span class="admin-menu-link-title">地域プロフィール(街の記憶)管理</span>
+            <span class="admin-menu-link-note">街の記憶（地域プロフィール）の作成・編集</span>
+          </a>
+        </section>
+
+        <section class="admin-menu-group">
+          <h3 class="admin-menu-group-title">
+            発信
+          </h3>
+
+          <a
+            id="adminPostLink"
+            class="admin-menu-link"
+            href="admin-post.html"
+          >
+            <span class="admin-menu-link-title">地域情報を投稿する</span>
+            <span class="admin-menu-link-note">街の「今」を運営から投稿</span>
+          </a>
+
+          <a
+            id="columnEditorLink"
+            class="admin-menu-link"
+            href="admin-column.html"
+          >
+            <span class="admin-menu-link-title">マチナウ読み物を書く</span>
+            <span class="admin-menu-link-note">記事の作成・編集・公開</span>
+          </a>
+
+          <a
+            class="admin-menu-link is-in-page"
+            href="#commentAdminSection"
+          >
+            <span class="admin-menu-link-title">コメント管理</span>
+            <span class="admin-menu-link-note">読み物コメントの確認・非表示</span>
+          </a>
+        </section>
+
+        <section class="admin-menu-group">
+          <h3 class="admin-menu-group-title">
+            お金と安全
+          </h3>
+
+          <!-- 今だけ投稿 決済 STEP 32-D⑥｜月次請求の運営確認(読み取り専用)。 -->
+          <a
+            class="admin-menu-link"
+            href="admin-billing.html"
+          >
+            <span class="admin-menu-link-title">今だけ投稿の請求確認</span>
+            <span class="admin-menu-link-note">月次請求で対応が必要なものの確認（確認専用・操作なし）</span>
+          </a>
+
+          <!-- OpenAI API安全対策 STEP 2-B 修正(2026-11-12)｜「この街の情報」「今日の地域情報」の
+          新しい AI の作成の緊急停止・再開(保存済みの表示は止めない)。 -->
           <a
             class="admin-menu-link"
             href="admin-ai-generation.html"
@@ -1319,30 +1367,7 @@
 
         <section class="admin-menu-group">
           <h3 class="admin-menu-group-title">
-            読み物
-          </h3>
-
-          <a
-            id="columnEditorLink"
-            class="admin-menu-link"
-            href="admin-column.html"
-          >
-            <span class="admin-menu-link-title">マチナウ読み物を管理する</span>
-            <span class="admin-menu-link-note">記事の作成・編集・公開</span>
-          </a>
-
-          <a
-            class="admin-menu-link is-in-page"
-            href="#commentAdminSection"
-          >
-            <span class="admin-menu-link-title">読み物のコメント管理</span>
-            <span class="admin-menu-link-note">コメントの確認・非表示</span>
-          </a>
-        </section>
-
-        <section class="admin-menu-group">
-          <h3 class="admin-menu-group-title">
-            アカウント
+            管理
           </h3>
 
           <a
@@ -1612,20 +1637,17 @@
         </div>
       </div>
 
-      <!-- 管理本部 Phase1｜旧機能への入口。削除せず、目立たない形で残す。 -->
-      <div class="admin-legacy-links">
-        <h3 class="admin-legacy-title">
+      <!-- 管理本部 再構成（2026-11-14 代表承認）｜旧機能の置き場は削除せず、折りたたんで残す。
+      旧機能にあった「地域のおすすめ」への入口は、管理メニューの「店舗と地域」へ移した。 -->
+      <details class="admin-legacy-links">
+        <summary class="admin-legacy-title">
           旧機能
-        </h3>
+        </summary>
 
-        <a
-          class="admin-legacy-link"
-          href="admin-region-picks.html"
-        >
-          <span class="admin-legacy-link-title">地域のおすすめ（旧）</span>
-          <span class="admin-legacy-link-note">旧機能。一部画面で現在も使用</span>
-        </a>
-      </div>
+        <p class="admin-legacy-note">
+          「地域のおすすめ」は、管理メニューの「店舗と地域」に移動しました。
+        </p>
+      </details>
 
     </section>
 
