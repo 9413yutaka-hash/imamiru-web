@@ -214,7 +214,7 @@ const LEGACY = "LEGACY1";
   t("H1 月末締め：新規登録・引き継ぎ・申込の契約とも、店舗ごとに1件・100円(税込)・契約者のアカウントへの請求書", dry.ok && run.ok && inv(NEW_ID).amountJpy === 100 && inv(NEW_ID).billingAccountUid === "un" && inv(CLAIM_ID).amountJpy === 100 && inv(CLAIM_ID).billingAccountUid === "uc" && inv(LEGACY).amountJpy === 100 && inv(LEGACY).billingAccountUid === "ul", { NEW: inv(NEW_ID), CLAIM: inv(CLAIM_ID), LEGACY: inv(LEGACY), run: run.invoices });
   const again = await BL.runStoreCustomPlanMonthlyClose(db, month, nextStart + 120000, true);
   t("H2 締めをもう一度実行しても請求書は増えない(二重請求にしない)", again.ok && keys("storeCustomPlanInvoices/").filter((k) => k.endsWith("_" + month)).length === keys("storeCustomPlanUsage/").filter((k) => k.endsWith("_" + month) && doc(k).status === "invoiced").length, again.invoices);
-  t("H3 締めは請求書を作るだけ(Stripe へは接続しない)・請求のスイッチは OFF", otherNetwork === 0 && BL.STORE_CUSTOM_PLAN_CHARGE_ENABLED === false, otherNetwork);
+  t("H3 締めは請求書を作るだけ(Stripe へは接続しない)・請求のスイッチは ON(2026-11-14開始)", otherNetwork === 0 && BL.STORE_CUSTOM_PLAN_CHARGE_ENABLED === true, otherNetwork);
 }
 
 // ===== I. 解約 → 期限まで編集できる → 期限後は編集できない → 退会(最終削除しない) =====
@@ -242,7 +242,7 @@ const LEGACY = "LEGACY1";
   t("J1 本番：同意があれば本番の暦月契約(試験の印なし)・同意が無ければ拒否", BL.STORE_CUSTOM_PLAN_MONTHLY_SIGNUP_ENABLED === true && prod.ok && prod.contractModel === "monthly" && prod.createdInPreview === false && !prodNoConsent.ok && prodNoConsent.reason === "plan_consent_required", { prod, prodNoConsent });
   t("J2 Preview：試験の環境(Preview の Firebase)の時だけ受け付ける(既定は試験の契約)・それ以外は plan_signup_unavailable", !previewOther.ok && previewOther.reason === "plan_signup_unavailable" && trial.ok && trial.contractModel === "preview_trial" && trial.createdInPreview === true, { previewOther, trial });
   const wf = readFileSync(join(REPO_ROOT, ".github/workflows/store-card-plan-production.yml"), "utf8");
-  t("J3 課金のスイッチは OFF のまま(店舗カードの請求・遅れた請求の自動・今だけ投稿の請求)・定期実行は1日4回", BL.STORE_CUSTOM_PLAN_CHARGE_ENABLED === false && CH.STORE_CUSTOM_PLAN_LATE_AUTO_CHARGE_ENABLED === false && IM.IMADAKE_CV_BILLING_STARTED === false && MC.IMADAKE_MONTHLY_CHARGE_ENABLED === false && /cron: "10 1-4 \* \* \*"/.test(wf));
+  t("J3 課金のスイッチ(店舗カードの請求は開始済み・遅れた請求の自動と今だけ投稿の請求は OFF のまま)・定期実行は1日4回", BL.STORE_CUSTOM_PLAN_CHARGE_ENABLED === true && CH.STORE_CUSTOM_PLAN_LATE_AUTO_CHARGE_ENABLED === false && IM.IMADAKE_CV_BILLING_STARTED === false && MC.IMADAKE_MONTHLY_CHARGE_ENABLED === false && /cron: "10 1-4 \* \* \*"/.test(wf));
   const app = readFileSync(join(REPO_ROOT, "app.js"), "utf8");
   t("J4 運営の無料掲載は従来どおり(近くの店舗の 15km・運営掲載 submissions は書き換えない)", /const NEARBY_SHOP_CARD_RADIUS_KM =\s*15;/.test(app) && doc("submissions/LC").shopName === "掲載中の店LC" && !("storeId" in doc("submissions/LC")));
   const ss = readFileSync(join(REPO_ROOT, "api/_lib/store-self-service.js"), "utf8");

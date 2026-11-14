@@ -77,7 +77,7 @@ for (const [id, uid] of [["G1", "u1"], ["G2", "u2"]]) {
 }
 
 // ===================== switches =====================
-t("W1 本番の請求のスイッチ false・遅れて確定した請求書の自動請求 false・今だけ投稿の請求は false のまま・締め・定期実行は true", B.STORE_CUSTOM_PLAN_CHARGE_ENABLED === false && CH.STORE_CUSTOM_PLAN_LATE_AUTO_CHARGE_ENABLED === false && IM.IMADAKE_CV_BILLING_STARTED === false && MC.IMADAKE_MONTHLY_CHARGE_ENABLED === false && B.STORE_CUSTOM_PLAN_CLOSE_WRITES_ENABLED === true && CR.STORE_CUSTOM_PLAN_CRON_CHARGES_ENABLED === true);
+t("W1 この試験のコピーでは本番の請求のスイッチ false(本物のコードは2026-11-14に開始済み true。止まっている時の流れを確かめる)・遅れて確定した請求書の自動請求 false・今だけ投稿の請求は false のまま・締め・定期実行は true", B.STORE_CUSTOM_PLAN_CHARGE_ENABLED === false && CH.STORE_CUSTOM_PLAN_LATE_AUTO_CHARGE_ENABLED === false && IM.IMADAKE_CV_BILLING_STARTED === false && MC.IMADAKE_MONTHLY_CHARGE_ENABLED === false && B.STORE_CUSTOM_PLAN_CLOSE_WRITES_ENABLED === true && CR.STORE_CUSTOM_PLAN_CRON_CHARGES_ENABLED === true);
 t("W2 本番の請求専用キー（rk_live_）・pk_live_・STRIPE_MODE live がそろっていても、請求の許可は charge_disabled", SB.readStripeLiveChargeConfig(ENV).ok === true && CH.readStoreCustomPlanChargeGate({ env: ENV }).ok === false && CH.readStoreCustomPlanChargeGate({ env: ENV }).reason === "charge_disabled");
 
 // ===================== sign-up and month-end close keep working =====================
