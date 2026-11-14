@@ -3900,8 +3900,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_account_verify_cooldown_active: {
-    ja: "このブラウザでは直前に確認メールの送信を行ったため、今は送信していません。再送できるようになったら「確認メールを再送する」を押してください。",
-    en: "A verification email was requested from this browser recently, so none was sent now. When resending becomes available, press \"Resend verification email\"."
+    ja: "このブラウザでは、直前に確認メールを送ったばかりのため、今は送信していません。再送できるようになったら、「確認メールを再送する」を押してください。",
+    en: "A verification email was just sent from this browser, so no email was sent this time. When you can resend, press \"Resend verification email\"."
   },
 
   store_account_resend_available_in: {
@@ -4413,8 +4413,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_account_store_note_pending_review: {
-    ja: "既存の店舗情報との重複がないか等を運営が確認しています。確認が終わるまでお待ちください。",
-    en: "Our team is checking this registration (for example, for duplicates of existing listings). Please wait until the check is complete."
+    ja: "すでに登録されている店舗情報と重複していないかなどを、運営が確認しています。確認が終わるまでお待ちください。",
+    en: "Our team is checking that this registration does not duplicate an existing listing. Please wait until the check is complete."
   },
 
   store_account_store_note_rejected: {
@@ -5954,8 +5954,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_claim_code_hint: {
-    ja: "マチナウ運営からお店の公式連絡先へ確認の連絡が届いた時に、このコードの申請であることを確かめてください。このコードを他の人に教えないでください。",
-    en: "When Machinau contacts the shop through its official contact details, please check that it refers to this code. Do not share this code with others."
+    ja: "マチナウ運営からお店の公式連絡先に確認の連絡が届いたら、その連絡がこのコードについてのものかどうかを確かめてください。このコードは、他の人に教えないでください。",
+    en: "When Machinau contacts the shop through its official contact details, please check that the message is about this code. Do not share this code with anyone else."
   },
 
   store_claim_mine_heading: {
@@ -6536,8 +6536,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_management_help_note: {
-    ja: "お店ごとの店舗情報の編集・公開（月額100円の契約中だけ）と、プランの申し込み・解約は「店舗カードの編集・申し込み」から行えます。ご請求・領収書は「ご請求の履歴」と「店舗カード（月額100円）のご請求」、カードの変更は「お支払い方法」、退会は一番下の「アカウントの削除」から行えます。",
-    en: "Edit and publish each shop (only while its ¥100/month contract is active), and subscribe to or cancel the plan, from \"Edit store card / subscribe\". Charges and receipts are under \"Billing history\" and \"Store card (¥100/month) charges\", card changes under \"Payment method\", and closing your account under \"Delete account\" at the bottom."
+    ja: "お店ごとの店舗情報の編集・公開（月額100円の契約中だけ）と、プランの申し込み・解約は「店舗カードの編集・申し込み」から行えます。ご請求・領収書は「ご請求の履歴」と「店舗カード（月額100円）のご請求」から確認できます。カードの変更は「お支払い方法」から、退会は一番下の「アカウントの削除」から行えます。",
+    en: "Edit and publish each shop (only while its ¥100/month contract is active), and subscribe to or cancel the plan, from \"Edit store card / subscribe\". You can check charges and receipts under \"Billing history\" and \"Store card (¥100/month) charges\". Card changes are under \"Payment method\", and closing your account is under \"Delete account\" at the bottom."
   },
 
   store_claim_resume_text: {
