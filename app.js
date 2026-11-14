@@ -222,6 +222,11 @@ function applyMachinauLanguage(language) {
 
   updateLocationButtonLanguage(language);
   updateLanguageSwitcherUi(language);
+
+  // 今日のフィード(03)は data-i18n の対象外の動的描画のため、言語切替に合わせて描き直す。
+  if (typeof queueTodayFeedRender === "function") {
+    queueTodayFeedRender();
+  }
 }
 
 // 言語切替のためだけにFirestore再取得を発生させないよう、既にメモリ上にある
@@ -3174,6 +3179,11 @@ function renderStreetDiscoverySection() {
     section.style.display =
       "none";
 
+    // 今日のフィード(03)用保持も空に戻す。
+    latestStreetDiscoveryItems =
+      [];
+    queueTodayFeedRender();
+
     return;
   }
 
@@ -3233,6 +3243,11 @@ function renderStreetDiscoverySection() {
           return first.distanceKm - second.distanceKm;
         }
       );
+
+  // 今日のフィード(03)用に、街の発見セクションと同じ抽出結果を保持する。
+  latestStreetDiscoveryItems =
+    nearbyStreetItems;
+  queueTodayFeedRender();
 
   if (nearbyStreetItems.length === 0) {
     list.innerHTML =
@@ -13213,7 +13228,27 @@ function renderDynamicColumnEntries() {
 
         // 旅の保存箱 Phase 1b｜♡はタイトルの横の独立したボタン(記事へのリンクの外)に置き、
         // 押しても記事へ移動せず、GA4のcolumn_entry_clickも送らない。
+        // トップページ改修(モカ案ブレンド)｜公開APIが返す imageUrl をカード上部に描く
+        // (従来はTOPカードだけ画像を描いていなかった)。無い記事は従来どおり文字だけ。
+        const columnImageUrl =
+          typeof article.imageUrl === "string"
+            ? getSafeImageUrl(article.imageUrl)
+            : "";
+
+        const columnImageHtml =
+          columnImageUrl !== ""
+            ? '<div class="column-entry-card-image"><img src="' +
+              escapeHtml(
+                buildOptimizedImageUrl(
+                  columnImageUrl,
+                  { width: OPTIMIZED_IMAGE_WIDTH_CARD }
+                )
+              ) +
+              '" alt="" loading="lazy" onerror="handleBrokenImage(this)"></div>'
+            : "";
+
         cardElement.innerHTML = `
+          ${columnImageHtml}
           <div class="region-recommendation-card-body">
             <div class="column-entry-card-header">
               <p class="region-recommendation-card-title">
@@ -15883,6 +15918,15 @@ function renderCommunityBoardForCurrentArea(
         .join("");
   }
 
+  // 今日のフィード(03)用に直近の掲示板取得結果を保持する(描画自体は従来どおり)。
+  latestCommunityBoardPosts =
+    loadFailed === true || !Array.isArray(posts)
+      ? []
+      : posts;
+  latestCommunityBoardRegionName =
+    typeof regionName === "string" ? regionName : "";
+  queueTodayFeedRender();
+
   section.style.display =
     "";
 }
@@ -16610,6 +16654,11 @@ function renderTownNowThreads(
   if (!list) {
     return;
   }
+
+  // 今日のフィード(03)用に直近の取得結果を保持する(描画自体は従来どおり)。
+  latestTownNowThreads =
+    Array.isArray(threads) ? threads : [];
+  queueTodayFeedRender();
 
   if (threads.length === 0) {
     // 0件でも空白にしない。新しいスレッドは投稿の入口の枠(1か所に統一)から立てられることを添える。
@@ -19786,6 +19835,9 @@ const REGION_TODAY_INFO_INITIAL_VISIBLE_COUNT =
   3;
 
 function renderRegionTodayInfo() {
+  // 今日のフィード(03)は currentRegionTodayInfoFindings を直接読むため、再描画だけ予約する。
+  queueTodayFeedRender();
+
   const section =
     document.getElementById(
       "regionTodayInfoSection"
@@ -22747,8 +22799,30 @@ function buildImadakeCardHtml(
         (IMADAKE_CATEGORY_EMOJI[post.categoryCode] || IMADAKE_CATEGORY_EMOJI.other) +
         "</span>";
 
+  // トップページ改修(モカ案ブレンド)｜「○分前」と「距離」をチップの先頭へ追加する。
+  // どちらも公開APIの返却済み項目(publishedAt / distanceKm)だけで作り、
+  // 「続きを見る」導線・CV計測の条件には一切触れない(表示の追加のみ)。
+  const publishedAgoText =
+    formatTodayFeedAgo(
+      getDateValue(post.publishedAt),
+      language
+    );
+
+  const distanceText =
+    Number.isFinite(post.distanceKm)
+      ? getMachinauTranslation(
+          "imadake_distance",
+          language
+        ).replace(
+          "{KM}",
+          String(Math.round(post.distanceKm * 10) / 10)
+        )
+      : "";
+
   const chips =
     [
+      publishedAgoText,
+      distanceText,
       getImadakeLiveStateText(post.liveState, language),
       getImadakeAvailableUntilText(post.availableUntil, language),
       getImadakeRemainingText(post.expiresAt, language, nowMillis)
@@ -22856,6 +22930,9 @@ function buildImadakeCardHtml(
 // 独立枠を描く。表示のたびに期限切れを除く(CDNに古い一覧が残っていても、期限切れの
 // カードは出さない)。0件なら枠ごと隠す。
 function renderImadakeSection() {
+  // 今日のフィード(03)は imadakeNearbyPosts を直接読むため、再描画だけ予約する。
+  queueTodayFeedRender();
+
   const section =
     document.getElementById("imadakeSection");
 
@@ -25095,3 +25172,702 @@ Object.keys(HERO_ACTION_ANALYTICS_ACTIONS).forEach(function(elementId) {
 // (中身は index.html の固定の文言・日英は data-i18n。ここで描き直す処理は無い)。通常の店舗一覧とはデータ・表示・並びを分け、
 // 店舗の掲載順位には一切関わらない。料金・申込み・広告の配信・課金は無い(店舗向け案内への移動は既存の
 // shop_guide_click の placement "ad_slot" で数える)。
+
+// ============================================================
+// 今日のフィード(03)｜トップページ改修(モカ案ブレンド) 2026-11-14
+// ============================================================
+// 既存の取得結果(今だけ投稿・今日の地域情報=行事・街の今スレッド・
+// 街の掲示板・街の発見)を正規化して1本に混ぜる、表示専用の統合枠。
+// 新しい通信は一切せず、各セクションの描画関数が保持した最新結果だけを読む。
+// 並び(2026-11-14 代表決定): 距離のあるものは距離順、無いもの(掲示板・
+// スレッド・行事)は新しさ順にし、距離組2件ごとに鮮度組1件を差し込んで混ぜる。
+// 詳細表示・CV計測・投稿導線は元の各セクションが担うため、この枠のカードは
+// 元の枠へのページ内リンクだけを持つ(同じ情報を別経路で開かせない)。
+// 掲示板の投稿者属性は、データで判別できる「運営」の時だけ表示する
+// (地元/旅行者は保存されていないため推測で出さない)。
+
+var latestTownNowThreads = [];
+var latestCommunityBoardPosts = [];
+var latestCommunityBoardRegionName = "";
+var latestStreetDiscoveryItems = [];
+
+var todayFeedFilter = "all";
+var todayFeedRenderTimer = null;
+
+function queueTodayFeedRender() {
+  if (todayFeedRenderTimer !== null) {
+    clearTimeout(todayFeedRenderTimer);
+  }
+
+  todayFeedRenderTimer =
+    setTimeout(
+      function() {
+        todayFeedRenderTimer = null;
+
+        try {
+          renderTodayFeed();
+        } catch (error) {
+          // フィードは付加表示のため、失敗してもTOP全体には影響させない。
+        }
+      },
+      60
+    );
+}
+
+// 既存の店舗チップ(getStoreImadakeChipHtml)と同じ整形: たった今/{N}分前/{N}時間前。
+// 24時間以上前(掲示板など)は日付で出す。
+function formatTodayFeedAgo(
+  millis,
+  language
+) {
+  if (!Number.isFinite(millis) || millis <= 0) {
+    return "";
+  }
+
+  const minutesAgo =
+    Math.floor((Date.now() - millis) / 60000);
+
+  if (minutesAgo < 1) {
+    return getMachinauTranslation("shop_time_ago_now", language);
+  }
+
+  if (minutesAgo < 60) {
+    return getMachinauTranslation("shop_time_ago_minutes", language)
+      .replace("{N}", String(minutesAgo));
+  }
+
+  if (minutesAgo < 60 * 24) {
+    return getMachinauTranslation("shop_time_ago_hours", language)
+      .replace("{N}", String(Math.floor(minutesAgo / 60)));
+  }
+
+  try {
+    return new Intl.DateTimeFormat(
+      language === "ja" ? "ja-JP" : "en-US",
+      {
+        timeZone: "Asia/Tokyo",
+        year: "numeric",
+        month: language === "ja" ? "long" : "short",
+        day: "numeric"
+      }
+    ).format(new Date(millis));
+  } catch (error) {
+    return "";
+  }
+}
+
+// TODAYブロックの日付は実日付(JST)を動的に出す。
+function updateTodayFeedDateLabel() {
+  const dateElement =
+    document.getElementById("todayFeedDate");
+
+  if (!dateElement) {
+    return;
+  }
+
+  const language =
+    getCurrentMachinauLanguage();
+
+  try {
+    if (language === "ja") {
+      const parts =
+        new Intl.DateTimeFormat(
+          "ja-JP",
+          {
+            timeZone: "Asia/Tokyo",
+            month: "numeric",
+            day: "numeric",
+            weekday: "short"
+          }
+        ).formatToParts(new Date());
+
+      let month = "";
+      let day = "";
+      let weekday = "";
+
+      parts.forEach(function(part) {
+        if (part.type === "month") {
+          month = part.value;
+        } else if (part.type === "day") {
+          day = part.value;
+        } else if (part.type === "weekday") {
+          weekday = part.value;
+        }
+      });
+
+      dateElement.textContent =
+        month + "月" + day + "日（" + weekday + "）";
+    } else {
+      dateElement.textContent =
+        new Intl.DateTimeFormat(
+          "en-US",
+          {
+            timeZone: "Asia/Tokyo",
+            weekday: "short",
+            month: "short",
+            day: "numeric"
+          }
+        ).format(new Date());
+    }
+  } catch (error) {
+    const now = new Date();
+    dateElement.textContent =
+      (now.getMonth() + 1) + "月" + now.getDate() + "日";
+  }
+}
+
+// 行事(findings)には生成・公開の時刻が無いため、新しさ順の基準として
+// 「今日の始まり(JST)」を使う(今日の投稿よりは後ろ、昨日の情報よりは前)。
+function getTodayFeedTodayStartMillis() {
+  try {
+    const nowJst =
+      new Date(
+        new Date().toLocaleString(
+          "en-US",
+          { timeZone: "Asia/Tokyo" }
+        )
+      );
+
+    nowJst.setHours(0, 0, 0, 0);
+
+    return nowJst.getTime();
+  } catch (error) {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    return now.getTime();
+  }
+}
+
+function truncateTodayFeedText(
+  text,
+  maxLength
+) {
+  if (typeof text !== "string") {
+    return "";
+  }
+
+  return text.length > maxLength
+    ? text.slice(0, maxLength) + "…"
+    : text;
+}
+
+function buildTodayFeedItems() {
+  const language =
+    getCurrentMachinauLanguage();
+
+  const nowMillis =
+    Date.now();
+
+  const items =
+    [];
+
+  // 今だけ投稿: 距離・公開時刻・状態タグは公開APIの返却済み項目。
+  const imadakePosts =
+    Array.isArray(imadakeNearbyPosts)
+      ? imadakeNearbyPosts
+      : [];
+
+  imadakePosts
+    .filter(function(post) {
+      return isImadakePostStillListed(post, nowMillis);
+    })
+    .forEach(function(post) {
+      const text =
+        getImadakeCardDisplayText(post, language);
+
+      items.push({
+        type: "imadake",
+        badgeKey: "feed_badge_imadake",
+        kindText: getImadakeLiveStateText(post.liveState, language),
+        title: text.headline || post.storeName || "",
+        storeLine: text.headline ? (post.storeName || "") : "",
+        body: truncateTodayFeedText(text.excerpt || "", 140),
+        imageUrl:
+          typeof post.imageUrl === "string"
+            ? getSafeImageUrl(post.imageUrl)
+            : "",
+        emoji: IMADAKE_CATEGORY_EMOJI[post.categoryCode] || IMADAKE_CATEGORY_EMOJI.other,
+        distanceKm: Number.isFinite(post.distanceKm) ? post.distanceKm : null,
+        timeMillis: getDateValue(post.publishedAt),
+        expiresText: getImadakeRemainingText(post.expiresAt, language, nowMillis),
+        area: "",
+        metaText: "",
+        isOperator: false,
+        targetId: "imadakeSection"
+      });
+    });
+
+  // 街の発見: 街の発見セクションと同じ抽出結果(距離計算済み)を保持したもの。
+  const discoveryItems =
+    Array.isArray(latestStreetDiscoveryItems)
+      ? latestStreetDiscoveryItems
+      : [];
+
+  discoveryItems.forEach(function(entry) {
+    const shop =
+      entry.shop || {};
+
+    const imageUrl =
+      Array.isArray(shop.imageUrls) && shop.imageUrls.length > 0
+        ? getSafeImageUrl(shop.imageUrls[0])
+        : "";
+
+    items.push({
+      type: "discovery",
+      badgeKey: "feed_badge_discovery",
+      kindText: "",
+      title: shop.title || "",
+      storeLine: "",
+      body: truncateTodayFeedText(
+        typeof shop.message === "string" ? shop.message : "",
+        140
+      ),
+      imageUrl: imageUrl,
+      emoji: "👀",
+      distanceKm: Number.isFinite(entry.distanceKm) ? entry.distanceKm : null,
+      timeMillis: getDateValue(shop.createdAt),
+      expiresText: "",
+      area: typeof shop.address === "string" ? shop.address : "",
+      metaText: "",
+      isOperator: false,
+      targetId: "streetDiscoverySection"
+    });
+  });
+
+  // 今日の行事: 地域情報セクションが「表示可(ready)」の時だけ、その findings を使う。
+  if (currentRegionTodayInfoStatus === "ready") {
+    const findings =
+      Array.isArray(currentRegionTodayInfoFindings)
+        ? currentRegionTodayInfoFindings
+        : [];
+
+    const todayStartMillis =
+      getTodayFeedTodayStartMillis();
+
+    findings
+      .filter(function(finding) {
+        return finding && finding.isDateValid === true;
+      })
+      .forEach(function(finding) {
+        const metaValues =
+          [finding.time, finding.place].filter(function(value) {
+            return typeof value === "string" && value.trim() !== "";
+          });
+
+        items.push({
+          type: "event",
+          badgeKey: "feed_badge_event",
+          kindText: "",
+          title: finding.name || "",
+          storeLine: "",
+          body: truncateTodayFeedText(finding.description || "", 140),
+          imageUrl: "",
+          emoji: "🎪",
+          distanceKm: null,
+          timeMillis: todayStartMillis,
+          expiresText: "",
+          area: typeof finding.area === "string" ? finding.area : "",
+          metaText: metaValues.join(" / "),
+          isOperator: false,
+          targetId: "regionTodayInfoSection"
+        });
+      });
+  }
+
+  // 街の今スレッド(地元の声): 公開APIは距離を返さないため鮮度組に入る。
+  const threads =
+    Array.isArray(latestTownNowThreads)
+      ? latestTownNowThreads
+      : [];
+
+  threads.forEach(function(thread) {
+    const createdMillis =
+      Date.parse(thread.createdAt);
+
+    items.push({
+      type: "voice",
+      badgeKey: "feed_badge_voice",
+      kindText: "",
+      title: thread.placeLabel || "",
+      storeLine: "",
+      body: truncateTodayFeedText(thread.text || "", 140),
+      imageUrl: "",
+      emoji: "💬",
+      distanceKm: null,
+      timeMillis: Number.isFinite(createdMillis) ? createdMillis : 0,
+      expiresText: "",
+      area: "",
+      metaText: "",
+      isOperator: false,
+      targetId: "townNowThreadsSection"
+    });
+  });
+
+  // 街の掲示板(地元の声): 地域単位で距離は無いため鮮度組に入る。
+  const boardPosts =
+    Array.isArray(latestCommunityBoardPosts)
+      ? latestCommunityBoardPosts
+      : [];
+
+  boardPosts.forEach(function(post) {
+    const imageUrl =
+      Array.isArray(post.imageUrls) && post.imageUrls.length > 0
+        ? getSafeImageUrl(post.imageUrls[0])
+        : "";
+
+    items.push({
+      type: "voice",
+      badgeKey: "feed_badge_board",
+      kindText: "",
+      title: "",
+      storeLine: "",
+      body: truncateTodayFeedText(
+        typeof post.text === "string" ? post.text : "",
+        140
+      ),
+      imageUrl: imageUrl,
+      emoji: "📌",
+      distanceKm: null,
+      timeMillis:
+        typeof post.createdAtMillis === "number" && Number.isFinite(post.createdAtMillis)
+          ? post.createdAtMillis
+          : 0,
+      expiresText: "",
+      area: latestCommunityBoardRegionName || "",
+      metaText: "",
+      isOperator: post.authorType === "operator",
+      targetId: "regionRecommendationSection"
+    });
+  });
+
+  return items;
+}
+
+// 決定事項の混合ルール: 距離組は距離順、鮮度組は新しい順に並べ、
+// 距離組2件ごとに鮮度組1件を差し込む。どちらかが尽きたら残りを続ける。
+function sortTodayFeedItems(
+  items
+) {
+  const withDistance =
+    items
+      .filter(function(item) {
+        return item.distanceKm !== null;
+      })
+      .sort(function(first, second) {
+        return first.distanceKm - second.distanceKm;
+      });
+
+  const withoutDistance =
+    items
+      .filter(function(item) {
+        return item.distanceKm === null;
+      })
+      .sort(function(first, second) {
+        return (second.timeMillis || 0) - (first.timeMillis || 0);
+      });
+
+  const merged =
+    [];
+
+  let distanceIndex = 0;
+  let freshnessIndex = 0;
+
+  while (
+    distanceIndex < withDistance.length ||
+    freshnessIndex < withoutDistance.length
+  ) {
+    for (
+      let count = 0;
+      count < 2 && distanceIndex < withDistance.length;
+      count++
+    ) {
+      merged.push(withDistance[distanceIndex]);
+      distanceIndex++;
+    }
+
+    if (freshnessIndex < withoutDistance.length) {
+      merged.push(withoutDistance[freshnessIndex]);
+      freshnessIndex++;
+    }
+
+    if (distanceIndex >= withDistance.length) {
+      while (freshnessIndex < withoutDistance.length) {
+        merged.push(withoutDistance[freshnessIndex]);
+        freshnessIndex++;
+      }
+    }
+  }
+
+  return merged;
+}
+
+function buildTodayFeedCardHtml(
+  item,
+  language
+) {
+  const imageHtml =
+    item.imageUrl !== ""
+      ? '<img src="' +
+        escapeHtml(
+          buildOptimizedImageUrl(
+            item.imageUrl,
+            { width: OPTIMIZED_IMAGE_WIDTH_CARD }
+          )
+        ) +
+        '" alt="" loading="lazy" onerror="handleBrokenImage(this)">'
+      : '<span class="feed-card-emoji" aria-hidden="true">' +
+        item.emoji +
+        "</span>";
+
+  const metaParts =
+    [];
+
+  if (item.storeLine !== "") {
+    metaParts.push(
+      '<span class="feed-area">' +
+        escapeHtml(item.storeLine) +
+        "</span>"
+    );
+  }
+
+  const agoText =
+    item.type !== "event"
+      ? formatTodayFeedAgo(item.timeMillis, language)
+      : "";
+
+  if (agoText !== "") {
+    metaParts.push(
+      '<span class="feed-ago">' +
+        escapeHtml(agoText) +
+        "</span>"
+    );
+  }
+
+  if (item.distanceKm !== null) {
+    metaParts.push(
+      '<span class="feed-dist">' +
+        escapeHtml(formatDistance(item.distanceKm)) +
+        "</span>"
+    );
+  }
+
+  if (item.area !== "") {
+    metaParts.push(
+      '<span class="feed-area">' +
+        escapeHtml(item.area) +
+        "</span>"
+    );
+  }
+
+  if (item.metaText !== "") {
+    metaParts.push(
+      "<span>" +
+        escapeHtml(item.metaText) +
+        "</span>"
+    );
+  }
+
+  return (
+    '<article class="feed-card" data-feed-type="' + item.type + '">' +
+      '<div class="feed-card-visual">' +
+        imageHtml +
+        '<span class="feed-badge feed-badge-' + item.type + '">' +
+          escapeHtml(
+            getMachinauTranslation(item.badgeKey, language)
+          ) +
+        "</span>" +
+        (item.kindText !== ""
+          ? '<span class="feed-kind-tag">' +
+            escapeHtml(item.kindText) +
+            "</span>"
+          : "") +
+        (item.expiresText !== ""
+          ? '<span class="feed-count-chip">' +
+            escapeHtml(item.expiresText) +
+            "</span>"
+          : "") +
+      "</div>" +
+      '<div class="feed-card-body">' +
+        (metaParts.length > 0
+          ? '<div class="feed-card-meta">' + metaParts.join("") + "</div>"
+          : "") +
+        (item.title !== ""
+          ? "<h3>" + escapeHtml(item.title) + "</h3>"
+          : "") +
+        (item.body !== ""
+          ? "<p>" + escapeHtml(item.body) + "</p>"
+          : "") +
+        '<div class="feed-card-foot">' +
+          (item.isOperator
+            ? '<span class="feed-attr">' +
+              escapeHtml(
+                getMachinauTranslation(
+                  "community_board_author_operator",
+                  language
+                )
+              ) +
+              "</span>"
+            : "") +
+          '<a class="feed-detail-link" href="#' + item.targetId + '">' +
+            escapeHtml(
+              getMachinauTranslation("feed_see_source", language)
+            ) +
+          "</a>" +
+        "</div>" +
+      "</div>" +
+    "</article>"
+  );
+}
+
+// ヒーロー下の赤ティッカーも、フィードと同じ実データの見出しから組み立てる。
+// データが無い間は丸ごと隠す(サンプル文面は置かない)。
+function renderTodayTicker(
+  items,
+  language
+) {
+  const ticker =
+    document.getElementById("todayTicker");
+
+  const track =
+    document.getElementById("todayTickerTrack");
+
+  if (!ticker || !track) {
+    return;
+  }
+
+  if (!items || items.length === 0) {
+    ticker.hidden = true;
+    track.innerHTML = "";
+    return;
+  }
+
+  const spansHtml =
+    items
+      .slice(0, 8)
+      .map(function(item) {
+        const agoText =
+          formatTodayFeedAgo(item.timeMillis, language);
+
+        const label =
+          item.type === "event" || agoText === ""
+            ? getMachinauTranslation("feed_ticker_today", language)
+            : agoText;
+
+        const headline =
+          item.type === "imadake"
+            ? (item.storeLine !== "" ? item.storeLine + " " : "") + item.title
+            : (item.title !== "" ? item.title : item.body);
+
+        return (
+          "<span><b>" +
+          escapeHtml(label) +
+          "</b>" +
+          escapeHtml(truncateTodayFeedText(headline, 60)) +
+          "</span>"
+        );
+      })
+      .join("");
+
+  // ループ再生のため同じ並びを2つ続ける(CSSの translateX(-50%) と対応)。
+  track.innerHTML =
+    spansHtml + spansHtml;
+
+  ticker.hidden = false;
+}
+
+function renderTodayFeed() {
+  const list =
+    document.getElementById("todayFeedList");
+
+  const emptyElement =
+    document.getElementById("todayFeedEmpty");
+
+  if (!list || !emptyElement) {
+    return;
+  }
+
+  updateTodayFeedDateLabel();
+
+  const language =
+    getCurrentMachinauLanguage();
+
+  const allItems =
+    sortTodayFeedItems(
+      buildTodayFeedItems()
+    ).slice(0, 12);
+
+  renderTodayTicker(allItems, language);
+
+  const visibleItems =
+    todayFeedFilter === "all"
+      ? allItems
+      : allItems.filter(function(item) {
+          return item.type === todayFeedFilter;
+        });
+
+  list.innerHTML =
+    visibleItems
+      .map(function(item) {
+        return buildTodayFeedCardHtml(item, language);
+      })
+      .join("");
+
+  if (visibleItems.length === 0) {
+    const hasLocationContext =
+      (userLatitude !== null && userLongitude !== null) ||
+      !!selectedShopRegion;
+
+    emptyElement.textContent =
+      getMachinauTranslation(
+        allItems.length === 0
+          ? (hasLocationContext ? "feed_empty_none" : "feed_empty_location")
+          : "feed_empty_filter",
+        language
+      );
+
+    emptyElement.hidden = false;
+  } else {
+    emptyElement.hidden = true;
+  }
+}
+
+function initTodayFeedUi() {
+  updateTodayFeedDateLabel();
+
+  const filterChips =
+    document.getElementById("todayFeedFilterChips");
+
+  if (filterChips) {
+    filterChips.addEventListener(
+      "click",
+      function(event) {
+        const button =
+          event.target.closest(
+            "button[data-feed-filter]"
+          );
+
+        if (!button) {
+          return;
+        }
+
+        todayFeedFilter =
+          button.getAttribute("data-feed-filter") || "all";
+
+        filterChips
+          .querySelectorAll("button")
+          .forEach(function(chipButton) {
+            chipButton.setAttribute(
+              "aria-pressed",
+              String(chipButton === button)
+            );
+          });
+
+        renderTodayFeed();
+      }
+    );
+  }
+
+  renderTodayFeed();
+}
+
+initTodayFeedUi();

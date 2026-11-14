@@ -2411,3 +2411,628 @@
   font-family: inherit;
   cursor: pointer;
 }
+
+/* ============================================================
+   トップページ改修(モカ案ブレンド・見た目)｜2026-11-14
+   デザイン試作モック(華やか版トップ試作×モカ案)の見た目を実サイトへ。
+   ・style.cssは他ページも読むため、ヘッダー等の共通部品の上書きは
+     body:has(#todayFeedSection) でTOP(index.html)だけに限定する。
+   ・ID・クラス・data属性の既存の意味は変えない(見た目だけの上書き)。
+   ============================================================ */
+
+/* 見出しの丸ゴシック(モックの書体)。読み込めない環境では従来書体に落ちる。 */
+body:has(#todayFeedSection) h1,
+body:has(#todayFeedSection) h2,
+body:has(#todayFeedSection) .brand-name,
+.today-hero-md,
+.today-hero-copy b,
+.feed-card h3,
+.feed-chips button {
+  font-family: "M PLUS Rounded 1c", "Yu Gothic", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+}
+
+/* ---- 01 ヘッダー: 濃紺バー＋ロゴ＋赤CTA＋言語ピル ---- */
+body:has(#todayFeedSection) .top-bar {
+  background: var(--navy);
+  border-bottom: 3px solid var(--blue);
+  backdrop-filter: none;
+}
+
+body:has(#todayFeedSection) .brand-name {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.1;
+  color: var(--white);
+}
+
+body:has(#todayFeedSection) .brand-name-dot {
+  color: #ff5340;
+}
+
+body:has(#todayFeedSection) .brand-caption {
+  color: #b9d4e6;
+  font-size: 11px;
+}
+
+body:has(#todayFeedSection) .brand-icon {
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: none;
+}
+
+body:has(#todayFeedSection) .top-pc-nav-button {
+  color: #b9d4e6;
+}
+
+body:has(#todayFeedSection) .top-pc-nav-button:hover,
+body:has(#todayFeedSection) .top-pc-nav-button:focus-visible {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--white);
+}
+
+body:has(#todayFeedSection) .top-pc-nav-button.active {
+  color: var(--yellow);
+}
+
+body:has(#todayFeedSection) .top-pc-navigation {
+  border-top-color: rgba(255, 255, 255, 0.14);
+}
+
+.header-post-cta {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 8px 18px;
+  border-radius: 999px;
+  background: #ff5340;
+  color: var(--white);
+  font-size: 14px;
+  font-weight: 800;
+  box-shadow: 0 6px 16px rgba(255, 83, 64, 0.35);
+  white-space: nowrap;
+}
+
+.header-post-cta:hover {
+  background: #e83e2c;
+}
+
+/* ヘッダー下のセクション移動チップ行(モックのチップナビ) */
+.top-section-nav {
+  display: none;
+}
+
+body:has(#todayFeedSection) .top-section-nav {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  width: min(100%, 920px);
+  margin: 0 auto;
+  padding: 0 18px 10px;
+  scrollbar-width: none;
+}
+
+body:has(#todayFeedSection) .top-section-nav::-webkit-scrollbar {
+  display: none;
+}
+
+body:has(#todayFeedSection) .top-section-nav a {
+  flex-shrink: 0;
+  padding: 7px 15px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--white);
+  font-size: 13.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+body:has(#todayFeedSection) .top-section-nav a:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+@media (max-width: 560px) {
+  .header-post-cta {
+    min-height: 36px;
+    padding: 6px 13px;
+    font-size: 13px;
+  }
+
+  body:has(#todayFeedSection) .brand-name {
+    font-size: 20px;
+  }
+}
+
+/* ---- ヒーロー: 全面写真＋左寄せコピー＋強い左グラデーション ---- */
+body:has(#todayFeedSection) .hero-overlay {
+  background: linear-gradient(
+    100deg,
+    rgba(4, 45, 66, 0.80) 0%,
+    rgba(4, 45, 66, 0.52) 46%,
+    rgba(4, 45, 66, 0.10) 80%
+  );
+}
+
+body:has(#todayFeedSection) .hero-content {
+  text-align: left;
+}
+
+body:has(#todayFeedSection) .hero-main-copy {
+  font-size: clamp(30px, 5.6vw, 46px);
+  line-height: 1.3;
+  margin-bottom: 10px;
+  text-shadow: 0 3px 18px rgba(0, 30, 45, 0.45);
+}
+
+.hero-hl {
+  color: #ffd23e;
+}
+
+body:has(#todayFeedSection) .hero-sub-copy {
+  font-size: clamp(15px, 2.2vw, 19px);
+  font-weight: 800;
+  margin-bottom: 8px;
+  text-shadow: 0 2px 10px rgba(0, 30, 45, 0.5);
+}
+
+.hero-lead2 {
+  margin: 0 0 20px;
+  max-width: 560px;
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.7;
+  color: #e6f6fb;
+  text-shadow: 0 2px 10px rgba(0, 30, 45, 0.5);
+}
+
+body:has(#todayFeedSection) .hero-content .location-card {
+  max-width: 620px;
+}
+
+body:has(#todayFeedSection) .hero-action-grid {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+@media (min-width: 720px) {
+  body:has(#todayFeedSection) .hero-section {
+    min-height: 500px;
+  }
+
+  body:has(#todayFeedSection) .hero-action-grid {
+    margin-left: 0;
+    margin-right: 0;
+  }
+}
+
+/* ---- ティッカー(ヒーロー下端の赤バンド) ---- */
+.today-ticker {
+  background: #ff5340;
+  color: var(--white);
+  overflow: hidden;
+}
+
+.today-ticker[hidden] {
+  display: none;
+}
+
+.today-ticker-track {
+  display: flex;
+  width: max-content;
+  padding: 9px 0;
+  animation: today-ticker-scroll 38s linear infinite;
+}
+
+.today-ticker-track span {
+  font-weight: 700;
+  font-size: 14px;
+  white-space: nowrap;
+  padding: 0 26px;
+}
+
+.today-ticker-track span b {
+  background: var(--white);
+  color: #e83e2c;
+  border-radius: 6px;
+  padding: 1px 8px;
+  margin-right: 10px;
+  font-size: 12.5px;
+}
+
+@keyframes today-ticker-scroll {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .today-ticker-track {
+    animation: none;
+    flex-wrap: wrap;
+    width: auto;
+  }
+}
+
+/* ---- セクション番号ラベル(モックの「03 — TODAY」式) ---- */
+.sec-num {
+  display: inline-block;
+  font-family: "M PLUS Rounded 1c", "Yu Gothic", sans-serif;
+  font-weight: 800;
+  font-size: 12.5px;
+  letter-spacing: 0.14em;
+  color: #00719e;
+  background: #e7f5f8;
+  border-radius: 8px;
+  padding: 3px 10px;
+  margin-bottom: 10px;
+}
+
+/* ---- 03 今日のフィード ---- */
+.today-feed-section {
+  margin-top: 26px;
+}
+
+.today-feed-heading-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.today-hero-card {
+  display: flex;
+  gap: 22px;
+  align-items: stretch;
+  flex-wrap: wrap;
+  background: linear-gradient(120deg, #0a4d68, #00719e);
+  color: var(--white);
+  border-radius: 24px;
+  padding: 26px 28px;
+  box-shadow: 0 18px 44px rgba(10, 77, 104, 0.22);
+  margin-bottom: 22px;
+}
+
+.today-hero-date {
+  line-height: 1.05;
+}
+
+.today-hero-dow {
+  display: block;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  color: #ffd23e;
+  margin-bottom: 6px;
+}
+
+.today-hero-md {
+  font-size: clamp(38px, 6vw, 54px);
+  font-weight: 800;
+}
+
+.today-hero-copy {
+  flex: 1;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.today-hero-copy b {
+  font-size: 20px;
+}
+
+.today-hero-copy p {
+  margin: 4px 0 0;
+  color: #d9f0f7;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.today-hero-radius {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 4px;
+  font-weight: 800;
+  font-size: 13.5px;
+}
+
+.today-hero-km {
+  font-family: "M PLUS Rounded 1c", "Yu Gothic", sans-serif;
+  font-size: 26px;
+  color: #ffd23e;
+}
+
+.today-hero-order {
+  font-size: 13px;
+  color: #d9f0f7;
+}
+
+@media (max-width: 620px) {
+  .today-hero-card {
+    padding: 22px 20px;
+  }
+
+  .today-hero-radius {
+    align-items: flex-start;
+  }
+}
+
+.feed-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-bottom: 14px;
+  align-items: center;
+}
+
+.feed-row-label {
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--subtext);
+  margin-right: 2px;
+}
+
+.feed-chip-note {
+  font-size: 12px;
+  color: var(--subtext);
+  font-weight: 700;
+}
+
+.feed-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.feed-chips button {
+  border: 2px solid var(--border);
+  background: var(--white);
+  color: var(--text);
+  cursor: pointer;
+  border-radius: 999px;
+  padding: 9px 18px;
+  font-weight: 700;
+  font-size: 14.5px;
+}
+
+.feed-chips button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.feed-date-chips button {
+  font-weight: 800;
+  font-size: 15.5px;
+  padding: 10px 22px;
+}
+
+.feed-date-chips button[aria-pressed="true"] {
+  background: #ffb300;
+  border-color: #ffb300;
+  color: #543d00;
+}
+
+.feed-filter-chips button[aria-pressed="true"] {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: var(--white);
+}
+
+.today-feed-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 22px;
+}
+
+@media (max-width: 980px) {
+  .today-feed-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 620px) {
+  .today-feed-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.today-feed-empty {
+  text-align: center;
+  color: var(--subtext);
+  font-weight: 700;
+  padding: 26px 10px;
+  margin: 0;
+}
+
+.today-feed-empty[hidden] {
+  display: none;
+}
+
+.feed-card {
+  background: var(--white);
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(10, 77, 104, 0.14);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+}
+
+.feed-card-visual {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #dff7ff, #b5e3dd);
+}
+
+.feed-card-visual img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.feed-card-emoji {
+  font-size: 56px;
+}
+
+.feed-badge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 2;
+  font-family: "M PLUS Rounded 1c", "Yu Gothic", sans-serif;
+  font-weight: 800;
+  font-size: 13px;
+  border-radius: 999px;
+  padding: 5px 13px;
+  color: var(--white);
+  background: #00719e;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+}
+
+.feed-badge-imadake {
+  background: #ff5340;
+}
+
+.feed-badge-event {
+  background: #19a96b;
+}
+
+.feed-kind-tag {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+  font-weight: 800;
+  font-size: 12.5px;
+  border-radius: 999px;
+  padding: 5px 12px;
+  color: var(--white);
+  background: #e07b00;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+}
+
+.feed-count-chip {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 2;
+  background: rgba(8, 40, 55, 0.85);
+  color: var(--white);
+  border-radius: 999px;
+  padding: 6px 13px;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.feed-card-body {
+  padding: 18px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.feed-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  font-size: 13.5px;
+  color: var(--subtext);
+  font-weight: 500;
+}
+
+.feed-ago {
+  font-weight: 900;
+  color: #e83e2c;
+  font-size: 14px;
+}
+
+.feed-dist {
+  color: #e83e2c;
+  font-weight: 800;
+}
+
+.feed-area {
+  color: #00719e;
+  font-weight: 700;
+}
+
+.feed-card h3 {
+  font-weight: 800;
+  font-size: 20px;
+  margin: 0;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.feed-card-body p {
+  margin: 0;
+  font-size: 14.5px;
+  color: var(--subtext);
+  flex: 1;
+  line-height: 1.7;
+}
+
+.feed-card-foot {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.feed-attr {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 800;
+  font-size: 12.5px;
+  border-radius: 999px;
+  padding: 4px 12px;
+  background: #fff1d6;
+  color: #7a5200;
+}
+
+.feed-detail-link {
+  margin-left: auto;
+  font-weight: 700;
+  font-size: 14px;
+  color: #00719e;
+  padding: 8px 2px;
+}
+
+.feed-detail-link:hover {
+  text-decoration: underline;
+}
+
+/* ---- 06 お店カード: PCでは写真を大きく(スマホの調整済みサイズは維持) ---- */
+@media (min-width: 701px) {
+  #shopsList .shop-visual {
+    height: 224px;
+  }
+}
+
+/* ---- 08 読みものカードの写真 ---- */
+.column-entry-card-image {
+  margin: 0 0 12px;
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.column-entry-card-image img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
