@@ -38,13 +38,216 @@ const MACHINAU_TRANSLATIONS = {
   // (STEP3の旧ヒーロー由来、参照箇所なし)とは別物。
   // サイト全体改善 第5弾｜代表採用のファーストビュー(見出し・補足・主ボタン「現在地から探す」)。
   hero_main_copy: {
-    ja: "街の今を知れば、<br>もっと、いい旅になる。",
-    en: "Know what's happening in town now,<br>and make your trip even better."
+    ja: "もっと、<span class=\"hero-hl\">いい旅</span>になる。",
+    en: "Make your <span class=\"hero-hl\">trip</span> even better."
   },
 
+  // トップページ改修フェーズ1(モカ案ブレンド)｜主文と分けたサブコピーを
+  // ヒーローの <p class="hero-sub-copy" data-i18n="hero_lead"> で復活使用する。
   hero_lead: {
-    ja: "今だけの情報も、近くのお店も。<br>今いる場所から見つけよう。",
-    en: "Limited-time updates and nearby places. Find them from where you are."
+    ja: "街の今を知れば、もっと、いい旅になる。",
+    en: "Discover what's happening in town right now."
+  },
+
+  // トップページ改修(モカ案ブレンド・見た目)｜ヒーローのリード文。
+  hero_lead2: {
+    ja: "店の今、今日の行事、地元の声。今いる街の「今」を、近い順に1本で届けます。",
+    en: "Shop updates, today's events, local voices — the town's “now”, in one feed, closest first."
+  },
+
+  // ヒーロー検索バー(モカ案ブレンド・モック忠実度)｜地名は既存の市区町村
+  // データで解決して地域選択へ接続し、それ以外は今日のフィードの
+  // キーワード絞り込みに使う(app.js の initHeroSearch)。
+  hero_search_placeholder: {
+    ja: "エリア・キーワードで探す（例：糸満、そば、祭り）",
+    en: "Search by area or keyword (e.g. Itoman, soba, festival)"
+  },
+
+  hero_search_button: {
+    ja: "探す",
+    en: "Search"
+  },
+
+  // ヘッダーの投稿CTA(赤ピル)とセクション移動チップ行。
+  header_post_cta: {
+    ja: "発見を投稿する",
+    en: "Post a discovery"
+  },
+
+  nav_feed: {
+    ja: "今日のフィード",
+    en: "Today's feed"
+  },
+
+  nav_board: {
+    ja: "掲示板",
+    en: "Board"
+  },
+
+  nav_shops: {
+    ja: "お店",
+    en: "Shops"
+  },
+
+  nav_columns: {
+    ja: "読みもの",
+    en: "Stories"
+  },
+
+  // 03 今日のフィード(TODAYブロック・チップ・カード・空状態)。
+  feed_sec_label: {
+    ja: "03 — TODAY",
+    en: "03 — TODAY"
+  },
+
+  feed_today_label: {
+    ja: "TODAY — 今日できること",
+    en: "TODAY — What you can do today"
+  },
+
+  feed_today_copy_title: {
+    ja: "今日の街を、近い順に。",
+    en: "Today's town, closest first."
+  },
+
+  feed_today_copy_text: {
+    ja: "店の今・今日の行事・地元の声を混ぜた1本のフィード。開いた瞬間に「いま出かける理由」が伝わるように、日付を主役にしています。",
+    en: "One feed mixing shop updates, today's events and local voices — led by the date, so you instantly see a reason to head out."
+  },
+
+  feed_radius_label: {
+    ja: "表示範囲",
+    en: "Area"
+  },
+
+  feed_radius_value: {
+    ja: "半径 15km",
+    en: "Within 15 km"
+  },
+
+  feed_order_note: {
+    ja: "距離順・新しい順",
+    en: "By distance & freshness"
+  },
+
+  feed_when_label: {
+    ja: "いつの街？",
+    en: "When?"
+  },
+
+  feed_chip_today: {
+    ja: "今日",
+    en: "Today"
+  },
+
+  feed_chip_tomorrow: {
+    ja: "明日",
+    en: "Tomorrow"
+  },
+
+  feed_chip_weekend: {
+    ja: "週末",
+    en: "Weekend"
+  },
+
+  feed_chip_soon_note: {
+    ja: "明日・週末は準備中です",
+    en: "Tomorrow & weekend are coming soon"
+  },
+
+  feed_filter_label: {
+    ja: "種類で絞る",
+    en: "Filter"
+  },
+
+  feed_filter_all: {
+    ja: "すべて",
+    en: "All"
+  },
+
+  feed_filter_imadake: {
+    ja: "今だけ投稿",
+    en: "Live posts"
+  },
+
+  feed_filter_event: {
+    ja: "行事",
+    en: "Events"
+  },
+
+  feed_filter_voice: {
+    ja: "地元の声",
+    en: "Local voices"
+  },
+
+  feed_filter_discovery: {
+    ja: "街の発見",
+    en: "Discoveries"
+  },
+
+  feed_badge_imadake: {
+    ja: "今だけ投稿",
+    en: "Live post"
+  },
+
+  feed_badge_event: {
+    ja: "行事",
+    en: "Event"
+  },
+
+  feed_badge_discovery: {
+    ja: "街の発見",
+    en: "Discovery"
+  },
+
+  feed_badge_voice: {
+    ja: "地元の声",
+    en: "Local voice"
+  },
+
+  feed_badge_board: {
+    ja: "掲示板",
+    en: "Board"
+  },
+
+  feed_see_source: {
+    ja: "この枠で見る →",
+    en: "View in its section →"
+  },
+
+  feed_empty_location: {
+    ja: "現在地を取得するか街を選ぶと、今日の「今」がここに集まります。",
+    en: "Get your location or pick a town, and today's “now” will gather here."
+  },
+
+  feed_empty_none: {
+    ja: "今日の「今」は、まだ届いていません。",
+    en: "Nothing new for today yet."
+  },
+
+  feed_empty_filter: {
+    ja: "この条件の「今」はまだありません。種類を変えてみてください。",
+    en: "Nothing matches this filter yet. Try another type."
+  },
+
+  feed_empty_keyword: {
+    ja: "「{term}」に合う今日の「今」は見つかりませんでした。",
+    en: "Nothing for today matches “{term}” yet."
+  },
+
+  feed_keyword_bar: {
+    ja: "「{term}」で絞り込み中",
+    en: "Showing results for “{term}”"
+  },
+
+  feed_keyword_clear: {
+    ja: "解除する",
+    en: "Clear"
+  },
+
+  feed_ticker_today: {
+    ja: "本日",
+    en: "Today"
   },
 
   // 今だけ投稿が0件の日の「今日の今」(ページ内の既存の枠への移動だけ)。
@@ -885,7 +1088,7 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   brand_caption: {
-    ja: "街の「今」がわかる旅の案内所",
+    ja: "街の「今」がわかる案内所",
     en: "Your guide to what's happening in town"
   },
 

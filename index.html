@@ -156,6 +156,15 @@
     href="style.css"
   >
 
+  <!-- トップページ改修(モカ案ブレンド・見た目)｜見出し用の丸ゴシック。
+       読めない環境では従来のフォントスタックへ落ちる(font-family側で指定)。 -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@700;800&display=swap"
+  >
+
   <style>
     /* 「地域のおすすめ」セクション専用の最小CSS。style.cssは変更しない。 */
     .region-recommendation-section {
@@ -2035,8 +2044,8 @@
       margin: 0 0 16px;
       padding: 5px 12px;
       border-radius: 999px;
-      background: rgba(255, 255, 255, 0.92);
-      color: #066fa6;
+      background: var(--yellow);
+      color: var(--navy);
       font-size: 12px;
       font-weight: 900;
       letter-spacing: 0.04em;
@@ -2048,7 +2057,7 @@
       width: 7px;
       height: 7px;
       border-radius: 50%;
-      background: var(--cyan);
+      background: var(--navy);
     }
 
     .hero-entry-card {
@@ -2651,8 +2660,11 @@
         </div>
 
         <div>
+          <p class="brand-name">
+            マチナウ<span class="brand-name-dot" aria-hidden="true">.</span>
+          </p>
           <p class="brand-caption" data-i18n="brand_caption">
-            街の「今」がわかる旅の案内所
+            街の「今」がわかる案内所
           </p>
         </div>
 
@@ -2700,7 +2712,27 @@
         </button>
       </div>
 
+      <!-- トップページ改修(モカ案ブレンド・見た目)｜ヘッダーの投稿CTA(赤ピル)。
+           行き先は投稿の入口と同じ contribute.html。 -->
+      <a
+        class="header-post-cta"
+        href="contribute.html"
+        data-i18n="header_post_cta"
+      >発見を投稿する</a>
+
     </div>
+
+    <!-- トップページ改修(モカ案ブレンド・見た目)｜セクション移動チップ行。
+         既存セクションへのページ内リンクのみ(新しい表示切替は作らない)。
+         非表示中の枠へのリンクは、表示されるまで移動しない。 -->
+    <nav class="top-section-nav" aria-label="セクション移動">
+      <a href="#todayFeedSection" data-i18n="nav_feed">今日のフィード</a>
+      <a href="#imadakeSection" data-i18n="imadake_heading">今だけ投稿</a>
+      <a href="#regionRecommendationSection" data-i18n="nav_board">掲示板</a>
+      <a href="#shopsSection" data-i18n="nav_shops">お店</a>
+      <a href="#columnEntrySection" data-i18n="nav_columns">読みもの</a>
+    </nav>
+
   </header>
 
   <!-- TOPヒーロー緊急変更｜旧opening-visual-banner.png(文言・4分類ボタン・
@@ -2724,11 +2756,43 @@
         <!-- TOP・街ページ統合改善(代表承認・ミューズの仕様とスマホの完成イメージ)｜キャッチコピー・
              「沖縄からエリア拡大中」・現在地カード・4つの入口・街の掲示板・マチナウの楽しみ方。
              第5弾のファーストビュー(見出し「今、この街で何しよう？」・入口2つ)はこの仕様で置き換えた。 -->
+        <p class="hero-area-badge" data-i18n="hero_area_badge">沖縄からエリア拡大中</p>
+
         <h1 class="hero-main-copy" data-i18n="hero_main_copy">
-          街の今を知れば、<br>もっと、いい旅になる。
+          もっと、<span class="hero-hl">いい旅</span>になる。
         </h1>
 
-        <p class="hero-area-badge" data-i18n="hero_area_badge">沖縄からエリア拡大中</p>
+        <p class="hero-sub-copy" data-i18n="hero_lead">
+          街の今を知れば、もっと、いい旅になる。
+        </p>
+
+        <p class="hero-lead2" data-i18n="hero_lead2">
+          店の今、今日の行事、地元の声。今いる街の「今」を、近い順に1本で届けます。
+        </p>
+
+        <!-- ヒーロー検索(モック準拠の白ピル+クイックチップ)｜新しい検索基盤は作らず、
+             地名は既存の地域選択(市区町村データ)へ、それ以外は今日のフィードの
+             キーワード絞り込みへ接続する(app.js の initHeroSearch)。
+             現在地カード(下)とは別導線として競合させない。 -->
+        <form class="hero-searchbar" id="heroSearchForm" role="search">
+          <input
+            type="search"
+            id="heroSearchInput"
+            data-i18n-placeholder="hero_search_placeholder"
+            placeholder="エリア・キーワードで探す（例：糸満、そば、祭り）"
+            aria-label="エリア・キーワードで探す"
+            autocomplete="off"
+          >
+          <button class="hero-search-button" type="submit" data-i18n="hero_search_button">探す</button>
+        </form>
+
+        <div class="hero-search-chips" id="heroSearchChips" role="group" aria-label="人気のキーワード">
+          <button type="button" data-hero-search-term="糸満">糸満</button>
+          <button type="button" data-hero-search-term="那覇">那覇</button>
+          <button type="button" data-hero-search-term="祭り">祭り</button>
+          <button type="button" data-hero-search-term="夕日">夕日</button>
+          <button type="button" data-hero-search-term="そば">そば</button>
+        </div>
 
         <section class="location-card hero-entry-card" aria-labelledby="locationHeading">
 
@@ -3057,6 +3121,14 @@
 
   </section>
 
+  <!-- トップページ改修(モカ案ブレンド・見た目)｜ヒーロー下端の赤ティッカー。
+       中身は app.js の renderTodayTicker() が今日のフィードと同じ実データ
+       (今だけ投稿・行事・地元の声の見出し)から組み立てる。データが無い間は
+       丸ごと隠す(サンプル文面は置かない)。 -->
+  <div class="today-ticker" id="todayTicker" hidden>
+    <div class="today-ticker-track" id="todayTickerTrack"></div>
+  </div>
+
 
   <main>
 
@@ -3214,6 +3286,67 @@
 
     </section>
 
+    <!-- 03 今日のフィード(モカ案ブレンド)｜今だけ投稿・今日の行事・地元の声(スレッド/掲示板)・
+         街の発見を、既存の取得結果から app.js の buildTodayFeedItems() が1本に混ぜて描く統合枠。
+         並びは決定事項どおり「距離のあるものは距離順、無いものは新しさ順で差し込む」。
+         元の各セクションは従来どおり残す(この枠は入口・要約であり、詳細と計測は元の枠で行う)。
+         日付チップは「今日」だけ有効。明日・週末は情報源が無いため disabled で正直に置く。 -->
+    <section
+      id="todayFeedSection"
+      class="today-feed-section"
+      aria-labelledby="todayFeedHeading"
+    >
+      <span class="sec-num" data-i18n="feed_sec_label">03 — TODAY</span>
+      <h2 id="todayFeedHeading" class="today-feed-heading-hidden" data-i18n="feed_today_copy_title">今日の街を、近い順に。</h2>
+
+      <div class="today-hero-card">
+        <div class="today-hero-date">
+          <span class="today-hero-dow" data-i18n="feed_today_label">TODAY — 今日できること</span>
+          <span class="today-hero-md" id="todayFeedDate"></span>
+        </div>
+        <div class="today-hero-copy">
+          <b data-i18n="feed_today_copy_title">今日の街を、近い順に。</b>
+          <p data-i18n="feed_today_copy_text">店の今・今日の行事・地元の声を混ぜた1本のフィード。開いた瞬間に「いま出かける理由」が伝わるように、日付を主役にしています。</p>
+        </div>
+        <div class="today-hero-radius">
+          <span data-i18n="feed_radius_label">表示範囲</span>
+          <span class="today-hero-km" data-i18n="feed_radius_value">半径 15km</span>
+          <span class="today-hero-order" data-i18n="feed_order_note">距離順・新しい順</span>
+        </div>
+      </div>
+
+      <div class="feed-chip-row">
+        <span class="feed-row-label" data-i18n="feed_when_label">いつの街？</span>
+        <div class="feed-chips feed-date-chips" id="todayFeedDateChips">
+          <button type="button" data-feed-day="today" aria-pressed="true" data-i18n="feed_chip_today">今日</button>
+          <button type="button" data-feed-day="tomorrow" aria-pressed="false" disabled data-i18n="feed_chip_tomorrow">明日</button>
+          <button type="button" data-feed-day="weekend" aria-pressed="false" disabled data-i18n="feed_chip_weekend">週末</button>
+        </div>
+        <span class="feed-chip-note" data-i18n="feed_chip_soon_note">明日・週末は準備中です</span>
+      </div>
+
+      <div class="feed-chip-row">
+        <span class="feed-row-label" data-i18n="feed_filter_label">種類で絞る</span>
+        <div class="feed-chips feed-filter-chips" id="todayFeedFilterChips">
+          <button type="button" data-feed-filter="all" aria-pressed="true" data-i18n="feed_filter_all">すべて</button>
+          <button type="button" data-feed-filter="imadake" aria-pressed="false" data-i18n="feed_filter_imadake">今だけ投稿</button>
+          <button type="button" data-feed-filter="event" aria-pressed="false" data-i18n="feed_filter_event">行事</button>
+          <button type="button" data-feed-filter="voice" aria-pressed="false" data-i18n="feed_filter_voice">地元の声</button>
+          <button type="button" data-feed-filter="discovery" aria-pressed="false" data-i18n="feed_filter_discovery">街の発見</button>
+        </div>
+      </div>
+
+      <!-- ヒーロー検索のキーワード絞り込み中だけ出すバー(解除ボタン付き)。
+           絞り込みが静かに残り続けないよう、常に見える形にする。 -->
+      <div class="today-feed-keyword-bar" id="todayFeedKeywordBar" hidden>
+        <span id="todayFeedKeywordLabel"></span>
+        <button type="button" id="todayFeedKeywordClear" data-i18n="feed_keyword_clear">解除する</button>
+      </div>
+
+      <div id="todayFeedList" class="today-feed-grid"></div>
+      <p id="todayFeedEmpty" class="today-feed-empty" data-i18n="feed_empty_location">現在地を取得するか街を選ぶと、今日の「今」がここに集まります。</p>
+    </section>
+
     <!-- 街の今スレッド Phase 1C-2｜TOP・街ページ統合改善で街ページの1番目(街の「今」の会話)。現在地の時は
          townNowThreadsNearby(話題地点から5km以内・同じ市区町村)、「地域から探す」で街を選んだ時は
          townNowThreadsList(選んだ市区町村の今日・公開中・期限内のスレッドだけ)を表示する。
@@ -3241,6 +3374,7 @@
       style="display:none;"
     >
 
+      <span class="sec-num" aria-hidden="true">05 — BOARD</span>
       <h2 id="regionRecommendationHeading" data-i18n="region_recommendation_heading_default">
         この地域のおすすめ
       </h2>
@@ -3305,6 +3439,7 @@
       aria-labelledby="imadakeHeading"
       hidden
     >
+      <span class="sec-num" aria-hidden="true">04 — IMA-DAKE</span>
       <h2 id="imadakeHeading" data-i18n="imadake_heading">今だけ投稿</h2>
       <p class="imadake-lead" data-i18n="imadake_lead">近くのお店・施設が「今」を伝えています（掲載は最長24時間）。</p>
       <div id="imadakeCardList" class="imadake-card-list"></div>
@@ -3338,6 +3473,7 @@
 
         <div class="section-title-area">
 
+          <span class="sec-num" aria-hidden="true">06 — SHOPS</span>
           <h2 id="shopsHeading" data-i18n="shops_heading">
             今、近くで楽しめる場所
           </h2>
@@ -3634,34 +3770,13 @@
 
     </section>
 
-    <!-- 街の発見の分離｜post.html?mode=street(街の「今」を投稿する)の投稿を、
-         店舗カード(今、近くで楽しめる場所)から分けてここに出す。現在地から
-         15km以内の投稿が1件も無い間はapp.jsのrenderStreetDiscoverySection()が
-         セクションごと非表示にする。見出しは仮名称(代表が最終決定)。 -->
-    <section
-      id="streetDiscoverySection"
-      class="region-recommendation-section"
-      style="display:none;"
-    >
-
-      <h2 data-i18n="street_discovery_heading">
-        街の発見
-      </h2>
-
-      <p class="column-entry-lead" data-i18n="street_discovery_lead">
-        近くの人が見つけた、今の街の様子です。
-      </p>
-
-      <div id="streetDiscoveryList"></div>
-
-    </section>
-
     <!-- 投稿の入口(TOP・街ページ統合改善で1か所に統一)｜街ページの4番目。旧来の「見つけた「今」を投稿する」
          (contribute.html)・街の今スレッドを立てる(#townNowNewThreadLink、town-now-post.html)・掲示板に投稿する
          (#communityBoardPostLink、表示中の街に合わせて app.js が文言・行き先を変える)を、ここにまとめた。
          投稿の権限・認証・承認・掲載期限は各投稿ページのまま。店舗・施設向けの案内は従来どおり控えめなリンク。 -->
     <section class="contribute-cta-section" id="postCtaSection" aria-labelledby="postCtaHeading">
 
+      <span class="sec-num" aria-hidden="true">07 — POST</span>
       <h2
         id="postCtaHeading"
         class="contribute-cta-heading"
@@ -3718,6 +3833,28 @@
 
     </section>
 
+    <!-- 街の発見の分離｜post.html?mode=street(街の「今」を投稿する)の投稿を、
+         店舗カード(今、近くで楽しめる場所)から分けてここに出す。現在地から
+         15km以内の投稿が1件も無い間はapp.jsのrenderStreetDiscoverySection()が
+         セクションごと非表示にする。見出しは仮名称(代表が最終決定)。 -->
+    <section
+      id="streetDiscoverySection"
+      class="region-recommendation-section"
+      style="display:none;"
+    >
+
+      <h2 data-i18n="street_discovery_heading">
+        街の発見
+      </h2>
+
+      <p class="column-entry-lead" data-i18n="street_discovery_lead">
+        近くの人が見つけた、今の街の様子です。
+      </p>
+
+      <div id="streetDiscoveryList"></div>
+
+    </section>
+
     <!-- マチナウ読み物(街ページの5番目)｜選んだ街では絞り込まない、運営の旅のヒント・ストーリー。カードは
          app.js の loadDynamicColumnEntries() が公開記事から描く(公開日＝publishedAt・初回公開日)。 -->
     <section
@@ -3725,6 +3862,7 @@
       class="region-recommendation-section"
     >
 
+      <span class="sec-num" aria-hidden="true">08 — READING</span>
       <h2 data-i18n="column_entry_heading">
         マチナウ読み物
       </h2>
