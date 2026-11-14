@@ -38,8 +38,8 @@ const LIVE = { VERCEL_ENV: "production", STRIPE_MODE: "live", STRIPE_CHARGE_REST
 const SECRET = LIVE.STRIPE_CHARGE_RESTRICTED_KEY;
 
 // ===================== A. all switches stay false =====================
-t("A1 申込受付の開始：本番の申込・本番のカード登録・月末締めの書き込み・定期実行の請求（STEP 53）は true／本番の請求（STEP 53-I：代表の承認まで）・今だけ投稿の請求は false（STEP 52-F：本番のカード登録・本番の申込は受付開始のため true）",
-  B.STORE_CUSTOM_PLAN_MONTHLY_SIGNUP_ENABLED === true && B.STORE_CUSTOM_PLAN_CLOSE_WRITES_ENABLED === true && B.STORE_CUSTOM_PLAN_CHARGE_ENABLED === false && CR.STORE_CUSTOM_PLAN_CRON_CHARGES_ENABLED === true && SB.STORE_CARD_REGISTRATION_LIVE_ENABLED === true && IM.IMADAKE_CV_BILLING_STARTED === false && MC.IMADAKE_MONTHLY_CHARGE_ENABLED === false);
+t("A1 申込受付の開始：本番の申込・本番のカード登録・月末締めの書き込み・定期実行の請求（STEP 53）は true／本番の請求も開始済み true（2026-11-14：代表の承認）・今だけ投稿の請求は false（STEP 52-F：本番のカード登録・本番の申込は受付開始のため true）",
+  B.STORE_CUSTOM_PLAN_MONTHLY_SIGNUP_ENABLED === true && B.STORE_CUSTOM_PLAN_CLOSE_WRITES_ENABLED === true && B.STORE_CUSTOM_PLAN_CHARGE_ENABLED === true && CR.STORE_CUSTOM_PLAN_CRON_CHARGES_ENABLED === true && SB.STORE_CARD_REGISTRATION_LIVE_ENABLED === true && IM.IMADAKE_CV_BILLING_STARTED === false && MC.IMADAKE_MONTHLY_CHARGE_ENABLED === false);
 
 // ===================== L. live charge config (store card only) =====================
 const lc = (env) => SB.readStripeLiveChargeConfig(env);
@@ -54,7 +54,7 @@ t("L6 失敗の応答にキーの値を出さない", !reasons.includes(SECRET) 
 
 // ===================== G. store card charge gate =====================
 const gate = (env, extra = {}) => CH.readStoreCustomPlanChargeGate({ env, ...extra });
-t("G1 （STEP 53-I：請求のスイッチ false）Production・本番の請求専用キーがそろっていても charge_disabled・Preview（試験の環境でない）も charge_disabled", gate(LIVE).ok === false && gate(LIVE).reason === "charge_disabled" && gate({ VERCEL_ENV: "preview", STRIPE_MODE: "test", STRIPE_CHARGE_RESTRICTED_KEY: "rk_" + "test_FAKE", STRIPE_PUBLISHABLE_KEY: "pk_" + "test_FAKE" }).reason === "charge_disabled");
+t("G1 （請求のスイッチ開始済み）Production・本番の請求専用キーがそろえば請求できる・Preview（試験の環境でない）は charge_disabled", gate(LIVE).ok === true && gate({ VERCEL_ENV: "preview", STRIPE_MODE: "test", STRIPE_CHARGE_RESTRICTED_KEY: "rk_" + "test_FAKE", STRIPE_PUBLISHABLE_KEY: "pk_" + "test_FAKE" }).reason === "charge_disabled");
 const gl = gate(LIVE, { chargeEnabledOverride: true });
 t("G2 （試験でスイッチを true に差し替えた時）Production は本番の設定・mode live・Preview 試験だけの制限なし", gl.ok === true && gl.config.mode === "live" && gl.previewTrialOnly === false, { ok: gl.ok, reason: gl.reason });
 t("G3 （スイッチ true でも）Production でテストキーなら請求しない（stripe_unavailable）", gate({ ...LIVE, STRIPE_MODE: "test", STRIPE_CHARGE_RESTRICTED_KEY: "rk_" + "test_FAKE", STRIPE_PUBLISHABLE_KEY: "pk_" + "test_FAKE" }, { chargeEnabledOverride: true }).reason === "stripe_unavailable");
@@ -71,15 +71,15 @@ let run = await CH.runStoreCustomPlanCharges(db, { env: LIVE, chargeEnabledOverr
 const pv = (run.invoices || []).find((e) => e.invoiceId === "PV_2026-10"), pr = (run.invoices || []).find((e) => e.invoiceId === "PR_2026-10");
 t("R1 本番の請求（試算）：Preview で作った請求書は請求しない（preview_invoice_in_live）・本番の請求書は請求の対象", run.ok === true && run.mode === "live" && !!pv && pv.plan === "skip" && pv.planReason === "preview_invoice_in_live" && !!pr && pr.plan === "charge", run.invoices);
 t("R2 試算では Stripe に通信せず、データも変えない", stripeCalls.length === 0 && JSON.stringify([...S.docs.entries()]) === before);
-// 請求を止めている間(スイッチ false)の試算でも、本番の請求の設定がそろっているかを返す(キーの値は返さない)。
+// 試算では、本番の請求の設定がそろっているかも返す(キーの値は返さない)。
 const cfgRun = async (env) => CH.runStoreCustomPlanCharges(db, { env, now }, { dryRun: true });
 const offReady = await cfgRun(LIVE), offSk = await cfgRun({ ...LIVE, STRIPE_CHARGE_RESTRICTED_KEY: "sk_" + "live_FAKE" }), offNone = await cfgRun({ ...LIVE, STRIPE_CHARGE_RESTRICTED_KEY: "" }), offTestPk = await cfgRun({ ...LIVE, STRIPE_PUBLISHABLE_KEY: "pk_" + "test_FAKE" }), offPreview = await cfgRun({ VERCEL_ENV: "preview", STRIPE_MODE: "test", STRIPE_CHARGE_RESTRICTED_KEY: "rk_" + "test_FAKE", STRIPE_PUBLISHABLE_KEY: "pk_" + "test_FAKE" });
-t("R2b 請求OFFの試算：実行は charge_disabled のまま・本番の請求の設定がそろっていれば ready true／sk_live_ は server_key_not_restricted_live・未登録は charge_key_not_configured・pk_test_ は key_mode_mismatch・Preview は null",
-  offReady.ok === true && offReady.executionAllowed === false && offReady.executionBlockedReason === "charge_disabled" && offReady.liveChargeConfig.ready === true && offReady.liveChargeConfig.reason === "" &&
+t("R2b 請求の試算（スイッチ開始済み）：本番の請求の設定がそろっていれば実行可・ready true／sk_live_ は server_key_not_restricted_live・未登録は charge_key_not_configured・pk_test_ は key_mode_mismatch・Preview は null",
+  offReady.ok === true && offReady.executionAllowed === true && offReady.executionBlockedReason === "" && offReady.liveChargeConfig.ready === true && offReady.liveChargeConfig.reason === "" &&
   offSk.liveChargeConfig.ready === false && offSk.liveChargeConfig.reason === "server_key_not_restricted_live" && offNone.liveChargeConfig.reason === "charge_key_not_configured" && offTestPk.liveChargeConfig.reason === "key_mode_mismatch" && offPreview.liveChargeConfig === null, { offReady: offReady.liveChargeConfig, offSk: offSk.liveChargeConfig });
 t("R2c 設定の確認の結果にキーの値を出さない・Stripe に通信しない・データを変えない", ![offReady, offSk, offNone, offTestPk].some((r) => JSON.stringify(r).includes(SECRET) || /(rk|sk|pk)_(live|test)_FAKE/.test(JSON.stringify(r))) && stripeCalls.length === 0 && JSON.stringify([...S.docs.entries()]) === before);
 run = await CH.runStoreCustomPlanCharges(db, { env: { ...LIVE, STRIPE_CHARGE_RESTRICTED_KEY: "" }, now }, { dryRun: false });
-t("R3 請求専用キーが未登録の Production（STEP 53-I：スイッチ false）：実行は charge_disabled・Stripe に通信しない・データを変えない", run.ok === false && run.reason === "charge_disabled" && stripeCalls.length === 0 && JSON.stringify([...S.docs.entries()]) === before, run);
+t("R3 請求専用キーが未登録の Production（スイッチ開始済み）：実行は stripe_unavailable・Stripe に通信しない・データを変えない", run.ok === false && run.reason === "stripe_unavailable" && stripeCalls.length === 0 && JSON.stringify([...S.docs.entries()]) === before, run);
 
 // ===================== P. Production sign-up stays closed =====================
 S.docs.set("storeAccounts/SP", { storeName: "店SP", registrationStatus: "active", enabled: true, countryCode: "JP", prefecture: "沖縄県", city: "那覇市", locationFormattedAddress: "沖縄県那覇市", latitude: 26.2, longitude: 127.68, duplicateCandidates: [] });

@@ -17,7 +17,7 @@
 // 契約の支払いの状態(storeCustomPlans.paymentStatus)：current / past_due / suspended。契約の状態(status)とは別に持つ。
 //   契約者が請求先の未払い(payment_failed・requires_action)が無くなれば current に戻す(複数月の未払いはすべて支払われた時)。
 //
-// 実行の許可：STORE_CUSTOM_PLAN_CHARGE_ENABLED(false)が true、または Preview 試験の経路(Preview・対象ブランチ・
+// 実行の許可：STORE_CUSTOM_PLAN_CHARGE_ENABLED(2026-11-14 の代表承認で true)が true、または Preview 試験の経路(Preview・対象ブランチ・
 // machinau-preview の環境で、請求用キーがテストモード、Preview で作った試験用の請求書だけ)。どちらでも、請求用の設定
 // (readStripeChargeConfig：Production では常に無効、テストキーのみ)が使える時だけ。本番キーでは実行しない。
 // このファイルは Vercel Function ではない(api/moderate-submission.js から呼ばれる)。

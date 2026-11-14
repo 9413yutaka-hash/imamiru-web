@@ -365,7 +365,7 @@ seedStore("M2", "um", "published", { latitude: 26.40, longitude: 127.90 }); mont
   const toku = readFileSync(join(REPO_ROOT, "tokushoho.html"), "utf8");
   // STEP 59｜17条9項：申し込みは受付中・実際の請求は未開始・初回の請求は2026年12月2日の予定(申し込みと請求を分ける)。
   t("G7 規約は11月4日の改定の版(STEP 59：17条9項は申し込みの受付と実際の請求を分ける)・12月1日の施行の告知を残す(12月1日の改定は早期に施行しない)", terms.includes("最終更新日：2026年11月4日") && terms.includes("<li>店舗カードの月額契約の申し込みは、現在受け付けています。月額料金の実際の請求は、現在はまだ開始していません。最初の請求は、2026年12月2日に行う予定です。</li>") && !terms.includes("申し込みと月額料金の請求は開始していません") && terms.includes('data-legal-notice="store-card-billing"') && terms.includes('data-effective="2026-12-01"') && toku.includes("data-legal-notice"));
-  t("G8 課金のスイッチは OFF のまま(店舗カードの請求・今だけ投稿の請求)", BL.STORE_CUSTOM_PLAN_CHARGE_ENABLED === false && IM.IMADAKE_CV_BILLING_STARTED === false && MC.IMADAKE_MONTHLY_CHARGE_ENABLED === false && typeof CR.STORE_CUSTOM_PLAN_CRON_CHARGES_ENABLED === "boolean", { charge: BL.STORE_CUSTOM_PLAN_CHARGE_ENABLED });
+  t("G8 課金のスイッチ(店舗カードの請求は開始済み・今だけ投稿の請求は OFF のまま)", BL.STORE_CUSTOM_PLAN_CHARGE_ENABLED === true && IM.IMADAKE_CV_BILLING_STARTED === false && MC.IMADAKE_MONTHLY_CHARGE_ENABLED === false && typeof CR.STORE_CUSTOM_PLAN_CRON_CHARGES_ENABLED === "boolean", { charge: BL.STORE_CUSTOM_PLAN_CHARGE_ENABLED });
   const wf = readFileSync(join(REPO_ROOT, ".github/workflows/store-card-plan-production.yml"), "utf8");
   t("G9 定期実行は1日4回のまま", /cron: "10 1-4 \* \* \*"/.test(wf));
   const rules = readFileSync(join(REPO_ROOT, "firestore.rules"), "utf8");
