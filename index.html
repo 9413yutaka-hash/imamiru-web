@@ -2770,6 +2770,30 @@
           店の今、今日の行事、地元の声。今いる街の「今」を、近い順に1本で届けます。
         </p>
 
+        <!-- ヒーロー検索(モック準拠の白ピル+クイックチップ)｜新しい検索基盤は作らず、
+             地名は既存の地域選択(市区町村データ)へ、それ以外は今日のフィードの
+             キーワード絞り込みへ接続する(app.js の initHeroSearch)。
+             現在地カード(下)とは別導線として競合させない。 -->
+        <form class="hero-searchbar" id="heroSearchForm" role="search">
+          <input
+            type="search"
+            id="heroSearchInput"
+            data-i18n-placeholder="hero_search_placeholder"
+            placeholder="エリア・キーワードで探す（例：糸満、そば、祭り）"
+            aria-label="エリア・キーワードで探す"
+            autocomplete="off"
+          >
+          <button class="hero-search-button" type="submit" data-i18n="hero_search_button">探す</button>
+        </form>
+
+        <div class="hero-search-chips" id="heroSearchChips" role="group" aria-label="人気のキーワード">
+          <button type="button" data-hero-search-term="糸満">糸満</button>
+          <button type="button" data-hero-search-term="那覇">那覇</button>
+          <button type="button" data-hero-search-term="祭り">祭り</button>
+          <button type="button" data-hero-search-term="夕日">夕日</button>
+          <button type="button" data-hero-search-term="そば">そば</button>
+        </div>
+
         <section class="location-card hero-entry-card" aria-labelledby="locationHeading">
 
           <div class="location-card-top">
@@ -3310,6 +3334,13 @@
           <button type="button" data-feed-filter="voice" aria-pressed="false" data-i18n="feed_filter_voice">地元の声</button>
           <button type="button" data-feed-filter="discovery" aria-pressed="false" data-i18n="feed_filter_discovery">街の発見</button>
         </div>
+      </div>
+
+      <!-- ヒーロー検索のキーワード絞り込み中だけ出すバー(解除ボタン付き)。
+           絞り込みが静かに残り続けないよう、常に見える形にする。 -->
+      <div class="today-feed-keyword-bar" id="todayFeedKeywordBar" hidden>
+        <span id="todayFeedKeywordLabel"></span>
+        <button type="button" id="todayFeedKeywordClear" data-i18n="feed_keyword_clear">解除する</button>
       </div>
 
       <div id="todayFeedList" class="today-feed-grid"></div>

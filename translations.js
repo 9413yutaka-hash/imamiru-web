@@ -55,6 +55,19 @@ const MACHINAU_TRANSLATIONS = {
     en: "Shop updates, today's events, local voices — the town's “now”, in one feed, closest first."
   },
 
+  // ヒーロー検索バー(モカ案ブレンド・モック忠実度)｜地名は既存の市区町村
+  // データで解決して地域選択へ接続し、それ以外は今日のフィードの
+  // キーワード絞り込みに使う(app.js の initHeroSearch)。
+  hero_search_placeholder: {
+    ja: "エリア・キーワードで探す（例：糸満、そば、祭り）",
+    en: "Search by area or keyword (e.g. Itoman, soba, festival)"
+  },
+
+  hero_search_button: {
+    ja: "探す",
+    en: "Search"
+  },
+
   // ヘッダーの投稿CTA(赤ピル)とセクション移動チップ行。
   header_post_cta: {
     ja: "発見を投稿する",
@@ -215,6 +228,21 @@ const MACHINAU_TRANSLATIONS = {
   feed_empty_filter: {
     ja: "この条件の「今」はまだありません。種類を変えてみてください。",
     en: "Nothing matches this filter yet. Try another type."
+  },
+
+  feed_empty_keyword: {
+    ja: "「{term}」に合う今日の「今」は見つかりませんでした。",
+    en: "Nothing for today matches “{term}” yet."
+  },
+
+  feed_keyword_bar: {
+    ja: "「{term}」で絞り込み中",
+    en: "Showing results for “{term}”"
+  },
+
+  feed_keyword_clear: {
+    ja: "解除する",
+    en: "Clear"
   },
 
   feed_ticker_today: {

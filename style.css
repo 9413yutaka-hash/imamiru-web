@@ -2586,6 +2586,83 @@ body:has(#todayFeedSection) .hero-sub-copy {
   text-shadow: 0 2px 10px rgba(0, 30, 45, 0.5);
 }
 
+/* ヒーロー写真(TOPのみ差し替え)｜モックの写真はローカルファイルで本番に
+   置けないため、同じ雰囲気(沖縄の空撮・ターコイズの海と海岸線)の
+   Pexelsフリー写真を外部URL参照する。出典: Pexels photo 12077392
+   "Stunning aerial view of Okinawa's turquoise waters and coastal landscape"
+   (https://www.pexels.com/search/okinawa%20aerial/ の先頭結果)。
+   machinau-hero-bg.png 自体は他ページ・従来表示のため残し、ここでは
+   TOP(body:has(#todayFeedSection))の参照だけを上書きする。 */
+body:has(#todayFeedSection) .hero-background {
+  background-image: url("https://images.pexels.com/photos/12077392/pexels-photo-12077392.jpeg?auto=compress&cs=tinysrgb&w=1920&h=1080&fit=crop");
+  background-position: center;
+}
+
+/* ヒーロー検索バー(モック準拠: 白ピル+青いボタン) */
+.hero-searchbar {
+  display: flex;
+  gap: 8px;
+  background: #fff;
+  border-radius: 999px;
+  padding: 7px;
+  max-width: 620px;
+  box-shadow: 0 12px 32px rgba(0, 30, 45, 0.28);
+  margin: 0 0 14px;
+}
+
+.hero-searchbar input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  font-size: 16px;
+  padding: 8px 14px;
+  color: #10333f;
+  background: transparent;
+  font-family: inherit;
+}
+
+.hero-search-button {
+  border: none;
+  cursor: pointer;
+  background: var(--blue);
+  color: #fff;
+  font-family: inherit;
+  font-weight: 800;
+  font-size: 15px;
+  border-radius: 999px;
+  padding: 10px 22px;
+  white-space: nowrap;
+}
+
+.hero-search-button:hover {
+  background: var(--cyan);
+}
+
+/* ヒーロー検索のクイックチップ(モック準拠: 半透明のガラス調) */
+.hero-search-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 22px;
+}
+
+.hero-search-chips button {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  border: 1.5px solid rgba(255, 255, 255, 0.5);
+  border-radius: 999px;
+  padding: 8px 15px;
+  font-weight: 700;
+  font-size: 13.5px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.hero-search-chips button:hover {
+  background: rgba(255, 255, 255, 0.32);
+}
+
 body:has(#todayFeedSection) .hero-content .location-card {
   max-width: 620px;
 }
@@ -2822,6 +2899,37 @@ body:has(#todayFeedSection) .hero-action-grid {
   background: var(--blue);
   border-color: var(--blue);
   color: var(--white);
+}
+
+/* ヒーロー検索のキーワード絞り込みバー(絞り込み中だけ表示・解除付き) */
+.today-feed-keyword-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 16px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.today-feed-keyword-bar[hidden] {
+  display: none;
+}
+
+.today-feed-keyword-bar button {
+  background: var(--white);
+  color: var(--blue);
+  border: 1.5px solid var(--blue);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-weight: 800;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.today-feed-keyword-bar button:hover {
+  background: var(--sky);
 }
 
 .today-feed-grid {
