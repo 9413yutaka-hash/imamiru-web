@@ -184,7 +184,7 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   feed_badge_event: {
-    ja: "行事",
+    ja: "イベント",
     en: "Event"
   },
 
