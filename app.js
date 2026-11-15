@@ -4180,9 +4180,8 @@ function buildStoreProfileShopCardHtml(shop, shopCardIndex) {
           return;
         }
 
-        openShopModal(
-          '${escapeHtml(shop.firestoreId)}',
-          '${isShowingAllShopCards ? "full_list" : "card"}'
+        openStoreProfilePage(
+          '${escapeHtml(shop.firestoreId)}'
         );
       "
     >
@@ -4248,7 +4247,7 @@ function buildStoreProfileShopCardHtml(shop, shopCardIndex) {
           <button
             class="shop-button detail-button"
             type="button"
-            onclick="openShopModal('${escapeHtml(shop.firestoreId)}', '${isShowingAllShopCards ? "full_list" : "card"}')"
+            onclick="openStoreProfilePage('${escapeHtml(shop.firestoreId)}')"
           >
             ${getMachinauTranslation("shop_detail_button", language)}
           </button>
@@ -6216,6 +6215,25 @@ const SHOP_VIEW_ENTRY_POINTS = [
   "awareness",
   "area_info"
 ];
+
+// 正式店舗のカードは、モーダルではなく店舗ごとの固定ページ
+// (/shop/{storeId})へ進む(共有リンクと同じURL。2026-11-15代表決定：
+// 一覧で変わるのは順位ではなく「押した先」)。IDが店舗ページの形で
+// ない場合は、従来どおりモーダルを開く。
+function openStoreProfilePage(firestoreId) {
+  if (
+    typeof firestoreId === "string" &&
+    firestoreId.indexOf("sp_") === 0 &&
+    firestoreId.length > 3
+  ) {
+    window.location.href =
+      "/shop/" + encodeURIComponent(firestoreId.slice(3));
+
+    return;
+  }
+
+  openShopModal(firestoreId, "card");
+}
 
 function openShopModal(
   firestoreId,
