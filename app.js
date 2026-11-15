@@ -25832,8 +25832,14 @@ function buildTodayFeedCardHtml(
   item,
   language
 ) {
+  // 写真の無い投稿は写真欄自体を出さない(案A・2026-11-15 代表決定)。
+  // 絵文字だけが大きな空の箱に浮く見た目をやめ、文字だけのカードにする。
+  // バッジ類は写真がある時は写真の上に、無い時は本文の上に並べる。
+  const hasImage =
+    item.imageUrl !== "";
+
   const imageHtml =
-    item.imageUrl !== ""
+    hasImage
       ? '<img src="' +
         escapeHtml(
           buildOptimizedImageUrl(
@@ -25842,9 +25848,24 @@ function buildTodayFeedCardHtml(
           )
         ) +
         '" alt="" loading="lazy" onerror="handleBrokenImage(this)">'
-      : '<span class="feed-card-emoji" aria-hidden="true">' +
-        item.emoji +
-        "</span>";
+      : "";
+
+  const chipsHtml =
+    '<span class="feed-badge feed-badge-' + item.type + '">' +
+      escapeHtml(
+        getMachinauTranslation(item.badgeKey, language)
+      ) +
+    "</span>" +
+    (item.kindText !== ""
+      ? '<span class="feed-kind-tag">' +
+        escapeHtml(item.kindText) +
+        "</span>"
+      : "") +
+    (item.expiresText !== ""
+      ? '<span class="feed-count-chip">' +
+        escapeHtml(item.expiresText) +
+        "</span>"
+      : "");
 
   const metaParts =
     [];
@@ -25895,26 +25916,17 @@ function buildTodayFeedCardHtml(
   }
 
   return (
-    '<article class="feed-card" data-feed-type="' + item.type + '">' +
-      '<div class="feed-card-visual">' +
-        imageHtml +
-        '<span class="feed-badge feed-badge-' + item.type + '">' +
-          escapeHtml(
-            getMachinauTranslation(item.badgeKey, language)
-          ) +
-        "</span>" +
-        (item.kindText !== ""
-          ? '<span class="feed-kind-tag">' +
-            escapeHtml(item.kindText) +
-            "</span>"
-          : "") +
-        (item.expiresText !== ""
-          ? '<span class="feed-count-chip">' +
-            escapeHtml(item.expiresText) +
-            "</span>"
-          : "") +
-      "</div>" +
+    '<article class="feed-card' + (hasImage ? "" : " feed-card-textonly") + '" data-feed-type="' + item.type + '">' +
+      (hasImage
+        ? '<div class="feed-card-visual">' +
+            imageHtml +
+            chipsHtml +
+          "</div>"
+        : "") +
       '<div class="feed-card-body">' +
+        (hasImage
+          ? ""
+          : '<div class="feed-card-chips">' + chipsHtml + "</div>") +
         (metaParts.length > 0
           ? '<div class="feed-card-meta">' + metaParts.join("") + "</div>"
           : "") +
