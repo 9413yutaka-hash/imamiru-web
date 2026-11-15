@@ -24,12 +24,11 @@
       scroll-behavior: smooth;
     }
 
-    /* 横にはみ出した要素で画面全体が左右にズレるのを防ぐ(全ページ共通)。
-       clip はスクロール領域を作らないため、sticky の固定表示を壊さない。 */
-    html,
-    body {
-      overflow-x: clip;
-    }
+    /* 【2026-11-15 撤去】横はみ出し防止に html,body へ overflow-x: clip を
+       入れていたが(PR #10)、iPhone Safari でティッカーの流れる文字が
+       描かれなくなる症状の主因候補となったため外した。実測では横に
+       はみ出す要素自体が無かったため、撤去の実害は小さい見込み。
+       横ズレが再発したら、はみ出す要素そのものを直すこと。 */
 
     body {
       margin: 0;
@@ -2705,13 +2704,17 @@ body:has(#todayFeedSection) .hero-action-grid {
 .today-ticker-track {
   display: flex;
   width: max-content;
-  padding: 9px 0;
-  animation: today-ticker-scroll 38s linear infinite;
+  padding: 12px 0;
+  /* iPhone Safari で流れる文字が描かれない・バラバラになる症状への対策：
+     3D変換でGPU描画に載せ、再描画を明示する(2026-11-15)。 */
+  will-change: transform;
+  backface-visibility: hidden;
+  animation: today-ticker-scroll 48s linear infinite;
 }
 
 .today-ticker-track a {
   font-weight: 700;
-  font-size: 14px;
+  font-size: 17px;
   white-space: nowrap;
   padding: 0 26px;
   color: inherit;
@@ -2724,12 +2727,12 @@ body:has(#todayFeedSection) .hero-action-grid {
   border-radius: 6px;
   padding: 1px 8px;
   margin-right: 10px;
-  font-size: 12.5px;
+  font-size: 14px;
 }
 
 @keyframes today-ticker-scroll {
   to {
-    transform: translateX(-50%);
+    transform: translate3d(-50%, 0, 0);
   }
 }
 
