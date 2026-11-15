@@ -3194,10 +3194,6 @@ body:has(#todayFeedSection) .hero-action-grid {
 .feed-card-body p {
   font-size: 13.5px;
   line-height: 1.65;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 
 .feed-card-foot {

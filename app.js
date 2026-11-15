@@ -25578,6 +25578,8 @@ function truncateTodayFeedText(
     : text;
 }
 
+// フィードカードの本文は途中で切らない(2026-11-15 代表決定)。
+// 文章の途中で切れるのは失礼にあたるため、全文を表示する。
 function buildTodayFeedItems() {
   const language =
     getCurrentMachinauLanguage();
@@ -25608,7 +25610,7 @@ function buildTodayFeedItems() {
         kindText: getImadakeLiveStateText(post.liveState, language),
         title: text.headline || post.storeName || "",
         storeLine: text.headline ? (post.storeName || "") : "",
-        body: truncateTodayFeedText(text.excerpt || "", 140),
+        body: text.excerpt || "",
         imageUrl:
           typeof post.imageUrl === "string"
             ? getSafeImageUrl(post.imageUrl)
@@ -25645,10 +25647,7 @@ function buildTodayFeedItems() {
       kindText: "",
       title: shop.title || "",
       storeLine: "",
-      body: truncateTodayFeedText(
-        typeof shop.message === "string" ? shop.message : "",
-        140
-      ),
+      body: typeof shop.message === "string" ? shop.message : "",
       imageUrl: imageUrl,
       emoji: "👀",
       distanceKm: Number.isFinite(entry.distanceKm) ? entry.distanceKm : null,
@@ -25687,7 +25686,7 @@ function buildTodayFeedItems() {
           kindText: "",
           title: finding.name || "",
           storeLine: "",
-          body: truncateTodayFeedText(finding.description || "", 140),
+          body: finding.description || "",
           imageUrl: "",
           emoji: "🎪",
           distanceKm: null,
@@ -25717,7 +25716,7 @@ function buildTodayFeedItems() {
       kindText: "",
       title: thread.placeLabel || "",
       storeLine: "",
-      body: truncateTodayFeedText(thread.text || "", 140),
+      body: thread.text || "",
       imageUrl: "",
       emoji: "💬",
       distanceKm: null,
