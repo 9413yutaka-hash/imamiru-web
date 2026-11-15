@@ -4482,6 +4482,11 @@ const MACHINAU_TRANSLATIONS = {
     en: "You can edit your store card. To show it to travelers, a ¥100/month (tax included) subscription is required."
   },
 
+  store_account_store_note_active_contracted: {
+    ja: "店舗カードを編集できます。",
+    en: "You can edit your store card."
+  },
+
   store_account_store_note_pending_review: {
     ja: "すでに登録されている店舗情報と重複していないかなどを、運営が確認しています。確認が終わるまでお待ちください。",
     en: "Our team is checking that this registration does not duplicate an existing listing. Please wait until the check is complete."
@@ -4711,6 +4716,81 @@ const MACHINAU_TRANSLATIONS = {
   store_profile_hours_note_hint: {
     ja: "例：祝日は不定休、ラストオーダー21:30（100文字まで）",
     en: "e.g. Irregular holidays, last order 21:30 (up to 100 characters)"
+  },
+
+  store_profile_preview_heading: {
+    ja: "旅行者にはこう見えます",
+    en: "How travelers see it"
+  },
+
+  store_profile_preview_note: {
+    ja: "下の入力に合わせて、その場で変わります。保存する前の内容も表示されるので、公開した時の見え方を確認しながら直せます。並び順は実際の公開ページと同じです。",
+    en: "Updates as you type, including unsaved changes, so you can check how the page will look before publishing. Sections appear in the same order as the public page."
+  },
+
+  store_profile_preview_empty: {
+    ja: "まだ表示できる内容がありません。写真と紹介文を入れると、ここに表示されます。",
+    en: "Nothing to show yet. Add a photo and a description and they will appear here."
+  },
+
+  store_profile_preview_about: {
+    ja: "お店・施設の紹介",
+    en: "About"
+  },
+
+  store_profile_preview_photos: {
+    ja: "写真",
+    en: "Photos"
+  },
+
+  store_profile_preview_story: {
+    ja: "こだわり・ストーリー",
+    en: "Our story"
+  },
+
+  store_profile_preview_menu: {
+    ja: "メニュー・商品",
+    en: "Menu & items"
+  },
+
+  store_profile_preview_hours: {
+    ja: "営業時間",
+    en: "Opening hours"
+  },
+
+  store_profile_preview_hours_draft: {
+    ja: "営業時間は入力中です。保存できる形になると、ここに表示されます。",
+    en: "Opening hours are still being entered. They will appear here once they are complete."
+  },
+
+  store_profile_preview_location: {
+    ja: "所在地",
+    en: "Location"
+  },
+
+  store_profile_preview_info: {
+    ja: "お店の情報",
+    en: "Shop info"
+  },
+
+  store_profile_preview_contact: {
+    ja: "電話・予約・SNS",
+    en: "Phone, bookings & social"
+  },
+
+  store_profile_category_hint: {
+    ja: "お店のページと、トップページの一覧で、お店の種類として表示されます。",
+    en: "Shown as the type of place on your page and in the top-page listings."
+  },
+
+  store_profile_contact_hint: {
+    ja: "電話番号・予約ページ・SNSは、お店のページの「電話・予約・SNS」に出ます。旅行者がそのまま電話や予約に進めます。",
+    en: "Your phone number, booking page and social links appear under \"Phone, bookings & social\" on your page, so travelers can call or book right away."
+  },
+
+  store_profile_payment_hint: {
+    ja: "お店のページの「お店の情報」に、選んだ支払い方法が表示されます。",
+    en: "The payment methods you select appear under \"Shop info\" on your page."
   },
 
   store_profile_day_mon: {

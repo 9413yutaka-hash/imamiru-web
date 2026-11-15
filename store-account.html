@@ -1190,7 +1190,10 @@
 
           const note = document.createElement("div");
           note.className = "store-card-note";
-          note.textContent = t("store_account_store_note_" + statusCode);
+          // 契約中の店舗には「申し込みが必要です」と出さない(下のプラン状態と食い違うため)。
+          note.textContent = t(statusCode === "active" && (store.planState === "active" || store.planState === "canceling")
+            ? "store_account_store_note_active_contracted"
+            : "store_account_store_note_" + statusCode);
           item.appendChild(note);
 
           // STEP 57｜公開の状態・月額100円プランの状態・お店のページの固定の URL(サーバーの判定をそのまま表示)。
