@@ -2430,15 +2430,28 @@
    ・ID・クラス・data属性の既存の意味は変えない(見た目だけの上書き)。
    ============================================================ */
 
-/* 見出しの丸ゴシック(モックの書体)。読み込めない環境では従来書体に落ちる。 */
+/* 見出しの丸ゴシック(モックの書体)。読み込めない環境では従来書体に落ちる。
+   2026-11-15 代表指示で、カード見出し・入口カードの題字まで対象を広げ、
+   大見出しと同じ丸ゴシックに統一した。 */
 body:has(#todayFeedSection) h1,
 body:has(#todayFeedSection) h2,
+body:has(#todayFeedSection) h3,
 body:has(#todayFeedSection) .brand-name,
+body:has(#todayFeedSection) .hero-action-title,
+body:has(#todayFeedSection) .hero-link-card-title,
 .today-hero-md,
 .today-hero-copy b,
 .feed-card h3,
 .feed-chips button {
   font-family: "M PLUS Rounded 1c", "Yu Gothic", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+}
+
+/* 見出しの太さも大見出しに合わせて800に統一する(2026-11-15 代表指示)。
+   本文とボタンの書体・太さは変更しない。 */
+body:has(#todayFeedSection) h1,
+body:has(#todayFeedSection) h2,
+body:has(#todayFeedSection) h3 {
+  font-weight: 800;
 }
 
 /* ---- 01 ヘッダー: 濃紺バー＋ロゴ＋赤CTA＋言語ピル ---- */
