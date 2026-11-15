@@ -153,7 +153,7 @@
 
   <link
     rel="stylesheet"
-    href="style.css?v=20261115d"
+    href="style.css?v=20261115e"
   >
 
   <!-- トップページ改修(モカ案ブレンド・見た目)｜見出し用の丸ゴシック。
@@ -1742,6 +1742,18 @@
     main [id],
     .opening-visual [id] {
       scroll-margin-top: calc(var(--header-h, 110px) + 12px);
+    }
+
+    /* ヒーロー内のバーの幅統一(代表指摘 2026-11-15)：検索バー(620px・左寄せ)・
+       現在地カード(620px)・入口カード(幅いっぱい)・掲示板/楽しみ方カード(780px)で
+       バラバラだった幅と寄せを、780px・中央寄せに揃える。スマホでは幅いっぱいのまま。 */
+    body:has(#todayFeedSection) .hero-content .hero-searchbar,
+    body:has(#todayFeedSection) .hero-content .location-card,
+    body:has(#todayFeedSection) .hero-content .hero-action-grid,
+    body:has(#todayFeedSection) .hero-content .hero-link-card {
+      max-width: 780px;
+      margin-left: auto;
+      margin-right: auto;
     }
 
     @media (min-width: 701px) {

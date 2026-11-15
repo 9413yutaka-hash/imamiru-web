@@ -2461,6 +2461,8 @@ body:has(#todayFeedSection) .brand-name-dot {
 body:has(#todayFeedSection) .brand-caption {
   color: #b9d4e6;
   font-size: 11px;
+  /* タグラインが途中で改行されて2行に割れないようにする(代表指摘 2026-11-15)。 */
+  white-space: nowrap;
 }
 
 body:has(#todayFeedSection) .brand-icon {
@@ -2594,14 +2596,13 @@ body:has(#todayFeedSection) .hero-sub-copy {
 }
 
 /* ヒーロー写真(TOPのみ差し替え)｜モックの写真はローカルファイルで本番に
-   置けないため、同じ雰囲気(沖縄の空撮・ターコイズの海と海岸線)の
-   Pexelsフリー写真を外部URL参照する。出典: Pexels photo 12077392
-   "Stunning aerial view of Okinawa's turquoise waters and coastal landscape"
-   (https://www.pexels.com/search/okinawa%20aerial/ の先頭結果)。
+   置けないため、Pexelsフリー写真を外部URL参照する。
+   2026-11-15 代表の選択で明るい写真へ差し替え：出典 Pexels photo 4870659
+   "Shore of Turquoise Sea"(ROMAN ODINTSOV)。旧写真は photo 12077392。 */
    machinau-hero-bg.png 自体は他ページ・従来表示のため残し、ここでは
    TOP(body:has(#todayFeedSection))の参照だけを上書きする。 */
 body:has(#todayFeedSection) .hero-background {
-  background-image: url("https://images.pexels.com/photos/12077392/pexels-photo-12077392.jpeg?auto=compress&cs=tinysrgb&w=1920&h=1080&fit=crop");
+  background-image: url("https://images.pexels.com/photos/4870659/pexels-photo-4870659.jpeg?auto=compress&cs=tinysrgb&w=1920&h=1080&fit=crop");
   background-position: center;
 }
 
