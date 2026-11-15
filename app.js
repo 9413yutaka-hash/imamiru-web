@@ -19148,8 +19148,9 @@ function ensureRegionTodayInfoForDay(dayKey) {
   if (dayKey === "tomorrow") {
     fetchRegionTodayInfoForDay("tomorrow");
   } else if (dayKey === "weekend") {
-    fetchRegionTodayInfoForDay("weekendSat");
-    fetchRegionTodayInfoForDay("weekendSun");
+    getTodayFeedWeekendDayKeys().forEach(function(day) {
+      fetchRegionTodayInfoForDay(day);
+    });
   }
 }
 
@@ -25739,16 +25740,19 @@ function updateTodayFeedDateLabel() {
       getTodayFeedDayRangeMillis("weekend");
 
     // 範囲の開始はJSTの0時。表示はその日の昼として整形する。
-    const saturday =
+    // 日曜は範囲が1日だけなので、その日だけを表示する。
+    const firstDay =
       new Date(range.start + 12 * 60 * 60 * 1000);
 
-    const sunday =
-      new Date(range.start + DAY_MS + 12 * 60 * 60 * 1000);
+    const dayCount =
+      Math.round((range.end - range.start) / DAY_MS);
 
     dateElement.textContent =
-      formatLabel(saturday, true) +
-      (language === "ja" ? "・" : " · ") +
-      formatLabel(sunday, true);
+      dayCount >= 2
+        ? formatLabel(firstDay, true) +
+          (language === "ja" ? "・" : " · ") +
+          formatLabel(new Date(range.start + DAY_MS + 12 * 60 * 60 * 1000), true)
+        : formatLabel(firstDay, true);
 
     return;
   }
@@ -25834,8 +25838,14 @@ function getTodayFeedDayRangeMillis(dayKey) {
     const weekday =
       new Date(todayStart + 9 * 60 * 60 * 1000).getUTCDay();
 
+    // 日曜は週末の残りが今日だけなので、日曜だけを範囲にする
+    // (終わった土曜の分を「これから行ける」顔で出さない)。
+    if (weekday === 0) {
+      return { start: todayStart, end: todayStart + DAY_MS };
+    }
+
     const saturdayOffset =
-      weekday === 0 ? -1 : 6 - weekday;
+      6 - weekday;
 
     return {
       start: todayStart + saturdayOffset * DAY_MS,
@@ -25844,6 +25854,21 @@ function getTodayFeedDayRangeMillis(dayKey) {
   }
 
   return { start: todayStart, end: todayStart + DAY_MS };
+}
+
+// 今日の曜日(JST、0=日曜)を返す。
+function getTodayFeedJstWeekday() {
+  const todayStart =
+    getTodayFeedDayRangeMillis("today").start;
+
+  return new Date(todayStart + 9 * 60 * 60 * 1000).getUTCDay();
+}
+
+// 週末の見方で対象になる日付キーの並び。日曜は日曜だけ。
+function getTodayFeedWeekendDayKeys() {
+  return getTodayFeedJstWeekday() === 0
+    ? ["weekendSun"]
+    : ["weekendSat", "weekendSun"];
 }
 
 // 選んだ見方のイベントの材料(地域情報の findings)を返す。週末は土曜と
@@ -25864,7 +25889,7 @@ function getTodayFeedEventSource(dayKey) {
     const seen = {};
     let ready = false;
 
-    ["weekendSat", "weekendSun"].forEach(function(day) {
+    getTodayFeedWeekendDayKeys().forEach(function(day) {
       const slot =
         regionTodayInfoByDay[day];
 
@@ -25904,7 +25929,7 @@ function isTodayFeedDayLoading(dayKey) {
   }
 
   if (dayKey === "weekend") {
-    return ["weekendSat", "weekendSun"].some(function(day) {
+    return getTodayFeedWeekendDayKeys().some(function(day) {
       const slot =
         regionTodayInfoByDay[day];
 
