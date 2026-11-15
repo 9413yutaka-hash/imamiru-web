@@ -25858,7 +25858,7 @@ function renderTodayTicker(
 
   const spansHtml =
     items
-      .slice(0, 8)
+      .slice(0, 5)
       .map(function(item) {
         const agoText =
           formatTodayFeedAgo(item.timeMillis, language);
@@ -25879,7 +25879,7 @@ function renderTodayTicker(
           "\"><b>" +
           escapeHtml(label) +
           "</b>" +
-          escapeHtml(truncateTodayFeedText(headline, 60)) +
+          escapeHtml(truncateTodayFeedText(headline, 44)) +
           "</a>"
         );
       })
