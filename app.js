@@ -26424,6 +26424,7 @@ function renderTodayTicker(
 
 let todayTickerRafId = 0;
 let todayTickerResumeAt = 0;
+let todayTickerStartSerial = 0;
 
 // ティッカーの自動送り：帯は横スクロール可能で、この処理が scrollLeft を
 // 少しずつ進める。触っている間と、触り終わってから3秒は止める。
@@ -26462,7 +26463,17 @@ function startTodayTickerAutoScroll() {
     return;
   }
 
+  // 開始の世代を数える。短い間隔で何度も呼ばれた場合(日付切り替え時の
+  // 再描画など)、古い開始予約が後から発火して送りループが重なると、
+  // その分だけ速くなってしまうため、最新の開始だけを生かす。
+  const startSerial =
+    ++todayTickerStartSerial;
+
   requestAnimationFrame(function() {
+    if (startSerial !== todayTickerStartSerial) {
+      return;
+    }
+
     const half =
       track.scrollWidth / 2;
 
@@ -26479,6 +26490,10 @@ function startTodayTickerAutoScroll() {
       performance.now();
 
     const step = function(now) {
+      if (startSerial !== todayTickerStartSerial) {
+        return;
+      }
+
       const dt =
         Math.min(now - last, 100);
 
