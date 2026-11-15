@@ -26253,5 +26253,34 @@ function initTodayFeedUi() {
 
 initTodayFeedUi();
 
+// お店のカテゴリ行が右に続くことを伝える印(2026-11-15 代表決定)。
+// 続きがある間だけ has-more を付け、右端のフェードと › を出す。
+function initCategoryScrollHint() {
+  const wrap =
+    document.querySelector(".category-scroll-wrap");
+
+  const scroller =
+    document.querySelector(".category-scroll");
+
+  if (!wrap || !scroller) {
+    return;
+  }
+
+  const updateCategoryScrollHint =
+    function() {
+      const hasMore =
+        scroller.scrollWidth - scroller.clientWidth - scroller.scrollLeft > 8;
+
+      wrap.classList.toggle("has-more", hasMore);
+    };
+
+  scroller.addEventListener("scroll", updateCategoryScrollHint, { passive: true });
+  window.addEventListener("resize", updateCategoryScrollHint);
+
+  updateCategoryScrollHint();
+}
+
+initCategoryScrollHint();
+
 // ヒーローの街の名前のボタンは置かない(2026-11-15 代表決定：
 // 「現在地を取得する」を押させることに集中させるため)。
