@@ -13508,6 +13508,108 @@ function computeRegionLocalDate(
   };
 }
 
+// 暦日(YYYY-MM-DD)に日数を足す。UTC基準で計算するため、地域のタイム
+// ゾーンや夏時間の影響を受けない(入力は地域の暦日そのもの)。
+function addDaysToRegionLocalDate(
+  localDate,
+  dayOffset
+) {
+  const match =
+    /^(\d{4})-(\d{2})-(\d{2})$/.exec(
+      typeof localDate === "string" ? localDate : ""
+    );
+
+  if (!match) {
+    return null;
+  }
+
+  const date =
+    new Date(
+      Date.UTC(
+        Number(match[1]),
+        Number(match[2]) - 1,
+        Number(match[3]) + dayOffset
+      )
+    );
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  const year =
+    String(date.getUTCFullYear());
+
+  const month =
+    String(date.getUTCMonth() + 1).padStart(2, "0");
+
+  const dayOfMonth =
+    String(date.getUTCDate()).padStart(2, "0");
+
+  return year + "-" + month + "-" + dayOfMonth;
+}
+
+// 明日・週末フィード(2026-11-15 代表決定)｜頼まれた見方(day)から対象の
+// 暦日を決める。dayの許可リストは today/tomorrow/weekendSat/weekendSun
+// のみで、未指定・不正値は today として扱う(language と同じ考え方)。
+// 日付そのものはクライアントから受け取らず、サーバーが確定した今日の
+// 暦日からだけ計算する(本部指示の「クライアントの日付は信用しない」を
+// 守る)。週末は「来る土日」で、今日が土曜なら今日、日曜なら前日の土曜
+// と次の日曜の組にする。
+const REGION_TODAY_INFO_DAY_VALUES =
+  ["today", "tomorrow", "weekendSat", "weekendSun"];
+
+function resolveRegionTodayInfoTargetDate(
+  localDate,
+  requestedDay
+) {
+  const day =
+    REGION_TODAY_INFO_DAY_VALUES.includes(requestedDay)
+      ? requestedDay
+      : "today";
+
+  if (day === "today") {
+    return { day: day, localDate: localDate };
+  }
+
+  if (day === "tomorrow") {
+    return { day: day, localDate: addDaysToRegionLocalDate(localDate, 1) };
+  }
+
+  const match =
+    /^(\d{4})-(\d{2})-(\d{2})$/.exec(
+      typeof localDate === "string" ? localDate : ""
+    );
+
+  if (!match) {
+    return { day: "today", localDate: localDate };
+  }
+
+  const weekday =
+    new Date(
+      Date.UTC(
+        Number(match[1]),
+        Number(match[2]) - 1,
+        Number(match[3])
+      )
+    ).getUTCDay();
+
+  // 日曜(0)の週末の土曜は前日。それ以外は来る土曜までの日数。
+  const saturdayOffset =
+    weekday === 0 ? -1 : 6 - weekday;
+
+  const saturday =
+    addDaysToRegionLocalDate(localDate, saturdayOffset);
+
+  if (day === "weekendSat") {
+    return { day: day, localDate: saturday };
+  }
+
+  return {
+    day: day,
+    localDate: saturday === null ? null : addDaysToRegionLocalDate(saturday, 1)
+  };
+}
+
 function buildRegionTodayInfoJsonSchema() {
   return {
     type: "json_schema",
@@ -15089,11 +15191,29 @@ async function handleRegionTodayInfoGetRequest(
       });
     }
 
+    // 明日・週末フィード｜対象の暦日は、サーバーが確定した今日からだけ
+    // 計算する(クライアントが送る day は見方の指定だけを受け付ける)。
+    const targetDateResult =
+      resolveRegionTodayInfoTargetDate(
+        localDateResult.localDate,
+        requestBody.day
+      );
+
+    const targetLocalDate =
+      targetDateResult.localDate;
+
+    if (!targetLocalDate) {
+      return response.status(400).json({
+        success: false,
+        message: "日付を特定できませんでした。"
+      });
+    }
+
     let documentId =
       buildRegionTodayInfoDocumentId(
         countryCode,
         cacheRegionKey,
-        localDateResult.localDate
+        targetLocalDate
       );
 
     if (!documentId) {
@@ -15113,7 +15233,7 @@ async function handleRegionTodayInfoGetRequest(
         buildRegionTodayInfoDocumentId(
           countryCode,
           regionKey,
-          localDateResult.localDate
+          targetLocalDate
         );
 
       if (
@@ -15169,7 +15289,7 @@ async function handleRegionTodayInfoGetRequest(
           regionKey: cacheRegionKey,
           regionName: promptRegionName,
           timezone: localDateResult.timeZoneId,
-          localDate: localDateResult.localDate
+          localDate: targetLocalDate
         },
         Object.assign(
           buildAiGenerationGate(
@@ -15240,7 +15360,7 @@ async function handleRegionTodayInfoGetRequest(
 
               regionName: promptRegionName,
               municipality: promptMunicipality,
-              localDate: localDateResult.localDate
+              localDate: targetLocalDate
             }
           );
       } catch (aiError) {
@@ -15297,7 +15417,9 @@ async function handleRegionTodayInfoGetRequest(
         success: true,
         status: "ready",
         checked: readyJaChecked,
-        findings: readyJaFindings
+        findings: readyJaFindings,
+        localDate: targetLocalDate,
+        day: targetDateResult.day
       });
     }
 
@@ -15307,7 +15429,9 @@ async function handleRegionTodayInfoGetRequest(
         success: true,
         status: "ready",
         checked: readyJaChecked,
-        findings: []
+        findings: [],
+        localDate: targetLocalDate,
+        day: targetDateResult.day
       });
     }
 
@@ -15329,7 +15453,9 @@ async function handleRegionTodayInfoGetRequest(
         success: true,
         status: "ready",
         checked: true,
-        findings: translationClaimResult.findings
+        findings: translationClaimResult.findings,
+        localDate: targetLocalDate,
+        day: targetDateResult.day
       });
     }
 
