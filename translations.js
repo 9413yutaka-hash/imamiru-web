@@ -5509,8 +5509,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_custom_menu_hint: {
-    ja: "最大{max}件。商品名は必須、価格と説明は任意です（空欄の項目は表示しません）。写真は1商品に1枚、お店全体で{photos}枚までです（写真の無い商品も登録できます）。「↑上へ」「↓下へ」で商品の並び順を変えられます。公開ページではこの順番で表示され、一番上の商品はトップページの一覧にも出ます。",
-    en: "Up to {max} items. A name is required; price and description are optional (empty fields are not shown). One photo per item, up to {photos} photos for the whole shop (items without a photo are fine). Use the Up and Down buttons to change the order: your page shows items in this order, and the first item also appears in the top-page listings."
+    ja: "最大{max}件。商品名は必須、価格と説明は任意です（空欄の項目は表示しません）。写真は1商品に1枚、お店全体で{photos}枚までです（写真の無い商品も登録できます）。「↑前へ」「↓後へ」で商品の並び順を変えられます。公開ページではこの順番で表示され、一番上の商品はトップページの一覧にも出ます。",
+    en: "Up to {max} items. A name is required; price and description are optional (empty fields are not shown). One photo per item, up to {photos} photos for the whole shop (items without a photo are fine). Use the Earlier and Later buttons to change the order: your page shows items in this order, and the first item also appears in the top-page listings."
   },
 
   store_custom_menu_photo_count: {
@@ -5569,13 +5569,13 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_custom_menu_up: {
-    ja: "↑ 上へ",
-    en: "↑ Up"
+    ja: "↑ 前へ",
+    en: "↑ Earlier"
   },
 
   store_custom_menu_down: {
-    ja: "↓ 下へ",
-    en: "↓ Down"
+    ja: "↓ 後へ",
+    en: "↓ Later"
   },
 
   store_custom_menu_remove: {
