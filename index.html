@@ -3277,10 +3277,9 @@
         <span class="feed-row-label" data-i18n="feed_when_label">いつの街？</span>
         <div class="feed-chips feed-date-chips" id="todayFeedDateChips">
           <button type="button" data-feed-day="today" aria-pressed="true" data-i18n="feed_chip_today">今日</button>
-          <button type="button" data-feed-day="tomorrow" aria-pressed="false" disabled data-i18n="feed_chip_tomorrow">明日</button>
-          <button type="button" data-feed-day="weekend" aria-pressed="false" disabled data-i18n="feed_chip_weekend">週末</button>
+          <button type="button" data-feed-day="tomorrow" aria-pressed="false" data-i18n="feed_chip_tomorrow">明日</button>
+          <button type="button" data-feed-day="weekend" aria-pressed="false" data-i18n="feed_chip_weekend">週末</button>
         </div>
-        <span class="feed-chip-note" data-i18n="feed_chip_soon_note">明日・週末は準備中です</span>
       </div>
 
       <div class="feed-chip-row">
@@ -4355,7 +4354,7 @@
   <script src="firebase.js?v=20261115"></script>
 
   <!-- 固定UI文言専用の翻訳辞書(投稿本文は扱わない)。app.jsより先に読み込む -->
-  <script src="translations.js?v=20261115k"></script>
+  <script src="translations.js?v=20261115l"></script>
 
   <!-- 街の掲示板：全国市区町村の選択肢データ(静的・出典クレジットはフッター参照)。app.jsより先に読み込む -->
   <script src="japan-municipalities.js?v=20261115"></script>
@@ -4381,7 +4380,7 @@
       window.addEventListener("resize", sync);
     })();
   </script>
-  <script src="app.js?v=20261115q"></script>
+  <script src="app.js?v=20261115r"></script>
   <!-- Google Maps JavaScript APIは常時読み込まず、地図セクション到達時または
        GPS/トイレ検索操作時にapp.jsのensureGoogleMapsLoaded()が動的に読み込む -->
 </body>

@@ -18702,6 +18702,12 @@ let currentRegionTodayInfoStatus =
 let currentRegionTodayInfoFindings =
   [];
 
+// 明日・週末フィード(2026-11-15 代表決定)｜明日と週末(土・日)の地域情報は
+// 日付ごとに分けて保持する。値は { status, findings, localDate }。
+// 今日の分は従来の currentRegionTodayInfo* をそのまま使う。
+let regionTodayInfoByDay =
+  { tomorrow: null, weekendSat: null, weekendSun: null };
+
 let currentRegionTodayInfoMunicipality =
   "";
 
@@ -18722,7 +18728,8 @@ const REGION_TODAY_INFO_MAX_POLL_ATTEMPTS =
 async function fetchRegionTodayInfoOnce(
   latitude,
   longitude,
-  locationHierarchy
+  locationHierarchy,
+  day
 ) {
   const idToken =
     await getAnonymousIdTokenForLocationCollection();
@@ -18747,6 +18754,7 @@ async function fetchRegionTodayInfoOnce(
           regionKey: locationHierarchy.regionKey,
           regionName: locationHierarchy.regionName,
           municipality: locationHierarchy.municipality,
+          day: typeof day === "string" && day !== "" ? day : "today",
 
           // 多言語化 Phase A｜独自の言語状態は作らず、既存の
           // getCurrentMachinauLanguage()をそのまま使う(本部指示)。
@@ -18837,6 +18845,23 @@ async function triggerRegionTodayInfo(
     // resolveLocationHierarchyFromCoordinates()の失敗時フォールバックと
     // 同じ考え方)。
     return;
+  }
+
+  // 明日・週末フィード｜地域が変わったら、日付ごとの保持と選択中の日付を
+  // 初期化する(言語切替の再取得は同じ緯度経度のため、選択は維持される)。
+  if (
+    lastRegionTodayInfoLatitude !== latitude ||
+    lastRegionTodayInfoLongitude !== longitude
+  ) {
+    regionTodayInfoByDay =
+      { tomorrow: null, weekendSat: null, weekendSun: null };
+
+    if (todayFeedDay !== "today") {
+      todayFeedDay =
+        "today";
+
+      syncTodayFeedDateChips();
+    }
   }
 
   lastRegionTodayInfoLatitude =
@@ -18974,6 +18999,157 @@ async function triggerRegionTodayInfo(
 
     renderRegionTodayInfo();
     renderCityNowGuidance();
+  }
+}
+
+// 明日・週末フィード｜指定した日付の地域情報を取得し、日付ごとの保持へ
+// 入れる。取得の作法(少数回のpolling・失敗しても静かに終わる)は今日の
+// triggerRegionTodayInfo と同じ。途中で地域が変わったら結果は捨てる。
+async function fetchRegionTodayInfoForDay(day) {
+  const latitude =
+    lastRegionTodayInfoLatitude;
+
+  const longitude =
+    lastRegionTodayInfoLongitude;
+
+  const locationHierarchy =
+    lastRegionTodayInfoLocationHierarchy;
+
+  if (
+    latitude === null ||
+    longitude === null ||
+    !locationHierarchy
+  ) {
+    return;
+  }
+
+  const existing =
+    regionTodayInfoByDay[day];
+
+  if (
+    existing &&
+    existing.status !== "error"
+  ) {
+    return;
+  }
+
+  regionTodayInfoByDay[day] =
+    { status: "loading", findings: [], localDate: "" };
+
+  renderTodayFeed();
+
+  try {
+    for (
+      let attemptIndex = 0;
+      attemptIndex < REGION_TODAY_INFO_MAX_POLL_ATTEMPTS;
+      attemptIndex += 1
+    ) {
+      if (
+        lastRegionTodayInfoLatitude !== latitude ||
+        lastRegionTodayInfoLongitude !== longitude
+      ) {
+        return;
+      }
+
+      const responseData =
+        await fetchRegionTodayInfoOnce(
+          latitude,
+          longitude,
+          locationHierarchy,
+          day
+        );
+
+      if (
+        lastRegionTodayInfoLatitude !== latitude ||
+        lastRegionTodayInfoLongitude !== longitude
+      ) {
+        return;
+      }
+
+      if (!responseData) {
+        regionTodayInfoByDay[day] =
+          { status: "error", findings: [], localDate: "" };
+
+        renderTodayFeed();
+
+        return;
+      }
+
+      if (responseData.status === "ready") {
+        regionTodayInfoByDay[day] =
+          {
+            status: "ready",
+            findings:
+              Array.isArray(responseData.findings)
+                ? responseData.findings
+                : [],
+            localDate:
+              typeof responseData.localDate === "string"
+                ? responseData.localDate
+                : ""
+          };
+
+        renderTodayFeed();
+
+        return;
+      }
+
+      if (responseData.status === "generating") {
+        regionTodayInfoByDay[day] =
+          { status: "generating", findings: [], localDate: "" };
+
+        renderTodayFeed();
+
+        if (
+          attemptIndex <
+          REGION_TODAY_INFO_MAX_POLL_ATTEMPTS - 1
+        ) {
+          await waitForMilliseconds(
+            REGION_TODAY_INFO_POLL_INTERVAL_MS
+          );
+
+          continue;
+        }
+
+        regionTodayInfoByDay[day] =
+          { status: "error", findings: [], localDate: "" };
+
+        renderTodayFeed();
+
+        return;
+      }
+
+      if (responseData.status === "paused") {
+        regionTodayInfoByDay[day] =
+          { status: "paused", findings: [], localDate: "" };
+
+        renderTodayFeed();
+
+        return;
+      }
+
+      regionTodayInfoByDay[day] =
+        { status: "error", findings: [], localDate: "" };
+
+      renderTodayFeed();
+
+      return;
+    }
+  } catch (error) {
+    regionTodayInfoByDay[day] =
+      { status: "error", findings: [], localDate: "" };
+
+    renderTodayFeed();
+  }
+}
+
+// 選んだ見方に必要な日付の地域情報を、まだ無ければ取りに行く。
+function ensureRegionTodayInfoForDay(dayKey) {
+  if (dayKey === "tomorrow") {
+    fetchRegionTodayInfoForDay("tomorrow");
+  } else if (dayKey === "weekend") {
+    fetchRegionTodayInfoForDay("weekendSat");
+    fetchRegionTodayInfoForDay("weekendSun");
   }
 }
 
@@ -25419,6 +25595,7 @@ var latestStreetDiscoveryItems = [];
 
 var todayFeedFilter = "all";
 var todayFeedKeyword = "";
+var todayFeedDay = "today";
 var todayFeedRenderTimer = null;
 
 function queueTodayFeedRender() {
@@ -25495,52 +25672,89 @@ function updateTodayFeedDateLabel() {
   const language =
     getCurrentMachinauLanguage();
 
-  try {
-    if (language === "ja") {
-      const parts =
-        new Intl.DateTimeFormat(
-          "ja-JP",
-          {
-            timeZone: "Asia/Tokyo",
-            month: "numeric",
-            day: "numeric",
-            weekday: "short"
+  const DAY_MS =
+    24 * 60 * 60 * 1000;
+
+  // 選んだ見方の日付を、JST基準で整形する。
+  function formatLabel(instant, withMonth) {
+    try {
+      if (language === "ja") {
+        const parts =
+          new Intl.DateTimeFormat(
+            "ja-JP",
+            {
+              timeZone: "Asia/Tokyo",
+              month: "numeric",
+              day: "numeric",
+              weekday: "short"
+            }
+          ).formatToParts(instant);
+
+        let month = "";
+        let day = "";
+        let weekday = "";
+
+        parts.forEach(function(part) {
+          if (part.type === "month") {
+            month = part.value;
+          } else if (part.type === "day") {
+            day = part.value;
+          } else if (part.type === "weekday") {
+            weekday = part.value;
           }
-        ).formatToParts(new Date());
+        });
 
-      let month = "";
-      let day = "";
-      let weekday = "";
+        return withMonth
+          ? month + "月" + day + "日（" + weekday + "）"
+          : day + "日（" + weekday + "）";
+      }
 
-      parts.forEach(function(part) {
-        if (part.type === "month") {
-          month = part.value;
-        } else if (part.type === "day") {
-          day = part.value;
-        } else if (part.type === "weekday") {
-          weekday = part.value;
+      return new Intl.DateTimeFormat(
+        "en-US",
+        {
+          timeZone: "Asia/Tokyo",
+          weekday: "short",
+          month: "short",
+          day: "numeric"
         }
-      });
-
-      dateElement.textContent =
-        month + "月" + day + "日（" + weekday + "）";
-    } else {
-      dateElement.textContent =
-        new Intl.DateTimeFormat(
-          "en-US",
-          {
-            timeZone: "Asia/Tokyo",
-            weekday: "short",
-            month: "short",
-            day: "numeric"
-          }
-        ).format(new Date());
+      ).format(instant);
+    } catch (error) {
+      const fallback = new Date(instant);
+      return (fallback.getMonth() + 1) + "月" + fallback.getDate() + "日";
     }
-  } catch (error) {
-    const now = new Date();
-    dateElement.textContent =
-      (now.getMonth() + 1) + "月" + now.getDate() + "日";
   }
+
+  const now =
+    Date.now();
+
+  if (todayFeedDay === "tomorrow") {
+    dateElement.textContent =
+      formatLabel(new Date(now + DAY_MS), true);
+
+    return;
+  }
+
+  if (todayFeedDay === "weekend") {
+    const range =
+      getTodayFeedDayRangeMillis("weekend");
+
+    // 範囲の開始はJSTの0時。表示はその日の昼として整形する。
+    const saturday =
+      new Date(range.start + 12 * 60 * 60 * 1000);
+
+    const sunday =
+      new Date(range.start + DAY_MS + 12 * 60 * 60 * 1000);
+
+    dateElement.textContent =
+      formatLabel(saturday, true) +
+      (language === "ja" ? "・" : " · ") +
+      formatLabel(sunday, true);
+
+    return;
+  }
+
+  dateElement.textContent =
+    formatLabel(new Date(now), true);
 }
 
 // 行事(findings)には生成・公開の時刻が無いため、新しさ順の基準として
@@ -25578,14 +25792,180 @@ function truncateTodayFeedText(
     : text;
 }
 
+// 明日・週末フィード(2026-11-15 代表決定)｜選んだ見方の範囲を、JSTの
+// 暦日の0時から24時までとして epoch ミリ秒で返す。週末は「来る土日」
+// で、今日が土曜ならその土曜から、日曜なら前日の土曜からにする
+// (サーバー側の日付計算と同じ決め方)。
+function getTodayFeedDayRangeMillis(dayKey) {
+  const DAY_MS =
+    24 * 60 * 60 * 1000;
+
+  let todayStart;
+
+  try {
+    const todayText =
+      new Intl.DateTimeFormat(
+        "en-CA",
+        {
+          timeZone: "Asia/Tokyo",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit"
+        }
+      ).format(new Date());
+
+    todayStart =
+      Date.parse(todayText + "T00:00:00+09:00");
+  } catch (error) {
+    todayStart = NaN;
+  }
+
+  if (!Number.isFinite(todayStart)) {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    todayStart = now.getTime();
+  }
+
+  if (dayKey === "tomorrow") {
+    return { start: todayStart + DAY_MS, end: todayStart + 2 * DAY_MS };
+  }
+
+  if (dayKey === "weekend") {
+    const weekday =
+      new Date(todayStart + 9 * 60 * 60 * 1000).getUTCDay();
+
+    const saturdayOffset =
+      weekday === 0 ? -1 : 6 - weekday;
+
+    return {
+      start: todayStart + saturdayOffset * DAY_MS,
+      end: todayStart + (saturdayOffset + 2) * DAY_MS
+    };
+  }
+
+  return { start: todayStart, end: todayStart + DAY_MS };
+}
+
+// 選んだ見方のイベントの材料(地域情報の findings)を返す。週末は土曜と
+// 日曜の分を合わせ、同じイベントが両日に載る場合は1件にまとめる。
+function getTodayFeedEventSource(dayKey) {
+  if (dayKey === "tomorrow") {
+    const slot =
+      regionTodayInfoByDay.tomorrow;
+
+    return {
+      ready: !!slot && slot.status === "ready",
+      findings: slot ? slot.findings : []
+    };
+  }
+
+  if (dayKey === "weekend") {
+    const findings = [];
+    const seen = {};
+    let ready = false;
+
+    ["weekendSat", "weekendSun"].forEach(function(day) {
+      const slot =
+        regionTodayInfoByDay[day];
+
+      if (slot && slot.status === "ready") {
+        ready = true;
+
+        slot.findings.forEach(function(finding) {
+          const key =
+            (finding.name || "") + "|" +
+            (finding.time || "") + "|" +
+            (finding.place || "");
+
+          if (!seen[key]) {
+            seen[key] = true;
+            findings.push(finding);
+          }
+        });
+      }
+    });
+
+    return { ready: ready, findings: findings };
+  }
+
+  return {
+    ready: currentRegionTodayInfoStatus === "ready",
+    findings: currentRegionTodayInfoFindings
+  };
+}
+
+// 選んだ見方の地域情報が、まだ用意の途中かどうか。
+function isTodayFeedDayLoading(dayKey) {
+  if (dayKey === "tomorrow") {
+    const slot =
+      regionTodayInfoByDay.tomorrow;
+
+    return !slot || slot.status === "loading" || slot.status === "generating";
+  }
+
+  if (dayKey === "weekend") {
+    return ["weekendSat", "weekendSun"].some(function(day) {
+      const slot =
+        regionTodayInfoByDay[day];
+
+      return !slot || slot.status === "loading" || slot.status === "generating";
+    });
+  }
+
+  return (
+    currentRegionTodayInfoStatus === "loading" ||
+    currentRegionTodayInfoStatus === "generating"
+  );
+}
+
+function syncTodayFeedDateChips() {
+  const container =
+    document.getElementById("todayFeedDateChips");
+
+  if (!container) {
+    return;
+  }
+
+  container
+    .querySelectorAll("[data-feed-day]")
+    .forEach(function(button) {
+      button.setAttribute(
+        "aria-pressed",
+        button.getAttribute("data-feed-day") === todayFeedDay
+          ? "true"
+          : "false"
+      );
+    });
+}
+
+function setTodayFeedDay(dayKey) {
+  if (dayKey !== "tomorrow" && dayKey !== "weekend") {
+    dayKey = "today";
+  }
+
+  todayFeedDay =
+    dayKey;
+
+  syncTodayFeedDateChips();
+  ensureRegionTodayInfoForDay(dayKey);
+  renderTodayFeed();
+}
+
 // フィードカードの本文は途中で切らない(2026-11-15 代表決定)。
 // 文章の途中で切れるのは失礼にあたるため、全文を表示する。
-function buildTodayFeedItems() {
+function buildTodayFeedItems(dayKey) {
+  if (dayKey !== "tomorrow" && dayKey !== "weekend") {
+    dayKey = "today";
+  }
+
   const language =
     getCurrentMachinauLanguage();
 
   const nowMillis =
     Date.now();
+
+  const range =
+    getTodayFeedDayRangeMillis(dayKey);
 
   const items =
     [];
@@ -25598,7 +25978,18 @@ function buildTodayFeedItems() {
 
   imadakePosts
     .filter(function(post) {
-      return isImadakePostStillListed(post, nowMillis);
+      if (dayKey === "today") {
+        return isImadakePostStillListed(post, nowMillis);
+      }
+
+      // 明日・週末は、表示期間がその日にかかっているものを出す。
+      const publishedMillis =
+        getDateValue(post.publishedAt);
+
+      const expiresMillis =
+        getDateValue(post.expiresAt);
+
+      return publishedMillis < range.end && expiresMillis > range.start;
     })
     .forEach(function(post) {
       const text =
@@ -25636,6 +26027,19 @@ function buildTodayFeedItems() {
     const shop =
       entry.shop || {};
 
+    if (dayKey !== "today") {
+      // 明日・週末は、表示期間がその日にかかっているものを出す。
+      const createdMillis =
+        getDateValue(shop.createdAt);
+
+      const expiresMillis =
+        getDateValue(shop.expiresAt);
+
+      if (!(createdMillis < range.end && expiresMillis > range.start)) {
+        return;
+      }
+    }
+
     const imageUrl =
       Array.isArray(shop.imageUrls) && shop.imageUrls.length > 0
         ? getSafeImageUrl(shop.imageUrls[0])
@@ -25660,15 +26064,18 @@ function buildTodayFeedItems() {
     });
   });
 
-  // 今日の行事: 地域情報セクションが「表示可(ready)」の時だけ、その findings を使う。
-  if (currentRegionTodayInfoStatus === "ready") {
+  // イベント: 選んだ日付の地域情報が「表示可(ready)」の時だけ、その findings を使う。
+  const eventSource =
+    getTodayFeedEventSource(dayKey);
+
+  if (eventSource.ready) {
     const findings =
-      Array.isArray(currentRegionTodayInfoFindings)
-        ? currentRegionTodayInfoFindings
-        : [];
+      eventSource.findings;
 
     const todayStartMillis =
-      getTodayFeedTodayStartMillis();
+      dayKey === "today"
+        ? getTodayFeedTodayStartMillis()
+        : range.start;
 
     findings
       .filter(function(finding) {
@@ -25701,8 +26108,9 @@ function buildTodayFeedItems() {
   }
 
   // 街の今スレッド(地元の声): 公開APIは距離を返さないため鮮度組に入る。
+  // 地元の声は投稿された日のものなので、明日・週末には出さない。
   const threads =
-    Array.isArray(latestTownNowThreads)
+    dayKey === "today" && Array.isArray(latestTownNowThreads)
       ? latestTownNowThreads
       : [];
 
@@ -26134,10 +26542,18 @@ function renderTodayFeed() {
 
   const allItems =
     sortTodayFeedItems(
-      buildTodayFeedItems()
+      buildTodayFeedItems(todayFeedDay)
     ).slice(0, 12);
 
-  renderTodayTicker(allItems, language);
+  // ティッカーは見方によらず「今日」の見出しを流す。
+  renderTodayTicker(
+    todayFeedDay === "today"
+      ? allItems
+      : sortTodayFeedItems(
+          buildTodayFeedItems("today")
+        ).slice(0, 12),
+    language
+  );
 
   const visibleItems =
     todayFeedFilter === "all"
@@ -26179,7 +26595,13 @@ function renderTodayFeed() {
       todayFeedKeyword !== ""
         ? "feed_empty_keyword"
         : allItems.length === 0
-          ? (hasLocationContext ? "feed_empty_none" : "feed_empty_location")
+          ? (hasLocationContext && isTodayFeedDayLoading(todayFeedDay)
+              ? "feed_day_loading"
+              : todayFeedDay === "tomorrow" && hasLocationContext
+                ? "feed_empty_tomorrow"
+                : todayFeedDay === "weekend" && hasLocationContext
+                  ? "feed_empty_weekend"
+                  : (hasLocationContext ? "feed_empty_none" : "feed_empty_location"))
           : "feed_empty_filter";
 
     emptyElement.textContent =
@@ -26196,6 +26618,24 @@ function renderTodayFeed() {
 
 function initTodayFeedUi() {
   updateTodayFeedDateLabel();
+
+  // 明日・週末フィード｜日付ボタンの切り替え。
+  const dateChipsElement =
+    document.getElementById("todayFeedDateChips");
+
+  if (dateChipsElement) {
+    dateChipsElement
+      .querySelectorAll("[data-feed-day]")
+      .forEach(function(button) {
+        button.addEventListener("click", function() {
+          setTodayFeedDay(
+            button.getAttribute("data-feed-day")
+          );
+        });
+      });
+
+    syncTodayFeedDateChips();
+  }
 
   // セクション移動チップ(ピル)は撤去済み(2026-11-15 代表決定・ピルの
   // 一本化)。今だけ投稿への絞り込みは、フィード内の絞り込みチップで行う。

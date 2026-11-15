@@ -218,6 +218,21 @@ const MACHINAU_TRANSLATIONS = {
     en: "Nothing new for today yet."
   },
 
+  feed_empty_tomorrow: {
+    ja: "明日の「今」は、まだ届いていません。",
+    en: "Nothing for tomorrow yet."
+  },
+
+  feed_empty_weekend: {
+    ja: "週末の「今」は、まだ届いていません。",
+    en: "Nothing for the weekend yet."
+  },
+
+  feed_day_loading: {
+    ja: "その日の情報を用意しています…",
+    en: "Preparing that day's updates…"
+  },
+
   feed_empty_filter: {
     ja: "この条件の「今」はまだありません。種類を変えてみてください。",
     en: "Nothing matches this filter yet. Try another type."
