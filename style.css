@@ -2610,44 +2610,29 @@ body:has(#todayFeedSection) .hero-background {
 }
 
 /* ヒーロー検索バー(モック準拠: 白ピル+青いボタン) */
-.hero-searchbar {
-  display: flex;
-  gap: 8px;
-  background: #fff;
-  border-radius: 999px;
-  padding: 7px;
-  max-width: 620px;
-  box-shadow: 0 12px 32px rgba(0, 30, 45, 0.28);
+/* 「他の地域を見てみる」ボタン(2026-11-15 代表指示で検索窓と白バーを廃止し、
+   このボタンだけを「今いる街」カードの真上に置く)。色と形は現在地ボタン
+   (.location-button / .hero-primary-button)に合わせる。 */
+.hero-area-button {
+  display: block;
+  width: 100%;
+  min-height: 54px;
   margin: 0 0 14px;
-}
-
-.hero-searchbar input {
-  flex: 1;
-  min-width: 0;
+  padding: 12px 16px;
   border: none;
-  outline: none;
-  font-size: 16px;
-  padding: 8px 14px;
-  color: #10333f;
-  background: transparent;
+  border-radius: 16px;
+  background: linear-gradient(
+    135deg,
+    var(--blue),
+    var(--cyan)
+  );
+  color: var(--white);
   font-family: inherit;
-}
-
-.hero-search-button {
-  border: none;
+  font-size: 17px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
   cursor: pointer;
-  background: var(--blue);
-  color: #fff;
-  font-family: inherit;
-  font-weight: 800;
-  font-size: 15px;
-  border-radius: 999px;
-  padding: 10px 22px;
-  white-space: nowrap;
-}
-
-.hero-search-button:hover {
-  background: var(--cyan);
+  box-shadow: 0 10px 24px rgba(5, 144, 194, 0.32);
 }
 
 /* ヒーロー検索のクイックチップ(モック準拠: 半透明のガラス調) */

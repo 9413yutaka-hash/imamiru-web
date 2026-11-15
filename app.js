@@ -26177,187 +26177,27 @@ function initTodayFeedUi() {
 
 initTodayFeedUi();
 
-// ヒーロー検索(モック準拠の検索バー+クイックチップ)｜新しい検索基盤は作らず、
-// 既存の入口へ接続するだけ。
-// ・入力が市区町村名として解決できた場合: 既存の「地域から探す」と同じ適用
-//   (GA計測→setSelectedShopRegion→掲示板の読み込み→店舗セクションへ移動)。
-// ・解決できない場合: キーワードとして今日のフィード(保持済みの実データ)を
-//   絞り込んで、フィードセクションへ移動する。
-// ・空のまま送信された場合: 既存の地域選択(#heroActionArea)を開く。
-var heroSearchApplying =
-  false;
+// ヒーローの「他の地域を見てみる」ボタン(2026-11-15 代表指示で検索窓を廃止)。
+// 押すと今までどおり地域の選択(#heroActionArea のクリック処理)が開く。
+function initHeroAreaGuide() {
+  const guideButton =
+    document.getElementById("heroAreaGuideButton");
 
-function resolveHeroSearchMunicipality(rawQuery) {
-  const query =
-    String(rawQuery || "").trim();
-
-  if (query === "") {
-    return null;
-  }
-
-  if (
-    typeof JAPAN_MUNICIPALITIES_BY_PREFECTURE === "undefined" ||
-    !JAPAN_MUNICIPALITIES_BY_PREFECTURE
-  ) {
-    return null;
-  }
-
-  let coreMatch =
-    null;
-
-  let coreMatchCount =
-    0;
-
-  const prefectureNames =
-    Object.keys(JAPAN_MUNICIPALITIES_BY_PREFECTURE);
-
-  for (const prefectureName of prefectureNames) {
-    const municipalityNames =
-      JAPAN_MUNICIPALITIES_BY_PREFECTURE[prefectureName] || [];
-
-    for (const municipalityName of municipalityNames) {
-      if (municipalityName === query) {
-        return {
-          prefectureName: prefectureName,
-          municipalityName: municipalityName
-        };
-      }
-
-      // 「糸満」「那覇」のような、末尾(市/町/村/区)を省いた入力も受ける。
-      const coreName =
-        municipalityName.replace(/(市|町|村|区)$/u, "");
-
-      if (coreName !== "" && coreName === query) {
-        coreMatch =
-          {
-            prefectureName: prefectureName,
-            municipalityName: municipalityName
-          };
-
-        coreMatchCount +=
-          1;
-      }
-    }
-  }
-
-  // 同名の市区町村が複数ある時は推測で選ばず、キーワード扱いに戻す。
-  return coreMatchCount === 1
-    ? coreMatch
-    : null;
-}
-
-async function handleHeroSearchSubmit(rawQuery) {
-  const query =
-    String(rawQuery || "").trim();
-
-  if (query === "") {
-    const heroActionAreaElement =
-      document.getElementById("heroActionArea");
-
-    if (heroActionAreaElement) {
-      heroActionAreaElement.click();
-    }
-
+  if (!guideButton) {
     return;
   }
 
-  const resolved =
-    resolveHeroSearchMunicipality(query);
+  guideButton.addEventListener(
+    "click",
+    function() {
+      const heroActionAreaElement =
+        document.getElementById("heroActionArea");
 
-  if (resolved) {
-    if (heroSearchApplying) {
-      return;
-    }
-
-    heroSearchApplying =
-      true;
-
-    try {
-      todayFeedKeyword =
-        "";
-
-      sendMachinauAnalyticsEvent(
-        "region_search",
-        {
-          prefecture: resolved.prefectureName,
-          search_term: query
-        }
-      );
-
-      setSelectedShopRegion(
-        resolved.prefectureName,
-        resolved.municipalityName
-      );
-
-      const succeeded =
-        await loadCommunityBoardForSelectedArea(
-          resolved.prefectureName,
-          resolved.municipalityName
-        );
-
-      // 読み込みの間に別の街へ切り替わった(古い結果)時は移動しない。
-      // 掲示板の解決に失敗しても、店舗の絞り込み自体は適用済みなので店舗枠へ移る。
-      if (succeeded !== "stale") {
-        scrollToHeroActionSection("shopsSection");
+      if (heroActionAreaElement) {
+        heroActionAreaElement.click();
       }
-    } finally {
-      heroSearchApplying =
-        false;
     }
-
-    return;
-  }
-
-  todayFeedKeyword =
-    query;
-
-  renderTodayFeed();
-
-  scrollToHeroActionSection("todayFeedSection");
+  );
 }
 
-function initHeroSearch() {
-  const heroSearchForm =
-    document.getElementById("heroSearchForm");
-
-  const heroSearchInput =
-    document.getElementById("heroSearchInput");
-
-  if (heroSearchForm && heroSearchInput) {
-    heroSearchForm.addEventListener(
-      "submit",
-      function(event) {
-        event.preventDefault();
-
-        handleHeroSearchSubmit(heroSearchInput.value);
-      }
-    );
-  }
-
-  const heroSearchChips =
-    document.getElementById("heroSearchChips");
-
-  if (heroSearchChips && heroSearchInput) {
-    heroSearchChips.addEventListener(
-      "click",
-      function(event) {
-        const chipButton =
-          event.target.closest("button[data-hero-search-term]");
-
-        if (!chipButton) {
-          return;
-        }
-
-        const term =
-          chipButton.getAttribute("data-hero-search-term") || "";
-
-        heroSearchInput.value =
-          term;
-
-        handleHeroSearchSubmit(term);
-      }
-    );
-  }
-}
-
-initHeroSearch();
+initHeroAreaGuide();
