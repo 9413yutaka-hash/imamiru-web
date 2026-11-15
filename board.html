@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <meta name="robots" content="noindex, nofollow">
+
+  <title>
+    街の掲示板｜マチナウ
+  </title>
+
+  <!-- 広告実証前 GA4最低限行動計測｜community-board-post.htmlと同じ
+       Measurement ID(G-PGM7GNVQX8)・同じ考え方(machinau.jp/
+       imamiru-web.vercel.app限定でのみ読み込み)。 -->
+  <script>
+    (function () {
+      if (location.hostname !== "machinau.jp" && location.hostname !== "imamiru-web.vercel.app") {
+        return;
+      }
+
+      window.dataLayer = window.dataLayer || [];
+
+      window.gtag = function () {
+        dataLayer.push(arguments);
+      };
+
+      gtag("js", new Date());
+      gtag("config", "G-PGM7GNVQX8");
+
+      const gaScript = document.createElement("script");
+      gaScript.async = true;
+      gaScript.src =
+        "https://www.googletagmanager.com/gtag/js?id=G-PGM7GNVQX8";
+      document.head.appendChild(gaScript);
+    })();
+  </script>
+
+  <!-- 街の掲示板 専用画面(モカ案作り変え第2弾 2026-11-15)｜TOPの掲示板は
+       最新3件だけにして、この画面で同じ街の投稿をまとめて見せる。
+       地域の受け渡しは投稿ページ(community-board-post.html)と同じ
+       URLパラメータ(googlePlaceId/countryCode/regionName/
+       administrativeLevel)を使い、データ取得も同じAPI
+       (communityBoardPostsList)・同じ匿名認証を使う。新方式は作らない。 -->
+  <style>
+    :root {
+      --navy: #071a33;
+      --blue: #0788c9;
+      --cyan: #04b7d7;
+      --sky: #dff7ff;
+      --white: #ffffff;
+      --text: #15233a;
+      --subtext: #697386;
+      --border: #e2eaf1;
+      --background: #f4f8fb;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0 0 60px;
+      font-family:
+        "Yu Gothic",
+        "Hiragino Kaku Gothic ProN",
+        "Meiryo",
+        sans-serif;
+      background: var(--background);
+      color: var(--text);
+    }
+
+    header {
+      padding: 28px 18px 40px;
+      background: linear-gradient(135deg, #0687c5, #13c3ce);
+      color: var(--white);
+    }
+
+    header .page-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    header h1 {
+      margin: 16px 0 0;
+      font-size: clamp(20px, 5vw, 26px);
+      line-height: 1.5;
+    }
+
+    header p {
+      margin: 10px 0 0;
+      max-width: 560px;
+      color: rgba(255, 255, 255, 0.92);
+      font-size: 13px;
+      line-height: 1.8;
+    }
+
+    main {
+      width: min(100%, 560px);
+      margin: -22px auto 0;
+      padding: 0 18px;
+    }
+
+    .panel {
+      margin-bottom: 16px;
+      padding: 20px;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: var(--white);
+    }
+
+    .board-status {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.8;
+      color: var(--subtext);
+    }
+
+    .board-post-button {
+      display: block;
+      margin-top: 18px;
+      padding: 14px 18px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, #0788c9, #04b7d7);
+      color: var(--white);
+      font-size: 15px;
+      font-weight: 900;
+      text-align: center;
+      text-decoration: none;
+    }
+
+    .top-back-link-row {
+      margin: 18px 0 0;
+      text-align: center;
+    }
+
+    .top-back-link {
+      color: var(--blue);
+      font-size: 14px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+
+    /* 掲示板の投稿カード｜TOP(index.html)と同じ見た目を、このページ用に
+       そのまま写したもの(クラス名も同じ)。 */
+    .community-board-region-image {
+      width: 100%;
+      max-height: 150px;
+      object-fit: cover;
+      display: block;
+      border-radius: 14px;
+      margin-bottom: 12px;
+      background: #e9f1f5;
+    }
+
+    .community-board-post-item {
+      padding: 12px 0;
+      border-top: 1px solid var(--border);
+    }
+
+    .community-board-post-item:first-child {
+      border-top: none;
+    }
+
+    .community-board-post-meta {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px 8px;
+      margin: 0 0 6px;
+      font-size: 12px;
+      color: var(--subtext);
+    }
+
+    .community-board-author-badge {
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--sky);
+      color: #066fa6;
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .community-board-post-text {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.8;
+      color: var(--text);
+      white-space: pre-wrap;
+    }
+
+    .community-board-link-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .community-board-link-button {
+      display: inline-flex;
+      align-items: center;
+      max-width: 100%;
+      min-height: 40px;
+      padding: 8px 12px;
+      border: 1px solid rgba(7, 136, 201, 0.3);
+      border-radius: 12px;
+      background: var(--white);
+      color: #066fa6;
+      font-size: 13px;
+      font-weight: 800;
+      text-decoration: none;
+      overflow-wrap: anywhere;
+    }
+
+    .community-board-post-images {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 6px;
+      max-width: 560px;
+      margin-top: 8px;
+    }
+
+    .community-board-post-images-1 {
+      grid-template-columns: minmax(0, 1fr);
+      justify-items: start;
+    }
+
+    .community-board-post-images-2 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .community-board-post-image {
+      display: block;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      object-fit: contain;
+      border-radius: 10px;
+      background: var(--sky);
+    }
+
+    .community-board-post-images-1 .community-board-post-image {
+      width: auto;
+      max-width: 100%;
+      height: auto;
+      max-height: 360px;
+      aspect-ratio: auto;
+    }
+
+    .community-board-video-link {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      background: var(--sky);
+      color: var(--navy);
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+
+    .board-empty-message {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.8;
+      color: var(--subtext);
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <span class="page-label" data-i18n="board_page_label">街の掲示板</span>
+    <h1 id="boardHeading">街の掲示板</h1>
+    <p data-i18n="board_page_lead">この街を訪れる人へ、地元のひとことを残す場所です。</p>
+  </header>
+
+  <main>
+
+    <div class="panel">
+
+      <div id="boardRegionImageBox"></div>
+
+      <p id="boardStatus" class="board-status" data-i18n="board_page_loading">読み込み中…</p>
+
+      <div id="boardList"></div>
+
+      <a
+        id="boardPostLink"
+        class="board-post-button"
+        href="community-board-post.html"
+        style="display:none;"
+      ></a>
+
+    </div>
+
+    <p class="top-back-link-row">
+      <a class="top-back-link" href="/index.html" data-i18n="board_post_back_top_arrow">← マチナウTOPへ戻る</a>
+    </p>
+
+  </main>
+
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"></script>
+  <script src="firebase.js"></script>
+
+  <script src="translations.js"></script>
+  <script>
+    // TOPで選んだ言語(machinauLanguage)を引き継ぐ(community-board-post.htmlと同じ)。
+    const PAGE_LANGUAGE = (function () {
+      let stored = null;
+      try {
+        stored = localStorage.getItem("machinauLanguage");
+      } catch (error) {
+        stored = null;
+      }
+      return typeof stored === "string" && MACHINAU_SUPPORTED_LANGUAGES.includes(stored) ? stored : MACHINAU_DEFAULT_LANGUAGE;
+    })();
+    function tr(key, params) {
+      let text = getMachinauTranslation(key, PAGE_LANGUAGE);
+      Object.keys(params || {}).forEach(function (name) {
+        text = text.split("{" + name + "}").join(String(params[name]));
+      });
+      return text;
+    }
+    (function applyPageLanguage() {
+      if (PAGE_LANGUAGE === MACHINAU_DEFAULT_LANGUAGE) {
+        return;
+      }
+      document.documentElement.lang = PAGE_LANGUAGE;
+      document.title = tr("board_page_doc_title");
+      document.querySelectorAll("[data-i18n]").forEach(function (element) {
+        element.textContent = tr(element.getAttribute("data-i18n"));
+      });
+    })();
+  </script>
+  <script>
+    // ---- TOP(app.js)の掲示板描画と同じ規則を、このページ用に写したもの ----
+    function escapeHtml(text) {
+      return String(text ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function getSafeImageUrl(value) {
+      if (typeof value !== "string" || value.trim() === "") {
+        return "";
+      }
+      const imageUrl = value.trim();
+      return imageUrl.startsWith("https://") ? imageUrl : "";
+    }
+
+    function getSafeWebsiteUrl(value) {
+      if (typeof value !== "string" || value.trim() === "") {
+        return "";
+      }
+      const websiteUrl = value.trim();
+      return /^https?:\/\//.test(websiteUrl) ? websiteUrl : "";
+    }
+
+    function buildOptimizedImageUrl(url, options) {
+      if (typeof url !== "string" || url === "") {
+        return url;
+      }
+      const uploadMarker = "/image/upload/";
+      const uploadIndex = url.indexOf(uploadMarker);
+      const isCloudinaryDeliveryUrl =
+        url.includes("res.cloudinary.com") && uploadIndex !== -1;
+      if (!isCloudinaryDeliveryUrl) {
+        return url;
+      }
+      const width =
+        options && Number.isFinite(options.width) && options.width > 0
+          ? Math.round(options.width)
+          : null;
+      const transformationParts = ["f_auto", "q_auto", "c_limit"];
+      if (width) {
+        transformationParts.push("w_" + width);
+      }
+      const insertPosition = uploadIndex + uploadMarker.length;
+      return (
+        url.slice(0, insertPosition) +
+        transformationParts.join(",") +
+        "/" +
+        url.slice(insertPosition)
+      );
+    }
+
+    const BOARD_TEXT_HTTPS_URL_PATTERN =
+      /https:\/\/[A-Za-z0-9\-._~:/?#@!$&*+,;=%]+/g;
+
+    function isSafeBoardTextUrl(value) {
+      let parsedUrl;
+      try {
+        parsedUrl = new URL(value);
+      } catch (error) {
+        return false;
+      }
+      return (
+        parsedUrl.protocol === "https:" &&
+        parsedUrl.username === "" &&
+        parsedUrl.password === "" &&
+        parsedUrl.hostname.includes(".")
+      );
+    }
+
+    // 運営のURL付き投稿だけ、本文中の安全なURLは本文から外し、
+    // 下のリンクボタンにまとめる(TOPと同じ規則)。
+    function buildBoardPostTextHtml(post) {
+      const text = typeof post.text === "string" ? post.text : "";
+
+      if (post.operatorLinksEnabled !== true) {
+        return escapeHtml(text);
+      }
+
+      let html = "";
+      let lastIndex = 0;
+      let match;
+
+      BOARD_TEXT_HTTPS_URL_PATTERN.lastIndex = 0;
+
+      while ((match = BOARD_TEXT_HTTPS_URL_PATTERN.exec(text)) !== null) {
+        const trailing = (match[0].match(/[.,!?;:]+$/) || [""])[0];
+        const url = match[0].slice(0, match[0].length - trailing.length);
+
+        html += escapeHtml(text.slice(lastIndex, match.index));
+        html += isSafeBoardTextUrl(url) ? "" : escapeHtml(url);
+        html += escapeHtml(trailing);
+
+        lastIndex = match.index + match[0].length;
+      }
+
+      return html + escapeHtml(text.slice(lastIndex));
+    }
+
+    function buildBoardPostLinksHtml(post) {
+      if (post.operatorLinksEnabled !== true || typeof post.text !== "string") {
+        return "";
+      }
+
+      const urls = [];
+
+      (post.text.match(BOARD_TEXT_HTTPS_URL_PATTERN) || []).forEach(function (rawUrl) {
+        const url = rawUrl.replace(/[.,!?;:]+$/, "");
+        if (isSafeBoardTextUrl(url) && urls.indexOf(url) === -1) {
+          urls.push(url);
+        }
+      });
+
+      if (urls.length === 0) {
+        return "";
+      }
+
+      return (
+        '<div class="community-board-link-buttons">' +
+        urls
+          .map(function (url) {
+            const siteName = new URL(url).hostname.replace(/^www\./, "");
+            return (
+              '<a class="community-board-link-button" href="' +
+              escapeHtml(url) +
+              '" target="_blank" rel="noopener noreferrer">' +
+              escapeHtml(
+                tr("community_board_open_link").replace("{SITE}", siteName)
+              ) +
+              "</a>"
+            );
+          })
+          .join("") +
+        "</div>"
+      );
+    }
+
+    const BOARD_POST_IMAGE_URL_PREFIX =
+      "https://res.cloudinary.com/cdhyctnp/image/upload/";
+
+    function buildBoardPostImagesHtml(post) {
+      const imageUrls = Array.isArray(post.imageUrls) ? post.imageUrls : [];
+
+      const safeImageUrls = imageUrls
+        .map(getSafeImageUrl)
+        .filter(function (imageUrl) {
+          return (
+            imageUrl.indexOf(BOARD_POST_IMAGE_URL_PREFIX) === 0 &&
+            imageUrl.indexOf("/machinau_submissions/") !== -1 &&
+            !/[\s"'<>]/.test(imageUrl)
+          );
+        })
+        .slice(0, 3);
+
+      if (safeImageUrls.length === 0) {
+        return "";
+      }
+
+      return (
+        '<div class="community-board-post-images community-board-post-images-' +
+        safeImageUrls.length +
+        '">' +
+        safeImageUrls
+          .map(function (imageUrl) {
+            return (
+              '<img class="community-board-post-image" src="' +
+              escapeHtml(buildOptimizedImageUrl(imageUrl, { width: 700 })) +
+              '" alt="" loading="lazy" decoding="async">'
+            );
+          })
+          .join("") +
+        "</div>"
+      );
+    }
+
+    function buildBoardPostMetaHtml(post) {
+      const createdAtMillis =
+        typeof post.createdAtMillis === "number" &&
+        Number.isFinite(post.createdAtMillis) &&
+        post.createdAtMillis > 0
+          ? post.createdAtMillis
+          : 0;
+
+      let dateHtml = "";
+
+      if (createdAtMillis > 0) {
+        const date = new Date(createdAtMillis);
+        let dateText = "";
+        try {
+          dateText = new Intl.DateTimeFormat(
+            PAGE_LANGUAGE === "ja" ? "ja-JP" : "en-US",
+            {
+              timeZone: "Asia/Tokyo",
+              year: "numeric",
+              month: PAGE_LANGUAGE === "ja" ? "long" : "short",
+              day: "numeric"
+            }
+          ).format(date);
+        } catch (error) {
+          dateText = "";
+        }
+        if (dateText !== "") {
+          dateHtml =
+            '<time class="community-board-post-date" datetime="' +
+            escapeHtml(date.toISOString()) +
+            '">' +
+            escapeHtml(dateText) +
+            "</time>";
+        }
+      }
+
+      const authorHtml =
+        post.authorType === "operator"
+          ? '<span class="community-board-author-badge">' +
+            escapeHtml(tr("community_board_author_operator")) +
+            "</span>"
+          : "";
+
+      if (dateHtml === "" && authorHtml === "") {
+        return "";
+      }
+
+      return '<p class="community-board-post-meta">' + authorHtml + dateHtml + "</p>";
+    }
+
+    function buildBoardPostItemHtml(post) {
+      const safeVideoUrl = getSafeWebsiteUrl(post.externalVideoUrl);
+
+      const videoLinkHtml =
+        safeVideoUrl !== ""
+          ? '<a class="community-board-video-link" href="' +
+            escapeHtml(safeVideoUrl) +
+            '" target="_blank" rel="noopener noreferrer">' +
+            escapeHtml(tr("community_board_watch_video")) +
+            "</a>"
+          : "";
+
+      return (
+        '<div class="community-board-post-item">' +
+        buildBoardPostMetaHtml(post) +
+        '<p class="community-board-post-text">' +
+        buildBoardPostTextHtml(post) +
+        "</p>" +
+        buildBoardPostLinksHtml(post) +
+        buildBoardPostImagesHtml(post) +
+        videoLinkHtml +
+        "</div>"
+      );
+    }
+
+    // ---- 匿名認証(community-board-post.htmlと同じ単発ヘルパー) ----
+    const BOARD_AUTH_READY_TIMEOUT_MS = 10000;
+    let boardAuthReadyPromise = null;
+    let boardAnonymousAuthPromise = null;
+
+    function waitForBoardAuthReady() {
+      if (boardAuthReadyPromise) {
+        return boardAuthReadyPromise;
+      }
+
+      boardAuthReadyPromise = new Promise(function (resolve, reject) {
+        let auth;
+
+        try {
+          if (typeof firebase === "undefined" || !firebase.auth) {
+            throw new Error("auth unavailable");
+          }
+          auth = firebase.auth();
+        } catch (error) {
+          reject(error);
+          return;
+        }
+
+        let settled = false;
+        let unsubscribe = null;
+
+        const finish = function (error) {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          clearTimeout(timeoutId);
+          if (typeof unsubscribe === "function") {
+            unsubscribe();
+          }
+          if (error) {
+            reject(error);
+          } else {
+            resolve(auth);
+          }
+        };
+
+        const timeoutId = setTimeout(function () {
+          finish(new Error("auth timeout"));
+        }, BOARD_AUTH_READY_TIMEOUT_MS);
+
+        unsubscribe = auth.onAuthStateChanged(
+          function () {
+            finish(null);
+          },
+          function (error) {
+            finish(error || new Error("auth error"));
+          }
+        );
+
+        if (settled && typeof unsubscribe === "function") {
+          unsubscribe();
+        }
+      }).catch(function (error) {
+        boardAuthReadyPromise = null;
+        throw error;
+      });
+
+      return boardAuthReadyPromise;
+    }
+
+    async function getAnonymousIdTokenForBoard() {
+      const auth = await waitForBoardAuthReady();
+
+      if (auth.currentUser) {
+        return auth.currentUser.getIdToken();
+      }
+
+      if (!boardAnonymousAuthPromise) {
+        boardAnonymousAuthPromise = auth
+          .signInAnonymously()
+          .then(function (credential) {
+            return credential.user;
+          })
+          .catch(function (error) {
+            boardAnonymousAuthPromise = null;
+            throw error;
+          });
+      }
+
+      return boardAnonymousAuthPromise.then(function (user) {
+        return user.getIdToken();
+      });
+    }
+
+    // ---- 地域の受け取りと読み込み ----
+    const boardUrlParams = new URLSearchParams(window.location.search);
+    const boardGooglePlaceId = boardUrlParams.get("googlePlaceId") || "";
+    const boardCountryCode = boardUrlParams.get("countryCode") || "";
+    const boardRegionName = boardUrlParams.get("regionName") || "";
+    const boardAdministrativeLevel = boardUrlParams.get("administrativeLevel") || "";
+
+    const boardHeading = document.getElementById("boardHeading");
+    const boardStatus = document.getElementById("boardStatus");
+    const boardList = document.getElementById("boardList");
+    const boardRegionImageBox = document.getElementById("boardRegionImageBox");
+    const boardPostLink = document.getElementById("boardPostLink");
+
+    async function loadBoard() {
+      if (boardGooglePlaceId === "" || boardCountryCode === "" || boardRegionName === "") {
+        boardStatus.textContent = tr("board_page_no_area");
+        return;
+      }
+
+      boardHeading.textContent = tr("community_board_heading_dynamic", { AREA: boardRegionName });
+      document.title = tr("board_page_doc_title") + "｜" + boardRegionName;
+
+      const postParams = new URLSearchParams({
+        googlePlaceId: boardGooglePlaceId,
+        countryCode: boardCountryCode,
+        regionName: boardRegionName,
+        administrativeLevel: boardAdministrativeLevel
+      });
+      boardPostLink.textContent = tr("community_board_post_link_remote", { AREA: boardRegionName });
+      boardPostLink.setAttribute("href", "community-board-post.html?" + postParams.toString());
+      boardPostLink.style.display = "";
+
+      try {
+        const idToken = await getAnonymousIdTokenForBoard();
+
+        const response = await fetch("/api/moderate-submission", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + idToken
+          },
+          body: JSON.stringify({
+            mode: "communityBoardPostsList",
+            googlePlaceId: boardGooglePlaceId,
+            countryCode: boardCountryCode
+          })
+        });
+
+        const responseData = await response.json();
+
+        if (!response.ok || !responseData || responseData.success !== true || !Array.isArray(responseData.posts)) {
+          boardStatus.textContent = tr("community_board_load_error");
+          return;
+        }
+
+        const safeRegionImageUrl = getSafeImageUrl(
+          typeof responseData.regionImageUrl === "string" ? responseData.regionImageUrl : ""
+        );
+        boardRegionImageBox.innerHTML =
+          safeRegionImageUrl !== ""
+            ? '<img class="community-board-region-image" src="' +
+              escapeHtml(buildOptimizedImageUrl(safeRegionImageUrl, { width: 700 })) +
+              '" alt="" loading="lazy">'
+            : "";
+
+        if (responseData.posts.length === 0) {
+          boardStatus.textContent = "";
+          boardList.innerHTML =
+            '<p class="board-empty-message">' +
+            escapeHtml(tr("community_board_empty")) +
+            "</p>";
+          return;
+        }
+
+        boardStatus.textContent = "";
+        boardList.innerHTML = responseData.posts.map(buildBoardPostItemHtml).join("");
+      } catch (error) {
+        boardStatus.textContent = tr("community_board_load_error");
+      }
+    }
+
+    loadBoard();
+  </script>
+</body>
+</html>

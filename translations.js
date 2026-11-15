@@ -3257,6 +3257,37 @@ const MACHINAU_TRANSLATIONS = {
     en: "{AREA} Community Board"
   },
 
+  // 掲示板の専用画面(board.html)への導線(モカ案作り変え第2弾 2026-11-15)。
+  community_board_more_link: {
+    ja: "掲示板の投稿をもっと見る",
+    en: "See more board posts"
+  },
+
+  board_page_doc_title: {
+    ja: "街の掲示板｜マチナウ",
+    en: "Community Board | Machinau"
+  },
+
+  board_page_label: {
+    ja: "街の掲示板",
+    en: "Community Board"
+  },
+
+  board_page_lead: {
+    ja: "この街を訪れる人へ、地元のひとことを残す場所です。",
+    en: "A place where locals leave a few words for people visiting this town."
+  },
+
+  board_page_loading: {
+    ja: "読み込み中…",
+    en: "Loading…"
+  },
+
+  board_page_no_area: {
+    ja: "街が選ばれていません。トップページで現在地を取得するか、「地域から探す」で街を選んでから、もう一度開いてください。",
+    en: "No town is selected yet. Get your location on the top page, or choose a town from “Search by area”, then open this page again."
+  },
+
   // 街の掲示板 停止防止｜掲示板を取得できなかった時(投稿0件とは別の表示)。
   community_board_load_error: {
     ja: "掲示板を読み込めませんでした。時間をおいて、もう一度お試しください。",

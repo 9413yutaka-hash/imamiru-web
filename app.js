@@ -14901,6 +14901,17 @@ function renderRegionRecommendationCards() {
         : "none";
   }
 
+  // 旧「地域のおすすめ」表示の間は、掲示板の専用画面への導線は出さない。
+  const boardMoreLinkForLegacy =
+    document.getElementById(
+      "communityBoardMoreLink"
+    );
+
+  if (boardMoreLinkForLegacy) {
+    boardMoreLinkForLegacy.style.display =
+      "none";
+  }
+
   if (regionRecommendationArticles.length === 0) {
     if (!isRegionRecommendationManualSelection) {
       regionRecommendationSection.style.display =
@@ -15949,12 +15960,71 @@ function renderCommunityBoardForCurrentArea(
       ) +
       '</p>';
   } else {
+    // モカ案作り変え第2弾(2026-11-15)｜トップの掲示板は最新3件だけ。
+    // 残りは専用画面(board.html)で見せる(下の「もっと見る」導線)。
+    // フィード用の保持(latestCommunityBoardPosts)は全件のまま変えない。
     list.innerHTML =
       posts
+        .slice(0, 3)
         .map(
           buildCommunityBoardPostItemHtml
         )
         .join("");
+  }
+
+  // 掲示板の専用画面への導線｜4件以上ある時だけ出す。地域の受け渡しは
+  // 投稿リンクと同じ4フィールド(googlePlaceId/countryCode/regionName/
+  // administrativeLevel)。現在地表示の時は保持中の地域情報を使う。
+  const boardMoreLink =
+    document.getElementById(
+      "communityBoardMoreLink"
+    );
+
+  if (boardMoreLink) {
+    const boardPlaceId =
+      (remoteRegionInfo &&
+        remoteRegionInfo.googlePlaceId) ||
+      currentCommunityBoardGooglePlaceId ||
+      "";
+
+    const boardCountryCode =
+      (remoteRegionInfo &&
+        remoteRegionInfo.countryCode) ||
+      currentCommunityBoardCountryCode ||
+      "";
+
+    if (
+      loadFailed !== true &&
+      Array.isArray(posts) &&
+      posts.length > 3 &&
+      boardPlaceId !== ""
+    ) {
+      const boardParams =
+        new URLSearchParams(
+          {
+            googlePlaceId: boardPlaceId,
+            countryCode: boardCountryCode,
+            regionName:
+              regionName || "",
+            administrativeLevel:
+              (remoteRegionInfo &&
+                remoteRegionInfo.administrativeLevel) ||
+              ""
+          }
+        );
+
+      boardMoreLink.setAttribute(
+        "href",
+        "board.html?" +
+          boardParams.toString()
+      );
+
+      boardMoreLink.style.display =
+        "";
+    } else {
+      boardMoreLink.style.display =
+        "none";
+    }
   }
 
   // 今日のフィード(03)用に直近の掲示板取得結果を保持する(描画自体は従来どおり)。
