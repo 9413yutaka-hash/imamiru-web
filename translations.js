@@ -55,15 +55,10 @@ const MACHINAU_TRANSLATIONS = {
     en: "Shop updates, today's events, local voices — the town's “now”, in one feed, closest first."
   },
 
-  // ヒーローの「探す」案内(2026-11-15 検索窓を廃止し、案内文+ボタンに変更)。
-  hero_search_guide_text: {
-    ja: "気になる街を探す？ 他の街を探す？",
-    en: "A town you're curious about? Or another town?"
-  },
-
-  hero_search_button: {
-    ja: "探す",
-    en: "Search"
+  // ヒーローの「他の地域を見てみる」ボタン(2026-11-15 検索窓を廃止)。
+  hero_area_button: {
+    ja: "他の地域を見てみる",
+    en: "See other areas"
   },
 
   // ヘッダーの投稿CTA(赤ピル)とセクション移動チップ行。

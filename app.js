@@ -26177,12 +26177,11 @@ function initTodayFeedUi() {
 
 initTodayFeedUi();
 
-// ヒーローの「探す」案内(2026-11-15 代表指示で検索窓を廃止)。
-// 入力欄は外し、案内文と「探す」ボタンだけを残す。押すと今までどおり
-// 地域の選択(#heroActionArea のクリック処理)が開く。
-function initHeroSearchGuide() {
+// ヒーローの「他の地域を見てみる」ボタン(2026-11-15 代表指示で検索窓を廃止)。
+// 押すと今までどおり地域の選択(#heroActionArea のクリック処理)が開く。
+function initHeroAreaGuide() {
   const guideButton =
-    document.getElementById("heroSearchGuideButton");
+    document.getElementById("heroAreaGuideButton");
 
   if (!guideButton) {
     return;
@@ -26201,4 +26200,4 @@ function initHeroSearchGuide() {
   );
 }
 
-initHeroSearchGuide();
+initHeroAreaGuide();
