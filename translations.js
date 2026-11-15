@@ -5744,8 +5744,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_profile_photos_hint: {
-    ja: "1枚目がメイン写真になります。JPEG・PNG・WebPで1枚10MBまで、最大10枚まで登録できます。写真は、店舗情報を保存した時にアップロードされます。",
-    en: "The first photo is the main photo. JPEG, PNG or WebP, up to 10 MB each, up to 10 photos. Photos are uploaded when you save your shop information."
+    ja: "1枚目がメイン写真になります。JPEG・PNG・WebPで1枚10MBまで、最大10枚まで登録できます。写真は、店舗情報を保存した時にアップロードされます。「◀前へ」「後へ▶」で写真の並び順を変えられます。1枚目は公開ページの先頭と、トップページの一覧に出ます。",
+    en: "The first photo is the main photo. JPEG, PNG or WebP, up to 10 MB each, up to 10 photos. Photos are uploaded when you save your shop information. Use the Earlier and Later buttons to change the order: the first photo appears at the top of your page and in the top-page listings."
   },
 
   store_profile_photos_count: {
