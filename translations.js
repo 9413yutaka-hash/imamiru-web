@@ -55,29 +55,15 @@ const MACHINAU_TRANSLATIONS = {
     en: "Shop updates, today's events, local voices — the town's “now”, in one feed, closest first."
   },
 
-  // ヒーロー検索バー(モカ案ブレンド・モック忠実度)｜地名は既存の市区町村
-  // データで解決して地域選択へ接続し、それ以外は今日のフィードの
-  // キーワード絞り込みに使う(app.js の initHeroSearch)。
-  hero_search_placeholder: {
-    ja: "エリア・キーワードで探す（例：糸満、そば、祭り）",
-    en: "Search by area or keyword (e.g. Itoman, soba, festival)"
+  // ヒーローの「探す」案内(2026-11-15 検索窓を廃止し、案内文+ボタンに変更)。
+  hero_search_guide_text: {
+    ja: "気になる街を探す？ 他の街を探す？",
+    en: "A town you're curious about? Or another town?"
   },
 
   hero_search_button: {
     ja: "探す",
     en: "Search"
-  },
-
-  // 検索で見つからなかった時の案内(2026-11-15)。市区町村より小さい地名は
-  // 検索対象に無いことを伝え、地域選択へ案内する。
-  hero_search_not_found: {
-    ja: "「{term}」では見つかりませんでした。地名で探すときは、市区町村の名前で入れてください。",
-    en: "No results for “{term}”. To search by place, enter a city or town name."
-  },
-
-  hero_search_area_button: {
-    ja: "地域から選ぶ",
-    en: "Choose an area"
   },
 
   // ヘッダーの投稿CTA(赤ピル)とセクション移動チップ行。
