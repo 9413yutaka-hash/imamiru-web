@@ -26202,51 +26202,8 @@ function renderTodayFeed() {
 function initTodayFeedUi() {
   updateTodayFeedDateLabel();
 
-  // セクション移動チップの「今だけ投稿」は、今日のフィードを今だけ投稿だけに
-  // 絞って見せる(2026-11-15 運営決定)。#imadakeSection は投稿が無い間は
-  // 非表示で、素のアンカーでは何も起きなかったため、絞り込み+移動にする。
-  const topNavImadake =
-    document.getElementById("topNavImadake");
-
-  if (topNavImadake) {
-    topNavImadake.addEventListener(
-      "click",
-      function(event) {
-        event.preventDefault();
-
-        todayFeedFilter =
-          "imadake";
-
-        const filterChipsElement =
-          document.getElementById("todayFeedFilterChips");
-
-        if (filterChipsElement) {
-          filterChipsElement
-            .querySelectorAll("button")
-            .forEach(function(chipButton) {
-              chipButton.setAttribute(
-                "aria-pressed",
-                String(chipButton.getAttribute("data-feed-filter") === "imadake")
-              );
-            });
-        }
-
-        renderTodayFeed();
-
-        const feedSection =
-          document.getElementById("todayFeedSection");
-
-        if (feedSection) {
-          feedSection.scrollIntoView(
-            {
-              behavior: "smooth",
-              block: "start"
-            }
-          );
-        }
-      }
-    );
-  }
+  // セクション移動チップ(ピル)は撤去済み(2026-11-15 代表決定・ピルの
+  // 一本化)。今だけ投稿への絞り込みは、フィード内の絞り込みチップで行う。
 
   const filterChips =
     document.getElementById("todayFeedFilterChips");
