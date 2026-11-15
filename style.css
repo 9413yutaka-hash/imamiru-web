@@ -2921,6 +2921,27 @@ body:has(#todayFeedSection) .hero-action-grid {
   color: var(--white);
 }
 
+/* 種類で絞るチップは、幅いっぱいの均等な格子に並べる(2026-11-15 代表
+   指示)。1段目は3つを3等分、2段目は2つを2等分にし、文字数で幅が
+   バラつかないようにする。 */
+.feed-filter-chips {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+  flex: 1 1 100%;
+}
+
+.feed-filter-chips button {
+  grid-column: span 2;
+  padding: 9px 4px;
+  text-align: center;
+}
+
+.feed-filter-chips button:nth-child(4),
+.feed-filter-chips button:nth-child(5) {
+  grid-column: span 3;
+}
+
 /* ヒーロー検索のキーワード絞り込みバー(絞り込み中だけ表示・解除付き) */
 .today-feed-keyword-bar {
   display: flex;
