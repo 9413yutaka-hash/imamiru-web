@@ -26246,6 +26246,38 @@ function resolveHeroSearchMunicipality(rawQuery) {
     : null;
 }
 
+function hideHeroSearchNote() {
+  const noteElement =
+    document.getElementById("heroSearchNote");
+
+  if (noteElement) {
+    noteElement.hidden =
+      true;
+  }
+}
+
+// 検索で見つからなかった時、検索バーの下に理由と地域選択への案内を出す。
+function showHeroSearchNotFound(term) {
+  const noteElement =
+    document.getElementById("heroSearchNote");
+
+  const noteTextElement =
+    document.getElementById("heroSearchNoteText");
+
+  if (!noteElement || !noteTextElement) {
+    return;
+  }
+
+  noteTextElement.textContent =
+    getMachinauTranslation(
+      "hero_search_not_found",
+      getCurrentMachinauLanguage()
+    ).replace("{term}", term);
+
+  noteElement.hidden =
+    false;
+}
+
 async function handleHeroSearchSubmit(rawQuery) {
   const query =
     String(rawQuery || "").trim();
@@ -26260,6 +26292,8 @@ async function handleHeroSearchSubmit(rawQuery) {
 
     return;
   }
+
+  hideHeroSearchNote();
 
   const resolved =
     resolveHeroSearchMunicipality(query);
@@ -26313,6 +26347,22 @@ async function handleHeroSearchSubmit(rawQuery) {
 
   renderTodayFeed();
 
+  const feedListElement =
+    document.getElementById("todayFeedList");
+
+  // 1件も合わなかった時は、空のフィードへ連れて行かず、検索バーの下で
+  // 理由と地域選択への案内を出す(市区町村より小さい地名は検索対象に無い)。
+  if (feedListElement && feedListElement.children.length === 0) {
+    todayFeedKeyword =
+      "";
+
+    renderTodayFeed();
+
+    showHeroSearchNotFound(query);
+
+    return;
+  }
+
   scrollToHeroActionSection("todayFeedSection");
 }
 
@@ -26355,6 +26405,27 @@ function initHeroSearch() {
           term;
 
         handleHeroSearchSubmit(term);
+      }
+    );
+  }
+
+  // 「見つかりませんでした」の案内にある「地域から選ぶ」は、
+  // ヒーローの地域選択(#heroActionArea)と同じ処理を開く。
+  const heroSearchNoteAreaButton =
+    document.getElementById("heroSearchNoteAreaButton");
+
+  if (heroSearchNoteAreaButton) {
+    heroSearchNoteAreaButton.addEventListener(
+      "click",
+      function() {
+        hideHeroSearchNote();
+
+        const heroActionAreaElement =
+          document.getElementById("heroActionArea");
+
+        if (heroActionAreaElement) {
+          heroActionAreaElement.click();
+        }
       }
     );
   }

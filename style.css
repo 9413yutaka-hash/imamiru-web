@@ -2621,6 +2621,38 @@ body:has(#todayFeedSection) .hero-background {
   margin: 0 0 14px;
 }
 
+/* 検索で見つからなかった時の案内(検索バーの直下に出す) */
+.hero-search-note {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  background: rgba(255, 255, 255, 0.95);
+  color: #22303c;
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin: 0 0 14px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  box-shadow: 0 8px 24px rgba(0, 30, 45, 0.22);
+}
+
+.hero-search-note[hidden] {
+  display: none;
+}
+
+.hero-search-note-button {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  color: #0b6fa4;
+  text-decoration: underline;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
 .hero-searchbar input {
   flex: 1;
   min-width: 0;

@@ -68,6 +68,18 @@ const MACHINAU_TRANSLATIONS = {
     en: "Search"
   },
 
+  // 検索で見つからなかった時の案内(2026-11-15)。市区町村より小さい地名は
+  // 検索対象に無いことを伝え、地域選択へ案内する。
+  hero_search_not_found: {
+    ja: "「{term}」では見つかりませんでした。地名で探すときは、市区町村の名前で入れてください。",
+    en: "No results for “{term}”. To search by place, enter a city or town name."
+  },
+
+  hero_search_area_button: {
+    ja: "地域から選ぶ",
+    en: "Choose an area"
+  },
+
   // ヘッダーの投稿CTA(赤ピル)とセクション移動チップ行。
   header_post_cta: {
     ja: "発見を投稿する",
