@@ -232,6 +232,30 @@
     .plan-consent { display: flex; gap: 8px; align-items: flex-start; overflow-wrap: anywhere; }
     .plan-consent input { margin-top: 3px; flex: none; }
 
+    /* 店主向けプレビュー｜公開ページの並びをまねた簡易表示 */
+    .store-preview { border: 1px solid var(--border); border-radius: 12px; padding: 14px; background: var(--white); }
+    .pv-hero img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 10px; margin-bottom: 10px; }
+    .pv-eyebrow { margin: 0 0 2px; font-size: 12px; font-weight: 800; color: var(--blue); }
+    .pv-name { margin: 0; font-size: 20px; font-weight: 800; color: var(--navy); overflow-wrap: anywhere; }
+    .pv-section { margin-top: 18px; }
+    .pv-section h3 { margin: 0 0 8px; padding-left: 10px; border-left: 4px solid var(--blue); font-size: 15px; color: var(--navy); }
+    .pv-text { margin: 0; font-size: 14px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .pv-gallery { display: flex; gap: 8px; overflow-x: auto; }
+    .pv-gallery img { width: 120px; height: 90px; object-fit: cover; border-radius: 8px; flex: none; }
+    .pv-menu { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+    .pv-menu li { display: flex; gap: 10px; align-items: flex-start; }
+    .pv-menu img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; flex: none; }
+    .pv-menu-name { margin: 0; font-weight: 800; color: var(--navy); font-size: 14px; }
+    .pv-menu-price { margin: 0; font-weight: 800; color: var(--blue); font-size: 13px; }
+    .pv-menu-desc { margin: 2px 0 0; font-size: 13px; color: var(--text); overflow-wrap: anywhere; }
+    .pv-hours { margin: 0; font-size: 13.5px; display: grid; gap: 3px; }
+    .pv-hours-note { color: var(--subtext); font-size: 12.5px; }
+    .pv-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+    .pv-tags span { padding: 3px 10px; border-radius: 999px; background: var(--background); border: 1px solid var(--border); font-size: 12.5px; }
+    .pv-info-label { margin: 0 0 4px; font-size: 12.5px; font-weight: 800; color: var(--navy); }
+    .pv-contact { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 13.5px; }
+    .pv-empty, .pv-draft-note { margin: 0; font-size: 13.5px; color: var(--subtext); }
+
     [hidden] { display: none !important; }
 
     @media (max-width: 380px) {
@@ -322,6 +346,13 @@
         <button type="button" class="secondary-button" id="unpublishButton" hidden data-i18n="store_profile_unpublish_button">非公開に戻す</button>
       </section>
 
+      <!-- 店主向けプレビュー｜入力中の内容を公開ページと同じ並びで見せる(表示だけ。保存・公開の判定には使わない)。 -->
+      <section class="panel" id="previewSection">
+        <h2 data-i18n="store_profile_preview_heading">旅行者にはこう見えます</h2>
+        <p class="hint" style="margin: 0 0 10px;" data-i18n="store_profile_preview_note"></p>
+        <div class="store-preview" id="storePreview"></div>
+      </section>
+
       <p class="message info show" id="notEditableNote" hidden></p>
 
       <form id="profileForm" novalidate>
@@ -339,6 +370,7 @@
           <div class="field">
             <label for="categorySelect" data-i18n="store_account_store_category_label">カテゴリ</label>
             <select id="categorySelect"></select>
+            <p class="hint" data-i18n="store_profile_category_hint"></p>
           </div>
 
           <div class="field">
@@ -368,6 +400,7 @@
 
         <section class="panel">
           <h2 data-i18n="store_profile_contact_heading">連絡先・リンク</h2>
+          <p class="hint" style="margin: 0 0 10px;" data-i18n="store_profile_contact_hint"></p>
           <div class="field">
             <label for="phoneInput" data-i18n="store_profile_phone_label">電話番号</label>
             <input type="tel" id="phoneInput" maxlength="20" autocomplete="tel">
@@ -390,6 +423,7 @@
 
         <section class="panel">
           <h2 data-i18n="store_profile_payment_heading">支払い方法</h2>
+          <p class="hint" style="margin: 0 0 10px;" data-i18n="store_profile_payment_hint"></p>
           <div class="check-group" id="paymentGroup"></div>
         </section>
 
@@ -1413,6 +1447,7 @@
         document.getElementById("photoAddButton").disabled = locked || photoItems.length >= getPhotosMax();
         // 写真の追加・削除・並べ替えも未保存の変更になるため、公開欄の表示を合わせる。
         renderPublication();
+        renderStorePreview();
       }
 
       function compressPhoto(file) {
@@ -2036,6 +2071,7 @@
         document.getElementById("customPhotoCount").textContent = t("store_custom_menu_photo_count")
           .replace("{n}", countCustomPhotos())
           .replace("{max}", limits.menuPhotosMax || 5);
+        renderStorePreview();
       }
 
       function countCustomPhotos() {
@@ -2089,6 +2125,7 @@
           container.appendChild(row);
         });
         document.getElementById("customLinkAddButton").disabled = locked || customLinks.length >= (limits.linksMax || 5);
+        renderStorePreview();
       }
 
       function updateCustomStoryCounter() {
@@ -2418,6 +2455,307 @@
         });
       }
 
+      // ===== 店主向けプレビュー(旅行者にはこう見えます) =====
+      // 入力中の内容を、公開ページ(お店のページ)と同じ並びで見せる表示だけの機能。
+      // 保存前の内容も反映する。保存・公開の判定には使わない。
+      // 見出し文言は公開ページ(api/_lib/store-page.js)の見出しに合わせ、translations.js の
+      // store_profile_preview_* キーで持つ。
+
+      function previewPhotoUrl(photo) {
+        if (!photo) {
+          return "";
+        }
+        if (photo.kind === "saved") {
+          return photo.url || "";
+        }
+        if (photo.kind === "local") {
+          return photo.previewUrl || "";
+        }
+        return "";
+      }
+
+      function previewSection(headingKey, body) {
+        if (!body) {
+          return null;
+        }
+        const section = document.createElement("div");
+        section.className = "pv-section";
+        const heading = document.createElement("h3");
+        heading.textContent = t(headingKey);
+        section.appendChild(heading);
+        section.appendChild(body);
+        return section;
+      }
+
+      function previewTextBlock(text) {
+        if (!text) {
+          return null;
+        }
+        const p = document.createElement("p");
+        p.className = "pv-text";
+        p.textContent = text;
+        return p;
+      }
+
+      function checkedLabels(groupIds) {
+        const labels = [];
+        groupIds.forEach(function (id) {
+          const group = document.getElementById(id);
+          if (!group) {
+            return;
+          }
+          group.querySelectorAll("input[type=\"checkbox\"]:checked").forEach(function (input) {
+            const span = input.parentElement ? input.parentElement.querySelector("span") : null;
+            if (span && span.textContent) {
+              labels.push(span.textContent);
+            }
+          });
+        });
+        return labels;
+      }
+
+      function renderStorePreview() {
+        const container = document.getElementById("storePreview");
+        if (!container) {
+          return;
+        }
+        container.textContent = "";
+        let hasContent = false;
+
+        // 先頭(公開ページの先頭と同じ): 1枚目の写真・カテゴリと所在地・店名。
+        const hero = document.createElement("div");
+        hero.className = "pv-hero";
+        const firstPhotoUrl = photoItems.length > 0 ? previewPhotoUrl(photoItems[0]) : "";
+        if (firstPhotoUrl) {
+          const img = document.createElement("img");
+          img.src = firstPhotoUrl;
+          img.alt = "";
+          hero.appendChild(img);
+          hasContent = true;
+        }
+        const categorySelect = document.getElementById("categorySelect");
+        const categoryLabel = categorySelect && categorySelect.selectedIndex >= 0
+          ? categorySelect.options[categorySelect.selectedIndex].textContent
+          : "";
+        const locationLabel = document.getElementById("storeLocationText").textContent;
+        const eyebrowText = [categoryLabel, locationLabel].filter(Boolean).join("｜");
+        if (eyebrowText) {
+          const eyebrow = document.createElement("p");
+          eyebrow.className = "pv-eyebrow";
+          eyebrow.textContent = eyebrowText;
+          hero.appendChild(eyebrow);
+        }
+        const storeName = document.getElementById("storeNameText").textContent;
+        if (storeName) {
+          const name = document.createElement("p");
+          name.className = "pv-name";
+          name.textContent = storeName;
+          hero.appendChild(name);
+          hasContent = true;
+        }
+        container.appendChild(hero);
+
+        // 紹介文。
+        const about = previewSection("store_profile_preview_about",
+          previewTextBlock(document.getElementById("descriptionInput").value.trim()));
+        if (about) {
+          container.appendChild(about);
+          hasContent = true;
+        }
+
+        // 写真(2枚目以降)。
+        if (photoItems.length > 1) {
+          const gallery = document.createElement("div");
+          gallery.className = "pv-gallery";
+          photoItems.slice(1).forEach(function (photo) {
+            const url = previewPhotoUrl(photo);
+            if (!url) {
+              return;
+            }
+            const img = document.createElement("img");
+            img.src = url;
+            img.alt = "";
+            gallery.appendChild(img);
+          });
+          const photoSection = previewSection("store_profile_preview_photos", gallery.children.length > 0 ? gallery : null);
+          if (photoSection) {
+            container.appendChild(photoSection);
+            hasContent = true;
+          }
+        }
+
+        // こだわり・ストーリー(カスタマイズ)。
+        const story = previewSection("store_profile_preview_story",
+          previewTextBlock(document.getElementById("customStoryInput").value.trim()));
+        if (story) {
+          container.appendChild(story);
+          hasContent = true;
+        }
+
+        // メニュー・商品(カスタマイズ。並び順どおり)。
+        const visibleItems = customItems.filter(function (item) {
+          return item && (item.name || item.description || item.priceText || item.photo);
+        });
+        if (visibleItems.length > 0) {
+          const list = document.createElement("ul");
+          list.className = "pv-menu";
+          visibleItems.forEach(function (item) {
+            const li = document.createElement("li");
+            const url = previewPhotoUrl(item.photo);
+            if (url) {
+              const img = document.createElement("img");
+              img.src = url;
+              img.alt = "";
+              li.appendChild(img);
+            }
+            const box = document.createElement("div");
+            if (item.name) {
+              const name = document.createElement("p");
+              name.className = "pv-menu-name";
+              name.textContent = item.name;
+              box.appendChild(name);
+            }
+            if (item.priceText) {
+              const price = document.createElement("p");
+              price.className = "pv-menu-price";
+              price.textContent = item.priceText;
+              box.appendChild(price);
+            }
+            if (item.description) {
+              const desc = document.createElement("p");
+              desc.className = "pv-menu-desc";
+              desc.textContent = item.description;
+              box.appendChild(desc);
+            }
+            li.appendChild(box);
+            list.appendChild(li);
+          });
+          const menuSection = previewSection("store_profile_preview_menu", list);
+          if (menuSection) {
+            container.appendChild(menuSection);
+            hasContent = true;
+          }
+        }
+
+        // 営業時間。
+        const hours = readHours();
+        if (hours.ok && hours.value) {
+          const box = document.createElement("div");
+          box.className = "pv-hours";
+          WEEKDAY_CODES.forEach(function (day) {
+            const ranges = hours.value.weekly ? hours.value.weekly[day] : null;
+            let text;
+            if (!ranges || ranges.length === 0) {
+              text = t("store_profile_day_closed");
+            } else if (ranges.length === 1 && ranges[0].open === "00:00" && ranges[0].close === "24:00") {
+              text = t("store_profile_day_allday");
+            } else {
+              text = ranges.map(function (range) { return range.open + "〜" + range.close; }).join(" / ");
+            }
+            const line = document.createElement("div");
+            line.textContent = t("store_profile_day_" + day) + "：" + text;
+            box.appendChild(line);
+          });
+          if (hours.value.note) {
+            const note = document.createElement("div");
+            note.className = "pv-hours-note";
+            note.textContent = hours.value.note;
+            box.appendChild(note);
+          }
+          const hoursSection = previewSection("store_profile_preview_hours", box);
+          if (hoursSection) {
+            container.appendChild(hoursSection);
+            hasContent = true;
+          }
+        } else if (!hours.ok) {
+          const note = document.createElement("p");
+          note.className = "pv-draft-note";
+          note.textContent = t("store_profile_preview_hours_draft");
+          const draftSection = previewSection("store_profile_preview_hours", note);
+          if (draftSection) {
+            container.appendChild(draftSection);
+          }
+        }
+
+        // 所在地。
+        const location = previewSection("store_profile_preview_location", previewTextBlock(locationLabel));
+        if (location) {
+          container.appendChild(location);
+          hasContent = true;
+        }
+
+        // お店の情報(支払い方法・設備・対応言語)。
+        const infoGroups = [
+          { headingKey: "store_profile_payment_heading", labels: checkedLabels(["paymentGroup"]) },
+          { headingKey: "store_profile_features_heading", labels: checkedLabels(["featurePrimaryGroup", "featureOtherGroup"]) },
+          { headingKey: "store_profile_languages_heading", labels: checkedLabels(["languageGroup"]) }
+        ].filter(function (group) { return group.labels.length > 0; });
+        if (infoGroups.length > 0) {
+          const box = document.createElement("div");
+          infoGroups.forEach(function (group) {
+            const label = document.createElement("p");
+            label.className = "pv-info-label";
+            label.textContent = t(group.headingKey);
+            box.appendChild(label);
+            const tags = document.createElement("div");
+            tags.className = "pv-tags";
+            group.labels.forEach(function (text) {
+              const span = document.createElement("span");
+              span.textContent = text;
+              tags.appendChild(span);
+            });
+            box.appendChild(tags);
+          });
+          const infoSection = previewSection("store_profile_preview_info", box);
+          if (infoSection) {
+            container.appendChild(infoSection);
+            hasContent = true;
+          }
+        }
+
+        // 電話・予約・SNS(登録があるものだけ)。
+        const contactLines = [];
+        const phone = document.getElementById("phoneInput").value.trim();
+        if (phone) {
+          contactLines.push(t("store_profile_phone_label") + "：" + phone);
+        }
+        if (document.getElementById("reservationInput").value.trim()) {
+          contactLines.push(t("store_profile_reservation_label"));
+        }
+        if (document.getElementById("websiteInput").value.trim()) {
+          contactLines.push(t("store_profile_website_label"));
+        }
+        readSocialLinks().forEach(function (link) {
+          contactLines.push(t("store_profile_social_" + link.type));
+        });
+        customLinks.forEach(function (link) {
+          if (link && link.url && link.url.trim()) {
+            contactLines.push(link.label || t("store_custom_link_type_" + link.type));
+          }
+        });
+        if (contactLines.length > 0) {
+          const list = document.createElement("ul");
+          list.className = "pv-contact";
+          contactLines.forEach(function (text) {
+            const li = document.createElement("li");
+            li.textContent = text;
+            list.appendChild(li);
+          });
+          const contactSection = previewSection("store_profile_preview_contact", list);
+          if (contactSection) {
+            container.appendChild(contactSection);
+            hasContent = true;
+          }
+        }
+
+        if (!hasContent) {
+          const empty = document.createElement("p");
+          empty.className = "pv-empty";
+          empty.textContent = t("store_profile_preview_empty");
+          container.appendChild(empty);
+        }
+      }
+
       // ===== 言語 =====
 
       function applyLanguage() {
@@ -2478,6 +2816,7 @@
         if (lastPlanMessage) {
           showPlanMessage(lastPlanMessage.key, lastPlanMessage.type, lastPlanMessage.code, lastPlanMessage.replacements);
         }
+        renderStorePreview();
       }
 
       function bindEvents() {
@@ -2499,6 +2838,11 @@
           dirty = true;
           renderPublication();
         });
+        form.addEventListener("input", renderStorePreview);
+        form.addEventListener("change", renderStorePreview);
+        const customFormElement = document.getElementById("customForm");
+        customFormElement.addEventListener("input", renderStorePreview);
+        customFormElement.addEventListener("change", renderStorePreview);
         form.addEventListener("change", function (event) {
           dirty = true;
           renderPublication();
