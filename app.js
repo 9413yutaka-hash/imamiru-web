@@ -25730,42 +25730,9 @@ function buildTodayFeedItems() {
     });
   });
 
-  // 街の掲示板(地元の声): 地域単位で距離は無いため鮮度組に入る。
-  const boardPosts =
-    Array.isArray(latestCommunityBoardPosts)
-      ? latestCommunityBoardPosts
-      : [];
-
-  boardPosts.forEach(function(post) {
-    const imageUrl =
-      Array.isArray(post.imageUrls) && post.imageUrls.length > 0
-        ? getSafeImageUrl(post.imageUrls[0])
-        : "";
-
-    items.push({
-      type: "voice",
-      badgeKey: "feed_badge_board",
-      kindText: "",
-      title: "",
-      storeLine: "",
-      body: truncateTodayFeedText(
-        typeof post.text === "string" ? post.text : "",
-        140
-      ),
-      imageUrl: imageUrl,
-      emoji: "📌",
-      distanceKm: null,
-      timeMillis:
-        typeof post.createdAtMillis === "number" && Number.isFinite(post.createdAtMillis)
-          ? post.createdAtMillis
-          : 0,
-      expiresText: "",
-      area: latestCommunityBoardRegionName || "",
-      metaText: "",
-      isOperator: post.authorType === "operator",
-      targetId: "regionRecommendationSection"
-    });
-  });
+  // 街の掲示板の投稿はフィードには混ぜない(2026-11-15 代表決定)。
+  // 掲示板セクション(と専用画面)に一本化し、同じ投稿が上下に二重で
+  // 出るのをやめた。データ保持(latestCommunityBoardPosts)は掲示板側が使う。
 
   return items;
 }
