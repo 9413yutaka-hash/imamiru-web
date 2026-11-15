@@ -3287,30 +3287,6 @@ body:has(#todayFeedSection) .hero-action-grid {
   cursor: pointer;
 }
 
-.hero-city-chips {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-}
-
-.hero-city-chip {
-  background: rgba(255, 255, 255, 0.18);
-  color: var(--white);
-  border: 1.5px solid rgba(255, 255, 255, 0.55);
-  font-family: inherit;
-  font-weight: 700;
-  font-size: 13.5px;
-  border-radius: 999px;
-  padding: 7px 15px;
-  cursor: pointer;
-  backdrop-filter: blur(6px);
-}
-
-.hero-city-chip:hover {
-  background: rgba(255, 255, 255, 0.32);
-}
-
 .hero-howto-link {
   background: none;
   border: none;

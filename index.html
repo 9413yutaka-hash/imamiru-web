@@ -3062,20 +3062,14 @@
         </section>
 
         <!-- 地域の入口(モカ案作り変え 2026-11-15)｜4つの入口カードと掲示板・
-             楽しみ方のカードは廃止し、「地域から探す」リンク+街チップ+
-             楽しみ方リンクに置き換える。#heroActionArea と #howToEntryButton の
-             id と既存の処理(地域の選択を開く/楽しみ方モーダルを開く)はそのまま使う。 -->
+             楽しみ方のカードは廃止し、「地域から探す」リンク+楽しみ方リンクに
+             置き換える。大事なのは「現在地を取得する」を押させることなので、
+             街の名前のボタン(チップ)は置かない(代表決定)。#heroActionArea と
+             #howToEntryButton の id と既存の処理はそのまま使う。 -->
         <div class="hero-area-nav">
           <button type="button" class="hero-area-link" id="heroActionArea">
             <span data-i18n="hero_action_area_title">地域から探す</span>
           </button>
-          <div class="hero-city-chips" role="group" aria-label="街を選ぶ">
-            <button type="button" class="hero-city-chip" data-city="那覇市">那覇市</button>
-            <button type="button" class="hero-city-chip" data-city="糸満市">糸満市</button>
-            <button type="button" class="hero-city-chip" data-city="豊見城市">豊見城市</button>
-            <button type="button" class="hero-city-chip" data-city="南城市">南城市</button>
-            <button type="button" class="hero-city-chip" data-city="名護市">名護市</button>
-          </div>
           <button type="button" class="hero-howto-link" id="howToEntryButton">
             <span data-i18n="how_to_entry_title">マチナウの楽しみ方</span> →
           </button>

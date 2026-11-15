@@ -26177,38 +26177,5 @@ function initTodayFeedUi() {
 
 initTodayFeedUi();
 
-// ヒーローの街チップ(モカ案作り変え 2026-11-15)｜押すと、その街を地域選択で
-// 選んだ時と同じ適用(街の選択+掲示板の読み込み)をして、お店の欄へ移る。
-function initHeroCityChips() {
-  document.querySelectorAll(
-    ".hero-city-chip"
-  ).forEach(function(chip) {
-    chip.addEventListener(
-      "click",
-      function() {
-        const cityName =
-          chip.getAttribute("data-city");
-
-        if (!cityName) {
-          return;
-        }
-
-        setSelectedShopRegion(
-          "沖縄県",
-          cityName
-        );
-
-        loadCommunityBoardForSelectedArea(
-          "沖縄県",
-          cityName
-        );
-
-        scrollToHeroActionSection(
-          "shopsSection"
-        );
-      }
-    );
-  });
-}
-
-initHeroCityChips();
+// ヒーローの街の名前のボタンは置かない(2026-11-15 代表決定：
+// 「現在地を取得する」を押させることに集中させるため)。
