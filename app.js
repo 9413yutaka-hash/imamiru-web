@@ -4131,6 +4131,37 @@ function getStoreImadakeChipHtml(shop, language) {
   )}</span>`;
 }
 
+// 一覧の差別化(2026-11-15 代表決定)｜有料の内容(STEP 44-Aでは詳細だけに
+// 使っていた)を、カードにも1行だけ出す。メニューの最初の1品だけを
+// 「メニュー・商品：品名 価格」の形で出す(全文・写真は詳細と店舗ページで)。
+function getStoreProfileMenuHighlightHtml(shop, language) {
+  if (
+    !shop.custom ||
+    !Array.isArray(shop.custom.menuItems) ||
+    shop.custom.menuItems.length === 0
+  ) {
+    return "";
+  }
+
+  const firstItem =
+    shop.custom.menuItems[0];
+
+  const pricePart =
+    firstItem.priceText
+      ? " " +
+        escapeHtml(
+          firstItem.priceText
+        )
+      : "";
+
+  return `<p class="shop-menu-highlight">🍽 ${escapeHtml(
+    getMachinauTranslation(
+      "shop_custom_menu_heading",
+      language
+    )
+  )}：${escapeHtml(firstItem.name)}${pricePart}</p>`;
+}
+
 function buildStoreProfileShopCardHtml(shop, shopCardIndex) {
   const language =
     getCurrentMachinauLanguage();
@@ -4177,6 +4208,7 @@ function buildStoreProfileShopCardHtml(shop, shopCardIndex) {
         </div>
         <div class="user-post-badge-row">
           <span class="user-post-badge store-managed-badge">${escapeHtml(getMachinauTranslation("shop_store_managed_badge", language))}</span>
+          <span class="user-post-badge store-page-badge">${escapeHtml(getMachinauTranslation("shop_store_page_badge", language))}</span>
         </div>
         <p class="shop-description">${escapeHtml(getShopDisplayMessage(shop, language))}</p>
         <div class="shop-info-row">
@@ -4199,7 +4231,14 @@ function buildStoreProfileShopCardHtml(shop, shopCardIndex) {
               return `<span class="info-chip">${paymentBadgeText}</span>`;
             })
             .join("")}
+          ${getStoreProfileFeatureTexts(shop)
+            .slice(0, 3)
+            .map(function(featureText) {
+              return `<span class="info-chip">${escapeHtml(featureText)}</span>`;
+            })
+            .join("")}
         </div>
+        ${getStoreProfileMenuHighlightHtml(shop, language)}
         ${
           shop.address
             ? `<div class="time-limit">📍 ${getShopAddressHtml(shop.address)}</div>`
@@ -4639,11 +4678,12 @@ function renderShops() {
                   isAdminPost
                     ? ""
                     : shop.isPermanentAd
-                      ? `
+                      ? // 一覧の差別化(2026-11-15 代表決定)｜無料の常設掲載の印は「店舗広告」ではなく運営掲載の印(shop_admin_badge)にそろえる。「広告」と読める印は、専用ページのある有料店舗の「専用ページあり」に役割を移した。
+                        `
                         <div class="user-post-badge-row">
                           <span class="user-post-badge">
                             ${getMachinauTranslation(
-                              "shop_permanent_ad_badge",
+                              "shop_admin_badge",
                               getCurrentMachinauLanguage()
                             )}
                           </span>
@@ -6441,11 +6481,13 @@ function openShopModal(
   } else if (
     selectedShop.isPermanentAd
   ) {
+    // 一覧の差別化(2026-11-15 代表決定)｜カードと同じく、常設掲載の印は
+    // 「店舗広告」ではなく運営掲載の印にそろえる。
     modalText +=
       "<br><br>" +
       escapeHtml(
         getMachinauTranslation(
-          "shop_permanent_ad_badge",
+          "shop_admin_badge",
           getCurrentMachinauLanguage()
         )
       );

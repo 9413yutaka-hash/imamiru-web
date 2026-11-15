@@ -3334,3 +3334,23 @@ body:has(#todayFeedSection) .hero-action-grid {
   text-decoration: none;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
 }
+
+/* 一覧の差別化(2026-11-15 代表決定)｜専用ページのあるお店の印と、
+   カードに出すメニューの1行。バッジの並びは間隔をそろえる。 */
+.user-post-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
+#shopsList .store-page-badge {
+  color: var(--navy);
+  font-weight: 900;
+}
+
+.shop-menu-highlight {
+  margin: 8px 0 0;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--navy);
+}
