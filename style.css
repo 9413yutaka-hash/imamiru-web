@@ -2691,10 +2691,22 @@ body:has(#todayFeedSection) .hero-action-grid {
 }
 
 /* ---- ティッカー(ヒーロー下端の赤バンド) ---- */
+/* 2026-11-15 作り替え(代表指示)：CSSアニメーションのマーキーは iPhone で
+   文字が描かれない事故があったため、横スクロールできる帯にし、自動送りは
+   app.js の startTodayTickerAutoScroll() が scrollLeft で行う。
+   手でスワイプして見逃しを戻すこともできる。文字はラベル・見出しとも
+   同じ大きさ・太さに統一し、帯は細めにする。 */
 .today-ticker {
   background: #ff5340;
   color: var(--white);
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.today-ticker::-webkit-scrollbar {
+  display: none;
 }
 
 .today-ticker[hidden] {
@@ -2704,46 +2716,21 @@ body:has(#todayFeedSection) .hero-action-grid {
 .today-ticker-track {
   display: flex;
   width: max-content;
-  padding: 12px 0;
-  /* iPhone Safari で流れる文字が描かれない・バラバラになる症状への対策：
-     3D変換でGPU描画に載せ、再描画を明示する(2026-11-15)。 */
-  will-change: transform;
-  backface-visibility: hidden;
-  animation: today-ticker-scroll 48s linear infinite;
+  padding: 7px 0;
 }
 
 .today-ticker-track a {
   font-weight: 700;
-  font-size: 17px;
+  font-size: 15px;
   white-space: nowrap;
-  padding: 0 26px;
+  padding: 0 22px;
   color: inherit;
   text-decoration: none;
 }
 
 .today-ticker-track a b {
-  background: var(--white);
-  color: #e83e2c;
-  border-radius: 6px;
-  padding: 1px 8px;
-  margin-right: 10px;
-  font-size: 14px;
-}
-
-@keyframes today-ticker-scroll {
-  to {
-    transform: translate3d(-50%, 0, 0);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .today-ticker {
-    overflow-x: auto;
-  }
-
-  .today-ticker-track {
-    animation: none;
-  }
+  font-weight: 700;
+  margin-right: 8px;
 }
 
 /* ---- セクション番号ラベル(モックの「03 — TODAY」式) ---- */
