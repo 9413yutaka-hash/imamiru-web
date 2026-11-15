@@ -395,6 +395,22 @@ const MACHINAU_TRANSLATIONS = {
     en: "Published"
   },
 
+  // お店・施設の方へ(モカ案07｜トップのお店一覧の直後の紺カード)。
+  shop_owner_cta_heading: {
+    ja: "お店・施設の方へ",
+    en: "For shops and facilities"
+  },
+
+  shop_owner_cta_text: {
+    ja: "マチナウは、旅行者と地元の人に「街の今」を届ける場所です。あなたのお店の「今」も、ここから届けられます。",
+    en: "Machinau brings what's happening in town to travelers and locals. Your shop's latest news can reach them from here, too."
+  },
+
+  shop_owner_cta_button: {
+    ja: "掲載について見る",
+    en: "See how to get listed"
+  },
+
   ad_slot_label: {
     ja: "広告",
     en: "Ad"

@@ -153,7 +153,7 @@
 
   <link
     rel="stylesheet"
-    href="style.css?v=20261115l"
+    href="style.css?v=20261115m"
   >
 
   <!-- トップページ改修(モカ案ブレンド・見た目)｜見出し用の丸ゴシック。
@@ -2788,11 +2788,6 @@
           店の今、今日のイベント、地元の声。今いる街の「今」を、近い順に1本で届けます。
         </p>
 
-        <!-- 「他の地域を見てみる」ボタン(2026-11-15 代表指示で検索窓と白バーを
-             廃止し、このボタンだけを「今いる街」カードの真上に置く)。
-             押すと今までどおり地域の選択(#heroActionArea と同じ処理)が開く
-             (app.js の initHeroAreaGuide)。 -->
-        <button class="hero-area-button" type="button" id="heroAreaGuideButton" data-i18n="hero_area_button">他の地域を見てみる</button>
 
         <!-- 人気キーワードのチップは運営決定で撤去(2026-11-15)。 -->
 
@@ -3066,55 +3061,19 @@
 
         </section>
 
-        <!-- 4つの入口(代表のスマホの完成イメージ)。アイコンは線の太さ・大きさをそろえたインラインのSVG(外部サービスなし)。
-             吹き出し＝スレッド、コンパス＝探索、地図＝地域選択、本＝読み物。現在地のピンとは別の形にする。 -->
-        <div class="hero-action-grid">
-
-          <button type="button" class="hero-action-card" id="heroActionToday">
-            <span class="hero-action-icon" aria-hidden="true"><svg class="hero-line-icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20.5 11.5a8 8 0 0 1-11.7 7.1L4 20l1.3-4.3A8 8 0 1 1 20.5 11.5z"/></svg></span>
-            <span class="hero-action-title" data-i18n="hero_action_today_title">今いる街の情報</span>
-            <span class="hero-action-caption" data-i18n="hero_action_today_caption">街のスレッドへ</span>
+        <!-- 地域の入口(モカ案作り変え 2026-11-15)｜4つの入口カードと掲示板・
+             楽しみ方のカードは廃止し、「地域から探す」リンク+楽しみ方リンクに
+             置き換える。大事なのは「現在地を取得する」を押させることなので、
+             街の名前のボタン(チップ)は置かない(代表決定)。#heroActionArea と
+             #howToEntryButton の id と既存の処理はそのまま使う。 -->
+        <div class="hero-area-nav">
+          <button type="button" class="hero-area-link" id="heroActionArea">
+            <span data-i18n="hero_action_area_title">地域から探す</span>
           </button>
-
-          <button type="button" class="hero-action-card" id="heroActionNearby">
-            <span class="hero-action-icon" aria-hidden="true"><svg class="hero-line-icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="m15.6 8.4-2.1 5.1-5.1 2.1 2.1-5.1z"/></svg></span>
-            <span class="hero-action-title" data-i18n="hero_action_nearby_title">近くで楽しめる場所</span>
-            <span class="hero-action-caption" data-i18n="hero_action_nearby_caption">お店・観光・体験</span>
+          <button type="button" class="hero-howto-link" id="howToEntryButton">
+            <span data-i18n="how_to_entry_title">マチナウの楽しみ方</span> →
           </button>
-
-          <button type="button" class="hero-action-card" id="heroActionArea">
-            <span class="hero-action-icon" aria-hidden="true"><svg class="hero-line-icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 4.5 3.5 6.5v13l5.5-2 6 2 5.5-2v-13l-5.5 2-6-2z"/><path d="M9 4.5v13M15 6.5v13"/></svg></span>
-            <span class="hero-action-title" data-i18n="hero_action_area_title">地域から探す</span>
-            <span class="hero-action-caption" data-i18n="hero_action_area_caption">都道府県・市区町村で</span>
-          </button>
-
-          <button type="button" class="hero-action-card" id="heroActionReads">
-            <span class="hero-action-icon" aria-hidden="true"><svg class="hero-line-icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 5.5h5.5A3.5 3.5 0 0 1 12 9v11a2.5 2.5 0 0 0-2.5-2.5H3z"/><path d="M21 5.5h-5.5A3.5 3.5 0 0 0 12 9v11a2.5 2.5 0 0 1 2.5-2.5H21z"/></svg></span>
-            <span class="hero-action-title" data-i18n="hero_action_reads_title">マチナウ読み物</span>
-            <span class="hero-action-caption" data-i18n="hero_action_reads_caption">旅のヒント・ストーリー</span>
-          </button>
-
         </div>
-
-        <!-- 街の掲示板の独立カード。スレッド(街の今の会話)とは別の機能(一定期間残る地域の情報)。
-             押すと、現在地があれば表示中の掲示板へ、無ければ地域の選択(#heroActionArea と同じ)を開く。 -->
-        <button type="button" class="hero-link-card hero-board-card" id="heroActionBoard">
-          <span class="hero-link-card-icon" aria-hidden="true"><svg class="hero-line-icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3.5" y="4" width="17" height="12" rx="2"/><path d="M7.5 8h9M7.5 11.5h6M12 16v4M8.5 20h7"/></svg></span>
-          <span class="hero-link-card-text">
-            <span class="hero-link-card-title" data-i18n="hero_board_title">街の掲示板</span>
-            <span class="hero-link-card-caption" data-i18n="hero_board_caption">この街を訪れる人へ、地元のひとことを残す場所</span>
-          </span>
-          <span class="hero-link-card-more" data-i18n="hero_card_more">見る →</span>
-        </button>
-
-        <!-- マチナウの楽しみ方｜はじめての方向けの入口。長い説明は入口に出さず、押すと #howToModal(楽しみ方のガイド)を開く。 -->
-        <button type="button" class="hero-link-card how-to-entry" id="howToEntryButton">
-          <span class="hero-link-card-text">
-            <span class="hero-link-card-label" data-i18n="how_to_entry_label">はじめての方へ</span>
-            <span class="hero-link-card-title" data-i18n="how_to_entry_title">マチナウの楽しみ方</span>
-          </span>
-          <span class="hero-link-card-more" data-i18n="hero_card_more">見る →</span>
-        </button>
 
       </div>
 
@@ -3338,6 +3297,31 @@
       <p id="todayFeedEmpty" class="today-feed-empty" data-i18n="feed_empty_location">現在地を取得するか街を選ぶと、今日の「今」がここに集まります。</p>
     </section>
 
+    <section
+      id="imadakeSection"
+      class="imadake-section"
+      aria-labelledby="imadakeHeading"
+      hidden
+    >
+      <h2 id="imadakeHeading" data-i18n="imadake_heading">今だけ投稿</h2>
+      <p class="imadake-lead" data-i18n="imadake_lead">近くのお店・施設が「今」を伝えています（掲載は最長24時間）。</p>
+      <div id="imadakeCardList" class="imadake-card-list"></div>
+    </section>
+
+    <section
+      id="todayNowEmptySection"
+      class="imadake-section today-now-empty"
+      aria-labelledby="todayNowEmptyHeading"
+      hidden
+    >
+      <h2 id="todayNowEmptyHeading" data-i18n="today_now_empty_heading">今日の今だけ投稿</h2>
+      <p class="imadake-lead" data-i18n="today_now_empty_text">近くでは、まだ掲載中の「今だけ投稿」がありません。</p>
+      <div class="today-now-empty-links">
+        <button type="button" class="today-now-empty-link" data-today-now-target="shopsSection" data-i18n="today_now_empty_link_shops" hidden>近くで楽しめるお店・施設</button>
+        <button type="button" class="today-now-empty-link" data-today-now-target="townNowThreadsSection" data-i18n="today_now_empty_link_threads" hidden>近くの人の今日の会話（街の今スレッド）</button>
+      </div>
+    </section>
+
     <!-- 街の今スレッド Phase 1C-2｜TOP・街ページ統合改善で街ページの1番目(街の「今」の会話)。現在地の時は
          townNowThreadsNearby(話題地点から5km以内・同じ市区町村)、「地域から探す」で街を選んだ時は
          townNowThreadsList(選んだ市区町村の今日・公開中・期限内のスレッドだけ)を表示する。
@@ -3423,35 +3407,13 @@
          現在地が分かった時だけapp.jsのloadImadakeNearbyPosts()が一覧(GET imadakePostsNearby)を
          取得して描く。0件・現在地なしの時は枠ごと隠す。無料店舗一覧(#shopsSection)・
          地図・お気に入り・旅の保存箱とは別のDOM・状態で、互いに読み書きしない。 -->
-    <section
-      id="imadakeSection"
-      class="imadake-section"
-      aria-labelledby="imadakeHeading"
-      hidden
-    >
-      <h2 id="imadakeHeading" data-i18n="imadake_heading">今だけ投稿</h2>
-      <p class="imadake-lead" data-i18n="imadake_lead">近くのお店・施設が「今」を伝えています（掲載は最長24時間）。</p>
-      <div id="imadakeCardList" class="imadake-card-list"></div>
-    </section>
+
 
     <!-- サイト全体改善 第5弾｜今だけ投稿が0件の日の「今日の今」。近くの今だけ投稿の取得に成功して0件だった時だけ出す
          (取得の失敗・現在地なしでは出さない)。今だけ投稿の枠・判定・CVの記録には触れない。中身は作らず、
          ページ内で今表示されている既存の枠(今日の地域情報・近くのお店・街の今スレッド・読みもの)への移動だけを並べる
          (同じ情報を2か所に出さない。表示されていない枠へのボタンは出さない)。 -->
-    <section
-      id="todayNowEmptySection"
-      class="imadake-section today-now-empty"
-      aria-labelledby="todayNowEmptyHeading"
-      hidden
-    >
-      <h2 id="todayNowEmptyHeading" data-i18n="today_now_empty_heading">今日の今だけ投稿</h2>
-      <p class="imadake-lead" data-i18n="today_now_empty_text">近くでは、まだ掲載中の「今だけ投稿」がありません。</p>
-      <div class="today-now-empty-links">
-        <button type="button" class="today-now-empty-link" data-today-now-target="regionTodayInfoSection" data-i18n="today_now_empty_link_region" hidden>今日、この地域で起きていること</button>
-        <button type="button" class="today-now-empty-link" data-today-now-target="shopsSection" data-i18n="today_now_empty_link_shops" hidden>近くで楽しめるお店・施設</button>
-        <button type="button" class="today-now-empty-link" data-today-now-target="townNowThreadsSection" data-i18n="today_now_empty_link_threads" hidden>近くの人の今日の会話（街の今スレッド）</button>
-      </div>
-    </section>
+
 
     <section
       id="shopsSection"
@@ -3617,6 +3579,14 @@
 
     </section>
 
+    <!-- お店・施設の方へ(モカ案07)｜お店の一覧を見た直後に、店主へ「出す側」の誘いを置く。
+         料金や申込みの仕組みは変えず、案内ページ(shop.html)への導線だけを置く。 -->
+    <section id="shopOwnerCtaSection" class="shop-owner-cta" aria-labelledby="shopOwnerCtaHeading">
+      <h2 id="shopOwnerCtaHeading" data-i18n="shop_owner_cta_heading">お店・施設の方へ</h2>
+      <p data-i18n="shop_owner_cta_text">マチナウは、旅行者と地元の人に「街の今」を届ける場所です。あなたのお店の「今」も、ここから届けられます。</p>
+      <a class="shop-owner-cta-button" href="shop.html" data-i18n="shop_owner_cta_button">掲載について見る</a>
+    </section>
+
     <!-- サイト全体改善 G｜共有された旅のリスト(?trip=)。公開中のお店・施設だけを、読み込み済みの一覧から出す(通信の追加なし)。 -->
     <section id="sharedTripSection" class="section shared-trip" aria-labelledby="sharedTripHeading" hidden>
       <h2 id="sharedTripHeading" data-i18n="shared_trip_heading">共有された旅のリスト</h2>
@@ -3665,43 +3635,7 @@
          キャッシュ・Luna調査ロジックには一切触れず、findingsの最小表示だけを
          行う。findingsが無い/取得できない場合はセクションごと非表示にする
          (既存のareaInfoSection等と同じ「空なら非表示」の慣習に合わせた)。 -->
-    <section
-      id="regionTodayInfoSection"
-      class="section"
-      style="display:none;"
-    >
 
-      <div class="section-header">
-
-        <div class="section-title-area">
-
-          <h2 data-i18n="region_today_info_heading">
-            今日、この地域で起きていること
-          </h2>
-
-        </div>
-
-      </div>
-
-      <div
-        id="regionTodayInfoLoading"
-        class="region-today-info-loading"
-        style="display:none;"
-        data-i18n="region_today_info_loading"
-      >
-        今日の地域情報を確認しています…
-      </div>
-
-      <div id="regionTodayInfoList"></div>
-
-      <button
-        type="button"
-        id="regionTodayInfoToggleButton"
-        class="region-today-info-toggle-button"
-        style="display:none;"
-      ></button>
-
-    </section>
 
     <!-- 初心回帰後の新トップ体験 Phase1｜街情報ボタン。全情報を旅行者へ
          押し付けず、興味を持った人だけが自分で開く入口。既存データを無理に
@@ -4399,7 +4333,7 @@
   <script src="firebase.js?v=20261115"></script>
 
   <!-- 固定UI文言専用の翻訳辞書(投稿本文は扱わない)。app.jsより先に読み込む -->
-  <script src="translations.js?v=20261115g"></script>
+  <script src="translations.js?v=20261115h"></script>
 
   <!-- 街の掲示板：全国市区町村の選択肢データ(静的・出典クレジットはフッター参照)。app.jsより先に読み込む -->
   <script src="japan-municipalities.js?v=20261115"></script>
@@ -4425,7 +4359,7 @@
       window.addEventListener("resize", sync);
     })();
   </script>
-  <script src="app.js?v=20261115h"></script>
+  <script src="app.js?v=20261115i"></script>
   <!-- Google Maps JavaScript APIは常時読み込まず、地図セクション到達時または
        GPS/トイレ検索操作時にapp.jsのensureGoogleMapsLoaded()が動的に読み込む -->
 </body>

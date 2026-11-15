@@ -26177,27 +26177,5 @@ function initTodayFeedUi() {
 
 initTodayFeedUi();
 
-// ヒーローの「他の地域を見てみる」ボタン(2026-11-15 代表指示で検索窓を廃止)。
-// 押すと今までどおり地域の選択(#heroActionArea のクリック処理)が開く。
-function initHeroAreaGuide() {
-  const guideButton =
-    document.getElementById("heroAreaGuideButton");
-
-  if (!guideButton) {
-    return;
-  }
-
-  guideButton.addEventListener(
-    "click",
-    function() {
-      const heroActionAreaElement =
-        document.getElementById("heroActionArea");
-
-      if (heroActionAreaElement) {
-        heroActionAreaElement.click();
-      }
-    }
-  );
-}
-
-initHeroAreaGuide();
+// ヒーローの街の名前のボタンは置かない(2026-11-15 代表決定：
+// 「現在地を取得する」を押させることに集中させるため)。
