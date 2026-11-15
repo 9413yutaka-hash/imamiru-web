@@ -22,6 +22,10 @@
 
     html {
       scroll-behavior: smooth;
+      /* iPhone Safari が横に長い要素の文字を勝手に拡大する仕様を止める
+         (ティッカーで項目ごとに文字の大きさがバラついた。2026-11-15)。 */
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
     }
 
     /* 【2026-11-15 撤去】横はみ出し防止に html,body へ overflow-x: clip を
