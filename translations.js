@@ -38,8 +38,8 @@ const MACHINAU_TRANSLATIONS = {
   // (STEP3の旧ヒーロー由来、参照箇所なし)とは別物。
   // サイト全体改善 第5弾｜代表採用のファーストビュー(見出し・補足・主ボタン「現在地から探す」)。
   hero_main_copy: {
-    ja: "もっと、<span class=\"hero-hl\">いい旅</span>になる。",
-    en: "Make your <span class=\"hero-hl\">trip</span> even better."
+    ja: "街の今を知れば、もっと、<span class=\"hero-hl\">いい旅</span>になる。",
+    en: "Know what's happening in town, for an even better <span class=\"hero-hl\">trip</span>."
   },
 
   // トップページ改修フェーズ1(モカ案ブレンド)｜主文と分けたサブコピーを
