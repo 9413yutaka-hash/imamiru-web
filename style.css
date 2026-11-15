@@ -3354,3 +3354,22 @@ body:has(#todayFeedSection) .hero-action-grid {
   font-weight: 800;
   color: var(--navy);
 }
+
+/* フィードの文字だけカード(案A・2026-11-15 代表決定)｜写真の無い投稿は
+   写真欄を出さず、バッジ類を本文の上に並べる。 */
+.feed-card-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.feed-card-chips .feed-badge,
+.feed-card-chips .feed-kind-tag,
+.feed-card-chips .feed-count-chip {
+  position: static;
+}
+
+.feed-card-textonly .feed-card-body {
+  padding: 14px 16px 16px;
+}
