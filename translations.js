@@ -5559,13 +5559,13 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_custom_menu_photo_change: {
-    ja: "写真を変える",
+    ja: "写真の変更",
     en: "Change photo"
   },
 
   store_custom_menu_photo_remove: {
-    ja: "写真を外す",
-    en: "Remove photo"
+    ja: "写真を消す",
+    en: "Delete photo"
   },
 
   store_custom_menu_up: {
