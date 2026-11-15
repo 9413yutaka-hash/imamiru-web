@@ -790,6 +790,54 @@
       display: none;
     }
 
+    .category-scroll-wrap {
+      position: relative;
+    }
+
+    /* 右に続きがあることを伝える(2026-11-15 代表決定): 右端を薄くし、
+       › の印を出す。続きが無い時と最後まで送った時は、印もフェードも
+       消える(JSの initCategoryScrollHint が has-more を付け外しする)。 */
+    .category-scroll-wrap.has-more .category-scroll {
+      -webkit-mask-image: linear-gradient(to right, #000 92%, transparent 99%);
+      mask-image: linear-gradient(to right, #000 92%, transparent 99%);
+    }
+
+    .category-scroll-hint {
+      position: absolute;
+      right: 3px;
+      top: calc(50% - 5px);
+      transform: translateY(-50%);
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--navy);
+      color: var(--white);
+      font-size: 19px;
+      font-weight: 900;
+      line-height: 28px;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(4, 45, 66, 0.35);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+
+    .category-scroll-wrap.has-more .category-scroll-hint {
+      opacity: 1;
+      animation: category-hint-nudge 1.8s ease-in-out infinite;
+    }
+
+    @keyframes category-hint-nudge {
+      0%, 100% { transform: translateY(-50%) translateX(0); }
+      50% { transform: translateY(-50%) translateX(3px); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .category-scroll-wrap.has-more .category-scroll-hint {
+        animation: none;
+      }
+    }
+
     .category-button {
       flex-shrink: 0;
       min-height: 41px;
