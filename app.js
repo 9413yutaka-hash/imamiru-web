@@ -26177,27 +26177,38 @@ function initTodayFeedUi() {
 
 initTodayFeedUi();
 
-// ヒーローの「他の地域を見てみる」ボタン(2026-11-15 代表指示で検索窓を廃止)。
-// 押すと今までどおり地域の選択(#heroActionArea のクリック処理)が開く。
-function initHeroAreaGuide() {
-  const guideButton =
-    document.getElementById("heroAreaGuideButton");
+// ヒーローの街チップ(モカ案作り変え 2026-11-15)｜押すと、その街を地域選択で
+// 選んだ時と同じ適用(街の選択+掲示板の読み込み)をして、お店の欄へ移る。
+function initHeroCityChips() {
+  document.querySelectorAll(
+    ".hero-city-chip"
+  ).forEach(function(chip) {
+    chip.addEventListener(
+      "click",
+      function() {
+        const cityName =
+          chip.getAttribute("data-city");
 
-  if (!guideButton) {
-    return;
-  }
+        if (!cityName) {
+          return;
+        }
 
-  guideButton.addEventListener(
-    "click",
-    function() {
-      const heroActionAreaElement =
-        document.getElementById("heroActionArea");
+        setSelectedShopRegion(
+          "沖縄県",
+          cityName
+        );
 
-      if (heroActionAreaElement) {
-        heroActionAreaElement.click();
+        loadCommunityBoardForSelectedArea(
+          "沖縄県",
+          cityName
+        );
+
+        scrollToHeroActionSection(
+          "shopsSection"
+        );
       }
-    }
-  );
+    );
+  });
 }
 
-initHeroAreaGuide();
+initHeroCityChips();

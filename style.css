@@ -3150,3 +3150,211 @@ body:has(#todayFeedSection) .hero-action-grid {
   aspect-ratio: 16 / 9;
   object-fit: cover;
 }
+
+/* ============================================================
+   モカ案作り変え(2026-11-15 代表指示)｜トップの見せ方をモカ案に寄せる。
+   ・今日のフィード: 大きな写真カード → 小さい写真+文章の行(Time Out式)
+   ・お店: スマホの横スライド → 大きな写真の縦並びカード(Airbnb式)
+   ・ヒーロー: 地域から探すリンク+街チップ+楽しみ方リンク
+   ・お店・施設の方へ: 紺カード+黄色ボタン(モカ案07)
+   データの取得・並び順・件数・押した時の動作は変えない(見た目だけ)。
+   ============================================================ */
+
+/* ---- 今日のフィードを行形式に ---- */
+.today-feed-grid {
+  grid-template-columns: 1fr;
+  max-width: 880px;
+  margin: 0 auto;
+  gap: 14px;
+}
+
+.feed-card {
+  flex-direction: row;
+  border-radius: 16px;
+}
+
+.feed-card-visual {
+  flex: 0 0 132px;
+  aspect-ratio: auto;
+  align-self: stretch;
+}
+
+@media (min-width: 700px) {
+  .feed-card-visual {
+    flex-basis: 184px;
+  }
+}
+
+.feed-card-emoji {
+  font-size: 40px;
+}
+
+.feed-badge {
+  top: 8px;
+  left: 8px;
+  font-size: 11px;
+  padding: 3px 9px;
+}
+
+.feed-kind-tag {
+  top: 8px;
+  right: 8px;
+  font-size: 11px;
+  padding: 3px 9px;
+}
+
+.feed-count-chip {
+  right: 8px;
+  bottom: 8px;
+  font-size: 11.5px;
+  padding: 4px 10px;
+}
+
+.feed-card-body {
+  padding: 12px 14px 14px;
+  gap: 6px;
+}
+
+.feed-card-meta {
+  font-size: 12.5px;
+  gap: 4px 10px;
+}
+
+.feed-card h3 {
+  font-size: 16.5px;
+  line-height: 1.5;
+}
+
+.feed-card-body p {
+  font-size: 13.5px;
+  line-height: 1.65;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.feed-card-foot {
+  margin-top: 4px;
+}
+
+/* ---- お店を縦並びの大きな写真カードに(スマホ) ---- */
+@media (max-width: 700px) {
+  #shopsList {
+    display: flex;
+    flex-direction: column;
+    overflow-x: visible;
+    scroll-snap-type: none;
+    gap: 16px;
+    padding-bottom: 0;
+  }
+
+  #shopsList .shop-card {
+    flex: none;
+    min-width: 0;
+    width: 100%;
+    scroll-snap-align: none;
+  }
+
+  #shopsList .shop-visual {
+    height: 208px;
+  }
+
+  #shopsList .shop-body {
+    padding: 14px 16px 16px;
+  }
+}
+
+/* ---- ヒーローの地域の入口 ---- */
+.hero-area-nav {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.hero-area-link {
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  font: inherit;
+  font-size: 15.5px;
+  font-weight: 800;
+  color: var(--white);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+
+.hero-city-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.hero-city-chip {
+  background: rgba(255, 255, 255, 0.18);
+  color: var(--white);
+  border: 1.5px solid rgba(255, 255, 255, 0.55);
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 13.5px;
+  border-radius: 999px;
+  padding: 7px 15px;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+}
+
+.hero-city-chip:hover {
+  background: rgba(255, 255, 255, 0.32);
+}
+
+.hero-howto-link {
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--white);
+  cursor: pointer;
+  opacity: 0.92;
+}
+
+/* ---- お店・施設の方へ(モカ案07) ---- */
+.shop-owner-cta {
+  background: var(--navy);
+  border-radius: 22px;
+  padding: 26px 22px;
+  margin-top: 18px;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+
+.shop-owner-cta h2 {
+  margin: 0 0 10px;
+  color: var(--white);
+  font-size: 21px;
+}
+
+.shop-owner-cta p {
+  margin: 0 auto 18px;
+  max-width: 560px;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.shop-owner-cta-button {
+  display: inline-block;
+  background: var(--yellow);
+  color: var(--navy);
+  font-weight: 900;
+  font-size: 15px;
+  border-radius: 999px;
+  padding: 12px 28px;
+  text-decoration: none;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+}
