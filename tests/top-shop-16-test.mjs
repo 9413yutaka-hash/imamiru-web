@@ -244,7 +244,7 @@ try {
     const v = await p.ev(`({ caption: ${text(".brand-caption")}, plan100: ${text(".plan-open")}, soon: [...document.querySelectorAll(".plan-soon")].map((e) => e.textContent.replace(/\\s+/g, " ").trim()), hScroll: document.documentElement.scrollWidth > innerWidth + 1 })`);
     t("B1 shop.html ヘッダー「街の「今」がわかる旅の案内所」", v.caption === "街の「今」がわかる旅の案内所", v.caption);
     // ---- ⑧ 申込みの案内(規約17条9項)
-    t("B2 100円：申込み受付中・初回請求 2026年12月2日予定・請求は未開始", /お申し込み受付中/.test(v.plan100) && /月額100円/.test(v.plan100) && /月額料金の実際の請求は、現在はまだ開始していません。最初の請求は、2026年12月2日に行う予定です。/.test(v.plan100), v.plan100);
+    t("B2 100円：申込み受付中・初回請求 2026年12月2日・11月分から請求", /お申し込み受付中/.test(v.plan100) && /月額100円/.test(v.plan100) && /月額料金は、2026年11月分から請求します。最初の請求は、2026年12月2日に行います。/.test(v.plan100), v.plan100);
     t("B3 500円：準備中(申込み不可)", v.soon.some((s) => /準備中/.test(s) && /月額500円/.test(s)), v.soon);
     t("B4 横スクロールなし", !v.hScroll, "");
     await p.close();
