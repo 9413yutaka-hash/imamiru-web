@@ -153,7 +153,7 @@
 
   <link
     rel="stylesheet"
-    href="style.css?v=20261115o"
+    href="style.css?v=20261115p"
   >
 
   <!-- トップページ改修(モカ案ブレンド・見た目)｜見出し用の丸ゴシック。
@@ -2755,16 +2755,9 @@
 
     </div>
 
-    <!-- トップページ改修(モカ案ブレンド・見た目)｜セクション移動チップ行。
-         既存セクションへのページ内リンクのみ(新しい表示切替は作らない)。
-         非表示中の枠へのリンクは、表示されるまで移動しない。 -->
-    <nav class="top-section-nav" aria-label="セクション移動">
-      <a href="#todayFeedSection" data-i18n="nav_feed">今日のフィード</a>
-      <a href="#todayFeedSection" id="topNavImadake" data-i18n="imadake_heading">今だけ投稿</a>
-      <a href="#regionRecommendationSection" data-i18n="nav_board">掲示板</a>
-      <a href="#shopsSection" data-i18n="nav_shops">お店</a>
-      <a href="#columnEntrySection" data-i18n="nav_columns">読みもの</a>
-    </nav>
+    <!-- セクション移動チップ行(ピル)は撤去(2026-11-15 代表決定・ピルの一本化)。
+         移動の入口は下部の固定バーに一本化した。フィード内の絞り込み
+         チップは残っているため、今だけ投稿への絞り込みも引き続きできる。 -->
 
   </header>
 
@@ -4385,7 +4378,7 @@
       window.addEventListener("resize", sync);
     })();
   </script>
-  <script src="app.js?v=20261115l"></script>
+  <script src="app.js?v=20261115m"></script>
   <!-- Google Maps JavaScript APIは常時読み込まず、地図セクション到達時または
        GPS/トイレ検索操作時にapp.jsのensureGoogleMapsLoaded()が動的に読み込む -->
 </body>

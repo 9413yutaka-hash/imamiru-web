@@ -2523,40 +2523,6 @@ body:has(#todayFeedSection) .top-pc-navigation {
   background: #e83e2c;
 }
 
-/* ヘッダー下のセクション移動チップ行(モックのチップナビ) */
-.top-section-nav {
-  display: none;
-}
-
-body:has(#todayFeedSection) .top-section-nav {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  width: min(100%, 920px);
-  margin: 0 auto;
-  padding: 0 18px 10px;
-  scrollbar-width: none;
-}
-
-body:has(#todayFeedSection) .top-section-nav::-webkit-scrollbar {
-  display: none;
-}
-
-body:has(#todayFeedSection) .top-section-nav a {
-  flex-shrink: 0;
-  padding: 7px 15px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
-  color: var(--white);
-  font-size: 13.5px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-body:has(#todayFeedSection) .top-section-nav a:hover {
-  background: rgba(255, 255, 255, 0.24);
-}
-
 @media (max-width: 560px) {
   .header-post-cta {
     min-height: 36px;
