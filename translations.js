@@ -3101,6 +3101,14 @@ const MACHINAU_TRANSLATIONS = {
     en: "Managed by the business"
   },
 
+  // 一覧の差別化(2026-11-15 代表決定)｜専用ページ(/shop/…)が公開されている
+  // お店だけに付ける印。一覧に出る正式店舗は公開条件(有料プラン有効を含む)を
+  // 満たした店だけなので、正式店舗のカードには常に出してよい。
+  shop_store_page_badge: {
+    ja: "専用ページあり",
+    en: "Store page"
+  },
+
   report_toggle_button: {
     ja: "🚩 気になる情報を報告",
     en: "🚩 Report this info"

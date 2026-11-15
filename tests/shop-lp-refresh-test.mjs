@@ -207,7 +207,7 @@ try {
     t(`B1 ${width}px：並び順・件数は今までどおり(距離順・15km の外の L3 は出さない・引き継がれた L1 は S1 に置き換わり重複しない)`, JSON.stringify(cards.map((c) => c.id)) === JSON.stringify(["sp_S1", "L2"]), cards.map((c) => c.id));
     t(`B2 ${width}px：横に2枚＋次の端(カードの幅＝(一覧の幅−34)/2)・写真の枠176px・はみ出しなし`, cards.every((c) => Math.abs(c.w - (listW - 34) / 2) <= 1.5 && c.photoH === 176 && !c.overflow), { listW, cards });
     t(`B3 ${width}px：運営掲載の見出しは写真の上ではなく店名の下に1行(⚡なし)・店主の店舗は見出しなし`, !l2.eventBadge && l2.headline === "ぜんざいとコーヒー" && l2.headlineBelowName && !s1.eventBadge && s1.headline === null, { l2, s1 });
-    t(`B4 ${width}px：最下段にラベル(店舗広告・店舗が管理・1行)、その下に距離・本文の補足と操作のボタンは出さない`, l2.label === "店舗広告" && s1.label === "店舗が管理" && /^📍 \d+m$/.test(l2.distance) && /^📍 \d+m$/.test(s1.distance) && l2.labelAbove && s1.labelAbove && cards.every((c) => c.hidden.length === 0 && c.bottomGap <= 14), cards);
+    t(`B4 ${width}px：最下段にラベル(マチナウ運営より・店舗が管理・1行)、その下に距離・本文の補足と操作のボタンは出さない`, l2.label === "🌺 マチナウ運営より" && s1.label === "店舗が管理" && /^📍 \d+m$/.test(l2.distance) && /^📍 \d+m$/.test(s1.distance) && l2.labelAbove && s1.labelAbove && cards.every((c) => c.hidden.length === 0 && c.bottomGap <= 14), cards);
     if (width === 390) {
       const fav = await p.ev(`(async () => { document.querySelector('#shopsList .shop-card[data-shop-id="L2"] .favorite-button').click(); await new Promise((r) => setTimeout(r, 400)); return document.querySelector('#shopsList .shop-card[data-shop-id="L2"] .favorite-button').classList.contains("active"); })()`);
       t("B5 ♡：押すとお気に入りになる(カードの詳細は開かない)", fav === true && (await p.ev(`getComputedStyle(document.getElementById("shopModal")).display === "none" || !document.getElementById("shopModal").classList.contains("active")`)), fav);
