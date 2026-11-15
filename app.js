@@ -25795,6 +25795,25 @@ function sortTodayFeedItems(
   return merged;
 }
 
+// 「この枠で見る」の飛び先が実在し、表示されている時だけリンクを出す
+// (2026-11-15 代表決定)。イベントの飛び先だった regionTodayInfoSection は
+// モカ案作り変え(PR #17)で無くなっており、押しても飛ばないリンクが
+// 残っていた。ティッカーのリンクも同じ判定でそろえる。
+function isTodayFeedTargetAvailable(targetId) {
+  if (!targetId) {
+    return false;
+  }
+
+  const element =
+    document.getElementById(targetId);
+
+  if (!element || element.hidden) {
+    return false;
+  }
+
+  return window.getComputedStyle(element).display !== "none";
+}
+
 function buildTodayFeedCardHtml(
   item,
   language
@@ -25903,23 +25922,27 @@ function buildTodayFeedCardHtml(
         (item.body !== ""
           ? "<p>" + escapeHtml(item.body) + "</p>"
           : "") +
-        '<div class="feed-card-foot">' +
-          (item.isOperator
-            ? '<span class="feed-attr">' +
-              escapeHtml(
-                getMachinauTranslation(
-                  "community_board_author_operator",
-                  language
-                )
-              ) +
-              "</span>"
-            : "") +
-          '<a class="feed-detail-link" href="#' + item.targetId + '">' +
-            escapeHtml(
-              getMachinauTranslation("feed_see_source", language)
-            ) +
-          "</a>" +
-        "</div>" +
+        (item.isOperator || isTodayFeedTargetAvailable(item.targetId)
+          ? '<div class="feed-card-foot">' +
+              (item.isOperator
+                ? '<span class="feed-attr">' +
+                  escapeHtml(
+                    getMachinauTranslation(
+                      "community_board_author_operator",
+                      language
+                    )
+                  ) +
+                  "</span>"
+                : "") +
+              (isTodayFeedTargetAvailable(item.targetId)
+                ? '<a class="feed-detail-link" href="#' + item.targetId + '">' +
+                    escapeHtml(
+                      getMachinauTranslation("feed_see_source", language)
+                    ) +
+                  "</a>"
+                : "") +
+            "</div>"
+          : "") +
       "</div>" +
     "</article>"
   );
@@ -25964,15 +25987,21 @@ function renderTodayTicker(
             ? (item.storeLine !== "" ? item.storeLine + " " : "") + item.title
             : (item.title !== "" ? item.title : item.body);
 
-        return (
-          "<a href=\"#" +
-          escapeHtml(item.targetId) +
-          "\"><b>" +
+        const tickerInner =
+          "<b>" +
           escapeHtml(label) +
           "｜</b>" +
-          escapeHtml(truncateTodayFeedText(headline, 44)) +
-          "</a>"
-        );
+          escapeHtml(truncateTodayFeedText(headline, 44));
+
+        return isTodayFeedTargetAvailable(item.targetId)
+          ? (
+            "<a href=\"#" +
+            escapeHtml(item.targetId) +
+            "\">" +
+            tickerInner +
+            "</a>"
+          )
+          : "<span>" + tickerInner + "</span>";
       })
       .join("");
 
