@@ -25878,18 +25878,101 @@ function renderTodayTicker(
           escapeHtml(item.targetId) +
           "\"><b>" +
           escapeHtml(label) +
-          "</b>" +
+          "｜</b>" +
           escapeHtml(truncateTodayFeedText(headline, 44)) +
           "</a>"
         );
       })
       .join("");
 
-  // ループ再生のため同じ並びを2つ続ける(CSSの translateX(-50%) と対応)。
+  // 自動送りのループのため同じ並びを2つ続ける(半分の位置で巻き戻すと
+  // 見た目がつながる)。手でスワイプして戻すこともできる。
   track.innerHTML =
     spansHtml + spansHtml;
 
   ticker.hidden = false;
+
+  startTodayTickerAutoScroll();
+}
+
+let todayTickerRafId = 0;
+let todayTickerResumeAt = 0;
+
+// ティッカーの自動送り：帯は横スクロール可能で、この処理が scrollLeft を
+// 少しずつ進める。触っている間と、触り終わってから3秒は止める。
+// 「視差効果を減らす」がONの場合は自動で流さない(手でスワイプできる)。
+function startTodayTickerAutoScroll() {
+  const ticker =
+    document.getElementById("todayTicker");
+
+  const track =
+    document.getElementById("todayTickerTrack");
+
+  if (!ticker || !track) {
+    return;
+  }
+
+  if (todayTickerRafId) {
+    cancelAnimationFrame(todayTickerRafId);
+    todayTickerRafId = 0;
+  }
+
+  if (!ticker.dataset.scrollBound) {
+    ticker.dataset.scrollBound = "1";
+
+    const pause = function() {
+      todayTickerResumeAt = Date.now() + 3000;
+    };
+
+    ticker.addEventListener("pointerdown", pause);
+    ticker.addEventListener("touchstart", pause, { passive: true });
+    ticker.addEventListener("touchend", pause);
+    ticker.addEventListener("pointerup", pause);
+    ticker.addEventListener("wheel", pause, { passive: true });
+  }
+
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    return;
+  }
+
+  requestAnimationFrame(function() {
+    const half =
+      track.scrollWidth / 2;
+
+    if (half <= ticker.clientWidth) {
+      return;
+    }
+
+    // 2つ目のコピーの手前から始めると、左へスワイプして
+    // 見逃した項目を戻って見る余地ができる。
+    ticker.scrollLeft =
+      half - ticker.clientWidth;
+
+    let last =
+      performance.now();
+
+    const step = function(now) {
+      const dt =
+        Math.min(now - last, 100);
+
+      last = now;
+
+      if (Date.now() >= todayTickerResumeAt && !document.hidden) {
+        ticker.scrollLeft +=
+          (dt / 1000) * 70;
+
+        if (ticker.scrollLeft >= half) {
+          ticker.scrollLeft -= half;
+        }
+      }
+
+      todayTickerRafId =
+        requestAnimationFrame(step);
+    };
+
+    todayTickerRafId =
+      requestAnimationFrame(step);
+  });
 }
 
 function renderTodayFeed() {
