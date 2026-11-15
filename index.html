@@ -153,7 +153,7 @@
 
   <link
     rel="stylesheet"
-    href="style.css?v=20261115b"
+    href="style.css?v=20261115d"
   >
 
   <!-- トップページ改修(モカ案ブレンド・見た目)｜見出し用の丸ゴシック。
@@ -1733,10 +1733,15 @@
     .travel-box-trip-share { margin-top: 18px; }
     .travel-box-share-note { margin: 8px 0 0; font-size: 13px; line-height: 1.6; color: var(--subtext, #55707a); }
     .travel-box-share-limit { margin: 6px 0 0; font-size: 13px; line-height: 1.6; font-weight: 700; color: #8a5a00; }
-    /* 共有リンクで開いた時に上部の固定バー(スマホ約110px・PC 57px)の下へ見出しが隠れないようにする。 */
-    .shared-trip { scroll-margin-top: 124px; }
-    @media (min-width: 701px) {
-      .shared-trip { scroll-margin-top: 76px; }
+    /* 共有リンクで開いた時に上部の固定バー(.top-bar)の下へ見出しが隠れないようにする。
+       バーの実高さは末尾のスクリプトで測って --header-h に入れる(折り返し・言語で変わるため固定値にしない)。 */
+    .shared-trip { scroll-margin-top: calc(var(--header-h, 110px) + 12px); }
+
+    /* セクション移動のズレ防止：チップ・下部ナビ・「元の投稿を見る」等のページ内移動で、
+       移動先の見出しが固定バー(.top-bar)の裏に隠れないよう、バー実高さ＋12pxの余白を持たせる。 */
+    main [id],
+    .opening-visual [id] {
+      scroll-margin-top: calc(var(--header-h, 110px) + 12px);
     }
 
     @media (min-width: 701px) {
@@ -4401,6 +4406,23 @@
   <script src="saved-items.js?v=20261115"></script>
 
   <!-- トップページの動き -->
+  <script>
+    // 上部固定バー(.top-bar)の実高さを測り、セクション移動時の
+    // scroll-margin-top(上のCSS)に --header-h として渡す。
+    // 折り返しや言語切替で高さが変わっても ResizeObserver が追随する。
+    (function () {
+      var bar = document.querySelector(".top-bar");
+      if (!bar) return;
+      var sync = function () {
+        document.documentElement.style.setProperty("--header-h", bar.offsetHeight + "px");
+      };
+      sync();
+      if ("ResizeObserver" in window) {
+        new ResizeObserver(sync).observe(bar);
+      }
+      window.addEventListener("resize", sync);
+    })();
+  </script>
   <script src="app.js?v=20261115c"></script>
   <!-- Google Maps JavaScript APIは常時読み込まず、地図セクション到達時または
        GPS/トイレ検索操作時にapp.jsのensureGoogleMapsLoaded()が動的に読み込む -->

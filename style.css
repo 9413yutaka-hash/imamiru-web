@@ -24,6 +24,13 @@
       scroll-behavior: smooth;
     }
 
+    /* 横にはみ出した要素で画面全体が左右にズレるのを防ぐ(全ページ共通)。
+       clip はスクロール領域を作らないため、sticky の固定表示を壊さない。 */
+    html,
+    body {
+      overflow-x: clip;
+    }
+
     body {
       margin: 0;
       padding-bottom: 92px;
