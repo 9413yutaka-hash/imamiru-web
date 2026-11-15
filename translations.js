@@ -5864,8 +5864,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_profile_publish_note_published: {
-    ja: "公開の設定が完了しています。旅行者向け画面への表示は準備中です。",
-    en: "Publishing is turned on. Display on the traveler pages is being prepared."
+    ja: "公開中です。お店の専用ページと、トップページのお店一覧に表示されています。",
+    en: "Your shop is public. It appears on its own page and in the shop listings on the top page."
   },
 
   store_profile_publish_note_blocked: {
@@ -5879,33 +5879,33 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_profile_publish_cond_photo: {
-    ja: "写真が1枚以上ある",
-    en: "At least one photo"
+    ja: "写真が1枚以上保存されている",
+    en: "At least one photo is saved"
   },
 
   store_profile_publish_cond_description: {
-    ja: "紹介文がある",
-    en: "A description"
+    ja: "紹介文が保存されている",
+    en: "A description is saved"
   },
 
   store_profile_publish_cond_moderation: {
-    ja: "保存した内容の確認が済んでいる",
-    en: "The saved content has been checked"
+    ja: "紹介文などの自動チェックが済んでいる",
+    en: "The automatic check of your saved text is done"
   },
 
   store_profile_publish_cond_owner: {
-    ja: "あなたがこの店舗・施設の管理者（オーナー）として有効",
-    en: "You are an active owner of this business"
+    ja: "あなたがこのお店の管理者として登録されている",
+    en: "You are registered as this shop's manager"
   },
 
   store_profile_publish_cond_store_active: {
-    ja: "店舗・施設の状態が有効",
-    en: "The business is active"
+    ja: "お店の登録が有効になっている",
+    en: "The shop's registration is active"
   },
 
   store_profile_publish_cond_location: {
-    ja: "所在地の位置情報が有効",
-    en: "The location is valid"
+    ja: "お店の場所が地図で登録されている",
+    en: "The shop's location is set on the map"
   },
 
   store_profile_publish_cond_country: {
@@ -5914,8 +5914,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_profile_publish_cond_duplicates: {
-    ja: "同じ店舗・施設の可能性がある掲載が解決している",
-    en: "Possible duplicate listings are resolved"
+    ja: "同じお店の掲載が重なっていない",
+    en: "There is no duplicate listing for this shop"
   },
 
   store_profile_publish_cond_plan: {
@@ -5924,18 +5924,18 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_profile_publish_fix_photo: {
-    ja: "「写真」に1枚以上追加して保存してください。",
-    en: "Add at least one photo and save."
+    ja: "『写真』に1枚以上追加して、『下書きを保存する』を押してください。",
+    en: "Add at least one photo under Photos, then press Save draft."
   },
 
   store_profile_publish_fix_description: {
-    ja: "「紹介文」を入力して保存してください。",
-    en: "Enter a description and save."
+    ja: "『紹介文』を入力して、『下書きを保存する』を押してください。",
+    en: "Write a description, then press Save draft."
   },
 
   store_profile_publish_fix_moderation: {
-    ja: "内容をもう一度保存してください。",
-    en: "Please save the content again."
+    ja: "『下書きを保存する』をもう一度押してください。",
+    en: "Press Save draft once more."
   },
 
   store_profile_publish_fix_owner: {
@@ -5964,13 +5964,25 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_profile_publish_fix_plan: {
-    ja: "非公開（月額100円の申込が必要）です。下の「店舗カード（月額100円・税込）」から申し込んでください。",
-    en: "Not public (a ¥100/month subscription is required). Please subscribe in \"Store card (¥100/month, tax included)\" below."
+    ja: "月額100円の申込が必要です。このページの『店舗カード（月額100円・税込）』から申し込んでください。",
+    en: "You need the ¥100 monthly plan. Apply from Store card (¥100/month, tax incl.) on this page."
+  },
+  store_profile_publish_fix_photo_unsaved: {
+    ja: "写真は入っていますが、まだ保存されていません。『下書きを保存する』を押してください。",
+    en: "Your photo is added but not saved yet. Press Save draft."
+  },
+  store_profile_publish_fix_photo_check: {
+    ja: "写真は保存されていますが、確認が通っていません。『下書きを保存する』をもう一度押してください。",
+    en: "Your photo is saved but has not passed the check. Press Save draft once more."
+  },
+  store_profile_publish_fix_description_unsaved: {
+    ja: "紹介文は入力されていますが、まだ保存されていません。『下書きを保存する』を押してください。",
+    en: "Your description is written but not saved yet. Press Save draft."
   },
 
   store_profile_publish_save_first: {
-    ja: "保存していない変更があります。先に保存してから公開してください。",
-    en: "You have unsaved changes. Please save them before publishing."
+    ja: "保存していない変更があります。上の『下書きを保存する』か『カスタマイズを保存する』を押してから、公開してください。",
+    en: "You have unsaved changes. Press \"Save draft\" or \"Save customization\" above first, then publish."
   },
 
   store_profile_publish_button: {

@@ -325,34 +325,6 @@
         <div id="identityMessage" class="message" role="status" aria-live="polite"></div>
       </section>
 
-      <!-- Phase 2D｜旅行者への公開。条件は保存済みの内容でサーバーが判定する(公開時にも再確認)。 -->
-      <section class="panel" id="publishSection">
-        <h2 data-i18n="store_profile_publish_heading">旅行者への公開</h2>
-        <span class="publish-state draft" id="publishStateText"></span>
-        <p class="hint" id="publishStateNote"></p>
-        <p class="publish-checklist-heading" data-i18n="store_profile_publish_checklist_heading">公開の条件</p>
-        <ul class="publish-checklist" id="publishChecklist"></ul>
-        <!-- STEP 56｜お店ごとの固定の公開ページ。店舗・施設名・写真・紹介文を変えても URL は変わらない。 -->
-        <div class="readonly-row store-page-row">
-          <span class="readonly-label" data-i18n="store_page_url_label">お店のページ（固定のURL）</span>
-          <a class="readonly-value" id="storePageLink" href="#" target="_blank" rel="noopener"></a>
-          <p class="hint" id="storePageNote"></p>
-          <button type="button" class="small-button" id="storePageCopyButton" data-i18n="store_page_copy_button">URLをコピー</button>
-          <span class="hint" id="storePageCopyStatus" role="status" aria-live="polite"></span>
-        </div>
-        <p class="message info" id="publishSaveFirstNote" data-i18n="store_profile_publish_save_first"></p>
-        <div id="publishMessage" class="message" role="status" aria-live="polite"></div>
-        <button type="button" class="primary-button" id="publishButton" data-i18n="store_profile_publish_button">旅行者に公開する</button>
-        <button type="button" class="secondary-button" id="unpublishButton" hidden data-i18n="store_profile_unpublish_button">非公開に戻す</button>
-      </section>
-
-      <!-- 店主向けプレビュー｜入力中の内容を公開ページと同じ並びで見せる(表示だけ。保存・公開の判定には使わない)。 -->
-      <section class="panel" id="previewSection">
-        <h2 data-i18n="store_profile_preview_heading">旅行者にはこう見えます</h2>
-        <p class="hint" style="margin: 0 0 10px;" data-i18n="store_profile_preview_note"></p>
-        <div class="store-preview" id="storePreview"></div>
-      </section>
-
       <p class="message info show" id="notEditableNote" hidden></p>
 
       <form id="profileForm" novalidate>
@@ -509,6 +481,37 @@
           <button type="submit" class="primary-button" id="customSaveButton" data-i18n="store_custom_save_button">カスタマイズを保存する</button>
           <button type="button" class="secondary-button" id="customReloadButton" hidden data-i18n="store_profile_reload_button">最新の内容を読み込む</button>
         </form>
+      </section>
+
+
+
+
+      <!-- 店主向けプレビュー｜入力中の内容を公開ページと同じ並びで見せる(表示だけ。保存・公開の判定には使わない)。 -->
+      <section class="panel" id="previewSection">
+        <h2 data-i18n="store_profile_preview_heading">旅行者にはこう見えます</h2>
+        <p class="hint" style="margin: 0 0 10px;" data-i18n="store_profile_preview_note"></p>
+        <div class="store-preview" id="storePreview"></div>
+      </section>
+
+      <!-- Phase 2D｜旅行者への公開。条件は保存済みの内容でサーバーが判定する(公開時にも再確認)。 -->
+      <section class="panel" id="publishSection">
+        <h2 data-i18n="store_profile_publish_heading">旅行者への公開</h2>
+        <span class="publish-state draft" id="publishStateText"></span>
+        <p class="hint" id="publishStateNote"></p>
+        <p class="publish-checklist-heading" data-i18n="store_profile_publish_checklist_heading">公開の条件</p>
+        <ul class="publish-checklist" id="publishChecklist"></ul>
+        <!-- STEP 56｜お店ごとの固定の公開ページ。店舗・施設名・写真・紹介文を変えても URL は変わらない。 -->
+        <div class="readonly-row store-page-row">
+          <span class="readonly-label" data-i18n="store_page_url_label">お店のページ（固定のURL）</span>
+          <a class="readonly-value" id="storePageLink" href="#" target="_blank" rel="noopener"></a>
+          <p class="hint" id="storePageNote"></p>
+          <button type="button" class="small-button" id="storePageCopyButton" data-i18n="store_page_copy_button">URLをコピー</button>
+          <span class="hint" id="storePageCopyStatus" role="status" aria-live="polite"></span>
+        </div>
+        <p class="message info" id="publishSaveFirstNote" data-i18n="store_profile_publish_save_first"></p>
+        <div id="publishMessage" class="message" role="status" aria-live="polite"></div>
+        <button type="button" class="primary-button" id="publishButton" data-i18n="store_profile_publish_button">旅行者に公開する</button>
+        <button type="button" class="secondary-button" id="unpublishButton" hidden data-i18n="store_profile_unpublish_button">非公開に戻す</button>
       </section>
     </div>
 
@@ -1064,6 +1067,21 @@
         return (publication.missing || []).length > 0 ? "blocked" : "published";
       }
 
+      // 条件が未達のときの直し方。写真・紹介文は「入れたのに✕」になりやすいので、
+      // 未保存かどうかで文言を変える(判定そのものは保存済みの内容でサーバーが行う)。
+      function publishFixText(code) {
+        if (code === "photo" && photoItems.length > 0) {
+          return t(dirty ? "store_profile_publish_fix_photo_unsaved" : "store_profile_publish_fix_photo_check");
+        }
+        if (code === "description" && dirty) {
+          const desc = document.getElementById("descriptionInput");
+          if (desc && desc.value.trim() !== "") {
+            return t("store_profile_publish_fix_description_unsaved");
+          }
+        }
+        return t("store_profile_publish_fix_" + code);
+      }
+
       function renderPublication() {
         renderStorePageUrl();
         const view = publicationView();
@@ -1096,7 +1114,7 @@
           if (!ok) {
             const fix = document.createElement("span");
             fix.className = "publish-fix";
-            fix.textContent = t("store_profile_publish_fix_" + code);
+            fix.textContent = publishFixText(code);
             body.appendChild(fix);
           }
           item.appendChild(mark);
