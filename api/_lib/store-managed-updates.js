@@ -105,6 +105,56 @@ function readUpdateId(body) {
   return body && typeof body.updateId === "string" && UPDATE_ID_PATTERN.test(body.updateId) ? body.updateId : "";
 }
 
+// mode: adminManagedStoreCustomGet (POST、運営のみ) { storeId }
+// 代行の画面用に、店舗の契約の種別と今の有料の内容を返す。
+export async function handleAdminManagedStoreCustomGet(request, response, deps) {
+  try {
+    const database = await requireAdminDatabase(request, response, deps);
+
+    if (!database) {
+      return;
+    }
+
+    const body = deps.readRequestBody(request) || {};
+    const storeId = typeof body.storeId === "string" ? body.storeId : "";
+
+    if (!STORE_ID_PATTERN.test(storeId)) {
+      return sendError(response, 400, "invalid_input", { field: "storeId" });
+    }
+
+    const snapshots = await Promise.all([
+      database.collection("storeAccounts").doc(storeId).get(),
+      database.collection(STORE_CUSTOM_PLANS_COLLECTION).doc(storeId).get(),
+      database.collection(STORE_CUSTOM_PROFILES_COLLECTION).doc(storeId).get()
+    ]);
+
+    if (!snapshots[0].exists) {
+      return sendError(response, 404, "store_not_found");
+    }
+
+    const account = snapshots[0].data() || {};
+    const plan = snapshots[1].exists ? snapshots[1].data() || {} : null;
+    const customData = snapshots[2].exists ? snapshots[2].data() || {} : {};
+
+    return response.status(200).json({
+      success: true,
+      storeId: storeId,
+      storeName: typeof account.storeName === "string" ? account.storeName : "",
+      planKind: plan ? normalizeStoreCustomPlanKind(plan.planKind) : null,
+      planStatus: plan && typeof plan.status === "string" ? plan.status : null,
+      custom: {
+        revision: readRevision(customData),
+        story: typeof customData.story === "string" ? customData.story : "",
+        menuItems: Array.isArray(customData.menuItems) ? customData.menuItems : [],
+        links: Array.isArray(customData.links) ? customData.links : []
+      }
+    });
+  } catch (error) {
+    console.error("運営代行：店舗の読み込みエラー：", error && error.message);
+    return sendError(response, 500, "server_error");
+  }
+}
+
 // mode: adminManagedUpdateCreate (POST、運営のみ) { storeId, custom: { story, menuItems, links } }
 // 更新案を作る。検証は店主本人の保存と同じものを通す。新しい商品写真は受け付けない。
 export async function handleAdminManagedUpdateCreate(request, response, deps) {

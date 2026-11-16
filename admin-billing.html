@@ -244,6 +244,49 @@
         <div id="customPlanReceiptProvisionList"></div>
       </div>
 
+      <!-- 運営管理（月額500円）の代行作業：変更依頼の台帳と、更新案（下書き→店舗へ送信→承認の記録→反映）。
+           承認は公式LINEで取り、返事の記録が無い更新案はサーバーが反映を止める。 -->
+      <div class="panel" id="managedPanel">
+        <h2>運営管理（代行・変更依頼）</h2>
+        <p class="note">運営管理（月額500円）の店舗の代行作業です。店舗IDを入れて読み込んでください。更新の内容は、公式LINEで店舗に送り、承認の返事をもらってから「承認された」を記録し、それから反映します。返事がなければ反映しません。変更依頼（1回1,000円）は、作業が終わったら「完了にする」を押してください（料金はその時点で確定し、その月の請求に合算されます）。</p>
+        <div class="button-row">
+          <label>店舗ID <input type="text" id="managedStoreIdInput" placeholder="店舗ID"></label>
+          <button id="managedLoadButton" class="secondary-button" type="button">読み込む</button>
+        </div>
+        <div id="managedMessage" class="message-box" role="status" aria-live="polite"></div>
+        <p id="managedStoreInfo" class="note"></p>
+
+        <div id="managedChangeSection" hidden>
+          <h3>変更依頼（1回1,000円）</h3>
+          <div class="button-row">
+            <label>メモ <input type="text" id="managedChangeNoteInput" placeholder="例：写真の差し替え"></label>
+            <button id="managedChangeCreateButton" class="secondary-button" type="button">変更依頼を受け付ける</button>
+          </div>
+          <div id="managedChangeList"></div>
+        </div>
+
+        <div id="managedUpdateSection" hidden>
+          <h3>代行の更新案（ストーリー・メニュー・リンク）</h3>
+          <p class="note">今の内容が入っています。直して「更新案を作る」を押すと下書きになります。商品写真は今ある写真だけ使えます（新しい写真の追加はできません。写真を外すことはできます）。</p>
+          <div class="field">
+            <label for="managedStoryInput">ストーリー</label>
+            <textarea id="managedStoryInput" rows="4" style="width: 100%;"></textarea>
+          </div>
+          <div id="managedMenuRows"></div>
+          <div class="button-row">
+            <button id="managedMenuAddButton" class="secondary-button" type="button">＋ 商品を追加</button>
+          </div>
+          <div id="managedLinkRows"></div>
+          <div class="button-row">
+            <button id="managedLinkAddButton" class="secondary-button" type="button">＋ リンクを追加</button>
+          </div>
+          <div class="button-row">
+            <button id="managedDraftCreateButton" class="primary-button" type="button">更新案を作る</button>
+          </div>
+          <div id="managedUpdateList"></div>
+        </div>
+      </div>
+
     </section>
 
   </main>
@@ -1280,6 +1323,262 @@
         line.textContent = new Date(item.providedAtMillis).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" }) + "｜" + item.invoiceId + "｜" + item.receiptNumber + "｜本人確認：" + item.verificationMethod + "（" + item.verificationNote + "）" + (item.issuedNow ? "｜この時に発行" : "") + (item.ownerAccountDeletionStatus ? "｜退会の状態：" + item.ownerAccountDeletionStatus : "");
         list.appendChild(line);
       });
+    });
+
+    // ===== 運営管理（代行・変更依頼） =====
+    const managedState = { storeId: "", photos: [] };
+    const MANAGED_CHANGE_STATUS = { requested: "受付", completed: "完了（月末締めで請求）", invoiced: "請求済み", canceled: "取り消し" };
+    const MANAGED_UPDATE_STATUS = { draft: "下書き", sent: "店舗へ送信済み", approved: "承認済み", rejected: "承認されなかった", applied: "反映済み", canceled: "取り消し" };
+    const MANAGED_LINK_TYPES = [["instagram", "Instagram"], ["website", "ウェブサイト"], ["reservation", "予約"], ["x", "X"], ["facebook", "Facebook"], ["tiktok", "TikTok"], ["youtube", "YouTube"], ["line", "LINE"], ["other", "その他"]];
+
+    function showManagedMessage(text, type) {
+      const box = document.getElementById("managedMessage");
+      box.textContent = text;
+      box.className = "message-box show " + (type || "info");
+    }
+
+    async function callManagedMode(payload) {
+      let idToken;
+
+      try {
+        idToken = await getAdminIdToken();
+      } catch (error) {
+        return { ok: false, message: error.message };
+      }
+
+      try {
+        const response = await fetch("/api/moderate-submission", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": "Bearer " + idToken },
+          body: JSON.stringify(payload)
+        });
+        const body = await response.json().catch(function() { return null; });
+
+        if (!response.ok || !body || body.success !== true) {
+          return { ok: false, message: (body && (body.message || body.reason)) || ("HTTP " + response.status) };
+        }
+
+        return { ok: true, body: body };
+      } catch (error) {
+        return { ok: false, message: "通信に失敗しました。" };
+      }
+    }
+
+    function managedMenuRow(item) {
+      const row = document.createElement("div");
+      row.className = "button-row managed-menu-row";
+      const name = document.createElement("input");
+      name.type = "text"; name.placeholder = "商品名"; name.value = item ? item.name || "" : "";
+      name.className = "managed-menu-name";
+      const price = document.createElement("input");
+      price.type = "text"; price.placeholder = "価格（例：950円）"; price.value = item ? item.priceText || "" : "";
+      price.className = "managed-menu-price";
+      const desc = document.createElement("input");
+      desc.type = "text"; desc.placeholder = "説明"; desc.value = item ? item.description || "" : "";
+      desc.className = "managed-menu-desc";
+      const photo = document.createElement("select");
+      photo.className = "managed-menu-photo";
+      const none = document.createElement("option");
+      none.value = ""; none.textContent = "写真なし";
+      photo.appendChild(none);
+      managedState.photos.forEach(function(p) {
+        const opt = document.createElement("option");
+        opt.value = p.publicId;
+        opt.textContent = "写真：" + p.publicId.split("/").pop();
+        photo.appendChild(opt);
+      });
+      if (item && item.photo && item.photo.publicId) {
+        photo.value = item.photo.publicId;
+      }
+      const del = document.createElement("button");
+      del.type = "button"; del.className = "secondary-button"; del.textContent = "削除";
+      del.addEventListener("click", function() { row.remove(); });
+      row.appendChild(name); row.appendChild(price); row.appendChild(desc); row.appendChild(photo); row.appendChild(del);
+      return row;
+    }
+
+    function managedLinkRow(link) {
+      const row = document.createElement("div");
+      row.className = "button-row managed-link-row";
+      const type = document.createElement("select");
+      type.className = "managed-link-type";
+      MANAGED_LINK_TYPES.forEach(function(pair) {
+        const opt = document.createElement("option");
+        opt.value = pair[0]; opt.textContent = pair[1];
+        type.appendChild(opt);
+      });
+      if (link && link.type) {
+        type.value = link.type;
+      }
+      const label = document.createElement("input");
+      label.type = "text"; label.placeholder = "表示名"; label.value = link ? link.label || "" : "";
+      label.className = "managed-link-label";
+      const url = document.createElement("input");
+      url.type = "text"; url.placeholder = "https://…"; url.value = link ? link.url || "" : "";
+      url.className = "managed-link-url";
+      const del = document.createElement("button");
+      del.type = "button"; del.className = "secondary-button"; del.textContent = "削除";
+      del.addEventListener("click", function() { row.remove(); });
+      row.appendChild(type); row.appendChild(label); row.appendChild(url); row.appendChild(del);
+      return row;
+    }
+
+    function renderManagedChangeList(requests) {
+      const list = document.getElementById("managedChangeList");
+      list.innerHTML = "";
+      (requests || []).forEach(function(req) {
+        const line = document.createElement("p");
+        line.className = "note";
+        line.textContent = (req.note || "（メモなし）") + "｜" + (MANAGED_CHANGE_STATUS[req.status] || req.status) + (req.status === "completed" || req.status === "invoiced" ? "｜1,000円" : "") + (req.completedMonth ? "｜完了：" + req.completedMonth : "");
+        if (req.status === "requested") {
+          const done = document.createElement("button");
+          done.type = "button"; done.className = "secondary-button"; done.textContent = "完了にする";
+          done.addEventListener("click", async function() {
+            if (!window.confirm("作業が完了したことにします。料金1,000円が確定します。よろしいですか。")) return;
+            const r = await callManagedMode({ mode: "adminStoreChangeRequestComplete", requestId: req.requestId });
+            showManagedMessage(r.ok ? "変更依頼を完了にしました。" : "失敗しました：" + r.message, r.ok ? "info" : "error");
+            if (r.ok) loadManagedStore();
+          });
+          const cancel = document.createElement("button");
+          cancel.type = "button"; cancel.className = "secondary-button"; cancel.textContent = "取り消し";
+          cancel.addEventListener("click", async function() {
+            const r = await callManagedMode({ mode: "adminStoreChangeRequestCancel", requestId: req.requestId });
+            showManagedMessage(r.ok ? "変更依頼を取り消しました。" : "失敗しました：" + r.message, r.ok ? "info" : "error");
+            if (r.ok) loadManagedStore();
+          });
+          line.appendChild(document.createTextNode(" "));
+          line.appendChild(done);
+          line.appendChild(document.createTextNode(" "));
+          line.appendChild(cancel);
+        }
+        list.appendChild(line);
+      });
+    }
+
+    function renderManagedUpdateList(updates) {
+      const list = document.getElementById("managedUpdateList");
+      list.innerHTML = "";
+      (updates || []).forEach(function(upd) {
+        const line = document.createElement("p");
+        line.className = "note";
+        const menuCount = upd.payload && Array.isArray(upd.payload.menuItems) ? upd.payload.menuItems.length : 0;
+        line.textContent = "更新案｜" + (MANAGED_UPDATE_STATUS[upd.status] || upd.status) + "｜商品 " + menuCount + " 件" + (upd.appliedRevision ? "｜反映済み revision " + upd.appliedRevision : "");
+        const addButton = function(label, mode, extra, confirmText) {
+          const btn = document.createElement("button");
+          btn.type = "button"; btn.className = "secondary-button"; btn.textContent = label;
+          btn.addEventListener("click", async function() {
+            if (confirmText && !window.confirm(confirmText)) return;
+            const r = await callManagedMode(Object.assign({ mode: mode, updateId: upd.updateId }, extra || {}));
+            showManagedMessage(r.ok ? "記録しました。" : "失敗しました：" + r.message, r.ok ? "info" : "error");
+            if (r.ok) loadManagedStore();
+          });
+          line.appendChild(document.createTextNode(" "));
+          line.appendChild(btn);
+        };
+        if (upd.status === "draft") {
+          addButton("店舗へ送った", "adminManagedUpdateMarkSent");
+          addButton("取り消し", "adminManagedUpdateCancel");
+        } else if (upd.status === "sent") {
+          addButton("承認された", "adminManagedUpdateRecordApproval", { approved: true });
+          addButton("承認されなかった", "adminManagedUpdateRecordApproval", { approved: false });
+        } else if (upd.status === "approved") {
+          addButton("反映する", "adminManagedUpdateApply", null, "承認された内容を公開に反映します。よろしいですか。");
+        }
+        list.appendChild(line);
+      });
+    }
+
+    async function loadManagedStore() {
+      const storeId = document.getElementById("managedStoreIdInput").value.trim();
+
+      if (!storeId) {
+        showManagedMessage("店舗IDを入れてください。", "error");
+        return;
+      }
+
+      const r = await callManagedMode({ mode: "adminManagedStoreCustomGet", storeId: storeId });
+
+      if (!r.ok) {
+        showManagedMessage("読み込めませんでした：" + r.message, "error");
+        return;
+      }
+
+      const body = r.body;
+      managedState.storeId = body.storeId;
+      managedState.photos = [];
+      (body.custom.menuItems || []).forEach(function(item) {
+        if (item && item.photo && item.photo.publicId) {
+          managedState.photos.push({ publicId: item.photo.publicId, url: item.photo.url });
+        }
+      });
+      document.getElementById("managedStoreInfo").textContent =
+        (body.storeName || body.storeId) + "｜契約：" + (body.planKind === "managed" ? "運営管理" : body.planKind === "self" ? "セルフ運用（100円）" : "契約なし") + (body.planStatus ? "（" + body.planStatus + "）" : "");
+      const isManaged = body.planKind === "managed";
+      document.getElementById("managedChangeSection").hidden = !isManaged;
+      document.getElementById("managedUpdateSection").hidden = !isManaged;
+
+      if (!isManaged) {
+        showManagedMessage("この店舗は運営管理の契約ではありません。代行の作業はできません。", "error");
+        return;
+      }
+
+      document.getElementById("managedStoryInput").value = body.custom.story || "";
+      const menuRows = document.getElementById("managedMenuRows");
+      menuRows.innerHTML = "";
+      (body.custom.menuItems || []).forEach(function(item) { menuRows.appendChild(managedMenuRow(item)); });
+      const linkRows = document.getElementById("managedLinkRows");
+      linkRows.innerHTML = "";
+      (body.custom.links || []).forEach(function(link) { linkRows.appendChild(managedLinkRow(link)); });
+
+      const changes = await callManagedMode({ mode: "adminStoreChangeRequestList", storeId: storeId });
+      if (changes.ok) renderManagedChangeList(changes.body.requests);
+      const updates = await callManagedMode({ mode: "adminManagedUpdateList", storeId: storeId });
+      if (updates.ok) renderManagedUpdateList(updates.body.updates);
+      showManagedMessage("読み込みました。", "info");
+    }
+
+    document.getElementById("managedLoadButton").addEventListener("click", loadManagedStore);
+    document.getElementById("managedChangeCreateButton").addEventListener("click", async function() {
+      const r = await callManagedMode({ mode: "adminStoreChangeRequestCreate", storeId: managedState.storeId, note: document.getElementById("managedChangeNoteInput").value });
+      showManagedMessage(r.ok ? "変更依頼を受け付けました。" : "失敗しました：" + r.message, r.ok ? "info" : "error");
+      if (r.ok) {
+        document.getElementById("managedChangeNoteInput").value = "";
+        loadManagedStore();
+      }
+    });
+    document.getElementById("managedMenuAddButton").addEventListener("click", function() {
+      document.getElementById("managedMenuRows").appendChild(managedMenuRow(null));
+    });
+    document.getElementById("managedLinkAddButton").addEventListener("click", function() {
+      document.getElementById("managedLinkRows").appendChild(managedLinkRow(null));
+    });
+    document.getElementById("managedDraftCreateButton").addEventListener("click", async function() {
+      const menuItems = [];
+      document.querySelectorAll(".managed-menu-row").forEach(function(row) {
+        const photoId = row.querySelector(".managed-menu-photo").value;
+        const photo = photoId ? managedState.photos.find(function(p) { return p.publicId === photoId; }) : null;
+        menuItems.push({
+          name: row.querySelector(".managed-menu-name").value,
+          priceText: row.querySelector(".managed-menu-price").value,
+          description: row.querySelector(".managed-menu-desc").value,
+          photo: photo ? { url: photo.url, publicId: photo.publicId } : null
+        });
+      });
+      const links = [];
+      document.querySelectorAll(".managed-link-row").forEach(function(row) {
+        links.push({
+          type: row.querySelector(".managed-link-type").value,
+          label: row.querySelector(".managed-link-label").value,
+          url: row.querySelector(".managed-link-url").value
+        });
+      });
+      const r = await callManagedMode({
+        mode: "adminManagedUpdateCreate",
+        storeId: managedState.storeId,
+        custom: { story: document.getElementById("managedStoryInput").value, menuItems: menuItems, links: links }
+      });
+      showManagedMessage(r.ok ? "更新案（下書き）を作りました。公式LINEで店舗に送ったら「店舗へ送った」を押してください。" : "失敗しました：" + r.message, r.ok ? "info" : "error");
+      if (r.ok) loadManagedStore();
     });
 
     // 画面の切り替えは運営のメールアドレスで判定する(最終的な権限確認はサーバーの requireAdmin)。
