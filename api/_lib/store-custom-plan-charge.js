@@ -52,6 +52,7 @@ import {
 import {
   STORE_CUSTOM_PLAN_CHARGE_ENABLED,
   STORE_CUSTOM_PLAN_MONTHLY_FEE_JPY,
+  storeCustomPlanFeeJpyForKind,
   STORE_CUSTOM_PLAN_PERIOD_MONTHLY,
   STORE_CUSTOM_PLAN_RETRY_DAYS,
   STORE_CUSTOM_PLAN_SUSPEND_DAYS
@@ -100,7 +101,7 @@ function isLateAutoCandidate(invoice, liveMode) {
   return liveMode === true &&
     invoice.status === "closed" &&
     invoice.createdInPreview !== true &&
-    Number(invoice.amountJpy) === STORE_CUSTOM_PLAN_MONTHLY_FEE_JPY &&
+    Number(invoice.amountJpy) === storeCustomPlanFeeJpyForKind(invoice.planKind) &&
     invoice.currency === "JPY" &&
     invoice.taxIncluded === true &&
     scheduledMs > 0 &&
@@ -189,7 +190,7 @@ function checkPlanInvoice(ledgerId, invoice) {
     return "invalid_invoice";
   }
 
-  if (Number(invoice.amountJpy) !== STORE_CUSTOM_PLAN_MONTHLY_FEE_JPY || Number(invoice.amountJpy) < STRIPE_MIN_AMOUNT_JPY) {
+  if (Number(invoice.amountJpy) !== storeCustomPlanFeeJpyForKind(invoice.planKind) || Number(invoice.amountJpy) < STRIPE_MIN_AMOUNT_JPY) {
     return "invalid_invoice_amount";
   }
 

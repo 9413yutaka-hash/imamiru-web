@@ -209,6 +209,15 @@ t("X1b Production の環境（請求のスイッチ開始済み）では、請�
 r = await call({ mode: "adminStoreCustomPlanCharge" }, "u1");
 t("X2 店主のアカウントでは請求の操作を呼べない", r.code === 401 || r.code === 403, r.code);
 
+// ===================== planKind (運営管理の基盤) =====================
+t("P0 料金の種別：self＝100円・managed＝500円・不明と未指定は self として扱う", B.storeCustomPlanFeeJpyForKind("self") === 100 && B.storeCustomPlanFeeJpyForKind("managed") === 500 && B.storeCustomPlanFeeJpyForKind(undefined) === 100 && B.storeCustomPlanFeeJpyForKind("unknown") === 100 && B.normalizeStoreCustomPlanKind("managed") === "managed" && B.normalizeStoreCustomPlanKind("x") === "self");
+seedStore("S12", "u1");
+NOW = jst(2026, 12, 5, 10, 0);
+S.docs.set("storeCustomPlanUsage/S12_2026-11", { storeId: "S12", planKind: "managed", month: "2026-11", holderUid: "u1", billingAccountUid: "u1", reason: "subscribed", firstUsageAt: Timestamp.fromMillis(jst(2026, 11, 10)), contractSubscribedAt: Timestamp.fromMillis(jst(2026, 11, 10)), createdInPreview: true, status: "accrued", invoiceId: null, laterHolderUids: [] });
+r = await call(CLOSE("2026-11", true), "admin");
+t("P1 運営管理(managed)の利用月の記録は、締めで500円・種別 managed の請求書になる", r.code === 200 && !!invoice("S12", "2026-11") && invoice("S12", "2026-11").amountJpy === 500 && invoice("S12", "2026-11").planKind === "managed" && invoice("S12", "2026-11").status === "closed", r.body);
+t("P2 種別を持たない既存の請求書は self のまま100円（P1 の締めでも変わらない）", invoice("S1", "2026-11").amountJpy === 100, invoice("S1", "2026-11"));
+
 // ===================== regressions / isolation =====================
 const IM = await import(REPO_URL + "/api/_lib/imadake.js");
 const MC = await import(REPO_URL + "/api/_lib/imadake-monthly-charge.js");

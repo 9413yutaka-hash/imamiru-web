@@ -75,6 +75,22 @@ export const STORE_CUSTOM_PLAN_PERIOD_PREVIEW_TRIAL = "preview_trial";
 export const STORE_CUSTOM_PLAN_PERIOD_MONTHLY = "monthly";
 
 export const STORE_CUSTOM_PLAN_MONTHLY_FEE_JPY = 100;
+// 料金の種別(運営管理の追加に伴う基盤)。self＝店主セルフ運用(月額100円)、managed＝運営管理(月額500円、
+// 100円分を含む)。既存の契約・利用月の記録・請求台帳は planKind を持たないため、self として扱う。
+export const STORE_CUSTOM_PLAN_KIND_SELF = "self";
+export const STORE_CUSTOM_PLAN_KIND_MANAGED = "managed";
+export const STORE_CUSTOM_PLAN_FEE_JPY_BY_KIND = {
+  [STORE_CUSTOM_PLAN_KIND_SELF]: STORE_CUSTOM_PLAN_MONTHLY_FEE_JPY,
+  [STORE_CUSTOM_PLAN_KIND_MANAGED]: 500
+};
+
+export function normalizeStoreCustomPlanKind(value) {
+  return value === STORE_CUSTOM_PLAN_KIND_MANAGED ? STORE_CUSTOM_PLAN_KIND_MANAGED : STORE_CUSTOM_PLAN_KIND_SELF;
+}
+
+export function storeCustomPlanFeeJpyForKind(value) {
+  return STORE_CUSTOM_PLAN_FEE_JPY_BY_KIND[normalizeStoreCustomPlanKind(value)];
+}
 // STEP 50-B(代表決定 2026-10-31)｜店舗カード月額契約(税込100円／店舗・暦月、月末締め・翌月2日請求・
 // 日割りなし、今だけ投稿とは別の請求)への同意の版。カード登録の同意(STORE_BILLING_CONSENT_VERSION)とは別。
 // 同意の文面を変えた時は版を上げる(古い版の申込は受け付けない)。
@@ -217,6 +233,7 @@ export function writeStoreCustomPlanUsage(transaction, usageRef, usageSnapshot, 
 
   transaction.set(usageRef, {
     storeId: entry.storeId,
+    planKind: normalizeStoreCustomPlanKind(entry.planKind),
     month: entry.month,
     holderUid: entry.holderUid,
     billingAccountUid: entry.holderUid,
@@ -316,6 +333,7 @@ async function ensureContinuationUsage(database, planDocument, monthKey, nowMill
       if (result === "create") {
         writeStoreCustomPlanUsage(transaction, usageRef, snapshots[2], {
           storeId: storeId,
+          planKind: plan.planKind,
           month: monthKey,
           holderUid: plan.ownerUid,
           reason: "continued",
@@ -373,8 +391,9 @@ async function closeUsageIntoInvoice(database, usageDocument, monthKey, closeRun
 
     return {
       storeId: storeId,
+      planKind: normalizeStoreCustomPlanKind(usage.planKind),
       month: monthKey,
-      amountJpy: STORE_CUSTOM_PLAN_MONTHLY_FEE_JPY,
+      amountJpy: storeCustomPlanFeeJpyForKind(usage.planKind),
       currency: "JPY",
       taxIncluded: true,
       holderUid: usage.holderUid,
@@ -439,7 +458,7 @@ async function closeUsageIntoInvoice(database, usageDocument, monthKey, closeRun
   counts[result] = (counts[result] || 0) + 1;
 
   if (result === "create") {
-    counts.amountJpy = (counts.amountJpy || 0) + STORE_CUSTOM_PLAN_MONTHLY_FEE_JPY;
+    counts.amountJpy = (counts.amountJpy || 0) + storeCustomPlanFeeJpyForKind((usageDocument.data() || {}).planKind);
   }
 
   return result;

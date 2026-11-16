@@ -39,6 +39,7 @@ import {
 import {
   STORE_CUSTOM_PLAN_PERIOD_MONTHLY,
   STORE_CUSTOM_PLAN_MONTHLY_SIGNUP_ENABLED,
+  STORE_CUSTOM_PLAN_KIND_SELF,
   STORE_CUSTOM_PLAN_MONTHLY_FEE_JPY,
   STORE_CARD_PLAN_CONSENT_VERSION,
   evaluateStoreCustomPlanAccess,
@@ -1037,6 +1038,7 @@ export function writeNewStoreCardPlanInTransaction(transaction, database, params
     ownerUid: uid,
     billingAccountUid: uid,
     periodKind: contractModel,
+    planKind: STORE_CUSTOM_PLAN_KIND_SELF,
     createdInPreview: createdInPreview,
     subscribedAt: Timestamp.fromMillis(nowMillis),
     accessUntil: monthly ? null : Timestamp.fromMillis(accessUntilMillis),
@@ -1186,6 +1188,7 @@ export async function handleStoreCustomPlanSubscribe(request, response, deps) {
           reactivated.accessUntil = null;
           writeStoreCustomPlanUsage(transaction, usageRef, usageSnapshot, {
             storeId: storeId,
+            planKind: planData.planKind,
             month: monthKey,
             holderUid: actor.uid,
             reason: "reactivated",
@@ -1242,6 +1245,7 @@ export async function handleStoreCustomPlanSubscribe(request, response, deps) {
           : previousCoversMonth
           ? {
               storeId: storeId,
+              planKind: planData ? planData.planKind : undefined,
               month: monthKey,
               holderUid: planData.ownerUid,
               laterHolderUids: planData.ownerUid !== actor.uid ? [actor.uid] : [],
@@ -1252,6 +1256,7 @@ export async function handleStoreCustomPlanSubscribe(request, response, deps) {
             }
           : {
               storeId: storeId,
+              planKind: planData ? planData.planKind : undefined,
               month: monthKey,
               holderUid: actor.uid,
               reason: "subscribed",
@@ -1267,6 +1272,7 @@ export async function handleStoreCustomPlanSubscribe(request, response, deps) {
         ownerUid: actor.uid,
         billingAccountUid: actor.uid,
         periodKind: contractModel,
+        planKind: STORE_CUSTOM_PLAN_KIND_SELF,
         createdInPreview: createdInPreview,
         subscribedAt: Timestamp.fromMillis(nowMillis),
         accessUntil: monthly ? null : Timestamp.fromMillis(accessUntilMillis),
@@ -1380,6 +1386,7 @@ export async function cancelStoreCustomPlan(database, storeId, uid, nowMillis) {
     if (monthly) {
       writeStoreCustomPlanUsage(transaction, usageRef, snapshots[2], {
         storeId: storeId,
+        planKind: planData.planKind,
         month: monthKey,
         holderUid: actor.uid,
         reason: "continued",
