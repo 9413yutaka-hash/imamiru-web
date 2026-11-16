@@ -3655,8 +3655,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_account_phase_note: {
-    ja: "現在ご利用いただけるのは、アカウントの作成・ログインと、店舗・施設の登録です。常設店舗情報の編集や投稿などの機能は、準備ができ次第このアカウントからご利用いただけるようになります。",
-    en: "For now, you can create an account, log in and register your shop or facility. Features such as editing your permanent shop information and posting will become available from this account once they are ready."
+    ja: "現在ご利用いただけるのは、アカウントの作成・ログインと、店舗・施設の登録です。お店の基本情報の編集や投稿などの機能は、準備ができ次第このアカウントからご利用いただけるようになります。",
+    en: "For now, you can create an account, log in and register your shop or facility. Features such as editing your shop's basic information and posting will become available from this account once they are ready."
   },
 
   store_account_title_login: {
@@ -4675,8 +4675,8 @@ const MACHINAU_TRANSLATIONS = {
     en: "Couldn't copy. Please press and hold or select the URL above to copy it."
   },
   store_page_note_published: {
-    ja: "旅行者に公開中です。このURLをLINE・Instagram・SNS・QRコードで共有できます。店舗・施設名・写真・紹介文を変えても、URLは変わりません。",
-    en: "Shown to travelers. You can share this URL on LINE, Instagram, other social media or as a QR code. It stays the same even if you change the name, photos or description."
+    ja: "公開中です。このURLをLINE・Instagram・SNS・QRコードで共有できます。店舗・施設名・写真・紹介文を変えても、URLは変わりません。",
+    en: "Published. You can share this URL on LINE, Instagram, other social media or as a QR code. It stays the same even if you change the name, photos or description."
   },
   store_page_note_draft: {
     ja: "公開されている間だけ、このURLでお店のページが開きます（今は開けません）。",
@@ -6515,7 +6515,7 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_delete_withdraw_guide_profile: {
-    ja: "店舗・施設の情報は非公開になっています。旅行者に表示するには、店舗の一覧の「常設店舗情報を編集する」から公開してください。",
+    ja: "店舗・施設の情報は非公開になっています。旅行者に表示するには、店舗の一覧の「お店の基本情報を編集する」から公開してください。",
     en: "Your business information is private. To show it to travelers, publish it from \"Edit shop profile\" in your business list."
   },
 
@@ -6525,7 +6525,7 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_delete_withdraw_guide_plan: {
-    ja: "有料のプランをご契約だった場合は解約されています。続ける場合は、「常設店舗情報を編集する」の画面から申し込み直してください。",
+    ja: "有料のプランをご契約だった場合は解約されています。続ける場合は、「お店の基本情報を編集する」の画面から申し込み直してください。",
     en: "If you had a paid plan, it has been canceled. To continue, sign up again from the \"Edit shop profile\" page."
   },
 
@@ -6612,18 +6612,18 @@ const MACHINAU_TRANSLATIONS = {
   // STEP 57｜手順の続き(月額プランの申し込みと公開)・店舗ごとの状態・引き継ぎの再開・管理の案内
 
   store_steps_publish: {
-    ja: "⑤ 店舗情報を編集して、旅行者に公開する",
-    en: "5. Edit your shop details and publish them to travelers"
+    ja: "⑤ 店舗情報を編集して、公開する",
+    en: "5. Edit your shop details and publish them"
   },
 
   store_list_public_visible: {
-    ja: "旅行者に公開中",
-    en: "Shown to travelers"
+    ja: "公開中",
+    en: "Published"
   },
 
   store_list_public_hidden: {
-    ja: "旅行者には公開されていません",
-    en: "Not shown to travelers"
+    ja: "まだ公開されていません",
+    en: "Not published yet"
   },
 
   store_list_plan_active: {
