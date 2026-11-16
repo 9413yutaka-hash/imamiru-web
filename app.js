@@ -3543,7 +3543,24 @@ const STORE_PROFILE_FEATURE_CODES = [
   "takeout",
   "delivery",
   "store_pickup",
-  "tax_free"
+  "tax_free",
+  "parking_free",
+  "parking_paid",
+  "barrier_free",
+  "no_smoking",
+  "smoking",
+  "table_seats",
+  "counter_seats",
+  "terrace_seats",
+  "tatami_seats",
+  "private_room",
+  "kids_menu",
+  "baby_chair",
+  "diaper_changing",
+  "reservations_ok",
+  "private_rental",
+  "english_menu",
+  "allergy_friendly"
 ];
 
 // 詳細の設備表示(テイクアウトは別の行で出すため除く)。

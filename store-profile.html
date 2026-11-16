@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex, nofollow">
   <meta name="theme-color" content="#071a33">
-  <title>常設店舗情報｜マチナウ</title>
+  <title>お店の基本情報｜マチナウ</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
 
   <!-- 正式店舗参加基盤 Phase 2B｜店舗自身による常設店舗情報の作成・編集。
@@ -275,7 +275,8 @@
         <button type="button" data-language="en" aria-pressed="false">English</button>
       </div>
     </div>
-    <h1 data-i18n="store_profile_heading">常設店舗情報</h1>
+    <h1 data-i18n="store_profile_heading">お店の基本情報</h1>
+    <p class="hint" data-i18n="store_profile_heading_note"></p>
   </header>
 
   <main>
@@ -355,11 +356,7 @@
 
         <section class="panel">
           <h2 data-i18n="store_profile_hours_heading">営業時間</h2>
-          <label class="check-line">
-            <input type="checkbox" id="hoursEnabledCheckbox">
-            <span data-i18n="store_profile_hours_enable">営業時間を設定する</span>
-          </label>
-          <div id="hoursEditor" hidden>
+          <div id="hoursEditor">
             <p class="hint" data-i18n="store_profile_hours_hint"></p>
             <div id="dayRows"></div>
             <div class="field" style="margin-top: 12px;">
@@ -404,12 +401,7 @@
         <section class="panel">
           <h2 data-i18n="store_profile_features_heading">設備・サービス</h2>
           <p class="hint" style="margin: 0 0 10px;" data-i18n="store_profile_features_hint"></p>
-          <span class="field-label" data-i18n="store_profile_features_primary">よく使われる項目</span>
-          <div class="check-group" id="featurePrimaryGroup"></div>
-          <details class="feature-more" id="featureMoreDetails">
-            <summary data-i18n="store_profile_features_more">その他の項目</summary>
-            <div class="check-group" id="featureOtherGroup"></div>
-          </details>
+          <div class="check-group" id="featureGroup"></div>
         </section>
 
         <section class="panel">
@@ -702,15 +694,19 @@
       // 選択肢(許可code)はサーバーの応答(loaded.options)だけから作る。ここで持つのは
       // 「カテゴリごとに先に見せる項目」という表示の並びだけ(保存できる項目は制限しない)。
       const FEATURE_PRIMARY_BY_CATEGORY = {
-        gourmet: ["dine_in", "takeout", "delivery", "parking", "kid_friendly", "wheelchair_accessible"],
-        cafe_sweets: ["dine_in", "takeout", "free_wifi", "power_outlets", "parking", "kid_friendly"],
-        nightlife: ["dine_in", "takeout", "parking", "free_wifi"],
-        shopping: ["tax_free", "delivery", "store_pickup", "parking", "wheelchair_accessible", "kid_friendly"],
-        sightseeing_experience: ["parking", "wheelchair_accessible", "kid_friendly", "pet_friendly", "free_wifi"],
-        beauty_relaxation: ["parking", "free_wifi", "kid_friendly", "wheelchair_accessible"],
-        lodging: ["parking", "free_wifi", "power_outlets", "wheelchair_accessible", "kid_friendly", "pet_friendly"],
-        other: ["parking", "free_wifi", "wheelchair_accessible", "kid_friendly"]
+        gourmet: ["dine_in", "takeout", "delivery", "parking_free", "kid_friendly", "barrier_free"],
+        cafe_sweets: ["dine_in", "takeout", "free_wifi", "power_outlets", "parking_free", "kid_friendly"],
+        nightlife: ["dine_in", "takeout", "parking_free", "free_wifi"],
+        shopping: ["tax_free", "delivery", "store_pickup", "parking_free", "barrier_free", "kid_friendly"],
+        sightseeing_experience: ["parking_free", "barrier_free", "kid_friendly", "pet_friendly", "free_wifi"],
+        beauty_relaxation: ["parking_free", "free_wifi", "kid_friendly", "barrier_free"],
+        lodging: ["parking_free", "free_wifi", "power_outlets", "barrier_free", "kid_friendly", "pet_friendly"],
+        other: ["parking_free", "free_wifi", "barrier_free", "kid_friendly"]
       };
+
+      // 置き換え済みの旧code。サーバーの決まりでcodeは追加のみ・改名しないため、新規の選択肢には出さない。
+      // すでに付けている店舗では、その店舗にだけチェック欄を残す(保存で消えたり表示が消えたりしないように)。
+      const LEGACY_FEATURE_CODES = ["parking", "wheelchair_accessible"];
 
       function getFeatureLabel(code) {
         return t("store_feature_" + code) || code;
@@ -745,11 +741,13 @@
       function renderFeatureAndLanguageChecks(profile, options) {
         const featureCodes = Array.isArray(profile.featureCodes) ? profile.featureCodes : [];
         const languageCodes = Array.isArray(profile.supportedLanguageCodes) ? profile.supportedLanguageCodes : [];
-        document.getElementById("featurePrimaryGroup").textContent = "";
-        const otherGroup = document.getElementById("featureOtherGroup");
-        otherGroup.textContent = "";
+        const featureGroup = document.getElementById("featureGroup");
+        featureGroup.textContent = "";
         (options.featureCodes || []).forEach(function (code) {
-          otherGroup.appendChild(createCodeCheckbox("data-feature", code, getFeatureLabel(code), featureCodes.includes(code)));
+          if (LEGACY_FEATURE_CODES.includes(code) && !featureCodes.includes(code)) {
+            return;
+          }
+          featureGroup.appendChild(createCodeCheckbox("data-feature", code, getFeatureLabel(code), featureCodes.includes(code)));
         });
         const languageGroup = document.getElementById("languageGroup");
         languageGroup.textContent = "";
@@ -759,14 +757,13 @@
         arrangeFeaturesForCategory();
       }
 
-      // カテゴリに合わせて「よく使われる項目」「その他の項目」へ並べ替える。
+      // カテゴリに合わせて、よく使う項目を先頭へ並べ替える(区切りは作らず、全部を常時表示する)。
       // 要素を移動するだけなので、チェック済みの値は消えない。
       function arrangeFeaturesForCategory() {
         const category = document.getElementById("categorySelect").value;
         const primaryCodes = FEATURE_PRIMARY_BY_CATEGORY[category] || FEATURE_PRIMARY_BY_CATEGORY.other;
-        const primaryGroup = document.getElementById("featurePrimaryGroup");
-        const otherGroup = document.getElementById("featureOtherGroup");
-        const items = Array.from(document.querySelectorAll("[data-feature]")).map(function (input) {
+        const group = document.getElementById("featureGroup");
+        const items = Array.from(group.querySelectorAll("[data-feature]")).map(function (input) {
           return input.closest("label");
         });
         const codeOf = function (item) {
@@ -775,18 +772,14 @@
         primaryCodes.forEach(function (code) {
           const item = items.find(function (candidate) { return codeOf(candidate) === code; });
           if (item) {
-            primaryGroup.appendChild(item);
+            group.appendChild(item);
           }
         });
         items.forEach(function (item) {
           if (!primaryCodes.includes(codeOf(item))) {
-            otherGroup.appendChild(item);
+            group.appendChild(item);
           }
         });
-        // 「その他」にチェック済みの項目があれば、見えるように開いておく。
-        if (otherGroup.querySelector("input:checked")) {
-          document.getElementById("featureMoreDetails").open = true;
-        }
       }
 
       // サーバーが許可した一覧の順で、チェックされたcodeだけを返す。
@@ -897,8 +890,6 @@
 
       function renderHours(businessHours) {
         const enabled = !!businessHours;
-        document.getElementById("hoursEnabledCheckbox").checked = enabled;
-        document.getElementById("hoursEditor").hidden = !enabled;
         const container = document.getElementById("dayRows");
         container.textContent = "";
         WEEKDAY_CODES.forEach(function (day) {
@@ -909,7 +900,23 @@
 
       // 入力欄 → 保存形式。時刻の片方だけが入っている等は null(=入力エラー)を返す。
       function readHours() {
-        if (!document.getElementById("hoursEnabledCheckbox").checked) {
+        // 入力欄は常時表示。どの曜日も未入力なら「設定なし(null)」、1つでも入力があれば全曜日ぶんを検証する。
+        let anyInput = false;
+        for (const day of WEEKDAY_CODES) {
+          const probe = document.querySelector('.day-row[data-day="' + day + '"]');
+          if (!probe) {
+            continue;
+          }
+          if (probe.querySelector(".day-closed").checked || probe.querySelector(".day-allday").checked) {
+            anyInput = true;
+          }
+          probe.querySelectorAll(".range-line").forEach(function (line) {
+            if (line.querySelector(".range-open").value !== "" || line.querySelector(".range-close").value !== "") {
+              anyInput = true;
+            }
+          });
+        }
+        if (!anyInput) {
           return { ok: true, value: null };
         }
         const weekly = {};
@@ -1222,9 +1229,16 @@
           return;
         }
         const location = loaded.location || {};
+        // 表示形は「日本、〒900-0015 沖縄県那覇市久茂地…」にそろえる。国名は将来の国外対応のため残し、
+        // 住所(formattedAddress)側の国名と重ならないようにする。プレビューの住所行もこの文字列を使う。
+        const countryName = getCountryDisplayName(location.countryCode);
+        let addressText = location.formattedAddress || "";
+        if (countryName && addressText.indexOf(countryName) === 0) {
+          addressText = addressText.slice(countryName.length).replace(/^[、,\s]+/, "");
+        }
+        const fallbackArea = [location.prefecture, location.city].filter(Boolean).join(" ");
         document.getElementById("storeLocationText").textContent =
-          [getCountryDisplayName(location.countryCode), location.prefecture, location.city].filter(Boolean).join(" ") +
-          (location.formattedAddress ? "（" + location.formattedAddress + "）" : "");
+          [countryName, addressText || fallbackArea].filter(Boolean).join("、");
       }
 
       // ===== STEP 56｜店舗・施設名と所在地の変更・お店のページの固定の URL =====
@@ -2705,7 +2719,7 @@
         // お店の情報(支払い方法・設備・対応言語)。
         const infoGroups = [
           { headingKey: "store_profile_payment_heading", labels: checkedLabels(["paymentGroup"]) },
-          { headingKey: "store_profile_features_heading", labels: checkedLabels(["featurePrimaryGroup", "featureOtherGroup"]) },
+          { headingKey: "store_profile_features_heading", labels: checkedLabels(["featureGroup"]) },
           { headingKey: "store_profile_languages_heading", labels: checkedLabels(["languageGroup"]) }
         ].filter(function (group) { return group.labels.length > 0; });
         if (infoGroups.length > 0) {
@@ -2791,6 +2805,7 @@
         document.querySelectorAll("[data-day-option]").forEach(function (element) {
           element.textContent = t(element.getAttribute("data-day-option") === "closed" ? "store_profile_day_closed" : "store_profile_day_allday");
         });
+        document.getElementById("descriptionInput").placeholder = t("store_profile_description_placeholder");
         document.querySelectorAll(".social-type").forEach(function (select) {
           Array.from(select.options).forEach(function (option) {
             option.textContent = t("store_profile_social_" + option.value);
@@ -2874,9 +2889,6 @@
               row.querySelector(".day-closed").checked = false;
             }
             updateDayRow(row);
-          }
-          if (event.target.id === "hoursEnabledCheckbox") {
-            document.getElementById("hoursEditor").hidden = !event.target.checked;
           }
           if (event.target.id === "categorySelect") {
             // 並びだけを変える。選択済みの設備・サービスは消さない。
