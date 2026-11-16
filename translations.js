@@ -4679,8 +4679,8 @@ const MACHINAU_TRANSLATIONS = {
     en: "Shown to travelers. You can share this URL on LINE, Instagram, other social media or as a QR code. It stays the same even if you change the name, photos or description."
   },
   store_page_note_draft: {
-    ja: "旅行者に公開されている間だけ、このURLでお店のページが開きます（今は開けません）。",
-    en: "Your shop page opens at this URL only while it is shown to travelers (it can't be opened right now)."
+    ja: "公開されている間だけ、このURLでお店のページが開きます（今は開けません）。",
+    en: "Your shop page opens at this URL only while it is published (it can't be opened right now)."
   },
   store_management_pricing_note: {
     ja: "マチナウの店舗管理サービスは月額100円（税込）です。新規店舗登録も、掲載済み店舗の引き継ぎも、同じ料金・同じ条件です。店舗情報の登録・編集・公開には、メールアドレスの確認・クレジットカードの登録・月額100円の契約が必要です（契約の前に店舗情報を保存・編集することはできません）。アカウントの作成とクレジットカードの登録だけでは料金はかかりません。料金は、お店・施設の登録・引き継ぎと同時に申し込む月額100円の契約からかかります。",
@@ -4727,8 +4727,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_profile_preview_heading: {
-    ja: "プレビュー（公開すると、こう見えます）",
-    en: "Preview (how it will look when published)"
+    ja: "プレビュー（公開したときの見え方）",
+    en: "Preview (how it looks when published)"
   },
 
   store_profile_preview_note: {
@@ -4792,8 +4792,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_profile_contact_hint: {
-    ja: "電話番号・予約ページ・SNSは、お店のページの「電話・予約・SNS」に出ます。旅行者がそのまま電話や予約に進めます。",
-    en: "Your phone number, booking page and social links appear under \"Phone, bookings & social\" on your page, so travelers can call or book right away."
+    ja: "電話番号・予約ページ・SNSは、お店のページの「電話・予約・SNS」に出ます。お客さんがそのまま電話や予約に進めます。",
+    en: "Your phone number, booking page and social links appear under \"Phone, bookings & social\" on your page, so customers can call or book right away."
   },
 
   store_profile_payment_hint: {
@@ -5951,8 +5951,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_profile_publish_heading: {
-    ja: "旅行者への公開",
-    en: "Showing to travelers"
+    ja: "公開",
+    en: "Publish"
   },
 
   store_profile_publish_state_draft: {
