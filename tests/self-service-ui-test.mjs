@@ -137,7 +137,7 @@ try {
   const enCards = await cards(p);
   st = await steps(p);
   const enHelp = await p.ev(`document.getElementById("storeManagementHelpNote").textContent`);
-  t("S16 英語：状態・手続きの案内・手順④⑤が英語", enCards.some((x) => x.plan === "¥100/month plan: subscribed") && enCards.some((x) => x.visible === "Shown to travelers") && /Delete account/.test(enHelp) && st.length === 5 && /^4\. Agree/.test(st[3].text) && /^5\. /.test(st[4].text),{ enCards, st: st.map((s) => s.text), enHelp });
+  t("S16 英語：状態・手続きの案内・手順④⑤が英語", enCards.some((x) => x.plan === "¥100/month plan: subscribed") && enCards.some((x) => x.visible === "Published") && /Delete account/.test(enHelp) && st.length === 5 && /^4\. Agree/.test(st[3].text) && /^5\. /.test(st[4].text),{ enCards, st: st.map((s) => s.text), enHelp });
   await p.close();
   t("S17 外部への通信なし(試験の偽物以外)", otherNetwork === 0, otherNetwork);
 } finally {
