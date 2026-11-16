@@ -141,7 +141,7 @@ t("C11 解約の取り消し：reactivated の履歴と契約の文書に同意�
 // ===================== D. card registration alone never creates a contract =====================
 const libDir = join(REPO_ROOT, "api", "_lib");
 const writers = readdirSync(libDir).filter((f) => f.endsWith(".js") && /storeCustomPlans"|STORE_CUSTOM_PLANS_COLLECTION/.test(readFileSync(join(libDir, f), "utf8")));
-t("D1 storeCustomPlans を扱うのは店舗カード契約・請求・公開判定と変更依頼のファイルだけ（カード登録・新規登録・引き継ぎ・今だけ投稿には無い）", JSON.stringify(writers.sort()) === JSON.stringify(["store-change-requests.js", "store-custom-plan-billing.js", "store-custom-plan-charge.js", "store-custom-profile.js", "store-profile.js"]), writers);
+t("D1 storeCustomPlans を扱うのは店舗カード契約・請求・公開判定・変更依頼・運営代行のファイルだけ（カード登録・新規登録・引き継ぎ・今だけ投稿には無い）", JSON.stringify(writers.sort()) === JSON.stringify(["store-change-requests.js", "store-custom-plan-billing.js", "store-custom-plan-charge.js", "store-custom-profile.js", "store-managed-updates.js", "store-profile.js"]), writers);
 t("D2 公開判定(store-profile.js)は storeCustomPlans を読むだけ（書き込まない）", !/STORE_CUSTOM_PLANS_COLLECTION\)\.doc\([^)]*\)\.(set|update)|transaction\.(set|update)\(planRef/.test(readFileSync(join(libDir, "store-profile.js"), "utf8")));
 t("D3 カード登録済みでも契約の無いアカウント（uy）には契約が無い", ![...S.docs.keys()].some((k) => k.startsWith("storeCustomPlans/") && (S.docs.get(k) || {}).ownerUid === "uy"));
 t("D4 店舗カードの同意の版はカード登録の同意の版と別", CONSENT !== (await import(REPO_URL + "/api/_lib/store-billing.js")).STORE_BILLING_CONSENT_VERSION);

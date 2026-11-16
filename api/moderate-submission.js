@@ -158,6 +158,16 @@ import {
   handleAdminStoreChangeRequestList
 } from "./_lib/store-change-requests.js";
 
+// 運営管理の代行編集(更新案・承認の記録・反映)。操作は運営のみ、反映は承認の記録がある時だけ。
+import {
+  handleAdminManagedUpdateCreate,
+  handleAdminManagedUpdateMarkSent,
+  handleAdminManagedUpdateRecordApproval,
+  handleAdminManagedUpdateApply,
+  handleAdminManagedUpdateCancel,
+  handleAdminManagedUpdateList
+} from "./_lib/store-managed-updates.js";
+
 // STEP 44-C④｜月額100円カスタマイズの請求(Stripe PaymentIntent)・未払い・本人認証。
 import {
   handleAdminStoreCustomPlanChargeRun,
@@ -32086,6 +32096,12 @@ export default async function handler(
       adminStoreChangeRequestComplete: handleAdminStoreChangeRequestComplete,
       adminStoreChangeRequestCancel: handleAdminStoreChangeRequestCancel,
       adminStoreChangeRequestList: handleAdminStoreChangeRequestList,
+      adminManagedUpdateCreate: handleAdminManagedUpdateCreate,
+      adminManagedUpdateMarkSent: handleAdminManagedUpdateMarkSent,
+      adminManagedUpdateRecordApproval: handleAdminManagedUpdateRecordApproval,
+      adminManagedUpdateApply: handleAdminManagedUpdateApply,
+      adminManagedUpdateCancel: handleAdminManagedUpdateCancel,
+      adminManagedUpdateList: handleAdminManagedUpdateList,
       adminStoreCustomPlanCharge: handleAdminStoreCustomPlanChargeRun,
       storeCustomPlanInvoiceList: handleStoreCustomPlanInvoiceList,
       adminStoreCustomPlanInvoiceList: handleAdminStoreCustomPlanInvoiceList,
