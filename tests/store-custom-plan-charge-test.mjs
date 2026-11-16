@@ -262,6 +262,19 @@ r = await RUN({ month: "2026-09" });
 r = await RUN({ month: "2026-09" });
 t("N3 人の確認待ちは何度実行しても自動で送り直さない", ST.creates === cN && inv("Z_2026-09").status === "needs_review" && plan("Z").paymentStatus === "current");
 
+// ===================== 運営管理＋変更依頼の合算請求書 =====================
+seedStore("M9", "u6"); card("u6");
+S.docs.set("storeCustomPlans/M9", { ...plan("M9"), planKind: "managed" });
+seedInvoice("M9", "2026-12", "u6", { planKind: "managed", planFeeJpy: 500, changeRequestJpy: 2000, changeRequestCount: 2, amountJpy: 2500, closedAt: Timestamp.fromMillis(jst(2027, 1, 1, 0, 30)) });
+seedStore("M8", "u8"); card("u8");
+S.docs.set("storeCustomPlans/M8", { ...plan("M8"), planKind: "managed" });
+seedInvoice("M8", "2026-12", "u8", { planKind: "managed", planFeeJpy: 500, changeRequestJpy: 2000, changeRequestCount: 2, amountJpy: 2600, closedAt: Timestamp.fromMillis(jst(2027, 1, 1, 0, 30)) });
+NOW = jst(2027, 2, 1, 10);
+ST.modes = ["succeed"];
+r = await RUN({ month: "2026-12" });
+t("P2-1 運営管理＋変更依頼の合算請求書（500＋2,000＝2,500円）は、合算した金額のまま請求できる", inv("M9_2026-12").status === "paid" && ST.pis.get(inv("M9_2026-12").paymentIntentId).amount === 2500, inv("M9_2026-12"));
+t("P2-2 内訳と合計が合わない請求書（500＋2,000≠2,600円）は請求しない", inv("M8_2026-12").status !== "paid" && inv("M8_2026-12").paymentIntentId === "", inv("M8_2026-12"));
+
 // ===================== admin list / flags / isolation =====================
 const al = await call({ mode: "adminStoreCustomPlanInvoiceList" }, "admin");
 t("L1 運営の請求台帳：決済失敗・結果不明・再試行の状況（試行・再試行・次の再試行・停止の予定）", al.code === 200 && al.body.invoices.some((x) => x.invoiceId === "Bf_2026-10" && x.status === "paid" && x.chargeAttempt === 4 && x.retryCount === 2) && al.body.invoices.some((x) => x.invoiceId === "Z_2026-09" && x.status === "needs_review"), al.body.invoices.slice(0, 3));

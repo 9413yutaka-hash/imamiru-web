@@ -150,6 +150,14 @@ import {
   handleAdminStoreCustomPlanInvoiceList
 } from "./_lib/store-custom-plan-billing.js";
 
+// 運営管理の変更依頼(1回1,000円)の台帳。状態の操作は運営のみ。締めでの合算は月末締めが行う。
+import {
+  handleAdminStoreChangeRequestCreate,
+  handleAdminStoreChangeRequestComplete,
+  handleAdminStoreChangeRequestCancel,
+  handleAdminStoreChangeRequestList
+} from "./_lib/store-change-requests.js";
+
 // STEP 44-C④｜月額100円カスタマイズの請求(Stripe PaymentIntent)・未払い・本人認証。
 import {
   handleAdminStoreCustomPlanChargeRun,
@@ -32074,6 +32082,10 @@ export default async function handler(
       // STEP 44-C③｜月末締め(運営のみ・既定は試算)、請求(フラグ false の間は必ず拒否・Stripe へ接続しない)、
       // 請求台帳の一覧(店主は自分が請求先の分だけ／運営は読み取り専用)。
       adminStoreCustomPlanMonthlyClose: handleAdminStoreCustomPlanMonthlyClose,
+      adminStoreChangeRequestCreate: handleAdminStoreChangeRequestCreate,
+      adminStoreChangeRequestComplete: handleAdminStoreChangeRequestComplete,
+      adminStoreChangeRequestCancel: handleAdminStoreChangeRequestCancel,
+      adminStoreChangeRequestList: handleAdminStoreChangeRequestList,
       adminStoreCustomPlanCharge: handleAdminStoreCustomPlanChargeRun,
       storeCustomPlanInvoiceList: handleStoreCustomPlanInvoiceList,
       adminStoreCustomPlanInvoiceList: handleAdminStoreCustomPlanInvoiceList,

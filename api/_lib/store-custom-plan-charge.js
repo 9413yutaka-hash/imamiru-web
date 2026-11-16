@@ -93,6 +93,15 @@ export const STORE_CUSTOM_PLAN_LATE_AUTO_CHARGE_MAX_DAYS = 7;
 export const STORE_CUSTOM_PLAN_LATE_AUTO_REASON = "late_auto";
 const USAGE_COLLECTION = "storeCustomPlanUsage";
 
+// 請求書の金額の内訳が正しいか(月額料金＋変更依頼の合算)。内訳の項目が無い古い請求書は、合計＝月額料金として扱う。
+function invoiceAmountsAreValid(invoice) {
+  const planFeeJpy = Number.isInteger(invoice.planFeeJpy) ? invoice.planFeeJpy : Number(invoice.amountJpy);
+  const changeRequestJpy = Number.isInteger(invoice.changeRequestJpy) ? invoice.changeRequestJpy : 0;
+
+  return planFeeJpy === storeCustomPlanFeeJpyForKind(invoice.planKind) &&
+    Number(invoice.amountJpy) === planFeeJpy + changeRequestJpy;
+}
+
 // 読まずに判断できる条件(請求書だけ)。
 function isLateAutoCandidate(invoice, liveMode) {
   const scheduledMs = millisOf(invoice.chargeScheduledAt);
@@ -101,7 +110,7 @@ function isLateAutoCandidate(invoice, liveMode) {
   return liveMode === true &&
     invoice.status === "closed" &&
     invoice.createdInPreview !== true &&
-    Number(invoice.amountJpy) === storeCustomPlanFeeJpyForKind(invoice.planKind) &&
+    invoiceAmountsAreValid(invoice) &&
     invoice.currency === "JPY" &&
     invoice.taxIncluded === true &&
     scheduledMs > 0 &&
@@ -190,7 +199,7 @@ function checkPlanInvoice(ledgerId, invoice) {
     return "invalid_invoice";
   }
 
-  if (Number(invoice.amountJpy) !== storeCustomPlanFeeJpyForKind(invoice.planKind) || Number(invoice.amountJpy) < STRIPE_MIN_AMOUNT_JPY) {
+  if (!invoiceAmountsAreValid(invoice) || Number(invoice.amountJpy) < STRIPE_MIN_AMOUNT_JPY) {
     return "invalid_invoice_amount";
   }
 
