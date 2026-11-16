@@ -160,6 +160,7 @@ import {
 
 // 運営管理の代行編集(更新案・承認の記録・反映)。操作は運営のみ、反映は承認の記録がある時だけ。
 import {
+  handleAdminManagedStoreCustomGet,
   handleAdminManagedUpdateCreate,
   handleAdminManagedUpdateMarkSent,
   handleAdminManagedUpdateRecordApproval,
@@ -32096,6 +32097,7 @@ export default async function handler(
       adminStoreChangeRequestComplete: handleAdminStoreChangeRequestComplete,
       adminStoreChangeRequestCancel: handleAdminStoreChangeRequestCancel,
       adminStoreChangeRequestList: handleAdminStoreChangeRequestList,
+      adminManagedStoreCustomGet: handleAdminManagedStoreCustomGet,
       adminManagedUpdateCreate: handleAdminManagedUpdateCreate,
       adminManagedUpdateMarkSent: handleAdminManagedUpdateMarkSent,
       adminManagedUpdateRecordApproval: handleAdminManagedUpdateRecordApproval,

@@ -124,5 +124,15 @@ t("U15 取り消した更新案は送信にできない", r.code === 409, r.body
 r = await call({ mode: "adminManagedUpdateList", storeId: "MU1" }, "admin");
 t("U16 一覧：MU1 の更新案が4件", r.code === 200 && r.body.updates.length === 4, r.body);
 
+// ===================== 代行画面用の読み込み =====================
+r = await call({ mode: "adminManagedStoreCustomGet", storeId: "MU1" }, "u1");
+t("U17 運営以外は店舗の内容を読めない", r.code === 403, r.body);
+r = await call({ mode: "adminManagedStoreCustomGet", storeId: "MU1" }, "admin");
+t("U18 読み込み：契約の種別 managed と今の内容（revision・商品）を返す", r.code === 200 && r.body.planKind === "managed" && r.body.custom.revision === 5 && r.body.custom.menuItems.length === 1, r.body);
+r = await call({ mode: "adminManagedStoreCustomGet", storeId: "MU2" }, "admin");
+t("U19 セルフ運用の店舗は planKind self と返る（画面で代行を止めるため）", r.code === 200 && r.body.planKind === "self", r.body);
+r = await call({ mode: "adminManagedStoreCustomGet", storeId: "NOPE" }, "admin");
+t("U20 存在しない店舗は 404", r.code === 404 && r.body.reason === "store_not_found", r.body);
+
 console.log(`TOTAL ${pass + fail}  PASS ${pass}  FAIL ${fail}`);
 process.exit(fail ? 1 : 0);
