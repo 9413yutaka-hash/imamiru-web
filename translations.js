@@ -4573,18 +4573,22 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_profile_doc_title: {
-    ja: "常設店舗情報｜マチナウ",
-    en: "Shop Profile | Machinau"
+    ja: "お店の基本情報｜マチナウ",
+    en: "Basic Shop Information | Machinau"
   },
 
   store_profile_heading: {
-    ja: "常設店舗情報",
-    en: "Shop profile"
+    ja: "お店の基本情報",
+    en: "Basic shop information"
+  },
+  store_profile_heading_note: {
+    ja: "ここに入力した内容は、お店のページに常に載る内容です。期間限定のお知らせは『今だけ投稿』から出せます。",
+    en: "Everything you enter here always appears on your shop page. For limited-time announcements, use an Imadake (now) post."
   },
 
   store_profile_not_public_banner: {
-    ja: "この情報はまだ旅行者に表示されません。下書きとして保存されます。",
-    en: "This information is not shown to travelers yet. It is saved as a draft."
+    ja: "まだ公開されていません。入力した内容は下書きとして残ります。",
+    en: "Not published yet. What you enter stays saved as a draft."
   },
 
   store_profile_loading: {
@@ -4613,14 +4617,14 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_profile_name_location_note: {
-    ja: "店舗・施設名と所在地は、下の「店舗・施設名と所在地を変更する」から変えられます。変えても、お店のページのURLは変わりません。",
-    en: "You can change the name and location with \"Change name and location\" below. The URL of your shop page stays the same."
+    ja: "店舗・施設名と所在地は、下のボタンから変えられます。変えても、お店のページのURL（アドレス）は変わりません。",
+    en: "You can change the shop name and location with the button below. Your shop page URL (address) will not change."
   },
 
   // STEP 56｜店舗・施設名と所在地の変更(店主本人)・お店ごとの固定の公開ページ
   store_identity_edit_button: {
-    ja: "店舗・施設名と所在地を変更する",
-    en: "Change name and location"
+    ja: "変更する",
+    en: "Change"
   },
   store_identity_address_label: {
     ja: "住所",
@@ -4688,9 +4692,13 @@ const MACHINAU_TRANSLATIONS = {
     en: "Description"
   },
 
+  store_profile_description_placeholder: {
+    ja: "久茂地の小さな食堂です。平日のランチは近所で働く人にも人気で、夜は地元の食材の一品料理が中心です。",
+    en: "A small diner in Kumoji. Weekday lunches are popular with people working nearby, and in the evening we mainly serve dishes made with local ingredients."
+  },
   store_profile_description_hint: {
-    ja: "お店・施設の特徴や、旅行者に知ってほしいことを書いてください（1,000文字まで）。",
-    en: "Describe your shop or facility and what travelers should know (up to 1,000 characters)."
+    ja: "お店の特徴や、お客さんに知ってほしいことを書いてください（1,000文字まで）。何のお店か、おすすめは何か、どんなときに使えるか、を書くと伝わります。",
+    en: "Write what makes your shop special and what customers should know (up to 1,000 characters). It helps to say what kind of shop it is, what you recommend, and when people can enjoy it."
   },
 
   store_profile_hours_heading: {
@@ -4719,13 +4727,13 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_profile_preview_heading: {
-    ja: "旅行者にはこう見えます",
-    en: "How travelers see it"
+    ja: "プレビュー（公開すると、こう見えます）",
+    en: "Preview (how it will look when published)"
   },
 
   store_profile_preview_note: {
-    ja: "下の入力に合わせて、その場で変わります。保存する前の内容も表示されるので、公開した時の見え方を確認しながら直せます。並び順は実際の公開ページと同じです。",
-    en: "Updates as you type, including unsaved changes, so you can check how the page will look before publishing. Sections appear in the same order as the public page."
+    ja: "上の入力に合わせて、その場で変わります。保存する前の内容も出るので、公開したときの見え方を確認しながら直せます。並び順は実際の公開ページと同じです。",
+    en: "It updates as you type in the fields above, including changes you have not saved yet, so you can fix things while checking how the published page will look. Sections are in the same order as the real page."
   },
 
   store_profile_preview_empty: {
@@ -4779,8 +4787,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_profile_category_hint: {
-    ja: "お店のページと、トップページの一覧で、お店の種類として表示されます。",
-    en: "Shown as the type of place on your page and in the top-page listings."
+    ja: "お店の種類です。お店のページと、一覧のカードに表示されます。",
+    en: "The type of your shop. Shown on your shop page and on listing cards."
   },
 
   store_profile_contact_hint: {
@@ -5102,6 +5110,74 @@ const MACHINAU_TRANSLATIONS = {
     ja: "免税対応",
     en: "Tax-free shopping"
   },
+  store_feature_parking_free: {
+    ja: "無料駐車場",
+    en: "Free parking"
+  },
+  store_feature_parking_paid: {
+    ja: "有料駐車場",
+    en: "Paid parking"
+  },
+  store_feature_barrier_free: {
+    ja: "バリアフリー対応",
+    en: "Barrier-free access"
+  },
+  store_feature_no_smoking: {
+    ja: "禁煙",
+    en: "No smoking"
+  },
+  store_feature_smoking: {
+    ja: "喫煙",
+    en: "Smoking"
+  },
+  store_feature_table_seats: {
+    ja: "テーブル席",
+    en: "Table seating"
+  },
+  store_feature_counter_seats: {
+    ja: "カウンター席",
+    en: "Counter seating"
+  },
+  store_feature_terrace_seats: {
+    ja: "テラス席",
+    en: "Terrace seating"
+  },
+  store_feature_tatami_seats: {
+    ja: "畳席",
+    en: "Tatami seating"
+  },
+  store_feature_private_room: {
+    ja: "個室",
+    en: "Private room"
+  },
+  store_feature_kids_menu: {
+    ja: "キッズメニュー",
+    en: "Kids menu"
+  },
+  store_feature_baby_chair: {
+    ja: "ベビーチェア",
+    en: "Baby chairs"
+  },
+  store_feature_diaper_changing: {
+    ja: "おむつ替えスペース",
+    en: "Diaper changing space"
+  },
+  store_feature_reservations_ok: {
+    ja: "予約可",
+    en: "Reservations accepted"
+  },
+  store_feature_private_rental: {
+    ja: "貸切可",
+    en: "Private hire available"
+  },
+  store_feature_english_menu: {
+    ja: "英語メニュー",
+    en: "English menu"
+  },
+  store_feature_allergy_friendly: {
+    ja: "アレルギー対応",
+    en: "Allergy information available"
+  },
 
   store_profile_features_heading: {
     ja: "設備・サービス",
@@ -5109,8 +5185,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_profile_features_hint: {
-    ja: "あるものだけチェックしてください。チェックしない項目は「未登録」として扱われ、旅行者に「なし」とは表示されません。",
-    en: "Check only what you offer. Unchecked items are treated as \"not provided\" and will never be shown to travelers as \"not available\"."
+    ja: "あてはまるものだけチェックしてください。チェックしない項目は「未登録」として扱われ、お客さんには非表示となります。",
+    en: "Check only what applies. Unchecked items are treated as not registered and are not shown to customers."
   },
 
   store_profile_features_primary: {
@@ -5744,8 +5820,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_profile_photos_hint: {
-    ja: "1枚目がメイン写真になります。JPEG・PNG・WebPで1枚10MBまで、最大10枚まで登録できます。写真は、店舗情報を保存した時にアップロードされます。「◀前へ」「後へ▶」で写真の並び順を変えられます。1枚目は公開ページの先頭と、トップページの一覧に出ます。",
-    en: "The first photo is the main photo. JPEG, PNG or WebP, up to 10 MB each, up to 10 photos. Photos are uploaded when you save your shop information. Use the Earlier and Later buttons to change the order: the first photo appears at the top of your page and in the top-page listings."
+    ja: "お店の写真は最大10枚まで。1枚目はメイン写真として、お店のページの先頭と、お店が一覧に並ぶときのカードに出ます。見え方は、このページの下のほうにあるプレビューで確認できます。追加した写真は、下の『下書きを保存する』を押したときに登録されます。",
+    en: "Up to 10 photos of your shop. The first photo is the main photo, shown at the top of your shop page and on the card when your shop appears in listings. You can check how they look in the preview near the bottom of this page. Added photos are registered when you press Save draft below."
   },
 
   store_profile_photos_count: {
