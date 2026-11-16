@@ -127,6 +127,8 @@
     .check-line { display: flex; align-items: center; gap: 8px; font-size: 13.5px; margin: 4px 0; }
     .check-line input { width: 18px; height: 18px; flex-shrink: 0; }
     .check-group { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+    .feature-group-title { font-size: 15px; font-weight: 700; border-left: 4px solid var(--blue); color: var(--navy); padding-left: 8px; margin: 18px 0 8px; }
+    .feature-group-title:first-child { margin-top: 4px; }
 
     .day-row { padding: 10px 0; border-bottom: 1px solid var(--border); }
     .day-row:last-child { border-bottom: none; }
@@ -401,7 +403,7 @@
         <section class="panel">
           <h2 data-i18n="store_profile_features_heading">設備・サービス</h2>
           <p class="hint" style="margin: 0 0 10px;" data-i18n="store_profile_features_hint"></p>
-          <div class="check-group" id="featureGroup"></div>
+          <div id="featureGroups"></div>
         </section>
 
         <section class="panel">
@@ -413,6 +415,7 @@
         <div id="formMessage" class="message" role="status" aria-live="polite"></div>
         <p class="save-progress" id="saveProgress" role="status" aria-live="polite" hidden></p>
         <button type="submit" class="primary-button" id="saveButton" data-i18n="store_profile_save_button">下書きを保存する</button>
+        <p class="hint" data-i18n="store_profile_save_all_note"></p>
         <button type="button" class="secondary-button" id="reloadButton" hidden data-i18n="store_profile_reload_button">最新の内容を読み込む</button>
       </form>
 
@@ -470,7 +473,8 @@
           </div>
           <div id="customMessage" class="message" role="status" aria-live="polite"></div>
           <p class="save-progress" id="customSaveProgress" role="status" aria-live="polite" hidden></p>
-          <button type="submit" class="primary-button" id="customSaveButton" data-i18n="store_custom_save_button">カスタマイズを保存する</button>
+          <button type="submit" class="primary-button" id="customSaveButton" data-i18n="store_custom_save_button">下書きを保存する</button>
+          <p class="hint" data-i18n="store_profile_save_all_note"></p>
           <button type="button" class="secondary-button" id="customReloadButton" hidden data-i18n="store_profile_reload_button">最新の内容を読み込む</button>
         </form>
       </section>
@@ -491,6 +495,7 @@
         <span class="publish-state draft" id="publishStateText"></span>
         <p class="hint" id="publishStateNote"></p>
         <p class="publish-checklist-heading" data-i18n="store_profile_publish_checklist_heading">公開の条件</p>
+        <p class="hint" data-i18n="store_profile_publish_checklist_intro"></p>
         <ul class="publish-checklist" id="publishChecklist"></ul>
         <!-- STEP 56｜お店ごとの固定の公開ページ。店舗・施設名・写真・紹介文を変えても URL は変わらない。 -->
         <div class="readonly-row store-page-row">
@@ -693,16 +698,17 @@
       // ===== 2B追加｜設備・サービス・対応言語 =====
       // 選択肢(許可code)はサーバーの応答(loaded.options)だけから作る。ここで持つのは
       // 「カテゴリごとに先に見せる項目」という表示の並びだけ(保存できる項目は制限しない)。
-      const FEATURE_PRIMARY_BY_CATEGORY = {
-        gourmet: ["dine_in", "takeout", "delivery", "parking_free", "kid_friendly", "barrier_free"],
-        cafe_sweets: ["dine_in", "takeout", "free_wifi", "power_outlets", "parking_free", "kid_friendly"],
-        nightlife: ["dine_in", "takeout", "parking_free", "free_wifi"],
-        shopping: ["tax_free", "delivery", "store_pickup", "parking_free", "barrier_free", "kid_friendly"],
-        sightseeing_experience: ["parking_free", "barrier_free", "kid_friendly", "pet_friendly", "free_wifi"],
-        beauty_relaxation: ["parking_free", "free_wifi", "kid_friendly", "barrier_free"],
-        lodging: ["parking_free", "free_wifi", "power_outlets", "barrier_free", "kid_friendly", "pet_friendly"],
-        other: ["parking_free", "free_wifi", "barrier_free", "kid_friendly"]
-      };
+      // 設備・サービスは似たもの同士のグループで並べる(全グループ常時表示・区切りは見出しだけ)。
+      // 並びは見本(代表指定)に合わせる。グループに入っていないcodeは最後のグループへ足す。
+      const FEATURE_GROUPS = [
+        { key: "dining", codes: ["dine_in", "takeout", "delivery", "store_pickup"] },
+        { key: "seats", codes: ["table_seats", "counter_seats", "tatami_seats", "terrace_seats", "private_room"] },
+        { key: "parking", codes: ["parking_free", "parking_paid", "parking"] },
+        { key: "kids", codes: ["kid_friendly", "kids_menu", "baby_chair", "diaper_changing"] },
+        { key: "smoking", codes: ["no_smoking", "smoking"] },
+        { key: "facilities", codes: ["free_wifi", "power_outlets", "pet_friendly", "barrier_free", "wheelchair_accessible", "tax_free"] },
+        { key: "other", codes: ["reservations_ok", "private_rental", "english_menu", "allergy_friendly"] }
+      ];
 
       // 置き換え済みの旧code。サーバーの決まりでcodeは追加のみ・改名しないため、新規の選択肢には出さない。
       // すでに付けている店舗では、その店舗にだけチェック欄を残す(保存で消えたり表示が消えたりしないように)。
@@ -741,44 +747,42 @@
       function renderFeatureAndLanguageChecks(profile, options) {
         const featureCodes = Array.isArray(profile.featureCodes) ? profile.featureCodes : [];
         const languageCodes = Array.isArray(profile.supportedLanguageCodes) ? profile.supportedLanguageCodes : [];
-        const featureGroup = document.getElementById("featureGroup");
-        featureGroup.textContent = "";
-        (options.featureCodes || []).forEach(function (code) {
-          if (LEGACY_FEATURE_CODES.includes(code) && !featureCodes.includes(code)) {
+        const featureGroups = document.getElementById("featureGroups");
+        featureGroups.textContent = "";
+        const available = (options.featureCodes || []).filter(function (code) {
+          return !LEGACY_FEATURE_CODES.includes(code) || featureCodes.includes(code);
+        });
+        const grouped = [];
+        FEATURE_GROUPS.forEach(function (group) {
+          const codes = group.codes.filter(function (code) { return available.includes(code); });
+          if (codes.length === 0) {
             return;
           }
-          featureGroup.appendChild(createCodeCheckbox("data-feature", code, getFeatureLabel(code), featureCodes.includes(code)));
+          grouped.push.apply(grouped, codes);
+          const title = document.createElement("h3");
+          title.className = "feature-group-title";
+          title.textContent = t("store_profile_feature_group_" + group.key);
+          featureGroups.appendChild(title);
+          const box = document.createElement("div");
+          box.className = "check-group";
+          codes.forEach(function (code) {
+            box.appendChild(createCodeCheckbox("data-feature", code, getFeatureLabel(code), featureCodes.includes(code)));
+          });
+          featureGroups.appendChild(box);
         });
+        const ungrouped = available.filter(function (code) { return !grouped.includes(code); });
+        if (ungrouped.length > 0) {
+          const box = document.createElement("div");
+          box.className = "check-group";
+          ungrouped.forEach(function (code) {
+            box.appendChild(createCodeCheckbox("data-feature", code, getFeatureLabel(code), featureCodes.includes(code)));
+          });
+          featureGroups.appendChild(box);
+        }
         const languageGroup = document.getElementById("languageGroup");
         languageGroup.textContent = "";
         (options.supportedLanguageCodes || []).forEach(function (code) {
           languageGroup.appendChild(createCodeCheckbox("data-language-code", code, getLanguageDisplayName(code), languageCodes.includes(code)));
-        });
-        arrangeFeaturesForCategory();
-      }
-
-      // カテゴリに合わせて、よく使う項目を先頭へ並べ替える(区切りは作らず、全部を常時表示する)。
-      // 要素を移動するだけなので、チェック済みの値は消えない。
-      function arrangeFeaturesForCategory() {
-        const category = document.getElementById("categorySelect").value;
-        const primaryCodes = FEATURE_PRIMARY_BY_CATEGORY[category] || FEATURE_PRIMARY_BY_CATEGORY.other;
-        const group = document.getElementById("featureGroup");
-        const items = Array.from(group.querySelectorAll("[data-feature]")).map(function (input) {
-          return input.closest("label");
-        });
-        const codeOf = function (item) {
-          return item.querySelector("[data-feature]").value;
-        };
-        primaryCodes.forEach(function (code) {
-          const item = items.find(function (candidate) { return codeOf(candidate) === code; });
-          if (item) {
-            group.appendChild(item);
-          }
-        });
-        items.forEach(function (item) {
-          if (!primaryCodes.includes(codeOf(item))) {
-            group.appendChild(item);
-          }
         });
       }
 
@@ -1102,6 +1106,10 @@
         const saveButton = document.getElementById("saveButton");
         if (!saving) {
           saveButton.textContent = t(isPublished() ? "store_profile_save_button_published" : "store_profile_save_button");
+        }
+        const customSaveButton = document.getElementById("customSaveButton");
+        if (!customSaving) {
+          customSaveButton.textContent = t(isPublished() ? "store_profile_save_button_published" : "store_profile_save_button");
         }
 
         const missing = publication ? publication.missing || [] : [];
@@ -1645,6 +1653,25 @@
         });
       }
 
+      // 保存は2か所のボタンどちらからでも、このページの内容すべてを保存する(基本情報→カスタマイズの順)。
+      // 基本情報の保存に失敗したら、その時点で止める(理由は基本情報側の表示に出ている)。
+      async function handleSaveAll(event) {
+        event.preventDefault();
+        if (saving || customSaving) {
+          return;
+        }
+        const innerEvent = { preventDefault: function () {} };
+        if (editable) {
+          await handleSave(innerEvent);
+          if (dirty) {
+            return;
+          }
+        }
+        if (customEditable && !document.getElementById("customSection").hidden) {
+          await handleCustomSave(innerEvent);
+        }
+      }
+
       async function handleSave(event) {
         event.preventDefault();
         if (saving || !editable) {
@@ -2179,6 +2206,7 @@
         story.disabled = locked;
         document.getElementById("customForm").hidden = false;
         document.getElementById("customStoryHint").textContent = t("store_custom_story_hint").replace("{max}", limits.storyMaxLength || 2000);
+        story.placeholder = t("store_custom_story_placeholder");
         document.getElementById("customMenuHint").textContent = t("store_custom_menu_hint").replace("{max}", limits.menuItemsMax || 20).replace("{photos}", limits.menuPhotosMax || 5);
         document.getElementById("customLinksHint").textContent = t("store_custom_links_hint").replace("{max}", limits.linksMax || 5);
         const saveButton = document.getElementById("customSaveButton");
@@ -2417,14 +2445,14 @@
         } finally {
           customSaving = false;
           document.getElementById("customSaveProgress").hidden = true;
-          saveButton.textContent = t("store_custom_save_button");
+          saveButton.textContent = t(isPublished() ? "store_profile_save_button_published" : "store_profile_save_button");
           renderCustom();
         }
       }
 
       function bindCustomEvents() {
         const form = document.getElementById("customForm");
-        form.addEventListener("submit", handleCustomSave);
+        form.addEventListener("submit", handleSaveAll);
         form.addEventListener("input", function (event) {
           const index = Number(event.target.getAttribute("data-custom-index"));
           const field = event.target.getAttribute("data-custom-field");
@@ -2719,7 +2747,7 @@
         // お店の情報(支払い方法・設備・対応言語)。
         const infoGroups = [
           { headingKey: "store_profile_payment_heading", labels: checkedLabels(["paymentGroup"]) },
-          { headingKey: "store_profile_features_heading", labels: checkedLabels(["featureGroup"]) },
+          { headingKey: "store_profile_features_heading", labels: checkedLabels(["featureGroups"]) },
           { headingKey: "store_profile_languages_heading", labels: checkedLabels(["languageGroup"]) }
         ].filter(function (group) { return group.labels.length > 0; });
         if (infoGroups.length > 0) {
@@ -2866,7 +2894,7 @@
         });
 
         const form = document.getElementById("profileForm");
-        form.addEventListener("submit", handleSave);
+        form.addEventListener("submit", handleSaveAll);
         form.addEventListener("input", function () {
           dirty = true;
           renderPublication();
@@ -2889,10 +2917,6 @@
               row.querySelector(".day-closed").checked = false;
             }
             updateDayRow(row);
-          }
-          if (event.target.id === "categorySelect") {
-            // 並びだけを変える。選択済みの設備・サービスは消さない。
-            arrangeFeaturesForCategory();
           }
         });
         form.addEventListener("click", function (event) {
