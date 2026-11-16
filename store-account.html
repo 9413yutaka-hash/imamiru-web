@@ -1428,7 +1428,12 @@
           const plan = document.createElement("div");
           plan.className = "store-card-state" + (store.planState === "active" || store.planState === "canceling" ? "" : " warn");
           plan.setAttribute("data-store-plan", store.planState);
-          plan.textContent = t(STORE_LIST_PLAN_KEYS[store.planState]).replace(
+          const planKey = store.planKind === "managed" && store.planState === "active"
+            ? "store_list_plan_managed_active"
+            : store.planKind === "managed" && store.planState === "canceling"
+              ? "store_list_plan_managed_canceling"
+              : STORE_LIST_PLAN_KEYS[store.planState];
+          plan.textContent = t(planKey).replace(
             "{date}",
             store.planAccessUntilMillis > 0 ? formatStoreListDate(store.planAccessUntilMillis) : ""
           );

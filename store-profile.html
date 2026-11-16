@@ -450,6 +450,27 @@
           <button type="button" class="primary-button" id="customSubscribeButton" hidden></button>
           <button type="button" class="secondary-button" id="customCancelButton" hidden data-i18n="store_custom_plan_cancel_button">解約する</button>
         </div>
+        <!-- 運営管理(月額500円・税込)の申込・切り替え。受付の開始まではサーバーが申込可能と返す時だけ出す。
+             条件・同意は店舗カード(100円)とは別に取る(サーバーも運営管理専用の同意の版が無い申込を受け付けない)。 -->
+        <div class="custom-plan-box" id="managedPlanBox" hidden>
+          <p class="plan-terms-heading" data-i18n="store_managed_plan_heading">運営管理（月額500円・税込）</p>
+          <p class="hint" data-i18n="store_managed_plan_intro"></p>
+          <p class="hint" id="managedPlanActiveNote" hidden data-i18n="store_managed_plan_active_note"></p>
+          <div class="plan-terms" id="managedPlanTerms" hidden>
+            <ul class="plan-terms-list">
+              <li data-i18n="store_managed_plan_terms_fee"></li>
+              <li data-i18n="store_managed_plan_terms_scope"></li>
+              <li data-i18n="store_managed_plan_terms_approval"></li>
+              <li data-i18n="store_managed_plan_terms_change"></li>
+              <li data-i18n="store_managed_plan_terms_billing"></li>
+              <li data-i18n="store_managed_plan_terms_cancel"></li>
+            </ul>
+            <label class="plan-consent"><input type="checkbox" id="managedPlanConsentCheck"> <span data-i18n="store_managed_plan_consent_label"></span></label>
+          </div>
+          <p class="hint" id="managedPlanCardNote" hidden><span data-i18n="store_custom_plan_card_required"></span> <a href="store-account.html" data-i18n="store_custom_plan_card_link"></a></p>
+          <div id="managedPlanMessage" class="message" role="status" aria-live="polite"></div>
+          <button type="button" class="primary-button" id="managedSubscribeButton" hidden></button>
+        </div>
         <form id="customForm" novalidate>
           <div class="field">
             <label for="customStoryInput" data-i18n="store_custom_story_label">お店のこだわり・ストーリー</label>
@@ -1881,6 +1902,10 @@
         const kept = hasContent ? " " + t("store_custom_plan_kept") : "";
         if (plan.access && !customEditable) {
           note.textContent = t("store_custom_not_editable");
+        } else if (plan.state === "active" && plan.periodKind === "monthly" && plan.planKind === "managed") {
+          note.textContent = t("store_managed_plan_monthly_active") + (plan.createdInPreview ? " " + t("store_custom_plan_monthly_trial_note") : "");
+        } else if (plan.state === "canceling" && plan.periodKind === "monthly" && plan.planKind === "managed") {
+          note.textContent = t("store_managed_plan_monthly_canceling").replace("{date}", formatCustomDate(plan.accessUntilMillis - 60000)) + (plan.createdInPreview ? " " + t("store_custom_plan_monthly_trial_note") : "");
         } else if (plan.state === "active" && plan.periodKind === "monthly") {
           // STEP 44-C③｜本番の暦月契約(解約するまで毎月継続・月末締め・翌月2日請求)。
           note.textContent = t("store_custom_plan_monthly_active") + (plan.createdInPreview ? " " + t("store_custom_plan_monthly_trial_note") : "");
@@ -1949,6 +1974,88 @@
         cancel.hidden = plan.state !== "active";
         cancel.disabled = planBusy;
         box.hidden = subscribe.hidden && cancel.hidden && datesElement.hidden && !lastPlanMessage;
+        renderManagedPlanBox();
+      }
+
+      // 運営管理(月額500円)の申込欄。サーバーが申込可能と返す時だけ出す。解約は店舗カードの解約ボタンと共通。
+      let lastManagedMessage = null;
+
+      function renderManagedPlanBox() {
+        const plan = customLoaded && customLoaded.plan;
+        const box = document.getElementById("managedPlanBox");
+        if (!plan || plan.managedSignupAvailable !== true) {
+          box.hidden = true;
+          return;
+        }
+        const activeManaged = plan.state === "active" && plan.planKind === "managed";
+        const cancelingManaged = plan.state === "canceling" && plan.planKind === "managed";
+        document.getElementById("managedPlanActiveNote").hidden = !(activeManaged || cancelingManaged);
+        const canApply =
+          plan.storeEditable === true &&
+          (plan.paymentStatus || "current") === "current" &&
+          (plan.state === "none" || plan.state === "expired" ||
+            (plan.state === "other_holder" && plan.otherHolderActive !== true) ||
+            (plan.state === "active" && plan.periodKind === "monthly" && plan.planKind !== "managed"));
+        document.getElementById("managedPlanTerms").hidden = !canApply;
+        const button = document.getElementById("managedSubscribeButton");
+        button.hidden = !canApply;
+        button.textContent = t(plan.state === "active" ? "store_managed_plan_upgrade_button" : "store_managed_plan_subscribe_button");
+        const check = document.getElementById("managedPlanConsentCheck");
+        check.disabled = planBusy || plan.cardRegistered !== true;
+        button.disabled = planBusy || plan.cardRegistered !== true || check.checked !== true;
+        document.getElementById("managedPlanCardNote").hidden = !canApply || plan.cardRegistered === true;
+        box.hidden = !canApply && !activeManaged && !cancelingManaged && !lastManagedMessage;
+      }
+
+      function showManagedMessage(key, type, code) {
+        const box = document.getElementById("managedPlanMessage");
+        box.textContent = t(key);
+        if (code) {
+          const codeElement = document.createElement("span");
+          codeElement.className = "error-code";
+          codeElement.textContent = "(" + code + ")";
+          box.appendChild(codeElement);
+        }
+        box.className = "message show " + type;
+        lastManagedMessage = { key: key, type: type, code: code || "" };
+        document.getElementById("managedPlanBox").hidden = false;
+      }
+
+      const STORE_MANAGED_PLAN_CONSENT_VERSION = "store-managed-plan-2026-11-17";
+
+      async function handleManagedSubscribe() {
+        if (planBusy) {
+          return;
+        }
+        if (document.getElementById("managedPlanConsentCheck").checked !== true) {
+          showManagedMessage("store_custom_plan_err_consent", "error");
+          return;
+        }
+        planBusy = true;
+        renderCustomPlanBox();
+        try {
+          const response = await callApi({
+            mode: "storeCustomPlanSubscribe",
+            storeId: storeId,
+            planKind: "managed",
+            planConsentVersion: STORE_MANAGED_PLAN_CONSENT_VERSION
+          });
+          const result = response.result || {};
+          if (response.status === 200 && result.success) {
+            document.getElementById("managedPlanConsentCheck").checked = false;
+            showManagedMessage(result.result === "upgraded" ? "store_managed_plan_upgraded" : "store_managed_plan_subscribed", "success");
+          } else {
+            showManagedMessage(PLAN_ERROR_KEYS[result.reason] || "store_account_err_generic", "error", result.reason || "http_" + response.status);
+          }
+          await refreshCustomPlan();
+          await refreshProfileEditable();
+          await refreshPublication();
+        } catch (error) {
+          showManagedMessage("store_account_err_network", "error");
+        } finally {
+          planBusy = false;
+          renderCustomPlanBox();
+        }
       }
 
       function showPlanMessage(key, type, code, replacements) {
@@ -2512,6 +2619,12 @@
         });
         document.getElementById("customCancelButton").addEventListener("click", function () {
           handlePlanAction("storeCustomPlanCancel");
+        });
+        document.getElementById("managedSubscribeButton").addEventListener("click", function () {
+          handleManagedSubscribe();
+        });
+        document.getElementById("managedPlanConsentCheck").addEventListener("change", function () {
+          renderManagedPlanBox();
         });
       }
 

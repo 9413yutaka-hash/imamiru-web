@@ -185,6 +185,7 @@ function buildPlanResponse(planData, uid, nowMillis) {
     subscribedAtMillis: mine ? millisOf(data.subscribedAt) : 0,
     canceledAtMillis: mine ? millisOf(data.canceledAt) : 0,
     periodKind: mine && typeof data.periodKind === "string" ? data.periodKind : "",
+    planKind: mine ? normalizeStoreCustomPlanKind(data.planKind) : "self",
     // STEP 44-C③｜Preview で作った試験用の契約か(画面に「実際には請求されません」を出す)。
     createdInPreview: mine && data.createdInPreview === true,
     // STEP 44-C④｜支払いの状態(契約の状態とは別)：current・past_due(未払い・猶予中)・suspended(未払いで停止)。
@@ -555,9 +556,13 @@ export async function handleStoreCustomProfileGet(request, response, deps) {
     plan.signupAvailable =
       isStoreCustomPlanMonthlySignupOpen(deps) ||
       (typeof deps.isStoreCustomPlanTrialEnabled === "function" && deps.isStoreCustomPlanTrialEnabled() === true);
+    // 運営管理の申込の可否の目安(画面の表示用)。受付の開始までは Preview 試験の環境だけ。
+    plan.managedSignupAvailable =
+      STORE_MANAGED_PLAN_SIGNUP_ENABLED === true ||
+      (typeof deps.isStoreCustomPlanTrialEnabled === "function" && deps.isStoreCustomPlanTrialEnabled() === true);
     plan.storeEditable = storeEditable;
 
-    if (plan.signupAvailable && typeof deps.checkAccountBillingCard === "function") {
+    if ((plan.signupAvailable || plan.managedSignupAvailable) && typeof deps.checkAccountBillingCard === "function") {
       const card = await deps.checkAccountBillingCard(database, actor.uid);
       plan.cardRegistered = !!card && card.ok === true;
     } else {

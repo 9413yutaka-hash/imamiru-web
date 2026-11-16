@@ -5409,6 +5409,86 @@ const MACHINAU_TRANSLATIONS = {
     en: "Your plan is active and renews monthly until you cancel. Each month's ¥100 (tax included) is closed at month end and charged on the 2nd of the next month."
   },
 
+  store_managed_plan_heading: {
+    ja: "運営管理（月額500円・税込）",
+    en: "Managed plan (¥500/month, tax included)"
+  },
+
+  store_managed_plan_intro: {
+    ja: "お店のページの情報の更新を、運営が代わりに行います。写真や文章などの素材は、公式LINEで送ってください。",
+    en: "Our team updates your shop page for you. Send photos and text materials via the official LINE account."
+  },
+
+  store_managed_plan_active_note: {
+    ja: "運営管理の契約中です。情報の更新は、公式LINEで素材を送ってください。",
+    en: "Your managed plan is active. Send materials via the official LINE account to update your page."
+  },
+
+  store_managed_plan_terms_fee: {
+    ja: "月額500円（税込）です。店舗カードの月額料金100円を含みます。",
+    en: "¥500/month (tax included). This includes the ¥100 store card monthly fee."
+  },
+
+  store_managed_plan_terms_scope: {
+    ja: "運営が代行するのは、お店のページの情報の更新（月1回まで）です。今だけ投稿は代行の対象外で、お店ご自身で行います。",
+    en: "We update your shop page information up to once a month. 'Now only' posts are not included; please post those yourself."
+  },
+
+  store_managed_plan_terms_approval: {
+    ja: "更新の内容は、公開する前に公式LINEでお送りします。承認の返事をいただいてから公開し、返事がない場合は公開しません。",
+    en: "We send the updated content via LINE before publishing, and publish only after your approval. If we receive no reply, we do not publish."
+  },
+
+  store_managed_plan_terms_change: {
+    ja: "月1回を超える更新の依頼は、変更依頼として1回1,000円（税込）です。料金は作業が完了した時点で確定し、完了しなければ請求しません。",
+    en: "Extra updates are change requests at ¥1,000 each (tax included). The fee is fixed when the work is completed; if the work is not completed, you are not charged."
+  },
+
+  store_managed_plan_terms_billing: {
+    ja: "月額料金は月末に締めて、翌月2日に登録されたクレジットカードへ請求します。100円プランから切り替えた月は、500円だけを請求します。",
+    en: "The monthly fee is closed at month end and charged to your registered card on the 2nd of the next month. In the month you switch from the ¥100 plan, only ¥500 is charged."
+  },
+
+  store_managed_plan_terms_cancel: {
+    ja: "解約はこの画面からいつでも申し込めます。解約の効力はその月の末日に生じ、日割りはありません。解約した後、店舗カードの月額契約に移行しない場合は、お店のページは非公開になります（保存した内容は消えません）。",
+    en: "You can cancel anytime from this page. Cancellation takes effect at the end of that month, with no proration. If you do not switch to the store card monthly plan after canceling, your shop page will be unpublished (your saved content is kept)."
+  },
+
+  store_managed_plan_consent_label: {
+    ja: "上の料金と条件を確認し、運営管理（月額500円・税込）に同意します。",
+    en: "I have checked the fee and terms above and agree to the managed plan (¥500/month, tax included)."
+  },
+
+  store_managed_plan_subscribe_button: {
+    ja: "運営管理を申し込む",
+    en: "Subscribe to the managed plan"
+  },
+
+  store_managed_plan_upgrade_button: {
+    ja: "運営管理に切り替える",
+    en: "Switch to the managed plan"
+  },
+
+  store_managed_plan_subscribed: {
+    ja: "運営管理の申し込みを受け付けました。",
+    en: "Your managed plan subscription is complete."
+  },
+
+  store_managed_plan_upgraded: {
+    ja: "運営管理に切り替えました。",
+    en: "Switched to the managed plan."
+  },
+
+  store_managed_plan_monthly_active: {
+    ja: "契約中です（運営管理・解約するまで毎月継続します）。各月の500円（税込）は月末に締めて、翌月2日に請求します。",
+    en: "Your managed plan is active and renews monthly until you cancel. Each month's ¥500 (tax included) is closed at month end and charged on the 2nd of the next month."
+  },
+
+  store_managed_plan_monthly_canceling: {
+    ja: "解約手続き済みです（運営管理）。{date}（今月末）まで運営管理が続き、今月分の500円は請求されます。",
+    en: "Cancellation requested (managed plan). The managed service continues until {date} (end of this month); this month's ¥500 is still charged."
+  },
+
   store_custom_plan_monthly_canceling: {
     ja: "解約手続き済みです。{date}（今月末）まで利用でき、翌月からは料金が発生しません。今月分の100円は請求されます。",
     en: "Cancellation requested. You can use the plan until {date} (end of this month); no charges from next month. This month's ¥100 is still charged."
@@ -6624,6 +6704,16 @@ const MACHINAU_TRANSLATIONS = {
   store_list_public_hidden: {
     ja: "まだ公開されていません",
     en: "Not published yet"
+  },
+
+  store_list_plan_managed_active: {
+    ja: "運営管理プラン：契約中",
+    en: "Managed plan: active"
+  },
+
+  store_list_plan_managed_canceling: {
+    ja: "運営管理プラン：解約済み（{date}まで）",
+    en: "Managed plan: canceled (until {date})"
   },
 
   store_list_plan_active: {
