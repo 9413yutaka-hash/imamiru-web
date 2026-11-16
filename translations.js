@@ -4617,8 +4617,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_profile_name_location_note: {
-    ja: "店舗・施設名と所在地は、下のボタンから変えられます。変えても、お店のページのURL（アドレス）は変わりません。",
-    en: "You can change the shop name and location with the button below. Your shop page URL (address) will not change."
+    ja: "店舗・施設名と所在地は、下の「変更する」ボタンから変えられます。変えても、お店のページのURL（アドレス）は変わりません。",
+    en: "You can change the shop name and location with the \"Change\" button below. Your shop page URL (address) will not change."
   },
 
   // STEP 56｜店舗・施設名と所在地の変更(店主本人)・お店ごとの固定の公開ページ
@@ -4659,7 +4659,7 @@ const MACHINAU_TRANSLATIONS = {
     en: "The details were changed on another screen. Please reload the page and try again."
   },
   store_page_url_label: {
-    ja: "お店のページ（固定のURL）",
+    ja: "お店のページのURL（アドレス）",
     en: "Your shop page (permanent URL)"
   },
   store_page_copy_button: {
@@ -5109,6 +5109,38 @@ const MACHINAU_TRANSLATIONS = {
   store_feature_tax_free: {
     ja: "免税対応",
     en: "Tax-free shopping"
+  },
+  store_profile_feature_group_dining: {
+    ja: "食べ方・受け取り",
+    en: "Dining & takeout"
+  },
+  store_profile_feature_group_seats: {
+    ja: "席",
+    en: "Seating"
+  },
+  store_profile_feature_group_parking: {
+    ja: "駐車場",
+    en: "Parking"
+  },
+  store_profile_feature_group_kids: {
+    ja: "子ども連れ",
+    en: "With children"
+  },
+  store_profile_feature_group_smoking: {
+    ja: "たばこ",
+    en: "Smoking"
+  },
+  store_profile_feature_group_facilities: {
+    ja: "設備",
+    en: "Facilities"
+  },
+  store_profile_feature_group_other: {
+    ja: "予約・その他",
+    en: "Reservations & other"
+  },
+  store_profile_save_all_note: {
+    ja: "押すと、このページの内容すべてが下書きとして保存されます。",
+    en: "Pressing this saves everything on this page as a draft."
   },
   store_feature_parking_free: {
     ja: "無料駐車場",
@@ -5574,9 +5606,13 @@ const MACHINAU_TRANSLATIONS = {
     en: "Our story"
   },
 
+  store_custom_story_placeholder: {
+    ja: "1980年に久茂地で創業しました。初代の味を守りながら、二代目の今は地元の食材を使った一品を増やしています。",
+    en: "We opened in Kumoji in 1980. While keeping the founder's flavors, the second generation now serves more dishes made with local ingredients."
+  },
   store_custom_story_hint: {
-    ja: "お店の歴史・こだわり・大切にしていることなどを紹介できます（{max}字まで）。",
-    en: "Share your shop's history, what you care about, and what makes you special (up to {max} characters)."
+    ja: "お店の歴史・こだわり・大切にしていることなどを紹介できます（{max}字まで）。紹介文が『今のお店の案内』、こちらは『お店の歩みや、大切にしていること』です。",
+    en: "Share your shop's history, what you care about, and what makes you special (up to {max} characters). Your description is the guide to your shop today; this is for your shop's story and what you value."
   },
 
   store_custom_menu_label: {
@@ -5585,8 +5621,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_custom_menu_hint: {
-    ja: "最大{max}件。商品名は必須、価格と説明は任意です（空欄の項目は表示しません）。写真は1商品に1枚、お店全体で{photos}枚までです（写真の無い商品も登録できます）。「↑前へ」「↓後へ」で商品の並び順を変えられます。公開ページではこの順番で表示され、一番上の商品はトップページの一覧にも出ます。",
-    en: "Up to {max} items. A name is required; price and description are optional (empty fields are not shown). One photo per item, up to {photos} photos for the whole shop (items without a photo are fine). Use the Earlier and Later buttons to change the order: your page shows items in this order, and the first item also appears in the top-page listings."
+    ja: "最大{max}件。商品名は必須、価格と説明は任意です（空欄の項目は表示しません）。写真は1商品に1枚、お店全体で{photos}枚までです（写真の無い商品も登録できます）。「↑前へ」「↓後へ」で商品の並び順を変えられます。公開ページではこの順番で表示され、一番上の商品は一覧のカードにも出ます。",
+    en: "Up to {max} items. A name is required; price and description are optional (empty fields are not shown). One photo per item, up to {photos} photos for the whole shop (items without a photo are fine). Use the Earlier and Later buttons to change the order: your page shows items in this order, and the first item also appears on listing cards."
   },
 
   store_custom_menu_photo_count: {
@@ -5730,7 +5766,7 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_custom_save_button: {
-    ja: "メニュー・リンク・ストーリーを保存する",
+    ja: "下書きを保存する",
     en: "Save menu, links and story"
   },
 
@@ -5935,7 +5971,7 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_profile_publish_note_draft: {
-    ja: "公開するまで、この情報は旅行者に表示されません。",
+    ja: "公開するまで、この情報はお客さんに表示されません。",
     en: "Travelers won't see this information until you publish it."
   },
 
@@ -5949,8 +5985,12 @@ const MACHINAU_TRANSLATIONS = {
     en: "Once all the conditions below are met, it will be shown again automatically."
   },
 
+  store_profile_publish_checklist_intro: {
+    ja: "✓はできていること、×はあと必要なことです。×の下に、直し方が書いてあります。",
+    en: "✓ means done, × means still needed. How to fix each × is written under it."
+  },
   store_profile_publish_checklist_heading: {
-    ja: "公開の条件（保存済みの内容で確認します）",
+    ja: "公開の条件（保存した内容で判定します）",
     en: "Conditions for publishing (checked against the saved content)"
   },
 
@@ -5965,8 +6005,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_profile_publish_cond_moderation: {
-    ja: "紹介文などの自動チェックが済んでいる",
-    en: "The automatic check of your saved text is done"
+    ja: "自動チェック（不適切な内容が含まれていないかの確認）が済んでいる",
+    en: "The automatic check (for inappropriate content) is done"
   },
 
   store_profile_publish_cond_owner: {
@@ -6057,13 +6097,13 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_profile_publish_save_first: {
-    ja: "保存していない変更があります。上の『下書きを保存する』か『カスタマイズを保存する』を押してから、公開してください。",
-    en: "You have unsaved changes. Press \"Save draft\" or \"Save customization\" above first, then publish."
+    ja: "保存していない変更があります。『下書きを保存する』を押してから、公開してください。",
+    en: "You have unsaved changes. Press \"Save draft\" first, then publish."
   },
 
   store_profile_publish_button: {
-    ja: "旅行者に公開する",
-    en: "Publish to travelers"
+    ja: "公開する",
+    en: "Publish"
   },
 
   store_profile_unpublish_button: {
