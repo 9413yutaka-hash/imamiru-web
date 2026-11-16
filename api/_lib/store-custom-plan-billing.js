@@ -71,6 +71,24 @@ const STORE_MEMBERS_COLLECTION = "storeMembers";
 const STORE_CUSTOM_PLANS_COLLECTION = "storeCustomPlans";
 export const STORE_CUSTOM_PLAN_USAGE_COLLECTION = "storeCustomPlanUsage";
 
+// 運営管理の変更依頼(1回1,000円・税込)。台帳は storeChangeRequests、状態の操作は api/_lib/store-change-requests.js。
+// 料金は作業が完了した時点で確定し、完了した月に月額料金と合算して1件の請求書にする(代表決定 2026-11-16)。
+export const STORE_CHANGE_REQUESTS_COLLECTION = "storeChangeRequests";
+export const STORE_CHANGE_REQUEST_FEE_JPY = 1000;
+
+// その月に完了し、まだ請求書に入っていない変更依頼を読む(締めの合算用)。
+async function readCompletedChangeRequestsForMonth(database, storeId, monthKey) {
+  const snapshot = await database.collection(STORE_CHANGE_REQUESTS_COLLECTION)
+    .where("storeId", "==", storeId)
+    .where("status", "==", "completed")
+    .get();
+
+  return snapshot.docs.filter(function(doc) {
+    const data = doc.data() || {};
+    return data.completedMonth === monthKey && !data.invoiceId;
+  });
+}
+
 export const STORE_CUSTOM_PLAN_PERIOD_PREVIEW_TRIAL = "preview_trial";
 export const STORE_CUSTOM_PLAN_PERIOD_MONTHLY = "monthly";
 
@@ -371,6 +389,7 @@ async function closeUsageIntoInvoice(database, usageDocument, monthKey, closeRun
   const invoiceRef = database.collection(STORE_CUSTOM_PLAN_INVOICES_COLLECTION).doc(storeId + "_" + monthKey);
   const accountRef = database.collection(STORE_ACCOUNTS_COLLECTION).doc(storeId);
   let result = "skipped";
+  let changeRequestTotalJpy = 0;
 
   const decide = function(usage, invoiceExists, account) {
     if (!usage || usage.month !== monthKey || usage.storeId !== storeId || usageRef.id !== storeId + "_" + monthKey) {
@@ -392,14 +411,19 @@ async function closeUsageIntoInvoice(database, usageDocument, monthKey, closeRun
     return "create";
   };
 
-  const buildInvoice = function(usage) {
+  const buildInvoice = function(usage, changeRequests) {
     const schedule = storeCustomPlanChargeScheduleFor(monthKey);
+    const planFeeJpy = storeCustomPlanFeeJpyForKind(usage.planKind);
+    const changeRequestJpy = STORE_CHANGE_REQUEST_FEE_JPY * changeRequests.length;
 
     return {
       storeId: storeId,
       planKind: normalizeStoreCustomPlanKind(usage.planKind),
       month: monthKey,
-      amountJpy: storeCustomPlanFeeJpyForKind(usage.planKind),
+      planFeeJpy: planFeeJpy,
+      changeRequestJpy: changeRequestJpy,
+      changeRequestCount: changeRequests.length,
+      amountJpy: planFeeJpy + changeRequestJpy,
       currency: "JPY",
       taxIncluded: true,
       holderUid: usage.holderUid,
@@ -435,19 +459,29 @@ async function closeUsageIntoInvoice(database, usageDocument, monthKey, closeRun
     const snapshots = await Promise.all([invoiceRef.get(), accountRef.get()]);
     result = decide(usageDocument.data() || {}, snapshots[0].exists, snapshots[1].exists ? snapshots[1].data() : null);
   } else {
+    const changeRequests = await readCompletedChangeRequestsForMonth(database, storeId, monthKey);
+    changeRequestTotalJpy = STORE_CHANGE_REQUEST_FEE_JPY * changeRequests.length;
     await database.runTransaction(async function(transaction) {
       const snapshots = await Promise.all([transaction.get(usageRef), transaction.get(invoiceRef), transaction.get(accountRef)]);
       const usage = snapshots[0].exists ? snapshots[0].data() || {} : null;
       result = decide(usage, snapshots[1].exists, snapshots[2].exists ? snapshots[2].data() : null);
 
       if (result === "create") {
-        transaction.set(invoiceRef, buildInvoice(usage));
+        transaction.set(invoiceRef, buildInvoice(usage, changeRequests));
         transaction.update(usageRef, {
           status: "invoiced",
           invoiceId: invoiceRef.id,
           invoicedAt: Timestamp.fromMillis(nowMillis),
           updatedAt: FieldValue.serverTimestamp()
         });
+        // 合算した変更依頼に請求書の印を付ける(次の締めで二重に数えない)。
+        for (const requestDocument of changeRequests) {
+          transaction.update(requestDocument.ref, {
+            status: "invoiced",
+            invoiceId: invoiceRef.id,
+            updatedAt: FieldValue.serverTimestamp()
+          });
+        }
       } else if (result === "invoice_exists") {
         // 請求書は既にある(別の実行が作った)：利用月の記録に印だけ付ける(金額は増やさない)。
         transaction.update(usageRef, {
@@ -464,7 +498,10 @@ async function closeUsageIntoInvoice(database, usageDocument, monthKey, closeRun
   counts[result] = (counts[result] || 0) + 1;
 
   if (result === "create") {
-    counts.amountJpy = (counts.amountJpy || 0) + storeCustomPlanFeeJpyForKind((usageDocument.data() || {}).planKind);
+    counts.amountJpy = (counts.amountJpy || 0) + storeCustomPlanFeeJpyForKind((usageDocument.data() || {}).planKind) + changeRequestTotalJpy;
+    if (changeRequestTotalJpy > 0) {
+      counts.changeRequestJpy = (counts.changeRequestJpy || 0) + changeRequestTotalJpy;
+    }
   }
 
   return result;
