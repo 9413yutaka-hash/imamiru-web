@@ -35,6 +35,10 @@ import {
   buildImadakeRegionKey
 } from "./imadake.js";
 
+import {
+  STORE_MANAGED_PLAN_SIGNUP_ENABLED
+} from "./store-custom-plan-billing.js";
+
 const STORE_ACCOUNTS_COLLECTION = "storeAccounts";
 const STORE_MEMBERS_COLLECTION = "storeMembers";
 const STORE_PROFILES_COLLECTION = "storeProfiles";
@@ -831,14 +835,14 @@ export async function handleStoreMyStores(request, response, deps) {
 
         const account = snapshots[0].data() || {};
         const profile = snapshots[1].exists ? snapshots[1].data() || {} : {};
-        let planSummary = { planState: null, planAccessUntilMillis: 0 };
+        let planSummary = { planState: null, planAccessUntilMillis: 0, planKind: null };
         let publiclyVisible = null;
 
         if (member.role === "owner" && typeof deps.readStorePlanSummary === "function") {
           try {
             planSummary = await deps.readStorePlanSummary(database, member.storeId);
           } catch (planError) {
-            planSummary = { planState: null, planAccessUntilMillis: 0 };
+            planSummary = { planState: null, planAccessUntilMillis: 0, planKind: null };
           }
         }
 
@@ -868,6 +872,7 @@ export async function handleStoreMyStores(request, response, deps) {
           publiclyVisible: publiclyVisible,
           planState: planSummary.planState,
           planAccessUntilMillis: planSummary.planAccessUntilMillis,
+          planKind: planSummary.planKind || "self",
           createdAtMillis:
             account.createdAt && typeof account.createdAt.toMillis === "function"
               ? account.createdAt.toMillis()
@@ -878,6 +883,9 @@ export async function handleStoreMyStores(request, response, deps) {
 
     return response.status(200).json({
       success: true,
+      managedPlanSignupAvailable:
+        STORE_MANAGED_PLAN_SIGNUP_ENABLED === true ||
+        (typeof deps.isStoreCustomPlanTrialEnabled === "function" && deps.isStoreCustomPlanTrialEnabled() === true),
       stores: stores
         .filter(Boolean)
         .sort(function(first, second) {

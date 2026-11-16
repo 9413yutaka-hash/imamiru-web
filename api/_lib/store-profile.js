@@ -34,7 +34,8 @@ import {
 
 // STEP 50-B｜店舗カードの公開条件(月額契約の利用権)。STEP 44 の判定をそのまま使う。
 import {
-  evaluateStoreCustomPlanAccess
+  evaluateStoreCustomPlanAccess,
+  normalizeStoreCustomPlanKind
 } from "./store-custom-plan-billing.js";
 
 const STORE_ACCOUNTS_COLLECTION = "storeAccounts";
@@ -733,23 +734,26 @@ export async function readStoreCardPlanActive(database, storeId, nowMillis, tran
 // unpaid：未払いで停止中／none：契約なし・終了。
 export function summarizeStorePlanForList(plan, nowMillis) {
   if (!plan) {
-    return { planState: "none", planAccessUntilMillis: 0 };
+    return { planState: "none", planAccessUntilMillis: 0, planKind: "self" };
   }
 
+  const planKind = normalizeStoreCustomPlanKind(plan.planKind);
+
   if (plan.paymentStatus === "suspended") {
-    return { planState: "unpaid", planAccessUntilMillis: 0 };
+    return { planState: "unpaid", planAccessUntilMillis: 0, planKind: planKind };
   }
 
   if (evaluateStoreCustomPlanAccess(plan, nowMillis)) {
     return plan.status === "canceling"
       ? {
         planState: "canceling",
-        planAccessUntilMillis: plan.accessUntil && typeof plan.accessUntil.toMillis === "function" ? plan.accessUntil.toMillis() : 0
+        planAccessUntilMillis: plan.accessUntil && typeof plan.accessUntil.toMillis === "function" ? plan.accessUntil.toMillis() : 0,
+        planKind: planKind
       }
-      : { planState: "active", planAccessUntilMillis: 0 };
+      : { planState: "active", planAccessUntilMillis: 0, planKind: planKind };
   }
 
-  return { planState: "none", planAccessUntilMillis: 0 };
+  return { planState: "none", planAccessUntilMillis: 0, planKind: planKind };
 }
 
 export async function readStorePlanSummaryForList(database, storeId, nowMillis) {
