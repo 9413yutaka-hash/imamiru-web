@@ -218,6 +218,37 @@ r = await call(CLOSE("2026-11", true), "admin");
 t("P1 運営管理(managed)の利用月の記録は、締めで500円・種別 managed の請求書になる", r.code === 200 && !!invoice("S12", "2026-11") && invoice("S12", "2026-11").amountJpy === 500 && invoice("S12", "2026-11").planKind === "managed" && invoice("S12", "2026-11").status === "closed", r.body);
 t("P2 種別を持たない既存の請求書は self のまま100円（P1 の締めでも変わらない）", invoice("S1", "2026-11").amountJpy === 100, invoice("S1", "2026-11"));
 
+// ===================== 運営管理の申込・切り替え(段階1) =====================
+const MSUB = (storeId) => ({ mode: "storeCustomPlanSubscribe", storeId, contractModel: "monthly", planKind: "managed", planConsentVersion: "store-managed-plan-2026-11-17" });
+seedStore("S13", "u3"); card("u3");
+NOW = jst(2026, 12, 5, 10, 0);
+r = await call({ mode: "storeCustomPlanSubscribe", storeId: "S13", contractModel: "monthly", planKind: "managed", planConsentVersion: "store-card-monthly-2026-10-31" }, "u3");
+t("M1 運営管理の申込は、運営管理専用の同意の版が無ければ受け付けない", r.code === 400 && r.body.reason === "plan_consent_required" && !plan("S13"), r.body);
+r = await call(MSUB("S13"), "u3");
+t("M2 運営管理の新規申込：契約の種別は managed・同意は500円・運営管理の版、今月の利用月の記録も managed", r.code === 200 && r.body.result === "subscribed" && r.body.planKind === "managed" && plan("S13").planKind === "managed" && plan("S13").consent.feeJpy === 500 && plan("S13").consent.version === "store-managed-plan-2026-11-17" && usage("S13", "2026-12").planKind === "managed" && usage("S13", "2026-12").holderUid === "u3", { body: r.body, plan: plan("S13") });
+r = await call(MSUB("S13"), "u3");
+t("M3 運営管理の二重申込は 409 already_subscribed", r.code === 409 && r.body.reason === "already_subscribed", r.body);
+r = await call(MSUB("S1"), "u6");
+t("M4 セルフ運用から運営管理への切り替え：契約の種別が managed になる。12月の利用月の記録は締め済み（請求済み）のため変えない（発生済みの料金はそのまま）", r.code === 200 && r.body.result === "upgraded" && plan("S1").planKind === "managed" && plan("S1").consent.feeJpy === 500 && usage("S1", "2026-12").planKind === "self" && invoice("S1", "2026-12").amountJpy === 100, { body: r.body, plan: plan("S1"), usage: usage("S1", "2026-12") });
+r = await call(CANCEL("S13"), "u3");
+t("M5 運営管理の解約：解約手続き済みになり、12月末まで利用できる", r.code === 200 && plan("S13").status === "canceling" && ms(plan("S13").accessUntil) === jst(2027, 1, 1), r.body);
+NOW = jst(2027, 1, 5, 10, 0);
+r = await call(CLOSE("2026-12", true), "admin");
+t("M6 12月の締め：解約した S13 の請求書は500円・managed、切り替えた S1 の12月は締め済みの100円のまま", r.code === 200 && invoice("S13", "2026-12").amountJpy === 500 && invoice("S13", "2026-12").planKind === "managed" && invoice("S1", "2026-12").amountJpy === 100, { body: r.body, s1: invoice("S1", "2026-12"), s13: invoice("S13", "2026-12") });
+NOW = jst(2027, 2, 5, 10, 0);
+r = await call(CLOSE("2027-01", true), "admin");
+t("M7 切り替え後の月（2月）の利用月の記録は managed で作られる", r.code === 200 && !!usage("S1", "2027-02") && usage("S1", "2027-02").planKind === "managed" && usage("S1", "2027-02").holderUid === "u6", { body: r.body, feb: usage("S1", "2027-02") });
+
+seedStore("S14", "u2");
+NOW = jst(2027, 2, 10, 10, 0);
+r = await call(SUB("S14"), "u2");
+t("M8 前提：S14 が2月にセルフ運用で申込（2月の利用月の記録は self）", r.code === 200 && plan("S14").planKind === "self" && usage("S14", "2027-02").planKind === "self", { body: r.body, plan: plan("S14") });
+r = await call(MSUB("S14"), "u2");
+t("M9 同じ月のうちに運営管理へ切り替えると、未請求の利用月の記録も managed になる（切り替え月は500円だけ）", r.code === 200 && r.body.result === "upgraded" && usage("S14", "2027-02").planKind === "managed", { body: r.body, usage: usage("S14", "2027-02") });
+NOW = jst(2027, 3, 5, 10, 0);
+r = await call(CLOSE("2027-02", true), "admin");
+t("M10 2月の締め：S14 の請求書は500円・managed 1件だけ（100円との二重請求なし）", r.code === 200 && invoice("S14", "2027-02").amountJpy === 500 && invoice("S14", "2027-02").planKind === "managed", { body: r.body, inv: invoice("S14", "2027-02") });
+
 // ===================== regressions / isolation =====================
 const IM = await import(REPO_URL + "/api/_lib/imadake.js");
 const MC = await import(REPO_URL + "/api/_lib/imadake-monthly-charge.js");

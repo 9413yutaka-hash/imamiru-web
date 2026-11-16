@@ -39,8 +39,13 @@ import {
 import {
   STORE_CUSTOM_PLAN_PERIOD_MONTHLY,
   STORE_CUSTOM_PLAN_MONTHLY_SIGNUP_ENABLED,
+  STORE_CUSTOM_PLAN_KIND_MANAGED,
   STORE_CUSTOM_PLAN_KIND_SELF,
   STORE_CUSTOM_PLAN_MONTHLY_FEE_JPY,
+  STORE_MANAGED_PLAN_CONSENT_VERSION,
+  STORE_MANAGED_PLAN_SIGNUP_ENABLED,
+  normalizeStoreCustomPlanKind,
+  storeCustomPlanFeeJpyForKind,
   STORE_CARD_PLAN_CONSENT_VERSION,
   evaluateStoreCustomPlanAccess,
   isMonthlyPlan,
@@ -977,6 +982,29 @@ function writePlanEvent(transaction, database, storeId, uid, event, nowMillis, d
 //   contractModel "monthly" を指定した時だけ試験用の暦月契約(createdInPreview。請求台帳の試験用)。
 // 戻り値 { ok: true, contractModel, createdInPreview } か { ok: false, status, reason, extra }。
 export function resolveStoreCardPlanSignup(deps, body) {
+  // 運営管理(planKind managed)の申込は、同意の版も受付の条件もセルフ運用とは別にする。契約の種類は常に
+  // 本番の暦月契約(試験の環境では createdInPreview の暦月契約)。受付の開始(STORE_MANAGED_PLAN_SIGNUP_ENABLED)
+  // までは Preview 試験の環境でだけ受け付ける。
+  if (body && body.planKind === STORE_CUSTOM_PLAN_KIND_MANAGED) {
+    if (body.planConsentVersion !== STORE_MANAGED_PLAN_CONSENT_VERSION) {
+      return { ok: false, status: 400, reason: "plan_consent_required", extra: { consentVersion: STORE_MANAGED_PLAN_CONSENT_VERSION } };
+    }
+
+    const managedSignupEnabled = STORE_MANAGED_PLAN_SIGNUP_ENABLED === true;
+    const trialEnvironment = typeof deps.isStoreCustomPlanTrialEnabled === "function" && deps.isStoreCustomPlanTrialEnabled() === true;
+
+    if (!managedSignupEnabled && !trialEnvironment) {
+      return { ok: false, status: 403, reason: "plan_signup_unavailable" };
+    }
+
+    return {
+      ok: true,
+      contractModel: STORE_CUSTOM_PLAN_PERIOD_MONTHLY,
+      createdInPreview: !managedSignupEnabled,
+      planKind: STORE_CUSTOM_PLAN_KIND_MANAGED
+    };
+  }
+
   if (!body || body.planConsentVersion !== STORE_CARD_PLAN_CONSENT_VERSION) {
     return { ok: false, status: 400, reason: "plan_consent_required", extra: { consentVersion: STORE_CARD_PLAN_CONSENT_VERSION } };
   }
@@ -993,7 +1021,8 @@ export function resolveStoreCardPlanSignup(deps, body) {
     contractModel: monthlySignupEnabled || body.contractModel === STORE_CUSTOM_PLAN_PERIOD_MONTHLY
       ? STORE_CUSTOM_PLAN_PERIOD_MONTHLY
       : STORE_CUSTOM_PLAN_PERIOD_PREVIEW_TRIAL,
-    createdInPreview: !monthlySignupEnabled
+    createdInPreview: !monthlySignupEnabled,
+    planKind: STORE_CUSTOM_PLAN_KIND_SELF
   };
 }
 
@@ -1125,9 +1154,9 @@ export async function handleStoreCustomPlanSubscribe(request, response, deps) {
     // STEP 50-B｜同意の証跡(契約の文書と契約の履歴の両方に残す。退会しても storeCustomPlans・
     // storeCustomPlanEvents は削除の対象ではない)。
     const consent = {
-      version: STORE_CARD_PLAN_CONSENT_VERSION,
+      version: signup.planKind === STORE_CUSTOM_PLAN_KIND_MANAGED ? STORE_MANAGED_PLAN_CONSENT_VERSION : STORE_CARD_PLAN_CONSENT_VERSION,
       consentedAt: Timestamp.fromMillis(nowMillis),
-      feeJpy: STORE_CUSTOM_PLAN_MONTHLY_FEE_JPY,
+      feeJpy: storeCustomPlanFeeJpyForKind(signup.planKind),
       taxIncluded: true,
       storeId: storeId,
       uid: actor.uid
@@ -1173,7 +1202,7 @@ export async function handleStoreCustomPlanSubscribe(request, response, deps) {
       }
 
       // 既存の契約と同じ種類の時だけ「解約の取り消し」(試験の契約と本番の暦月契約は混ぜない)。
-      if (inPeriod && mine && planData.status === "canceling" && (isMonthlyPlan(planData) === (contractModel === STORE_CUSTOM_PLAN_PERIOD_MONTHLY))) {
+      if (inPeriod && mine && planData.status === "canceling" && (isMonthlyPlan(planData) === (contractModel === STORE_CUSTOM_PLAN_PERIOD_MONTHLY)) && normalizeStoreCustomPlanKind(planData.planKind) === signup.planKind) {
         const reactivated = {
           status: "active",
           canceledAt: null,
@@ -1208,6 +1237,53 @@ export async function handleStoreCustomPlanSubscribe(request, response, deps) {
           result: "reactivated",
           accessUntilMillis: isMonthlyPlan(planData) ? 0 : millisOf(planData.accessUntil),
           periodKind: isMonthlyPlan(planData) ? STORE_CUSTOM_PLAN_PERIOD_MONTHLY : STORE_CUSTOM_PLAN_PERIOD_PREVIEW_TRIAL
+        };
+        return;
+      }
+
+      // セルフ運用(100円)の契約中の運営管理への切り替え。契約の種別を managed に変え、今月の利用月の
+      // 記録が申込んだ本人の未請求のものなら種別も合わせる(切り替えた月は500円だけを請求する代表決定)。
+      // 今月の料金が前の契約者に結び付いている時は、その月の種別は変えない(発生済みの料金はそのまま)。
+      if (inPeriod && mine && planData.status === "active" && isMonthlyPlan(planData) &&
+        normalizeStoreCustomPlanKind(planData.planKind) === STORE_CUSTOM_PLAN_KIND_SELF &&
+        signup.planKind === STORE_CUSTOM_PLAN_KIND_MANAGED) {
+        if (usageSnapshot.exists) {
+          const usageData = usageSnapshot.data() || {};
+
+          if (usageData.holderUid === actor.uid && usageData.status === "accrued") {
+            transaction.update(usageRef, {
+              planKind: STORE_CUSTOM_PLAN_KIND_MANAGED,
+              updatedAt: FieldValue.serverTimestamp()
+            });
+          }
+        } else {
+          writeStoreCustomPlanUsage(transaction, usageRef, { exists: false }, {
+            storeId: storeId,
+            planKind: STORE_CUSTOM_PLAN_KIND_MANAGED,
+            month: monthKey,
+            holderUid: actor.uid,
+            reason: "upgraded",
+            atMillis: nowMillis,
+            contractSubscribedAt: planData.subscribedAt || null,
+            createdInPreview: planData.createdInPreview === true
+          });
+        }
+
+        transaction.update(planRef, {
+          planKind: STORE_CUSTOM_PLAN_KIND_MANAGED,
+          consent: consent,
+          updatedAt: FieldValue.serverTimestamp(),
+          revision: (Number.isInteger(planData.revision) ? planData.revision : 0) + 1
+        });
+        writePlanEvent(transaction, database, storeId, actor.uid, "plan_upgraded", nowMillis, {
+          consent: consent
+        });
+        outcome = {
+          status: 200,
+          result: "upgraded",
+          accessUntilMillis: 0,
+          periodKind: STORE_CUSTOM_PLAN_PERIOD_MONTHLY,
+          planKind: STORE_CUSTOM_PLAN_KIND_MANAGED
         };
         return;
       }
@@ -1256,7 +1332,7 @@ export async function handleStoreCustomPlanSubscribe(request, response, deps) {
             }
           : {
               storeId: storeId,
-              planKind: planData ? planData.planKind : undefined,
+              planKind: signup.planKind,
               month: monthKey,
               holderUid: actor.uid,
               reason: "subscribed",
@@ -1272,7 +1348,7 @@ export async function handleStoreCustomPlanSubscribe(request, response, deps) {
         ownerUid: actor.uid,
         billingAccountUid: actor.uid,
         periodKind: contractModel,
-        planKind: STORE_CUSTOM_PLAN_KIND_SELF,
+        planKind: signup.planKind,
         createdInPreview: createdInPreview,
         subscribedAt: Timestamp.fromMillis(nowMillis),
         accessUntil: monthly ? null : Timestamp.fromMillis(accessUntilMillis),
@@ -1286,7 +1362,7 @@ export async function handleStoreCustomPlanSubscribe(request, response, deps) {
         accessUntil: monthly ? null : Timestamp.fromMillis(accessUntilMillis),
         consent: consent
       });
-      outcome = { status: 200, result: "subscribed", accessUntilMillis: accessUntilMillis, periodKind: contractModel };
+      outcome = { status: 200, result: "subscribed", accessUntilMillis: accessUntilMillis, periodKind: contractModel, planKind: signup.planKind };
     });
 
     if (outcome.status !== 200) {
@@ -1297,7 +1373,8 @@ export async function handleStoreCustomPlanSubscribe(request, response, deps) {
       success: true,
       result: outcome.result,
       accessUntilMillis: outcome.accessUntilMillis,
-      periodKind: outcome.periodKind || ""
+      periodKind: outcome.periodKind || "",
+      planKind: outcome.planKind || signup.planKind || ""
     });
   } catch (error) {
     console.error("店舗カスタマイズ：申込エラー：", error && error.message);
