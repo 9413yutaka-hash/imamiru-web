@@ -26793,10 +26793,11 @@ function startTodayTickerAutoScroll() {
       return;
     }
 
-    // 2つ目のコピーの手前から始めると、左へスワイプして
-    // 見逃した項目を戻って見る余地ができる。
+    // 先頭(最初の項目のラベル)から始める。途中の位置から始めると
+    // 項目の途中から表示されて、切れているように見えるため
+    // (2026-11-17 代表指摘)。
     ticker.scrollLeft =
-      half - ticker.clientWidth;
+      0;
 
     let last =
       performance.now();
