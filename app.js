@@ -1009,6 +1009,108 @@ function parseTimeStringToMinutes(
   );
 }
 
+// 店舗カードの写真に重ねる小さなタグ(見せ方だけ・2026-11-17 代表提案)。
+// ・距離が分かる時:「あと◯km」
+// ・現在地が未取得の時:「現在地未取得」(shop_distance_unknown と同じ文言)
+// ・営業時間と定休日から今日が営業日と確かめられる時だけ:「今日やってる」
+// 地域から探す表示中は、距離で探していないため距離系のタグは出さない
+// (カード内の距離チップを出さない既存の扱いにそろえる)。
+function isShopOpenTodayByHours(
+  shop
+) {
+  const hours =
+    shop &&
+    shop.permanentAdHours;
+
+  if (
+    !hours ||
+    hours.startTime === "" ||
+    hours.endTime === "" ||
+    hours.irregularClosed === true
+  ) {
+    return false;
+  }
+
+  const todayCodeByWeekday = {
+    Sun: "sun",
+    Mon: "mon",
+    Tue: "tue",
+    Wed: "wed",
+    Thu: "thu",
+    Fri: "fri",
+    Sat: "sat"
+  };
+
+  const weekdayShort =
+    new Intl.DateTimeFormat(
+      "en-US",
+      {
+        timeZone: "Asia/Tokyo",
+        weekday: "short"
+      }
+    ).format(new Date());
+
+  const todayCode =
+    todayCodeByWeekday[weekdayShort];
+
+  return (
+    typeof todayCode === "string" &&
+    !hours.closedDays.includes(todayCode)
+  );
+}
+
+function getShopPhotoTagsHtml(
+  shop
+) {
+  const language =
+    getCurrentMachinauLanguage();
+
+  const tagTexts = [];
+
+  if (!selectedShopRegion) {
+    if (
+      typeof shop.distanceKm === "number" &&
+      Number.isFinite(shop.distanceKm)
+    ) {
+      tagTexts.push(
+        getMachinauTranslation(
+          "shop_photo_tag_distance",
+          language
+        ).replace(
+          "{distance}",
+          formatDistance(shop.distanceKm)
+        )
+      );
+    } else {
+      tagTexts.push(
+        getMachinauTranslation(
+          "shop_distance_unknown",
+          language
+        )
+      );
+    }
+  }
+
+  if (isShopOpenTodayByHours(shop)) {
+    tagTexts.push(
+      getMachinauTranslation(
+        "shop_photo_tag_open_today",
+        language
+      )
+    );
+  }
+
+  if (tagTexts.length === 0) {
+    return "";
+  }
+
+  return `<div class="shop-photo-tags">${tagTexts
+    .map(function(tagText) {
+      return `<span class="shop-photo-tag">${escapeHtml(tagText)}</span>`;
+    })
+    .join("")}</div>`;
+}
+
 // サイト全体改善 第5弾(代表指示：今営業していると確かめられない店舗に「営業中」と出さない)｜
 // 投稿の営業時間には定休日・臨時休業の情報が無く、今営業しているかを確かめられない。そのため
 // 営業中・営業時間外・「掲載中」の状態と、閉店まで・本日の営業終了の案内(この結果から決まる)は出さない。
@@ -4214,6 +4316,7 @@ function buildStoreProfileShopCardHtml(shop, shopCardIndex) {
             ${isStoreProfileShopFavorite(shop) ? "♥" : "♡"}
           </button>
         </div>
+        ${getShopPhotoTagsHtml(shop)}
         ${getCardVisualHtml(shop, shopCardIndex < 2)}
       </div>
       <div class="shop-body">
@@ -4626,6 +4729,10 @@ function renderShops() {
                   </button>
 
                 </div>
+
+                ${getShopPhotoTagsHtml(
+                  shop
+                )}
 
                 ${getCardVisualHtml(
                   shop,

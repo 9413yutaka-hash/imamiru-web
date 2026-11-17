@@ -3054,6 +3054,20 @@ const MACHINAU_TRANSLATIONS = {
     en: "Location not set"
   },
 
+  // 店舗カードの写真に重ねるタグ(見せ方だけ・2026-11-17 代表提案)。
+  // 距離は formatDistance() の結果(例: 1.2km / 850m)を {distance} に入れる。
+  shop_photo_tag_distance: {
+    ja: "あと{distance}",
+    en: "{distance} away"
+  },
+
+  // 営業時間と定休日から「今日が営業日」と確かめられる時だけ写真に重ねるタグ。
+  // 「営業中」とは言わない(今の時刻に開いているかまでは確かめない)。
+  shop_photo_tag_open_today: {
+    ja: "今日やってる",
+    en: "Open today"
+  },
+
   shop_walking_car_recommended: {
     ja: "車での移動推奨",
     en: "Drive Recommended"
