@@ -359,7 +359,7 @@ seedStore("M2", "um", "published", { latitude: 26.40, longitude: 127.90 }); mont
   const allJa = Object.values(T).map((e) => e.ja || "").join("\n") + pages.map((p) => p[1]).join("\n");
   t("G4 「引き継ぎ無料」「新規登録無料」「店舗カードの作成・下書きは無料」など、店主の管理を無料と誤認させる文言が無い", !/引き継ぎ(は|も)?無料|新規登録(は|も)?無料|登録は無料|店舗カードの作成・下書きは無料|下書きは無料/.test(allJa));
   t("G5 shop.html・shop-guide.html・店舗アカウント画面に統一の案内", pages[0][1].includes("新規店舗登録も、掲載済み店舗の引き継ぎも、同じ料金・同じ条件です") && pages[1][1].includes("新規店舗登録も、掲載済み店舗の引き継ぎも、同じ料金・同じ条件です") && pages[2][1].includes('data-i18n="store_management_pricing_note"'));
-  t("G6 今だけ投稿は別料金のまま(店舗の案内のページ)", pages[0][1].includes("有効な閲覧があった日だけ1投稿100円（税込）") && pages[1][1].includes("有効な閲覧があった日だけ1投稿100円（税込）"));
+  t("G6 今だけ投稿は別料金のまま(店舗の案内のページ)", pages[0][1].includes("旅行者が「続きを見る」を押した日だけ1投稿100円（税込）") && pages[1][1].includes("旅行者が「続きを見る」を押した日だけ1投稿100円（税込）"));
 
   const terms = readFileSync(join(REPO_ROOT, "terms.html"), "utf8");
   const toku = readFileSync(join(REPO_ROOT, "tokushoho.html"), "utf8");
