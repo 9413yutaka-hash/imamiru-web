@@ -3566,7 +3566,7 @@ body:has(#todayFeedSection) #shopsSection:not(.shops-show-all) #shopsList .shop-
   }
 }
 
-/* ---- 読み物: 大きい1枚＋小さい2枚の横スクロール ---- */
+/* ---- 読み物: 幅をそろえた横スクロール ---- */
 body:has(#todayFeedSection) #columnEntryCardList {
   display: flex;
   flex-direction: row;
@@ -3584,9 +3584,11 @@ body:has(#todayFeedSection) #columnEntryCardList::-webkit-scrollbar {
   display: none;
 }
 
+/* カードの幅は全部同じにそろえる(2026-11-17 代表指示。当初の
+   「大きい1枚＋小さい2枚」はやめる)。 */
 body:has(#todayFeedSection) #columnEntryCardList .region-recommendation-card {
-  flex: 0 0 62%;
-  max-width: 250px;
+  flex: 0 0 78%;
+  max-width: 330px;
   min-width: 0;
   margin-bottom: 0;
   scroll-snap-align: start;
@@ -3594,19 +3596,47 @@ body:has(#todayFeedSection) #columnEntryCardList .region-recommendation-card {
   flex-direction: column;
 }
 
-body:has(#todayFeedSection) #columnEntryCardList .region-recommendation-card:first-child {
-  flex-basis: 84%;
-  max-width: 430px;
-}
-
 @media (min-width: 701px) {
   body:has(#todayFeedSection) #columnEntryCardList .region-recommendation-card {
-    flex-basis: 250px;
+    flex-basis: 330px;
   }
+}
 
-  body:has(#todayFeedSection) #columnEntryCardList .region-recommendation-card:first-child {
-    flex-basis: 430px;
-  }
+/* 右にまだ続きがあることを伝える(お店のカテゴリ行と同じ作法):
+   右端を薄くし、› の印を出す。最後まで送ると消える。 */
+.column-scroll-wrap {
+  position: relative;
+}
+
+.column-scroll-wrap.has-more #columnEntryCardList {
+  -webkit-mask-image: linear-gradient(to right, #000 92%, transparent 99%);
+  mask-image: linear-gradient(to right, #000 92%, transparent 99%);
+}
+
+.column-scroll-hint {
+  position: absolute;
+  right: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--navy);
+  color: var(--white);
+  font-size: 19px;
+  font-weight: 900;
+  line-height: 28px;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(4, 45, 66, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+  z-index: 2;
+}
+
+.column-scroll-wrap.has-more .column-scroll-hint {
+  opacity: 1;
+  animation: category-hint-nudge 1.8s ease-in-out infinite;
 }
 
 /* 読み物の写真はカードの端まで(枠の内側に余白で囲まない)。 */
