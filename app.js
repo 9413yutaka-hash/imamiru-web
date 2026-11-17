@@ -26782,8 +26782,9 @@ function renderTodayTicker(
         const tickerInner =
           "<b>" +
           escapeHtml(label) +
-          "｜</b>" +
-          escapeHtml(truncateTodayFeedText(headline, 44));
+          "</b>" +
+          escapeHtml(truncateTodayFeedText(headline, 44)) +
+          "&nbsp;&nbsp;";
 
         return isTodayFeedTargetAvailable(item.targetId)
           ? (
