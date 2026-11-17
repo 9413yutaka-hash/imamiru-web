@@ -25970,6 +25970,8 @@ function updateTodayFeedDateLabel() {
     Date.now();
 
   if (todayFeedDay === "tomorrow") {
+    dateElement.classList.remove("is-weekend");
+
     dateElement.textContent =
       formatLabel(new Date(now + DAY_MS), true);
 
@@ -25985,18 +25987,62 @@ function updateTodayFeedDateLabel() {
     const firstDay =
       new Date(range.start + 12 * 60 * 60 * 1000);
 
+    const secondDay =
+      new Date(range.start + DAY_MS + 12 * 60 * 60 * 1000);
+
     const dayCount =
       Math.round((range.end - range.start) / DAY_MS);
 
-    dateElement.textContent =
+    // 週末は日付が長く、途中で割れてバラバラに見えるため、1日分を
+    // ひとかたまり(改行不可)にして、区切りでのみ改行させる。
+    // 同じ月なら2日目の月は省く(2026-11-17 代表指摘)。
+    dateElement.classList.add("is-weekend");
+
+    const firstLabel =
+      formatLabel(firstDay, true);
+
+    let secondLabel =
+      formatLabel(secondDay, true);
+
+    if (language === "ja" && dayCount >= 2) {
+      const monthOf =
+        function(instant) {
+          try {
+            return new Intl.DateTimeFormat(
+              "ja-JP",
+              { timeZone: "Asia/Tokyo", month: "numeric" }
+            ).format(instant);
+          } catch (error) {
+            return "";
+          }
+        };
+
+      if (monthOf(firstDay) === monthOf(secondDay)) {
+        secondLabel =
+          formatLabel(secondDay, false);
+      }
+    }
+
+    const wrapDay =
+      function(label) {
+        return (
+          '<span class="today-hero-day">' +
+          escapeHtml(label) +
+          "</span>"
+        );
+      };
+
+    dateElement.innerHTML =
       dayCount >= 2
-        ? formatLabel(firstDay, true) +
+        ? wrapDay(firstLabel) +
           (language === "ja" ? "・" : " · ") +
-          formatLabel(new Date(range.start + DAY_MS + 12 * 60 * 60 * 1000), true)
-        : formatLabel(firstDay, true);
+          wrapDay(secondLabel)
+        : wrapDay(firstLabel);
 
     return;
   }
+
+  dateElement.classList.remove("is-weekend");
 
   dateElement.textContent =
     formatLabel(new Date(now), true);
