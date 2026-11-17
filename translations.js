@@ -4670,6 +4670,11 @@ const MACHINAU_TRANSLATIONS = {
     en: "Please log in with your business account first."
   },
 
+  store_profile_to_account_link: {
+    ja: "店舗アカウントの画面を開く",
+    en: "Open the business account page"
+  },
+
   store_profile_not_found: {
     ja: "この店舗・施設の情報を開けませんでした。店舗・施設アカウントの画面から開き直してください。",
     en: "This shop or facility could not be opened. Please open it again from your business account page."

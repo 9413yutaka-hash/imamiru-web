@@ -297,7 +297,7 @@
   </header>
 
   <main>
-    <p class="draft-banner" data-i18n="store_profile_not_public_banner">この情報はまだ旅行者に表示されません。</p>
+    <p class="draft-banner" data-i18n="store_profile_not_public_banner" hidden>この情報はまだ旅行者に表示されません。</p>
 
     <div id="pageMessage" class="message" role="status" aria-live="polite"></div>
 
@@ -307,10 +307,12 @@
 
     <div class="panel" id="loginRequiredPanel" hidden>
       <p class="note" data-i18n="store_profile_login_required"></p>
+      <p class="note"><a href="store-account.html" data-i18n="store_profile_to_account_link">店舗アカウントの画面を開く</a></p>
     </div>
 
     <div class="panel" id="notFoundPanel" hidden>
       <p class="note" data-i18n="store_profile_not_found"></p>
+      <p class="note"><a href="store-account.html" data-i18n="store_profile_to_account_link">店舗アカウントの画面を開く</a></p>
     </div>
 
     <div id="editorArea" hidden>
