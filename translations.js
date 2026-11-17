@@ -248,6 +248,26 @@ const MACHINAU_TRANSLATIONS = {
     en: "Nothing matches this filter yet. Try another type."
   },
 
+  feed_empty_filter_imadake: {
+    ja: "今だけ投稿は、まだ届いていません。",
+    en: "No time-limited posts yet."
+  },
+
+  feed_empty_filter_event: {
+    ja: "イベントは、まだ届いていません。",
+    en: "No events yet."
+  },
+
+  feed_empty_filter_voice: {
+    ja: "地元の声は、まだ届いていません。",
+    en: "No local voices yet."
+  },
+
+  feed_empty_filter_discovery: {
+    ja: "街の発見は、まだ届いていません。",
+    en: "No town discoveries yet."
+  },
+
   feed_empty_keyword: {
     ja: "「{term}」に合う今日の「今」は見つかりませんでした。",
     en: "Nothing for today matches “{term}” yet."
