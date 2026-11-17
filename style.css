@@ -2504,7 +2504,9 @@ body:has(#todayFeedSection) h3 {
 
 /* ---- 01 ヘッダー: 濃紺バー＋ロゴ＋赤CTA＋言語ピル ---- */
 body:has(#todayFeedSection) .top-bar {
-  background: var(--navy);
+  /* 濃い面の色はヒーロー写真の海の色に統一(2026-11-17 代表提案)。
+     --navy 自体は他ページ・文字色と共有のため変えず、この面だけ差し替える。 */
+  background: #045a6e;
   border-bottom: 3px solid var(--blue);
   backdrop-filter: none;
 }
@@ -2782,11 +2784,12 @@ body:has(#todayFeedSection) .hero-action-grid {
   gap: 22px;
   align-items: stretch;
   flex-wrap: wrap;
-  background: linear-gradient(120deg, #0a4d68, #00719e);
+  /* 表示範囲「半径15km」の面｜濃い面の色を海の色 #045a6e に統一(2026-11-17 代表提案)。 */
+  background: #045a6e;
   color: var(--white);
   border-radius: 24px;
   padding: 26px 28px;
-  box-shadow: 0 18px 44px rgba(10, 77, 104, 0.22);
+  box-shadow: 0 18px 44px rgba(4, 90, 110, 0.22);
   margin-bottom: 22px;
 }
 
@@ -3332,7 +3335,9 @@ body:has(#todayFeedSection) .hero-action-grid {
 
 /* ---- お店・施設の方へ(モカ案07) ---- */
 .shop-owner-cta {
-  background: var(--navy);
+  /* 濃い面の色を海の色 #045a6e に統一(2026-11-17 代表提案)。このクラスは
+     index.html でだけ使うため、ここで直接差し替えても他ページへ波及しない。 */
+  background: #045a6e;
   border-radius: 22px;
   padding: 26px 22px;
   margin-top: 18px;
@@ -3403,4 +3408,214 @@ body:has(#todayFeedSection) .hero-action-grid {
 
 .feed-card-textonly .feed-card-body {
   padding: 14px 16px 16px;
+}
+
+/* ============================================================
+   トップページ見せ方変更(2026-11-17 代表提案)｜中身・文言・並び順は変えず、見せ方だけ。
+   ・背景は白に戻し、セクションごとに薄い色面で区切る
+   ・カードは細いグレーの枠をやめ、薄い影だけ。写真はカードの端まで
+   ・お店カードと読み物は横スクロール(全件表示・フィードの縦並びと混ぜる)
+   ・見出しは丸ゴシック太字のまま、本文との差を広げる
+   style.css は他ページも読むため、既存部品の上書きは
+   body:has(#todayFeedSection) で TOP(index.html)だけに限定する。
+   ============================================================ */
+
+/* ---- 背景は白。セクションは薄い色面で区切る ---- */
+body:has(#todayFeedSection) {
+  background: #ffffff;
+}
+
+body:has(#todayFeedSection) .today-feed-section {
+  background: #fff6d9;
+  border-radius: 24px;
+  padding: 22px 16px 24px;
+}
+
+body:has(#todayFeedSection) .imadake-section {
+  background: #e9f6ec;
+  border: none;
+  box-shadow: none;
+}
+
+body:has(#todayFeedSection) .region-recommendation-section {
+  background: #eef5f8;
+  border: none;
+  box-shadow: none;
+}
+
+body:has(#todayFeedSection) #shopsSection {
+  background: #eef5f8;
+  border-radius: 24px;
+  padding: 22px 16px 24px;
+}
+
+/* 色面の上に乗るカードは白地のまま読めるようにする(フィードのカードは
+   元々白地。今だけ・掲示板などのカードも白地でそろえる)。 */
+body:has(#todayFeedSection) .imadake-card,
+body:has(#todayFeedSection) .region-recommendation-card {
+  background: var(--white);
+}
+
+/* ---- 見出しを立たせる(丸ゴシック太字は既存指定のまま、大きさだけ広げる) ---- */
+/* 対象は今15pxで本文と差が小さいセクション見出しだけ。大見出し
+   (.section-title-area h2 の24px、フラッシュバナーの22px等)は触らない。 */
+body:has(#todayFeedSection) .imadake-section h2,
+body:has(#todayFeedSection) .region-recommendation-section h2 {
+  font-size: 20px;
+  line-height: 1.4;
+}
+
+body:has(#todayFeedSection) .today-hero-copy b {
+  font-size: 22px;
+}
+
+/* ---- カード: 細いグレーの枠をやめ、薄い影だけにする ---- */
+body:has(#todayFeedSection) .feed-card,
+body:has(#todayFeedSection) .imadake-card,
+body:has(#todayFeedSection) #shopsList .shop-card,
+body:has(#todayFeedSection) .region-recommendation-card {
+  border: none;
+  box-shadow: 0 6px 18px rgba(20, 52, 82, 0.10);
+}
+
+body:has(#todayFeedSection) #shopsList .shop-card:hover {
+  box-shadow: 0 10px 24px rgba(20, 52, 82, 0.14);
+}
+
+/* ---- 店舗カードの写真に重ねる小さなタグ(app.js の getShopPhotoTagsHtml) ---- */
+.shop-photo-tags {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.shop-photo-tag {
+  background: rgba(8, 40, 55, 0.82);
+  color: var(--white);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.3;
+  border-radius: 999px;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+
+/* ---- お店カードは横スクロール(通常表示だけ。全件表示は従来どおり縦並び) ---- */
+body:has(#todayFeedSection) #shopsSection:not(.shops-show-all) #shopsList {
+  display: flex;
+  flex-direction: row;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  gap: 14px;
+  margin: 0 -16px;
+  padding: 4px 16px 12px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+body:has(#todayFeedSection) #shopsSection:not(.shops-show-all) #shopsList::-webkit-scrollbar {
+  display: none;
+}
+
+body:has(#todayFeedSection) #shopsSection:not(.shops-show-all) #shopsList .shop-card {
+  flex: 0 0 78%;
+  max-width: 330px;
+  min-width: 0;
+  scroll-snap-align: start;
+}
+
+@media (min-width: 701px) {
+  body:has(#todayFeedSection) #shopsSection:not(.shops-show-all) #shopsList .shop-card {
+    flex-basis: 330px;
+  }
+}
+
+@media (max-width: 700px) {
+  body:has(#todayFeedSection) #shopsSection:not(.shops-show-all) #shopsList .shop-visual {
+    height: 190px;
+  }
+}
+
+/* ---- 読み物: 大きい1枚＋小さい2枚の横スクロール ---- */
+body:has(#todayFeedSection) #columnEntryCardList {
+  display: flex;
+  flex-direction: row;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  gap: 14px;
+  margin: 0 -18px;
+  padding: 4px 18px 12px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+body:has(#todayFeedSection) #columnEntryCardList::-webkit-scrollbar {
+  display: none;
+}
+
+body:has(#todayFeedSection) #columnEntryCardList .region-recommendation-card {
+  flex: 0 0 62%;
+  max-width: 250px;
+  min-width: 0;
+  margin-bottom: 0;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+}
+
+body:has(#todayFeedSection) #columnEntryCardList .region-recommendation-card:first-child {
+  flex-basis: 84%;
+  max-width: 430px;
+}
+
+@media (min-width: 701px) {
+  body:has(#todayFeedSection) #columnEntryCardList .region-recommendation-card {
+    flex-basis: 250px;
+  }
+
+  body:has(#todayFeedSection) #columnEntryCardList .region-recommendation-card:first-child {
+    flex-basis: 430px;
+  }
+}
+
+/* 読み物の写真はカードの端まで(枠の内側に余白で囲まない)。 */
+body:has(#todayFeedSection) .column-entry-card-image {
+  margin: 0;
+  border-radius: 0;
+}
+
+body:has(#todayFeedSection) #columnEntryCardList .region-recommendation-card-body {
+  flex: 1;
+}
+
+/* ---- 線アイコン(絞り込みチップ・底バー・PCナビ) ---- */
+.line-icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  display: inline-block;
+  vertical-align: -3px;
+}
+
+body:has(#todayFeedSection) .category-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+body:has(#todayFeedSection) .nav-icon .line-icon {
+  width: 22px;
+  height: 22px;
+  vertical-align: 0;
+}
+
+body:has(#todayFeedSection) .top-pc-nav-icon .line-icon {
+  width: 17px;
+  height: 17px;
 }
