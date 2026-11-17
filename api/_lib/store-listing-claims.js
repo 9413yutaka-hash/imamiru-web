@@ -151,7 +151,7 @@ function isEligibleTargetStore(memberData, accountData, uid, storeId) {
   );
 }
 
-// STEP 58｜既存の自店舗への引き継ぎは、その店舗の月額100円の契約が有効な時だけ(候補にも出さない)。
+// 2026-11-18 代表決定(STEP 58の変更)｜既存の自店舗への引き継ぎに契約は要らない(候補に出す)。
 async function listEligibleStoresForUser(database, uid, deps) {
   const membersSnapshot = await database.collection(STORE_MEMBERS_COLLECTION).where("uid", "==", uid).get();
   const stores = [];
@@ -167,9 +167,7 @@ async function listEligibleStoresForUser(database, uid, deps) {
     const account = accountSnapshot.exists ? accountSnapshot.data() || {} : null;
 
     if (
-      isEligibleTargetStore(member, account, uid, member.storeId) &&
-      deps && typeof deps.readStoreCardPlanActive === "function" &&
-      (await deps.readStoreCardPlanActive(database, member.storeId, Date.now()))
+      isEligibleTargetStore(member, account, uid, member.storeId)
     ) {
       stores.push({
         storeId: member.storeId,
@@ -299,9 +297,7 @@ export async function handleStoreListingClaimCreate(request, response, deps) {
         return sendError(response, 403, "target_store_not_allowed");
       }
 
-      if (typeof deps.readStoreCardPlanActive !== "function" || !(await deps.readStoreCardPlanActive(database, targetStoreId, Date.now()))) {
-        return sendError(response, 403, "plan_required");
-      }
+      // 2026-11-18 代表決定(STEP 58の変更)｜既存の自店舗への引き継ぎにも契約は要らない。
     }
 
     const [linkSnapshot, myClaimsSnapshot] = await Promise.all([
@@ -319,26 +315,8 @@ export async function handleStoreListingClaimCreate(request, response, deps) {
       return sendError(response, 409, "listing_already_linked");
     }
 
-    // STEP 42-D｜引き継ぎの条件：このアカウントにクレジットカードが登録済み(有効)であること。
-    const card = typeof deps.checkAccountBillingCard === "function"
-      ? await deps.checkAccountBillingCard(database, actor.uid)
-      : { ok: false, reason: "card_billing_unavailable" };
-
-    if (!card || card.ok !== true) {
-      return sendError(response, 409, card && typeof card.reason === "string" && card.reason !== "" ? card.reason : "card_billing_unavailable");
-    }
-
-    // STEP 58(代表最終決定)｜引き継ぎは新規登録と同じ条件。新しいお店として引き継ぐ時は月額100円の契約の申込と一体
-    // (同意が無い・受付の無い環境では引き継がない)。既存の自店舗へ引き継ぐ時は、その店舗の契約が有効なこと。
-    const signup = targetType === "new_store"
-      ? (typeof deps.resolveStoreCardPlanSignup === "function" && typeof deps.writeNewStoreCardPlanInTransaction === "function"
-        ? deps.resolveStoreCardPlanSignup(deps, body)
-        : { ok: false, status: 403, reason: "plan_signup_unavailable" })
-      : { ok: true };
-
-    if (!signup.ok) {
-      return sendError(response, signup.status, signup.reason, signup.extra);
-    }
+    // 2026-11-18 代表決定(STEP 58の変更)｜引き継ぎは新規登録と同じく契約と切り離す。カード登録・
+    // 料金への同意・契約は公開の申込みの時に行う。ここでは下書きへ写すだけ。
 
     const myClaims = myClaimsSnapshot.docs.map(function(documentSnapshot) { return documentSnapshot.data() || {}; });
 
@@ -394,22 +372,9 @@ export async function handleStoreListingClaimCreate(request, response, deps) {
         newStoreRef: newStoreRef,
         newStoreLocation: newStoreLocation,
         decidedByUid: actor.uid,
-        verificationMethod: "auto_card_registered",
+        verificationMethod: "auto_email_verified",
         verificationChannel: "",
-        reason: "",
-        // STEP 58｜既存の自店舗：同じトランザクションで契約が今も有効か確かめる。新しいお店：契約を同時に作る。
-        readPlanActive: function(storeId) {
-          return deps.readStoreCardPlanActive(database, storeId, nowMillis, transaction);
-        },
-        writeNewPlan: function(storeId) {
-          return deps.writeNewStoreCardPlanInTransaction(transaction, database, {
-            storeId: storeId,
-            uid: actor.uid,
-            nowMillis: nowMillis,
-            signup: signup,
-            channel: "listing_claim"
-          });
-        }
+        reason: ""
       });
 
       if (linked.status !== 200) {
@@ -431,7 +396,7 @@ export async function handleStoreListingClaimCreate(request, response, deps) {
         claimCode: claimCode,
         status: "approved",
         linkConflictAtCreation: false,
-        verificationMethod: "auto_card_registered",
+        verificationMethod: "auto_email_verified",
         decidedByType: "auto",
         decidedByUid: actor.uid,
         decidedAt: FieldValue.serverTimestamp(),
@@ -688,10 +653,6 @@ async function linkListingInTransaction(transaction, database, params) {
       return { status: 409, reason: "target_store_not_allowed" };
     }
 
-    if (!(await params.readPlanActive(storeId))) {
-      return { status: 403, reason: "plan_required" };
-    }
-
     // 既存の自店舗：店主がまだ入れていない項目だけを運営掲載の内容で埋める(入力済みは上書きしない)。
     if (profileSnapshot.exists) {
       const fill = buildEmptyFieldFill(profileSnapshot.data() || {}, copiedFields);
@@ -710,8 +671,7 @@ async function linkListingInTransaction(transaction, database, params) {
       return { status: 500, reason: "store_id_collision" };
     }
 
-    // STEP 58｜月額100円の契約(同意の証跡・今月の利用の記録)。引き継いだ店舗と同時に成立する。
-    params.writeNewPlan(storeId);
+    // 2026-11-18 代表決定(STEP 58の変更)｜引き継ぎでは契約を作らない(下書きだけを作る)。
 
     // Phase 2Aと同じ形の管理情報(tokenHashは作らない)。所在地は掲載の座標を使う。
     transaction.set(params.newStoreRef, Object.assign({

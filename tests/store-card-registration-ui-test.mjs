@@ -8,7 +8,7 @@ const ORIGIN = "http://127.0.0.1:8871";
 process.env.FIREBASE_SERVICE_ACCOUNT_KEY = "{}"; process.env.RATE_LIMIT_HMAC_SECRET = "fake"; process.env.ADMIN_EMAIL = "admin@example.com"; process.env.GOOGLE_MAPS_API_KEY = "fake-maps-key";
 const FAKE_SERVER_KEY = "rk_" + "test_FAKEKEYFORLOCALTESTS0001", FAKE_PK = "pk_" + "test_FAKEPUBLISHABLEFORTESTS01";
 Object.assign(process.env, { STRIPE_MODE: "test", STRIPE_RESTRICTED_KEY: FAKE_SERVER_KEY, STRIPE_PUBLISHABLE_KEY: FAKE_PK, VERCEL_ENV: "preview" });
-// STEP 58｜新規登録・引き継ぎは月額100円の申込と一体。申込を受け付ける Preview 試験の環境(Preview の Firebase)で試す。
+// 2026-11-18 代表決定(STEP 58の変更)｜新規登録・引き継ぎは下書きだけを作り、契約は公開の申込みの時に作る。
 const sa = (id) => JSON.stringify({ type: "service_account", project_id: id, private_key: "-----FAKE-KEY-FOR-TESTS-----" });
 Object.assign(process.env, { VERCEL_GIT_COMMIT_REF: "preview/stripe-card-setup", FIREBASE_SERVICE_ACCOUNT_KEY: sa("chikashoku-app"), FIREBASE_SERVICE_ACCOUNT_KEY_PREVIEW: sa("machinau-preview") });
 const pw = (uid, email) => ({ uid, email, email_verified: true, firebase: { sign_in_provider: "password" } });
@@ -73,51 +73,41 @@ async function registerCard(p) {
   await p.waitFor(`/登録しました|registered/.test(document.getElementById("billingMessage").textContent)`, 8000); await sleep(800);
 }
 try {
-  // ---- new store: card first ----
+  // ---- new store: draft first (2026-11-18 代表決定) ----
   let p = await open("newOwner");
   let g = await gate(p);
-  t("U1 カード未登録：手順（①アカウント ✓ ②メール確認 ✓ ③カード登録＝今の手順 ④同意して登録・引き継ぎ＝契約 ⑤公開の5つ・STEP 58）・「店舗・施設を登録する」は押せない・カード登録への案内", g.steps.length === 5 && /月額100円/.test(g.steps[3]) && g.steps[3].startsWith("todo") && g.steps[4].startsWith("todo") && g.steps[0].startsWith("done") && g.steps[1].startsWith("done") && g.steps[2].startsWith("todo current") && /クレジットカード/.test(g.steps[2]) && g.registerDisabled === true && /クレジットカードの登録が必要/.test(g.notice) && g.overflow === false, g);
-  await p.ev(`document.getElementById("cardGateLink").click(), true`);
-  await registerCard(p);
-  g = await gate(p);
-  t("U2 案内からカードを登録すると、元の作業（店舗の登録フォーム）へ自動で戻る・③が完了・登録ボタンが使える", g.steps[2].startsWith("done") && g.notice === "" && g.registerDisabled === false && g.formOpen === true, g);
+  t("U1 カード未登録：手順（①アカウント ✓ ②メール確認 ✓ ③お店を登録・引き継ぐ＝今の手順 ④カード登録 ⑤申込み・公開の5つ）・「店舗・施設を登録する」は押せる・カード登録への案内は出ない", g.steps.length === 5 && g.steps[0].startsWith("done") && g.steps[1].startsWith("done") && g.steps[2].startsWith("todo current") && /お店を登録する/.test(g.steps[2]) && g.steps[3].startsWith("todo") && /クレジットカード/.test(g.steps[3]) && /月額100円/.test(g.steps[4]) && g.registerDisabled === false && g.notice === "" && g.overflow === false, g);
+  await p.ev(`document.getElementById("openStoreFormButton").click(), true`);
+  await sleep(300);
   const cat = await p.ev(`(() => { const set = (id, v) => { const el = document.getElementById(id); el.value = v; el.dispatchEvent(new Event("input")); el.dispatchEvent(new Event("change")); }; set("storeNameInput", "新しいカフェ"); const c = document.getElementById("storeCategorySelect"); set("storeCategorySelect", c.options[c.options.length > 1 ? 1 : 0].value); set("storeCountrySelect", "JP"); set("storeAddressInput", "沖縄県島尻郡八重瀬町1-1"); document.getElementById("storePreviewButton").click(); return c.value; })()`);
-  // STEP 58｜所在地の確認だけでは登録できない(料金と条件・同意が登録のフォームの中にあり、チェックを入れて初めて押せる)。
+  // 2026-11-18 代表決定｜所在地の確認が済めば登録できる(料金と条件・同意の欄は登録のフォームに無い)。
   await p.waitFor(`!document.getElementById("storePreviewBox").hidden`, 10000); await sleep(500);
-  const beforeConsent = await p.ev(`({ disabled: document.getElementById("storeRegisterButton").disabled, terms: !document.getElementById("storePlanTerms").hidden && /月額100円/.test(document.getElementById("storePlanTerms").innerText), label: document.getElementById("storeRegisterButton").textContent })`);
-  t("U3a 同意の前は登録ボタンが押せない・登録のフォームに月額100円の料金と条件・ボタンは「同意して登録し、月額100円（税込）を申し込む」", beforeConsent.disabled === true && beforeConsent.terms === true && /同意して登録し、月額100円/.test(beforeConsent.label), beforeConsent);
-  await p.ev(`(() => { const c = document.getElementById("storeConsentCheck"); c.checked = true; c.dispatchEvent(new Event("change")); return true; })()`);
-  await p.waitFor(`!document.getElementById("storeRegisterButton").disabled`, 10000);
+  const beforeRegister = await p.ev(`({ disabled: document.getElementById("storeRegisterButton").disabled, terms: !!document.getElementById("storePlanTerms"), consent: !!document.getElementById("storeConsentCheck"), label: document.getElementById("storeRegisterButton").textContent })`);
+  t("U2 所在地の確認が済めば登録ボタンが押せる・同意の欄は無い・ボタンは「お店を登録する」", beforeRegister.disabled === false && beforeRegister.terms === false && beforeRegister.consent === false && /お店を登録する/.test(beforeRegister.label), beforeRegister);
   await p.ev(`document.getElementById("storeRegisterButton").click(), true`);
   await p.waitFor(`document.getElementById("storeForm").hidden`, 10000); await sleep(1000);
   const owned = [...S.docs.entries()].filter(([k, v]) => k.startsWith("storeMembers/") && v.uid === "n1");
   const stored = owned.length ? S.docs.get("storeAccounts/" + owned[0][1].storeId) : null;
   const ownedPlan = owned.length ? S.docs.get("storeCustomPlans/" + owned[0][1].storeId) : null;
-  t("U3 カード登録後・同意して新規登録：すぐに利用可能（active）で作成され、運営の承認待ちにならない・同じ手続きで月額100円の契約が成立", !!stored && stored.registrationStatus === "active" && !!ownedPlan && ownedPlan.status === "active" && ownedPlan.consent.feeJpy === 100, { cat, owned: owned.length, stored, ownedPlan });
+  t("U3 カード未登録・同意なしで新規登録：すぐに利用可能（active）で作成され、運営の承認待ちにならない・契約はまだ無い（下書き）", !!stored && stored.registrationStatus === "active" && !ownedPlan, { cat, owned: owned.length, stored, ownedPlan });
+  g = await gate(p);
+  t("U3b 登録が済むと③が完了し、④カード登録が今の手順になる", g.steps[2].startsWith("done") && g.steps[3].startsWith("todo current"), g);
   await p.close();
 
   // ---- takeover from the listing ----
   p = await open("claimer", "?claim=L1");
   g = await gate(p);
-  t("U4 運営掲載の引き継ぎ（?claim=）：カード未登録の間は引き継ぎボタンが押せず、カード登録への案内を表示", g.claimShown && g.claimDisabled === true && /クレジットカードの登録が必要/.test(g.claimNotice), g);
+  t("U4 運営掲載の引き継ぎ（?claim=）：カード未登録でも引き継ぎボタンが押せる・カード登録への案内は出ない", g.claimShown && g.claimDisabled === false && g.claimNotice === "", g);
   const claimTexts = await p.ev(`document.getElementById("claimSection").innerText`);
-  t("U5 引き継ぎの説明は「運営の確認なしで、すぐに完了」（運営が確認・申請コードの案内は出さない）", /運営の確認なしで、すぐに引き継ぎと月額100円（税込）の契約が完了/.test(claimTexts) && /料金と条件（店舗カード）/.test(claimTexts) && !/申請コード/.test(claimTexts.replace(/あなたのオーナー申請[\s\S]*$/, "")), claimTexts.slice(0, 300));
-  await p.ev(`document.getElementById("claimCardGateLink").click(), true`);
-  await registerCard(p);
-  g = await gate(p);
-  const ru = await p.ev(`window.__returnUrl || ""`);
-  t("U6 カード登録後は引き継ぎへ戻れる（カード会社の画面から戻る時も ?claim= を保つ）・同意の前は引き継ぎボタンが押せない（STEP 58）", g.claimDisabled === true && g.claimNotice === "" && /billingAccount=1&claim=L1/.test(ru), { g, ru });
-  await p.ev(`(() => { const c = document.getElementById("claimConsentCheck"); c.checked = true; c.dispatchEvent(new Event("change")); return true; })()`);
-  g = await gate(p);
-  t("U6b 同意のチェックを入れると引き継ぎボタンが使える", g.claimDisabled === false, g);
+  t("U5 引き継ぎの説明は「運営の確認なしで、すぐに引き継ぎが完了」（料金と条件・申請コードの案内は出さない）", /運営の確認なしで、すぐに引き継ぎが完了/.test(claimTexts) && !/料金と条件（店舗カード）/.test(claimTexts) && !/申請コード/.test(claimTexts.replace(/あなたのオーナー申請[\s\S]*$/, "")), claimTexts.slice(0, 300));
   await p.ev(`document.getElementById("claimSubmitButton").click(), true`);
-  await p.waitFor(`/引き継ぎと月額100円（税込）の契約が完了しました/.test(document.getElementById("claimMessage").textContent)`, 10000); await sleep(1500);
+  await p.waitFor(`/引き継ぎが完了しました/.test(document.getElementById("claimMessage").textContent)`, 10000); await sleep(1500);
   g = await gate(p);
-  t("U7 同意して「このお店を引き継ぐ」→ その場で完了（運営の承認待ちなし）・あなたの店舗に表示・契約が同時に成立", /引き継ぎと月額100円（税込）の契約が完了しました/.test(g.claimMsg) && /八重瀬の食堂/.test(g.stores) && S.docs.get("storeListingLinks/L1").status === "active" && (S.docs.get("storeCustomPlans/" + S.docs.get("storeListingLinks/L1").storeId) || {}).status === "active", g);
+  t("U7 「このお店を引き継ぐ」→ その場で完了（運営の承認待ちなし）・あなたの店舗に表示・契約はまだ無い（下書き）", /引き継ぎが完了しました/.test(g.claimMsg) && /八重瀬の食堂/.test(g.stores) && S.docs.get("storeListingLinks/L1").status === "active" && !S.docs.get("storeCustomPlans/" + S.docs.get("storeListingLinks/L1").storeId), g);
   await p.close();
   p = await open("claimer", "", "en", 1280);
   g = await gate(p);
-  t("U8 英語・PC：手順の表示も英語", g.steps.length === 5 && /Agree to the ¥100\/month fee and terms/.test(g.steps[3]) && /Register a credit card/.test(g.steps[2]) && /publish them to travelers/.test(g.steps[4]), g.steps);
+  t("U8 英語・PC：手順の表示も英語", g.steps.length === 5 && /Register a shop/.test(g.steps[2]) && /Register a credit card/.test(g.steps[3]) && /subscribe, and publish/.test(g.steps[4]), g.steps);
   await p.close();
 
   // ---- TOP entry ----

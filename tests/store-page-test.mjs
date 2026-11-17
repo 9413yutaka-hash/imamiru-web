@@ -354,7 +354,7 @@ seedStore("M2", "um", "published", { latitude: 26.40, longitude: 127.90 }); mont
   const keys = ["store_identity_edit_button", "store_identity_address_label", "store_identity_note", "store_identity_save_button", "store_identity_cancel_button", "store_identity_saved", "store_identity_saved_duplicate", "store_identity_err_account_deleting", "store_identity_err_conflict", "store_page_url_label", "store_page_copy_button", "store_page_copied", "store_page_copy_failed", "store_page_note_published", "store_page_note_draft", "store_management_pricing_note"];
   t("G2 新しい文言は日本語・英語の両方がある", keys.every((k) => T[k] && T[k].ja && T[k].en), keys.filter((k) => !(T[k] && T[k].ja && T[k].en)));
   const pricing = T.store_management_pricing_note.ja;
-  t("G3 店主向けの料金の案内：月額100円(税込)・新規登録も引き継ぎも同じ料金・アカウントとカードの登録だけでは料金なし", pricing.includes("マチナウの店舗管理サービスは月額100円（税込）です。新規店舗登録も、掲載済み店舗の引き継ぎも、同じ料金・同じ条件です。") && pricing.includes("契約の前に店舗情報を保存・編集することはできません") && pricing.includes("アカウントの作成とクレジットカードの登録だけでは料金はかかりません"));
+  t("G3 店主向けの料金の案内：月額100円(税込)・新規登録も引き継ぎも同じ料金・登録と編集はメール確認だけ(下書き)・公開に契約が必要・アカウントとカードの登録だけでは料金なし", pricing.includes("マチナウの店舗管理サービスは月額100円（税込）です。新規店舗登録も、掲載済み店舗の引き継ぎも、同じ料金・同じ条件です。") && pricing.includes("お店の登録と店舗情報の編集は、メールアドレスの確認だけでできます") && pricing.includes("お店を公開するには、クレジットカードの登録と月額100円の契約が必要です") && pricing.includes("アカウントの作成とクレジットカードの登録だけでは料金はかかりません"));
   const pages = ["shop.html", "shop-guide.html", "store-account.html", "store-profile.html"].map((f) => [f, readFileSync(join(REPO_ROOT, f), "utf8")]);
   const allJa = Object.values(T).map((e) => e.ja || "").join("\n") + pages.map((p) => p[1]).join("\n");
   t("G4 「引き継ぎ無料」「新規登録無料」「店舗カードの作成・下書きは無料」など、店主の管理を無料と誤認させる文言が無い", !/引き継ぎ(は|も)?無料|新規登録(は|も)?無料|登録は無料|店舗カードの作成・下書きは無料|下書きは無料/.test(allJa));
