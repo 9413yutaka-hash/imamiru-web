@@ -4132,10 +4132,14 @@ const MACHINAU_TRANSLATIONS = {
     ja: "同意して登録し、月額100円（税込）を申し込む",
     en: "Agree, register and subscribe (¥100/month, tax included)"
   },
+  store_account_store_register_submit: {
+    ja: "お店を登録する",
+    en: "Register your shop"
+  },
 
   store_signup_plan_note: {
-    ja: "登録と同時に、このお店の月額100円（税込）の契約が成立します。契約の前に店舗情報を保存・編集することはできません。カードの登録だけでは料金はかかりません。",
-    en: "The ¥100/month contract (tax included) for this shop starts when you register. You cannot save or edit shop details before the contract. Registering a card alone is free of charge."
+    ja: "登録だけでは契約は成立しません。お店を公開する時に、月額100円（税込）の契約を申し込みます。",
+    en: "Registering alone does not start a contract. You subscribe to the ¥100/month plan (tax included) when you publish your shop."
   },
 
   store_signup_consent_required: {
@@ -4149,8 +4153,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_claim_plan_note: {
-    ja: "引き継ぎと同時に、このお店の月額100円（税込）の契約が成立します。契約の前に店舗情報を保存・編集することはできません。カードの登録だけでは料金はかかりません。",
-    en: "The ¥100/month contract (tax included) for this shop starts when you take it over. You cannot save or edit shop details before the contract. Registering a card alone is free of charge."
+    ja: "引き継ぎだけでは契約は成立しません。お店を公開する時に、月額100円（税込）の契約を申し込みます。",
+    en: "Taking over a listing alone does not start a contract. You subscribe to the ¥100/month plan (tax included) when you publish your shop."
   },
 
   store_claim_err_plan_required: {
@@ -4250,8 +4254,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_billing_intro: {
-    ja: "店舗カードの月額料金（1店舗・月額100円・税込）と、今だけ投稿の利用料金（旅行者が「続きを見る」を押した「投稿×1日」ごとに100円・税込）のお支払いに使うカードを登録します。どちらも月末締め・翌月2日にカードへ請求します（別々に請求します）。カードは1つのアカウントに1枚で、このアカウントで管理するすべてのお店・施設に共通です。お店・施設の登録と引き継ぎにも、カードの登録が必要です。カードを登録しただけでは料金は発生しません。店舗カードの月額料金は、月額契約を申し込んだお店・施設についてだけ請求します。カード番号は決済会社（Stripe）が直接受け取り、マチナウには保存されません（保存するのは、カードのブランド・下4桁・有効期限だけです）。",
-    en: "Register the card used to pay the store card fee (¥100 per shop per month, tax included) and Just for Now fees (¥100 incl. tax for each post × day when a traveler tapped to read more). Both are closed at month end and charged to the card on the 2nd of the next month (billed separately). One card per account, shared by all the shops and venues you manage with this account. A card is also required to register or take over a shop or venue. Registering a card does not by itself incur any fee. The store card monthly fee is charged only for shops and venues that have a monthly contract. Your card number goes directly to our payment provider (Stripe) and is not stored by Machinau (we keep only the card brand, last 4 digits and expiry date)."
+    ja: "店舗カードの月額料金（1店舗・月額100円・税込）と、今だけ投稿の利用料金（旅行者が「続きを見る」を押した「投稿×1日」ごとに100円・税込）のお支払いに使うカードを登録します。どちらも月末締め・翌月2日にカードへ請求します（別々に請求します）。カードは1つのアカウントに1枚で、このアカウントで管理するすべてのお店・施設に共通です。お店・施設を公開する時の月額契約の申込みにも、カードの登録が必要です。カードを登録しただけでは料金は発生しません。店舗カードの月額料金は、月額契約を申し込んだお店・施設についてだけ請求します。カード番号は決済会社（Stripe）が直接受け取り、マチナウには保存されません（保存するのは、カードのブランド・下4桁・有効期限だけです）。",
+    en: "Register the card used to pay the store card fee (¥100 per shop per month, tax included) and Just for Now fees (¥100 incl. tax for each post × day when a traveler tapped to read more). Both are closed at month end and charged to the card on the 2nd of the next month (billed separately). One card per account, shared by all the shops and venues you manage with this account. A card is also required when you subscribe to the monthly plan to publish a shop or venue. Registering a card does not by itself incur any fee. The store card monthly fee is charged only for shops and venues that have a monthly contract. Your card number goes directly to our payment provider (Stripe) and is not stored by Machinau (we keep only the card brand, last 4 digits and expiry date)."
   },
 
   store_billing_store_label: {
@@ -4552,8 +4556,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_account_store_registered_active: {
-    ja: "店舗・施設を登録し、月額100円（税込）の契約が成立しました。「店舗カードの編集・申し込み」から店舗情報を編集して公開すると、旅行者に表示されます。",
-    en: "Your shop or facility has been registered and the ¥100/month contract (tax included) has started. Edit and publish your shop details from \"Edit store card / subscribe\" to show them to travelers."
+    ja: "店舗・施設を登録しました（下書き）。「店舗カードの編集・申し込み」から店舗情報を編集し、月額100円（税込）の契約を申し込んで公開すると、旅行者に表示されます。",
+    en: "Your shop or venue is registered (as a draft). Edit its details from \"Edit / subscribe to the store card\", subscribe to the ¥100/month plan (tax included) and publish to show it to travelers."
   },
 
   store_account_store_registered_pending: {
@@ -4670,11 +4674,6 @@ const MACHINAU_TRANSLATIONS = {
     en: "Please log in with your business account first."
   },
 
-  store_profile_to_account_link: {
-    ja: "店舗アカウントの画面を開く",
-    en: "Open the business account page"
-  },
-
   store_profile_not_found: {
     ja: "この店舗・施設の情報を開けませんでした。店舗・施設アカウントの画面から開き直してください。",
     en: "This shop or facility could not be opened. Please open it again from your business account page."
@@ -4757,8 +4756,8 @@ const MACHINAU_TRANSLATIONS = {
     en: "Your shop page opens at this URL only while it is published (it can't be opened right now)."
   },
   store_management_pricing_note: {
-    ja: "マチナウの店舗管理サービスは月額100円（税込）です。新規店舗登録も、掲載済み店舗の引き継ぎも、同じ料金・同じ条件です。店舗情報の登録・編集・公開には、メールアドレスの確認・クレジットカードの登録・月額100円の契約が必要です（契約の前に店舗情報を保存・編集することはできません）。アカウントの作成とクレジットカードの登録だけでは料金はかかりません。料金は、お店・施設の登録・引き継ぎと同時に申し込む月額100円の契約からかかります。",
-    en: "Machinau's store management service is ¥100/month (tax included) per shop. Registering a new shop and taking over a shop already listed on Machinau cost the same, with the same conditions. To register, edit and publish your shop details you need a confirmed email address, a registered credit card and the ¥100/month contract (you cannot save or edit shop details before the contract). Creating an account and registering a credit card alone are free of charge. Charges start with the ¥100/month contract you sign up for when you register or take over a shop."
+    ja: "マチナウの店舗管理サービスは月額100円（税込）です。新規店舗登録も、掲載済み店舗の引き継ぎも、同じ料金・同じ条件です。お店の登録と店舗情報の編集は、メールアドレスの確認だけでできます（下書きとして保存され、旅行者には表示されません）。お店を公開するには、クレジットカードの登録と月額100円の契約が必要です。アカウントの作成とクレジットカードの登録だけでは料金はかかりません。料金は、公開の申込みの時に申し込む月額100円の契約からかかります。",
+    en: "Machinau's store management service is ¥100/month (tax included) per shop. Registering a new shop and taking over a shop already listed on Machinau cost the same, with the same conditions. You can register a shop and edit its details with just a confirmed email address (saved as a draft that travelers cannot see). To publish a shop you need a registered credit card and the ¥100/month contract. Creating an account and registering a credit card alone are free of charge. Charges start with the ¥100/month contract you sign up for when you publish."
   },
 
   store_profile_description_label: {
@@ -6321,8 +6320,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_claim_process_note: {
-    ja: "クレジットカードを登録済みのアカウントなら、下の料金と条件に同意すると、マチナウ運営の確認なしで、すぐに引き継ぎと月額100円（税込）の契約が完了します。掲載中の紹介文・営業時間などは、あなたの店舗情報（非公開の下書き）に引き継がれます。旅行者への表示は、店舗情報を公開するまで変わりません。登録済みの自分の店舗につなぐ時は、その店舗の月額100円の契約が有効である必要があります。",
-    en: "If your account has a registered credit card, agreeing to the fee and terms below completes the takeover and the ¥100/month contract (tax included) right away, without a review by Machinau. The listing's description, hours, etc. are copied into your store profile (a draft that is not public). What travelers see does not change until you publish your store profile. To connect the listing to a shop you already registered, that shop's ¥100/month contract must be active."
+    ja: "申請すると、マチナウ運営の確認なしで、すぐに引き継ぎが完了します。掲載中の紹介文・営業時間などは、あなたの店舗情報（非公開の下書き）に引き継がれます。旅行者への表示は、店舗情報を公開するまで変わりません。引き継ぎだけでは月額100円（税込）の契約は成立せず、契約はお店を公開する時に申し込みます。",
+    en: "Submitting completes the takeover right away, without a review by Machinau. The listing's description, hours, etc. are copied into your store profile (a draft that is not public). What travelers see does not change until you publish your store profile. The takeover alone does not start the ¥100/month contract (tax included); you subscribe when you publish the shop."
   },
 
   store_claim_target_label: {
@@ -6467,8 +6466,8 @@ const MACHINAU_TRANSLATIONS = {
 
   // STEP 42-D｜カード登録 → 店舗の登録・引き継ぎ
   store_claim_completed: {
-    ja: "引き継ぎと月額100円（税込）の契約が完了しました。「あなたの店舗・施設」の「店舗カードの編集・申し込み」から店舗情報を編集して公開すると、旅行者に表示されます。公開するまでは、運営による無料掲載がそのまま表示されます。",
-    en: "The takeover and the ¥100/month contract (tax included) are complete. Edit and publish your shop details from \"Edit store card / subscribe\" in \"Your shops & venues\" to show them to travelers. Until you publish, the free listing by Machinau stays as it is."
+    ja: "引き継ぎが完了しました。「あなたの店舗・施設」の「店舗カードの編集・申し込み」から店舗情報を編集し、月額100円（税込）の契約を申し込んで公開すると、旅行者に表示されます。公開するまでは、運営による無料掲載がそのまま表示されます。",
+    en: "The takeover is complete. Edit your store details from \"Edit / subscribe to the store card\" under \"Your shops & venues\", subscribe to the ¥100/month plan (tax included) and publish to show it to travelers. Until you publish, the free listing by Machinau stays as it is."
   },
 
   store_claim_err_already_linked: {
@@ -6754,20 +6753,20 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_steps_card: {
-    ja: "③ クレジットカードを登録（1アカウント1枚）",
-    en: "3. Register a credit card (one per account)"
+    ja: "④ クレジットカードを登録する（1つのアカウントに1枚。公開の申込みに必要です）",
+    en: "4. Register a credit card (one per account; needed when you subscribe to publish)"
   },
 
   store_steps_register: {
-    ja: "④ 月額100円（税込）の料金と条件に同意して、お店を登録する、またはマチナウに掲載中のお店を引き継ぐ。同時に契約が成立します",
-    en: "4. Agree to the ¥100/month fee and terms (tax included) and register a shop, or take over a listing on Machinau. The contract starts at the same time"
+    ja: "③ お店を登録する、またはマチナウに掲載中のお店を引き継ぐ（下書きができます）",
+    en: "3. Register a shop, or take over a listing on Machinau (starts as a draft)"
   },
 
   // STEP 57｜手順の続き(月額プランの申し込みと公開)・店舗ごとの状態・引き継ぎの再開・管理の案内
 
   store_steps_publish: {
-    ja: "⑤ 店舗情報を編集して、公開する",
-    en: "5. Edit your shop details and publish them"
+    ja: "⑤ 月額100円（税込）に同意して申し込み、お店を公開する",
+    en: "5. Agree to the ¥100/month fee (tax included), subscribe, and publish your shop"
   },
 
   store_list_public_visible: {
@@ -6978,8 +6977,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_management_help_note: {
-    ja: "お店ごとの店舗情報の編集・公開（月額100円の契約中だけ）と、プランの申し込み・解約は「店舗カードの編集・申し込み」から行えます。ご請求・領収書は「ご請求の履歴」と「店舗カード（月額100円）のご請求」から確認できます。カードの変更は「お支払い方法」から、退会は一番下の「アカウントの削除」から行えます。",
-    en: "Edit and publish each shop (only while its ¥100/month contract is active), and subscribe to or cancel the plan, from \"Edit store card / subscribe\". You can check charges and receipts under \"Billing history\" and \"Store card (¥100/month) charges\". Card changes are under \"Payment method\", and closing your account is under \"Delete account\" at the bottom."
+    ja: "お店ごとの店舗情報の編集は、契約の前でもできます。公開と、プランの申し込み・解約は「店舗カードの編集・申し込み」から行えます。ご請求・領収書は「ご請求の履歴」と「店舗カード（月額100円）のご請求」から確認できます。カードの変更は「お支払い方法」から、退会は一番下の「アカウントの削除」から行えます。",
+    en: "You can edit each shop's details even before subscribing. Publish a shop, and subscribe to or cancel its plan, from \"Edit / subscribe to the store card\". Check invoices and receipts under \"Billing history\" and \"Store card (¥100/month) invoices\". Change your card under \"Payment method\", and close your account from \"Delete account\" at the bottom."
   },
 
   store_claim_resume_text: {

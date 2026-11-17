@@ -510,9 +510,7 @@ export async function checkStoreCustomEditor(database, storeId, uid, nowMillis) 
     return { ok: false, status: 403, reason: "store_not_editable" };
   }
 
-  if (!(await readStoreCardPlanActive(database, storeId, nowMillis))) {
-    return { ok: false, status: 403, reason: "plan_required" };
-  }
+  // 2026-11-18 代表決定(STEP 58の変更)｜くわしい情報の編集にも契約は要らない(店主本人だけ確かめる)。
 
   return { ok: true };
 }
@@ -581,13 +579,14 @@ export async function handleStoreCustomProfileGet(request, response, deps) {
     }
 
     const planActive = storeEditable && (await readStoreCardPlanActive(database, storeId, readNowMillis(deps)));
+    // 2026-11-18 代表決定(STEP 58の変更)｜編集に契約は要らない。planActive は契約状態の表示のためだけに返す。
 
     return response.status(200).json({
       success: true,
       storeId: storeId,
       plan: plan,
-      editable: planActive,
-      planRequired: storeEditable && !planActive,
+      editable: storeEditable,
+      planRequired: false,
       custom: buildCustomResponse(snapshots[3].exists ? snapshots[3].data() : null),
       limits: STORE_CUSTOM_LIMITS,
       linkTypes: STORE_CUSTOM_LINK_TYPES
@@ -645,10 +644,6 @@ export async function handleStoreCustomProfileUpdate(request, response, deps) {
 
     if (!isEditableStore(accountBefore)) {
       return sendError(response, 403, "store_not_editable");
-    }
-
-    if (!(await readStoreCardPlanActive(database, storeId, readNowMillis(deps)))) {
-      return sendError(response, 403, "plan_required");
     }
 
     const customBefore = preSnapshots[2].exists ? preSnapshots[2].data() || {} : {};
@@ -767,12 +762,6 @@ export async function handleStoreCustomProfileUpdate(request, response, deps) {
 
       if (!isEditableStore(snapshots[1].data())) {
         outcome = { status: 403, reason: "store_not_editable" };
-        return;
-      }
-
-      // 確認の後に解約の期限が過ぎた・未払いで停止した時も保存しない(同じトランザクションで確かめる)。
-      if (!(await readStoreCardPlanActive(database, storeId, readNowMillis(deps), transaction))) {
-        outcome = { status: 403, reason: "plan_required" };
         return;
       }
 

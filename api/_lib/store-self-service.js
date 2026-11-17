@@ -608,9 +608,8 @@ export async function handleStoreRegistrationPreview(request, response, deps) {
 // mode: storeSelfRegister (POST、メール確認済み店舗アカウント)
 // { storeName, categoryCode, countryCode, address, sourceLanguage, planConsentVersion }
 // 所在地はクライアントの値を信用せず、サーバーで改めてGeocodingして確定する。
-// STEP 58(代表最終決定)｜新規登録は月額100円の契約の申込と一体の手続き。同意(planConsentVersion)が無い・
-// 申込を受け付けない環境では登録しない。店舗と契約は同じトランザクションで作る(契約の無い店舗を作らない)。
-// 契約の記録はこのファイルでは書かない(deps.writeNewStoreCardPlanInTransaction＝store-custom-profile.js)。
+// 2026-11-18 代表決定(STEP 58の変更)｜新規登録では契約を作らない(下書きの店舗だけを作る)。
+// 契約は公開の申込みの時に storeCustomPlanSubscribe で別に作る。
 export async function handleStoreSelfRegister(request, response, deps) {
   try {
     const actor = await requireVerifiedStoreUser(request, response, deps);
@@ -632,22 +631,8 @@ export async function handleStoreSelfRegister(request, response, deps) {
       return sendError(response, 409, "account_deleting");
     }
 
-    // STEP 42-D｜新規登録の条件：このアカウントにクレジットカードが登録済み(有効)であること(1アカウント1枚)。
-    const card = typeof deps.checkAccountBillingCard === "function"
-      ? await deps.checkAccountBillingCard(database, actor.uid)
-      : { ok: false, reason: "card_billing_unavailable" };
-
-    if (!card || card.ok !== true) {
-      return sendError(response, 409, card && typeof card.reason === "string" && card.reason !== "" ? card.reason : "card_billing_unavailable");
-    }
-
-    const signup = typeof deps.resolveStoreCardPlanSignup === "function" && typeof deps.writeNewStoreCardPlanInTransaction === "function"
-      ? deps.resolveStoreCardPlanSignup(deps, deps.readRequestBody(request))
-      : { ok: false, status: 403, reason: "plan_signup_unavailable" };
-
-    if (!signup.ok) {
-      return sendError(response, signup.status, signup.reason, signup.extra);
-    }
+    // 2026-11-18 代表決定(STEP 58の変更)｜新規登録は月額100円の契約と切り離す。カード登録・料金への
+    // 同意・契約は、公開の申込みの時に storeCustomPlanSubscribe で行う。ここでは下書きの店舗だけを作る。
 
     const allowed = await deps.claimRateLimit(
       database,
@@ -720,15 +705,6 @@ export async function handleStoreSelfRegister(request, response, deps) {
       if (deletionStarted) {
         return;
       }
-
-      // STEP 58｜月額100円の契約(同意の証跡・今月の利用の記録)。店舗と同時に成立する。
-      plan = deps.writeNewStoreCardPlanInTransaction(transaction, database, {
-        storeId: storeId,
-        uid: actor.uid,
-        nowMillis: nowMillis,
-        signup: signup,
-        channel: "store_registration"
-      });
 
       // 管理情報。tokenHashは作らない(旧store token経路では操作できない)。
       transaction.set(storeRef, {
@@ -983,10 +959,7 @@ export async function handleStoreIdentityUpdate(request, response, deps) {
       return sendError(response, 403, "store_not_editable");
     }
 
-    // STEP 58｜店舗・施設名と所在地の変更も、月額100円の契約が有効な時だけ(契約の判定は deps.readStoreCardPlanActive)。
-    if (typeof deps.readStoreCardPlanActive !== "function" || !(await deps.readStoreCardPlanActive(database, input.storeId, Date.now()))) {
-      return sendError(response, 403, "plan_required");
-    }
+    // 2026-11-18 代表決定(STEP 58の変更)｜店舗・施設名と所在地の変更にも契約は要らない。
 
     if (await readAccountDeletion(database, actor.uid)) {
       return sendError(response, 409, "account_deleting");
@@ -1060,11 +1033,6 @@ export async function handleStoreIdentityUpdate(request, response, deps) {
 
       if (!isEditableStoreAccount(current)) {
         outcome = { status: 403, reason: "store_not_editable" };
-        return;
-      }
-
-      if (!(await deps.readStoreCardPlanActive(database, input.storeId, Date.now(), transaction))) {
-        outcome = { status: 403, reason: "plan_required" };
         return;
       }
 

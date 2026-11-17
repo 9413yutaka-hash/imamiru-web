@@ -192,8 +192,8 @@ export async function checkStoreProfileEditor(database, storeId, uid) {
   return { ok: true };
 }
 
-// STEP 58(代表最終決定)｜店舗情報の写真の署名発行・保存は、月額100円の契約が有効な店舗だけ
-// (契約が成立していない店舗の保存・編集・下書きの管理はできない)。今だけ投稿の店舗の確認(checkStoreProfileEditor)は変えない。
+// 旧STEP 58｜写真の署名発行・保存に契約を求める確認。2026-11-18の代表決定(STEP 58の変更)で
+// 呼び出し側は checkStoreProfileEditor(店主本人だけ)に切り替えた。公開の条件としての契約は残る。
 export async function checkStoreProfilePaidEditor(database, storeId, uid, nowMillis) {
   const editor = await checkStoreProfileEditor(database, storeId, uid);
 
@@ -904,17 +904,17 @@ export async function handleStoreProfileGet(request, response, deps) {
     const account = snapshots[1].data() || {};
     const profileData = snapshots[2].exists ? snapshots[2].data() || {} : {};
     const publication = await readPublicationForOwner(database, storeId, account, profileData);
-    // STEP 58｜編集できるのは、店舗が利用できて月額100円の契約が有効な時だけ。planRequired は「契約が無いため編集できない」。
+    // 2026-11-18 代表決定(STEP 58の変更)｜編集できるのは店舗が利用できる時だけ(契約は公開の条件)。
+    // planRequired は互換のため残し、常に false(編集に契約は要らない)。
     const storeEditable = isEditableStore(account);
-    const planActive = storeEditable && (await readStoreCardPlanActive(database, storeId, Date.now()));
 
     return response.status(200).json({
       success: true,
       storeId: storeId,
       storeName: typeof account.storeName === "string" ? account.storeName : "",
       registrationStatus: readRegistrationStatusForDisplay(account),
-      editable: planActive,
-      planRequired: storeEditable && !planActive,
+      editable: storeEditable,
+      planRequired: false,
       location: {
         countryCode: account.countryCode || "",
         prefecture: account.prefecture || "",
@@ -998,9 +998,7 @@ export async function handleStoreProfileUpdate(request, response, deps) {
       });
     }
 
-    if (!(await readStoreCardPlanActive(database, storeId, Date.now()))) {
-      return sendError(response, 403, "plan_required");
-    }
+    // 2026-11-18 代表決定(STEP 58の変更)｜保存・編集に契約は要らない(店主本人であることだけ確かめる)。
 
     const profileBefore = preSnapshots[2].exists ? preSnapshots[2].data() || {} : {};
 
@@ -1123,12 +1121,6 @@ export async function handleStoreProfileUpdate(request, response, deps) {
 
       if (!isEditableStore(snapshots[1].data())) {
         outcome = { status: 403, reason: "store_not_editable" };
-        return;
-      }
-
-      // 確認の後に解約の期限が過ぎた・未払いで停止した時も保存しない(同じトランザクションで確かめる)。
-      if (!(await readStoreCardPlanActive(database, storeId, Date.now(), transaction))) {
-        outcome = { status: 403, reason: "plan_required" };
         return;
       }
 

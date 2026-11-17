@@ -52,17 +52,17 @@ const listingBefore = JSON.stringify(S.docs.get("submissions/L1"));
 
 // ===================== A: new store registration =====================
 let r = await call(REG("新しいカフェ"), "u1");
-t("A1 カード未登録：新規登録は 409 card_required・店舗は作られない", r.code === 409 && r.body.reason === "card_required" && docsIn("storeAccounts").length === 0, r.body);
-card("u1", { card: { brand: "visa", last4: "4242", expMonth: 1, expYear: 2020 } });
-r = await call(REG("新しいカフェ"), "u1");
-t("A2 期限切れのカード：409 card_expired・店舗は作られない", r.code === 409 && r.body.reason === "card_expired" && docsIn("storeAccounts").length === 0, r.body);
-card("u2"); clearRate();
-r = await call(REG("新しいカフェ"), "u1");
-t("A3 他のアカウント（u2）のカードは使えない：u1 は 409（card_expired のまま）", r.code === 409 && docsIn("storeAccounts").length === 0, r.body);
-card("u1"); clearRate();
-r = await call(REG("新しいカフェ"), "u1");
 const s1 = S.docs.get("storeAccounts/" + r.body.storeId) || {};
-t("A4 カード登録済み：即時に登録（active）・owner と店舗情報の下書きを作成・運営の承認待ちにしない", r.code === 200 && r.body.registrationStatus === "active" && s1.registrationStatus === "active" && S.docs.get("storeMembers/" + r.body.storeId + "_u1").role === "owner" && S.docs.get("storeProfiles/" + r.body.storeId).status === "draft", { body: r.body, s1 });
+t("A1 カード未登録でも新規登録できる（2026-11-18代表決定）：即時に登録（active）・owner と店舗情報の下書きを作成・運営の承認待ちにしない", r.code === 200 && r.body.registrationStatus === "active" && s1.registrationStatus === "active" && S.docs.get("storeMembers/" + r.body.storeId + "_u1").role === "owner" && S.docs.get("storeProfiles/" + r.body.storeId).status === "draft", { body: r.body, s1 });
+t("A4 登録だけでは契約は作られない（契約は公開の申込みの時）", r.body.plan === null && docsIn("storeCustomPlans").length === 0, r.body);
+card("u1", { card: { brand: "visa", last4: "4242", expMonth: 1, expYear: 2020 } });
+clearRate();
+r = await call(REG("期限切れでも登録できる店"), "u1");
+t("A2 期限切れのカードでも登録できる（登録ではカードを見ない）", r.code === 200 && r.body.registrationStatus === "active", r.body);
+card("u2"); clearRate();
+r = await call(REG("新しいカフェ"), "u2");
+const dupOther = S.docs.get("storeAccounts/" + r.body.storeId) || {};
+t("A3 別のアカウントが同じ名前・近くの店を登録：承認待ちにせず active・重複の候補として記録", r.code === 200 && dupOther.registrationStatus === "active" && (dupOther.reviewFlags || []).includes("possible_duplicate"), dupOther);
 clearRate();
 r = await call(REG("八重瀬の食堂"), "u2");
 const dup = S.docs.get("storeAccounts/" + r.body.storeId) || {};
@@ -79,16 +79,14 @@ const sameOwner = await call(REG("新しいカフェ"), "u1");
 t("A9 同じアカウントの同じ店（名前・100m以内）は 409 already_registered（既存の店舗を上書きしない）", sameOwner.code === 409 && sameOwner.body.reason === "already_registered", sameOwner.body);
 
 // ===================== B: automatic takeover =====================
-const CLAIM = (submissionId, extra = {}) => ({ mode: "storeListingClaimCreate", submissionId, targetType: "new_store", role: "owner", publicReferenceUrl: "", note: "", planConsentVersion: CONSENT, ...extra });
-r = await call(CLAIM("L1"), "u3");
-t("B1 カード未登録：引き継ぎは 409 card_required・紐付け・申請・店舗は作られない", r.code === 409 && r.body.reason === "card_required" && !S.docs.get("storeListingLinks/L1") && docsIn("storeListingClaims").length === 0, r.body);
-card("u3");
+const CLAIM = (submissionId, extra = {}) => ({ mode: "storeListingClaimCreate", submissionId, targetType: "new_store", role: "owner", publicReferenceUrl: "", note: "", ...extra });
 const storesBefore = docsIn("storeAccounts").length;
 r = await call(CLAIM("L1"), "u3");
+t("B1 カード未登録でも引き継ぎできる（2026-11-18代表決定）：契約は作られない", r.code === 200 && r.body.status === "approved" && !S.docs.get("storeCustomPlans/" + r.body.storeId), r.body);
 const link = S.docs.get("storeListingLinks/L1") || {};
 const newStore = S.docs.get("storeAccounts/" + r.body.storeId) || {};
 const claimDoc = (docsIn("storeListingClaims").find((d) => d.v.submissionId === "L1") || {}).v || {};
-t("B2 カード登録済み：運営の承認なしでその場で引き継ぎ完了（approved・自動の記録・紐付け active・新しい店舗 active・owner）", r.code === 200 && r.body.status === "approved" && link.status === "active" && link.storeId === r.body.storeId && link.verificationMethod === "auto_card_registered" && claimDoc.status === "approved" && claimDoc.decidedByType === "auto" && claimDoc.verificationMethod === "auto_card_registered" && newStore.registrationStatus === "active" && newStore.createdByType === "listingClaim" && S.docs.get("storeMembers/" + r.body.storeId + "_u3").role === "owner" && docsIn("storeAccounts").length === storesBefore + 1, { body: r.body, link, claimDoc });
+t("B2 運営の承認なしでその場で引き継ぎ完了（approved・自動の記録・紐付け active・新しい店舗 active・owner）", r.code === 200 && r.body.status === "approved" && link.status === "active" && link.storeId === r.body.storeId && link.verificationMethod === "auto_email_verified" && claimDoc.status === "approved" && claimDoc.decidedByType === "auto" && claimDoc.verificationMethod === "auto_email_verified" && newStore.registrationStatus === "active" && newStore.createdByType === "listingClaim" && S.docs.get("storeMembers/" + r.body.storeId + "_u3").role === "owner" && docsIn("storeAccounts").length === storesBefore + 1, { body: r.body, link, claimDoc });
 const prof = S.docs.get("storeProfiles/" + r.body.storeId) || {};
 t("B3 運営掲載の文章・営業時間（定休日は休み・不定休は補足）・カテゴリ・支払い方法・テイクアウトを店舗情報（下書き）へ写す", prof.status === "draft" && prof.description === LISTING.content && prof.categoryCode === "gourmet" && JSON.stringify(prof.paymentMethodCodes) === '["cash","qr"]' && JSON.stringify(prof.featureCodes) === '["takeout"]' && prof.businessHours && JSON.stringify(prof.businessHours.weekly.tue) === "[]" && JSON.stringify(prof.businessHours.weekly.mon) === '[{"open":"11:00","close":"21:00"}]' && prof.businessHours.note === "不定休" && prof.copiedFromSubmissionId === "L1", prof);
 t("B4 写さないもの：情報元ページ（websiteUrl）・Moderation 済みの記録（公開は店主の保存・公開の確認を通す）", !("websiteUrl" in prof) && !("moderatedText" in prof) && !("moderationStatus" in prof), Object.keys(prof));
@@ -97,7 +95,7 @@ t("B6 写真の複製は代表の承認まで止めている（photoCopy: disabl
 card("u4");
 const w0 = S.writes.length;
 r = await call(CLAIM("L1"), "u4");
-t("B7 二重引き継ぎの防止：管理者がいる掲載は、別のカード登録済みアカウントでも 409 listing_already_linked（奪えない・書き込みなし）", r.code === 409 && r.body.reason === "listing_already_linked" && S.docs.get("storeListingLinks/L1").storeId === link.storeId && S.writes.length === w0, r.body);
+t("B7 二重引き継ぎの防止：管理者がいる掲載は、別のアカウントでも 409 listing_already_linked（奪えない・書き込みなし）", r.code === 409 && r.body.reason === "listing_already_linked" && S.docs.get("storeListingLinks/L1").storeId === link.storeId && S.writes.length === w0, r.body);
 // concurrency: two accounts at the same time
 card("u5"); card("u6");
 const both = await Promise.all([call(CLAIM("L2"), "u5"), call(CLAIM("L2"), "u6")]);
@@ -119,7 +117,7 @@ t("B11 他人の店舗へはつなげない（403 target_store_not_allowed）", 
 const rv = await call({ mode: "adminStoreListingLinkRevoke", submissionId: "L1", reason: "店舗からの申し出" }, "admin");
 clearRate();
 r = await call(CLAIM("L1"), "u4");
-t("B12 運営による紐付けの解除は従来どおり（Admin だけ・履歴を残す）。解除後は別のカード登録済みアカウントが引き継げる", rv.code === 200 && r.code === 200 && S.docs.get("storeListingLinks/L1").status === "active" && S.docs.get("storeListingLinks/L1").storeId === r.body.storeId && (S.docs.get("storeListingLinks/L1").history || []).some((h) => h.event === "revoked"), { rv: rv.body, r: r.body });
+t("B12 運営による紐付けの解除は従来どおり（Admin だけ・履歴を残す）。解除後は別のアカウントが引き継げる", rv.code === 200 && r.code === 200 && S.docs.get("storeListingLinks/L1").status === "active" && S.docs.get("storeListingLinks/L1").storeId === r.body.storeId && (S.docs.get("storeListingLinks/L1").history || []).some((h) => h.event === "revoked"), { rv: rv.body, r: r.body });
 const notAdmin = await call({ mode: "adminStoreListingLinkRevoke", submissionId: "L1", reason: "x" }, "u3");
 t("B13 店主は紐付けを解除できない（Admin だけ）", notAdmin.code === 403 || notAdmin.code === 401, notAdmin.code);
 // STEP 42-F｜運営の店舗一覧：引き継ぎで作られた店舗は listingClaim として返し、旧店舗URL(token)の発行・運営の所在地上書きはしない。
@@ -183,7 +181,7 @@ t("D2 撤去した旧方式の mode はすべて 410（未対応件数・申請�
 // ===================== Z: invariants =====================
 t("Z1 課金関連3フラグは false のまま・Stripe／Cloudinary への通信なし（地図の住所確認だけ模擬）", IM.IMADAKE_CV_BILLING_STARTED === false && MC.IMADAKE_MONTHLY_CLOSE_WRITES_ENABLED === false && CH.IMADAKE_MONTHLY_CHARGE_ENABLED === false && otherNetwork === 0 && geocodeCalls > 0);
 const touched = [...new Set(S.writes.map((w) => w.split("/")[0]))].sort();
-// STEP 58｜新規登録・引き継ぎは月額100円の申込と一体のため、契約(storeCustomPlans)と契約の履歴(storeCustomPlanEvents)も同時に書く。
-t("Z2 書き込み先は店舗登録・引き継ぎと、同時に成立する月額100円の契約だけ（請求書・カード・submissions は書かない）", !touched.includes("submissions") && !touched.includes("imadakeMonthlyInvoices") && !touched.includes("storeCustomPlanInvoices") && touched.includes("storeCustomPlans") && touched.every((c) => ["accountBilling", "storeAccounts", "storeMembers", "storeProfiles", "storeListingLinks", "storeListingClaims", "storeRegistrationRateLimits", "storeCustomPlans", "storeCustomPlanEvents", "storeCustomPlanUsage"].includes(c)), touched);
+// 2026-11-18 代表決定(STEP 58の変更)｜新規登録・引き継ぎでは契約を作らない。
+t("Z2 書き込み先は店舗登録・引き継ぎだけ（契約・請求書・カード・submissions は書かない）", !touched.includes("submissions") && !touched.includes("imadakeMonthlyInvoices") && !touched.includes("storeCustomPlanInvoices") && !touched.includes("storeCustomPlans") && !touched.includes("storeCustomPlanEvents") && !touched.includes("storeCustomPlanUsage") && touched.every((c) => ["accountBilling", "storeAccounts", "storeMembers", "storeProfiles", "storeListingLinks", "storeListingClaims", "storeRegistrationRateLimits"].includes(c)), touched);
 console.log(`\nTOTAL ${pass + fail}  PASS ${pass}  FAIL ${fail}`);
 process.exit(0);

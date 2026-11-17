@@ -85,41 +85,42 @@ const listingBefore = JSON.stringify(doc("submissions/LA"));
   t("A1 メール未確認：新規登録も引き継ぎも 403 email_not_verified(店舗は作られない)", r.code === 403 && r.body.reason === "email_not_verified" && c.code === 403 && c.body.reason === "email_not_verified" && ![...S.docs.keys()].some((k) => k.startsWith("storeAccounts/")), { r: r.body, c: c.body });
   clearRate();
   r = await call({ mode: "storeSelfRegister", storeName: "カード無しの店", categoryCode: "cafe_sweets", countryCode: "JP", address: "沖縄県那覇市牧志2-2-2", sourceLanguage: "ja" }, "ua");
-  const c2 = await call({ mode: "storeListingClaimCreate", submissionId: "LA", targetType: "new_store", role: "owner", publicReferenceUrl: "", note: "" }, "ub");
-  t("A2 カード未登録：新規登録も引き継ぎも 409 card_required(同じ前提)", r.code === 409 && r.body.reason === "card_required" && c2.code === 409 && c2.body.reason === "card_required", { r: r.body, c: c2.body });
+  t("A2 カード未登録でも新規登録できる(2026-11-18代表決定：下書きだけ作り、契約は作らない)", r.code === 200 && r.body.plan === null && !doc("storeCustomPlans/" + r.body.storeId), { r: r.body });
   const none = await myStores("ua");
-  t("A3 店舗一覧：まだ店舗が無い時は空(メール確認済み・ログイン中)", Array.isArray(none) && none.length === 0, none);
+  t("A3 店舗一覧：下書きの店舗が返る(契約なし・まだ非公開)", Array.isArray(none) && none.length === 1 && none[0].planState === "none" && none[0].publiclyVisible === false && none[0].profileStatus === "draft", none);
 }
 
-// ===== B. 新規登録(ua)：同意なしは登録しない → 同意して登録(契約が同時に成立) → 編集 → 公開 → 店舗ページ =====
-// STEP 58(代表最終決定)：契約成立前の保存・編集・下書きの管理は無い。新規登録の入力は月額100円の申込と一体。
+// ===== B. 新規登録(ua)：登録は下書きだけ → 編集は契約前でもできる → 公開は契約が要る → カード+申込 → 公開 → 店舗ページ =====
+// 2026-11-18 代表決定(STEP 58の変更)：登録・引き継ぎと契約を切り離し、契約は公開の申込みの時に作る。
 let NEW_ID = "";
 {
-  card("ua"); clearRate();
-  const REG_UA = { mode: "storeSelfRegister", storeName: "ひとりで登録したカフェ", categoryCode: "cafe_sweets", countryCode: "JP", address: "沖縄県那覇市牧志2-2-2", sourceLanguage: "ja", contractModel: "monthly" };
-  const r0 = await call(REG_UA, "ua");
-  t("B0 カード登録済みでも、月額100円の同意が無い新規登録は 400 plan_consent_required(店舗・契約は作られない)", r0.code === 400 && r0.body.reason === "plan_consent_required" && ![...S.docs.keys()].some((k) => k.startsWith("storeAccounts/") || k.startsWith("storeCustomPlans/")), r0.body);
   clearRate();
-  const r = await call({ ...REG_UA, planConsentVersion: CONSENT }, "ua");
+  const REG_UA = { mode: "storeSelfRegister", storeName: "ひとりで登録したカフェ", categoryCode: "cafe_sweets", countryCode: "JP", address: "沖縄県那覇市牧志2-2-2", sourceLanguage: "ja" };
+  const r = await call(REG_UA, "ua");
   NEW_ID = r.body && r.body.storeId;
-  const plan0 = doc("storeCustomPlans/" + NEW_ID) || {};
-  t("B1 同意して登録：運営の承認なしで登録(active)・同じ手続きで月額100円(税込)の契約が成立(同意の証跡・登録の経路)", r.code === 200 && r.body.registrationStatus === "active" && r.body.plan && r.body.plan.result === "subscribed" && plan0.status === "active" && plan0.ownerUid === "ua" && plan0.consent.feeJpy === 100 && plan0.consent.taxIncluded === true && plan0.consent.version === CONSENT && plan0.signupChannel === "store_registration", { r: r.body, plan0 });
+  t("B1 登録：運営の承認なしで登録(active)・契約は作られない(同意もカードも不要)", r.code === 200 && r.body.registrationStatus === "active" && r.body.plan === null && !doc("storeCustomPlans/" + NEW_ID), { r: r.body });
   let list = await myStores("ua");
   const s0 = list.find((s) => s.storeId === NEW_ID) || {};
-  t("B2 店舗一覧：固定の URL・契約中(active)・まだ旅行者に非公開(false)を一か所で返す", s0.storePageUrl === "https://machinau.jp/shop/" + NEW_ID && s0.planState === "active" && s0.publiclyVisible === false && s0.profileStatus === "draft", s0);
+  t("B2 店舗一覧：固定の URL・契約なし(none)・まだ旅行者に非公開(false)を一か所で返す", s0.storePageUrl === "https://machinau.jp/shop/" + NEW_ID && s0.planState === "none" && s0.publiclyVisible === false && s0.profileStatus === "draft", s0);
 
   clearRate();
   const u1 = await call(PROFILE(NEW_ID, rev(NEW_ID)), "ua");
   const usage0 = [...S.docs.keys()].filter((k) => k.startsWith("storeCustomPlanUsage/") && doc(k).storeId === NEW_ID);
-  t("B3 契約の後は店舗情報を保存・編集できる・今月の利用の記録は1件(100円が上限)", u1.code === 200 && usage0.length === 1 && doc(usage0[0]).holderUid === "ua", { u1: u1.body, usage0 });
+  t("B3 契約の前でも店舗情報を保存・編集できる(利用の記録はまだ無い)", u1.code === 200 && usage0.length === 0, { u1: u1.body, usage0 });
   addPhoto(NEW_ID);
 
   clearRate();
+  const p0 = await call({ mode: "storeProfilePublish", storeId: NEW_ID, expectedRevision: rev(NEW_ID) }, "ua");
+  t("B5 契約が無いと公開できない(条件の不足に plan が入る)", p0.code === 409 && p0.body.reason === "publish_conditions_not_met" && Array.isArray(p0.body.missing) && p0.body.missing.includes("plan") && doc("storeProfiles/" + NEW_ID).status === "draft", p0.body);
+
+  card("ua"); clearRate();
   const sub1 = await call({ mode: "storeCustomPlanSubscribe", storeId: NEW_ID, contractModel: "monthly", planConsentVersion: CONSENT }, "ua");
+  const plan0 = doc("storeCustomPlans/" + NEW_ID) || {};
+  t("B1b 公開の申込みで契約が成立(同意の証跡・月額100円・税込)", sub1.code === 200 && plan0.status === "active" && plan0.ownerUid === "ua" && plan0.consent.feeJpy === 100 && plan0.consent.taxIncluded === true && plan0.consent.version === CONSENT, { sub1: sub1.body, plan0 });
   clearRate();
   const sub2 = await call({ mode: "storeCustomPlanSubscribe", storeId: NEW_ID, contractModel: "monthly", planConsentVersion: CONSENT }, "ua");
   const usage = [...S.docs.keys()].filter((k) => k.startsWith("storeCustomPlanUsage/") && doc(k).storeId === NEW_ID);
-  t("B4 二重契約にならない：登録の後の申込は 409 already_subscribed・台帳は1件のまま", sub1.code === 409 && sub1.body.reason === "already_subscribed" && sub2.code === 409 && usage.length === 1, { sub1: sub1.body, sub2: sub2.body, usage });
+  t("B4 二重契約にならない：2回目の申込は 409 already_subscribed・台帳は1件のまま", sub2.code === 409 && sub2.body.reason === "already_subscribed" && usage.length === 1 && doc(usage[0]).holderUid === "ua", { sub2: sub2.body, usage });
 
   clearRate();
   const p1 = await call({ mode: "storeProfilePublish", storeId: NEW_ID, expectedRevision: rev(NEW_ID) }, "ua");
@@ -145,32 +146,31 @@ let NEW_ID = "";
   t("B15 旧い共有リンク(/share/shop/sp_{ID})は店舗ページへ移る(互換)", share.includes('location.replace("/shop/' + NEW_ID + '")'));
 }
 
-// ===== C. 引き継ぎ(ub)：新規登録と同じ条件(同意と同時に契約)・同じ流れ。運営掲載は書き換えない =====
+// ===== C. 引き継ぎ(ub)：新規登録と同じく契約と切り離す。運営掲載は書き換えない =====
 let CLAIM_ID = "";
 {
-  card("ub"); clearRate();
-  const CLAIM_UB = { mode: "storeListingClaimCreate", submissionId: "LA", targetType: "new_store", role: "owner", publicReferenceUrl: "", note: "", contractModel: "monthly" };
-  const r0 = await call(CLAIM_UB, "ub");
-  t("C0 カード登録済みでも、月額100円の同意が無い引き継ぎは 400 plan_consent_required(紐付け・店舗・契約は作られない)", r0.code === 400 && r0.body.reason === "plan_consent_required" && !doc("storeListingLinks/LA"), r0.body);
   clearRate();
-  const r = await call({ ...CLAIM_UB, planConsentVersion: CONSENT }, "ub");
+  const CLAIM_UB = { mode: "storeListingClaimCreate", submissionId: "LA", targetType: "new_store", role: "owner", publicReferenceUrl: "", note: "" };
+  const r = await call(CLAIM_UB, "ub");
   CLAIM_ID = r.body && r.body.storeId;
-  t("C1 同意して引き継ぎ：運営の承認・電話確認・運営配布の URL なしで、その場で引き継ぎ(approved)・契約が同時に成立", r.code === 200 && r.body.status === "approved" && doc("storeListingLinks/LA").storeId === CLAIM_ID && (doc("storeCustomPlans/" + CLAIM_ID) || {}).status === "active" && doc("storeCustomPlans/" + CLAIM_ID).signupChannel === "listing_claim", r.body);
+  t("C1 引き継ぎ：運営の承認・電話確認・運営配布の URL なしで、その場で引き継ぎ(approved)・契約は作られない", r.code === 200 && r.body.status === "approved" && doc("storeListingLinks/LA").storeId === CLAIM_ID && !doc("storeCustomPlans/" + CLAIM_ID), r.body);
   t("C2 運営掲載(submissions)は書き換えない", JSON.stringify(doc("submissions/LA")) === listingBefore);
   clearRate();
-  const again = await call({ ...CLAIM_UB, planConsentVersion: CONSENT }, "ua");
-  t("C3 二重の引き継ぎは 409 listing_already_linked(契約も作られない)", again.code === 409 && again.body.reason === "listing_already_linked" && [...S.docs.keys()].filter((k) => k.startsWith("storeCustomPlans/")).length === 2, again.body);
+  const again = await call(CLAIM_UB, "ua");
+  t("C3 二重の引き継ぎは 409 listing_already_linked(契約も作られない)", again.code === 409 && again.body.reason === "listing_already_linked" && [...S.docs.keys()].filter((k) => k.startsWith("storeCustomPlans/")).length === 1, again.body);
   let s = (await myStores("ub")).find((x) => x.storeId === CLAIM_ID) || {};
-  t("C4 引き継いだ店舗も一覧に同じ形(契約中・まだ非公開・固定の URL)", s.planState === "active" && s.publiclyVisible === false && s.storePageUrl === "https://machinau.jp/shop/" + CLAIM_ID, s);
+  t("C4 引き継いだ店舗も一覧に同じ形(契約なし・まだ非公開・固定の URL)", s.planState === "none" && s.publiclyVisible === false && s.storePageUrl === "https://machinau.jp/shop/" + CLAIM_ID, s);
+  card("ub"); clearRate();
+  const sub = await call({ mode: "storeCustomPlanSubscribe", storeId: CLAIM_ID, contractModel: "monthly", planConsentVersion: CONSENT }, "ub");
   const pick = (p) => p && { status: p.status, periodKind: p.periodKind, fee: p.consent.feeJpy, tax: p.consent.taxIncluded, version: p.consent.version };
-  t("C6 引き継ぎの契約は、新規登録の契約と同じ(月額100円・税込・同じ同意の版・暦月)", JSON.stringify(pick(doc("storeCustomPlans/" + CLAIM_ID))) === JSON.stringify(pick(doc("storeCustomPlans/" + NEW_ID))), { a: pick(doc("storeCustomPlans/" + NEW_ID)), b: pick(doc("storeCustomPlans/" + CLAIM_ID)) });
+  t("C6 引き継ぎの後の申込でできる契約は、新規登録の後の契約と同じ(月額100円・税込・同じ同意の版・暦月)", sub.code === 200 && JSON.stringify(pick(doc("storeCustomPlans/" + CLAIM_ID))) === JSON.stringify(pick(doc("storeCustomPlans/" + NEW_ID))), { a: pick(doc("storeCustomPlans/" + NEW_ID)), b: pick(doc("storeCustomPlans/" + CLAIM_ID)) });
   clearRate();
   const u = await call(PROFILE(CLAIM_ID, rev(CLAIM_ID), { description: "引き継いだ店主の紹介文。" }), "ub");
   addPhoto(CLAIM_ID);
   clearRate();
   const p1 = await call({ mode: "storeProfilePublish", storeId: CLAIM_ID, expectedRevision: rev(CLAIM_ID) }, "ub");
   s = (await myStores("ub")).find((x) => x.storeId === CLAIM_ID) || {};
-  t("C7 契約中なので編集・公開でき、店舗ページ /shop/{ID} が開く", u.code === 200 && p1.code === 200 && s.publiclyVisible === true && (await page(CLAIM_ID)).code === 200, { u: u.body, p1: p1.body });
+  t("C7 契約したので編集・公開でき、店舗ページ /shop/{ID} が開く", u.code === 200 && p1.code === 200 && s.publiclyVisible === true && (await page(CLAIM_ID)).code === 200, { u: u.body, p1: p1.body });
 }
 
 // ===== D. 他の店舗は操作できない =====
@@ -236,16 +236,16 @@ let CLAIM_ID = "";
   t("G2 店舗ページの電話・予約・SNS の文言は編集画面の文言と同じ(日英)", ["ja", "en"].every((lang) => L[lang].phone === T.store_profile_phone_label[lang] && L[lang].reservation === T.store_profile_reservation_label[lang] && L[lang].headingLanguages === T.store_profile_languages_heading[lang] && ["instagram", "x", "facebook", "tiktok", "youtube", "threads", "line"].every((k) => L[lang].social[k] === T["store_profile_social_" + k][lang])));
 
   const acc = readFileSync(join(REPO_ROOT, "store-account.html"), "utf8");
-  t("G3 店舗アカウント画面：手順は⑤公開まで(登録・引き継ぎと契約は同じ手続き)・店舗ごとの公開/契約の状態・固定の URL とコピー・管理の案内", !acc.includes('key: "store_steps_plan"') && acc.includes('key: "store_steps_register"') && acc.includes('key: "store_steps_publish"') && !("store_steps_plan" in T) && acc.includes("appendStoreCardStates(item, store)") && acc.includes('data-store-page-copy') && acc.includes('data-i18n="store_management_help_note"'));
+  t("G3 店舗アカウント画面：手順は⑤公開まで(登録・引き継ぎ→カード→申込み・公開)・店舗ごとの公開/契約の状態・固定の URL とコピー・管理の案内", !acc.includes('key: "store_steps_plan"') && acc.includes('key: "store_steps_register"') && acc.includes('key: "store_steps_publish"') && !("store_steps_plan" in T) && acc.includes("appendStoreCardStates(item, store)") && acc.includes('data-store-page-copy') && acc.includes('data-i18n="store_management_help_note"'));
   t("G4 引き継ぎの途中のメール確認から戻れる(掲載 ID だけをこの端末に24時間)・確認の後の自動の取り直し", acc.includes('CLAIM_RESUME_STORAGE_KEY = "machinauPendingClaim"') && acc.includes("rememberPendingClaim(CLAIM_SUBMISSION_ID)") && acc.includes("forgetPendingClaim();") && acc.includes('addEventListener("visibilitychange", refreshVerificationQuietly)'));
   // STEP 58(代表最終決定)｜契約の前に入力を途中保存する機能は残さない(STEP 57 の入力の保持は撤去)。新規登録・引き継ぎは同意と一体。
-  t("G5 新規登録の入力を端末に残さない(途中保存なし・前の版の値も消す)・登録と引き継ぎ(新しい店舗)は同意のチェックと同意の版を送る", !acc.includes("STORE_FORM_DRAFT_STORAGE_KEY") && !acc.includes("restoreStoreFormDraft") && !acc.includes("sessionStorage.setItem(\"machinauStoreFormDraft\"") && acc.includes('sessionStorage.removeItem("machinauStoreFormDraft")') && acc.includes('id="storeConsentCheck"') && acc.includes('id="claimConsentCheck"') && /mode: "storeSelfRegister",[\s\S]{0,400}planConsentVersion: STORE_CARD_PLAN_CONSENT_VERSION/.test(acc) && acc.includes("payload.planConsentVersion = STORE_CARD_PLAN_CONSENT_VERSION") && acc.includes('STORE_CARD_PLAN_CONSENT_VERSION = "' + CONSENT + '"'));
+  t("G5 新規登録の入力を端末に残さない(途中保存なし・前の版の値も消す)・登録と引き継ぎに同意のチェックは無い(同意と同意の版は公開の申込みの時だけ)", !acc.includes("STORE_FORM_DRAFT_STORAGE_KEY") && !acc.includes("restoreStoreFormDraft") && !acc.includes("sessionStorage.setItem(\"machinauStoreFormDraft\"") && acc.includes('sessionStorage.removeItem("machinauStoreFormDraft")') && !acc.includes('id="storeConsentCheck"') && !acc.includes('id="claimConsentCheck"') && !/mode: "storeSelfRegister",[\s\S]{0,400}planConsentVersion/.test(acc) && !acc.includes("payload.planConsentVersion = STORE_CARD_PLAN_CONSENT_VERSION") && acc.includes('STORE_CARD_PLAN_CONSENT_VERSION = "' + CONSENT + '"'));
   t("G6 LINE の登録・ログインを必須にしていない・架空の公式アカウントの URL を置いていない", !/line\.me\/R\/ti|lin\.ee\//.test(acc) && !/LINE(で|に)ログイン/.test(acc));
 
   const apply = readFileSync(join(REPO_ROOT, "shop-apply.html"), "utf8");
   const visible = apply.replace(/<!--[\s\S]*?-->/g, "");
   t("G7 shop-apply.html：URL は残し(200 の静的ページ)、古い「投稿は無料」・旧フォーム・旧方式の案内を撤去", !visible.includes("無料") && !apply.includes('id="applyForm"') && !apply.includes("shopApplicationCreate") && !apply.includes("<script") && apply.includes('href="store-account.html"') && apply.includes('href="shop.html"'));
-  t("G8 shop-apply.html：今の正式な料金(新規登録も引き継ぎも同じ月額100円)・noindex・canonical は shop.html", apply.includes("新規店舗登録も、掲載済み店舗の引き継ぎも、同じ料金・同じ条件です") && apply.includes("契約の前に店舗情報を保存・編集することはできません") && apply.includes('content="noindex"') && apply.includes('href="https://machinau.jp/shop.html"'));
+  t("G8 shop-apply.html：今の正式な料金(新規登録も引き継ぎも同じ月額100円)・noindex・canonical は shop.html", apply.includes("新規店舗登録も、掲載済み店舗の引き継ぎも、同じ料金・同じ条件です") && apply.includes("お店の登録と店舗情報の編集は、メールアドレスの確認だけでできます") && apply.includes('content="noindex"') && apply.includes('href="https://machinau.jp/shop.html"'));
 
   const terms = readFileSync(join(REPO_ROOT, "terms.html"), "utf8");
   const toku = readFileSync(join(REPO_ROOT, "tokushoho.html"), "utf8");

@@ -21327,7 +21327,7 @@ async function handleStoreProfilePhotoSignatureRequest(
             actorResult.actor.uid,
             Date.now()
           )
-        : await checkStoreProfilePaidEditor(
+        : await checkStoreProfileEditor(
             getFirestore(
               getFirebaseAdminApp()
             ),
