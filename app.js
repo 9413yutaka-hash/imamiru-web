@@ -26780,10 +26780,10 @@ function renderTodayTicker(
             : (item.title !== "" ? item.title : item.body);
 
         const tickerInner =
-          "<b>" +
+          escapeHtml(truncateTodayFeedText(headline, 44)) +
+          "&nbsp;&nbsp;<b>" +
           escapeHtml(label) +
-          "｜</b>" +
-          escapeHtml(truncateTodayFeedText(headline, 44));
+          "</b>&nbsp;&nbsp;";
 
         return isTodayFeedTargetAvailable(item.targetId)
           ? (
