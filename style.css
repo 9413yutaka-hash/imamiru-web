@@ -2826,6 +2826,15 @@ body:has(#todayFeedSection) .hero-action-grid {
   font-weight: 800;
 }
 
+/* 週末の日付は2日分で長いため少し小さくし、1日分は途中で割らない。 */
+.today-hero-md.is-weekend {
+  font-size: clamp(26px, 7.4vw, 42px);
+}
+
+.today-hero-day {
+  white-space: nowrap;
+}
+
 .today-hero-copy {
   flex: 1 1 220px;
   min-width: 0;
