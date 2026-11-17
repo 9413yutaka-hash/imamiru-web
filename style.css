@@ -2504,11 +2504,11 @@ body:has(#todayFeedSection) h3 {
 
 /* ---- 01 ヘッダー: 濃紺バー＋ロゴ＋赤CTA＋言語ピル ---- */
 body:has(#todayFeedSection) .top-bar {
-  /* 濃い面の色はヒーロー写真の海の色に統一(2026-11-17 代表提案)。
-     --navy 自体は他ページ・文字色と共有のため変えず、この面だけ差し替える。 */
-  background: #045a6e;
-  border-bottom: 3px solid var(--blue);
-  backdrop-filter: none;
+  /* 明るい印象にするため白基調に戻す(2026-11-17 代表指摘「バックが暗い」)。
+     海の色 #045a6e は下の線と文字のアクセントに使う。 */
+  background: rgba(255, 255, 255, 0.94);
+  border-bottom: 2px solid #045a6e;
+  backdrop-filter: blur(16px);
 }
 
 body:has(#todayFeedSection) .brand-name {
@@ -2517,7 +2517,7 @@ body:has(#todayFeedSection) .brand-name {
   font-weight: 800;
   letter-spacing: 0.04em;
   line-height: 1.1;
-  color: var(--white);
+  color: var(--navy);
 }
 
 body:has(#todayFeedSection) .brand-name-dot {
@@ -2525,33 +2525,33 @@ body:has(#todayFeedSection) .brand-name-dot {
 }
 
 body:has(#todayFeedSection) .brand-caption {
-  color: #b9d4e6;
+  color: var(--subtext);
   font-size: 11px;
   /* タグラインが途中で改行されて2行に割れないようにする(代表指摘 2026-11-15)。 */
   white-space: nowrap;
 }
 
 body:has(#todayFeedSection) .brand-icon {
-  background: rgba(255, 255, 255, 0.12);
+  background: #e9f7fa;
   box-shadow: none;
 }
 
 body:has(#todayFeedSection) .top-pc-nav-button {
-  color: #b9d4e6;
+  color: #33586a;
 }
 
 body:has(#todayFeedSection) .top-pc-nav-button:hover,
 body:has(#todayFeedSection) .top-pc-nav-button:focus-visible {
-  background: rgba(255, 255, 255, 0.12);
-  color: var(--white);
+  background: rgba(4, 90, 110, 0.08);
+  color: var(--navy);
 }
 
 body:has(#todayFeedSection) .top-pc-nav-button.active {
-  color: var(--yellow);
+  color: #045a6e;
 }
 
 body:has(#todayFeedSection) .top-pc-navigation {
-  border-top-color: rgba(255, 255, 255, 0.14);
+  border-top-color: rgba(4, 90, 110, 0.14);
 }
 
 .header-post-cta {
@@ -2784,12 +2784,13 @@ body:has(#todayFeedSection) .hero-action-grid {
   gap: 22px;
   align-items: stretch;
   flex-wrap: wrap;
-  /* 表示範囲「半径15km」の面｜濃い面の色を海の色 #045a6e に統一(2026-11-17 代表提案)。 */
-  background: #045a6e;
-  color: var(--white);
+  /* 表示範囲「半径15km」の面｜明るい海色の面にする(2026-11-17 代表指摘「バックが暗い」)。
+     海の色 #045a6e は曜日・距離の文字に使う。 */
+  background: #e9f7fa;
+  color: var(--navy);
   border-radius: 24px;
   padding: 26px 28px;
-  box-shadow: 0 18px 44px rgba(4, 90, 110, 0.22);
+  box-shadow: 0 14px 34px rgba(4, 90, 110, 0.12);
   margin-bottom: 22px;
 }
 
@@ -2803,7 +2804,7 @@ body:has(#todayFeedSection) .hero-action-grid {
   font-size: 14px;
   font-weight: 800;
   letter-spacing: 0.18em;
-  color: #ffd23e;
+  color: #045a6e;
   margin-bottom: 6px;
 }
 
@@ -2826,7 +2827,7 @@ body:has(#todayFeedSection) .hero-action-grid {
 
 .today-hero-copy p {
   margin: 4px 0 0;
-  color: #d9f0f7;
+  color: #3d6071;
   font-size: 14px;
   line-height: 1.7;
 }
@@ -2845,12 +2846,12 @@ body:has(#todayFeedSection) .hero-action-grid {
 .today-hero-km {
   font-family: "M PLUS Rounded 1c", "Yu Gothic", sans-serif;
   font-size: 26px;
-  color: #ffd23e;
+  color: #045a6e;
 }
 
 .today-hero-order {
   font-size: 13px;
-  color: #d9f0f7;
+  color: #3d6071;
 }
 
 @media (max-width: 620px) {
@@ -3335,9 +3336,9 @@ body:has(#todayFeedSection) .hero-action-grid {
 
 /* ---- お店・施設の方へ(モカ案07) ---- */
 .shop-owner-cta {
-  /* 濃い面の色を海の色 #045a6e に統一(2026-11-17 代表提案)。このクラスは
+  /* 明るい海色の面にする(2026-11-17 代表指摘「バックが暗い」)。このクラスは
      index.html でだけ使うため、ここで直接差し替えても他ページへ波及しない。 */
-  background: #045a6e;
+  background: #e9f7fa;
   border-radius: 22px;
   padding: 26px 22px;
   margin-top: 18px;
@@ -3347,14 +3348,14 @@ body:has(#todayFeedSection) .hero-action-grid {
 
 .shop-owner-cta h2 {
   margin: 0 0 10px;
-  color: var(--white);
+  color: var(--navy);
   font-size: 21px;
 }
 
 .shop-owner-cta p {
   margin: 0 auto 18px;
   max-width: 560px;
-  color: rgba(255, 255, 255, 0.88);
+  color: #3d6071;
   font-size: 14px;
   line-height: 1.8;
 }
@@ -3368,7 +3369,7 @@ body:has(#todayFeedSection) .hero-action-grid {
   border-radius: 999px;
   padding: 12px 28px;
   text-decoration: none;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 8px 20px rgba(4, 90, 110, 0.18);
 }
 
 /* 一覧の差別化(2026-11-15 代表決定)｜専用ページのあるお店の印と、
