@@ -13573,6 +13573,15 @@ function renderDynamicColumnEntries() {
   refreshColumnEntryTranslationsIfNeeded(
     visibleSlugs
   );
+
+  // 読み物一覧の「右にまだある」印を、描画後の幅で付け直す。
+  updateColumnScrollHint();
+
+  requestAnimationFrame(
+    function() {
+      updateColumnScrollHint();
+    }
+  );
 }
 
 // ============================================================
@@ -27147,6 +27156,41 @@ function initCategoryScrollHint() {
 }
 
 initCategoryScrollHint();
+
+// 読み物一覧の「右にまだある」印(お店のカテゴリ行と同じ作法)。
+// 一覧は後から読み込まれるため、描画のたびにも呼び直す。
+function updateColumnScrollHint() {
+  const wrap =
+    document.querySelector(".column-scroll-wrap");
+
+  const scroller =
+    document.getElementById("columnEntryCardList");
+
+  if (!wrap || !scroller) {
+    return;
+  }
+
+  const hasMore =
+    scroller.scrollWidth - scroller.clientWidth - scroller.scrollLeft > 8;
+
+  wrap.classList.toggle("has-more", hasMore);
+}
+
+function initColumnScrollHint() {
+  const scroller =
+    document.getElementById("columnEntryCardList");
+
+  if (!scroller) {
+    return;
+  }
+
+  scroller.addEventListener("scroll", updateColumnScrollHint, { passive: true });
+  window.addEventListener("resize", updateColumnScrollHint);
+
+  updateColumnScrollHint();
+}
+
+initColumnScrollHint();
 
 // ヒーローの街の名前のボタンは置かない(2026-11-15 代表決定：
 // 「現在地を取得する」を押させることに集中させるため)。

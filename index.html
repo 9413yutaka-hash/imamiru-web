@@ -153,7 +153,7 @@
 
   <link
     rel="stylesheet"
-    href="style.css?v=20261117f"
+    href="style.css?v=20261117i"
   >
 
   <!-- トップページ改修(モカ案ブレンド・見た目)｜見出し用の丸ゴシック。
@@ -3822,7 +3822,10 @@
       <!-- 旅の保存箱 Phase 1b｜♡で保存できなかった時・上限の時の案内(通常は非表示)。 -->
       <p id="columnSaveNotice" class="saved-items-notice" role="status" aria-live="polite" hidden></p>
 
-      <div id="columnEntryCardList"></div>
+      <div class="column-scroll-wrap">
+        <div id="columnEntryCardList"></div>
+        <span class="column-scroll-hint" aria-hidden="true">›</span>
+      </div>
 
       <a
         class="column-entry-more-link"
@@ -4379,7 +4382,7 @@
       window.addEventListener("resize", sync);
     })();
   </script>
-  <script src="app.js?v=20261117h"></script>
+  <script src="app.js?v=20261117i"></script>
   <!-- Google Maps JavaScript APIは常時読み込まず、地図セクション到達時または
        GPS/トイレ検索操作時にapp.jsのensureGoogleMapsLoaded()が動的に読み込む -->
 </body>
