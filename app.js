@@ -26608,7 +26608,8 @@ function isTodayFeedTargetAvailable(targetId) {
 
 function buildTodayFeedCardHtml(
   item,
-  language
+  language,
+  cardIndex
 ) {
   // 写真の無い投稿は写真欄自体を出さない(案A・2026-11-15 代表決定)。
   // 絵文字だけが大きな空の箱に浮く見た目をやめ、文字だけのカードにする。
@@ -26694,7 +26695,7 @@ function buildTodayFeedCardHtml(
   }
 
   return (
-    '<article class="feed-card' + (hasImage ? "" : " feed-card-textonly") + '" data-feed-type="' + item.type + '">' +
+    '<article class="feed-card' + (hasImage ? "" : " feed-card-textonly") + '"' + (Number.isInteger(cardIndex) ? ' id="todayFeedCard-' + cardIndex + '"' : "") + ' data-feed-type="' + item.type + '">' +
       (hasImage
         ? '<div class="feed-card-visual">' +
             imageHtml +
@@ -26765,7 +26766,7 @@ function renderTodayTicker(
   const spansHtml =
     items
       .slice(0, 5)
-      .map(function(item) {
+      .map(function(item, tickerIndex) {
         const agoText =
           formatTodayFeedAgo(item.timeMillis, language);
 
@@ -26786,15 +26787,15 @@ function renderTodayTicker(
           escapeHtml(truncateTodayFeedText(headline, 44)) +
           "&nbsp;&nbsp;";
 
-        return isTodayFeedTargetAvailable(item.targetId)
-          ? (
-            "<a href=\"#" +
-            escapeHtml(item.targetId) +
-            "\">" +
-            tickerInner +
-            "</a>"
-          )
-          : "<span>" + tickerInner + "</span>";
+        // ティッカーの見出しは全部リンクにする(2026-11-18 代表決定)。
+        // 飛び先は、その投稿のフィードカード(通し番号のid)。
+        return (
+          "<a href=\"#todayFeedCard-" +
+          tickerIndex +
+          "\">" +
+          tickerInner +
+          "</a>"
+        );
       })
       .join("");
 
@@ -26807,6 +26808,105 @@ function renderTodayTicker(
 
   startTodayTickerAutoScroll();
 }
+
+// ティッカーの見出しを押した時、その投稿のフィードカードへ飛ぶ。
+// 別の日を見ている・種類で絞っている・キーワードで絞っている時は、
+// 今日・すべて表示に戻してから飛ぶ(押して何も起きない状態を作らない)。
+function scrollToTickerFeedCard(targetId) {
+  if (!isTodayFeedTargetAvailable(targetId)) {
+    let changed =
+      false;
+
+    if (todayFeedDay !== "today") {
+      setTodayFeedDay("today");
+
+      changed =
+        true;
+    }
+
+    if (todayFeedFilter !== "all") {
+      todayFeedFilter =
+        "all";
+
+      const filterChips =
+        document.getElementById("todayFeedFilterChips");
+
+      if (filterChips) {
+        filterChips
+          .querySelectorAll("button")
+          .forEach(function(chipButton) {
+            chipButton.setAttribute(
+              "aria-pressed",
+              String(chipButton.getAttribute("data-feed-filter") === "all")
+            );
+          });
+      }
+
+      changed =
+        true;
+    }
+
+    if (todayFeedKeyword !== "") {
+      todayFeedKeyword =
+        "";
+
+      changed =
+        true;
+    }
+
+    if (changed) {
+      renderTodayFeed();
+    }
+  }
+
+  const element =
+    document.getElementById(targetId);
+
+  if (element) {
+    element.scrollIntoView({ behavior: "smooth", block: "start" });
+
+    return;
+  }
+
+  const feedSection =
+    document.getElementById("todayFeedSection");
+
+  if (feedSection) {
+    feedSection.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+}
+
+function initTodayTickerNavigation() {
+  const ticker =
+    document.getElementById("todayTicker");
+
+  if (!ticker || ticker.dataset.navBound === "1") {
+    return;
+  }
+
+  ticker.dataset.navBound =
+    "1";
+
+  ticker.addEventListener(
+    "click",
+    function(event) {
+      const link =
+        event.target.closest("a[href^=\"#todayFeedCard-\"]");
+
+      if (!link) {
+        return;
+      }
+
+      event.preventDefault();
+
+      scrollToTickerFeedCard(
+        link.getAttribute("href").slice(1)
+      );
+    }
+  );
+}
+
+initTodayTickerNavigation();
 
 let todayTickerRafId = 0;
 let todayTickerResumeAt = 0;
@@ -27004,7 +27104,7 @@ function renderTodayFeed() {
   list.innerHTML =
     keywordFilteredItems
       .map(function(item) {
-        return buildTodayFeedCardHtml(item, language);
+        return buildTodayFeedCardHtml(item, language, allItems.indexOf(item));
       })
       .join("");
 
