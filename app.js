@@ -1,5 +1,9 @@
 let shops = [];
 
+// 初回の掲載データが届くまでは true にしない。読み込み中の描画で
+// 「ありません」と断定しないために使う(2026-11-17 初回訪問者調査の指摘)。
+let shopListingsLoaded = false;
+
 let userLatitude = null;
 let userLongitude = null;
 let userAreaName = null;
@@ -4535,6 +4539,20 @@ function renderShops() {
     topShopCardCandidates.length ===
     0
   ) {
+    // 読み込み中は「ありません」と出さず、読み込み中とだけ出す。
+    if (!shopListingsLoaded) {
+      shopsList.innerHTML = `
+      <div class="sample-notice">
+        ${getMachinauTranslation(
+          "shops_loading",
+          getCurrentMachinauLanguage()
+        )}
+      </div>
+    `;
+
+      return;
+    }
+
     // サイト全体改善 A｜現在地から15km以内に1件も無い時(カテゴリー「すべて」)は、カテゴリーの
     // 問題ではないため距離の案内と「地域から探す」への導線を出す(15km・距離順の判定は変えない)。
     const nearbyEmpty =
@@ -6756,14 +6774,18 @@ function openShopModal(
           selectedShop
         );
 
+  // 営業時間・定休日・電話は、紹介文と区切って1つの箱にまとめる
+  // (文章が区切りなく続いて読みにくいという 2026-11-17 調査の指摘)。
+  const modalPermanentInfoParts = [];
+
   if (modalPermanentAdHoursLines.length > 0) {
-    modalText +=
-      "<br><br>" +
+    modalPermanentInfoParts.push(
       modalPermanentAdHoursLines
         .map(function(line) {
           return escapeHtml(line);
         })
-        .join("<br>");
+        .join("<br>")
+    );
   }
 
   // 16項目⑥｜常設店舗広告の電話番号(未設定なら何も出さない)。押すと電話をかけられる。
@@ -6773,8 +6795,7 @@ function openShopModal(
       : selectedShop.permanentAdHours.phone;
 
   if (modalPermanentAdPhone) {
-    modalText +=
-      "<br><br>" +
+    modalPermanentInfoParts.push(
       escapeHtml(
         getMachinauTranslation("shop_phone_label", getCurrentMachinauLanguage())
       ) +
@@ -6782,7 +6803,15 @@ function openShopModal(
       escapeHtml(modalPermanentAdPhone.replace(/[^0-9+]/g, "")) +
       '">' +
       escapeHtml(modalPermanentAdPhone) +
-      "</a>";
+      "</a>"
+    );
+  }
+
+  if (modalPermanentInfoParts.length > 0) {
+    modalText +=
+      '<br><br><div class="shop-modal-info-box">' +
+      modalPermanentInfoParts.join("<br>") +
+      "</div>";
   }
 
   const modalExpiryDisplayText =
@@ -12432,6 +12461,19 @@ function scrollToShops() {
     return;
   }
 
+  // 保存箱(マイページ)を開くと店舗欄は隠れる。お店への移動では必ず
+  // 表示に戻す(戻れず再読み込みするしかない状態を防ぐ。2026-11-17 調査の指摘)。
+  if (shopsSection.style.display === "none") {
+    shopsSection.style.display = "block";
+
+    const myPageSection =
+      document.getElementById("myPageSection");
+
+    if (myPageSection) {
+      myPageSection.style.display = "none";
+    }
+  }
+
   shopsSection.scrollIntoView({
     behavior:
       "smooth"
@@ -12794,6 +12836,8 @@ function applyLoadedSubmissions(
   loadedShops,
   nearestExpiryTime
 ) {
+  shopListingsLoaded = true;
+
   shops =
     loadedShops;
 
@@ -13054,6 +13098,8 @@ async function loadApprovedSubmissions() {
       "❌ 掲載情報の読み込みに失敗しました。",
       error
     );
+
+    shopListingsLoaded = true;
 
     updateTopCounts(
       0
@@ -18858,14 +18904,14 @@ let isRegionTodayInfoExpanded =
 
 // status:"generating"のときだけ短時間間隔で少数回だけ再取得する
 // (無限pollingは行わない)。Luna生成は最大90秒程度かかり得るため、
-// 5秒間隔×5回(追加で最大25秒)というLunaのタイムアウトより短い、
-// 安全側の小さな値にとどめる。それでもreadyにならない場合は
-// エラー表示にはせず、このセクションだけ静かに非表示にする。
+// 生成が終わる前に諦めて「まだ届いていません」と誤読させないよう、
+// 5秒間隔×20回(追加で最大100秒)まで待つ(2026-11-17 初回訪問者調査の指摘)。
+// それでもreadyにならない場合はエラー表示にはせず、空の案内にする。
 const REGION_TODAY_INFO_POLL_INTERVAL_MS =
   5000;
 
 const REGION_TODAY_INFO_MAX_POLL_ATTEMPTS =
-  5;
+  20;
 
 async function fetchRegionTodayInfoOnce(
   latitude,
@@ -20915,6 +20961,7 @@ function buildCommunityBoardAreaSearchFormHtml() {
       "</select>" +
     "</div>" +
     '<button type="button" id="communityBoardAreaSearchButton" class="location-button" data-i18n="community_board_area_search_button">この街を見る</button>' +
+      '<p class="community-board-area-search-note" data-i18n="area_search_coverage_note">いま情報が集まっているのは沖縄県です。他の都道府県は、これから広げていきます。</p>' +
     '<p id="communityBoardAreaSearchError" class="community-board-area-search-error" style="display:none;"></p>'
   );
 }
@@ -21261,6 +21308,49 @@ if (regionRecommendationAreaPickerElement) {
   }
 }
 
+// 地域の選択欄を開く時、表示中の地域があれば選択欄に反映する
+// (開くたび未選択に戻って見える問題の修正。2026-11-17 初回訪問者調査の指摘)。
+function syncAreaSearchFormToSelectedRegion() {
+  if (!selectedShopRegion) {
+    return;
+  }
+
+  const prefectureSelectElement =
+    document.getElementById(
+      "communityBoardPrefectureSelect"
+    );
+
+  const areaSelectElement =
+    document.getElementById(
+      "communityBoardAreaNameInput"
+    );
+
+  if (!prefectureSelectElement || !areaSelectElement) {
+    return;
+  }
+
+  if (
+    prefectureSelectElement.value !==
+    selectedShopRegion.prefectureName
+  ) {
+    prefectureSelectElement.value =
+      selectedShopRegion.prefectureName;
+
+    // 市区町村の選択肢は都道府県の change で作り直される。
+    prefectureSelectElement.dispatchEvent(
+      new Event("change")
+    );
+  }
+
+  if (
+    areaSelectElement.value !==
+    selectedShopRegion.municipalityName
+  ) {
+    areaSelectElement.value =
+      selectedShopRegion.municipalityName;
+  }
+}
+
 if (
   regionRecommendationOtherAreaButtonElement &&
   regionRecommendationAreaPickerElement
@@ -21273,6 +21363,13 @@ if (
         "none"
           ? "block"
           : "none";
+
+      if (
+        regionRecommendationAreaPickerElement.style.display !==
+        "none"
+      ) {
+        syncAreaSearchFormToSelectedRegion();
+      }
     }
   );
 }
@@ -21824,6 +21921,8 @@ if (heroActionAreaElement) {
         if (otherAreaButtonElement) {
           otherAreaButtonElement.click();
         }
+      } else {
+        syncAreaSearchFormToSelectedRegion();
       }
 
       (
@@ -26699,6 +26798,26 @@ function renderTodayFeed() {
 
   const language =
     getCurrentMachinauLanguage();
+
+  // 見出しは選んだ日(今日・明日・週末)に合わせる(2026-11-17 調査の指摘)。
+  // data-i18n属性も差し替えて、言語切替でもその日の見出しを保つ。
+  const feedCopyTitleKey =
+    todayFeedDay === "tomorrow"
+      ? "feed_tomorrow_copy_title"
+      : todayFeedDay === "weekend"
+        ? "feed_weekend_copy_title"
+        : "feed_today_copy_title";
+
+  [
+    document.getElementById("todayFeedHeading"),
+    document.querySelector(".today-hero-copy b")
+  ].forEach(function(element) {
+    if (element) {
+      element.textContent =
+        getMachinauTranslation(feedCopyTitleKey, language);
+      element.setAttribute("data-i18n", feedCopyTitleKey);
+    }
+  });
 
   // ヒーロー検索のキーワード絞り込み中は、フィード上部に解除付きのバーを出す
   // (絞り込みが静かに残り続けないようにするため)。
