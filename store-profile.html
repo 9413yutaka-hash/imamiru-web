@@ -51,6 +51,20 @@
     header .page-label { font-size: 12px; opacity: 0.85; }
     header h1 { margin: 6px 0 2px; font-size: 22px; }
 
+    .flow-steps { margin: 8px 0 0; font-size: 13px; opacity: 0.92; }
+
+    .block-heading {
+      margin: 22px 0 12px;
+      padding: 10px 14px;
+      border-radius: 10px;
+      background: #106a77;
+      color: var(--white);
+      font-size: 17px;
+      line-height: 1.5;
+    }
+
+    .block-heading-first { margin-top: 4px; }
+
     .language-switch { display: flex; gap: 4px; flex-shrink: 0; }
 
     .language-switch button {
@@ -279,6 +293,7 @@
     </div>
     <h1 data-i18n="store_profile_heading">お店の基本情報</h1>
     <p class="hint" data-i18n="store_profile_heading_note"></p>
+    <p class="flow-steps" data-i18n="store_profile_flow_steps">①お店の基本 → ②くわしい情報 → ③確認と公開</p>
   </header>
 
   <main>
@@ -299,6 +314,7 @@
     </div>
 
     <div id="editorArea" hidden>
+      <h2 class="block-heading block-heading-first" data-i18n="store_profile_block_basic">① お店の基本（公開に必要なもの）</h2>
       <section class="panel">
         <h2 data-i18n="store_profile_basic_heading">店舗・施設</h2>
         <div class="readonly-row">
@@ -392,6 +408,14 @@
           </div>
         </section>
 
+        <div id="formMessage" class="message" role="status" aria-live="polite"></div>
+        <p class="save-progress" id="saveProgress" role="status" aria-live="polite" hidden></p>
+        <button type="submit" class="primary-button" id="saveButton" data-i18n="store_profile_save_button">下書きを保存する</button>
+        <p class="hint" data-i18n="store_profile_save_all_note"></p>
+        <button type="button" class="secondary-button" id="reloadButton" hidden data-i18n="store_profile_reload_button">最新の内容を読み込む</button>
+
+        <h2 class="block-heading" data-i18n="store_profile_block_detail">② くわしい情報（任意・後からでもOK）</h2>
+
         <section class="panel">
           <h2 data-i18n="store_profile_payment_heading">支払い方法</h2>
           <p class="hint" style="margin: 0 0 10px;" data-i18n="store_profile_payment_hint"></p>
@@ -412,17 +436,77 @@
           <div class="check-group" id="languageGroup"></div>
         </section>
 
-        <div id="formMessage" class="message" role="status" aria-live="polite"></div>
-        <p class="save-progress" id="saveProgress" role="status" aria-live="polite" hidden></p>
-        <button type="submit" class="primary-button" id="saveButton" data-i18n="store_profile_save_button">下書きを保存する</button>
-        <p class="hint" data-i18n="store_profile_save_all_note"></p>
-        <button type="button" class="secondary-button" id="reloadButton" hidden data-i18n="store_profile_reload_button">最新の内容を読み込む</button>
       </form>
 
       <!-- STEP 44-A｜月額100円カスタマイズ(有料の拡張)。無料の店舗情報(上のフォーム)とは別の保存で、
            無料の内容には触れない。保存・商品写真の署名・旅行者への表示は、すべてサーバーが
            契約状態(利用権限)で判定する(この画面のボタンの表示は根拠にしない)。 -->
       <section class="panel" id="customSection" hidden>
+        <form id="customForm" novalidate>
+          <div class="field">
+            <label for="customStoryInput" data-i18n="store_custom_story_label">お店のこだわり・ストーリー</label>
+            <textarea id="customStoryInput"></textarea>
+            <div class="counter" id="customStoryCounter"></div>
+            <p class="hint" id="customStoryHint"></p>
+          </div>
+          <div class="field">
+            <span class="field-label" data-i18n="store_custom_menu_label">メニュー・商品紹介</span>
+            <p class="hint" style="margin: 0 0 8px;" id="customMenuHint"></p>
+            <p class="photo-count" id="customPhotoCount"></p>
+            <div id="customMenuList"></div>
+            <input type="file" id="customPhotoInput" accept="image/jpeg,image/png,image/webp" hidden>
+            <button type="button" class="small-button" id="customMenuAddButton" data-i18n="store_custom_menu_add">＋ 商品を追加</button>
+          </div>
+          <div class="field">
+            <span class="field-label" data-i18n="store_custom_links_label">追加リンク</span>
+            <p class="hint" style="margin: 0 0 8px;" id="customLinksHint"></p>
+            <div id="customLinkRows"></div>
+            <button type="button" class="small-button" id="customLinkAddButton" data-i18n="store_custom_links_add">＋ リンクを追加</button>
+          </div>
+          <div id="customMessage" class="message" role="status" aria-live="polite"></div>
+          <p class="save-progress" id="customSaveProgress" role="status" aria-live="polite" hidden></p>
+          <button type="submit" class="primary-button" id="customSaveButton" data-i18n="store_custom_save_button">下書きを保存する</button>
+          <p class="hint" data-i18n="store_profile_save_all_note"></p>
+          <button type="button" class="secondary-button" id="customReloadButton" hidden data-i18n="store_profile_reload_button">最新の内容を読み込む</button>
+        </form>
+      </section>
+
+
+
+
+      <h2 class="block-heading" data-i18n="store_profile_block_publish">③ 確認と公開</h2>
+
+      <!-- 店主向けプレビュー｜入力中の内容を公開ページと同じ並びで見せる(表示だけ。保存・公開の判定には使わない)。 -->
+      <section class="panel" id="previewSection">
+        <h2 data-i18n="store_profile_preview_heading">旅行者にはこう見えます</h2>
+        <p class="hint" style="margin: 0 0 10px;" data-i18n="store_profile_preview_note"></p>
+        <div class="store-preview" id="storePreview"></div>
+      </section>
+
+      <!-- Phase 2D｜旅行者への公開。条件は保存済みの内容でサーバーが判定する(公開時にも再確認)。 -->
+      <section class="panel" id="publishSection">
+        <h2 data-i18n="store_profile_publish_heading">公開</h2>
+        <span class="publish-state draft" id="publishStateText"></span>
+        <p class="hint" id="publishStateNote"></p>
+        <p class="publish-checklist-heading" data-i18n="store_profile_publish_checklist_heading">公開の条件</p>
+        <p class="hint" data-i18n="store_profile_publish_checklist_intro"></p>
+        <ul class="publish-checklist" id="publishChecklist"></ul>
+        <!-- STEP 56｜お店ごとの固定の公開ページ。店舗・施設名・写真・紹介文を変えても URL は変わらない。 -->
+        <div class="readonly-row store-page-row">
+          <span class="readonly-label" data-i18n="store_page_url_label">お店のページ（固定のURL）</span>
+          <a class="readonly-value" id="storePageLink" href="#" target="_blank" rel="noopener"></a>
+          <p class="hint" id="storePageNote"></p>
+          <button type="button" class="small-button" id="storePageCopyButton" data-i18n="store_page_copy_button">URLをコピー</button>
+          <span class="hint" id="storePageCopyStatus" role="status" aria-live="polite"></span>
+        </div>
+        <p class="message info" id="publishSaveFirstNote" data-i18n="store_profile_publish_save_first"></p>
+        <div id="publishMessage" class="message" role="status" aria-live="polite"></div>
+        <button type="button" class="primary-button" id="publishButton" data-i18n="store_profile_publish_button">公開する</button>
+        <button type="button" class="secondary-button" id="unpublishButton" hidden data-i18n="store_profile_unpublish_button">非公開に戻す</button>
+      </section>
+
+      <!-- 契約は編集の流れの外。ページの一番下に置く(店舗カード・運営管理の申込と解約)。 -->
+      <section class="panel" id="planSection">
         <h2 data-i18n="store_custom_heading">店舗カード（月額100円・税込）</h2>
         <p class="hint" style="margin: 0 0 10px;" data-i18n="store_custom_intro"></p>
         <p class="message info show" id="customPlanNote"></p>
@@ -471,65 +555,6 @@
           <div id="managedPlanMessage" class="message" role="status" aria-live="polite"></div>
           <button type="button" class="primary-button" id="managedSubscribeButton" hidden></button>
         </div>
-        <form id="customForm" novalidate>
-          <div class="field">
-            <label for="customStoryInput" data-i18n="store_custom_story_label">お店のこだわり・ストーリー</label>
-            <textarea id="customStoryInput"></textarea>
-            <div class="counter" id="customStoryCounter"></div>
-            <p class="hint" id="customStoryHint"></p>
-          </div>
-          <div class="field">
-            <span class="field-label" data-i18n="store_custom_menu_label">メニュー・商品紹介</span>
-            <p class="hint" style="margin: 0 0 8px;" id="customMenuHint"></p>
-            <p class="photo-count" id="customPhotoCount"></p>
-            <div id="customMenuList"></div>
-            <input type="file" id="customPhotoInput" accept="image/jpeg,image/png,image/webp" hidden>
-            <button type="button" class="small-button" id="customMenuAddButton" data-i18n="store_custom_menu_add">＋ 商品を追加</button>
-          </div>
-          <div class="field">
-            <span class="field-label" data-i18n="store_custom_links_label">追加リンク</span>
-            <p class="hint" style="margin: 0 0 8px;" id="customLinksHint"></p>
-            <div id="customLinkRows"></div>
-            <button type="button" class="small-button" id="customLinkAddButton" data-i18n="store_custom_links_add">＋ リンクを追加</button>
-          </div>
-          <div id="customMessage" class="message" role="status" aria-live="polite"></div>
-          <p class="save-progress" id="customSaveProgress" role="status" aria-live="polite" hidden></p>
-          <button type="submit" class="primary-button" id="customSaveButton" data-i18n="store_custom_save_button">下書きを保存する</button>
-          <p class="hint" data-i18n="store_profile_save_all_note"></p>
-          <button type="button" class="secondary-button" id="customReloadButton" hidden data-i18n="store_profile_reload_button">最新の内容を読み込む</button>
-        </form>
-      </section>
-
-
-
-
-      <!-- 店主向けプレビュー｜入力中の内容を公開ページと同じ並びで見せる(表示だけ。保存・公開の判定には使わない)。 -->
-      <section class="panel" id="previewSection">
-        <h2 data-i18n="store_profile_preview_heading">旅行者にはこう見えます</h2>
-        <p class="hint" style="margin: 0 0 10px;" data-i18n="store_profile_preview_note"></p>
-        <div class="store-preview" id="storePreview"></div>
-      </section>
-
-      <!-- Phase 2D｜旅行者への公開。条件は保存済みの内容でサーバーが判定する(公開時にも再確認)。 -->
-      <section class="panel" id="publishSection">
-        <h2 data-i18n="store_profile_publish_heading">公開</h2>
-        <span class="publish-state draft" id="publishStateText"></span>
-        <p class="hint" id="publishStateNote"></p>
-        <p class="publish-checklist-heading" data-i18n="store_profile_publish_checklist_heading">公開の条件</p>
-        <p class="hint" data-i18n="store_profile_publish_checklist_intro"></p>
-        <ul class="publish-checklist" id="publishChecklist"></ul>
-        <!-- STEP 56｜お店ごとの固定の公開ページ。店舗・施設名・写真・紹介文を変えても URL は変わらない。 -->
-        <div class="readonly-row store-page-row">
-          <span class="readonly-label" data-i18n="store_page_url_label">お店のページ（固定のURL）</span>
-          <a class="readonly-value" id="storePageLink" href="#" target="_blank" rel="noopener"></a>
-          <p class="hint" id="storePageNote"></p>
-          <button type="button" class="small-button" id="storePageCopyButton" data-i18n="store_page_copy_button">URLをコピー</button>
-          <span class="hint" id="storePageCopyStatus" role="status" aria-live="polite"></span>
-        </div>
-        <p class="message info" id="publishSaveFirstNote" data-i18n="store_profile_publish_save_first"></p>
-        <div id="publishMessage" class="message" role="status" aria-live="polite"></div>
-        <button type="button" class="primary-button" id="publishButton" data-i18n="store_profile_publish_button">公開する</button>
-        <button type="button" class="secondary-button" id="unpublishButton" hidden data-i18n="store_profile_unpublish_button">非公開に戻す</button>
       </section>
     </div>
 

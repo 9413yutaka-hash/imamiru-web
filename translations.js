@@ -4586,6 +4586,26 @@ const MACHINAU_TRANSLATIONS = {
     en: "Everything you enter here always appears on your shop page. For limited-time announcements, use an Imadake (now) post."
   },
 
+  store_profile_flow_steps: {
+    ja: "①お店の基本 → ②くわしい情報 → ③確認と公開",
+    en: "① Basics → ② More details → ③ Check and publish"
+  },
+
+  store_profile_block_basic: {
+    ja: "① お店の基本（公開に必要なもの）",
+    en: "① Basics (needed to publish)"
+  },
+
+  store_profile_block_detail: {
+    ja: "② くわしい情報（任意・後からでもOK）",
+    en: "② More details (optional — add anytime)"
+  },
+
+  store_profile_block_publish: {
+    ja: "③ 確認と公開",
+    en: "③ Check and publish"
+  },
+
   store_profile_not_public_banner: {
     ja: "まだ公開されていません。入力した内容は下書きとして残ります。",
     en: "Not published yet. What you enter stays saved as a draft."
