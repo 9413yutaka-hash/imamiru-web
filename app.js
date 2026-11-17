@@ -18090,12 +18090,43 @@ function resolveGooglePlaceIdForPrefectureAndAreaName(
               return;
             }
 
+            // 明日・週末フィードの地域情報取得にも使うため、選んだ結果の
+            // 座標も一緒に返す(2026-11-17 追加。従来の利用側は無視する)。
+            let resolvedLatitude =
+              null;
+
+            let resolvedLongitude =
+              null;
+
+            try {
+              if (
+                chosenResult.geometry &&
+                chosenResult.geometry.location &&
+                typeof chosenResult.geometry.location.lat === "function" &&
+                typeof chosenResult.geometry.location.lng === "function"
+              ) {
+                resolvedLatitude =
+                  chosenResult.geometry.location.lat();
+
+                resolvedLongitude =
+                  chosenResult.geometry.location.lng();
+              }
+            } catch (geometryError) {
+              resolvedLatitude =
+                null;
+
+              resolvedLongitude =
+                null;
+            }
+
             resolve(
               {
                 googlePlaceId: chosenResult.place_id,
                 countryCode: countryCode,
                 regionName: regionName,
-                administrativeLevel: administrativeLevel
+                administrativeLevel: administrativeLevel,
+                latitude: resolvedLatitude,
+                longitude: resolvedLongitude
               }
             );
           }
@@ -18147,6 +18178,31 @@ async function loadCommunityBoardForSelectedArea(
   if (!resolvedRegion) {
     clearCommunityBoardLoading();
     return false;
+  }
+
+  // 地域から探す・街のURLでも、現在地と同じ地域情報(今日・明日・週末の
+  // フィードの材料)を取得する。以前は現在地の経路でしか取得が始まらず、
+  // 街を選んだ場合は明日・週末が「用意しています…」のまま終わらなかった
+  // (2026-11-17 代表指摘で判明)。座標が取れた時だけ開始する。
+  if (
+    typeof resolvedRegion.latitude === "number" &&
+    Number.isFinite(resolvedRegion.latitude) &&
+    typeof resolvedRegion.longitude === "number" &&
+    Number.isFinite(resolvedRegion.longitude)
+  ) {
+    triggerRegionTodayInfo(
+      resolvedRegion.latitude,
+      resolvedRegion.longitude,
+      {
+        countryCode: resolvedRegion.countryCode,
+        countryName:
+          resolvedRegion.countryCode === "JP" ? "日本" : "",
+        regionKey: resolvedRegion.googlePlaceId,
+        regionName: prefectureName,
+        municipality: areaName
+      },
+      machinauSuggestionGpsSessionId
+    );
   }
 
   loadTownNowThreadsForSelectedArea(
@@ -19208,6 +19264,14 @@ async function fetchRegionTodayInfoForDay(day) {
     longitude === null ||
     !locationHierarchy
   ) {
+    // 地域がまだ決まっていない時は、その日を「取得できない」として
+    // 終える。「読み込み中」のまま残すと、画面が「用意しています…」から
+    // 永遠に変わらなくなるため(2026-11-17)。
+    regionTodayInfoByDay[day] =
+      { status: "error", findings: [], localDate: "" };
+
+    renderTodayFeed();
+
     return;
   }
 
@@ -26939,18 +27003,32 @@ function renderTodayFeed() {
       (userLatitude !== null && userLongitude !== null) ||
       !!selectedShopRegion;
 
+    // 種類で絞っている時は、その種類の案内を出す。同じ文のままだと
+    // ボタンが効いていないように見えるため(2026-11-17 代表指摘)。
+    const filterEmptyMessageKeys =
+      {
+        imadake: "feed_empty_filter_imadake",
+        event: "feed_empty_filter_event",
+        voice: "feed_empty_filter_voice",
+        discovery: "feed_empty_filter_discovery"
+      };
+
     const emptyMessageKey =
       todayFeedKeyword !== ""
         ? "feed_empty_keyword"
-        : allItems.length === 0
-          ? (hasLocationContext && isTodayFeedDayLoading(todayFeedDay)
-              ? "feed_day_loading"
-              : todayFeedDay === "tomorrow" && hasLocationContext
-                ? "feed_empty_tomorrow"
-                : todayFeedDay === "weekend" && hasLocationContext
-                  ? "feed_empty_weekend"
-                  : (hasLocationContext ? "feed_empty_none" : "feed_empty_location"))
-          : "feed_empty_filter";
+        : hasLocationContext && isTodayFeedDayLoading(todayFeedDay)
+          ? "feed_day_loading"
+          : todayFeedFilter !== "all" &&
+              hasLocationContext &&
+              filterEmptyMessageKeys[todayFeedFilter]
+            ? filterEmptyMessageKeys[todayFeedFilter]
+            : allItems.length === 0
+              ? (todayFeedDay === "tomorrow" && hasLocationContext
+                  ? "feed_empty_tomorrow"
+                  : todayFeedDay === "weekend" && hasLocationContext
+                    ? "feed_empty_weekend"
+                    : (hasLocationContext ? "feed_empty_none" : "feed_empty_location"))
+              : "feed_empty_filter";
 
     emptyElement.textContent =
       getMachinauTranslation(
