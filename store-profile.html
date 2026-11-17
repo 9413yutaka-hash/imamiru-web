@@ -1283,10 +1283,12 @@
           return;
         }
         const location = loaded.location || {};
-        // 表示形は「日本、〒900-0015 沖縄県那覇市久茂地…」にそろえる。国名は将来の国外対応のため残し、
-        // 住所(formattedAddress)側の国名と重ならないようにする。プレビューの住所行もこの文字列を使う。
-        const countryName = getCountryDisplayName(location.countryCode);
+        // 表示形は「〒900-0015 沖縄県那覇市久茂地…」。国内の住所は国名を先頭に出さない(代表決定 2026-11-17)。
+        // 国外の住所だけ国名を先頭に付ける。プレビューの住所行もこの文字列を使う。
+        const isJapan = !location.countryCode || location.countryCode === "JP";
+        const countryName = isJapan ? "" : getCountryDisplayName(location.countryCode);
         let addressText = location.formattedAddress || "";
+        addressText = addressText.replace(/^(日本|Japan)[、,\s]+/, "");
         if (countryName && addressText.indexOf(countryName) === 0) {
           addressText = addressText.slice(countryName.length).replace(/^[、,\s]+/, "");
         }

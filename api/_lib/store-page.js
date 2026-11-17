@@ -843,7 +843,8 @@ export function buildStorePageHtml(storeId, store, custom, languageValue, option
   }
 
   // ---- 所在地(住所は日本語のまま。英語の表示は C案の案内を添える) ----
-  const addressText = readText(location.formattedAddress) || areaText;
+  // 表示だけ先頭の国名(日本、)を取り除く。保存データと構造化データはそのまま(代表決定 2026-11-17)。
+  const addressText = readText(location.formattedAddress).replace(/^(日本|Japan)[、,\s]+/, "") || areaText;
   sections.push(buildSectionHtml(
     labels.headingLocation,
     "<div class=\"panel\">" +
