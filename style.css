@@ -1396,6 +1396,14 @@
       color: var(--navy);
     }
 
+    /* 店舗モーダル｜営業時間・定休日・電話をまとめる箱(紹介文との区切り)。 */
+    .shop-modal-info-box {
+      background: #eef5f8;
+      border-radius: 12px;
+      padding: 12px 14px;
+      line-height: 1.9;
+    }
+
     .modal-message {
       margin: 16px 0 0;
       padding: 15px;

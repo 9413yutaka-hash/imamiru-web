@@ -103,6 +103,16 @@ const MACHINAU_TRANSLATIONS = {
     en: "Today's town, closest first."
   },
 
+  feed_tomorrow_copy_title: {
+    ja: "明日の街を、近い順に。",
+    en: "Tomorrow's town, closest first."
+  },
+
+  feed_weekend_copy_title: {
+    ja: "週末の街を、近い順に。",
+    en: "The weekend's town, closest first."
+  },
+
   feed_today_copy_text: {
     ja: "店の今・今日のイベント・地元の声を混ぜた1本のフィードです。",
     en: "One feed mixing shop updates, today's events, and local voices."
@@ -1572,7 +1582,7 @@ const MACHINAU_TRANSLATIONS = {
     en: "Events, shops, views, little changes around town.\nShare what you found right now, with or without photos."
   },
   contribute_street_heading: {
-    ja: "投稿、ありませんか？",
+    ja: "投稿してみませんか？",
     en: "Anything to share?"
   },
   contribute_street_text: {
@@ -2280,8 +2290,8 @@ const MACHINAU_TRANSLATIONS = {
     en: "End listing"
   },
   post_security_note: {
-    ja: "投稿された情報は、マチナウ運営の確認後に公開されます。 API Secretや管理者情報が、このページから送信されることはありません。",
-    en: "Posts are published after the Machinau team reviews them. No API secrets or admin information are sent from this page."
+    ja: "投稿された情報は、マチナウ運営の確認後に公開されます。このページで、パスワードやカード情報を入力することはありません。",
+    en: "Posts are published after the Machinau team reviews them. You will never be asked for passwords or card details on this page."
   },
   post_hero_heading: {
     ja: "街の「今」を、\nみんなへ届けよう。",
@@ -3359,6 +3369,11 @@ const MACHINAU_TRANSLATIONS = {
   community_board_post_link_remote: {
     ja: "{AREA}について投稿する",
     en: "Post about {AREA}"
+  },
+
+  area_search_coverage_note: {
+    ja: "いま情報が集まっているのは沖縄県です。他の都道府県は、これから広げていきます。",
+    en: "Listings are currently available in Okinawa only. Other prefectures will be added over time."
   },
 
   community_board_prefecture_label: {
