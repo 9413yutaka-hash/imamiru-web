@@ -114,8 +114,8 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   feed_today_copy_text: {
-    ja: "店の今・今日のイベント・地元の声を混ぜた1本のフィードです。",
-    en: "One feed mixing shop updates, today's events, and local voices."
+    ja: "お店からのお知らせ、<br>今日のイベント、<br>街の人の投稿が、ここに集まります。",
+    en: "Shop announcements,<br>today's events,<br>and local posts — all here."
   },
 
   feed_radius_label: {
