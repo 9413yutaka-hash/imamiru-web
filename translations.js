@@ -477,26 +477,27 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   // 広告枠の募集文言。2026-11-19 代表決定：この枠は地元の大きな会社向けに
-  // 都道府県単位・1社独占で売る(地域の小枠は作らない)。以前の「この街の
-  // お店を募集中」という小さなお店向け文言(16項目⑮)から差し替え。
+  // 都道府県単位で売る。最大3社のスライド表示で、同業種は1社だけ(地域の
+  // 小枠は作らない)。以前の「この街のお店を募集中」という小さなお店向け
+  // 文言(16項目⑮)から差し替え。スライドの仕組み自体は広告主が決まった時に作る。
   ad_slot_recruit_tag: {
     ja: "広告主募集中",
     en: "Advertisers wanted"
   },
 
   ad_slot_recruit_title: {
-    ja: "沖縄県内、1枠だけ。先着です。",
-    en: "One slot for all of Okinawa. First come, first served."
+    ja: "沖縄県内、3枠だけ。先着順です。",
+    en: "Only 3 slots for all of Okinawa. First come, first served."
   },
 
   ad_slot_recruit_text_audience: {
-    ja: "この広告は、沖縄県内のマチナウの全ページに出ます。",
-    en: "This ad appears on every Machinau page across Okinawa."
+    ja: "この広告枠は、沖縄県内のマチナウの全ページにスライドで出ます。",
+    en: "These ads rotate on every Machinau page across Okinawa."
   },
 
   ad_slot_recruit_text_order: {
-    ja: "枠は1社だけ。旅行者にも、地元の人にも届きます。",
-    en: "Only one company gets the slot. It reaches travelers and locals alike."
+    ja: "枠は最大3社まで。同業種は1社だけです。旅行者にも、地元の人にも届きます。",
+    en: "Up to 3 companies, one per industry. Reaching travelers and locals alike."
   },
 
   ad_slot_recruit_button: {
