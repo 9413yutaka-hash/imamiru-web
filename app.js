@@ -160,6 +160,23 @@ function updateLocationButtonLanguage(language) {
 // と同じ考え方)。
 let adSlotCurrentAreaName = "";
 
+// 現在地(GPS・復元)で分かったエリア。地域から探すで街を選んでいる間は
+// 選んだ街のエリアが優先し、現在地に戻すとこちらへ戻る。
+let adSlotGpsAreaName = "";
+
+// 表示中のエリア(選んだ街があればその都道府県、無ければ現在地のエリア)に
+// 合わせて、広告枠のエリア名を決め直して文面へ反映する。
+function refreshAdSlotAreaTexts() {
+  adSlotCurrentAreaName =
+    (selectedShopRegion && selectedShopRegion.prefectureName) ||
+    adSlotGpsAreaName ||
+    "";
+
+  updateAdSlotAreaTexts(
+    getCurrentMachinauLanguage()
+  );
+}
+
 function updateAdSlotAreaTexts(language) {
   const areaName = adSlotCurrentAreaName;
 
@@ -3113,6 +3130,9 @@ function setSelectedShopRegion(
   renderShops();
 
   syncShopRegionUrl();
+
+  // 広告枠のエリア名も、選んだ街のエリアに合わせる。
+  refreshAdSlotAreaTexts();
 }
 
 // 地域検索をやめて現在地(15km)側の表示へ戻す。地域検索中でなければ
@@ -3131,6 +3151,9 @@ function clearSelectedShopRegion() {
   renderShops();
 
   syncShopRegionUrl();
+
+  // 広告枠のエリア名も、現在地のエリアに戻す。
+  refreshAdSlotAreaTexts();
 
   // TOP・街ページ統合改善｜選んだ街のスレッドを出していたら、現在地の近くのスレッドへ戻す。
   restoreTownNowThreadsAfterRegionView();
@@ -12046,11 +12069,9 @@ function applyUserLocation(
           "";
 
         if (adSlotAreaName) {
-          adSlotCurrentAreaName = adSlotAreaName;
+          adSlotGpsAreaName = adSlotAreaName;
 
-          updateAdSlotAreaTexts(
-            getCurrentMachinauLanguage()
-          );
+          refreshAdSlotAreaTexts();
         }
 
         // 店主向け「この街のマチナウ利用状況」｜GPS で新しく取得した時だけ(30分の復元では送らない)。
