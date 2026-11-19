@@ -328,7 +328,7 @@ try {
         signup: [...document.querySelectorAll("a[href]")].map((a) => a.getAttribute("href")).filter((h) => /store-account/.test(h)),
         hScroll: document.documentElement.scrollWidth > innerWidth + 1, body: document.body.innerText }; })()`);
     t(`E1 ${width}：最初に価値「今、この街にいる旅行者へ、お店の情報を届ける。」→見本(架空と明示)→活用例→管理のメリット→料金と条件→はじめ方→引き継ぎ`, v.h1 === "今、この街にいる旅行者へ、お店の情報を届ける。" && v.sample && JSON.stringify(v.sections.slice(0, 6)) === JSON.stringify(["旅行者には、こう見えます", "「今だけ投稿」の使い方の例", "お店の情報をご自身で管理すると", "料金と条件", "はじめ方", "マチナウにすでに掲載されているお店の方へ"]) && !v.hScroll && p.log.errors.length === 0, v);
-    t(`E2 ${width}：100円は受付中・500円／1,000円は「準備中・現在はお申し込みできません」で申込みの導線なし・申込みは既存の店舗アカウントだけ`, v.open.join("|") === "お申し込み受付中|月額100円（税込）／1店舗" && v.soon.length === 2 && v.soon.every((s) => s.startsWith("準備中・現在はお申し込みできません")) && /月額500円/.test(v.soon[0]) && /1回1,000円/.test(v.soon[1]) && v.soonLinks === 0 && v.signup.every((h) => h === "store-account.html?view=signup" || h === "store-account.html"), v);
+    t(`E2 ${width}：100円・500円・1,000円すべて受付中（2026-11-19 運営管理の受付開始・代表承認）・申込みは既存の店舗アカウントだけ`, v.open.join("|") === "お申し込み受付中|月額100円（税込）／1店舗|お申し込み受付中|月額500円（税込）／1店舗|お申し込み受付中|1回1,000円（税込）" && v.soon.length === 0 && v.soonLinks === 0 && v.signup.every((h) => h === "store-account.html?view=signup" || h === "store-account.html"), v);
     t(`E3 ${width}：正式な条件の文(新規も引き継ぎも同じ料金・無料掲載は続く・料金で表示順は上がらない・今だけ投稿の料金)・実績や集客の数字を書かない`, ["新規店舗登録も、掲載済み店舗の引き継ぎも、同じ料金・同じ条件です", "運営が掲載している無料の掲載は、店舗カードの契約が無くても続きます", "料金によってトップページでの表示順が上がることはありません", "旅行者が「続きを見る」を押した日だけ1投稿100円（税込）"].every((s) => v.body.includes(s)) && !/導入店舗|店舗が導入|人が利用|万人|実績|売上|来店数|集客効果|No\.1/.test(v.body), "");
     await p.close();
   }
