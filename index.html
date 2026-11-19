@@ -3263,6 +3263,39 @@
       <p id="todayFeedEmpty" class="today-feed-empty" data-i18n="feed_empty_location">現在地を取得するか街を選ぶと、今日の「今」がここに集まります。</p>
     </section>
 
+    <!-- 「この街の情報」Phase1｜置き場所は今日のフィードの直下・
+         「あなたの発見を教えて！」のすぐ上(大事な情報なので上の方に置く)。
+         GPSでuserAreaNameが確定した時点ではボタンを
+         表示するだけで、AIは一切呼ばない(本部指示)。ボタン押下時に初めて
+         /api/moderate-submissionへ問い合わせる。既存の
+         regionRecommendationSectionとは独立したセクションとし、その内部
+         構造・表示条件には一切触れない。外枠は既存
+         .region-recommendation-sectionクラスをそのまま再利用する
+         (新しいデザイン体系を作らない)。 -->
+    <section
+      id="cityInfoSection"
+      class="region-recommendation-section"
+      style="display:none;"
+    >
+
+      <button
+        id="cityInfoButton"
+        class="location-button"
+        type="button"
+        data-i18n="city_info_button"
+      >
+        この街の情報
+      </button>
+
+      <p id="cityInfoStatus"></p>
+
+      <div id="cityInfoResult" style="display:none;">
+        <p id="cityInfoTitle"></p>
+        <p id="cityInfoContent"></p>
+      </div>
+
+    </section>
+
     <!-- あなたの発見を教えて！(導入)｜「今」グループ(今だけ投稿〜街の掲示板)の先頭に置く導入。
          見出しと文章だけで、ボタンは置かない。投稿ボタンは各カードの中へ分けた
          (今日の今だけ投稿=見つけた「今」を投稿する、街の今スレッド=新しいスレッドを立てる、
@@ -3658,37 +3691,6 @@
         <button class="shared-trip-close" type="button" data-i18n="shared_trip_close" onclick="closeSharedTrip()">閉じる</button>
       </div>
       <p id="sharedTripStatus" class="shared-trip-status" role="status" aria-live="polite"></p>
-    </section>
-
-    <!-- 「この街の情報」Phase1｜GPSでuserAreaNameが確定した時点ではボタンを
-         表示するだけで、AIは一切呼ばない(本部指示)。ボタン押下時に初めて
-         /api/moderate-submissionへ問い合わせる。既存の
-         regionRecommendationSectionとは独立したセクションとし、その内部
-         構造・表示条件には一切触れない。外枠は既存
-         .region-recommendation-sectionクラスをそのまま再利用する
-         (新しいデザイン体系を作らない)。 -->
-    <section
-      id="cityInfoSection"
-      class="region-recommendation-section"
-      style="display:none;"
-    >
-
-      <button
-        id="cityInfoButton"
-        class="location-button"
-        type="button"
-        data-i18n="city_info_button"
-      >
-        この街の情報
-      </button>
-
-      <p id="cityInfoStatus"></p>
-
-      <div id="cityInfoResult" style="display:none;">
-        <p id="cityInfoTitle"></p>
-        <p id="cityInfoContent"></p>
-      </div>
-
     </section>
 
     <!-- 広域region×localDate共有AI地域情報 Phase1 UI｜「今日、この地域で
