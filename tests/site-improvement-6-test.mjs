@@ -357,7 +357,7 @@ try {
     const first = await q.ev(`document.querySelector("#adSlotBody [data-ad-house]").getAttribute("data-ad-house")`);
     await q.ev(`location.reload(); true`); await sleep(2500);
     const second = await q.ev(`document.querySelector("#adSlotBody [data-ad-house]").getAttribute("data-ad-house")`);
-    t("E7 one fixed recruitment slot (no rotation)", first === "shop" && second === "shop", [first, second]);
+    t("E7 one fixed recruitment slot (no rotation)", first === "ad" && second === "ad", [first, second]);
     await q.ev(`switchMachinauLanguage("en"); true`); await sleep(300);
     t("E8 English ad label / reads date", await q.ev(`document.querySelector(".ad-slot-label").textContent.trim() === "Ad" && /Published Oct 7, 2026/.test(document.getElementById("columnEntryCardList").textContent.replace(/\\s+/g, " "))`), await q.ev(text("#columnEntryCardList")));
     await q.close();
@@ -412,7 +412,7 @@ try {
     t("G internal clicks are not counted as hero clicks", programmatic === 0, programmatic);
     await p.ev(`document.querySelector("#adSlotBody").innerHTML = '<a class="ad-slot-house" href="shop.html" data-ad-house="shop">x</a>'; document.querySelector("#adSlotBody a").addEventListener("click", (e) => e.preventDefault()); document.querySelector("#adSlotBody a").click(); true`);
     const shopGa = await p.ev(`window.__ga.filter((e) => e[0] === "shop_guide_click").map((e) => e[1].placement)`);
-    t("G ad slot → shop_guide_click placement ad_slot (1 event)", JSON.stringify(shopGa) === JSON.stringify(["ad_slot"]), shopGa);
+    t("G ad slot no longer counts as shop_guide_click (button now goes to contact)", JSON.stringify(shopGa) === JSON.stringify([]), shopGa);
     const pii = await p.ev(`JSON.stringify(window.__ga.map((e) => e[1]))`);
     t("G no coordinates in GA params", !/26\.2|127\.6/.test(pii), pii);
     await p.ev(`showMyPage(); true`); await sleep(500);
