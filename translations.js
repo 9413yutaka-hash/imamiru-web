@@ -7063,6 +7063,13 @@ const MACHINAU_TRANSLATIONS = {
     en: "Just for Now"
   },
 
+  // TOPの今だけ投稿の枠の見出し(投稿がある時・0件の時で共通)。
+  // imadake_heading(機能の名前)は店舗アカウント側のリンク文言にも使うため、枠の見出しはこちらで分ける。
+  imadake_frame_heading: {
+    ja: "店舗・施設・イベント<br>からの今だけ投稿",
+    en: "Limited-time posts<br>from shops, facilities & events"
+  },
+
   imadake_lead: {
     ja: "近くのお店・施設が「今」を伝えています（掲載は最長24時間）。",
     en: "Nearby shops and places sharing what's on right now (posted for up to 24 hours)."

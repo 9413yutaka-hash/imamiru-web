@@ -303,7 +303,7 @@ try {
       const p = await openAt("/", { lang, geo: NAHA }); await sleep(800);
       const v = await p.ev(`(() => { const s = document.getElementById("todayNowEmptySection"); const introBtn = document.querySelector("#postIntroSection .contribute-cta-button"); return { empty: !s.hidden, imadake: !document.getElementById("imadakeSection").hidden, heading: s.querySelector("h2").textContent.trim(), targets: s.querySelectorAll("[data-today-now-target]").length, postBtn: s.querySelector(".contribute-cta-button") ? s.querySelector(".contribute-cta-button").getAttribute("href") : null, introBtn: introBtn ? introBtn.getAttribute("href") : null }; })()`);
       if (label === "ok0") {
-        t(`D1 ${lang}：取得に成功して0件の時だけ「今日の今」を出す。今だけ投稿はお店の投稿なので一般の投稿ボタンは枠に置かず、ボタンは「あなたの発見を教えて！」導入の下に置く`, v.empty && !v.imadake && v.heading === (lang === "ja" ? "今日の今だけ投稿" : "Today's limited-time posts") && v.postBtn === null && v.introBtn === "contribute.html" && v.targets === 0, v);
+        t(`D1 ${lang}：取得に成功して0件の時だけ「今日の今」を出す。今だけ投稿はお店の投稿なので一般の投稿ボタンは枠に置かず、ボタンは「あなたの発見を教えて！」導入の下に置く`, v.empty && !v.imadake && v.heading === (lang === "ja" ? "店舗・施設・イベントからの今だけ投稿" : "Limited-time postsfrom shops, facilities & events") && v.postBtn === null && v.introBtn === "contribute.html" && v.targets === 0, v);
         // 16項目⑯｜読みものの枠に記事が出ても、移動リンクの行は出さない(削除済み)。
         await p.ev(`document.getElementById("columnEntryCardList").insertAdjacentHTML("beforeend", "<article>記事</article>"); true`); await sleep(300);
         const after = await p.ev(`(() => { const s = document.getElementById("todayNowEmptySection"); return { targets: s.querySelectorAll("[data-today-now-target]").length, postBtn: s.querySelector(".contribute-cta-button") }; })()`);
