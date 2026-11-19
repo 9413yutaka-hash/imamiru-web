@@ -25474,8 +25474,10 @@ document.addEventListener(
 // 飛んだ場所へ戻す(いちばん上に戻らないようにする)。
 // 位置は同じタブの中だけ(sessionStorage)に覚える。共有リンクなどの
 // パラメータ付きの入り口では復元しない(従来どおりの場所へ案内する)。
+// 復元がある時は head の先読みが画面を隠しておき、位置が合ってから表示する
+// (戻った瞬間にいちばん上や、段階的に飛ぶ画面を見せない)。
 // 中身は後から描かれて高さが伸びるため、届くまで少しの間だけ繰り返し合わせる。
-// 利用者が自分でスクロールしたら、その時点で合わせるのをやめる。
+// 利用者が自分でスクロールしたら、その時点で合わせるのをやめて表示する。
 // ==========================================================================
 (function setupTopScrollRestore() {
   if (!document.getElementById("todayFeedSection")) {
@@ -25542,32 +25544,45 @@ document.addEventListener(
     saveTopScrollPosition
   );
 
-  let saved =
-    null;
+  // 復元する位置は、先読み(head内の小さなスクリプト)が見つけて
+  // 画面を隠したうえで渡してくる。無い場合はここで覚え直す。
+  let targetY =
+    typeof window.__machinauScrollRestoreTarget ===
+      "number" &&
+    window.__machinauScrollRestoreTarget > 0
+      ? window.__machinauScrollRestoreTarget
+      : null;
 
-  try {
-    saved =
-      JSON.parse(
-        sessionStorage.getItem(STORAGE_KEY) ||
-          "null"
-      );
-  } catch (error) {
-    saved =
+  if (targetY === null) {
+    let saved =
       null;
+
+    try {
+      saved =
+        JSON.parse(
+          sessionStorage.getItem(STORAGE_KEY) ||
+            "null"
+        );
+    } catch (error) {
+      saved =
+        null;
+    }
+
+    if (
+      saved &&
+      typeof saved.y === "number" &&
+      saved.y > 0 &&
+      typeof saved.t === "number" &&
+      Date.now() - saved.t <= MAX_AGE_MS
+    ) {
+      targetY =
+        saved.y;
+    }
   }
 
-  if (
-    !saved ||
-    typeof saved.y !== "number" ||
-    saved.y <= 0 ||
-    typeof saved.t !== "number" ||
-    Date.now() - saved.t > MAX_AGE_MS
-  ) {
+  if (targetY === null) {
     return;
   }
-
-  const targetY =
-    saved.y;
 
   restoreActive =
     true;
@@ -25576,6 +25591,12 @@ document.addEventListener(
     0;
   let restoreTimer =
     null;
+
+  function revealTopPage() {
+    document.documentElement.classList.remove(
+      "is-scroll-restoring"
+    );
+  }
 
   function stopTopScrollRestore() {
     restoreActive =
@@ -25599,6 +25620,8 @@ document.addEventListener(
       "keydown",
       stopTopScrollRestore
     );
+
+    revealTopPage();
   }
 
   window.addEventListener(
@@ -25616,6 +25639,8 @@ document.addEventListener(
     stopTopScrollRestore
   );
 
+  // 画面は隠れているので、位置合わせは見えないところで済ませる。
+  // 合った時点(または3秒で打ち切り)で表示する。
   restoreTimer =
     setInterval(function() {
       attempts +=
@@ -25629,11 +25654,11 @@ document.addEventListener(
         Math.abs(window.scrollY - targetY) <=
           2 ||
         attempts >=
-          25
+          30
       ) {
         stopTopScrollRestore();
       }
-    }, 200);
+    }, 100);
 })();
 
 // ==========================================================================
