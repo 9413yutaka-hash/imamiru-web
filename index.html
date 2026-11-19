@@ -3296,6 +3296,29 @@
 
     </section>
 
+    <section
+      id="imadakeSection"
+      class="imadake-section"
+      aria-labelledby="imadakeHeading"
+      hidden
+    >
+      <h2 id="imadakeHeading" data-i18n="imadake_heading">今だけ投稿</h2>
+      <p class="imadake-lead" data-i18n="imadake_lead">近くのお店・施設が「今」を伝えています（掲載は最長24時間）。</p>
+      <div id="imadakeCardList" class="imadake-card-list"></div>
+    </section>
+
+    <section
+      id="todayNowEmptySection"
+      class="imadake-section today-now-empty"
+      aria-labelledby="todayNowEmptyHeading"
+      hidden
+    >
+      <h2 id="todayNowEmptyHeading" data-i18n="today_now_empty_heading">今日の今だけ投稿</h2>
+      <p class="imadake-lead" data-i18n="today_now_empty_text">近くでは、まだ掲載中の「今だけ投稿」がありません。</p>
+      <!-- 今だけ投稿はお店・施設の投稿なので、一般の人の投稿ボタンはこの枠には
+           置かない(ボタンは「あなたの発見を教えて！」導入の下に分けた)。 -->
+    </section>
+
     <!-- あなたの発見を教えて！(導入)｜「今」グループ(今だけ投稿〜街の掲示板)の先頭に置く導入。
          一般の人の投稿ボタン(見つけた「今」を投稿する)は、この導入の文章の下に置く
          (今だけ投稿はお店の投稿なので、その枠からは切り離した)。 -->
@@ -3330,29 +3353,6 @@
       >
         見つけた「今」を投稿する →
       </a>
-    </section>
-
-    <section
-      id="imadakeSection"
-      class="imadake-section"
-      aria-labelledby="imadakeHeading"
-      hidden
-    >
-      <h2 id="imadakeHeading" data-i18n="imadake_heading">今だけ投稿</h2>
-      <p class="imadake-lead" data-i18n="imadake_lead">近くのお店・施設が「今」を伝えています（掲載は最長24時間）。</p>
-      <div id="imadakeCardList" class="imadake-card-list"></div>
-    </section>
-
-    <section
-      id="todayNowEmptySection"
-      class="imadake-section today-now-empty"
-      aria-labelledby="todayNowEmptyHeading"
-      hidden
-    >
-      <h2 id="todayNowEmptyHeading" data-i18n="today_now_empty_heading">今日の今だけ投稿</h2>
-      <p class="imadake-lead" data-i18n="today_now_empty_text">近くでは、まだ掲載中の「今だけ投稿」がありません。</p>
-      <!-- 今だけ投稿はお店・施設の投稿なので、一般の人の投稿ボタンはこの枠には
-           置かない(ボタンは「あなたの発見を教えて！」導入の下に分けた)。 -->
     </section>
 
     <!-- 街の発見の分離｜post.html?mode=street(街の「今」を投稿する)の投稿を、
