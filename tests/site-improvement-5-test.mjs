@@ -301,13 +301,13 @@ try {
     for (const lang of label === "ok0" ? ["ja", "en"] : ["ja"]) {
       posts.length = 0;
       const p = await openAt("/", { lang, geo: NAHA }); await sleep(800);
-      const v = await p.ev(`(() => { const s = document.getElementById("todayNowEmptySection"); return { empty: !s.hidden, imadake: !document.getElementById("imadakeSection").hidden, heading: s.querySelector("h2").textContent.trim(), targets: s.querySelectorAll("[data-today-now-target]").length, postBtn: (s.querySelector(".contribute-cta-button") || {}).getAttribute ? s.querySelector(".contribute-cta-button").getAttribute("href") : null }; })()`);
+      const v = await p.ev(`(() => { const s = document.getElementById("todayNowEmptySection"); const introBtn = document.querySelector("#postIntroSection .contribute-cta-button"); return { empty: !s.hidden, imadake: !document.getElementById("imadakeSection").hidden, heading: s.querySelector("h2").textContent.trim(), targets: s.querySelectorAll("[data-today-now-target]").length, postBtn: s.querySelector(".contribute-cta-button") ? s.querySelector(".contribute-cta-button").getAttribute("href") : null, introBtn: introBtn ? introBtn.getAttribute("href") : null }; })()`);
       if (label === "ok0") {
-        t(`D1 ${lang}：取得に成功して0件の時だけ「今日の今」を出し、中には投稿ボタン(contribute.html)だけを置く(他枠への移動リンクは置かない)`, v.empty && !v.imadake && v.heading === (lang === "ja" ? "今日の今だけ投稿" : "Today's limited-time posts") && v.postBtn === "contribute.html" && v.targets === 0, v);
-        // 16項目⑯｜読みものの枠に記事が出ても、移動リンクの行は出さない(削除済み)。枠の中は投稿ボタンだけのまま。
+        t(`D1 ${lang}：取得に成功して0件の時だけ「今日の今」を出す。今だけ投稿はお店の投稿なので一般の投稿ボタンは枠に置かず、ボタンは「あなたの発見を教えて！」導入の下に置く`, v.empty && !v.imadake && v.heading === (lang === "ja" ? "今日の今だけ投稿" : "Today's limited-time posts") && v.postBtn === null && v.introBtn === "contribute.html" && v.targets === 0, v);
+        // 16項目⑯｜読みものの枠に記事が出ても、移動リンクの行は出さない(削除済み)。
         await p.ev(`document.getElementById("columnEntryCardList").insertAdjacentHTML("beforeend", "<article>記事</article>"); true`); await sleep(300);
-        const after = await p.ev(`(() => { const s = document.getElementById("todayNowEmptySection"); return { targets: s.querySelectorAll("[data-today-now-target]").length, postBtn: s.querySelector(".contribute-cta-button").getAttribute("href") }; })()`);
-        t(`D2 ${lang}：ほかの枠に中身が出ても移動リンクは増えない・今だけ投稿の CV・詳細の通信なし`, after.targets === 0 && after.postBtn === "contribute.html" && !posts.some((m) => /imadake/i.test(m)), { after, posts });
+        const after = await p.ev(`(() => { const s = document.getElementById("todayNowEmptySection"); return { targets: s.querySelectorAll("[data-today-now-target]").length, postBtn: s.querySelector(".contribute-cta-button") }; })()`);
+        t(`D2 ${lang}：ほかの枠に中身が出ても移動リンクは増えない・今だけ投稿の CV・詳細の通信なし`, after.targets === 0 && after.postBtn === null && !posts.some((m) => /imadake/i.test(m)), { after, posts });
       } else if (label === "fail") {
         t("D3 取得に失敗した時は「今日の今」を出さない(掲載が無いと言わない)・今だけ投稿の枠も出さない", !v.empty && !v.imadake, v);
       } else {
