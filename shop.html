@@ -1107,5 +1107,25 @@
     沖縄の「今」を、旅人へ。
   </footer>
 
+
+  <script>
+    // 「トップへ戻る」は、トップから来た時だけ履歴で戻る(トップを読み直さないので
+    // 速く、トップのスクロール位置もそのまま戻る)。それ以外は従来どおりトップを開く。
+    document.addEventListener("click", function (event) {
+      var link = event.target && event.target.closest ? event.target.closest("a[href]") : null;
+      if (!link || !document.referrer) return;
+      var url, referrer;
+      try {
+        url = new URL(link.getAttribute("href"), location.href);
+        referrer = new URL(document.referrer);
+      } catch (error) { return; }
+      function isTopPath(pathname) { return pathname === "/" || pathname.endsWith("/index.html"); }
+      if (url.origin !== location.origin || !isTopPath(url.pathname) || url.search || url.hash) return;
+      if (referrer.origin !== location.origin || !isTopPath(referrer.pathname)) return;
+      if (history.length <= 1) return;
+      event.preventDefault();
+      history.back();
+    });
+  </script>
 </body>
 </html>

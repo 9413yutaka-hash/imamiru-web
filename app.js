@@ -25470,196 +25470,68 @@ document.addEventListener(
 );
 
 // ==========================================================================
-// TOPのスクロール位置の復元｜トップから別ページへ飛んで戻った時に、
-// 飛んだ場所へ戻す(いちばん上に戻らないようにする)。
-// 位置は同じタブの中だけ(sessionStorage)に覚える。共有リンクなどの
-// パラメータ付きの入り口では復元しない(従来どおりの場所へ案内する)。
-// 復元がある時は head の先読みが画面を隠しておき、位置が合ってから表示する
-// (戻った瞬間にいちばん上や、段階的に飛ぶ画面を見せない)。
-// 中身は後から描かれて高さが伸びるため、届くまで少しの間だけ繰り返し合わせる。
-// 利用者が自分でスクロールしたら、その時点で合わせるのをやめて表示する。
+// 「トップへ戻る」は、トップから来た時だけ履歴で戻る｜トップから別ページへ
+// 飛んだあと「トップへ戻る」を押した時に、トップページを読み直さず履歴を
+// 戻す。読み直しが無いので速く、トップのスクロール位置もそのまま戻る。
+// トップ以外から来た時(検索・共有リンクなど)は、従来どおりトップを開く。
 // ==========================================================================
-(function setupTopScrollRestore() {
-  if (!document.getElementById("todayFeedSection")) {
-    return;
-  }
-
-  if (location.search || location.hash) {
-    return;
-  }
-
-  const STORAGE_KEY =
-    "machinauTopScrollRestore";
-  const MAX_AGE_MS =
-    30 * 60 * 1000;
-
-  if ("scrollRestoration" in history) {
-    history.scrollRestoration =
-      "manual";
-  }
-
-  let restoreActive =
-    false;
-
-  function saveTopScrollPosition() {
-    if (restoreActive) {
+document.addEventListener(
+  "click",
+  function(event) {
+    if (document.getElementById("todayFeedSection")) {
       return;
     }
 
-    try {
-      sessionStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({
-          y: window.scrollY,
-          t: Date.now()
-        })
-      );
-    } catch (error) {
-      // 覚えられなくても、ページの動きは止めない。
+    const link =
+      event.target && event.target.closest
+        ? event.target.closest("a[href]")
+        : null;
+
+    if (!link || !document.referrer) {
+      return;
     }
-  }
 
-  let saveTimer =
-    null;
-
-  window.addEventListener(
-    "scroll",
-    function() {
-      if (saveTimer !== null) {
-        return;
-      }
-
-      saveTimer =
-        setTimeout(function() {
-          saveTimer =
-            null;
-          saveTopScrollPosition();
-        }, 150);
-    },
-    { passive: true }
-  );
-
-  window.addEventListener(
-    "pagehide",
-    saveTopScrollPosition
-  );
-
-  // 復元する位置は、先読み(head内の小さなスクリプト)が見つけて
-  // 画面を隠したうえで渡してくる。無い場合はここで覚え直す。
-  let targetY =
-    typeof window.__machinauScrollRestoreTarget ===
-      "number" &&
-    window.__machinauScrollRestoreTarget > 0
-      ? window.__machinauScrollRestoreTarget
-      : null;
-
-  if (targetY === null) {
-    let saved =
+    let url =
+      null;
+    let referrer =
       null;
 
     try {
-      saved =
-        JSON.parse(
-          sessionStorage.getItem(STORAGE_KEY) ||
-            "null"
+      url =
+        new URL(
+          link.getAttribute("href"),
+          location.href
         );
+      referrer =
+        new URL(document.referrer);
     } catch (error) {
-      saved =
-        null;
+      return;
     }
+
+    const isTopPath = function(pathname) {
+      return (
+        pathname === "/" ||
+        pathname.endsWith("/index.html")
+      );
+    };
 
     if (
-      saved &&
-      typeof saved.y === "number" &&
-      saved.y > 0 &&
-      typeof saved.t === "number" &&
-      Date.now() - saved.t <= MAX_AGE_MS
+      url.origin !== location.origin ||
+      !isTopPath(url.pathname) ||
+      url.search ||
+      url.hash ||
+      referrer.origin !== location.origin ||
+      !isTopPath(referrer.pathname) ||
+      history.length <= 1
     ) {
-      targetY =
-        saved.y;
-    }
-  }
-
-  if (targetY === null) {
-    return;
-  }
-
-  restoreActive =
-    true;
-
-  let attempts =
-    0;
-  let restoreTimer =
-    null;
-
-  function revealTopPage() {
-    document.documentElement.classList.remove(
-      "is-scroll-restoring"
-    );
-  }
-
-  function stopTopScrollRestore() {
-    restoreActive =
-      false;
-
-    if (restoreTimer !== null) {
-      clearInterval(restoreTimer);
-      restoreTimer =
-        null;
+      return;
     }
 
-    window.removeEventListener(
-      "wheel",
-      stopTopScrollRestore
-    );
-    window.removeEventListener(
-      "touchmove",
-      stopTopScrollRestore
-    );
-    window.removeEventListener(
-      "keydown",
-      stopTopScrollRestore
-    );
-
-    revealTopPage();
+    event.preventDefault();
+    history.back();
   }
+);
 
-  window.addEventListener(
-    "wheel",
-    stopTopScrollRestore,
-    { passive: true }
-  );
-  window.addEventListener(
-    "touchmove",
-    stopTopScrollRestore,
-    { passive: true }
-  );
-  window.addEventListener(
-    "keydown",
-    stopTopScrollRestore
-  );
-
-  // 画面は隠れているので、位置合わせは見えないところで済ませる。
-  // 合った時点(または3秒で打ち切り)で表示する。
-  restoreTimer =
-    setInterval(function() {
-      attempts +=
-        1;
-      window.scrollTo(
-        0,
-        targetY
-      );
-
-      if (
-        Math.abs(window.scrollY - targetY) <=
-          2 ||
-        attempts >=
-          30
-      ) {
-        stopTopScrollRestore();
-      }
-    }, 100);
-})();
 
 // ==========================================================================
 // サイト全体改善 G｜旅の保存箱の共有(同行者へ保存したお店・施設を送る)
