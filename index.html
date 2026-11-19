@@ -849,19 +849,20 @@
       line-height: 1.4;
     }
 
-    /* 投稿玄関Phase1｜TOPの参加CTA。既存の広告的なバナーではなく
-       マチナウ自身の呼びかけであることが伝わるよう、水色系トーン
-       (--sky)の独立セクションとし、中央寄せ+大きめタップ領域のボタンで
-       390pxでも押せる場所だと一目で分かるようにする。 */
-    .contribute-cta-section {
+    /* あなたの発見を教えて！(導入)｜「今」グループ(今だけ投稿〜街の掲示板)の先頭に置く、
+       見出しと文章だけの導入。ボタンは各カード(今日の今だけ投稿・街の今スレッド・
+       街の掲示板)へ分けたため、ここには置かない。 */
+    .contribute-intro-section {
       margin-top: 18px;
-      padding: 22px 18px;
-      border-radius: 22px;
-      background: var(--sky);
-      border: 1px solid rgba(7, 136, 201, 0.25);
-      text-align: center;
     }
 
+    .contribute-intro-section h2.contribute-cta-heading {
+      margin: 0;
+    }
+
+    /* 投稿玄関Phase1｜「あなたの発見を教えて！」の見出し・文章・ボタンの共通スタイル。
+       置き場所は分かれた(見出しと文章は「今」グループ先頭の導入、ボタンは各カードの中、
+       お店向けリンクは掲示板の下)が、スタイルはこの共通クラスで揃える。 */
     .contribute-cta-heading {
       display: block;
       font-size: 17px;
@@ -1474,8 +1475,7 @@
     /* カード・枠の角丸と影を揃える(大きな枠20px・中の枠16px・ボタン14px)。 */
     .location-card,
     .region-recommendation-section,
-    .map-section,
-    .contribute-cta-section {
+    .map-section {
       border-radius: var(--radius-card);
     }
 
@@ -2337,19 +2337,9 @@
       }
     }
 
-    /* TOP・街ページ統合改善｜街ページ：投稿の入口(1か所)・スレッドの注記・掲示板の日付と属性・リンクのボタン・
-       読み物の公開日・広告枠・正式店舗の「今だけ投稿あり」。 */
-    .contribute-cta-section h2.contribute-cta-heading {
-      margin: 0;
-    }
-
-    .post-cta-choices {
-      display: grid;
-      gap: 8px;
-      max-width: 320px;
-      margin: 12px auto 4px;
-    }
-
+    /* TOP・街ページ統合改善｜街ページ：スレッドの注記・掲示板の日付と属性・リンクのボタン・
+       読み物の公開日・広告枠・正式店舗の「今だけ投稿あり」。
+       .post-cta-choice は投稿ボタンの共通スタイル(街の今スレッド・街の掲示板の中で使う)。 */
     .post-cta-choice {
       display: flex;
       align-items: center;
@@ -2565,42 +2555,6 @@
       font-weight: 800;
     }
 
-    /* サイト全体改善 第5弾｜今だけ投稿が0件の日の「今日の今」(ページ内の既存の枠への移動だけ)。 */
-    .today-now-empty-links {
-      display: grid;
-      gap: 8px;
-    }
-
-    .today-now-empty-link {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      min-height: 46px;
-      padding: 10px 14px;
-      border: 1px solid rgba(6, 111, 166, 0.18);
-      border-radius: 14px;
-      background: #f3f9fd;
-      color: #0b4f7a;
-      font-size: 14px;
-      font-weight: 800;
-      text-align: left;
-      cursor: pointer;
-    }
-
-    .today-now-empty-link::after {
-      content: "›";
-      flex-shrink: 0;
-      font-size: 18px;
-      color: #066fa6;
-    }
-
-    @media (min-width: 720px) {
-      .today-now-empty-links {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-    }
-
     /* サイト全体改善 第5弾｜TOPカードを短時間で選べる形に(写真・店名・短い紹介・種類・距離・詳細への導線)。
        短い紹介は2行まで。紹介文の全文・住所・支払い・徒歩の時間・地図・情報元は詳細(押した時の表示)と店舗ページで見る。
        並び順・件数・15km・お気に入り・詳細・地図の機能は変えない。見つける全件表示(.shops-show-all)は従来どおり。 */
@@ -2629,10 +2583,6 @@
         align-self: start;
         font-size: 12px;
       }
-    }
-
-    .today-now-empty-link[hidden] {
-      display: none;
     }
 
     #shopsSection:not(.shops-show-all) .shop-description,
@@ -3108,7 +3058,9 @@
   <main>
 
     <!-- TOP・街ページ統合改善｜街ページの表示順：1 街の今スレッド → 2 街の掲示板 → (今だけ投稿＝ゲリラ情報) →
-         3 近くで楽しめる場所 → (この街の情報・街の発見) → 4 投稿の入口 → 5 マチナウ読み物 → 6 広告枠。
+         3 近くで楽しめる場所 → (この街の情報・街の発見) → 4 マチナウ読み物 → 5 広告枠。
+         投稿の入口は1か所にまとめず、「今」グループ先頭の導入(見出しと文章だけ)と、
+         各カードの中のボタン(今日の今だけ投稿・街の今スレッド・街の掲示板)に分けた。
          重要なお知らせ(今、知っておきたいこと・今、見てほしい)は、内容がある時だけ先頭に出す。 -->
 
     <section
@@ -3311,6 +3263,32 @@
       <p id="todayFeedEmpty" class="today-feed-empty" data-i18n="feed_empty_location">現在地を取得するか街を選ぶと、今日の「今」がここに集まります。</p>
     </section>
 
+    <!-- あなたの発見を教えて！(導入)｜「今」グループ(今だけ投稿〜街の掲示板)の先頭に置く導入。
+         見出しと文章だけで、ボタンは置かない。投稿ボタンは各カードの中へ分けた
+         (今日の今だけ投稿=見つけた「今」を投稿する、街の今スレッド=新しいスレッドを立てる、
+         街の掲示板=○○町について投稿する)。 -->
+    <section
+      id="postIntroSection"
+      class="contribute-intro-section"
+      aria-labelledby="postCtaHeading"
+    >
+      <h2
+        id="postCtaHeading"
+        class="contribute-cta-heading"
+        data-i18n="contribute_cta_heading"
+      >
+        あなたの発見を教えて！
+      </h2>
+
+      <p
+        class="contribute-cta-message"
+        data-i18n="contribute_cta_message"
+      >
+        あなたが見つけた街の今が、
+        今そこにいる誰かの役に立ちます。
+      </p>
+    </section>
+
     <section
       id="imadakeSection"
       class="imadake-section"
@@ -3330,16 +3308,23 @@
     >
       <h2 id="todayNowEmptyHeading" data-i18n="today_now_empty_heading">今日の今だけ投稿</h2>
       <p class="imadake-lead" data-i18n="today_now_empty_text">近くでは、まだ掲載中の「今だけ投稿」がありません。</p>
-      <div class="today-now-empty-links">
-        <button type="button" class="today-now-empty-link" data-today-now-target="shopsSection" data-i18n="today_now_empty_link_shops" hidden>近くで楽しめるお店・施設</button>
-        <button type="button" class="today-now-empty-link" data-today-now-target="townNowThreadsSection" data-i18n="today_now_empty_link_threads" hidden>近くの人の今日の会話（街の今スレッド）</button>
-      </div>
+      <!-- 投稿ボタンは、このカードの中に置く(旧「あなたの発見を教えて！」ブロックから移動)。
+           旧来の「近くで楽しめるお店・施設」など他枠への移動リンク行は、今だけ投稿と
+           関係がないため置かない。 -->
+      <a
+        class="contribute-cta-button"
+        href="contribute.html"
+        style="margin-top: 12px;"
+        data-i18n="contribute_cta_button"
+      >
+        見つけた「今」を投稿する →
+      </a>
     </section>
 
     <!-- 街の今スレッド Phase 1C-2｜TOP・街ページ統合改善で街ページの1番目(街の「今」の会話)。現在地の時は
          townNowThreadsNearby(話題地点から5km以内・同じ市区町村)、「地域から探す」で街を選んだ時は
          townNowThreadsList(選んだ市区町村の今日・公開中・期限内のスレッドだけ)を表示する。
-         新しいスレッドの入口は、投稿の入口の枠(.contribute-cta-section)にまとめた。 -->
+         新しいスレッドの入口は、この枠の中のボタン(#townNowNewThreadLink)に置く。 -->
     <section
       id="townNowThreadsSection"
       class="region-recommendation-section"
@@ -3352,11 +3337,20 @@
         近くにいる人たちの、今日の会話です。
       </p>
       <p id="townNowThreadsAreaNote" class="town-now-area-note" hidden></p>
+      <a
+        id="townNowNewThreadLink"
+        class="post-cta-choice"
+        href="town-now-post.html"
+        style="margin-bottom: 12px;"
+        data-i18n="town_now_new_thread_link"
+      >
+        新しいスレッドを立てる
+      </a>
       <div id="townNowThreadsList"></div>
     </section>
 
     <!-- 街の掲示板(街ページの2番目)｜一定期間残る地域の情報。地域の選択(#regionRecommendationAreaPicker)もこの枠の中。
-         投稿リンク(#communityBoardPostLink)は投稿の入口の枠へ移した(ID・JS の文言と行き先の書き換えは従来どおり)。 -->
+         投稿ボタン(#communityBoardPostLink)はこの枠の中に置く(ID・JS の文言と行き先の書き換えは従来どおり)。 -->
     <section
       id="regionRecommendationSection"
       class="region-recommendation-section"
@@ -3373,6 +3367,18 @@
       <div id="communityBoardRegionImageBox"></div>
 
       <div id="regionRecommendationList"></div>
+
+      <!-- 掲示板への投稿ボタン。文言と行き先は、表示中の街に合わせて app.js が
+           書き換える(「○○町について投稿する」)。街が確定していない間は出さない。 -->
+      <a
+        id="communityBoardPostLink"
+        class="post-cta-choice"
+        href="community-board-post.html"
+        style="display:none; margin-top: 12px;"
+        data-i18n="community_board_post_link"
+      >
+        今いる街について投稿する
+      </a>
 
       <!-- 掲示板の専用画面(board.html)への導線(モカ案作り変え第2弾)｜
            トップは最新3件だけを出し、4件以上ある時だけこのリンクを出す。
@@ -3426,6 +3432,17 @@
 
     </section>
 
+    <!-- お店・施設の方へ(独立リンク)｜旧「あなたの発見を教えて！」ブロックは解体し、
+         店舗向けの案内だけを掲示板の下に単独のリンクとして残す。お店の投稿ボタンは
+         店舗アカウント専用のため、一般向けのカードには置かない。 -->
+    <a
+      class="contribute-cta-shop-link"
+      href="shop.html"
+      data-i18n="contribute_cta_shop_link"
+    >
+      お店・施設の方へ｜店舗カード・今だけ投稿のご案内 →
+    </a>
+
     <!-- 今だけ投稿｜ヒーロー(.opening-visual)の直下、<main>の先頭に置く(2026-10-13 本部指示で
          「気になる情報を見る」と「今、近くで楽しめる場所」の間から移動。中身・表示条件は無変更)。
          今だけ投稿 STEP 2｜お店・施設の「今だけ」の投稿(24時間)の独立枠。
@@ -3435,9 +3452,8 @@
 
 
     <!-- サイト全体改善 第5弾｜今だけ投稿が0件の日の「今日の今」。近くの今だけ投稿の取得に成功して0件だった時だけ出す
-         (取得の失敗・現在地なしでは出さない)。今だけ投稿の枠・判定・CVの記録には触れない。中身は作らず、
-         ページ内で今表示されている既存の枠(今日の地域情報・近くのお店・街の今スレッド・読みもの)への移動だけを並べる
-         (同じ情報を2か所に出さない。表示されていない枠へのボタンは出さない)。 -->
+         (取得の失敗・現在地なしでは出さない)。今だけ投稿の枠・判定・CVの記録には触れない。
+         中身は見出し・案内文と「見つけた「今」を投稿する」ボタンだけ(他枠への移動リンクは置かない)。 -->
 
 
     <section
@@ -3720,67 +3736,10 @@
 
     </section>
 
-    <!-- 投稿の入口(TOP・街ページ統合改善で1か所に統一)｜街ページの4番目。旧来の「見つけた「今」を投稿する」
-         (contribute.html)・街の今スレッドを立てる(#townNowNewThreadLink、town-now-post.html)・掲示板に投稿する
-         (#communityBoardPostLink、表示中の街に合わせて app.js が文言・行き先を変える)を、ここにまとめた。
-         投稿の権限・認証・承認・掲載期限は各投稿ページのまま。店舗・施設向けの案内は従来どおり控えめなリンク。 -->
-    <section class="contribute-cta-section" id="postCtaSection" aria-labelledby="postCtaHeading">
-
-      <h2
-        id="postCtaHeading"
-        class="contribute-cta-heading"
-        data-i18n="contribute_cta_heading"
-      >
-        あなたの発見を教えて！
-      </h2>
-
-      <p
-        class="contribute-cta-message"
-        data-i18n="contribute_cta_message"
-      >
-        あなたが見つけた街の今が、
-        今そこにいる誰かの役に立ちます。
-      </p>
-
-      <a
-        class="contribute-cta-button"
-        href="contribute.html"
-        data-i18n="contribute_cta_button"
-      >
-        見つけた「今」を投稿する →
-      </a>
-
-      <div class="post-cta-choices">
-        <a
-          id="townNowNewThreadLink"
-          class="post-cta-choice"
-          href="town-now-post.html"
-          data-i18n="town_now_new_thread_link"
-        >
-          新しいスレッドを立てる
-        </a>
-        <a
-          id="communityBoardPostLink"
-          class="post-cta-choice"
-          href="community-board-post.html"
-          style="display:none;"
-          data-i18n="community_board_post_link"
-        >
-          今いる街について投稿する
-        </a>
-      </div>
-
-      <!-- 店舗・施設向けの控えめな第2導線。主役は上の投稿ボタンのまま、
-           参加前の案内ページ(shop.html)へテキストリンクで案内する。 -->
-      <a
-        class="contribute-cta-shop-link"
-        href="shop.html"
-        data-i18n="contribute_cta_shop_link"
-      >
-        お店・施設の方へ｜店舗カード・今だけ投稿のご案内 →
-      </a>
-
-    </section>
+    <!-- 旧「あなたの発見を教えて！」ブロックは解体した。見出しと文章は「今」グループの
+         先頭の導入(#postIntroSection)へ、投稿ボタンは各カード(今日の今だけ投稿・
+         街の今スレッド・街の掲示板)の中へ、お店向けリンクは掲示板の下へ分けた。
+         ボタンの行き先・投稿の権限・認証・承認・掲載期限は各投稿ページのまま。 -->
 
     <!-- 街の発見の分離｜post.html?mode=street(街の「今」を投稿する)の投稿を、
          店舗カード(今、近くで楽しめる場所)から分けてここに出す。現在地から

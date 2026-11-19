@@ -17009,7 +17009,8 @@ function renderTownNowThreads(
   queueTodayFeedRender();
 
   if (threads.length === 0) {
-    // 0件でも空白にしない。新しいスレッドは投稿の入口の枠(1か所に統一)から立てられることを添える。
+    // 0件でも空白にしない。新しいスレッドの入口は、この枠の中のボタン
+    // (#townNowNewThreadLink)が常にあるため、案内文は添えない。
     const emptyKey =
       townNowThreadsViewMode === "region"
         ? "town_now_empty_region"
@@ -17022,13 +17023,6 @@ function renderTownNowThreads(
       escapeHtml(
         getTownNowTranslation(
           emptyKey
-        )
-      ) +
-      "</p>" +
-      '<p class="town-now-empty-hint" data-i18n="town_now_empty_hint">' +
-      escapeHtml(
-        getTownNowTranslation(
-          "town_now_empty_hint"
         )
       ) +
       "</p>";
@@ -23635,59 +23629,8 @@ function renderImadakeSection() {
 }
 
 // ---- サイト全体改善 第5弾｜今だけ投稿が0件の日の「今日の今」 ----
-// 新しい情報は作らず、ページ内で今表示されている既存の枠への移動ボタンだけを出す。
-// 枠が非表示・中身が空のボタンは出さない(枠の表示が変わったら付け直す)。
-const TODAY_NOW_EMPTY_TARGET_CHECKS = {
-  regionTodayInfoSection: function(section) {
-    return section.style.display !== "none" &&
-      document.querySelectorAll("#regionTodayInfoList .region-today-info-card").length > 0;
-  },
-  shopsSection: function(section) {
-    return section.style.display !== "none" &&
-      document.querySelectorAll("#shopsList .shop-card").length > 0;
-  },
-  townNowThreadsSection: function(section) {
-    return section.style.display !== "none" &&
-      document.querySelectorAll("#townNowThreadsList .town-now-thread-item").length > 0;
-  },
-  columnEntrySection: function(section) {
-    const list =
-      document.getElementById("columnEntryCardList");
-    return section.style.display !== "none" &&
-      !!list &&
-      list.childElementCount > 0;
-  }
-};
-
-let todayNowEmptyObserver =
-  null;
-
-function updateTodayNowEmptyLinks() {
-  const section =
-    document.getElementById("todayNowEmptySection");
-
-  if (!section || section.hidden) {
-    return;
-  }
-
-  section
-    .querySelectorAll("[data-today-now-target]")
-    .forEach(function(button) {
-      const targetId =
-        button.getAttribute("data-today-now-target");
-      const target =
-        document.getElementById(targetId);
-      const check =
-        TODAY_NOW_EMPTY_TARGET_CHECKS[targetId];
-      const available =
-        !!target && !!check && check(target);
-
-      if (button.hidden === available) {
-        button.hidden = !available;
-      }
-    });
-}
-
+// 0件の日に出す枠。中身は見出し・案内文と「見つけた「今」を投稿する」ボタンだけ
+// (旧来の他枠への移動リンク行は、今だけ投稿と関係がないため置かない)。
 function renderTodayNowEmptySection(
   show
 ) {
@@ -23699,49 +23642,7 @@ function renderTodayNowEmptySection(
   }
 
   section.hidden = !show;
-
-  if (!show) {
-    if (todayNowEmptyObserver) {
-      todayNowEmptyObserver.disconnect();
-      todayNowEmptyObserver = null;
-    }
-    return;
-  }
-
-  updateTodayNowEmptyLinks();
-
-  if (!todayNowEmptyObserver && typeof MutationObserver === "function") {
-    todayNowEmptyObserver =
-      new MutationObserver(updateTodayNowEmptyLinks);
-
-    Object.keys(TODAY_NOW_EMPTY_TARGET_CHECKS).forEach(function(targetId) {
-      const target =
-        document.getElementById(targetId);
-      if (target) {
-        todayNowEmptyObserver.observe(target, {
-          attributes: true,
-          attributeFilter: ["style", "hidden"],
-          childList: true,
-          subtree: true
-        });
-      }
-    });
-  }
 }
-
-document
-  .querySelectorAll("#todayNowEmptySection [data-today-now-target]")
-  .forEach(function(button) {
-    button.addEventListener("click", function() {
-      const target =
-        document.getElementById(
-          button.getAttribute("data-today-now-target")
-        );
-      if (target) {
-        target.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-    });
-  });
 
 function startImadakeExpiryCheck() {
   if (imadakeExpiryCheckTimer !== null) {
