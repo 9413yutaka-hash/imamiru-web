@@ -151,6 +151,53 @@ function updateLocationButtonLanguage(language) {
   }
 }
 
+// 広告枠のエリア名｜広告枠は「広域エリアごとに3枠」が商品の形(2026-11-19
+// 代表決定・世界規模)。エリアは行政レベル1(日本は都道府県、海外は州・省
+// など)で、無い国では国名を使う。見る人の現在地のエリアが分かる場合は、
+// 募集文面のエリア名をそのエリアに差し替える。分からない時と沖縄県の時は、
+// 既定文言(沖縄県)のまま。言語切替時は applyMachinauLanguage() の
+// 一括置換の直後に呼び直して追従する(updateLocationButtonLanguage
+// と同じ考え方)。
+let adSlotCurrentAreaName = "";
+
+function updateAdSlotAreaTexts(language) {
+  const areaName = adSlotCurrentAreaName;
+
+  if (!areaName || areaName === "沖縄県") {
+    return;
+  }
+
+  const headingElement =
+    document.getElementById("adSlotHeading");
+
+  const audienceElement =
+    document.querySelector(
+      '#adSlotBody [data-i18n="ad_slot_recruit_text_audience"]'
+    );
+
+  if (language === "en") {
+    if (headingElement) {
+      headingElement.textContent =
+        "Only 3 slots for all of " + areaName + ". First come, first served.";
+    }
+
+    if (audienceElement) {
+      audienceElement.textContent =
+        "These ads rotate on every Machinau page across " + areaName + ".";
+    }
+  } else {
+    if (headingElement) {
+      headingElement.textContent =
+        areaName + "内、3枠だけ。先着順です。";
+    }
+
+    if (audienceElement) {
+      audienceElement.textContent =
+        "この広告枠は、" + areaName + "のマチナウの全ページにスライドで出ます。";
+    }
+  }
+}
+
 function updateLanguageSwitcherUi(language) {
   const switcherButtons =
     document.querySelectorAll(
@@ -225,6 +272,7 @@ function applyMachinauLanguage(language) {
   });
 
   updateLocationButtonLanguage(language);
+  updateAdSlotAreaTexts(language);
   updateLanguageSwitcherUi(language);
 
   // 今日のフィード(03)は data-i18n の対象外の動的描画のため、言語切替に合わせて描き直す。
@@ -11987,6 +12035,22 @@ function applyUserLocation(
         ) {
           cityInfoCurrentLocationHierarchy =
             locationHierarchy;
+        }
+
+        // 広告枠のエリア名を、見る人の広域エリアに差し替える(広告枠は
+        // エリアごとに3枠のため。行政レベル1が無い国では国名を使う。
+        // 新しい Geocoder の呼び出しはしない)。
+        const adSlotAreaName =
+          locationHierarchy.prefecture ||
+          locationHierarchy.countryName ||
+          "";
+
+        if (adSlotAreaName) {
+          adSlotCurrentAreaName = adSlotAreaName;
+
+          updateAdSlotAreaTexts(
+            getCurrentMachinauLanguage()
+          );
         }
 
         // 店主向け「この街のマチナウ利用状況」｜GPS で新しく取得した時だけ(30分の復元では送らない)。
