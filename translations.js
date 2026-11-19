@@ -1497,8 +1497,8 @@ const MACHINAU_TRANSLATIONS = {
 
   // サイト全体改善 G｜旅の保存箱の共有。送るのは公開中のお店・施設の ID だけ(位置情報・利用者の情報は含めない)。
   travel_box_share_button: {
-    ja: "保存したお店を一緒に旅する人に送る",
-    en: "Send saved places to your travel companions"
+    ja: "保存したお店・施設をシェアする",
+    en: "Share saved shops & places"
   },
   travel_box_share_note: {
     ja: "送れるのは公開中のお店・施設だけで、一度に最大30件までです。リンクに位置情報やあなたの情報は含まれません。",
