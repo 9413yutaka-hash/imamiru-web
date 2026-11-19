@@ -3348,7 +3348,7 @@
     <!-- 街の今スレッド Phase 1C-2｜TOP・街ページ統合改善で街ページの1番目(街の「今」の会話)。現在地の時は
          townNowThreadsNearby(話題地点から5km以内・同じ市区町村)、「地域から探す」で街を選んだ時は
          townNowThreadsList(選んだ市区町村の今日・公開中・期限内のスレッドだけ)を表示する。
-         新しいスレッドの入口は、この枠の中のボタン(#townNowNewThreadLink)に置く。 -->
+         新しいスレッドの入口はここには置かない(投稿の入口ページ側にあるため)。 -->
     <section
       id="townNowThreadsSection"
       class="region-recommendation-section"
@@ -3361,15 +3361,6 @@
         近くにいる人たちの、今日の会話です。
       </p>
       <p id="townNowThreadsAreaNote" class="town-now-area-note" hidden></p>
-      <a
-        id="townNowNewThreadLink"
-        class="post-cta-choice"
-        href="town-now-post.html"
-        style="margin-bottom: 12px;"
-        data-i18n="town_now_new_thread_link"
-      >
-        新しいスレッドを立てる
-      </a>
       <div id="townNowThreadsList"></div>
     </section>
 
