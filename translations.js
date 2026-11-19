@@ -3096,13 +3096,6 @@ const MACHINAU_TRANSLATIONS = {
     en: "{distance} away"
   },
 
-  // 営業時間と定休日から「今日が営業日」と確かめられる時だけ写真に重ねるタグ。
-  // 「営業中」とは言わない(今の時刻に開いているかまでは確かめない)。
-  shop_photo_tag_open_today: {
-    ja: "今日やってる",
-    en: "Open today"
-  },
-
   shop_walking_car_recommended: {
     ja: "車での移動推奨",
     en: "Drive Recommended"

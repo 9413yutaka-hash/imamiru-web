@@ -1016,53 +1016,10 @@ function parseTimeStringToMinutes(
 // 店舗カードの写真に重ねる小さなタグ(見せ方だけ・2026-11-17 代表提案)。
 // ・距離が分かる時:「あと◯km」
 // ・現在地が未取得の時:「現在地未取得」(shop_distance_unknown と同じ文言)
-// ・営業時間と定休日から今日が営業日と確かめられる時だけ:「今日やってる」
 // 地域から探す表示中は、距離で探していないため距離系のタグは出さない
 // (カード内の距離チップを出さない既存の扱いにそろえる)。
-function isShopOpenTodayByHours(
-  shop
-) {
-  const hours =
-    shop &&
-    shop.permanentAdHours;
-
-  if (
-    !hours ||
-    hours.startTime === "" ||
-    hours.endTime === "" ||
-    hours.irregularClosed === true
-  ) {
-    return false;
-  }
-
-  const todayCodeByWeekday = {
-    Sun: "sun",
-    Mon: "mon",
-    Tue: "tue",
-    Wed: "wed",
-    Thu: "thu",
-    Fri: "fri",
-    Sat: "sat"
-  };
-
-  const weekdayShort =
-    new Intl.DateTimeFormat(
-      "en-US",
-      {
-        timeZone: "Asia/Tokyo",
-        weekday: "short"
-      }
-    ).format(new Date());
-
-  const todayCode =
-    todayCodeByWeekday[weekdayShort];
-
-  return (
-    typeof todayCode === "string" &&
-    !hours.closedDays.includes(todayCode)
-  );
-}
-
+// ※「今日やってる」タグは2026-11-19に代表指示で廃止。登録データが実態と
+// 　違うと「やってる」と言い切ってしまうリスクが大きいため出さない。
 function getShopPhotoTagsHtml(
   shop
 ) {
@@ -1093,15 +1050,6 @@ function getShopPhotoTagsHtml(
         )
       );
     }
-  }
-
-  if (isShopOpenTodayByHours(shop)) {
-    tagTexts.push(
-      getMachinauTranslation(
-        "shop_photo_tag_open_today",
-        language
-      )
-    );
   }
 
   if (tagTexts.length === 0) {
