@@ -198,6 +198,11 @@ const MACHINAU_TRANSLATIONS = {
     en: "Event"
   },
 
+  feed_badge_notice: {
+    ja: "お知らせ",
+    en: "Notice"
+  },
+
   feed_badge_discovery: {
     ja: "街の発見",
     en: "Discovery"
