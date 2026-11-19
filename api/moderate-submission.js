@@ -13680,6 +13680,11 @@ function buildRegionTodayInfoJsonSchema() {
 
               isDateValid: {
                 type: "boolean"
+              },
+
+              kind: {
+                type: "string",
+                enum: ["event", "notice"]
               }
             },
 
@@ -13691,7 +13696,8 @@ function buildRegionTodayInfoJsonSchema() {
               "description",
               "source",
               "isOfficial",
-              "isDateValid"
+              "isDateValid",
+              "kind"
             ],
 
             additionalProperties: false
@@ -13794,7 +13800,14 @@ function buildRegionTodayInfoInstructions(
     "this belongs to, in your own words), name, time, place, a short " +
     "Japanese description in your own words (not copied from a " +
     "source), source (the organization/site name as plain text, never " +
-    "a raw URL), isOfficial, and isDateValid. Write area/name/time/" +
+    "a raw URL), isOfficial, isDateValid, and kind. Set \"kind\" to " +
+    "\"event\" when the finding is something held or happening that " +
+    "people can attend, join, or watch. Set \"kind\" to \"notice\" " +
+    "when it is not an event but still matters for today's plans — " +
+    "for example a facility closure, a suspended service, or a " +
+    "temporary change of opening hours. A closure is important " +
+    "information, but it is not an event: never label a closure, " +
+    "suspension, or closure day as \"event\". Write area/name/time/" +
     "place/description/source in Japanese. Set \"checked\":true once " +
     "you have actually performed web searches (even if you found " +
     "nothing) — never set it to true without actually searching. If " +
@@ -13897,7 +13910,14 @@ function sanitizeRegionTodayInfoFinding(
       rawFinding.isOfficial === true,
 
     isDateValid:
-      rawFinding.isDateValid === true
+      rawFinding.isDateValid === true,
+
+    // 種類(イベント/お知らせ)。古い保存分など kind が無いものは
+    // 従来どおり event として扱う(表示側で休館などの見分けも行う)。
+    kind:
+      rawFinding.kind === "notice"
+        ? "notice"
+        : "event"
   };
 }
 

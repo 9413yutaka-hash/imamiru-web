@@ -26448,15 +26448,23 @@ function buildTodayFeedItems(dayKey) {
             return typeof value === "string" && value.trim() !== "";
           });
 
+        // 休館・休業・運休などの「お知らせ」はイベントではないので札を分ける。
+        // kind は新しい生成分に付く。古い保存分(kind無し)は、名前に休みの
+        // 言葉が入っている時だけお知らせとして扱う。
+        const isNotice =
+          finding.kind === "notice" ||
+          (finding.kind !== "event" &&
+            /休館|休業|休園|運休/.test(finding.name || ""));
+
         items.push({
           type: "event",
-          badgeKey: "feed_badge_event",
+          badgeKey: isNotice ? "feed_badge_notice" : "feed_badge_event",
           kindText: "",
           title: finding.name || "",
           storeLine: "",
           body: finding.description || "",
           imageUrl: "",
-          emoji: "🎪",
+          emoji: isNotice ? "📢" : "🎪",
           distanceKm: null,
           timeMillis: todayStartMillis,
           expiresText: "",
