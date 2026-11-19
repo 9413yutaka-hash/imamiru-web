@@ -2974,6 +2974,29 @@ body:has(#todayFeedSection) .hero-action-grid {
   grid-column: span 3;
 }
 
+/* 大見出し(各枠の見出し)は真ん中寄せ(2026-11-19 代表指示)。
+   対象はトップの各枠の見出し。ヒーロー内・モーダル・広告枠の見出しは対象外。 */
+body:has(#todayFeedSection) :is(
+  #imadakeSection,
+  #todayNowEmptySection,
+  #postIntroSection,
+  #streetDiscoverySection,
+  #townNowThreadsSection,
+  #regionRecommendationSection,
+  #columnEntrySection,
+  #shopOwnerCtaSection,
+  #sharedTripSection
+) > h2 {
+  text-align: center;
+}
+
+/* お店・保存箱は見出しの箱(title-area)の幅いっぱいに広げて真ん中寄せにする
+   (右端の「新しい順」などの表示はそのまま)。 */
+body:has(#todayFeedSection) :is(#shopsSection, #myPageSection) .section-title-area {
+  flex: 1;
+  text-align: center;
+}
+
 /* ヒーロー検索のキーワード絞り込みバー(絞り込み中だけ表示・解除付き) */
 .today-feed-keyword-bar {
   display: flex;

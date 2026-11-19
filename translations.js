@@ -7067,7 +7067,7 @@ const MACHINAU_TRANSLATIONS = {
   // TOPの今だけ投稿の枠の見出し(投稿がある時・0件の時で共通)。
   // imadake_heading(機能の名前)は店舗アカウント側のリンク文言にも使うため、枠の見出しはこちらで分ける。
   imadake_frame_heading: {
-    ja: "店舗・施設・イベント<br>からの今だけ投稿",
+    ja: "店舗・施設・イベントからの<br>今だけ投稿",
     en: "Limited-time posts<br>from shops, facilities & events"
   },
 
