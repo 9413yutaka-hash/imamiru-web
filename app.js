@@ -25467,7 +25467,7 @@ document.addEventListener(
     // 置き場所(placement)を分けて数える。1回の押下で1件だけ送る。
     const link =
       event.target && event.target.closest
-        ? event.target.closest(".contribute-cta-button, .contribute-cta-shop-link, footer a[href=\"shop.html\"], #howToModal a[href=\"shop.html\"], #adSlotSection a[href=\"shop.html\"]")
+        ? event.target.closest(".contribute-cta-button, .contribute-cta-shop-link, footer a[href=\"shop.html\"], #howToModal a[href=\"shop.html\"]")
         : null;
     if (!link) {
       return;
@@ -25484,9 +25484,7 @@ document.addEventListener(
             ? "top_cta"
             : link.closest("#howToModal")
               ? "how_to"
-              : link.closest("#adSlotSection")
-                ? "ad_slot"
-                : "footer"
+              : "footer"
       }
     );
   }
@@ -25809,10 +25807,13 @@ Object.keys(HERO_ACTION_ANALYTICS_ACTIONS).forEach(function(elementId) {
 });
 
 // TOP・街ページ統合改善｜街ページの末尾の広告枠(#adSlotSection、地図の欄の跡)。
-// 16項目⑮(代表の確定文言)｜表示のたびに入れ替える自社告知をやめ、横幅いっぱいの「広告主募集中」の1枠に固定した
+// 表示のたびに入れ替える自社告知をやめ、横幅いっぱいの「広告主募集中」の1枠に固定した
 // (中身は index.html の固定の文言・日英は data-i18n。ここで描き直す処理は無い)。通常の店舗一覧とはデータ・表示・並びを分け、
-// 店舗の掲載順位には一切関わらない。料金・申込み・広告の配信・課金は無い(店舗向け案内への移動は既存の
-// shop_guide_click の placement "ad_slot" で数える)。
+// 店舗の掲載順位には一切関わらない。
+// 2026-11-19 代表決定：この枠は地元の大きな会社向けに都道府県単位で売る枠とし、
+// 文言を企業向け(「沖縄県内、3枠だけ。先着順です。」)に変更。最大3社のスライド表示で同業種は1社だけ。
+// ボタンは店舗向け案内(shop.html)ではなく広告掲載のお問い合わせ(contact.html)へ。地域単位の小枠は作らない。
+// スライド表示・料金・申込み・広告の配信・課金の仕組みはまだ無い(広告主が決まった時に作る)。
 
 // ============================================================
 // 今日のフィード(03)｜トップページ改修(モカ案ブレンド) 2026-11-14
