@@ -3321,6 +3321,30 @@
       </a>
     </section>
 
+    <!-- 街の発見の分離｜post.html?mode=street(街の「今」を投稿する)の投稿を、
+         店舗カード(今、近くで楽しめる場所)から分けてここに出す。現在地から
+         15km以内の投稿が1件も無い間はapp.jsのrenderStreetDiscoverySection()が
+         セクションごと非表示にする。見出しは仮名称(代表が最終決定)。
+         並びは「今日の今だけ投稿 → 街の発見 → 街の今スレッド → 街の掲示板 →
+         店舗カード → お店・施設の方へ」(代表指示)。 -->
+    <section
+      id="streetDiscoverySection"
+      class="region-recommendation-section"
+      style="display:none;"
+    >
+
+      <h2 data-i18n="street_discovery_heading">
+        街の発見
+      </h2>
+
+      <p class="column-entry-lead" data-i18n="street_discovery_lead">
+        近くの人が見つけた、今の街の様子です。
+      </p>
+
+      <div id="streetDiscoveryList"></div>
+
+    </section>
+
     <!-- 街の今スレッド Phase 1C-2｜TOP・街ページ統合改善で街ページの1番目(街の「今」の会話)。現在地の時は
          townNowThreadsNearby(話題地点から5km以内・同じ市区町村)、「地域から探す」で街を選んだ時は
          townNowThreadsList(選んだ市区町村の今日・公開中・期限内のスレッドだけ)を表示する。
@@ -3740,28 +3764,6 @@
          先頭の導入(#postIntroSection)へ、投稿ボタンは各カード(今日の今だけ投稿・
          街の今スレッド・街の掲示板)の中へ、お店向けリンクは掲示板の下へ分けた。
          ボタンの行き先・投稿の権限・認証・承認・掲載期限は各投稿ページのまま。 -->
-
-    <!-- 街の発見の分離｜post.html?mode=street(街の「今」を投稿する)の投稿を、
-         店舗カード(今、近くで楽しめる場所)から分けてここに出す。現在地から
-         15km以内の投稿が1件も無い間はapp.jsのrenderStreetDiscoverySection()が
-         セクションごと非表示にする。見出しは仮名称(代表が最終決定)。 -->
-    <section
-      id="streetDiscoverySection"
-      class="region-recommendation-section"
-      style="display:none;"
-    >
-
-      <h2 data-i18n="street_discovery_heading">
-        街の発見
-      </h2>
-
-      <p class="column-entry-lead" data-i18n="street_discovery_lead">
-        近くの人が見つけた、今の街の様子です。
-      </p>
-
-      <div id="streetDiscoveryList"></div>
-
-    </section>
 
     <!-- マチナウ読み物(街ページの5番目)｜選んだ街では絞り込まない、運営の旅のヒント・ストーリー。カードは
          app.js の loadDynamicColumnEntries() が公開記事から描く(公開日＝publishedAt・初回公開日)。 -->
