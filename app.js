@@ -25470,6 +25470,173 @@ document.addEventListener(
 );
 
 // ==========================================================================
+// TOPのスクロール位置の復元｜トップから別ページへ飛んで戻った時に、
+// 飛んだ場所へ戻す(いちばん上に戻らないようにする)。
+// 位置は同じタブの中だけ(sessionStorage)に覚える。共有リンクなどの
+// パラメータ付きの入り口では復元しない(従来どおりの場所へ案内する)。
+// 中身は後から描かれて高さが伸びるため、届くまで少しの間だけ繰り返し合わせる。
+// 利用者が自分でスクロールしたら、その時点で合わせるのをやめる。
+// ==========================================================================
+(function setupTopScrollRestore() {
+  if (!document.getElementById("todayFeedSection")) {
+    return;
+  }
+
+  if (location.search || location.hash) {
+    return;
+  }
+
+  const STORAGE_KEY =
+    "machinauTopScrollRestore";
+  const MAX_AGE_MS =
+    30 * 60 * 1000;
+
+  if ("scrollRestoration" in history) {
+    history.scrollRestoration =
+      "manual";
+  }
+
+  let restoreActive =
+    false;
+
+  function saveTopScrollPosition() {
+    if (restoreActive) {
+      return;
+    }
+
+    try {
+      sessionStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          y: window.scrollY,
+          t: Date.now()
+        })
+      );
+    } catch (error) {
+      // 覚えられなくても、ページの動きは止めない。
+    }
+  }
+
+  let saveTimer =
+    null;
+
+  window.addEventListener(
+    "scroll",
+    function() {
+      if (saveTimer !== null) {
+        return;
+      }
+
+      saveTimer =
+        setTimeout(function() {
+          saveTimer =
+            null;
+          saveTopScrollPosition();
+        }, 150);
+    },
+    { passive: true }
+  );
+
+  window.addEventListener(
+    "pagehide",
+    saveTopScrollPosition
+  );
+
+  let saved =
+    null;
+
+  try {
+    saved =
+      JSON.parse(
+        sessionStorage.getItem(STORAGE_KEY) ||
+          "null"
+      );
+  } catch (error) {
+    saved =
+      null;
+  }
+
+  if (
+    !saved ||
+    typeof saved.y !== "number" ||
+    saved.y <= 0 ||
+    typeof saved.t !== "number" ||
+    Date.now() - saved.t > MAX_AGE_MS
+  ) {
+    return;
+  }
+
+  const targetY =
+    saved.y;
+
+  restoreActive =
+    true;
+
+  let attempts =
+    0;
+  let restoreTimer =
+    null;
+
+  function stopTopScrollRestore() {
+    restoreActive =
+      false;
+
+    if (restoreTimer !== null) {
+      clearInterval(restoreTimer);
+      restoreTimer =
+        null;
+    }
+
+    window.removeEventListener(
+      "wheel",
+      stopTopScrollRestore
+    );
+    window.removeEventListener(
+      "touchmove",
+      stopTopScrollRestore
+    );
+    window.removeEventListener(
+      "keydown",
+      stopTopScrollRestore
+    );
+  }
+
+  window.addEventListener(
+    "wheel",
+    stopTopScrollRestore,
+    { passive: true }
+  );
+  window.addEventListener(
+    "touchmove",
+    stopTopScrollRestore,
+    { passive: true }
+  );
+  window.addEventListener(
+    "keydown",
+    stopTopScrollRestore
+  );
+
+  restoreTimer =
+    setInterval(function() {
+      attempts +=
+        1;
+      window.scrollTo(
+        0,
+        targetY
+      );
+
+      if (
+        Math.abs(window.scrollY - targetY) <=
+          2 ||
+        attempts >=
+          25
+      ) {
+        stopTopScrollRestore();
+      }
+    }, 200);
+})();
+
+// ==========================================================================
 // サイト全体改善 G｜旅の保存箱の共有(同行者へ保存したお店・施設を送る)
 // ==========================================================================
 // 送る URL は https://machinau.jp/?trip={ID}.{ID}...(公開中のお店・施設の ID だけ、最大30件)。
