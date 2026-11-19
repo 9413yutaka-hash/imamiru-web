@@ -157,8 +157,8 @@ if (HAS_NOTICE) {
   const datesInCorr = [...corrText.matchAll(/20\d\d年\d+月\d+日/g)].map((m) => m[0]);
   const corrAll = corrText + " " + tr.store_account_legal_correction_date.ja + " " + tr.store_account_legal_correction_contract.ja;
   const enAll = tr.store_account_legal_correction_title.en + tr.store_account_legal_correction_body.en + tr.store_account_legal_correction_date.en + tr.store_account_legal_correction_contract.en;
-  t("L9 訂正文：4ページすべて・11月7日の予定の変更・改定後は施行日から適用（前日までは改定前）・施行日は別の行（最終更新日と混同しない）・既存の利用者に料金は自動で発生しない・契約は同意して申し込んだ場合だけ・契約の無いカードは非公開・施行日以外の新しい日付は書かない・英語あり",
-    corr.every((c) => c.html.includes('data-legal-correction="step47"') && (c.f === "store-account.html" ? c.html.includes('data-i18n="store_account_legal_correction_date"') : c.html.includes("施行日：<span data-legal-effective>"))) && /2026年10月30日/.test(corrAll) && /施行予定日（2026年11月7日）を変更しました/.test(corrAll) && /下記の施行日から適用します/.test(corrAll) && /施行日の前日までは、改定前の利用規約・プライバシーポリシーが適用/.test(corrAll) && !/最終更新日に改定/.test(corrAll) &&
+  t("L9 訂正文：3ページ（店舗アカウント画面からは2026-11-19 代表指示で削除）・11月7日の予定の変更・改定後は施行日から適用（前日までは改定前）・施行日は別の行（最終更新日と混同しない）・既存の利用者に料金は自動で発生しない・契約は同意して申し込んだ場合だけ・契約の無いカードは非公開・施行日以外の新しい日付は書かない・英語あり",
+    corr.filter((c) => c.f !== "store-account.html").every((c) => c.html.includes('data-legal-correction="step47"') && c.html.includes("施行日：<span data-legal-effective>")) && !FILES["store-account.html"].includes('data-legal-correction="step47"') && /2026年10月30日/.test(corrAll) && /施行予定日（2026年11月7日）を変更しました/.test(corrAll) && /下記の施行日から適用します/.test(corrAll) && /施行日の前日までは、改定前の利用規約・プライバシーポリシーが適用/.test(corrAll) && !/最終更新日に改定/.test(corrAll) &&
     /自動で発生することはありません/.test(corrAll) && /同意して申し込んだ場合にだけ成立/.test(corrAll) && /契約の無い店舗カードは、施行日から旅行者に公開されません/.test(corrAll) &&
     [...corrAll.matchAll(/20\d\d年\d+月\d+日/g)].map((m) => m[0]).every((d) => d === "2026年10月30日" || d === "2026年11月7日" || (LAUNCH_EFFECTIVE !== null && d === ja(LAUNCH_EFFECTIVE))) &&
     /November 7, 2026/.test(enAll) && /charged automatically/.test(enAll) && !/[\u3040-\u30ff\u4e00-\u9fff]/.test(enAll), { pages: corr.map((c) => c.f + ":" + (c.html ? "ok" : "missing")), datesInCorr });
@@ -180,7 +180,7 @@ try {
         t(`B ${page}・${label}：告知が見える・文言が入っている・横にはみ出さない・JSエラーなし`, L.shown && textOk && L.sw <= L.w && p.log.errors.length === 0, { L: { ...L, text: L.text.slice(0, 120) }, errors: p.log.errors });
         if (mobile) await p.screenshot(join(SHOTS_DIR, `legal-notice-${page.replace(".html", "")}-${lang}-${w}.png`));
       } else {
-        t(`B ${page}・${label}：旧告知は出ない・訂正文が見える（英語は英語の文）・横にはみ出さない・JSエラーなし`, !L.shown && L.corr && (lang === "en" ? /^Correction/.test(L.corrText) : /^お知らせ（訂正）/.test(L.corrText)) && L.sw <= L.w && p.log.errors.length === 0, { L, errors: p.log.errors });
+        t(`B ${page}・${label}：旧告知は出ない・訂正文が見える（店舗アカウント画面は2026-11-19に削除済みで出ない）・横にはみ出さない・JSエラーなし`, !L.shown && (page === "store-account.html" ? !L.corr : (L.corr && (lang === "en" ? /^Correction/.test(L.corrText) : /^お知らせ（訂正）/.test(L.corrText)))) && L.sw <= L.w && p.log.errors.length === 0, { L, errors: p.log.errors });
       }
       t(`B ${page}・${label}：本番のサーバーへ書き込みの要求を送っていない`, !p.log.posts.length, p.log.posts);
       await p.close();
