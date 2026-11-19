@@ -2997,6 +2997,18 @@ body:has(#todayFeedSection) :is(#shopsSection, #myPageSection) .section-title-ar
   text-align: center;
 }
 
+/* お店の見出しは、右端の並び順表示に押されてページの左に寄って見えるため、
+   見出しの段と並び順の段を分けて、見出しをページの真ん中に置く
+   (2026-11-19 代表指示「同じように真ん中に」)。並び順は右端の下の段に残す。 */
+body:has(#todayFeedSection) #shopsSection .section-header {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+body:has(#todayFeedSection) #shopsSection #shopsOrderLabel {
+  align-self: flex-end;
+}
+
 /* ヒーロー検索のキーワード絞り込みバー(絞り込み中だけ表示・解除付き) */
 .today-feed-keyword-bar {
   display: flex;
