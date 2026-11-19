@@ -325,9 +325,9 @@ try {
     const p = await openAt("/", { lang, width: 390, geo: NAHA });
     await sleep(800);
     await p.ev(`document.getElementById("columnEntryCardList").insertAdjacentHTML("beforeend", "<article>記事</article>"); true`); await sleep(300);
-    const v = await p.ev(`(() => { const s = document.getElementById("todayNowEmptySection"); return { shown: !s.hidden, h: s.querySelector("h2").textContent.trim(), lead: s.querySelector(".imadake-lead").textContent.trim(), targets: [...s.querySelectorAll("[data-today-now-target]")].map((b) => b.getAttribute("data-today-now-target")), readsLine: /マチナウ読み物|Machinau Reads/.test(s.textContent) }; })()`);
+    const v = await p.ev(`(() => { const s = document.getElementById("todayNowEmptySection"); return { shown: !s.hidden, h: s.querySelector("h2").textContent.trim(), lead: s.querySelector(".imadake-lead").textContent.trim(), targets: [...s.querySelectorAll("[data-today-now-target]")].map((b) => b.getAttribute("data-today-now-target")), postBtn: (s.querySelector(".contribute-cta-button") || {}).getAttribute ? s.querySelector(".contribute-cta-button").getAttribute("href") : null, readsLine: /マチナウ読み物|Machinau Reads/.test(s.textContent) }; })()`);
     t(`F1 ${lang} 見出し・本文`, v.shown && v.h === (lang === "ja" ? "今日の今だけ投稿" : "Today's limited-time posts") && v.lead === (lang === "ja" ? "近くでは、まだ掲載中の「今だけ投稿」がありません。" : "There are no limited-time posts nearby yet."), v);
-    t(`F2 ${lang} 読み物の行は削除・近くのお店の導線は残す(地域の今日はフィード一本化で導線なし)`, !v.readsLine && !v.targets.includes("columnEntrySection") && !v.targets.includes("regionTodayInfoSection") && v.targets.includes("shopsSection"), v);
+    t(`F2 ${lang} 読み物の行・お店への移動リンクは置かず、投稿ボタン(contribute.html)だけを置く`, !v.readsLine && v.targets.length === 0 && v.postBtn === "contribute.html", v);
     await p.close();
     imadakeReply = null;
   }
