@@ -3381,6 +3381,26 @@ const MACHINAU_TRANSLATIONS = {
     en: "What people nearby have spotted around town right now."
   },
 
+  street_discovery_empty: {
+    ja: "近くでは、まだ発見がありません。",
+    en: "No discoveries nearby yet."
+  },
+
+  street_discovery_empty_region: {
+    ja: "この街では、まだ発見がありません。",
+    en: "No discoveries in this town yet."
+  },
+
+  street_discovery_area_note_prefix: {
+    ja: "選んだ街「",
+    en: "Discoveries in "
+  },
+
+  street_discovery_area_note_suffix: {
+    ja: "」の発見です。",
+    en: " (the town you picked)."
+  },
+
   community_board_post_link: {
     ja: "今いる街について投稿する",
     en: "Post about the city you're in now"

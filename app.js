@@ -3281,6 +3281,59 @@ function getStreetDiscoveryItemsInSelectedRegion(
     );
 }
 
+// 街の発見の選んだ街の注記(街の今スレッドの setTownNowThreadsAreaNote と同じ形)。
+// 現在地の時は隠す。街の名前は日本語の正式名のまま、前後の文だけ翻訳する。
+function setStreetDiscoveryAreaNote(
+  regionName
+) {
+  const note =
+    document.getElementById(
+      "streetDiscoveryAreaNote"
+    );
+
+  if (!note) {
+    return;
+  }
+
+  if (
+    typeof regionName !== "string" ||
+    regionName === ""
+  ) {
+    note.hidden =
+      true;
+    note.innerHTML =
+      "";
+    return;
+  }
+
+  const language =
+    getCurrentMachinauLanguage();
+
+  note.innerHTML =
+    '<span data-i18n="street_discovery_area_note_prefix">' +
+    escapeHtml(
+      getMachinauTranslation(
+        "street_discovery_area_note_prefix",
+        language
+      )
+    ) +
+    "</span><strong>" +
+    escapeHtml(
+      regionName
+    ) +
+    '</strong><span data-i18n="street_discovery_area_note_suffix">' +
+    escapeHtml(
+      getMachinauTranslation(
+        "street_discovery_area_note_suffix",
+        language
+      )
+    ) +
+    "</span>";
+
+  note.hidden =
+    false;
+}
+
 // 街の発見の分離｜street投稿(承認済み・期限内のものだけがshopsに入る)を、
 // 「マチナウ読みもの」直前の専用セクションへ出す。現在地が分かるまでは
 // 何も出さず(全国の投稿を無差別に並べない)、分かった後は座標があり
@@ -3394,18 +3447,40 @@ function renderStreetDiscoverySection() {
     nearbyStreetItems;
   queueTodayFeedRender();
 
-  if (nearbyStreetItems.length === 0) {
-    list.innerHTML =
-      "";
-
-    section.style.display =
-      "none";
-
-    return;
-  }
+  // 選んだ街の注記(街の今スレッドと同じ形)。現在地の時は出さない。
+  setStreetDiscoveryAreaNote(
+    selectedShopRegion
+      ? selectedShopRegion.municipalityName
+      : ""
+  );
 
   const currentLanguage =
     getCurrentMachinauLanguage();
+
+  if (nearbyStreetItems.length === 0) {
+    // 投稿が無くても枠は出す(街の今スレッドと同じ)。文言も同じ形にする。
+    const emptyKey =
+      selectedShopRegion
+        ? "street_discovery_empty_region"
+        : "street_discovery_empty";
+
+    list.innerHTML =
+      '<p class="town-now-empty" data-i18n="' +
+      emptyKey +
+      '">' +
+      escapeHtml(
+        getMachinauTranslation(
+          emptyKey,
+          currentLanguage
+        )
+      ) +
+      "</p>";
+
+    section.style.display =
+      "";
+
+    return;
+  }
 
   list.innerHTML =
     nearbyStreetItems
