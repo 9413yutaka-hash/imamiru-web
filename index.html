@@ -27,48 +27,6 @@
     })();
   </script>
 
-  <!-- TOPのスクロール位置の復元(先読み)｜別ページから戻った時に復元する位置が
-       覚えられていれば、画面が描かれる前に本文を隠しておく。位置が合ってから
-       app.js が表示するので、戻った瞬間にいちばん上が見えたり、画面が段階的に
-       飛んだりしない。app.js が読み込めなくても4秒で必ず表示する。 -->
-  <script>
-    (function () {
-      if (location.search || location.hash) {
-        return;
-      }
-
-      try {
-        var saved =
-          JSON.parse(
-            sessionStorage.getItem("machinauTopScrollRestore") ||
-              "null"
-          );
-
-        if (
-          saved &&
-          typeof saved.y === "number" &&
-          saved.y > 0 &&
-          typeof saved.t === "number" &&
-          Date.now() - saved.t <=
-            30 * 60 * 1000
-        ) {
-          window.__machinauScrollRestoreTarget =
-            saved.y;
-          document.documentElement.classList.add(
-            "is-scroll-restoring"
-          );
-          setTimeout(function() {
-            document.documentElement.classList.remove(
-              "is-scroll-restoring"
-            );
-          }, 4000);
-        }
-      } catch (error) {
-        // 復元できなくても、通常の表示を妨げない。
-      }
-    })();
-  </script>
-
   <meta charset="UTF-8">
 
   <meta
@@ -208,16 +166,6 @@
   >
 
   <style>
-    /* TOPのスクロール位置の復元中は本文を隠す(位置が合ってから表示する)。
-       表示の切り替えは app.js(復元できた時)と先読み側の保険(4秒)が行う。 */
-    html.is-scroll-restoring body {
-      opacity: 0;
-    }
-
-    body {
-      transition: opacity 0.18s ease;
-    }
-
     /* 「地域のおすすめ」セクション専用の最小CSS。style.cssは変更しない。 */
     .region-recommendation-section {
       margin-top: 18px;
