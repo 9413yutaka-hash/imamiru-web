@@ -17009,8 +17009,8 @@ function renderTownNowThreads(
   queueTodayFeedRender();
 
   if (threads.length === 0) {
-    // 0件でも空白にしない。新しいスレッドの入口は、この枠の中のボタン
-    // (#townNowNewThreadLink)が常にあるため、案内文は添えない。
+    // 0件でも空白にしない(案内文を出す)。新しいスレッドの入口は
+    // トップには置かず、投稿の入口ページ側にある。
     const emptyKey =
       townNowThreadsViewMode === "region"
         ? "town_now_empty_region"
