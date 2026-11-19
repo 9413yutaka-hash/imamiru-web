@@ -116,9 +116,9 @@ export const STORE_CARD_PLAN_CONSENT_VERSION = "store-card-monthly-2026-10-31";
 // 運営管理(月額500円・税込、店舗カードの月額料金100円を含む)への同意の版。セルフ運用の同意とは別に取る。
 export const STORE_MANAGED_PLAN_CONSENT_VERSION = "store-managed-plan-2026-11-17";
 // 運営管理の申込の受付。false の間は Preview 試験の環境でだけ受け付け、本番(Production)では受け付けない。
-// 受付の開始は代表の承認のうえで true にする(段階5)。
+// 2026-11-19、代表の承認で受付を開始した(段階5)。
 export const STORE_MANAGED_PLAN_SIGNUP_ENABLED =
-  false;
+  true;
 // 請求予定日(翌月の何日、日本時間)。
 export const STORE_CUSTOM_PLAN_CHARGE_DAY_OF_MONTH = 2;
 // 決済失敗(代表決定)：初回失敗の3日後・7日後に再試行、初回失敗から14日で有料機能を停止。
