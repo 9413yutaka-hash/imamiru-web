@@ -231,6 +231,12 @@
       color: var(--navy);
     }
 
+    /* 青いバーの長さを「見つけた『今』を投稿する」と統一する(2026-11-19
+       代表指示)。このボタンは枠(左右18pxの余白)の内側いっぱいにする。 */
+    #cityInfoButton {
+      width: 100%;
+    }
+
     .region-recommendation-card-title {
       font-size: 15px;
       font-weight: 900;
@@ -894,6 +900,15 @@
       font-weight: 900;
       text-decoration: none;
       box-shadow: 0 8px 20px rgba(5, 144, 194, 0.22);
+    }
+
+    /* トップの投稿ボタンは、青いバーの長さを「この街の情報」と統一する
+       (2026-11-19 代表指示)。320pxの上限を外し、「この街の情報」の枠の
+       内側(左右18pxを引いた幅)と長さ・左右位置をそろえる。 */
+    #postIntroSection .contribute-cta-button {
+      max-width: none;
+      width: calc(100% - 36px);
+      margin-left: 18px;
     }
 
     /* 店舗・施設向けの第2導線。メインボタンより弱いテキストリンクとし、
