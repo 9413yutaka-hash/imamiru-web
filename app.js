@@ -57,6 +57,11 @@ const STORE_PROFILE_TRANSLATION_MAX_RETRIES =
 const storeProfileDescriptionTranslations =
   {};
 
+// 取得したメニューの訳。{ "sp_...": { en: [{ sourceName, sourceDescription, name, description }] } }
+// 紹介文と同じ要求(storeProfileTranslationGet)で届く。モーダルのメニュー併記にだけ使う。
+const storeMenuTranslations =
+  {};
+
 // 頼んだ店舗("language:sp_...")。同じ店舗を何度も頼まない。
 const storeProfileTranslationRequestedKeys =
   new Set();
@@ -3973,7 +3978,9 @@ function readStoreProfileCustom(custom) {
 
 // 詳細表示の有料の内容(HTML)。登録の無い欄は見出しも出さない。文字はすべてエスケープする。
 // modal-message は white-space: pre-line のため、タグの間に改行を入れない。
-function buildStoreProfileCustomHtml(custom, language) {
+// menuTranslationItems は表示言語のメニューの訳(無ければ null)。日本語は主役のまま、
+// 原文(名前・説明)が一致する項目にだけ訳を下へ併記する(置き換えない)。
+function buildStoreProfileCustomHtml(custom, language, menuTranslationItems) {
   if (!custom) {
     return "";
   }
@@ -3995,7 +4002,19 @@ function buildStoreProfileCustomHtml(custom, language) {
       '<section class="shop-custom-section">' +
         '<h3 class="shop-custom-heading">' + escapeHtml(getMachinauTranslation("shop_custom_menu_heading", language)) + "</h3>" +
         '<ul class="shop-custom-menu">' +
-        custom.menuItems.map(function(item) {
+        custom.menuItems.map(function(item, itemIndex) {
+          const translatedMenuItem =
+            language !== "ja" && Array.isArray(menuTranslationItems)
+              ? menuTranslationItems.find(function(entry) {
+                  return (
+                    entry &&
+                    entry.sourceName === item.name &&
+                    entry.sourceDescription === item.description &&
+                    typeof entry.name === "string" &&
+                    entry.name !== ""
+                  );
+                })
+              : null;
           return (
             '<li class="shop-custom-menu-item' + (item.photoUrl !== "" ? " has-photo" : "") + '">' +
               (item.photoUrl !== ""
@@ -4013,6 +4032,13 @@ function buildStoreProfileCustomHtml(custom, language) {
                       return '<span class="shop-custom-allergen-chip">' + escapeHtml(getMachinauTranslation("shop_allergen_" + code, language)) + "</span>";
                     }).join("") +
                     "</div></div>"
+                  : "") +
+                (translatedMenuItem
+                  ? '<div class="shop-custom-menu-tr"><p class="shop-custom-menu-tr-name">' + escapeHtml(translatedMenuItem.name) + "</p>" +
+                    (typeof translatedMenuItem.description === "string" && translatedMenuItem.description !== ""
+                      ? '<p class="shop-custom-menu-tr-desc">' + escapeHtml(translatedMenuItem.description) + "</p>"
+                      : "") +
+                    "</div>"
                   : "") +
               "</div>" +
             "</li>"
@@ -7003,7 +7029,10 @@ function openShopModal(
     modalText +=
       buildStoreProfileCustomHtml(
         selectedShop.custom,
-        modalCurrentLanguage
+        modalCurrentLanguage,
+        storeMenuTranslations[selectedShop.id]
+          ? storeMenuTranslations[selectedShop.id][modalCurrentLanguage]
+          : null
       );
   }
 
@@ -19930,10 +19959,33 @@ async function fetchStoreProfileTranslations(
     }
   });
 
+  // メニューの訳も同じ応答で届く(モーダルの併記用)。原文の組が一致する項目だけが使われる。
+  const menuTranslations =
+    responseData.menuTranslations && typeof responseData.menuTranslations === "object"
+      ? responseData.menuTranslations
+      : {};
+
+  storeIds.forEach(function(publicId) {
+    const items =
+      menuTranslations[publicId];
+
+    if (Array.isArray(items) && items.length > 0) {
+      storeMenuTranslations[publicId] =
+        Object.assign({}, storeMenuTranslations[publicId] || {}, {
+          [language]: items
+        });
+
+      didUpdate = true;
+    }
+  });
+
   // 生成中・後回しの店舗は、少し後に頼み直す(1店舗あたり最大3回。上限到達の日は頼まない)。
   const pendingStoreIds =
-    Array.isArray(responseData.pending) && responseData.limited !== true
-      ? responseData.pending.filter(function(publicId) {
+    responseData.limited !== true
+      ? Array.from(new Set(
+          (Array.isArray(responseData.pending) ? responseData.pending : [])
+            .concat(Array.isArray(responseData.menuPending) ? responseData.menuPending : [])
+        )).filter(function(publicId) {
           const key =
             language + ":" + publicId;
 

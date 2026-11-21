@@ -98,7 +98,8 @@ import {
 // 店主の店舗カードの紹介文の英語自動翻訳(2026-11-07 G案)｜実処理はapi/_lib/store-profile-translation.js。
 import {
   handleStoreProfileTranslationGet,
-  callOpenAiStoreProfileTranslation
+  callOpenAiStoreProfileTranslation,
+  callOpenAiStoreMenuTranslation
 } from "./_lib/store-profile-translation.js";
 
 // 正式店舗参加基盤 Phase 2A｜セルフ店舗登録。実処理はapi/_lib/store-self-service.js。
@@ -31580,7 +31581,22 @@ function buildStoreProfileTranslationDeps() {
     claimRateLimit: claimRateLimit,
     hashClientIpAddress: hashClientIpAddress,
     readPublicStore: readPublicStoreProfileForShare,
-    translateDescriptions: callOpenAiStoreProfileTranslation
+    translateDescriptions: callOpenAiStoreProfileTranslation,
+    // メニュー一式の翻訳(2026-11-21追加)：公開中のカスタムプロフィールから項目だけを取り出す。
+    readPublicMenuItems: async function(database, storeId, nowMillis) {
+      const customByStoreId =
+        await readPublicStoreCustomProfiles(database, [storeId], nowMillis);
+
+      const custom =
+        customByStoreId.get(storeId);
+
+      if (!custom || !Array.isArray(custom.menuItems)) {
+        return null;
+      }
+
+      return custom.menuItems;
+    },
+    translateMenuItems: callOpenAiStoreMenuTranslation
   };
 }
 
