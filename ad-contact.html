@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <meta
+    name="theme-color"
+    content="#0788c9"
+  >
+
+  <meta
+    name="description"
+    content="マチナウの広告掲載のお問い合わせはこちらから。広告枠は都道府県ごとに最大3社・同業種1社まで、先着順です。料金・期間はお問い合わせ後にご案内します。"
+  >
+
+  <title>
+    広告掲載のお問い合わせ｜マチナウ
+  </title>
+
+  <link
+    rel="canonical"
+    href="https://machinau.jp/ad-contact.html"
+  >
+
+  <link
+    rel="icon"
+    type="image/png"
+    href="/favicon.png?v=2"
+  >
+
+  <!-- 広告掲載のお問い合わせ窓口｜広告枠(都道府県ごとに最大3社・同業種1社・
+       先着順)への掲載を考えている会社向けの専用フォーム。送信内容は
+       /api/moderate-submission(mode:"contactInquiryCreate"、category:"ad")
+       経由でのみ保存し、Firestoreへは直接書き込まない。代表は
+       admin-contact.htmlで種別「広告掲載」として確認する。
+       画面構成・スタイルはcontact.htmlと同じ。 -->
+
+  <style>
+    :root {
+      --navy: #071a33;
+      --blue: #0788c9;
+      --cyan: #04b7d7;
+      --sky: #dff7ff;
+      --white: #ffffff;
+      --text: #15233a;
+      --subtext: #697386;
+      --border: #e2eaf1;
+      --background: #f4f8fb;
+      --red: #d94f4f;
+      --shadow: 0 18px 50px rgba(20, 52, 82, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0 0 60px;
+      font-family:
+        "Yu Gothic",
+        "Hiragino Kaku Gothic ProN",
+        "Meiryo",
+        sans-serif;
+      background: var(--background);
+      color: var(--text);
+    }
+
+    /* ヘッダー/ヒーロー/カードはshop.htmlと同じクラス構成・見た目。 */
+    .top-bar {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(12, 54, 87, 0.08);
+    }
+
+    .top-bar-inner {
+      width: min(100%, 760px);
+      margin: 0 auto;
+      padding: 13px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .brand-area {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-icon {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      box-shadow: 0 8px 20px rgba(4, 158, 199, 0.25);
+    }
+
+    .brand-caption {
+      margin: 2px 0 0;
+      color: var(--subtext);
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .home-link {
+      padding: 9px 13px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--white);
+      color: var(--navy);
+      font-size: 12px;
+      font-weight: 900;
+      white-space: nowrap;
+      text-decoration: none;
+    }
+
+    .page-hero {
+      padding: 42px 18px 70px;
+      background: linear-gradient(135deg, #0687c5, #13c3ce);
+      color: var(--white);
+    }
+
+    .page-hero-inner {
+      width: min(100%, 720px);
+      margin: 0 auto;
+    }
+
+    .hero-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 8px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .page-hero h1 {
+      margin: 20px 0 0;
+      font-size: clamp(24px, 6vw, 32px);
+      line-height: 1.4;
+      letter-spacing: 0.02em;
+      text-wrap: balance;
+    }
+
+    .free-badge {
+      display: inline-block;
+      margin-top: 16px;
+      padding: 9px 14px;
+      border-radius: 12px;
+      background: var(--white);
+      color: var(--blue);
+      font-size: 13px;
+      font-weight: 900;
+      line-height: 1.6;
+      text-wrap: pretty;
+    }
+
+    main {
+      width: min(100%, 640px);
+      margin: -38px auto 0;
+      padding: 0 18px;
+    }
+
+    .guide-card {
+      margin-bottom: 16px;
+      padding: 22px 20px;
+      border: 1px solid rgba(12, 54, 87, 0.08);
+      border-radius: 22px;
+      background: var(--white);
+      box-shadow: var(--shadow);
+    }
+
+    .guide-card h2 {
+      margin: 0 0 10px;
+      color: var(--navy);
+      font-size: 18px;
+      line-height: 1.5;
+      text-wrap: balance;
+    }
+
+    .guide-card p {
+      margin: 0 0 10px;
+      color: #3d5163;
+      font-size: 13.5px;
+      line-height: 1.85;
+      text-wrap: pretty;
+    }
+
+    .step-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      counter-reset: apply-step;
+    }
+
+    .step-list li {
+      position: relative;
+      padding: 1px 0 0 40px;
+      color: #3d5163;
+      font-size: 13.5px;
+      line-height: 1.85;
+      counter-increment: apply-step;
+      text-wrap: pretty;
+    }
+
+    .step-list li + li {
+      margin-top: 10px;
+    }
+
+    .step-list li::before {
+      content: counter(apply-step);
+      position: absolute;
+      top: 1px;
+      left: 0;
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      color: var(--white);
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .form-field {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+
+    .form-field label {
+      color: var(--navy);
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .required-mark,
+    .optional-mark {
+      display: inline-block;
+      margin-left: 6px;
+      padding: 1px 7px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 900;
+      vertical-align: middle;
+    }
+
+    .required-mark {
+      background: #fff0f0;
+      color: #b23b3b;
+    }
+
+    .optional-mark {
+      background: #eef3f7;
+      color: var(--subtext);
+    }
+
+    .field-hint {
+      margin: 0;
+      color: var(--subtext);
+      font-size: 11.5px;
+      line-height: 1.6;
+    }
+
+    .form-field input,
+    .form-field select,
+    .form-field textarea {
+      width: 100%;
+      min-width: 0;
+      padding: 12px 13px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #fbfdfe;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 16px;
+      outline: none;
+    }
+
+    .form-field textarea {
+      min-height: 110px;
+      resize: vertical;
+      line-height: 1.7;
+    }
+
+    .form-field input:focus,
+    .form-field select:focus,
+    .form-field textarea:focus {
+      border-color: var(--cyan);
+      background: var(--white);
+      box-shadow: 0 0 0 4px rgba(4, 183, 215, 0.12);
+    }
+
+    .char-count {
+      margin: 0;
+      color: var(--subtext);
+      font-size: 11.5px;
+      text-align: right;
+    }
+
+    /* bot対策の入力欄(人間には見えない)。 */
+    .confirmation-field {
+      position: absolute;
+      left: -9999px;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+    }
+
+    .submit-button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      min-height: 56px;
+      padding: 8px 14px;
+      border: none;
+      border-radius: 15px;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      color: var(--white);
+      font-family: inherit;
+      font-size: 16px;
+      font-weight: 900;
+      cursor: pointer;
+      box-shadow: 0 10px 24px rgba(5, 144, 194, 0.25);
+    }
+
+    .submit-button:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+    .privacy-note {
+      margin: 10px 0 0;
+      color: var(--subtext);
+      font-size: 11.5px;
+      line-height: 1.7;
+      text-wrap: pretty;
+    }
+
+    .privacy-note a {
+      color: var(--blue);
+      font-weight: 700;
+    }
+
+    .form-message {
+      display: none;
+      margin: 0 0 14px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: #fff0f0;
+      border: 1px solid #f3c7c7;
+      color: #a93d3d;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.7;
+    }
+
+    .form-message.visible {
+      display: block;
+    }
+
+    .complete-card {
+      display: none;
+      text-align: center;
+    }
+
+    .complete-card.visible {
+      display: block;
+    }
+
+    .complete-icon {
+      display: inline-grid;
+      place-items: center;
+      width: 56px;
+      height: 56px;
+      margin-bottom: 8px;
+      border-radius: 50%;
+      background: var(--sky);
+      font-size: 26px;
+    }
+
+    .back-link {
+      display: inline-block;
+      margin-top: 4px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--blue);
+      text-decoration: none;
+    }
+
+    footer {
+      padding: 26px 18px 0;
+      color: #8c9aa8;
+      text-align: center;
+      font-size: 10px;
+      line-height: 1.8;
+    }
+
+    @media (max-width: 480px) {
+      .page-hero {
+        padding: 34px 15px 60px;
+      }
+
+      main {
+        padding-right: 14px;
+        padding-left: 14px;
+      }
+
+      .guide-card {
+        padding: 20px 17px;
+      }
+    }
+  </style>
+  <!-- サイト全体改善 第2弾｜公開ページの共通の基準(見出し・押せる高さ・帯の色)。このページのスタイルの後に読む。 -->
+  <link rel="stylesheet" href="machinau-pages.css">
+</head>
+
+<body class="machinau-page">
+
+  <header class="top-bar">
+    <div class="top-bar-inner">
+
+      <div class="brand-area">
+
+        <div class="brand-icon">
+          <img
+            src="/icon-192.png?v=2"
+            alt="マチナウ"
+            style="width:100%;height:100%;object-fit:contain;border-radius:inherit;"
+          >
+        </div>
+
+        <div>
+          <p class="brand-caption" data-i18n="contact_brand_caption">
+            街の「今」がわかる案内所
+          </p>
+        </div>
+
+      </div>
+
+      <a
+        class="home-link"
+        href="index.html"
+       data-i18n="contact_home_link">
+        ← マチナウTOPへ
+      </a>
+
+    </div>
+  </header>
+
+  <section class="page-hero">
+    <div class="page-hero-inner">
+
+      <div class="hero-label" data-i18n="ad_contact_hero_label">
+        広告掲載について
+      </div>
+
+      <h1 data-i18n="ad_contact_heading">
+        広告掲載のお問い合わせ
+      </h1>
+
+      <div class="free-badge" data-i18n="ad_contact_badge">
+        広告枠は都道府県ごとに最大3社まで。同業種は1社だけ、先着順です。
+      </div>
+
+    </div>
+  </section>
+
+  <main>
+
+    <section
+      id="contactFormCard"
+      class="guide-card"
+    >
+      <h2 data-i18n="ad_contact_form_heading">
+        広告掲載フォーム
+      </h2>
+
+      <p data-i18n="ad_contact_form_lead">
+        マチナウへの広告掲載のご相談はこちらからお送りください。料金・期間は、お問い合わせの内容を確認してからご案内します。
+      </p>
+
+      <form
+        id="contactForm"
+        novalidate
+      >
+
+        <div
+          id="formMessage"
+          class="form-message"
+          role="alert"
+        ></div>
+
+        <div class="form-field">
+          <label for="companyInput">
+            <span data-i18n="ad_contact_label_company">会社名</span>
+            <span class="required-mark" data-i18n="contact_required">必須</span>
+          </label>
+          <input
+            id="companyInput"
+            name="company"
+            type="text"
+            maxlength="100"
+            autocomplete="organization"
+            required
+          >
+        </div>
+
+        <div class="form-field">
+          <label for="nameInput">
+            <span data-i18n="ad_contact_label_name">担当者名</span>
+            <span class="required-mark" data-i18n="contact_required">必須</span>
+          </label>
+          <input
+            id="nameInput"
+            name="name"
+            type="text"
+            maxlength="60"
+            autocomplete="name"
+            required
+          >
+        </div>
+
+        <div class="form-field">
+          <label for="emailInput">
+            <span data-i18n="ad_contact_label_email">返信先メールアドレス</span>
+            <span class="required-mark" data-i18n="contact_required">必須</span>
+          </label>
+          <p class="field-hint" data-i18n="ad_contact_email_hint">
+            料金・期間のご案内は、このアドレスへお送りします。
+          </p>
+          <input
+            id="emailInput"
+            name="email"
+            type="email"
+            maxlength="254"
+            autocomplete="email"
+            inputmode="email"
+            placeholder="例：info@example.com" data-i18n-placeholder="contact_email_placeholder"
+            required
+          >
+        </div>
+
+        <div class="form-field">
+          <label for="phoneInput">
+            <span data-i18n="ad_contact_label_phone">電話番号</span>
+            <span class="optional-mark" data-i18n="contact_optional">任意</span>
+          </label>
+          <input
+            id="phoneInput"
+            name="phone"
+            type="tel"
+            maxlength="30"
+            autocomplete="tel"
+          >
+        </div>
+
+        <div class="form-field">
+          <label for="industryInput">
+            <span data-i18n="ad_contact_label_industry">業種</span>
+            <span class="required-mark" data-i18n="contact_required">必須</span>
+          </label>
+          <p class="field-hint" data-i18n="ad_contact_industry_hint">
+            広告枠は同業種1社までのため、確認に使います。
+          </p>
+          <input
+            id="industryInput"
+            name="industry"
+            type="text"
+            maxlength="60"
+            placeholder="例：ホテル・旅館" data-i18n-placeholder="ad_contact_industry_placeholder"
+            required
+          >
+        </div>
+
+        <div class="form-field">
+          <label for="areaInput">
+            <span data-i18n="ad_contact_label_area">掲載希望エリア</span>
+            <span class="required-mark" data-i18n="contact_required">必須</span>
+          </label>
+          <p class="field-hint" data-i18n="ad_contact_area_hint">
+            広告枠は都道府県ごとです。
+          </p>
+          <input
+            id="areaInput"
+            name="area"
+            type="text"
+            maxlength="40"
+            placeholder="例：沖縄県" data-i18n-placeholder="ad_contact_area_placeholder"
+            required
+          >
+        </div>
+
+        <div class="form-field">
+          <label for="messageInput">
+            <span data-i18n="contact_label_message">お問い合わせ内容</span>
+            <span class="required-mark" data-i18n="contact_required">必須</span>
+          </label>
+          <p class="field-hint" data-i18n="ad_contact_message_hint">
+            掲載したい内容や時期など、分かる範囲でご記入ください。
+          </p>
+          <textarea
+            id="messageInput"
+            name="message"
+            maxlength="1000"
+            required
+          ></textarea>
+          <p class="char-count">
+            <span id="messageCount">0</span> / 1000
+          </p>
+        </div>
+
+        <div
+          class="confirmation-field"
+          aria-hidden="true"
+        >
+          <label for="confirmationFieldInput" data-i18n="contact_honeypot_label">確認用（入力しないでください）</label>
+          <input
+            id="confirmationFieldInput"
+            type="text"
+            tabindex="-1"
+            autocomplete="off"
+          >
+        </div>
+
+        <button
+          id="submitButton"
+          class="submit-button"
+          type="submit"
+         data-i18n="contact_submit">
+          この内容で送信する
+        </button>
+
+        <p class="privacy-note">
+          <span data-i18n="ad_contact_privacy_note">ご記入いただいた会社名・担当者名・メールアドレス・お問い合わせ内容は、広告掲載への対応のためにのみ使用し、公開されることはありません。</span>
+          <span data-i18n="contact_privacy_more_before">詳しくは</span><a href="privacy.html" data-i18n="contact_privacy_link">プライバシーポリシー</a><span data-i18n="contact_privacy_more_after">をご覧ください。</span>
+        </p>
+
+      </form>
+    </section>
+
+    <section
+      id="completeCard"
+      class="guide-card complete-card"
+      role="status"
+      aria-live="polite"
+    >
+      <div class="complete-icon">✅</div>
+
+      <h2 data-i18n="ad_contact_done_heading">
+        お問い合わせを受け付けました。
+      </h2>
+
+      <p data-i18n="ad_contact_done_text">
+        マチナウ運営へ届きました。ありがとうございます。内容を確認して、料金・期間のご案内をメールでお送りします。
+      </p>
+    </section>
+
+    <a class="back-link" href="index.html" data-i18n="contact_back_top_arrow">← マチナウTOPへ戻る</a>
+
+  </main>
+
+  <footer data-i18n-lines="contact_footer">
+    マチナウ
+    <br>
+    街の今を知れば、もっと、いい旅になる。
+  </footer>
+
+  <script src="translations.js"></script>
+  <script>
+    // サイト全体改善 第4弾｜TOP で選んだ言語(machinauLanguage)を引き継ぐ(値が無い・不正なら日本語)。
+    // 英語の時だけ、data-i18n 系の属性が付いた固定の文言を辞書(translations.js)で差し替える。
+    // 日本語は HTML のまま。このページのスクリプトより先に動く(後から書き換える文言は tr() で引く)。
+    const PAGE_LANGUAGE = (function () {
+      let stored = null;
+      try {
+        stored = localStorage.getItem("machinauLanguage");
+      } catch (error) {
+        stored = null;
+      }
+      return typeof stored === "string" && MACHINAU_SUPPORTED_LANGUAGES.includes(stored) ? stored : MACHINAU_DEFAULT_LANGUAGE;
+    })();
+    function tr(key, params) {
+      let text = getMachinauTranslation(key, PAGE_LANGUAGE);
+      Object.keys(params || {}).forEach(function (name) {
+        text = text.split("{" + name + "}").join(String(params[name]));
+      });
+      return text;
+    }
+    (function applyPageLanguage() {
+      if (PAGE_LANGUAGE === MACHINAU_DEFAULT_LANGUAGE) {
+        return;
+      }
+      document.documentElement.lang = PAGE_LANGUAGE;
+      document.title = tr("ad_contact_doc_title");
+      document.querySelectorAll("[data-i18n]").forEach(function (element) {
+        element.textContent = tr(element.getAttribute("data-i18n"));
+      });
+      document.querySelectorAll("[data-i18n-placeholder]").forEach(function (element) {
+        element.placeholder = tr(element.getAttribute("data-i18n-placeholder"));
+      });
+      // 訳文の改行(\n)は <br> にする(辞書の固定の文言だけで、利用者の入力は入らない)。
+      document.querySelectorAll("[data-i18n-lines]").forEach(function (element) {
+        const lines = tr(element.getAttribute("data-i18n-lines")).split("\n");
+        element.textContent = "";
+        lines.forEach(function (line, index) {
+          if (index > 0) {
+            element.appendChild(document.createElement("br"));
+          }
+          element.appendChild(document.createTextNode(line));
+        });
+      });
+    })();
+  </script>
+  <script>
+    // サイト全体改善 第4弾｜サーバー(contactInquiryCreate)が返す利用者向けのメッセージ(日本語)を、英語の時は対応する訳にする。
+    // 文字数の上限(「お名前・店舗名は60文字以内で入力してください。」など)は項目と文字数を読み取って訳す。
+    // 知らないメッセージは汎用の案内。日本語の時はサーバーの文言のまま。送信先・保存先・項目は変えない。
+    const SERVER_MESSAGE_KEYS = {
+      "お問い合わせ内容を入力してください。": "ad_contact_error_message",
+      "会社名を入力してください。": "ad_contact_error_company",
+      "担当者名を入力してください。": "ad_contact_error_name",
+      "メールアドレスを入力してください。": "ad_contact_error_email_required",
+      "メールアドレスの形式を確認してください。": "contact_error_email",
+      "業種を入力してください。": "ad_contact_error_industry",
+      "掲載希望エリアを入力してください。": "ad_contact_error_area",
+      "ただいまお問い合わせが集中しています。時間をおいて、もう一度お試しください。": "contact_server_busy",
+      "短時間に続けて送信されています。3分ほど時間をおいて、もう一度お試しください。": "contact_server_rate",
+      "送信できませんでした。時間をおいて、もう一度お試しください。": "contact_error_send"
+    };
+    const SERVER_FIELD_KEYS = {
+      "お名前・店舗名": "ad_contact_field_name",
+      "メールアドレス": "contact_field_email",
+      "お問い合わせ内容": "contact_field_message",
+      "会社名": "ad_contact_field_company",
+      "電話番号": "ad_contact_field_phone",
+      "業種": "ad_contact_field_industry",
+      "掲載希望エリア": "ad_contact_field_area"
+    };
+    function localizeServerMessage(message, fallbackKey) {
+      if (PAGE_LANGUAGE === MACHINAU_DEFAULT_LANGUAGE) {
+        return typeof message === "string" && message !== "" ? message : tr(fallbackKey);
+      }
+      if (typeof message !== "string") {
+        return tr(fallbackKey);
+      }
+      if (SERVER_MESSAGE_KEYS[message]) {
+        return tr(SERVER_MESSAGE_KEYS[message]);
+      }
+      const tooLong = message.match(/^(.+)は(\d+)文字以内で入力してください。$/);
+      if (tooLong && SERVER_FIELD_KEYS[tooLong[1]]) {
+        return tr("contact_error_too_long", { field: tr(SERVER_FIELD_KEYS[tooLong[1]]), max: tooLong[2] });
+      }
+      return tr(fallbackKey);
+    }
+
+    (function() {
+      const contactForm = document.getElementById("contactForm");
+      const submitButton = document.getElementById("submitButton");
+      const formMessage = document.getElementById("formMessage");
+      const contactFormCard = document.getElementById("contactFormCard");
+      const completeCard = document.getElementById("completeCard");
+      const companyInput = document.getElementById("companyInput");
+      const nameInput = document.getElementById("nameInput");
+      const emailInput = document.getElementById("emailInput");
+      const phoneInput = document.getElementById("phoneInput");
+      const industryInput = document.getElementById("industryInput");
+      const areaInput = document.getElementById("areaInput");
+      const messageInput = document.getElementById("messageInput");
+      const messageCount = document.getElementById("messageCount");
+
+      // 広告枠を見ていた地域(?area=)を、掲載希望エリアの初期値として引き継ぐ。
+      try {
+        const areaParam = new URLSearchParams(window.location.search).get("area");
+        if (areaParam && areaParam.trim() !== "") {
+          areaInput.value = areaParam.trim().slice(0, 40);
+        }
+      } catch (error) {
+        // URLが読めなくても、エリアは手入力できるのでそのまま進める。
+      }
+
+      // 送信中・送信完了後の二重送信を防ぐ。
+      let isSubmitting = false;
+      let isCompleted = false;
+
+      function showFormMessage(text) {
+        formMessage.textContent = text;
+        formMessage.classList.add("visible");
+        formMessage.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+
+      function clearFormMessage() {
+        formMessage.textContent = "";
+        formMessage.classList.remove("visible");
+      }
+
+      messageInput.addEventListener("input", function() {
+        messageCount.textContent = String(messageInput.value.length);
+      });
+
+      contactForm.addEventListener("submit", async function(event) {
+        event.preventDefault();
+
+        if (isSubmitting || isCompleted) {
+          return;
+        }
+
+        clearFormMessage();
+
+        const payload = {
+          mode: "contactInquiryCreate",
+          category: "ad",
+          company: companyInput.value.trim(),
+          name: nameInput.value.trim(),
+          email: emailInput.value.trim(),
+          phone: phoneInput.value.trim(),
+          industry: industryInput.value.trim(),
+          area: areaInput.value.trim(),
+          message: messageInput.value.trim(),
+          confirmationField: document.getElementById("confirmationFieldInput").value
+        };
+
+        // 入力漏れ・形式はここで先に知らせる(最終的な確認はサーバー側でも行う)。
+        if (payload.company === "") {
+          showFormMessage(tr("ad_contact_error_company"));
+          companyInput.focus();
+          return;
+        }
+
+        if (payload.name === "") {
+          showFormMessage(tr("ad_contact_error_name"));
+          nameInput.focus();
+          return;
+        }
+
+        if (payload.email === "") {
+          showFormMessage(tr("ad_contact_error_email_required"));
+          emailInput.focus();
+          return;
+        }
+
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)) {
+          showFormMessage(tr("contact_error_email"));
+          emailInput.focus();
+          return;
+        }
+
+        if (payload.industry === "") {
+          showFormMessage(tr("ad_contact_error_industry"));
+          industryInput.focus();
+          return;
+        }
+
+        if (payload.area === "") {
+          showFormMessage(tr("ad_contact_error_area"));
+          areaInput.focus();
+          return;
+        }
+
+        if (payload.message === "") {
+          showFormMessage(tr("ad_contact_error_message"));
+          messageInput.focus();
+          return;
+        }
+
+        isSubmitting = true;
+        submitButton.disabled = true;
+        submitButton.textContent = tr("contact_sending");
+
+        try {
+          const response = await fetch("/api/moderate-submission", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+          });
+
+          let responseData = null;
+
+          try {
+            responseData = await response.json();
+          } catch (jsonError) {
+            responseData = null;
+          }
+
+          if (!response.ok || !responseData || responseData.success !== true) {
+            showFormMessage(
+              localizeServerMessage(responseData && responseData.message, "contact_error_send")
+            );
+            return;
+          }
+
+          isCompleted = true;
+          contactFormCard.style.display = "none";
+          completeCard.classList.add("visible");
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        } catch (error) {
+          console.error("お問い合わせの送信に失敗しました：", error);
+          showFormMessage(tr("contact_error_network"));
+        } finally {
+          isSubmitting = false;
+
+          if (!isCompleted) {
+            submitButton.disabled = false;
+            submitButton.textContent = tr("contact_submit");
+          }
+        }
+      });
+    })();
+  </script>
+
+
+  <script>
+    // 「トップへ戻る」は、マチナウの中から来た時はブラウザの「戻る」と同じ動きをする
+    // (前のページへ読み直しなしで戻るので速く、スクロール位置もそのまま)。
+    // 検索や共有リンクなど、外から直接来た時は従来どおりトップを開く。
+    document.addEventListener("click", function (event) {
+      var link = event.target && event.target.closest ? event.target.closest("a[href]") : null;
+      if (!link || !document.referrer) return;
+      var url, referrer;
+      try {
+        url = new URL(link.getAttribute("href"), location.href);
+        referrer = new URL(document.referrer);
+      } catch (error) { return; }
+      function isTopPath(pathname) { return pathname === "/" || pathname.endsWith("/index.html"); }
+      if (url.origin !== location.origin || !isTopPath(url.pathname) || url.search || url.hash) return;
+      if (referrer.origin !== location.origin) return;
+      if (history.length <= 1) return;
+      event.preventDefault();
+      history.back();
+    });
+  </script>
+</body>
+</html>

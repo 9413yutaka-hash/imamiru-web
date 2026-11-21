@@ -456,7 +456,8 @@
       correction: "情報の訂正",
       bug: "不具合の報告",
       feedback: "ご意見・ご要望",
-      other: "その他"
+      other: "その他",
+      ad: "広告掲載"
     };
 
     const MESSAGE_PREVIEW_LENGTH = 60;
@@ -600,6 +601,22 @@
       details.className = "application-details";
 
       appendDetailRow(details, "返信先", buildEmailNode(inquiry.email || ""));
+
+      if (inquiry.company) {
+        appendDetailRow(details, "会社名", textNode(inquiry.company));
+      }
+
+      if (inquiry.phone) {
+        appendDetailRow(details, "電話番号", textNode(inquiry.phone));
+      }
+
+      if (inquiry.industry) {
+        appendDetailRow(details, "業種", textNode(inquiry.industry));
+      }
+
+      if (inquiry.area) {
+        appendDetailRow(details, "掲載希望エリア", textNode(inquiry.area));
+      }
 
       const message = inquiry.message || "";
       const isLong = message.length > MESSAGE_PREVIEW_LENGTH;

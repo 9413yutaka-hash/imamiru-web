@@ -30770,6 +30770,7 @@ const CONTACT_INQUIRY_GLOBAL_HOURLY_LIMIT =
   30;
 
 // 問い合わせ種別(保存値)。表示名はcontact.html・admin-contact.html側。
+// ad は広告専用フォーム(ad-contact.html)からの広告掲載の問い合わせ(2026-11-21追加)。
 const CONTACT_INQUIRY_CATEGORIES =
   [
     "shop",
@@ -30777,7 +30778,8 @@ const CONTACT_INQUIRY_CATEGORIES =
     "correction",
     "bug",
     "feedback",
-    "other"
+    "other",
+    "ad"
   ];
 
 // 本文は店舗申込みの備考(既存の最長の自由記述欄)と同じ1000文字。
@@ -30786,6 +30788,15 @@ const CONTACT_INQUIRY_FIELD_MAX_LENGTHS =
     name: 60,
     email: 254,
     message: 1000
+  };
+
+// 広告掲載(ad)だけが持つ追加項目の上限。
+const CONTACT_INQUIRY_AD_FIELD_MAX_LENGTHS =
+  {
+    company: 100,
+    phone: 30,
+    industry: 60,
+    area: 40
   };
 
 const CONTACT_INQUIRY_LIST_MAX_COUNT =
@@ -30854,6 +30865,77 @@ function validateContactInquiryInput(
       ok: false,
       message: "メールアドレスの形式を確認してください。"
     };
+  }
+
+  // 広告掲載(ad)は商談のため、会社名・担当者名・メールアドレス・業種・
+  // 掲載希望エリアを必須とし、追加項目も検証して保存する。
+  if (category === "ad") {
+    fields.company =
+      normalizeShopApplicationText(requestBody.company, false);
+    fields.phone =
+      normalizeShopApplicationText(requestBody.phone, false);
+    fields.industry =
+      normalizeShopApplicationText(requestBody.industry, false);
+    fields.area =
+      normalizeShopApplicationText(requestBody.area, false);
+
+    if (fields.company === "") {
+      return {
+        ok: false,
+        message: "会社名を入力してください。"
+      };
+    }
+
+    if (fields.name === "") {
+      return {
+        ok: false,
+        message: "担当者名を入力してください。"
+      };
+    }
+
+    if (fields.email === "") {
+      return {
+        ok: false,
+        message: "メールアドレスを入力してください。"
+      };
+    }
+
+    if (fields.industry === "") {
+      return {
+        ok: false,
+        message: "業種を入力してください。"
+      };
+    }
+
+    if (fields.area === "") {
+      return {
+        ok: false,
+        message: "掲載希望エリアを入力してください。"
+      };
+    }
+
+    const adFieldLabels = {
+      company: "会社名",
+      phone: "電話番号",
+      industry: "業種",
+      area: "掲載希望エリア"
+    };
+
+    for (const fieldName of Object.keys(CONTACT_INQUIRY_AD_FIELD_MAX_LENGTHS)) {
+      if (
+        fields[fieldName].length >
+        CONTACT_INQUIRY_AD_FIELD_MAX_LENGTHS[fieldName]
+      ) {
+        return {
+          ok: false,
+          message:
+            adFieldLabels[fieldName] +
+            "は" +
+            CONTACT_INQUIRY_AD_FIELD_MAX_LENGTHS[fieldName] +
+            "文字以内で入力してください。"
+        };
+      }
+    }
   }
 
   return {
@@ -31163,6 +31245,10 @@ async function handleAdminListContactInquiriesRequest(
             name: readText("name"),
             email: readText("email"),
             message: readText("message"),
+            company: readText("company"),
+            phone: readText("phone"),
+            industry: readText("industry"),
+            area: readText("area"),
             createdAtMillis:
               createdAtDate
                 ? createdAtDate.getTime()
