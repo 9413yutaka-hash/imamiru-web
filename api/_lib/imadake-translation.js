@@ -515,7 +515,7 @@ function buildImadakeCardTranslationPrompt(
   return {
     systemInstruction:
       "You translate short shop posts for travelers. Translate each item's \"headline\" and \"excerpt\" from Japanese into natural " +
-      (targetLanguage === "en" ? "English" : targetLanguage) +
+      (targetLanguage === "en" ? "English" : targetLanguage === "zh-TW" ? "Traditional Chinese (Taiwan)" : targetLanguage) +
       ". Rules: keep every number, price, currency symbol, time, date, quantity and unit exactly as written (same digits); " +
       "keep shop names, place names, product names, phone numbers and URLs unchanged; do not add, remove or guess information; " +
       "the excerpt may be cut off mid-sentence, so translate the fragment as it is without completing it. " +

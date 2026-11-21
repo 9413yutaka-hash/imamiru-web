@@ -2402,7 +2402,7 @@
               billingStripe = StripeConstructor(result.publishableKey);
               billingElements = billingStripe.elements({
                 clientSecret: result.clientSecret,
-                locale: currentLanguage === "en" ? "en" : "ja"
+                locale: currentLanguage === "en" ? "en" : currentLanguage === "zh-TW" ? "zh-TW" : "ja"
               });
               billingElements.create("payment", { layout: "tabs" }).mount("#billingPaymentElement");
               billingSetup = { setupIntentId: result.setupIntentId, consentVersion: result.consentVersion };

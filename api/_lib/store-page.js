@@ -303,6 +303,127 @@ export const STORE_PAGE_LABELS = {
     addressNote: "Address (in Japanese)",
     // G案の保存済みの自動翻訳を出した時だけ添える。
     translatedNote: "Automatically translated from Japanese."
+  },
+  "zh-TW": {
+    category: {
+      gourmet: "美食",
+      cafe_sweets: "咖啡・甜點",
+      shopping: "購物",
+      sightseeing_experience: "觀光・體驗",
+      nightlife: "夜生活景點",
+      beauty_relaxation: "美容・放鬆",
+      lodging: "住宿",
+      other: "其他"
+    },
+    day: {
+      mon: "星期一",
+      tue: "星期二",
+      wed: "星期三",
+      thu: "星期四",
+      fri: "星期五",
+      sat: "星期六",
+      sun: "星期日"
+    },
+    closed: "公休日",
+    allday: "24 小時",
+    payment: {
+      cash: "現金",
+      card: "信用卡",
+      qr: "QR 碼付款"
+    },
+    feature: {
+      parking: "有停車場",
+      free_wifi: "免費 Wi-Fi",
+      power_outlets: "有電源插座",
+      wheelchair_accessible: "輪椅友善",
+      kid_friendly: "歡迎兒童同行",
+      pet_friendly: "可攜帶寵物",
+      dine_in: "店內用餐",
+      takeout: "外帶",
+      delivery: "配送・外送",
+      store_pickup: "店面取貨",
+      tax_free: "提供免稅",
+      parking_free: "免費停車場",
+      parking_paid: "付費停車場",
+      barrier_free: "無障礙友善",
+      no_smoking: "禁菸",
+      smoking: "可吸菸",
+      table_seats: "桌席",
+      counter_seats: "吧檯座位",
+      terrace_seats: "露台座位",
+      tatami_seats: "榻榻米座位",
+      private_room: "包廂",
+      kids_menu: "兒童菜單",
+      baby_chair: "嬰兒椅",
+      diaper_changing: "尿布更換空間",
+      reservations_ok: "可預約",
+      private_rental: "可包場",
+      english_menu: "英文菜單",
+      allergy_friendly: "提供過敏資訊"
+    },
+    social: {
+      instagram: "Instagram",
+      x: "X",
+      facebook: "Facebook",
+      tiktok: "TikTok",
+      youtube: "YouTube",
+      threads: "Threads",
+      line: "LINE",
+      other: "其他社群媒體"
+    },
+    linkType: {
+      instagram: "Instagram",
+      website: "官方網站",
+      reservation: "預約頁面",
+      x: "X",
+      facebook: "Facebook",
+      tiktok: "TikTok",
+      youtube: "YouTube",
+      line: "LINE",
+      other: "其他連結"
+    },
+    headingAbout: "店家・設施介紹",
+    headingLocation: "位置",
+    headingHours: "營業時間",
+    headingPayment: "付款方式",
+    headingFeatures: "設施・服務",
+    headingStory: "特色與故事",
+    headingMenu: "菜單・商品",
+    headingLinks: "連結",
+    headingContact: "電話・預約・社群媒體",
+    headingLanguages: "支援語言",
+    headingInfo: "店家資訊",
+    phone: "電話號碼",
+    reservation: "預約頁面",
+    website: "官方網站",
+    openMap: "在地圖上查看",
+    openMachinau: "在 Machinau 查看附近的現況",
+    hoursNotice: "營業時間與內容可能有所變更。前往之前，請先向店家確認。",
+    ownerNotice: "本頁面的資訊由店家自行註冊與管理。",
+    forOwners: "店家專區",
+    terms: "使用條款",
+    privacy: "隱私權政策",
+    notFoundTitle: "無法顯示此店家頁面",
+    notFoundBody: "頁面尚未公開，或刊登已結束。也請確認網址是否正確。",
+    unavailableTitle: "目前無法顯示",
+    unavailableBody: "請稍後再試一次。",
+    backToTop: "回到 Machinau 首頁",
+    quickNav: "店家快速操作",
+    actionMap: "地圖",
+    actionCall: "電話",
+    actionReserve: "預約",
+    actionShare: "分享",
+    today: "今天",
+    todayHours: "今天的營業時間",
+    headingPhotos: "照片",
+    headingShare: "分享這個頁面",
+    shareNote: "這是本頁面的網址。可以用 LINE、社群媒體或 QR 碼分享。",
+    shareLine: "用 LINE 傳送",
+    shareX: "在 X 發文",
+    photoAlt: "{NAME}的照片{N}",
+    menuPhotoAlt: "{NAME}的照片",
+    addressNote: "地址（以日文標示）",
+    translatedNote: "本內容由日文自動翻譯。"
   }
 };
 
@@ -331,7 +452,7 @@ export function buildStorePageUrl(storeId) {
 }
 
 function readStorePageLanguage(value) {
-  return value === "en" ? "en" : "ja";
+  return value === "en" || value === "zh-TW" ? value : "ja";
 }
 
 // 紹介の冒頭(改行・連続空白を1つにまとめ、120文字で切る)。
@@ -685,6 +806,7 @@ function buildLanguageNavHtml(storeId, language) {
     "<nav class=\"lang\" aria-label=\"Language\">" +
       "<a href=\"" + escapeStorePageHtml(base) + "\" hreflang=\"ja\" lang=\"ja\"" + (language === "ja" ? " aria-current=\"true\"" : "") + ">日本語</a>" +
       "<a href=\"" + escapeStorePageHtml(base + "?lang=en") + "\" hreflang=\"en\" lang=\"en\"" + (language === "en" ? " aria-current=\"true\"" : "") + ">English</a>" +
+      "<a href=\"" + escapeStorePageHtml(base + "?lang=zh-TW") + "\" hreflang=\"zh-TW\" lang=\"zh-TW\"" + (language === "zh-TW" ? " aria-current=\"true\"" : "") + ">繁體中文</a>" +
     "</nav>"
   );
 }
@@ -728,7 +850,7 @@ export function buildStorePageHtml(storeId, store, custom, languageValue, option
   const language = readStorePageLanguage(languageValue);
   const labels = STORE_PAGE_LABELS[language];
   const pageUrl = buildStorePageUrl(storeId);
-  const selfUrl = language === "en" ? pageUrl + "?lang=en" : pageUrl;
+  const selfUrl = language === "ja" ? pageUrl : pageUrl + "?lang=" + language;
   const location = store.location || {};
   const areaText = buildAreaText(location);
   const categoryText = labels.category[store.categoryCode] || labels.category.other;
@@ -942,13 +1064,13 @@ export function buildStorePageHtml(storeId, store, custom, languageValue, option
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  ${language === "en" ? "<meta name=\"robots\" content=\"noindex\">" : ""}
+  ${language !== "ja" ? "<meta name=\"robots\" content=\"noindex\">" : ""}
   <title>${escapeStorePageHtml(title)}</title>
   <meta name="description" content="${escapeStorePageHtml(description)}">
   <link rel="canonical" href="${escapeStorePageHtml(pageUrl)}">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="${SITE_NAME}">
-  <meta property="og:locale" content="${language === "en" ? "en_US" : "ja_JP"}">
+  <meta property="og:locale" content="${language === "en" ? "en_US" : language === "zh-TW" ? "zh_TW" : "ja_JP"}">
   <meta property="og:title" content="${escapeStorePageHtml(title)}">
   <meta property="og:description" content="${escapeStorePageHtml(description)}">
   <meta property="og:url" content="${escapeStorePageHtml(pageUrl)}">
@@ -1022,7 +1144,7 @@ export async function readPublicStorePage(database, storeId, deps) {
     return null;
   }
 
-  const store = await readPublicStoreProfileForShare(database, storeId, { includeContact: true, includeDescriptionTranslations: ["en"] });
+  const store = await readPublicStoreProfileForShare(database, storeId, { includeContact: true, includeDescriptionTranslations: ["en", "zh-TW"] });
 
   if (!store) {
     return null;
@@ -1059,7 +1181,7 @@ export async function handleRenderStorePage(request, response, deps) {
 
   // 共有リンクの形(sp_{storeId})で開かれた時は、正式な URL へ移す。
   if (storeId.indexOf(PUBLIC_STORE_ID_PREFIX) === 0 && isStorePageId(storeId.slice(PUBLIC_STORE_ID_PREFIX.length))) {
-    const target = STORE_PAGE_PATH_PREFIX + encodeURIComponent(storeId.slice(PUBLIC_STORE_ID_PREFIX.length)) + (language === "en" ? "?lang=en" : "");
+    const target = STORE_PAGE_PATH_PREFIX + encodeURIComponent(storeId.slice(PUBLIC_STORE_ID_PREFIX.length)) + (language === "ja" ? "" : "?lang=" + language);
 
     response.setHeader("Location", target);
     response.setHeader("Cache-Control", STORE_PAGE_CACHE_CONTROL);
@@ -1086,7 +1208,7 @@ export async function handleRenderStorePage(request, response, deps) {
   response.setHeader("Content-Type", "text/html; charset=utf-8");
   response.setHeader("Cache-Control", STORE_PAGE_CACHE_CONTROL);
 
-  if (language === "en") {
+  if (language !== "ja") {
     response.setHeader("X-Robots-Tag", "noindex");
   }
 

@@ -11356,7 +11356,8 @@ function buildCityInfoTranslationPrompt(
 ) {
   const targetLanguageNamesByCode =
     {
-      en: "English"
+      en: "English",
+      "zh-TW": "Traditional Chinese (Taiwan)"
     };
 
   const targetLanguageName =
@@ -11381,13 +11382,23 @@ function buildCityInfoTranslationPrompt(
     "rounded, or estimated. " +
     "\n- Never invent facilities, cultural assets, historical events, or " +
     "other details that are not explicitly present in the original text. " +
-    "\n- Place names (municipality, prefecture, districts, landmarks) " +
-    "must NOT be translated by meaning into a different-sounding name. " +
-    "Use the standard, widely-recognized English romanization of the " +
-    "Japanese name, adding the conventional administrative suffix only " +
-    "when appropriate (for example \"八重瀬町\" → \"Yaese Town\", " +
-    "\"那覇市\" → \"Naha City\", \"沖縄県\" → \"Okinawa Prefecture\"). Do " +
-    "not invent a name unrelated to the actual romanization. " +
+    (targetLanguage === "zh-TW"
+      ? "\n- Place names (municipality, prefecture, districts, " +
+        "landmarks) must NOT be translated by meaning into a " +
+        "different-sounding name. Write them in the standard " +
+        "Traditional Chinese characters used in Taiwan, converting " +
+        "the Japanese kanji name to Traditional Chinese characters " +
+        "and keeping the administrative suffix (for example " +
+        "\"八重瀬町\" → \"八重瀨町\", \"那覇市\" → \"那霸市\", " +
+        "\"沖縄県\" → \"沖繩縣\"). Never use Simplified Chinese " +
+        "characters and do not romanize place names. "
+      : "\n- Place names (municipality, prefecture, districts, landmarks) " +
+        "must NOT be translated by meaning into a different-sounding name. " +
+        "Use the standard, widely-recognized English romanization of the " +
+        "Japanese name, adding the conventional administrative suffix only " +
+        "when appropriate (for example \"八重瀬町\" → \"Yaese Town\", " +
+        "\"那覇市\" → \"Naha City\", \"沖縄県\" → \"Okinawa Prefecture\"). Do " +
+        "not invent a name unrelated to the actual romanization. ") +
     "\n- Do not strengthen, exaggerate, or otherwise editorialize beyond " +
     "what the original text says. " +
 
@@ -13307,7 +13318,8 @@ const REGION_TODAY_INFO_SOURCE_LANGUAGE =
 const REGION_TODAY_INFO_SUPPORTED_LANGUAGES =
   [
     "ja",
-    "en"
+    "en",
+    "zh-TW"
   ];
 
 // 単純翻訳にはweb_search・高度な推論は不要なため、既存コード内で最も
@@ -14435,7 +14447,8 @@ function buildRegionTodayInfoTranslationPrompt(
   // (将来言語を増やす際にこの対応表へ追記するだけでよい設計にする)。
   const targetLanguageNamesByCode =
     {
-      en: "English"
+      en: "English",
+      "zh-TW": "Traditional Chinese (Taiwan)"
     };
 
   const targetLanguageName =
@@ -15772,7 +15785,8 @@ function buildShopTranslationPrompt(
 ) {
   const targetLanguageNamesByCode =
     {
-      en: "English"
+      en: "English",
+      "zh-TW": "Traditional Chinese (Taiwan)"
     };
 
   const targetLanguageName =
@@ -16380,7 +16394,8 @@ function buildShopTitleTranslationPrompt(
 ) {
   const targetLanguageNamesByCode =
     {
-      en: "English"
+      en: "English",
+      "zh-TW": "Traditional Chinese (Taiwan)"
     };
 
   const targetLanguageName =
@@ -17542,7 +17557,8 @@ function buildRegionRecommendationTranslationPrompt(
 ) {
   const targetLanguageNamesByCode =
     {
-      en: "English"
+      en: "English",
+      "zh-TW": "Traditional Chinese (Taiwan)"
     };
 
   const targetLanguageName =
@@ -17576,9 +17592,15 @@ function buildRegionRecommendationTranslationPrompt(
     "\n- Never change or invent numbers, dates, prices, distances, " +
     "facility names, or historical facts — translate the wording only, " +
     "never the underlying fact. " +
-    "\n- Place names must NOT be translated by meaning into a " +
-    "different-sounding name; use the standard, widely-recognized " +
-    "English romanization instead of inventing one. " +
+    (targetLanguage === "zh-TW"
+      ? "\n- Place names must NOT be translated by meaning into a " +
+        "different-sounding name; write them in the standard " +
+        "Traditional Chinese characters used in Taiwan (for example " +
+        "沖繩 for 沖縄 and 那霸 for 那覇). Never use Simplified Chinese " +
+        "characters and do not romanize place names. "
+      : "\n- Place names must NOT be translated by meaning into a " +
+        "different-sounding name; use the standard, widely-recognized " +
+        "English romanization instead of inventing one. ") +
     "\n- Do not strengthen, exaggerate, or otherwise editorialize beyond " +
     "what the original text says. " +
 
@@ -24041,59 +24063,70 @@ const COLUMN_CATEGORY_DISPLAY_LABELS =
   {
     "街を知る": {
       ja: "街を知る",
-      en: "Know the Town"
+      en: "Know the Town",
+      "zh-TW": "認識城市"
     },
 
     "街を歩く": {
       ja: "街を歩く",
-      en: "Walk the Town"
+      en: "Walk the Town",
+      "zh-TW": "漫步城市"
     },
 
     "食べる・飲む": {
       ja: "食べる・飲む",
-      en: "Eat & Drink"
+      en: "Eat & Drink",
+      "zh-TW": "美食與飲品"
     },
 
     "見る・遊ぶ": {
       ja: "見る・遊ぶ",
-      en: "See & Do"
+      en: "See & Do",
+      "zh-TW": "觀光・遊樂"
     },
 
     "地元のくらし": {
       ja: "地元のくらし",
-      en: "Local Life"
+      en: "Local Life",
+      "zh-TW": "在地生活"
     },
 
     "旅のヒント": {
       ja: "旅のヒント",
-      en: "Travel Tips"
+      en: "Travel Tips",
+      "zh-TW": "旅行小提示"
     },
 
     "ちょっと深掘り": {
       ja: "ちょっと深掘り",
-      en: "A Little Deeper"
+      en: "A Little Deeper",
+      "zh-TW": "深入一點"
     },
 
     // 以下は旧カテゴリー。新規保存はできないが、まだ旧カテゴリーのままの
     // 既存記事の表示のために残す。
     "文化・背景": {
       ja: "文化・背景",
-      en: "Culture & Background"
+      en: "Culture & Background",
+      "zh-TW": "文化與背景"
     },
 
     "楽しみ方": {
       ja: "楽しみ方",
-      en: "How to Enjoy"
+      en: "How to Enjoy",
+      "zh-TW": "享受方式"
     },
 
     "安全・備え": {
       ja: "安全・備え",
-      en: "Safety & Preparedness"
+      en: "Safety & Preparedness",
+      "zh-TW": "安全與防備"
     },
 
     "マチナウの想い": {
       ja: "マチナウの想い",
-      en: "Machinau's Thoughts"
+      en: "Machinau's Thoughts",
+      "zh-TW": "Machinau 的心意"
     }
   };
 
@@ -24127,195 +24160,239 @@ const COLUMN_ARTICLE_PAGE_UI_TEXT =
   {
     brandName: {
       ja: "マチナウ",
-      en: "Machinau"
+      en: "Machinau",
+      "zh-TW": "Machinau"
     },
 
     titleSuffix: {
       ja: "｜マチナウ",
-      en: " | Machinau"
+      en: " | Machinau",
+      "zh-TW": " | Machinau"
     },
 
     publishedLabel: {
       ja: "公開日：",
-      en: "Published: "
+      en: "Published: ",
+      "zh-TW": "發佈日期："
     },
 
     updatedLabel: {
       ja: "／更新日：",
-      en: " / Updated: "
+      en: " / Updated: ",
+      "zh-TW": " / 更新日期："
     },
 
     ctaText: {
       ja: "天気・交通・地域の「今」を確認して、このあとの判断材料に。",
-      en: "Check the weather, transit, and what's happening now to help plan what's next."
+      en: "Check the weather, transit, and what's happening now to help plan what's next.",
+      "zh-TW": "查看天氣、交通和當地的「現況」，為接下來的行程提供參考。"
     },
 
     ctaButton: {
       ja: "今の沖縄をマチナウで見る",
-      en: "See Okinawa right now on Machinau"
+      en: "See Okinawa right now on Machinau",
+      "zh-TW": "在 Machinau 查看沖繩的現況"
     },
 
     byline: {
       ja: "マチナウ運営",
-      en: "Machinau Team"
+      en: "Machinau Team",
+      "zh-TW": "Machinau 團隊"
     },
 
     backLink: {
       ja: "← マチナウTOPへ戻る",
-      en: "← Back to Machinau"
+      en: "← Back to Machinau",
+      "zh-TW": "← 返回 Machinau 首頁"
     },
 
     // 読みもの全文ページ｜記事上部の「← 戻る」と、本文直後の保存ボタン(旅の保存箱)。
     backButton: {
       ja: "← 戻る",
-      en: "← Back"
+      en: "← Back",
+      "zh-TW": "← 返回"
     },
 
     saveButton: {
       ja: "♡ お気に入りに保存",
-      en: "♡ Save to favorites"
+      en: "♡ Save to favorites",
+      "zh-TW": "♡ 儲存到收藏"
     },
 
     savedButton: {
       ja: "♥ 保存済み",
-      en: "♥ Saved"
+      en: "♥ Saved",
+      "zh-TW": "♥ 已儲存"
     },
 
     saveButtonAriaLabel: {
       ja: "この読み物を旅の保存箱に保存",
-      en: "Save this read to your Travel Box"
+      en: "Save this read to your Travel Box",
+      "zh-TW": "將這篇文章儲存到旅行收藏箱"
     },
 
     savedButtonAriaLabel: {
       ja: "この読み物の保存を解除",
-      en: "Remove this read from your Travel Box"
+      en: "Remove this read from your Travel Box",
+      "zh-TW": "取消儲存這篇文章"
     },
 
     saveLimitReached: {
       ja: "保存できる読み物は{MAX}件までです。旅の保存箱で保存を解除してから、もう一度お試しください。",
-      en: "You can save up to {MAX} reads. Remove some in your Travel Box, then try again."
+      en: "You can save up to {MAX} reads. Remove some in your Travel Box, then try again.",
+      "zh-TW": "最多可儲存 {MAX} 篇文章。請先在旅行收藏箱中取消一些儲存，再試一次。"
     },
 
     saveFailed: {
       ja: "保存を変更できませんでした。このブラウザでは保存が使えない可能性があります（プライベートブラウズ等）。",
-      en: "Couldn't update your saved reads. Saving may be unavailable in this browser (e.g. private browsing)."
+      en: "Couldn't update your saved reads. Saving may be unavailable in this browser (e.g. private browsing).",
+      "zh-TW": "無法變更儲存狀態。此瀏覽器可能無法使用儲存功能（例如私密瀏覽）。"
     },
 
     // STEP 48｜シェア(保存ボタンの下)。TOPの share_* (translations.js)と同じ文言。
     shareButton: {
       ja: "🔗 シェア",
-      en: "🔗 Share"
+      en: "🔗 Share",
+      "zh-TW": "🔗 分享"
     },
 
     shareCopied: {
       ja: "リンクをコピーしました。LINEやメールなどに貼り付けて送れます。",
-      en: "Link copied. Paste it into a message or email to send it."
+      en: "Link copied. Paste it into a message or email to send it.",
+      "zh-TW": "已複製連結。可以貼到 LINE 或電子郵件中傳送。"
     },
 
     shareCopyFailed: {
       ja: "リンクをコピーできませんでした。下のリンクを長押し（または選択）してコピーしてください。",
-      en: "Couldn't copy the link. Press and hold (or select) the link below to copy it."
+      en: "Couldn't copy the link. Press and hold (or select) the link below to copy it.",
+      "zh-TW": "無法複製連結。請長按（或選取）下方連結來複製。"
     },
 
     shareLinkLabel: {
       ja: "共有するリンク",
-      en: "Link to share"
+      en: "Link to share",
+      "zh-TW": "要分享的連結"
     },
 
     // 読みもの回遊導線｜記事の後(コメント欄より前)に出す同カテゴリー記事と一覧への導線。
     relatedHeading: {
       ja: "もう少し、読んでみる？",
-      en: "Keep reading"
+      en: "Keep reading",
+      "zh-TW": "繼續閱讀"
     },
 
     relatedMoreLink: {
       ja: "マチナウ読み物をもっと見る →",
-      en: "Explore more Machinau stories →"
+      en: "Explore more Machinau stories →",
+      "zh-TW": "查看更多 Machinau 文章 →"
     },
 
     languageSwitchLabelJapanese: {
       ja: "日本語",
-      en: "日本語"
+      en: "日本語",
+      "zh-TW": "日本語"
     },
 
     languageSwitchLabelEnglish: {
       ja: "English",
-      en: "English"
+      en: "English",
+      "zh-TW": "English"
+    },
+
+    languageSwitchLabelTraditionalChinese: {
+      ja: "繁體中文",
+      en: "繁體中文",
+      "zh-TW": "繁體中文"
     },
 
     commentSectionHeading: {
       ja: "この記事にコメントする",
-      en: "Leave a Comment"
+      en: "Leave a Comment",
+      "zh-TW": "在此文章留言"
     },
 
     commentNicknameLabel: {
       ja: "ニックネーム",
-      en: "Nickname"
+      en: "Nickname",
+      "zh-TW": "暱稱"
     },
 
     commentNicknamePlaceholder: {
       ja: "例：旅好き",
-      en: "e.g. Traveler"
+      en: "e.g. Traveler",
+      "zh-TW": "例：旅行愛好者"
     },
 
     commentTextLabel: {
       ja: "コメント",
-      en: "Comment"
+      en: "Comment",
+      "zh-TW": "留言"
     },
 
     commentTextPlaceholder: {
       ja: "この記事についてのご感想や、実際に体験したことなどをどうぞ",
-      en: "Share your thoughts or experience about this article"
+      en: "Share your thoughts or experience about this article",
+      "zh-TW": "歡迎分享您對這篇文章的感想或實際體驗"
     },
 
     commentWebsiteLabel: {
       ja: "ウェブサイト",
-      en: "Website"
+      en: "Website",
+      "zh-TW": "網站"
     },
 
     commentSubmitButton: {
       ja: "コメントを投稿する",
-      en: "Post Comment"
+      en: "Post Comment",
+      "zh-TW": "發表留言"
     },
 
     commentSubmitting: {
       ja: "投稿しています…",
-      en: "Posting…"
+      en: "Posting…",
+      "zh-TW": "正在發表…"
     },
 
     commentLoadingPlaceholder: {
       ja: "コメントを読み込んでいます…",
-      en: "Loading comments…"
+      en: "Loading comments…",
+      "zh-TW": "正在載入留言…"
     },
 
     commentEmptyState: {
       ja: "まだコメントはありません。最初のコメントを投稿してみませんか？",
-      en: "No comments yet. Be the first to share your thoughts!"
+      en: "No comments yet. Be the first to share your thoughts!",
+      "zh-TW": "目前還沒有留言。來發表第一則留言吧！"
     },
 
     commentLoadError: {
       ja: "コメントを読み込めませんでした。時間をおいて再度お試しください。",
-      en: "Couldn't load comments. Please try again later."
+      en: "Couldn't load comments. Please try again later.",
+      "zh-TW": "無法載入留言。請稍後再試一次。"
     },
 
     commentGenericError: {
       ja: "応答を読み取れませんでした。",
-      en: "Couldn't read the response."
+      en: "Couldn't read the response.",
+      "zh-TW": "無法讀取回應。"
     },
 
     commentPostFailedFallback: {
       ja: "コメントを投稿できませんでした。",
-      en: "Couldn't post your comment."
+      en: "Couldn't post your comment.",
+      "zh-TW": "無法發表留言。"
     },
 
     commentPostSuccess: {
       ja: "コメントを投稿しました。",
-      en: "Your comment has been posted."
+      en: "Your comment has been posted.",
+      "zh-TW": "留言已發表。"
     },
 
     commentPostError: {
       ja: "コメントの投稿に失敗しました。時間をおいて、もう一度お試しください。",
-      en: "Failed to post your comment. Please try again later."
+      en: "Failed to post your comment. Please try again later.",
+      "zh-TW": "留言發表失敗。請稍後再試一次。"
     }
   };
 
@@ -24362,7 +24439,8 @@ function formatColumnArticleDateForDisplay(
 
   const localeByLanguage =
     {
-      en: "en-US"
+      en: "en-US",
+      "zh-TW": "zh-TW"
     };
 
   const locale =
@@ -24419,7 +24497,8 @@ function buildColumnArticleUrlForLanguage(
 const COLUMN_ARTICLE_LANGUAGE_SWITCH_LABEL_KEYS_BY_LANGUAGE =
   {
     ja: "languageSwitchLabelJapanese",
-    en: "languageSwitchLabelEnglish"
+    en: "languageSwitchLabelEnglish",
+    "zh-TW": "languageSwitchLabelTraditionalChinese"
   };
 
 function buildColumnArticleLanguageSwitchHtml(
@@ -24744,7 +24823,8 @@ function buildColumnArticleSummaryTranslationPrompt(
 ) {
   const targetLanguageNamesByCode =
     {
-      en: "English"
+      en: "English",
+      "zh-TW": "Traditional Chinese (Taiwan)"
     };
 
   const targetLanguageName =
@@ -24777,9 +24857,14 @@ function buildColumnArticleSummaryTranslationPrompt(
     "exactly one entry per input item, with the same \"id\" value. " +
     "\n- Never change or invent numbers, dates, place names, or facts — " +
     "translate the wording only, never the underlying fact. " +
-    "\n- Place names must NOT be translated by meaning into a " +
-    "different-sounding name; use the standard, widely-recognized " +
-    "English romanization instead of inventing one. " +
+    (targetLanguage === "zh-TW"
+      ? "\n- Place names must be written in the standard Traditional " +
+        "Chinese characters used in Taiwan (for example 沖繩 for 沖縄 " +
+        "and 那霸 for 那覇). Never use Simplified Chinese characters " +
+        "and do not romanize place names. "
+      : "\n- Place names must NOT be translated by meaning into a " +
+        "different-sounding name; use the standard, widely-recognized " +
+        "English romanization instead of inventing one. ") +
 
     "\n\nOUTPUT: respond with a JSON object of exactly this form: " +
     "{\"items\":[{\"id\":\"...\",\"title\":\"...\"," +
@@ -25322,7 +25407,8 @@ function buildColumnArticleContentTranslationPrompt(
 ) {
   const targetLanguageNamesByCode =
     {
-      en: "English"
+      en: "English",
+      "zh-TW": "Traditional Chinese (Taiwan)"
     };
 
   const targetLanguageName =
@@ -25346,10 +25432,16 @@ function buildColumnArticleContentTranslationPrompt(
     "exact same paragraph structure: the number of paragraphs and their " +
     "order must match the original exactly, separated by a single " +
     "blank line between paragraphs (matching the input format). " +
-    "\n- Never change or invent numbers, dates, historical facts, or " +
-    "place names. Place names must use standard, widely-recognized " +
-    "English romanization rather than an invented or meaning-based " +
-    "translation. " +
+    (targetLanguage === "zh-TW"
+      ? "\n- Never change or invent numbers, dates, historical facts, " +
+        "or place names. Place names must be written in the standard " +
+        "Traditional Chinese characters used in Taiwan (for example " +
+        "沖繩 for 沖縄 and 那霸 for 那覇). Never use Simplified Chinese " +
+        "characters and do not romanize place names. "
+      : "\n- Never change or invent numbers, dates, historical facts, or " +
+        "place names. Place names must use standard, widely-recognized " +
+        "English romanization rather than an invented or meaning-based " +
+        "translation. ") +
     "\n- Do not invent URLs or web links that are not in the original " +
     "text. " +
     "\n- The text may contain placeholders of the form [[MACHINAU_URL_1]], " +
@@ -27633,7 +27725,7 @@ function buildColumnArticleHtml(
   <script>
     const ARTICLE_SLUG = ${escapedSlugForJs};
     const PAGE_LANGUAGE = ${JSON.stringify(language)};
-    const COMMENT_TIME_LOCALE = PAGE_LANGUAGE === "en" ? "en-US" : "ja-JP";
+    const COMMENT_TIME_LOCALE = PAGE_LANGUAGE === "en" ? "en-US" : PAGE_LANGUAGE === "zh-TW" ? "zh-TW" : "ja-JP";
     const TEXT_COMMENT_SUBMITTING = ${JSON.stringify(getColumnArticlePageText("commentSubmitting", language))};
     const TEXT_COMMENT_SUBMIT_BUTTON = ${JSON.stringify(getColumnArticlePageText("commentSubmitButton", language))};
     const TEXT_COMMENT_GENERIC_ERROR = ${JSON.stringify(getColumnArticlePageText("commentGenericError", language))};
