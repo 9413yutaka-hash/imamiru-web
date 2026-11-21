@@ -74,6 +74,14 @@ const ALLOWED_PAYMENT_METHOD_VALUES = [
   "qr"
 ];
 
+// 形態タグ(businessFormCodes)｜有料店舗と同じ4種。
+const ALLOWED_BUSINESS_FORM_VALUES = [
+  "mobile_vendor",
+  "event_booth",
+  "visiting_service",
+  "street_spot"
+];
+
 
 const MAX_IMAGE_COUNT = 5;
 
@@ -401,6 +409,19 @@ function validatePostFields(
         )
       : [];
 
+  const businessFormCodes =
+    Array.isArray(
+      requestBody.businessFormCodes
+    )
+      ? requestBody.businessFormCodes.filter(
+          function(value) {
+            return ALLOWED_BUSINESS_FORM_VALUES.includes(
+              value
+            );
+          }
+        )
+      : [];
+
   // STEP 40-A｜営業時間・定休日は、既存ドキュメントが常設店舗広告のときだけ解析する。
   const permanentAdHours =
     isExistingPermanentAd
@@ -421,6 +442,7 @@ function validatePostFields(
     shopName: shopName,
     takeout: takeout,
     paymentMethods: paymentMethods,
+    businessFormCodes: businessFormCodes,
     permanentAdHours: permanentAdHours
   };
 }
@@ -609,6 +631,9 @@ export default async function handler(
 
       paymentMethods:
         postFields.paymentMethods,
+
+      businessFormCodes:
+        postFields.businessFormCodes,
 
       updatedAt:
         FieldValue.serverTimestamp()

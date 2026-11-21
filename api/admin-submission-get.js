@@ -203,6 +203,22 @@ export default async function handler(
             ? data.paymentMethods
             : [],
 
+        businessFormCodes:
+          Array.isArray(
+            data.businessFormCodes
+          )
+            ? data.businessFormCodes.filter(
+                function(value) {
+                  return [
+                    "mobile_vendor",
+                    "event_booth",
+                    "visiting_service",
+                    "street_spot"
+                  ].includes(value);
+                }
+              )
+            : [],
+
         sourceLabel:
           data.sourceLabel || "",
 
