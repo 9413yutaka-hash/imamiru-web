@@ -1,7 +1,8 @@
 // ==========================================================================
 // 今だけ投稿(imadake) STEP 3｜サーバー側データ基盤
 // ==========================================================================
-// お店・施設・主催者が「今、伝えたいこと」を旅行者へ届ける24時間限定の投稿。
+// お店・施設・主催者が「今、伝えたいこと」を旅行者へ届ける期間限定の投稿。
+// 掲載期間は店主が3・6・12・24時間から選ぶ(2026-10-31代表決定、2026-11-21実装)。
 // 既存の無料店舗掲載(submissions)・街の発見・掲示板とは完全に独立した
 // collectionと処理で、既存の表示・集計には一切混ざらない。
 //
@@ -135,8 +136,8 @@ const IMADAKE_MODERATION_IMAGES_PER_REQUEST = 5;
 // 投稿の状態(固定英語コード)。
 //   pending   安全重大語等で人間確認待ち(公開しない)
 //   published 公開中(expiresAtまで)
-//   ended     店舗が24時間前に自主終了
-//   expired   24時間経過(次の投稿時等に記録される。表示はexpiresAtで判定)
+//   ended     店舗が掲載期間の終了前に自主終了
+//   expired   掲載期間の経過(次の投稿時等に記録される。表示はexpiresAtで判定)
 //   rejected  Moderationで危険判定(公開しない)
 //   removed   運営による削除(今回は作成経路なし)
 //   withdrawn 店舗が審査中の投稿を取り下げ
@@ -1637,7 +1638,7 @@ export async function handleImadakePostCreate(
     }
 
     const messageByStatus = {
-      published: "今だけ投稿を掲載しました。24時間後に自動で終了します。",
+      published: "今だけ投稿を掲載しました。" + fields.durationHours + "時間後に自動で終了します。",
       pending: "内容を確認してから掲載します。",
       rejected: "この内容は掲載できません。内容を見直してください。"
     };
@@ -2803,7 +2804,8 @@ export async function handleImadakeAdminReview(
           return {
             status: "published",
             publishedAtMillis: nowMillis,
-            expiresAtMillis: nowMillis + imadakeDurationMilliseconds(post.durationHours)
+            expiresAtMillis: nowMillis + imadakeDurationMilliseconds(post.durationHours),
+            durationHours: resolveImadakeDurationHours(post.durationHours)
           };
         }
       );
@@ -2843,7 +2845,7 @@ export async function handleImadakeAdminReview(
           : null,
       message:
         result.status === "published"
-          ? "承認して公開しました。24時間後に自動で終了します。"
+          ? "承認して公開しました。" + resolveImadakeDurationHours(result.durationHours) + "時間後に自動で終了します。"
           : "却下しました。"
     });
   } catch (error) {

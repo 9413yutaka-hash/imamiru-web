@@ -9418,15 +9418,15 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   imadake_post_meta_pending: {
-    ja: "確認が終わると公開され、その時点から24時間掲載されます。",
-    en: "Once the review is complete, it will go live for 24 hours from that time.",
-    "zh-TW": "確認完成後即會公開，並從該時間起刊登24小時。"
+    ja: "確認が終わると公開され、その時点から、選んだ掲載期間だけ掲載されます。",
+    en: "Once the review is complete, it will go live for the period you chose.",
+    "zh-TW": "確認完成後即會公開，並從該時間起刊登所選的期間。"
   },
 
   imadake_post_meta_published: {
-    ja: "掲載終了予定：{time}（公開から24時間）",
-    en: "Scheduled to end: {time} (24 hours after going live)",
-    "zh-TW": "預定結束刊登：{time}（公開後24小時）"
+    ja: "掲載終了予定：{time}",
+    en: "Scheduled to end: {time}",
+    "zh-TW": "預定結束刊登：{time}"
   },
 
   imadake_post_end_button: {
@@ -9874,9 +9874,9 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   imadake_post_result_pending: {
-    ja: "内容を運営が確認しています。確認が終わると公開され、その時点から24時間掲載されます（まだ公開されていません）。",
-    en: "Machinau is reviewing your post. Once the review is complete, it will go live for 24 hours from that time (not live yet).",
-    "zh-TW": "營運團隊正在確認內容。確認完成後即會公開，並從該時間起刊登24小時（尚未公開）。"
+    ja: "内容を運営が確認しています。確認が終わると公開され、その時点から、選んだ掲載期間だけ掲載されます（まだ公開されていません）。",
+    en: "Machinau is reviewing your post. Once the review is complete, it will go live for the period you chose (not live yet).",
+    "zh-TW": "營運團隊正在確認內容。確認完成後即會公開，並從該時間起刊登所選的期間（尚未公開）。"
   },
 
   imadake_post_result_rejected: {
@@ -9886,9 +9886,9 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   imadake_post_result_expires: {
-    ja: "24時間限定です。掲載終了予定：{time}",
-    en: "It stays live for 24 hours. Scheduled to end: {time}",
-    "zh-TW": "限時24小時。預定結束刊登：{time}"
+    ja: "掲載終了予定：{time}",
+    en: "Scheduled to end: {time}",
+    "zh-TW": "預定結束刊登：{time}"
   },
 
   imadake_post_error_active_exists: {
