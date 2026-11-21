@@ -140,6 +140,7 @@ export const STORE_PAGE_LABELS = {
     },
     headingAbout: "お店・施設の紹介",
     headingLocation: "所在地",
+    headingActivityArea: "主な活動エリア",
     headingHours: "営業時間",
     headingPayment: "支払い方法",
     headingFeatures: "設備・サービス",
@@ -274,6 +275,7 @@ export const STORE_PAGE_LABELS = {
     },
     headingAbout: "About",
     headingLocation: "Location",
+    headingActivityArea: "Main activity area",
     headingHours: "Opening hours",
     headingPayment: "Payment methods",
     headingFeatures: "Facilities & services",
@@ -409,6 +411,7 @@ export const STORE_PAGE_LABELS = {
     },
     headingAbout: "店家・設施介紹",
     headingLocation: "位置",
+    headingActivityArea: "主要活動地區",
     headingHours: "營業時間",
     headingPayment: "付款方式",
     headingFeatures: "設施・服務",
@@ -1033,7 +1036,7 @@ export function buildStorePageHtml(storeId, store, custom, languageValue, option
   // 表示だけ先頭の国名(日本、)を取り除く。保存データと構造化データはそのまま(代表決定 2026-11-17)。
   const addressText = readText(location.formattedAddress).replace(/^(日本|Japan)[、,\s]+/, "") || areaText;
   sections.push(buildSectionHtml(
-    labels.headingLocation,
+    location.locationMode === "mobile" ? labels.headingActivityArea : labels.headingLocation,
     "<div class=\"panel\">" +
       (labels.addressNote !== "" ? "<span class=\"address-note\">" + escapeStorePageHtml(labels.addressNote) + "</span>" : "") +
       "<p class=\"text\"" + jaAttribute + ">" + escapeStorePageHtml(addressText) + "</p>" +

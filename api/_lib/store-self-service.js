@@ -39,6 +39,10 @@ import {
   STORE_MANAGED_PLAN_SIGNUP_ENABLED
 } from "./store-custom-plan-billing.js";
 
+import {
+  JAPAN_MUNICIPALITIES_BY_PREFECTURE
+} from "./japan-municipalities.js";
+
 const STORE_ACCOUNTS_COLLECTION = "storeAccounts";
 const STORE_MEMBERS_COLLECTION = "storeMembers";
 const STORE_PROFILES_COLLECTION = "storeProfiles";
@@ -164,6 +168,41 @@ function readStoreRegistrationInput(body) {
     return { ok: false, field: "countryCode" };
   }
 
+  // 2026-11-22 代表決定｜固定の店舗がない形態(キッチンカー・出店・出張など)は、住所なしで
+  // 登録できる(locationMode: "mobile")。住所の代わりに、主な活動エリア(都道府県・市区町村)を
+  // 市区町村マスタで確かめて持つ。座標は持たない(今日の場所は今だけ投稿ごとに持つ)。
+  const locationMode = body.locationMode === "mobile" ? "mobile" : "fixed";
+
+  if (locationMode === "mobile") {
+    if (countryCode !== "JP") {
+      return { ok: false, field: "countryCode" };
+    }
+
+    const activityPrefecture = readSingleLineText(body.activityPrefecture, 20);
+    const activityCity = readSingleLineText(body.activityCity, 60);
+    const cities = activityPrefecture ? JAPAN_MUNICIPALITIES_BY_PREFECTURE[activityPrefecture] : null;
+
+    if (!activityPrefecture || !activityCity || !Array.isArray(cities) || !cities.includes(activityCity)) {
+      return { ok: false, field: "activityArea" };
+    }
+
+    const sourceLanguageMobile = STORE_SOURCE_LANGUAGES.includes(body.sourceLanguage)
+      ? body.sourceLanguage
+      : "ja";
+
+    return {
+      ok: true,
+      storeName: storeName,
+      categoryCode: categoryCode,
+      countryCode: countryCode,
+      address: "",
+      locationMode: "mobile",
+      activityPrefecture: activityPrefecture,
+      activityCity: activityCity,
+      sourceLanguage: sourceLanguageMobile
+    };
+  }
+
   const address = readSingleLineText(body.address, STORE_ADDRESS_MAX_LENGTH);
 
   if (address === null || address === "") {
@@ -180,6 +219,9 @@ function readStoreRegistrationInput(body) {
     categoryCode: categoryCode,
     countryCode: countryCode,
     address: address,
+    locationMode: "fixed",
+    activityPrefecture: "",
+    activityCity: "",
     sourceLanguage: sourceLanguage
   };
 }
@@ -645,10 +687,26 @@ export async function handleStoreSelfRegister(request, response, deps) {
       return sendError(response, 429, "rate_limited");
     }
 
-    const location = await geocodeStoreAddressInCountry(input.address, input.countryCode, deps);
+    // mobile(住所なし)は Geocoding せず、活動エリア(都道府県・市区町村)だけを持つ。
+    // 座標は持たない(公開条件の location は store-profile.js 側でエリアで代替判定する)。
+    let location = null;
 
-    if (!location.ok) {
-      return sendError(response, location.reason === "geocoding_unavailable" ? 503 : 400, location.reason);
+    if (input.locationMode === "mobile") {
+      location = {
+        formattedAddress: "",
+        latitude: null,
+        longitude: null,
+        countryCode: input.countryCode,
+        prefecture: input.activityPrefecture,
+        city: input.activityCity,
+        regionKey: buildImadakeRegionKey(input.countryCode, input.activityPrefecture)
+      };
+    } else {
+      location = await geocodeStoreAddressInCountry(input.address, input.countryCode, deps);
+
+      if (!location.ok) {
+        return sendError(response, location.reason === "geocoding_unavailable" ? 503 : 400, location.reason);
+      }
     }
 
     const duplicates = await findStrongDuplicates(
@@ -707,7 +765,25 @@ export async function handleStoreSelfRegister(request, response, deps) {
       }
 
       // 管理情報。tokenHashは作らない(旧store token経路では操作できない)。
-      transaction.set(storeRef, {
+      const locationFields = {
+        address: input.address,
+        locationMode: input.locationMode,
+        locationFormattedAddress: location.formattedAddress,
+        countryCode: location.countryCode,
+        prefecture: location.prefecture,
+        city: location.city,
+        regionKey: location.regionKey,
+        locationSource: input.locationMode === "mobile" ? "storeSelfActivityArea" : "storeSelfGeocode",
+        locationUpdatedAt: FieldValue.serverTimestamp()
+      };
+
+      if (input.locationMode !== "mobile") {
+        locationFields.latitude = location.latitude;
+        locationFields.longitude = location.longitude;
+        locationFields.geohash = encodeTownNowGeohash(location.latitude, location.longitude);
+      }
+
+      transaction.set(storeRef, Object.assign({
         storeName: input.storeName,
         enabled: true,
         createdByType: "storeUser",
@@ -717,20 +793,9 @@ export async function handleStoreSelfRegister(request, response, deps) {
         duplicateCandidates: duplicates.map(function(match) {
           return { source: match.source, id: match.id };
         }),
-        address: input.address,
-        locationFormattedAddress: location.formattedAddress,
-        latitude: location.latitude,
-        longitude: location.longitude,
-        countryCode: location.countryCode,
-        prefecture: location.prefecture,
-        city: location.city,
-        regionKey: location.regionKey,
-        geohash: encodeTownNowGeohash(location.latitude, location.longitude),
-        locationSource: "storeSelfGeocode",
-        locationUpdatedAt: FieldValue.serverTimestamp(),
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp()
-      });
+      }, locationFields));
 
       transaction.set(memberRef, {
         storeId: storeId,
@@ -841,6 +906,7 @@ export async function handleStoreMyStores(request, response, deps) {
               : account.registrationStatus || "active",
           profileStatus: typeof profile.status === "string" ? profile.status : "draft",
           countryCode: account.countryCode || "",
+          locationMode: account.locationMode === "mobile" ? "mobile" : "fixed",
           prefecture: account.prefecture || "",
           city: account.city || "",
           formattedAddress: account.locationFormattedAddress || account.address || "",
@@ -903,7 +969,9 @@ function readStoreIdentityInput(body) {
 
   const address = readSingleLineText(body.address, STORE_ADDRESS_MAX_LENGTH);
 
-  if (address === null || address === "") {
+  // 住所なし(mobile)登録の店舗は、店名だけの変更を住所空欄のまま通すため、ここでは
+  // 空を許す。固定店舗で空が来た場合は、呼び出し側が店舗の状態を見て拒否する。
+  if (address === null) {
     return { ok: false, field: "address" };
   }
 
@@ -957,6 +1025,12 @@ export async function handleStoreIdentityUpdate(request, response, deps) {
 
     if (!isEditableStoreAccount(before)) {
       return sendError(response, 403, "store_not_editable");
+    }
+
+    // 固定店舗は住所を空にできない(住所なしへの変更は v1 では作らない)。
+    // 住所なし(mobile)の店舗は、住所を入れて送れば固定店舗へ移行する。
+    if (input.address === "" && before.locationMode !== "mobile") {
+      return sendError(response, 400, "invalid_input", { field: "address" });
     }
 
     // 2026-11-18 代表決定(STEP 58の変更)｜店舗・施設名と所在地の変更にも契約は要らない。
@@ -1066,6 +1140,8 @@ export async function handleStoreIdentityUpdate(request, response, deps) {
       if (location) {
         Object.assign(update, {
           address: input.address,
+          // 住所を設定したら固定店舗に戻る(今だけ投稿の場所も正式所在地に戻る)。
+          locationMode: "fixed",
           locationFormattedAddress: location.formattedAddress,
           latitude: location.latitude,
           longitude: location.longitude,

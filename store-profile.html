@@ -1359,7 +1359,7 @@
         if (storeName === "") {
           return showIdentityMessage("store_account_store_err_name", "error");
         }
-        if (address === "") {
+        if (address === "" && !(loaded.location && loaded.location.locationMode === "mobile")) {
           return showIdentityMessage("store_account_store_err_address", "error");
         }
         clearIdentityMessage();
