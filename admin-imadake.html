@@ -15,7 +15,7 @@
   </title>
 
   <!-- 今だけ投稿 STEP 3.5｜安全重大語等でpendingになった今だけ投稿を代表が
-       承認(承認時点から24時間公開)または却下する。投稿内容はすべて
+       承認(承認時点から、店舗が選んだ掲載期間だけ公開)または却下する。投稿内容はすべて
        textContentで表示し、innerHTMLへ入力値を入れない。 -->
 
   <style>
@@ -529,7 +529,7 @@
 
         <ol class="flow-list">
           <li>内容が事実に基づき、旅行者に誤解や危険を与えないか確認する</li>
-          <li>問題なければ「承認して公開」：承認した時点から24時間掲載されます</li>
+          <li>問題なければ「承認して公開」：承認した時点から、店舗が選んだ掲載期間（3・6・12・24時間）掲載されます</li>
           <li>掲載できない内容なら「却下」：必要なら理由を残せます（店舗には表示されません）</li>
         </ol>
       </div>
@@ -685,6 +685,9 @@
           (post.storeName || "(店名なし)") +
             "｜" +
             (CATEGORY_LABELS[post.categoryCode] || post.categoryCode) +
+            "｜掲載期間 " +
+            ([3, 6, 12, 24].includes(post.durationHours) ? post.durationHours : 24) +
+            "時間" +
             "｜投稿 " +
             formatDateTime(post.createdAt)
         )
@@ -779,7 +782,7 @@
       async function review(decision) {
         if (
           decision === "approve" &&
-          !window.confirm("承認すると、この時点から24時間公開されます。公開しますか？")
+          !window.confirm("承認すると、この時点から" + ([3, 6, 12, 24].includes(post.durationHours) ? post.durationHours : 24) + "時間公開されます。公開しますか？")
         ) {
           return;
         }
