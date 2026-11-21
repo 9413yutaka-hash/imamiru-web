@@ -1019,6 +1019,19 @@
       gap: 8px;
     }
 
+    /* 2026-11-21追加｜形態タグの印(正式店舗カードの写真左上)。 */
+    .business-form-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: #e07b2a;
+      color: #ffffff;
+      font-size: 11px;
+      font-weight: 700;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+    }
+
     .event-badge {
       display: inline-flex;
       align-items: center;

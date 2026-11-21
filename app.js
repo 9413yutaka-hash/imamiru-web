@@ -8,6 +8,9 @@ let userLatitude = null;
 let userLongitude = null;
 let userAreaName = null;
 let selectedCategory = "すべて";
+// 2026-11-21追加｜形態タグ(軸2)の絞り込み。カテゴリーとは別の軸で、同時に有効なのは
+// カテゴリーか形態のどちらか1つだけ(チップを押した方に切り替わる)。
+let selectedBusinessForm = null;
 
 // TOP店舗カード(最大6件・横スクロール)か、見つける全件表示(1列リッチカード)かを
 // 切り替えるフラグ。selectCategory()等では変更しない(切替はもっと見る/
@@ -2499,6 +2502,13 @@ function getVisibleShops() {
   let visibleShops =
     shops.filter(
       function(shop) {
+        if (selectedBusinessForm) {
+          return (
+            Array.isArray(shop.businessFormCodes) &&
+            shop.businessFormCodes.includes(selectedBusinessForm)
+          );
+        }
+
         return (
           selectedCategory === "すべて" ||
 selectedCategory === "お気に入り" ||
@@ -3790,6 +3800,32 @@ const STORE_PROFILE_FEATURE_CODES = [
   "allergy_friendly"
 ];
 
+// 2026-11-21追加｜形態タグcode(サーバーのSTORE_BUSINESS_FORM_CODESと同じ並び・同じcode)。
+// 表示名は store_business_form_* 翻訳を使う。
+const STORE_PROFILE_BUSINESS_FORM_CODES = [
+  "mobile_vendor",
+  "event_booth",
+  "visiting_service",
+  "street_spot"
+];
+
+// 正式店舗カードの写真左上の形態の印(付けている店舗だけ・最初の1つ)。
+// 印が無い店舗では、.shop-badges の並びを保つため空の span を返す。
+function getStoreBusinessFormBadgeHtml(shop, language) {
+  const codes = Array.isArray(shop.businessFormCodes) ? shop.businessFormCodes : [];
+  const code = codes.find(function(candidate) {
+    return STORE_PROFILE_BUSINESS_FORM_CODES.includes(candidate);
+  });
+
+  if (!code) {
+    return "<span></span>";
+  }
+
+  return `<span class="business-form-badge">${escapeHtml(
+    getMachinauTranslation("store_business_form_" + code, language)
+  )}</span>`;
+}
+
 // 詳細の設備表示(テイクアウトは別の行で出すため除く)。
 function getStoreProfileFeatureTexts(shop) {
   const language =
@@ -4475,7 +4511,7 @@ function buildStoreProfileShopCardHtml(shop, shopCardIndex) {
     >
       <div class="shop-visual ${escapeHtml(shop.visualClass)}">
         <div class="shop-badges">
-          <span></span>
+          ${getStoreBusinessFormBadgeHtml(shop, language)}
           <button
             class="favorite-button ${isStoreProfileShopFavorite(shop) ? "active" : ""}"
             type="button"
@@ -5464,6 +5500,54 @@ function selectCategory(
 ) {
   selectedCategory =
     category;
+  selectedBusinessForm =
+    null;
+
+  document
+    .querySelectorAll(
+      ".category-button"
+    )
+    .forEach(
+      function(
+        categoryButton
+      ) {
+        categoryButton
+          .classList
+          .remove(
+            "active"
+          );
+      }
+    );
+
+  if (button) {
+    button
+      .classList
+      .add(
+        "active"
+      );
+  }
+
+  renderShops();
+}
+
+// 2026-11-21追加｜形態タグのチップ。カテゴリーの絞り込みを解除して形態で絞る
+// (カテゴリーに戻る時はカテゴリーか「すべて」のチップを押す)。
+function selectBusinessForm(
+  code,
+  button
+) {
+  if (
+    !STORE_PROFILE_BUSINESS_FORM_CODES.includes(
+      code
+    )
+  ) {
+    return;
+  }
+
+  selectedBusinessForm =
+    code;
+  selectedCategory =
+    "すべて";
 
   document
     .querySelectorAll(

@@ -6563,6 +6563,43 @@ const MACHINAU_TRANSLATIONS = {
     "zh-TW": "提供過敏資訊"
   },
 
+  // 形態タグ(軸2：どう営業しているか)。カテゴリー・設備とは別の軸(2026-11-21)。
+  store_business_form_mobile_vendor: {
+    ja: "キッチンカー・移動販売",
+    en: "Food truck / Mobile vendor",
+    "zh-TW": "餐車・移動販售"
+  },
+
+  store_business_form_event_booth: {
+    ja: "イベント出店",
+    en: "Event booth",
+    "zh-TW": "活動擺攤"
+  },
+
+  store_business_form_visiting_service: {
+    ja: "出張・訪問サービス",
+    en: "Visiting service",
+    "zh-TW": "到府服務"
+  },
+
+  store_business_form_street_spot: {
+    ja: "大道芸・路上出店",
+    en: "Street performance / Pop-up",
+    "zh-TW": "街頭表演・路邊出攤"
+  },
+
+  store_profile_business_form_heading: {
+    ja: "形態",
+    en: "Business type",
+    "zh-TW": "型態"
+  },
+
+  store_profile_business_form_hint: {
+    ja: "固定の店舗がない・場所が変わる営業の形です。当てはまるものがあれば選んでください（複数可）。",
+    en: "For businesses without a fixed storefront, or whose location changes. Select all that apply.",
+    "zh-TW": "沒有固定店面、或地點會變動的營業型態。如有符合請選擇（可複選）。"
+  },
+
   store_profile_features_heading: {
     ja: "設備・サービス",
     en: "Facilities & services",
