@@ -91,10 +91,10 @@ try {
   const cr = be.reqs.filter((r) => r.mode === "imadakePostCreate").at(-1);
   t("EN create: request unchanged (codes, sourceLanguage 'ja' as before, typed text as-is)", cr && cr.categoryCode === "restaurant" && cr.headline === "Seats still available" && cr.sourceLanguage === "ja", cr);
   let cur = await p.ev("({status: document.getElementById('currentStatusLabel').textContent, meta: document.getElementById('currentMeta').textContent, msg: document.getElementById('currentMessage').textContent, end: document.getElementById('endButton').textContent})");
-  t("EN create result: Live / 'Scheduled to end' / success message with end time", cur.status === "Live" && /^Scheduled to end: 10\/16, 10:00 AM \(24 hours after going live\)$/.test(cur.meta) && /^Your post is now live\.\nIt stays live for 24 hours\. Scheduled to end: 10\/16, 10:00 AM$/.test(cur.msg) && cur.end === "End this post", cur);
+  t("EN create result: Live / 'Scheduled to end' / success message with end time", cur.status === "Live" && /^Scheduled to end: 10\/16, 10:00 AM$/.test(cur.meta) && /^Your post is now live\.\nScheduled to end: 10\/16, 10:00 AM$/.test(cur.msg) && cur.end === "End this post", cur);
   await sw(p, "ja"); await sleep(150);
   cur = await p.ev("({status: document.getElementById('currentStatusLabel').textContent, meta: document.getElementById('currentMeta').textContent, msg: document.getElementById('currentMessage').textContent})");
-  t("switch to JA after posting: status / date / message in Japanese (JST)", cur.status === "公開中" && cur.meta === "掲載終了予定：10/16 10:00（公開から24時間）" && cur.msg === "今だけ投稿を公開しました。\n24時間限定です。掲載終了予定：10/16 10:00", cur);
+  t("switch to JA after posting: status / date / message in Japanese (JST)", cur.status === "公開中" && cur.meta === "掲載終了予定：10/16 10:00" && cur.msg === "今だけ投稿を公開しました。\n掲載終了予定：10/16 10:00", cur);
   await sw(p, "en"); await sleep(100);
   await p.ev("document.getElementById('endButton').click(); true"); await p.waitFor("document.getElementById('postForm').hidden === false", 8000); await sleep(150);
   t("EN end: confirm dialog in English, result message in English, form back", (await p.ev("window.__confirms.at(-1)")) === "End your live post? (Travelers will no longer see it.)" && (await p.ev("document.getElementById('formMessage').textContent")) === "Your post has ended. You can create a new post.");
