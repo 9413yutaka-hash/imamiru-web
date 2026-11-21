@@ -454,6 +454,7 @@
           <div class="field">
             <span class="field-label" data-i18n="store_custom_menu_label">メニュー・商品紹介</span>
             <p class="hint" style="margin: 0 0 8px;" id="customMenuHint"></p>
+            <p class="hint" style="margin: 0 0 8px;" data-i18n="store_custom_menu_allergens_hint">含まれるものだけを選んでください。分かる範囲で正確に。分からないものは選ばなくて大丈夫です。選ばなかったものが「含まれていない」という意味にはなりません。</p>
             <p class="photo-count" id="customPhotoCount"></p>
             <div id="customMenuList"></div>
             <input type="file" id="customPhotoInput" accept="image/jpeg,image/png,image/webp" hidden>
@@ -1827,6 +1828,8 @@
       let customDirty = false;
       // { name, description, priceText, photo: null | {kind:"saved",url,publicId} | {kind:"local",previewUrl,blob,preparing,uploaded} }
       let customItems = [];
+      // アレルギー表示(特定原材料8品目)。サーバーの STORE_CUSTOM_ALLERGEN_CODES と一致させる。
+      const CUSTOM_ALLERGEN_CODES = ["shrimp", "crab", "walnut", "wheat", "buckwheat", "egg", "milk", "peanut"];
       let customLinks = [];     // { type, label, url }
       let customPhotoTarget = -1;
       let customPhotoPreparation = Promise.resolve();
@@ -1889,7 +1892,8 @@
             name: item.name || "",
             description: item.description || "",
             priceText: item.priceText || "",
-            photo: item.photo ? { kind: "saved", url: item.photo.url, publicId: item.photo.publicId } : null
+            photo: item.photo ? { kind: "saved", url: item.photo.url, publicId: item.photo.publicId } : null,
+            allergens: Array.isArray(item.allergens) ? item.allergens.slice() : []
           };
         });
         customLinks = (result.custom.links || []).map(function (link) {
@@ -2236,6 +2240,35 @@
           card.appendChild(customInput("input", "name", index, item.name, limits.menuNameMaxLength || 40, "store_custom_menu_name"));
           card.appendChild(customInput("input", "priceText", index, item.priceText, limits.menuPriceMaxLength || 20, "store_custom_menu_price", "store_custom_menu_price_placeholder"));
           card.appendChild(customInput("textarea", "description", index, item.description, limits.menuDescriptionMaxLength || 300, "store_custom_menu_description"));
+          const allergenBox = document.createElement("div");
+          allergenBox.className = "custom-item-allergens";
+          const allergenLabel = document.createElement("p");
+          allergenLabel.className = "field-label";
+          allergenLabel.textContent = t("store_custom_menu_allergens_label");
+          allergenBox.appendChild(allergenLabel);
+          const allergenChecks = document.createElement("div");
+          allergenChecks.className = "check-group";
+          CUSTOM_ALLERGEN_CODES.forEach(function (code) {
+            const line = document.createElement("label");
+            line.className = "check-line";
+            const box = document.createElement("input");
+            box.type = "checkbox";
+            box.checked = Array.isArray(item.allergens) && item.allergens.includes(code);
+            box.addEventListener("change", function () {
+              const current = Array.isArray(item.allergens) ? item.allergens : [];
+              const next = box.checked ? current.concat([code]) : current.filter(function (entry) { return entry !== code; });
+              item.allergens = CUSTOM_ALLERGEN_CODES.filter(function (entry) { return next.includes(entry); });
+              customDirty = true;
+              renderStorePreview();
+            });
+            const text = document.createElement("span");
+            text.textContent = t("shop_allergen_" + code);
+            line.appendChild(box);
+            line.appendChild(text);
+            allergenChecks.appendChild(line);
+          });
+          allergenBox.appendChild(allergenChecks);
+          card.appendChild(allergenBox);
           const photoRow = document.createElement("div");
           photoRow.className = "custom-item-photo";
           if (item.photo) {
@@ -2496,7 +2529,8 @@
               name: item.name.trim(),
               description: item.description,
               priceText: item.priceText.trim(),
-              photo: !photo ? null : photo.kind === "saved" ? { url: photo.url, publicId: photo.publicId } : photo.uploaded
+              photo: !photo ? null : photo.kind === "saved" ? { url: photo.url, publicId: photo.publicId } : photo.uploaded,
+              allergens: Array.isArray(item.allergens) ? item.allergens.slice() : []
             };
           }),
           // URLが空の行は送らない(無料のSNS欄と同じ扱い)。
@@ -2516,6 +2550,7 @@
           "menuItems.description": ["store_custom_err_description", { item: item, max: limits.menuDescriptionMaxLength }],
           "menuItems.priceText": ["store_custom_err_price", { item: item, max: limits.menuPriceMaxLength }],
           "menuItems.photo": ["store_custom_err_photo", { item: item }],
+          "menuItems.allergens": ["store_custom_err_allergens", { item: item }],
           menuPhotos: ["store_custom_err_photo_max", { max: limits.menuPhotosMax }],
           links: ["store_custom_err_link", { n: position, max: limits.linkLabelMaxLength }],
           story: ["store_custom_err_story", { max: limits.storyMaxLength }]
@@ -2618,7 +2653,7 @@
         });
         document.getElementById("customMenuAddButton").addEventListener("click", function () {
           if (customEditable && !customSaving && customItems.length < (customLimits().menuItemsMax || 20)) {
-            customItems.push({ name: "", description: "", priceText: "", photo: null });
+            customItems.push({ name: "", description: "", priceText: "", photo: null, allergens: [] });
             customDirty = true;
             renderCustom();
           }
@@ -2829,10 +2864,26 @@
               desc.textContent = item.description;
               box.appendChild(desc);
             }
+            if (Array.isArray(item.allergens) && item.allergens.length > 0) {
+              const allergy = document.createElement("p");
+              allergy.className = "pv-menu-desc";
+              allergy.textContent = t("shop_custom_allergens_heading") + "：" + item.allergens.map(function (code) { return t("shop_allergen_" + code); }).join("・");
+              box.appendChild(allergy);
+            }
             li.appendChild(box);
             list.appendChild(li);
           });
-          const menuSection = previewSection("store_profile_preview_menu", list);
+          const anyPreviewAllergens = visibleItems.some(function (item) { return Array.isArray(item.allergens) && item.allergens.length > 0; });
+          let menuBody = list;
+          if (anyPreviewAllergens) {
+            menuBody = document.createElement("div");
+            menuBody.appendChild(list);
+            const allergyNote = document.createElement("p");
+            allergyNote.className = "pv-menu-desc";
+            allergyNote.textContent = t("shop_custom_allergy_note");
+            menuBody.appendChild(allergyNote);
+          }
+          const menuSection = previewSection("store_profile_preview_menu", menuBody);
           if (menuSection) {
             container.appendChild(menuSection);
             hasContent = true;

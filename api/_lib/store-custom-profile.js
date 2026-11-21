@@ -92,6 +92,42 @@ export const STORE_CUSTOM_LIMITS = {
   storyMaxLength: 2000
 };
 
+// メニュー品目のアレルギー表示(2026-11-21代表決定)。特定原材料8品目のcode。
+// 店主が「含まれるもの」だけをチェックし、表示は固定訳のラベルだけを使う(自動翻訳は使わない)。
+// チェックの無い原材料について「含まれていない」とは表示しない。一度使ったcodeは改名・意味変更しない。
+export const STORE_CUSTOM_ALLERGEN_CODES = [
+  "shrimp",
+  "crab",
+  "walnut",
+  "wheat",
+  "buckwheat",
+  "egg",
+  "milk",
+  "peanut"
+];
+
+// アレルギーの入力を読む。未指定は空。不正なcode・重複・上限超過があれば null。
+export function readMenuAllergens(value) {
+  if (value === undefined || value === null) {
+    return [];
+  }
+
+  if (!Array.isArray(value) || value.length > STORE_CUSTOM_ALLERGEN_CODES.length) {
+    return null;
+  }
+
+  const seen = new Set();
+
+  for (const code of value) {
+    if (!STORE_CUSTOM_ALLERGEN_CODES.includes(code) || seen.has(code)) {
+      return null;
+    }
+    seen.add(code);
+  }
+
+  return STORE_CUSTOM_ALLERGEN_CODES.filter(function (code) { return seen.has(code); });
+}
+
 // 追加リンクの種類は英語code。一度使ったcodeは改名・意味変更しない(追加のみ)。
 export const STORE_CUSTOM_LINK_TYPES = [
   "instagram",
@@ -295,7 +331,13 @@ export function validateStoreCustomProfileInput(body, storeId) {
       seenPhotoIds.add(photo.photo.publicId);
     }
 
-    menuItems.push({ name: name, description: description, priceText: priceText, photo: photo.photo });
+    const allergens = readMenuAllergens(item.allergens);
+
+    if (allergens === null) {
+      return { ok: false, field: "menuItems.allergens", index: index };
+    }
+
+    menuItems.push({ name: name, description: description, priceText: priceText, photo: photo.photo, allergens: allergens });
   }
 
   const linksInput = body.links === undefined || body.links === null ? [] : body.links;
@@ -470,7 +512,8 @@ function buildCustomResponse(customData) {
         priceText: typeof item.priceText === "string" ? item.priceText : "",
         photo: item.photo && typeof item.photo.url === "string"
           ? { url: item.photo.url, publicId: item.photo.publicId }
-          : null
+          : null,
+        allergens: readMenuAllergens(item.allergens) || []
       };
     }),
     links: (Array.isArray(data.links) ? data.links : []).map(function(link) {
@@ -732,6 +775,7 @@ export async function handleStoreCustomProfileUpdate(request, response, deps) {
         name: item.name,
         description: item.description,
         priceText: item.priceText,
+        allergens: item.allergens,
         photo: item.photo
           ? {
               url: item.photo.url,
@@ -856,7 +900,8 @@ export function buildPublicStoreCustomProfile(storeId, planData, customData, now
         name: item.name,
         description: typeof item.description === "string" ? item.description : "",
         priceText: typeof item.priceText === "string" ? item.priceText : "",
-        photoUrl: photoOk ? photo.url : ""
+        photoUrl: photoOk ? photo.url : "",
+        allergens: readMenuAllergens(item.allergens) || []
       };
     });
 
