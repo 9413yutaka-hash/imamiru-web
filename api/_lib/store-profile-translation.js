@@ -45,7 +45,7 @@ import {
 } from "./imadake-translation.js";
 
 export const STORE_PROFILE_TRANSLATION_LANGUAGES =
-  ["en"];
+  ["en", "zh-TW"];
 
 export const STORE_PROFILE_TRANSLATION_MAX_STORES_PER_REQUEST =
   10;
@@ -414,7 +414,7 @@ function buildStoreProfileTranslationPrompt(
   return {
     systemInstruction:
       "You translate shop introductions written by shop owners for travelers. Translate each item's \"description\" from Japanese into natural " +
-      (targetLanguage === "en" ? "English" : targetLanguage) +
+      (targetLanguage === "en" ? "English" : targetLanguage === "zh-TW" ? "Traditional Chinese (Taiwan)" : targetLanguage) +
       ". Rules: keep every number, price, currency symbol, time, date, quantity and unit exactly as written (same digits); " +
       "keep shop names, place names, product names, phone numbers and URLs unchanged; do not add, remove, exaggerate or guess information; " +
       "keep the line breaks. " +

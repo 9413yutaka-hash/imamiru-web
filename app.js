@@ -202,6 +202,16 @@ function updateAdSlotAreaTexts(language) {
       audienceElement.textContent =
         "These ads rotate on every Machinau page across " + areaName + ".";
     }
+  } else if (language === "zh-TW") {
+    if (headingElement) {
+      headingElement.textContent =
+        areaName + "全區僅有3個名額。先到先得。";
+    }
+
+    if (audienceElement) {
+      audienceElement.textContent =
+        "這個廣告欄位會在" + areaName + "的 Machinau 所有頁面輪播顯示。";
+    }
   } else {
     if (headingElement) {
       headingElement.textContent =
@@ -13385,7 +13395,7 @@ function buildColumnEntryPublishedDateHtml(
     try {
       dateText =
         new Intl.DateTimeFormat(
-          "en-US",
+          language === "zh-TW" ? "zh-TW" : "en-US",
           {
             timeZone: "UTC",
             year: "numeric",
@@ -15643,7 +15653,7 @@ function buildCommunityBoardPostMetaHtml(
     try {
       dateText =
         new Intl.DateTimeFormat(
-          language === "ja" ? "ja-JP" : "en-US",
+          language === "ja" ? "ja-JP" : language === "zh-TW" ? "zh-TW" : "en-US",
           {
             timeZone: "Asia/Tokyo",
             year: "numeric",
@@ -16530,7 +16540,9 @@ function formatTownNowTime(
   return date.toLocaleTimeString(
     getCurrentMachinauLanguage() === "en"
       ? "en-US"
-      : "ja-JP",
+      : getCurrentMachinauLanguage() === "zh-TW"
+        ? "zh-TW"
+        : "ja-JP",
     {
       hour: "2-digit",
       minute: "2-digit"
@@ -25972,7 +25984,7 @@ function formatTodayFeedAgo(
 
   try {
     return new Intl.DateTimeFormat(
-      language === "ja" ? "ja-JP" : "en-US",
+      language === "ja" ? "ja-JP" : language === "zh-TW" ? "zh-TW" : "en-US",
       {
         timeZone: "Asia/Tokyo",
         year: "numeric",
@@ -26035,7 +26047,7 @@ function updateTodayFeedDateLabel() {
       }
 
       return new Intl.DateTimeFormat(
-        "en-US",
+        language === "zh-TW" ? "zh-TW" : "en-US",
         {
           timeZone: "Asia/Tokyo",
           weekday: "short",

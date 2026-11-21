@@ -2090,7 +2090,7 @@ export function buildImadakeCardExcerpt(
 
 // カード翻訳に対応する表示言語(サーバー側の許可リスト。初期は英語のみ)。
 export const IMADAKE_CARD_TRANSLATION_LANGUAGES =
-  ["en"];
+  ["en", "zh-TW"];
 
 export function getImadakeCardSource(
   post

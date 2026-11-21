@@ -175,8 +175,13 @@
       let busy = false;
 
       try {
-        if (localStorage.getItem("machinauLanguage") === "en") {
-          document.getElementById("langNote").hidden = false;
+        const savedLanguage = localStorage.getItem("machinauLanguage");
+        if (savedLanguage === "en" || savedLanguage === "zh-TW") {
+          const langNote = document.getElementById("langNote");
+          if (savedLanguage === "zh-TW") {
+            langNote.textContent = "本收據以日文開立。";
+          }
+          langNote.hidden = false;
         }
       } catch (error) {
         // 表示の補足だけのため無視する。

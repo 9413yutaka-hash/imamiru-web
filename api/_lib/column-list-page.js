@@ -431,6 +431,9 @@ const PAGE_AFTER_ARTICLE_CARDS =
       if (currentLanguage === "en") {
         return new Date(Date.UTC(Number(parts[0]), Number(parts[1]) - 1, 1)).toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
       }
+      if (currentLanguage === "zh-TW") {
+        return new Date(Date.UTC(Number(parts[0]), Number(parts[1]) - 1, 1)).toLocaleString("zh-TW", { month: "long", year: "numeric", timeZone: "UTC" });
+      }
       return Number(parts[0]) + "年" + Number(parts[1]) + "月";
     }
 
