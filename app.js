@@ -2311,6 +2311,22 @@ function convertSubmissionToShop(
           )
         : [],
 
+    businessFormCodes:
+      Array.isArray(
+        data.businessFormCodes
+      )
+        ? data.businessFormCodes.filter(
+            function(value) {
+              return [
+                "mobile_vendor",
+                "event_booth",
+                "visiting_service",
+                "street_spot"
+              ].includes(value);
+            }
+          )
+        : [],
+
     postType:
       typeof data.postType === "string" &&
       data.postType.trim() !== ""
@@ -6963,6 +6979,39 @@ function openShopModal(
       modalPaymentBadgeTexts.join(
         "　"
       );
+  }
+
+  const modalBusinessFormTexts =
+    (Array.isArray(selectedShop.businessFormCodes)
+      ? selectedShop.businessFormCodes
+      : []
+    )
+      .filter(function(code) {
+        return [
+          "mobile_vendor",
+          "event_booth",
+          "visiting_service",
+          "street_spot"
+        ].includes(code);
+      })
+      .map(function(code) {
+        return getMachinauTranslation(
+          "store_business_form_" + code,
+          getCurrentMachinauLanguage()
+        );
+      });
+
+  if (modalBusinessFormTexts.length > 0) {
+    modalText +=
+      "<br><br>" +
+      escapeHtml(
+        getMachinauTranslation(
+          "store_profile_business_form_heading",
+          getCurrentMachinauLanguage()
+        )
+      ) +
+      "：" +
+      escapeHtml(modalBusinessFormTexts.join("・"));
   }
 
   // Phase 2D STEP 4B｜正式店舗の設備(APIのfeatureCodesのうち許可されたcodeだけ。

@@ -21779,6 +21779,8 @@ const PUBLIC_SUBMISSION_FIELD_ALLOWLIST =
     "area",
     "authorType",
     "businessEndTime",
+    // 形態タグ(無料掲載にも付与・TOPの絞り込みと印に使う)。
+    "businessFormCodes",
     "businessName",
     "businessStartTime",
     "category",

@@ -1243,6 +1243,62 @@
             QR・電子マネー
           </label>
 
+          <div
+            class="form-label"
+            style="margin-top: 16px;"
+          >
+            形態
+            <span class="optional">任意</span>
+          </div>
+
+          <label
+            class="form-label"
+            for="businessFormMobileVendor"
+          >
+            <input
+              id="businessFormMobileVendor"
+              name="businessFormMobileVendor"
+              type="checkbox"
+            >
+            キッチンカー・移動販売
+          </label>
+
+          <label
+            class="form-label"
+            for="businessFormEventBooth"
+          >
+            <input
+              id="businessFormEventBooth"
+              name="businessFormEventBooth"
+              type="checkbox"
+            >
+            イベント出店
+          </label>
+
+          <label
+            class="form-label"
+            for="businessFormVisitingService"
+          >
+            <input
+              id="businessFormVisitingService"
+              name="businessFormVisitingService"
+              type="checkbox"
+            >
+            出張・訪問サービス
+          </label>
+
+          <label
+            class="form-label"
+            for="businessFormStreetSpot"
+          >
+            <input
+              id="businessFormStreetSpot"
+              name="businessFormStreetSpot"
+              type="checkbox"
+            >
+            大道芸・路上出店
+          </label>
+
           <p class="form-help">
             店舗・施設のお知らせにのみ表示される項目です。空欄でも投稿できます。
           </p>
@@ -1577,6 +1633,10 @@
     const paymentCashInput = document.getElementById("paymentCash");
     const paymentCardInput = document.getElementById("paymentCard");
     const paymentQrInput = document.getElementById("paymentQr");
+    const businessFormMobileVendorInput = document.getElementById("businessFormMobileVendor");
+    const businessFormEventBoothInput = document.getElementById("businessFormEventBooth");
+    const businessFormVisitingServiceInput = document.getElementById("businessFormVisitingService");
+    const businessFormStreetSpotInput = document.getElementById("businessFormStreetSpot");
     const areaRequirementLabel = document.getElementById("areaRequirementLabel");
 
     const locationButton = document.getElementById("locationButton");
@@ -2311,6 +2371,10 @@
         paymentCashInput.checked = false;
         paymentCardInput.checked = false;
         paymentQrInput.checked = false;
+        businessFormMobileVendorInput.checked = false;
+        businessFormEventBoothInput.checked = false;
+        businessFormVisitingServiceInput.checked = false;
+        businessFormStreetSpotInput.checked = false;
       }
     }
 
@@ -2511,6 +2575,24 @@
           paymentMethods.push("qr");
         }
 
+        const businessFormCodes = [];
+
+        if (businessFormMobileVendorInput.checked) {
+          businessFormCodes.push("mobile_vendor");
+        }
+
+        if (businessFormEventBoothInput.checked) {
+          businessFormCodes.push("event_booth");
+        }
+
+        if (businessFormVisitingServiceInput.checked) {
+          businessFormCodes.push("visiting_service");
+        }
+
+        if (businessFormStreetSpotInput.checked) {
+          businessFormCodes.push("street_spot");
+        }
+
         const payload = {
           title: titleInput.value.trim(),
           category: categoryInput.value,
@@ -2527,7 +2609,8 @@
           // チェックを外しているため、常にチェック状態をそのまま送って良い
           // (店舗系カテゴリー以外では自然にfalse/空配列になる)。
           takeout: takeoutInput.checked,
-          paymentMethods: paymentMethods
+          paymentMethods: paymentMethods,
+          businessFormCodes: businessFormCodes
         };
 
         // 常設店舗広告(isPermanentAdチェックON)はexpiresAtを送らない
@@ -2721,6 +2804,16 @@
       paymentCashInput.checked = existingPaymentMethods.includes("cash");
       paymentCardInput.checked = existingPaymentMethods.includes("card");
       paymentQrInput.checked = existingPaymentMethods.includes("qr");
+
+      const existingBusinessFormCodes =
+        Array.isArray(submission.businessFormCodes)
+          ? submission.businessFormCodes
+          : [];
+
+      businessFormMobileVendorInput.checked = existingBusinessFormCodes.includes("mobile_vendor");
+      businessFormEventBoothInput.checked = existingBusinessFormCodes.includes("event_booth");
+      businessFormVisitingServiceInput.checked = existingBusinessFormCodes.includes("visiting_service");
+      businessFormStreetSpotInput.checked = existingBusinessFormCodes.includes("street_spot");
 
       // STEP 40-A｜営業時間・定休日。この機能より前の常設店舗広告(フィールドが無い)は未設定のまま。
       setTimeSelectValue(businessStartTimeInput, submission.businessStartTime);

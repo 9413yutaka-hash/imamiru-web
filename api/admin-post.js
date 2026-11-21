@@ -73,6 +73,16 @@ const ALLOWED_PAYMENT_METHOD_VALUES = [
   "qr"
 ];
 
+// 形態タグ(businessFormCodes)｜有料店舗(store-profile.jsの
+// STORE_BUSINESS_FORM_CODES)と同じ4種。無料掲載でも同じフィールド名・
+// 同じ値で保存する。
+const ALLOWED_BUSINESS_FORM_VALUES = [
+  "mobile_vendor",
+  "event_booth",
+  "visiting_service",
+  "street_spot"
+];
+
 // 運営管理型・常設店舗広告(isPermanentAd:true)専用のauthorType識別値。
 // 既存の"admin"/"ai"とは異なる値にすることで、🔥(admin+admin)・
 // ⚡(admin+ai)のいずれの選定条件にも一致させない(postTypeを未設定のまま
@@ -726,6 +736,19 @@ function validatePostFields(
         )
       : [];
 
+  const businessFormCodes =
+    Array.isArray(
+      requestBody.businessFormCodes
+    )
+      ? requestBody.businessFormCodes.filter(
+          function(value) {
+            return ALLOWED_BUSINESS_FORM_VALUES.includes(
+              value
+            );
+          }
+        )
+      : [];
+
   // STEP 40-A｜営業時間・定休日は常設店舗広告のときだけ解析・保存する(通常の運営投稿では読まない)。
   const permanentAdHours =
     isPermanentAd
@@ -750,6 +773,7 @@ function validatePostFields(
     sourceType: sourceType,
     takeout: takeout,
     paymentMethods: paymentMethods,
+    businessFormCodes: businessFormCodes,
     sourceId:
       sanitizeOptionalSourceId(
         requestBody.sourceId
@@ -892,6 +916,9 @@ export default async function handler(
 
       paymentMethods:
         postFields.paymentMethods,
+
+      businessFormCodes:
+        postFields.businessFormCodes,
 
       sourceLabel:
         "マチナウ運営より",
