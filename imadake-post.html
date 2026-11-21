@@ -9,7 +9,7 @@
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
 
   <!-- 今だけ投稿 STEP 4A｜正式参加店舗(店舗専用URL＋token)が「今、伝えたいこと」を
-       24時間限定で届ける画面。認証・安全チェック・掲載期間・1店舗1件・所在地は
+       選んだ掲載期間(3・6・12・24時間)だけ届ける画面。認証・安全チェック・掲載期間・1店舗1件・所在地は
        すべてサーバー(api/_lib/imadake.js)が決め、この画面はFirestoreへ直接
        アクセスしない。tokenは画面に表示せず、メモリにだけ保持する(post.htmlと同じ)。
        所在地は運営が登録した店舗の正式所在地をサーバーが使う(この画面からは送らない)。 -->
@@ -266,7 +266,7 @@
       <div id="languageSwitch" class="language-switch" role="group" aria-label="表示言語" data-i18n-aria-label="imadake_post_language_aria"></div>
     </div>
     <h1 data-i18n="imadake_heading">今だけ投稿</h1>
-    <p data-i18n="imadake_post_header_lead">「今、伝えたいこと」を、24時間だけ旅行者へ届けます。</p>
+    <p data-i18n="imadake_post_header_lead">「今、伝えたいこと」を、選んだ期間だけ旅行者へ届けます。</p>
   </header>
 
   <main>
@@ -302,10 +302,10 @@
     </div>
 
     <div id="aboutPanel" class="panel" hidden>
-      <h2><span class="badge-24h" data-i18n="imadake_post_badge_24h">24時間限定</span> <span data-i18n="imadake_post_about_heading">今だけ投稿とは</span></h2>
+      <h2><span class="badge-24h" data-i18n="imadake_post_badge_24h">期間限定</span> <span data-i18n="imadake_post_about_heading">今だけ投稿とは</span></h2>
       <ul class="about-list">
         <li data-i18n="imadake_post_about_1">「今だから役立つ」情報を、近くの旅行者へ届けます</li>
-        <li data-i18n="imadake_post_about_2">公開から24時間で自動的に終わります</li>
+        <li data-i18n="imadake_post_about_2">公開から、選んだ掲載期間で自動的に終わります</li>
         <li data-i18n="imadake_post_about_3">1店舗につき、同時に掲載できるのは1件です</li>
         <li data-i18n="imadake_post_about_4">安全確認のあとに公開します（内容によっては運営が確認してから公開します）</li>
       </ul>
@@ -339,6 +339,19 @@
           <label class="chip"><input type="radio" name="sourceLanguage" value="en"><span lang="en">English</span></label>
         </div>
         <p class="hint" data-i18n="imadake_post_source_language_hint">見出しと説明を書いた言語を選んでください。旅行者の表示言語に合わせた自動翻訳に使います。</p>
+      </div>
+
+      <!-- 掲載期間｜店主が3・6・12・24時間から選ぶ(2026-10-31代表決定、2026-11-21実装)。
+           期間は公開(publishedAt)から数える。初期値は24時間(従来どおり)。 -->
+      <div class="field">
+        <span class="field-label"><span data-i18n="imadake_post_duration_label">掲載期間</span><span class="required" data-i18n="imadake_post_required">必須</span></span>
+        <div id="durationChips" class="chip-group" role="radiogroup" aria-label="掲載期間" data-i18n-aria-label="imadake_post_duration_label">
+          <label class="chip"><input type="radio" name="durationHours" value="3"><span data-i18n="imadake_post_duration_3">3時間</span></label>
+          <label class="chip"><input type="radio" name="durationHours" value="6"><span data-i18n="imadake_post_duration_6">6時間</span></label>
+          <label class="chip"><input type="radio" name="durationHours" value="12"><span data-i18n="imadake_post_duration_12">12時間</span></label>
+          <label class="chip selected"><input type="radio" name="durationHours" value="24" checked><span data-i18n="imadake_post_duration_24">24時間</span></label>
+        </div>
+        <p class="hint" data-i18n="imadake_post_duration_hint">公開されてから、選んだ時間で自動的に終わります。</p>
       </div>
 
       <div class="field">
@@ -1022,6 +1035,23 @@
       input.addEventListener("change", syncSourceLanguageChips);
     });
 
+    // 掲載期間(3・6・12・24時間)。サーバーが受け付ける値以外は24時間として扱う。
+    function getSelectedDurationHours() {
+      const checked = document.querySelector('input[name="durationHours"]:checked');
+      const value = checked ? Number(checked.value) : 24;
+      return [3, 6, 12, 24].includes(value) ? value : 24;
+    }
+
+    function syncDurationChips() {
+      document.querySelectorAll("#durationChips .chip").forEach(function(chip) {
+        chip.classList.toggle("selected", chip.querySelector("input").checked);
+      });
+    }
+
+    document.querySelectorAll('input[name="durationHours"]').forEach(function(input) {
+      input.addEventListener("change", syncDurationChips);
+    });
+
     function onCategoryChange(code) {
       selectedCategory = code;
       renderLiveState();
@@ -1383,7 +1413,9 @@
           imageUrls: imageUrls,
           imagePublicIds: imagePublicIds,
           // 店舗が選んだ原文言語(画面の表示言語は使わない)。
-          sourceLanguage: getSelectedSourceLanguage()
+          sourceLanguage: getSelectedSourceLanguage(),
+          // 店舗が選んだ掲載期間(時間)。公開されてから数える。
+          durationHours: getSelectedDurationHours()
         });
 
         // 決済 STEP 35-A｜カード登録が必要な理由の時だけ、カード登録への案内を出す。

@@ -87,10 +87,33 @@ export const IMADAKE_STORE_SLOTS_COLLECTION =
 export const IMADAKE_RATE_LIMITS_COLLECTION =
   "imadakeRateLimits";
 
-// 掲載時間は公開(publishedAt)から24時間。作成時刻からではない
+// 掲載時間は公開(publishedAt)から数える。作成時刻からではない
 // (審査待ちの時間で店舗の掲載時間を消費させないため)。
 export const IMADAKE_PUBLISH_DURATION_MILLISECONDS =
   24 * 60 * 60 * 1000;
+
+// 掲載期間の選択肢(2026-10-31代表決定。2026-11-21実装)。
+// 店主が投稿時に 3・6・12・24 時間から選ぶ。未指定は24時間(従来どおり)。
+export const IMADAKE_DURATION_HOURS_OPTIONS =
+  [3, 6, 12, 24];
+
+export const IMADAKE_DEFAULT_DURATION_HOURS =
+  24;
+
+// 保存済みの値・過去の投稿にも安全な解決(許可の一覧に無ければ24時間)。
+export function resolveImadakeDurationHours(
+  value
+) {
+  return IMADAKE_DURATION_HOURS_OPTIONS.includes(value)
+    ? value
+    : IMADAKE_DEFAULT_DURATION_HOURS;
+}
+
+export function imadakeDurationMilliseconds(
+  durationHours
+) {
+  return resolveImadakeDurationHours(durationHours) * 60 * 60 * 1000;
+}
 
 // 同じ店舗の連続投稿(作成リクエスト)の間隔。審査中・掲載中の制限とは別の、
 // Moderation呼び出しの連打対策。
@@ -720,6 +743,16 @@ export function validateImadakePostInput(
     return fail("sourceLanguage");
   }
 
+  // 掲載期間(時間)。未指定は24時間(従来どおり)。許可の一覧に無い値は拒否する。
+  const durationHours =
+    body.durationHours === undefined || body.durationHours === null
+      ? IMADAKE_DEFAULT_DURATION_HOURS
+      : body.durationHours;
+
+  if (!IMADAKE_DURATION_HOURS_OPTIONS.includes(durationHours)) {
+    return fail("durationHours");
+  }
+
   return {
     ok: true,
     fields: {
@@ -734,7 +767,8 @@ export function validateImadakePostInput(
       availableUntil: availableUntil,
       priceText: priceText,
       paymentMethods: paymentMethods,
-      sourceLanguage: sourceLanguage
+      sourceLanguage: sourceLanguage,
+      durationHours: durationHours
     }
   };
 }
@@ -1487,7 +1521,7 @@ export async function handleImadakePostCreate(
           const expiresAt =
             isPublished
               ? Timestamp.fromMillis(
-                  nowMillis + IMADAKE_PUBLISH_DURATION_MILLISECONDS
+                  nowMillis + imadakeDurationMilliseconds(fields.durationHours)
                 )
               : null;
 
@@ -1498,6 +1532,7 @@ export async function handleImadakePostCreate(
             headline: fields.headline,
             body: fields.body,
             sourceLanguage: fields.sourceLanguage,
+            durationHours: fields.durationHours,
             status: safety.decision,
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
@@ -1583,7 +1618,7 @@ export async function handleImadakePostCreate(
             postId: postRef.id,
             status: safety.decision,
             publishedAtMillis: publishedAt ? nowMillis : null,
-            expiresAtMillis: expiresAt ? nowMillis + IMADAKE_PUBLISH_DURATION_MILLISECONDS : null
+            expiresAtMillis: expiresAt ? nowMillis + imadakeDurationMilliseconds(fields.durationHours) : null
           };
         }
       );
@@ -2504,7 +2539,9 @@ function buildImadakeAdminPendingItem(
           }
         : null,
     availableUntil: post.availableUntil,
-    priceText: post.priceText
+    priceText: post.priceText,
+    // 店舗が選んだ掲載期間(時間)。承認すると、この期間だけ公開される。
+    durationHours: resolveImadakeDurationHours(post.durationHours)
   };
 }
 
@@ -2727,9 +2764,10 @@ export async function handleImadakeAdminReview(
           const publishedAt =
             Timestamp.fromMillis(nowMillis);
 
+          // 掲載期間は投稿時に店主が選んだ値(投稿に保存済み)。無い過去の投稿は24時間。
           const expiresAt =
             Timestamp.fromMillis(
-              nowMillis + IMADAKE_PUBLISH_DURATION_MILLISECONDS
+              nowMillis + imadakeDurationMilliseconds(post.durationHours)
             );
 
           transaction.update(postRef, {
@@ -2765,7 +2803,7 @@ export async function handleImadakeAdminReview(
           return {
             status: "published",
             publishedAtMillis: nowMillis,
-            expiresAtMillis: nowMillis + IMADAKE_PUBLISH_DURATION_MILLISECONDS
+            expiresAtMillis: nowMillis + imadakeDurationMilliseconds(post.durationHours)
           };
         }
       );

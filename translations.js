@@ -9225,9 +9225,9 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   imadake_post_header_lead: {
-    ja: "「今、伝えたいこと」を、24時間だけ旅行者へ届けます。",
-    en: "Share what you want travelers to know right now, for 24 hours.",
-    "zh-TW": "把「現在想傳達的訊息」，僅在24小時內傳遞給旅客。"
+    ja: "「今、伝えたいこと」を、選んだ期間だけ旅行者へ届けます。",
+    en: "Share what you want travelers to know right now, for the period you choose.",
+    "zh-TW": "把「現在想傳達的訊息」，在所選期間內傳遞給旅客。"
   },
 
   imadake_post_language_aria: {
@@ -9328,9 +9328,9 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   imadake_post_badge_24h: {
-    ja: "24時間限定",
-    en: "24 hours only",
-    "zh-TW": "限時24小時"
+    ja: "期間限定",
+    en: "Limited time",
+    "zh-TW": "限時刊登"
   },
 
   imadake_post_about_heading: {
@@ -9346,9 +9346,45 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   imadake_post_about_2: {
-    ja: "公開から24時間で自動的に終わります",
-    en: "Posts end automatically 24 hours after going live",
-    "zh-TW": "公開後24小時自動結束"
+    ja: "公開から、選んだ掲載期間で自動的に終わります",
+    en: "Posts end automatically after the period you choose",
+    "zh-TW": "公開後，經過所選的刊登期間即自動結束"
+  },
+
+  imadake_post_duration_label: {
+    ja: "掲載期間",
+    en: "How long to post",
+    "zh-TW": "刊登期間"
+  },
+
+  imadake_post_duration_3: {
+    ja: "3時間",
+    en: "3 hours",
+    "zh-TW": "3小時"
+  },
+
+  imadake_post_duration_6: {
+    ja: "6時間",
+    en: "6 hours",
+    "zh-TW": "6小時"
+  },
+
+  imadake_post_duration_12: {
+    ja: "12時間",
+    en: "12 hours",
+    "zh-TW": "12小時"
+  },
+
+  imadake_post_duration_24: {
+    ja: "24時間",
+    en: "24 hours",
+    "zh-TW": "24小時"
+  },
+
+  imadake_post_duration_hint: {
+    ja: "公開されてから、選んだ時間で自動的に終わります。",
+    en: "Your post ends automatically once the chosen time has passed after it goes live.",
+    "zh-TW": "公開後，經過所選時間即自動結束。"
   },
 
   imadake_post_about_3: {
