@@ -822,6 +822,19 @@ function hasValidCoordinates(account) {
   );
 }
 
+// 2026-11-22 代表決定｜住所なし(locationMode: "mobile")の店舗は、座標の代わりに
+// 主な活動エリア(都道府県・市区町村)が入っていれば所在地の条件を満たす。
+function hasMobileActivityArea(account) {
+  return (
+    !!account &&
+    account.locationMode === "mobile" &&
+    typeof account.prefecture === "string" &&
+    account.prefecture !== "" &&
+    typeof account.city === "string" &&
+    account.city !== ""
+  );
+}
+
 // 公開条件をすべて確認し、満たしていない条件codeの一覧を返す(空なら公開できる)。
 // ownerActive：操作する本人が有効なownerか(公開・非公開の操作時に確認する)。
 // planActive：店舗カード契約の利用権があるか(readStoreCardPlanActive の結果。渡されなければ未契約)。
@@ -845,7 +858,7 @@ export function evaluateStorePublishConditions(input) {
       profile.moderatedText === buildProfileModerationText(profile.description, profile.businessHours),
     owner: input.ownerActive === true,
     store_active: isEditableStore(account),
-    location: hasValidCoordinates(account),
+    location: hasValidCoordinates(account) || hasMobileActivityArea(account),
     country: STORE_PUBLISH_COUNTRY_CODES.includes(account.countryCode),
     duplicates: candidates.every(function(candidate) {
       return !!candidate && candidate.source === "submissions" && resolvedListingIds.has(candidate.id);
@@ -939,6 +952,7 @@ export async function handleStoreProfileGet(request, response, deps) {
       planRequired: false,
       location: {
         countryCode: account.countryCode || "",
+        locationMode: account.locationMode === "mobile" ? "mobile" : "fixed",
         prefecture: account.prefecture || "",
         city: account.city || "",
         formattedAddress: account.locationFormattedAddress || account.address || "",
@@ -1577,7 +1591,13 @@ function buildPublicStoreProfile(storeId, account, profile, linkedListingIds) {
       countryCode: readPublicText(account.countryCode),
       prefecture: readPublicText(account.prefecture),
       city: readPublicText(account.city),
-      formattedAddress: readPublicText(account.locationFormattedAddress),
+      // 住所なし(mobile)の店舗は、表示用の住所として活動エリア(都道府県＋市区町村)を返す
+      // (カードの住所行と地域検索の判定がこの文字列を使うため)。
+      formattedAddress:
+        account.locationMode === "mobile"
+          ? readPublicText(account.prefecture) + readPublicText(account.city)
+          : readPublicText(account.locationFormattedAddress),
+      locationMode: account.locationMode === "mobile" ? "mobile" : "fixed",
       latitude: account.latitude,
       longitude: account.longitude
     },

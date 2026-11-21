@@ -6595,6 +6595,14 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_profile_business_form_hint: {
+  store_account_store_location_mode_label: { ja: "固定の店舗の有無", en: "Fixed storefront", zh: "是否有固定店面" },
+  store_account_store_location_fixed: { ja: "固定の店舗がある", en: "I have a fixed storefront", zh: "有固定店面" },
+  store_account_store_location_mobile: { ja: "固定の店舗はない（キッチンカー・出店・出張など）", en: "No fixed storefront (food truck, event booth, visiting service, etc.)", zh: "沒有固定店面（餐車、活動擺攤、到府服務等）" },
+  store_account_store_activity_prefecture_label: { ja: "主な活動エリア（都道府県）", en: "Main activity area (prefecture)", zh: "主要活動地區（都道府縣）" },
+  store_account_store_activity_city_label: { ja: "主な活動エリア（市区町村）", en: "Main activity area (city / town)", zh: "主要活動地區（市區町村）" },
+  store_account_store_activity_hint: { ja: "住所は登録しません。出店場所は、今だけ投稿のたびに入力します。", en: "No street address is registered. You will enter each sales location when you post.", zh: "不登記詳細地址。每次發佈時，再輸入當天的出店地點。" },
+  store_account_store_err_activity_area: { ja: "活動エリア（都道府県・市区町村）を選んでください", en: "Please choose your activity area (prefecture and city).", zh: "請選擇活動地區（都道府縣與市區町村）。" },
+  store_account_store_err_mobile_country: { ja: "住所なしの登録は、日本のお店だけです", en: "Registration without an address is available for stores in Japan only.", zh: "無地址登記僅適用於日本的店家。" },
     ja: "固定の店舗がない・場所が変わる営業の形です。当てはまるものがあれば選んでください（複数可）。",
     en: "For businesses without a fixed storefront, or whose location changes. Select all that apply.",
     "zh-TW": "沒有固定店面、或地點會變動的營業型態。如有符合請選擇（可複選）。"
@@ -9413,6 +9421,12 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   imadake_post_duration_24: {
+  imadake_post_spot_label: { ja: "今日の出店場所", en: "Today's sales location", zh: "今天的出店地點" },
+  imadake_post_spot_hint: { ja: "市区町村・番地や施設名まで入れると、探して来てもらえます。掲載が終わると、この場所も一緒に消えます。", en: "Adding the city, street address, or venue name helps people find you. This location disappears when the post ends.", zh: "填上市區町村、門牌或設施名稱，更容易被找到。貼文結束時，這個地點也會一起消失。" },
+  imadake_post_spot_placeholder: { ja: "例：北谷町美浜9-1 ○○パーク前", en: "Example: 9-1 Mihama, Chatan — in front of ○○ Park", zh: "例：北谷町美浜9-1 ○○公園前" },
+  imadake_post_spot_required: { ja: "今日の出店場所を入力してください", en: "Please enter today's sales location.", zh: "請輸入今天的出店地點。" },
+  imadake_post_spot_unresolved: { ja: "出店場所の住所を確認できませんでした。市区町村・番地まで入れて、もう一度お試しください", en: "We couldn't confirm that address. Please include the city and street address and try again.", zh: "無法確認這個地址。請填到市區町村與門牌後再試一次。" },
+  imadake_post_location_area_note: { ja: "掲載場所は、投稿ごとに入力する出店場所になります。", en: "Each post uses the sales location you enter for that post.", zh: "每篇貼文會使用您為該篇輸入的出店地點。" },
     ja: "24時間",
     en: "24 hours",
     "zh-TW": "24小時"

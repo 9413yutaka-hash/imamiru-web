@@ -126,6 +126,7 @@ export const IMADAKE_BODY_MAX_LENGTH = 3000;
 export const IMADAKE_MAX_IMAGES = 10;
 export const IMADAKE_URL_MAX_LENGTH = 500;
 export const IMADAKE_SHORT_TEXT_MAX_LENGTH = 60;
+export const IMADAKE_POST_ADDRESS_MAX_LENGTH = 200;
 export const IMADAKE_PLACE_NAME_MAX_LENGTH = 40;
 export const IMADAKE_STOCK_QUANTITY_MAX = 9999;
 
@@ -754,6 +755,17 @@ export function validateImadakePostInput(
     return fail("durationHours");
   }
 
+  // 2026-11-22 代表決定｜住所なし(mobile)店舗だけが使う「今日の出店場所」。
+  // 任意項目として読み、使うかどうかは作成時の所在地の解決で決める(固定店舗では使わない)。
+  const postAddress =
+    body.postAddress === undefined || body.postAddress === null
+      ? ""
+      : readShortText(body.postAddress, IMADAKE_POST_ADDRESS_MAX_LENGTH);
+
+  if (postAddress === null) {
+    return fail("postAddress");
+  }
+
   return {
     ok: true,
     fields: {
@@ -769,7 +781,8 @@ export function validateImadakePostInput(
       priceText: priceText,
       paymentMethods: paymentMethods,
       sourceLanguage: sourceLanguage,
-      durationHours: durationHours
+      durationHours: durationHours,
+      postAddress: postAddress
     }
   };
 }
@@ -872,7 +885,8 @@ async function decideImadakeSafety(
       fields.body,
       fields.priceText,
       fields.categoryFields.venue || "",
-      fields.categoryFields.feeText || ""
+      fields.categoryFields.feeText || "",
+      fields.postAddress || ""
     ]
       .filter(
         function(value) {
@@ -1088,7 +1102,17 @@ export async function verifyImadakeStoreActor(
     valid: true,
     storeId: storeId,
     storeName: storeName,
-    method: "storeUser"
+    method: "storeUser",
+    // 2026-11-22｜住所なし(mobile)店舗かどうかと、その活動エリア(投稿画面の表示用)。
+    locationMode: accountData.locationMode === "mobile" ? "mobile" : "fixed",
+    activityArea:
+      accountData.locationMode === "mobile"
+        ? {
+            prefecture: typeof accountData.prefecture === "string" ? accountData.prefecture : "",
+            city: typeof accountData.city === "string" ? accountData.city : "",
+            address: ""
+          }
+        : null
   };
 }
 
@@ -1331,13 +1355,56 @@ export async function handleImadakePostCreate(
         storeId
       );
 
+    // 2026-11-22 代表決定｜住所なし(mobile)店舗は正式所在地を持たない代わりに、投稿ごとに
+    // 「今日の出店場所」をサーバーで Geocoding して確定する(ブラウザの座標は使わない)。
+    // 固定店舗の扱いは従来通り(正式所在地だけ・postAddress は使わない)。
+    let postLocation = null;
+
     if (!officialLocation) {
-      return response.status(409).json({
-        success: false,
-        reason: "location_not_registered",
-        message: "店舗の掲載場所がまだ登録されていません。運営へお問い合わせください。"
-      });
+      const accountSnapshot =
+        await database.collection("storeAccounts").doc(storeId).get();
+      const accountData =
+        accountSnapshot.exists ? accountSnapshot.data() || {} : {};
+
+      if (accountData.locationMode !== "mobile") {
+        return response.status(409).json({
+          success: false,
+          reason: "location_not_registered",
+          message: "店舗の掲載場所がまだ登録されていません。運営へお問い合わせください。"
+        });
+      }
+
+      if (fields.postAddress === "") {
+        return response.status(400).json({
+          success: false,
+          reason: "post_location_required",
+          message: "今日の出店場所を入力してください。"
+        });
+      }
+
+      const geocodedPostLocation =
+        await geocodeStoreAddress(fields.postAddress, deps);
+
+      if (!geocodedPostLocation.ok) {
+        return response.status(400).json({
+          success: false,
+          reason: "post_location_unresolved",
+          message: "出店場所の住所を確認できませんでした。市区町村・番地まで入れて、もう一度お試しください。"
+        });
+      }
+
+      postLocation = {
+        address: fields.postAddress,
+        latitude: geocodedPostLocation.latitude,
+        longitude: geocodedPostLocation.longitude,
+        countryCode: geocodedPostLocation.countryCode,
+        prefecture: geocodedPostLocation.prefecture,
+        city: geocodedPostLocation.city,
+        regionKey: buildImadakeRegionKey(geocodedPostLocation.countryCode, geocodedPostLocation.prefecture)
+      };
     }
+
+    const effectiveLocation = postLocation || officialLocation;
 
     // 収益化 STEP 3｜課金対象かどうかは作成時にサーバーで決めて固定する(Productionでは現在常にfalse)。
     // STEP 35-A｜回数制限・投稿枠より前に決め、課金対象になる投稿はカード登録(店舗の請求先アカウントの accountBilling、STEP 42-C)を必須にする
@@ -1448,14 +1515,14 @@ export async function handleImadakePostCreate(
 
     const geohash =
       encodeTownNowGeohash(
-        officialLocation.latitude,
-        officialLocation.longitude
+        effectiveLocation.latitude,
+        effectiveLocation.longitude
       );
 
     const regionKey =
       buildImadakeRegionKey(
-        officialLocation.countryCode,
-        officialLocation.prefecture
+        effectiveLocation.countryCode,
+        effectiveLocation.prefecture
       );
 
     const result =
@@ -1541,15 +1608,15 @@ export async function handleImadakePostCreate(
             publishedAt: publishedAt,
             expiresAt: expiresAt,
             endedAt: null,
-            // storeAccountsの正式所在地を投稿時点のsnapshotとして保存する
-            // (後で店舗の所在地が変わっても、この投稿の値は変えない)。
-            latitude: officialLocation.latitude,
-            longitude: officialLocation.longitude,
-            countryCode: officialLocation.countryCode,
-            prefecture: officialLocation.prefecture,
-            city: officialLocation.city,
-            address: officialLocation.address,
-            locationSource: "storeAccount",
+            // 所在地を投稿時点のsnapshotとして保存する(固定店舗はstoreAccountsの正式所在地、
+            // 住所なし店舗はこの投稿の出店場所。後で店舗の所在地が変わっても、この投稿の値は変えない)。
+            latitude: effectiveLocation.latitude,
+            longitude: effectiveLocation.longitude,
+            countryCode: effectiveLocation.countryCode,
+            prefecture: effectiveLocation.prefecture,
+            city: effectiveLocation.city,
+            address: effectiveLocation.address,
+            locationSource: postLocation ? "storePost" : "storeAccount",
             regionKey: regionKey,
             geohash: geohash,
             actionTargets: fields.actionTargets,
@@ -1600,9 +1667,9 @@ export async function handleImadakePostCreate(
                 expiresAt: expiresAt,
                 regionKey: regionKey,
                 geohash: geohash,
-                latitude: officialLocation.latitude,
-                longitude: officialLocation.longitude,
-                countryCode: officialLocation.countryCode
+                latitude: effectiveLocation.latitude,
+                longitude: effectiveLocation.longitude,
+                countryCode: effectiveLocation.countryCode
               })
             );
           } else if (state.activeIsStaleExpired) {
@@ -3290,6 +3357,7 @@ export async function handleImadakeStoreStatus(
     return response.status(200).json({
       success: true,
       storeName: storeValidation.storeName,
+      locationMode: storeValidation.locationMode,
       location:
         officialLocation
           ? {
@@ -3297,7 +3365,7 @@ export async function handleImadakeStoreStatus(
               city: officialLocation.city,
               address: officialLocation.address
             }
-          : null,
+          : storeValidation.activityArea,
       currentPost: currentPost
     });
   } catch (error) {

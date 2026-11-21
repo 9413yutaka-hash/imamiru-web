@@ -576,6 +576,22 @@
             <select id="storeCountrySelect" required></select>
           </div>
           <div class="field">
+            <label for="storeLocationModeSelect" data-i18n="store_account_store_location_mode_label">固定の店舗の有無</label>
+            <select id="storeLocationModeSelect">
+              <option value="fixed" data-i18n="store_account_store_location_fixed">固定の店舗がある</option>
+              <option value="mobile" data-i18n="store_account_store_location_mobile">固定の店舗はない（キッチンカー・出店・出張など）</option>
+            </select>
+          </div>
+          <div class="field" id="storeActivityPrefectureField" hidden>
+            <label for="storeActivityPrefectureSelect" data-i18n="store_account_store_activity_prefecture_label">主な活動エリア（都道府県）</label>
+            <select id="storeActivityPrefectureSelect"></select>
+          </div>
+          <div class="field" id="storeActivityCityField" hidden>
+            <label for="storeActivityCitySelect" data-i18n="store_account_store_activity_city_label">主な活動エリア（市区町村）</label>
+            <select id="storeActivityCitySelect"></select>
+            <p class="hint" data-i18n="store_account_store_activity_hint"></p>
+          </div>
+          <div class="field" id="storeAddressField">
             <label for="storeAddressInput" data-i18n="store_account_store_address_label">住所</label>
             <input type="text" id="storeAddressInput" maxlength="200" autocomplete="street-address" required>
             <p class="hint" data-i18n="store_account_store_address_hint"></p>
@@ -761,6 +777,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
   <script src="firebase.js"></script>
   <script src="translations.js"></script>
+  <script src="japan-municipalities.js"></script>
 
   <script>
     (function () {
@@ -2767,12 +2784,62 @@
           });
       }
 
+      function isMobileLocationMode() {
+        const select = document.getElementById("storeLocationModeSelect");
+        return !!select && select.value === "mobile";
+      }
+
+      function populateActivityPrefectures() {
+        const select = document.getElementById("storeActivityPrefectureSelect");
+        if (!select || select.options.length > 0) return;
+        const data = typeof JAPAN_MUNICIPALITIES_BY_PREFECTURE !== "undefined" ? JAPAN_MUNICIPALITIES_BY_PREFECTURE : {};
+        Object.keys(data).forEach(function (prefecture) {
+          const option = document.createElement("option");
+          option.value = prefecture;
+          option.textContent = prefecture;
+          select.appendChild(option);
+        });
+        populateActivityCities();
+      }
+
+      function populateActivityCities() {
+        const prefectureSelect = document.getElementById("storeActivityPrefectureSelect");
+        const citySelect = document.getElementById("storeActivityCitySelect");
+        if (!prefectureSelect || !citySelect) return;
+        const data = typeof JAPAN_MUNICIPALITIES_BY_PREFECTURE !== "undefined" ? JAPAN_MUNICIPALITIES_BY_PREFECTURE : {};
+        const cities = data[prefectureSelect.value] || [];
+        citySelect.textContent = "";
+        cities.forEach(function (city) {
+          const option = document.createElement("option");
+          option.value = city;
+          option.textContent = city;
+          citySelect.appendChild(option);
+        });
+      }
+
+      function applyLocationModeVisibility() {
+        const mobile = isMobileLocationMode();
+        document.getElementById("storeAddressField").hidden = mobile;
+        document.getElementById("storePreviewButton").hidden = mobile;
+        if (mobile) {
+          document.getElementById("storePreviewBox").hidden = true;
+          populateActivityPrefectures();
+          populateActivityCities();
+        }
+        document.getElementById("storeActivityPrefectureField").hidden = !mobile;
+        document.getElementById("storeActivityCityField").hidden = !mobile;
+        updateStoreRegisterButton();
+      }
+
       function readStoreForm() {
         return {
           storeName: document.getElementById("storeNameInput").value.trim(),
           categoryCode: document.getElementById("storeCategorySelect").value,
           countryCode: document.getElementById("storeCountrySelect").value,
-          address: document.getElementById("storeAddressInput").value.trim()
+          address: document.getElementById("storeAddressInput").value.trim(),
+          locationMode: isMobileLocationMode() ? "mobile" : "fixed",
+          activityPrefecture: document.getElementById("storeActivityPrefectureSelect").value || "",
+          activityCity: document.getElementById("storeActivityCitySelect").value || ""
         };
       }
 
@@ -2780,6 +2847,11 @@
         if (values.storeName === "") return "store_account_store_err_name";
         if (values.categoryCode === "") return "store_account_store_err_category";
         if (values.countryCode === "") return "store_account_store_err_country";
+        if (values.locationMode === "mobile") {
+          if (values.countryCode !== "JP") return "store_account_store_err_mobile_country";
+          if (values.activityPrefecture === "" || values.activityCity === "") return "store_account_store_err_activity_area";
+          return "";
+        }
         if (values.address === "") return "store_account_store_err_address";
         return "";
       }
@@ -2797,6 +2869,13 @@
 
       function updateStoreRegisterButton() {
         const values = readStoreForm();
+        if (values.locationMode === "mobile") {
+          // 住所なし登録は所在地の確認が無いので、入力がそろえば登録できる。
+          document.getElementById("storeRegisterButton").disabled =
+            storeRequestPending || validateStoreForm(values) !== "";
+          document.getElementById("storePreviewButton").disabled = storeRequestPending;
+          return;
+        }
         // 所在地の確認が済んだ時だけ登録できる(契約の申込は公開の時に別に行う)。
         document.getElementById("storeRegisterButton").disabled =
           storeRequestPending ||
@@ -2839,7 +2918,7 @@
         storePreviewKey = "";
         storePreviewLocation = null;
         document.getElementById("storePreviewBox").hidden = true;
-        updateStoreRegisterButton();
+        applyLocationModeVisibility();
       }
 
       function handleStorePreview() {
@@ -2883,7 +2962,7 @@
         if (storeRequestPending) {
           return;
         }
-        if (storePreviewKey !== values.countryCode + "|" + values.address) {
+        if (values.locationMode !== "mobile" && storePreviewKey !== values.countryCode + "|" + values.address) {
           // 所在地の確認前(Enterキー等)は、登録せず確認だけを行う。
           return handleStorePreview();
         }
@@ -2899,7 +2978,10 @@
           storeName: values.storeName,
           categoryCode: values.categoryCode,
           countryCode: values.countryCode,
-          address: values.address,
+          address: values.locationMode === "mobile" ? "" : values.address,
+          locationMode: values.locationMode,
+          activityPrefecture: values.locationMode === "mobile" ? values.activityPrefecture : "",
+          activityCity: values.locationMode === "mobile" ? values.activityCity : "",
           sourceLanguage: currentLanguage
         })
           .then(function (response) {
@@ -3360,6 +3442,17 @@
         ["storeCountrySelect", "storeAddressInput"].forEach(function (id) {
           document.getElementById(id).addEventListener("input", invalidateStorePreview);
           document.getElementById(id).addEventListener("change", invalidateStorePreview);
+        });
+        document.getElementById("storeLocationModeSelect").addEventListener("change", applyLocationModeVisibility);
+        document.getElementById("storeActivityPrefectureSelect").addEventListener("change", function () {
+          populateActivityCities();
+          updateStoreRegisterButton();
+        });
+        document.getElementById("storeActivityCitySelect").addEventListener("change", updateStoreRegisterButton);
+        document.getElementById("storeCountrySelect").addEventListener("change", updateStoreRegisterButton);
+        ["storeNameInput", "storeCategorySelect"].forEach(function (id) {
+          document.getElementById(id).addEventListener("input", updateStoreRegisterButton);
+          document.getElementById(id).addEventListener("change", updateStoreRegisterButton);
         });
 
         document.querySelectorAll("[data-go-view]").forEach(function (button) {
