@@ -143,6 +143,15 @@ export const STORE_PAGE_LABELS = {
     headingHours: "営業時間",
     headingPayment: "支払い方法",
     headingFeatures: "設備・サービス",
+    headingBusinessForm: "形態",
+    businessForm: {
+      mobile_vendor: "キッチンカー・移動販売",
+      event_booth: "イベント出店",
+      visiting_service: "出張・訪問サービス",
+      street_spot: "大道芸・路上出店"
+    },
+    businessFormLocationNote: "出店・活動の場所は日によって変わります。今日の場所は、今だけ投稿でご確認ください。",
+    businessFormVisitingNote: "訪問・出張型のサービスです。店舗での営業はしていません。",
     headingStory: "こだわり・ストーリー",
     headingMenu: "メニュー・商品",
     headingLinks: "リンク",
@@ -268,6 +277,15 @@ export const STORE_PAGE_LABELS = {
     headingHours: "Opening hours",
     headingPayment: "Payment methods",
     headingFeatures: "Facilities & services",
+    headingBusinessForm: "Business type",
+    businessForm: {
+      mobile_vendor: "Food truck / Mobile vendor",
+      event_booth: "Event booth",
+      visiting_service: "Visiting service",
+      street_spot: "Street performance / Pop-up"
+    },
+    businessFormLocationNote: "Locations change by day. Check today's spot in the Just for Now posts.",
+    businessFormVisitingNote: "This is a visiting / on-site service with no storefront.",
     headingStory: "Our story",
     headingMenu: "Menu & products",
     headingLinks: "Links",
@@ -394,6 +412,15 @@ export const STORE_PAGE_LABELS = {
     headingHours: "營業時間",
     headingPayment: "付款方式",
     headingFeatures: "設施・服務",
+    headingBusinessForm: "型態",
+    businessForm: {
+      mobile_vendor: "餐車・移動販售",
+      event_booth: "活動擺攤",
+      visiting_service: "到府服務",
+      street_spot: "街頭表演・路邊出攤"
+    },
+    businessFormLocationNote: "出攤・活動地點會依日期變動。請在『今日限定貼文』確認今天的地點。",
+    businessFormVisitingNote: "這是到府・外派型服務，沒有店面營業。",
     headingStory: "特色與故事",
     headingMenu: "菜單・商品",
     headingLinks: "連結",
@@ -1018,7 +1045,23 @@ export function buildStorePageHtml(storeId, store, custom, languageValue, option
   const facts = [];
   const payments = (store.paymentMethodCodes || []).map(function(code) { return labels.payment[code]; }).filter(Boolean);
   const features = (store.featureCodes || []).map(function(code) { return labels.feature[code]; }).filter(Boolean);
+  const businessFormCodes = Array.isArray(store.businessFormCodes) ? store.businessFormCodes : [];
+  const businessForms = businessFormCodes.map(function(code) { return labels.businessForm[code]; }).filter(Boolean);
   const languageNames = (contact.supportedLanguageCodes || []).map(function(code) { return readLanguageDisplayName(code, language); });
+
+  if (businessForms.length > 0) {
+    let businessFormNotes = "";
+
+    if (businessFormCodes.some(function(code) { return code === "mobile_vendor" || code === "event_booth" || code === "street_spot"; })) {
+      businessFormNotes += "<p class=\"note\">" + escapeStorePageHtml(labels.businessFormLocationNote) + "</p>";
+    }
+
+    if (businessFormCodes.includes("visiting_service")) {
+      businessFormNotes += "<p class=\"note\">" + escapeStorePageHtml(labels.businessFormVisitingNote) + "</p>";
+    }
+
+    facts.push("<div><h3>" + escapeStorePageHtml(labels.headingBusinessForm) + "</h3>" + buildTagListHtml(businessForms) + businessFormNotes + "</div>");
+  }
 
   if (payments.length > 0) {
     facts.push("<div><h3>" + escapeStorePageHtml(labels.headingPayment) + "</h3>" + buildTagListHtml(payments) + "</div>");

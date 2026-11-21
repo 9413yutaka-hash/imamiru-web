@@ -104,6 +104,17 @@ export const STORE_FEATURE_CODES = [
   "allergy_friendly"
 ];
 
+// 2026-11-21追加｜形態タグ(軸2：どう営業しているか)。カテゴリー(業種)とも
+// 設備・サービス(featureCodes)とも別の軸。「ある」ものだけを保存する(codeなし＝
+// 固定店舗などの通常形態・未登録)。一度使ったcodeは改名・意味変更しない(追加のみ)。
+// 画面はstoreProfileGetの応答に含まれるこの一覧から選択肢を作る。
+export const STORE_BUSINESS_FORM_CODES = [
+  "mobile_vendor",
+  "event_booth",
+  "visiting_service",
+  "street_spot"
+];
+
 // 2B追加｜対応言語(BCP 47)。設備・サービスとは別項目。将来は一覧へ追加するだけで増やせる。
 export const STORE_LANGUAGE_CODES = ["ja", "en", "zh-Hans", "zh-Hant", "ko", "th", "vi", "fr", "es", "de"];
 
@@ -549,6 +560,12 @@ export function validateStoreProfileInput(body) {
     return { ok: false, field: "featureCodes" };
   }
 
+  const businessFormCodes = readOptionalCodeList(body.businessFormCodes, STORE_BUSINESS_FORM_CODES);
+
+  if (businessFormCodes === null) {
+    return { ok: false, field: "businessFormCodes" };
+  }
+
   const supportedLanguageCodes = readOptionalCodeList(body.supportedLanguageCodes, STORE_LANGUAGE_CODES);
 
   if (supportedLanguageCodes === null) {
@@ -560,6 +577,10 @@ export function validateStoreProfileInput(body) {
 
   if (featureCodes !== undefined) {
     optionalFields.featureCodes = featureCodes;
+  }
+
+  if (businessFormCodes !== undefined) {
+    optionalFields.businessFormCodes = businessFormCodes;
   }
 
   if (supportedLanguageCodes !== undefined) {
@@ -635,6 +656,7 @@ function buildProfileResponse(profileData) {
     socialLinks: Array.isArray(data.socialLinks) ? data.socialLinks : [],
     paymentMethodCodes: Array.isArray(data.paymentMethodCodes) ? data.paymentMethodCodes : [],
     featureCodes: Array.isArray(data.featureCodes) ? data.featureCodes : [],
+    businessFormCodes: Array.isArray(data.businessFormCodes) ? data.businessFormCodes : [],
     supportedLanguageCodes: Array.isArray(data.supportedLanguageCodes) ? data.supportedLanguageCodes : [],
     photos: readStoredPhotos(data).map(function(photo) {
       return { url: photo.url, publicId: photo.publicId };
@@ -931,6 +953,7 @@ export async function handleStoreProfileGet(request, response, deps) {
       // 編集画面はこの一覧から選択肢を作る(許可codeをサーバーと一致させる)。
       options: {
         featureCodes: STORE_FEATURE_CODES,
+        businessFormCodes: STORE_BUSINESS_FORM_CODES,
         supportedLanguageCodes: STORE_LANGUAGE_CODES,
         photosMax: STORE_PHOTOS_MAX
       }
@@ -1562,6 +1585,7 @@ function buildPublicStoreProfile(storeId, account, profile, linkedListingIds) {
     websiteUrl: readPublicText(profile.websiteUrl),
     paymentMethodCodes: readPublicCodes(profile.paymentMethodCodes, STORE_PAYMENT_METHOD_CODES),
     featureCodes: readPublicCodes(profile.featureCodes, STORE_FEATURE_CODES),
+    businessFormCodes: readPublicCodes(profile.businessFormCodes, STORE_BUSINESS_FORM_CODES),
     publishedAt: readPublicIsoDate(profile.publishedAt),
     // STEP 44-A｜月額100円カスタマイズの有料の内容は、一覧の取得の最後に利用権限がある店舗だけ
     // custom として付ける(store-custom-profile.js の buildPublicStoreCustomProfile の許可リスト)。

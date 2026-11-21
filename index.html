@@ -3681,6 +3681,44 @@
           <svg class="line-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V5a1.5 1.5 0 0 1 1.5-1.5h11A1.5 1.5 0 0 1 19 5v16"/><path d="M3 21h18"/><path d="M9 7.5h2M13 7.5h2M9 11.5h2M13 11.5h2"/><path d="M10.2 21v-3.6h3.6V21"/></svg> <span data-i18n="category_lodging">宿泊</span>
         </button>
 
+        <!-- 2026-11-21追加｜形態タグ(軸2)の絞り込みチップ。カテゴリーとは別の軸で、
+             カテゴリーのチップと同時に有効なのは1つだけ(app.jsのselectBusinessForm)。 -->
+        <button
+          class="category-button business-form-chip"
+          type="button"
+          data-business-form="mobile_vendor"
+          onclick="selectBusinessForm('mobile_vendor', this)"
+        >
+          <span data-i18n="store_business_form_mobile_vendor">キッチンカー・移動販売</span>
+        </button>
+
+        <button
+          class="category-button business-form-chip"
+          type="button"
+          data-business-form="event_booth"
+          onclick="selectBusinessForm('event_booth', this)"
+        >
+          <span data-i18n="store_business_form_event_booth">イベント出店</span>
+        </button>
+
+        <button
+          class="category-button business-form-chip"
+          type="button"
+          data-business-form="visiting_service"
+          onclick="selectBusinessForm('visiting_service', this)"
+        >
+          <span data-i18n="store_business_form_visiting_service">出張・訪問サービス</span>
+        </button>
+
+        <button
+          class="category-button business-form-chip"
+          type="button"
+          data-business-form="street_spot"
+          onclick="selectBusinessForm('street_spot', this)"
+        >
+          <span data-i18n="store_business_form_street_spot">大道芸・路上出店</span>
+        </button>
+
       </div>
       <span class="category-scroll-hint" aria-hidden="true">›</span>
       </div>

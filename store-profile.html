@@ -432,6 +432,14 @@
           <div id="featureGroups"></div>
         </section>
 
+        <!-- 2026-11-21追加｜形態タグ(軸2)。カテゴリー・設備とは別の軸で、選択肢は
+             storeProfileGetの応答(options.businessFormCodes)から作る。 -->
+        <section class="panel">
+          <h2 data-i18n="store_profile_business_form_heading">形態</h2>
+          <p class="hint" style="margin: 0 0 10px;" data-i18n="store_profile_business_form_hint"></p>
+          <div class="check-group" id="businessFormGroup"></div>
+        </section>
+
         <section class="panel">
           <h2 data-i18n="store_profile_languages_heading">対応言語</h2>
           <p class="hint" style="margin: 0 0 10px;" data-i18n="store_profile_languages_hint"></p>
@@ -832,6 +840,12 @@
         languageGroup.textContent = "";
         (options.supportedLanguageCodes || []).forEach(function (code) {
           languageGroup.appendChild(createCodeCheckbox("data-language-code", code, getLanguageDisplayName(code), languageCodes.includes(code)));
+        });
+        const businessFormCodes = Array.isArray(profile.businessFormCodes) ? profile.businessFormCodes : [];
+        const businessFormGroup = document.getElementById("businessFormGroup");
+        businessFormGroup.textContent = "";
+        (options.businessFormCodes || []).forEach(function (code) {
+          businessFormGroup.appendChild(createCodeCheckbox("data-business-form", code, t("store_business_form_" + code) || code, businessFormCodes.includes(code)));
         });
       }
 
@@ -1769,6 +1783,7 @@
             socialLinks: readSocialLinks(),
             paymentMethodCodes: readPaymentCodes(),
             featureCodes: readCheckedCodes("data-feature", loaded.options && loaded.options.featureCodes),
+            businessFormCodes: readCheckedCodes("data-business-form", loaded.options && loaded.options.businessFormCodes),
             supportedLanguageCodes: readCheckedCodes("data-language-code", loaded.options && loaded.options.supportedLanguageCodes),
             photos: readPhotosForSave()
           });
@@ -2939,6 +2954,7 @@
 
         // お店の情報(支払い方法・設備・対応言語)。
         const infoGroups = [
+          { headingKey: "store_profile_business_form_heading", labels: checkedLabels(["businessFormGroup"]) },
           { headingKey: "store_profile_payment_heading", labels: checkedLabels(["paymentGroup"]) },
           { headingKey: "store_profile_features_heading", labels: checkedLabels(["featureGroups"]) },
           { headingKey: "store_profile_languages_heading", labels: checkedLabels(["languageGroup"]) }
