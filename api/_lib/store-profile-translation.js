@@ -94,6 +94,22 @@ const STORE_PROFILE_TRANSLATION_OUTPUT_COST_PER_MILLION_USD =
 export const STORE_PROFILE_TRANSLATED_DESCRIPTION_MAX_LENGTH =
   3000;
 
+// メニュー一式の翻訳(2026-11-21追加、仕様は store-menu-translation-spec-20261121.md)。
+// 1回の呼び出しで1店舗分のメニュー(最大20項目)をまとめて訳すため、紹介文より大きな出力上限。
+export const STORE_MENU_TRANSLATION_MAX_OUTPUT_TOKENS =
+  8000;
+
+// 訳した料理名の長さの上限(原文は最大40字。補足が付く分の余裕)。
+export const STORE_MENU_TRANSLATED_NAME_MAX_LENGTH =
+  160;
+
+// メニュー項目の最大数(店舗カスタマイズの上限と同じ)。
+const STORE_MENU_TRANSLATION_MAX_ITEMS =
+  20;
+
+const STORE_CUSTOM_PROFILES_COLLECTION_FOR_MENU =
+  "storeCustomProfiles";
+
 const STORE_ID_PATTERN =
   /^[A-Za-z0-9_-]{1,100}$/;
 
@@ -101,6 +117,73 @@ function getDescriptionTranslationFieldPath(
   language
 ) {
   return "translations." + language + ".description";
+}
+
+function getMenuTranslationFieldPath(
+  language
+) {
+  return "translations." + language + ".menuItems";
+}
+
+function readMenuTranslationEntry(
+  profile,
+  language
+) {
+  return profile &&
+    profile.translations &&
+    profile.translations[language] &&
+    typeof profile.translations[language].menuItems === "object"
+    ? profile.translations[language].menuItems
+    : null;
+}
+
+// メニュー項目の原文ハッシュ(名前と説明の組)。項目ごとに訳と対応づけるため、
+// 並べ替え・追加・削除があっても古い訳が別の項目に付かない。
+export function computeStoreMenuItemSourceHash(
+  name,
+  description
+) {
+  return computeStoreProfileDescriptionHash(
+    (typeof name === "string" ? name : "") +
+      "\n" +
+      (typeof description === "string" ? description : "")
+  );
+}
+
+// メニュー一式のハッシュ(項目のハッシュを並べたもの)。生成権の判定に使う。
+export function computeStoreMenuSetHash(
+  items
+) {
+  return computeStoreProfileDescriptionHash(
+    items
+      .map(function(item) {
+        return computeStoreMenuItemSourceHash(item.name, item.description);
+      })
+      .join("\n")
+  );
+}
+
+// 翻訳に渡すメニュー項目の形にそろえる(名前が空の項目は除く)。
+export function normalizeStoreMenuItemsForTranslation(
+  rawItems
+) {
+  if (!Array.isArray(rawItems)) {
+    return [];
+  }
+
+  return rawItems
+    .slice(0, STORE_MENU_TRANSLATION_MAX_ITEMS)
+    .map(function(item) {
+      return {
+        name:
+          item && typeof item.name === "string" ? item.name.trim() : "",
+        description:
+          item && typeof item.description === "string" ? item.description.trim() : ""
+      };
+    })
+    .filter(function(item) {
+      return item.name !== "";
+    });
 }
 
 function readDescriptionTranslationEntry(
@@ -376,6 +459,456 @@ async function saveStoreProfileTranslationResult(
       return { saved: false };
     }
   );
+}
+
+// メニュー一式の生成権とその日の新規翻訳枠を確保する(紹介文と同じ枠・同じ数え方で、
+// 1店舗×1言語のメニュー一式を1件とする)。原文(項目の一覧)は公開用の読み取り結果を渡す。
+async function claimStoreMenuTranslation(
+  database,
+  storeId,
+  language,
+  menuItems,
+  nowMillis,
+  claimId,
+  allowNewClaim
+) {
+  const profileRef =
+    database
+      .collection(STORE_PROFILES_COLLECTION)
+      .doc(storeId);
+
+  const dayKey =
+    computeImadakeTranslationDayKey(nowMillis);
+
+  const budgetRef =
+    database
+      .collection(STORE_PROFILE_TRANSLATION_BUDGETS_COLLECTION)
+      .doc(dayKey);
+
+  const setHash =
+    computeStoreMenuSetHash(menuItems);
+
+  return database.runTransaction(
+    async function(transaction) {
+      const profileSnapshot =
+        await transaction.get(profileRef);
+
+      const budgetSnapshot =
+        await transaction.get(budgetRef);
+
+      const profile =
+        profileSnapshot.exists
+          ? profileSnapshot.data() || {}
+          : null;
+
+      if (
+        profile === null ||
+        profile.status !== "published"
+      ) {
+        return { outcome: "unavailable" };
+      }
+
+      const entry =
+        readMenuTranslationEntry(profile, language);
+
+      const state =
+        decideImadakeCardTranslationState(
+          entry,
+          setHash,
+          nowMillis
+        );
+
+      if (state === "ready") {
+        return {
+          outcome: "ready",
+          items: Array.isArray(entry.items) ? entry.items : []
+        };
+      }
+
+      if (state !== "claimable") {
+        return { outcome: state };
+      }
+
+      if (!allowNewClaim) {
+        return { outcome: "deferred" };
+      }
+
+      let errorCount =
+        entry && entry.sourceHash === setHash
+          ? Number(entry.errorCount) || 0
+          : 0;
+
+      if (
+        entry &&
+        entry.status === "generating" &&
+        entry.sourceHash === setHash
+      ) {
+        errorCount += 1;
+
+        const staleFailure =
+          buildFailureEntry(setHash, errorCount, nowMillis, "stale_generating");
+
+        if (staleFailure.status === "failed") {
+          transaction.update(profileRef, {
+            [getMenuTranslationFieldPath(language)]: staleFailure
+          });
+
+          return { outcome: "failed" };
+        }
+      }
+
+      const budgetData =
+        budgetSnapshot.exists
+          ? budgetSnapshot.data() || {}
+          : {};
+
+      const usedCount =
+        Number(budgetData.count) || 0;
+
+      if (usedCount >= STORE_PROFILE_TRANSLATION_DAILY_LIMIT) {
+        return { outcome: "limited" };
+      }
+
+      transaction.set(
+        budgetRef,
+        {
+          dayKey: dayKey,
+          count: usedCount + 1,
+          limit: STORE_PROFILE_TRANSLATION_DAILY_LIMIT,
+          updatedAt: Timestamp.fromMillis(nowMillis)
+        },
+        { merge: true }
+      );
+
+      transaction.update(profileRef, {
+        [getMenuTranslationFieldPath(language)]: {
+          status: "generating",
+          sourceHash: setHash,
+          claimId: claimId,
+          generatingStartedAt: Timestamp.fromMillis(nowMillis),
+          errorCount: errorCount,
+          retryAfter: null
+        }
+      });
+
+      return {
+        outcome: "claimed",
+        sourceHash: setHash,
+        errorCount: errorCount
+      };
+    }
+  );
+}
+
+// 自分の生成権のまま・公開中・メニューの原文が同じ時だけ結果を保存する。
+// 原文の確認はカスタマイズ文書(storeCustomProfiles/{storeId})を同じトランザクションで読む。
+async function saveStoreMenuTranslationResult(
+  database,
+  storeId,
+  language,
+  claim,
+  claimId,
+  nowMillis,
+  result
+) {
+  const profileRef =
+    database
+      .collection(STORE_PROFILES_COLLECTION)
+      .doc(storeId);
+
+  const customRef =
+    database
+      .collection(STORE_CUSTOM_PROFILES_COLLECTION_FOR_MENU)
+      .doc(storeId);
+
+  return database.runTransaction(
+    async function(transaction) {
+      const snapshot =
+        await transaction.get(profileRef);
+
+      const customSnapshot =
+        await transaction.get(customRef);
+
+      const profile =
+        snapshot.exists
+          ? snapshot.data() || {}
+          : null;
+
+      const entry =
+        readMenuTranslationEntry(profile, language);
+
+      if (
+        profile === null ||
+        !entry ||
+        entry.status !== "generating" ||
+        entry.claimId !== claimId
+      ) {
+        return { saved: false };
+      }
+
+      const currentItems =
+        normalizeStoreMenuItemsForTranslation(
+          customSnapshot.exists
+            ? (customSnapshot.data() || {}).menuItems
+            : null
+        );
+
+      const stillValid =
+        profile.status === "published" &&
+        currentItems.length > 0 &&
+        computeStoreMenuSetHash(currentItems) === claim.sourceHash;
+
+      if (!stillValid) {
+        transaction.update(profileRef, {
+          [getMenuTranslationFieldPath(language)]:
+            buildFailureEntry(claim.sourceHash, claim.errorCount + 1, nowMillis, "source_changed_or_unpublished")
+        });
+
+        return { saved: false };
+      }
+
+      if (result.ok) {
+        transaction.update(profileRef, {
+          [getMenuTranslationFieldPath(language)]: {
+            status: "ready",
+            sourceHash: claim.sourceHash,
+            items: result.items,
+            model: STORE_PROFILE_TRANSLATION_MODEL,
+            generatedAt: Timestamp.fromMillis(nowMillis),
+            usage: result.usage || null,
+            estimatedCostUsd:
+              typeof result.estimatedCostUsd === "number"
+                ? result.estimatedCostUsd
+                : null,
+            errorCount: claim.errorCount,
+            retryAfter: null
+          }
+        });
+
+        return { saved: true };
+      }
+
+      transaction.update(profileRef, {
+        [getMenuTranslationFieldPath(language)]:
+          buildFailureEntry(claim.sourceHash, claim.errorCount + 1, nowMillis, result.reason || "error")
+      });
+
+      return { saved: false };
+    }
+  );
+}
+
+// メニューの訳の検証。件数・空・長すぎ・数字の並び(価格・数量)が原文と違う訳は失敗として扱う。
+export function validateStoreMenuTranslation(
+  sourceItems,
+  translatedItems
+) {
+  if (
+    !Array.isArray(translatedItems) ||
+    translatedItems.length !== sourceItems.length
+  ) {
+    return { ok: false, reason: "shape" };
+  }
+
+  const items = [];
+
+  for (let index = 0; index < sourceItems.length; index += 1) {
+    const source = sourceItems[index];
+    const translated = translatedItems[index] || {};
+
+    const name =
+      typeof translated.name === "string" ? translated.name.trim() : "";
+
+    const description =
+      typeof translated.description === "string" ? translated.description.trim() : "";
+
+    if (
+      name === "" ||
+      name.length > STORE_MENU_TRANSLATED_NAME_MAX_LENGTH ||
+      description.length > STORE_PROFILE_TRANSLATED_DESCRIPTION_MAX_LENGTH
+    ) {
+      return { ok: false, reason: "length" };
+    }
+
+    if (source.description !== "" && description === "") {
+      return { ok: false, reason: "shape" };
+    }
+
+    if (
+      JSON.stringify(extractImadakeDigitGroups(source.name)) !==
+        JSON.stringify(extractImadakeDigitGroups(name)) ||
+      JSON.stringify(extractImadakeDigitGroups(source.description)) !==
+        JSON.stringify(extractImadakeDigitGroups(description))
+    ) {
+      return { ok: false, reason: "digits_mismatch" };
+    }
+
+    items.push({
+      sourceHash: computeStoreMenuItemSourceHash(source.name, source.description),
+      sourceName: source.name,
+      sourceDescription: source.description,
+      name: name,
+      description: description
+    });
+  }
+
+  return { ok: true, items: items };
+}
+
+function buildStoreMenuTranslationPrompt(
+  items,
+  targetLanguage
+) {
+  return {
+    systemInstruction:
+      "You translate restaurant menu items written by shop owners for travelers. Translate each item's \"name\" and \"description\" from Japanese into natural " +
+      (targetLanguage === "en" ? "English" : targetLanguage === "zh-TW" ? "Traditional Chinese (Taiwan)" : targetLanguage) +
+      ". Rules: for dish names, prefer a translation or transliteration that tells the traveler what the dish is; " +
+      "keep every number, price, currency symbol, quantity and unit exactly as written (same digits); " +
+      "do not add ingredients, cooking methods or information that are not in the source; do not remove information; keep it concise. " +
+      "Return only JSON: {\"items\":[{\"id\":\"...\",\"name\":\"...\",\"description\":\"...\"}]} with the same ids in the same order.",
+    userContent:
+      JSON.stringify({
+        items: items.map(function(item, index) {
+          return {
+            id: String(index),
+            name: item.name,
+            description: item.description
+          };
+        })
+      })
+  };
+}
+
+// OpenAIで1店舗分のメニューをまとめて翻訳する(サーバー側だけ)。件数が合わない時は例外。
+export async function callOpenAiStoreMenuTranslation(
+  items,
+  targetLanguage
+) {
+  const apiKey =
+    process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    throw new Error("OPENAI_API_KEY が設定されていません。");
+  }
+
+  const prompt =
+    buildStoreMenuTranslationPrompt(items, targetLanguage);
+
+  const controller =
+    new AbortController();
+
+  const timeoutId =
+    setTimeout(function() {
+      controller.abort();
+    }, STORE_PROFILE_TRANSLATION_TIMEOUT_MS);
+
+  let response;
+
+  try {
+    response =
+      await fetch(
+        STORE_PROFILE_TRANSLATION_ENDPOINT,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + apiKey
+          },
+          body: JSON.stringify({
+            model: STORE_PROFILE_TRANSLATION_MODEL,
+            max_completion_tokens: STORE_MENU_TRANSLATION_MAX_OUTPUT_TOKENS,
+            response_format: { type: "json_object" },
+            messages: [
+              { role: "system", content: prompt.systemInstruction },
+              { role: "user", content: prompt.userContent }
+            ]
+          }),
+          signal: controller.signal
+        }
+      );
+  } catch (fetchError) {
+    throw new Error(
+      fetchError && fetchError.name === "AbortError"
+        ? "店舗メニューの翻訳がタイムアウトしました。"
+        : "店舗メニューの翻訳呼び出しに失敗しました。"
+    );
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  if (!response.ok) {
+    throw new Error("OpenAI APIがエラーを返しました。status=" + response.status);
+  }
+
+  const responseData =
+    await response.json();
+
+  const finishReason =
+    responseData &&
+    Array.isArray(responseData.choices) &&
+    responseData.choices[0]
+      ? responseData.choices[0].finish_reason
+      : "";
+
+  if (finishReason === "length") {
+    const truncatedError =
+      new Error("店舗メニューの翻訳が出力上限で途中までになりました。");
+
+    truncatedError.reason =
+      "output_truncated";
+
+    throw truncatedError;
+  }
+
+  const messageContent =
+    responseData &&
+    Array.isArray(responseData.choices) &&
+    responseData.choices[0] &&
+    responseData.choices[0].message &&
+    typeof responseData.choices[0].message.content === "string"
+      ? responseData.choices[0].message.content
+      : "";
+
+  const parsed =
+    JSON.parse(messageContent);
+
+  const outputItems =
+    parsed && Array.isArray(parsed.items)
+      ? parsed.items
+      : [];
+
+  if (outputItems.length !== items.length) {
+    throw new Error("店舗メニューの翻訳結果の件数が一致しませんでした。");
+  }
+
+  const translatedItems =
+    outputItems.map(function(outputItem) {
+      return {
+        name:
+          outputItem && typeof outputItem.name === "string" ? outputItem.name : "",
+        description:
+          outputItem && typeof outputItem.description === "string" ? outputItem.description : ""
+      };
+    });
+
+  const usage =
+    responseData.usage
+      ? {
+          inputTokens: Number(responseData.usage.prompt_tokens) || 0,
+          outputTokens: Number(responseData.usage.completion_tokens) || 0
+        }
+      : null;
+
+  return {
+    items: translatedItems,
+    usage: usage,
+    estimatedCostUsd:
+      usage
+        ? (usage.inputTokens * STORE_PROFILE_TRANSLATION_INPUT_COST_PER_MILLION_USD +
+            usage.outputTokens * STORE_PROFILE_TRANSLATION_OUTPUT_COST_PER_MILLION_USD) / 1000000
+        : null
+  };
 }
 
 // 訳の検証。空・長すぎ・数字の並び(価格・時間・数量)が原文と違う訳は失敗として扱う。
@@ -834,11 +1367,160 @@ export async function handleStoreProfileTranslationGet(
       }
     }
 
+    // メニュー一式の翻訳(2026-11-21追加)。紹介文と同じ要求で、同じ上限を共用する。
+    // 公開メニューの読み取り手段が無い環境(試験など)では、メニューは扱わない。
+    const menuTranslations =
+      {};
+
+    const menuPending =
+      [];
+
+    if (typeof deps.readPublicMenuItems === "function") {
+      const translateMenuItems =
+        typeof deps.translateMenuItems === "function"
+          ? deps.translateMenuItems
+          : callOpenAiStoreMenuTranslation;
+
+      let newClaimsUsed =
+        claimedItems.length;
+
+      const claimedMenuItems =
+        [];
+
+      for (const storeId of storeIds) {
+        const publicId =
+          PUBLIC_STORE_ID_PREFIX + storeId;
+
+        let menuItems;
+
+        try {
+          menuItems =
+            normalizeStoreMenuItemsForTranslation(
+              await deps.readPublicMenuItems(
+                database,
+                storeId,
+                now()
+              )
+            );
+        } catch (readError) {
+          console.error("店舗メニューの翻訳：公開メニューの確認に失敗：", readError && readError.message);
+          continue;
+        }
+
+        if (menuItems.length === 0) {
+          continue;
+        }
+
+        const claimId =
+          newClaimId();
+
+        let claim;
+
+        try {
+          claim =
+            await claimStoreMenuTranslation(
+              database,
+              storeId,
+              language,
+              menuItems,
+              now(),
+              claimId,
+              newClaimsUsed < STORE_PROFILE_TRANSLATION_MAX_NEW_PER_REQUEST
+            );
+        } catch (claimError) {
+          console.error("店舗メニューの翻訳：生成権の確保に失敗：", claimError && claimError.message);
+          continue;
+        }
+
+        if (claim.outcome === "ready") {
+          menuTranslations[publicId] = claim.items;
+        } else if (
+          claim.outcome === "generating" ||
+          claim.outcome === "deferred"
+        ) {
+          menuPending.push(publicId);
+        } else if (claim.outcome === "limited") {
+          limited = true;
+        } else if (claim.outcome === "claimed") {
+          claimedMenuItems.push({
+            storeId: storeId,
+            publicId: publicId,
+            claimId: claimId,
+            claim: claim,
+            menuItems: menuItems
+          });
+
+          newClaimsUsed += 1;
+        }
+      }
+
+      for (const item of claimedMenuItems) {
+        let result;
+
+        try {
+          const translated =
+            await translateMenuItems(
+              item.menuItems,
+              language
+            );
+
+          const validation =
+            validateStoreMenuTranslation(
+              item.menuItems,
+              translated && translated.items
+            );
+
+          result =
+            validation.ok
+              ? {
+                  ok: true,
+                  items: validation.items,
+                  usage: translated.usage,
+                  estimatedCostUsd:
+                    typeof translated.estimatedCostUsd === "number"
+                      ? translated.estimatedCostUsd
+                      : null
+                }
+              : validation;
+        } catch (translationError) {
+          console.error("店舗メニューの翻訳：生成エラー：", translationError && translationError.message);
+          result = {
+            ok: false,
+            reason:
+              translationError && translationError.reason === "output_truncated"
+                ? "output_truncated"
+                : "translation_error"
+          };
+        }
+
+        try {
+          const saved =
+            await saveStoreMenuTranslationResult(
+              database,
+              item.storeId,
+              language,
+              item.claim,
+              item.claimId,
+              now(),
+              result
+            );
+
+          if (saved.saved && result.ok) {
+            menuTranslations[item.publicId] = result.items;
+          }
+        } catch (saveError) {
+          console.error("店舗メニューの翻訳：結果の保存に失敗：", saveError && saveError.message);
+        }
+      }
+    }
+
     return response.status(200).json({
       success: true,
       translations: translations,
       pending: pending,
-      limited: limited
+      limited: limited,
+      menuTranslations: menuTranslations,
+      menuPending: menuPending
     });
   } catch (error) {
     console.error("店舗の紹介文の翻訳に失敗しました：", error && error.message);

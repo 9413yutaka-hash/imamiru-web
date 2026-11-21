@@ -1679,6 +1679,23 @@ export async function readPublicStoreProfileForShare(database, storeId, options)
     });
   }
 
+  // 2026-11-21｜店舗ページのメニュー併記用：保存済みのメニュー一式の訳(storeProfileTranslationGet が保存したもの)。
+  // 読むだけで、ここから翻訳を頼むことはない。項目との対応は店舗ページの側で原文ハッシュで確かめる。
+  if (options && Array.isArray(options.includeMenuTranslations)) {
+    store.menuTranslations = {};
+
+    options.includeMenuTranslations.forEach(function(language) {
+      const entry =
+        profile.translations &&
+        profile.translations[language] &&
+        profile.translations[language].menuItems;
+
+      if (entry && typeof entry === "object" && entry.status === "ready" && Array.isArray(entry.items)) {
+        store.menuTranslations[language] = entry.items;
+      }
+    });
+  }
+
   return store;
 }
 

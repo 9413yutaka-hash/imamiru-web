@@ -30,7 +30,8 @@ import {
 } from "./store-profile.js";
 
 import {
-  computeStoreProfileDescriptionHash
+  computeStoreProfileDescriptionHash,
+  computeStoreMenuItemSourceHash
 } from "./store-profile-translation.js";
 
 export const STORE_PAGE_ORIGIN =
@@ -178,6 +179,9 @@ export const STORE_PAGE_LABELS = {
     shareX: "Xでポスト",
     photoAlt: "{NAME}の写真{N}",
     menuPhotoAlt: "{NAME}の写真",
+    allergensHeading: "含まれる原材料（アレルギー）",
+    allergen: { shrimp: "えび", crab: "かに", walnut: "くるみ", wheat: "小麦", buckwheat: "そば", egg: "卵", milk: "乳", peanut: "落花生" },
+    menuAllergyNote: "原材料の一部を表示しています。詳しくはお店にご確認ください。",
     addressNote: "",
     translatedNote: ""
   },
@@ -299,6 +303,9 @@ export const STORE_PAGE_LABELS = {
     shareX: "Post on X",
     photoAlt: "Photo {N} of {NAME}",
     menuPhotoAlt: "Photo of {NAME}",
+    allergensHeading: "Contains (allergens)",
+    allergen: { shrimp: "Shrimp", crab: "Crab", walnut: "Walnut", wheat: "Wheat", buckwheat: "Buckwheat", egg: "Egg", milk: "Milk", peanut: "Peanut" },
+    menuAllergyNote: "Only some ingredients are listed. Please ask the shop for details.",
     // C案と同じ案内(TOP の shop_address_in_japanese_label と同じ文言)。住所は日本語のまま。
     addressNote: "Address (in Japanese)",
     // G案の保存済みの自動翻訳を出した時だけ添える。
@@ -422,6 +429,9 @@ export const STORE_PAGE_LABELS = {
     shareX: "在 X 發文",
     photoAlt: "{NAME}的照片{N}",
     menuPhotoAlt: "{NAME}的照片",
+    allergensHeading: "含有原料（過敏原）",
+    allergen: { shrimp: "蝦", crab: "蟹", walnut: "核桃", wheat: "小麥", buckwheat: "蕎麥", egg: "雞蛋", milk: "牛奶", peanut: "花生" },
+    menuAllergyNote: "僅標示部分原料，詳情請向店家確認。",
     addressNote: "地址（以日文標示）",
     translatedNote: "本內容由日文自動翻譯。"
   }
@@ -734,6 +744,12 @@ const STORE_PAGE_STYLE = `
     ul.menu .name { font-weight: 700; margin: 0; overflow-wrap: anywhere; }
     ul.menu .price { color: var(--accent); font-weight: 800; margin: 0; white-space: nowrap; font-variant-numeric: tabular-nums; }
     ul.menu .desc { margin: 4px 0 0; color: var(--sub); font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+    ul.menu .tr { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); }
+    ul.menu .tr-name { margin: 0; font-size: 13.5px; font-weight: 700; color: #40506a; overflow-wrap: anywhere; }
+    ul.menu .tr-desc { margin: 2px 0 0; color: var(--sub); font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .allergens { margin-top: 8px; }
+    .allergens-label { margin: 0 0 4px; color: var(--sub); font-size: 12px; font-weight: 700; }
+    .allergens ul.tags li { font-size: 12px; padding: 2px 10px; }
     table.hours { border-collapse: collapse; width: 100%; font-size: 15px; font-variant-numeric: tabular-nums; }
     table.hours th { text-align: left; font-weight: 600; padding: 7px 12px 7px 8px; white-space: nowrap; width: 8.5em; }
     table.hours td { padding: 7px 8px 7px 0; }
@@ -932,21 +948,48 @@ export function buildStorePageHtml(storeId, store, custom, languageValue, option
   }
 
   if (custom && Array.isArray(custom.menuItems) && custom.menuItems.length > 0) {
+    let anyAllergens = false;
+    // 外国語表示の時だけ、保存済みの訳を日本語の下に併記する(置き換えない)。
+    // 対応づけは項目の原文ハッシュ。訳が無い・原文が変わった項目は日本語だけ。
+    const menuTranslationEntries =
+      language !== "ja" && store.menuTranslations && Array.isArray(store.menuTranslations[language])
+        ? store.menuTranslations[language]
+        : [];
+    const menuHtml = custom.menuItems.map(function(item) {
+      const allergenCodes = (Array.isArray(item.allergens) ? item.allergens : []).filter(function(code) { return !!labels.allergen[code]; });
+      let allergenHtml = "";
+      if (allergenCodes.length > 0) {
+        anyAllergens = true;
+        allergenHtml = "<div class=\"allergens\"><p class=\"allergens-label\">" + escapeStorePageHtml(labels.allergensHeading) + "</p><ul class=\"tags\">" +
+          allergenCodes.map(function(code) { return "<li>" + escapeStorePageHtml(labels.allergen[code]) + "</li>"; }).join("") +
+          "</ul></div>";
+      }
+      let translationHtml = "";
+      if (menuTranslationEntries.length > 0) {
+        const itemHash = computeStoreMenuItemSourceHash(readText(item.name), readText(item.description));
+        const translated = menuTranslationEntries.find(function(entry) { return entry && entry.sourceHash === itemHash && readText(entry.name) !== ""; });
+        if (translated) {
+          translationHtml = "<div class=\"tr\" lang=\"" + escapeStorePageHtml(language) + "\"><p class=\"tr-name\">" + escapeStorePageHtml(readText(translated.name)) + "</p>" +
+            (readText(translated.description) !== "" ? "<p class=\"tr-desc\">" + escapeStorePageHtml(readText(translated.description)) + "</p>" : "") +
+            "</div>";
+        }
+      }
+      return (
+        "<li>" +
+          (isSafeImageUrl(item.photoUrl) ? "<img src=\"" + escapeStorePageHtml(buildStorePageImageUrl(item.photoUrl, 300)) + "\" alt=\"" + escapeStorePageHtml(fillLabel(labels.menuPhotoAlt, { name: item.name, n: "" })) + "\" loading=\"lazy\" decoding=\"async\">" : "") +
+          "<div class=\"item\"><div class=\"head\"><p class=\"name\">" + escapeStorePageHtml(item.name) + "</p>" +
+          (readText(item.priceText) !== "" ? "<p class=\"price\">" + escapeStorePageHtml(item.priceText) + "</p>" : "") + "</div>" +
+          (readText(item.description) !== "" ? "<p class=\"desc\">" + escapeStorePageHtml(item.description) + "</p>" : "") +
+          allergenHtml +
+          translationHtml +
+          "</div>" +
+        "</li>"
+      );
+    }).join("");
     sections.push(buildSectionHtml(
       labels.headingMenu,
-      "<ul class=\"menu\"" + jaAttribute + ">" +
-      custom.menuItems.map(function(item) {
-        return (
-          "<li>" +
-            (isSafeImageUrl(item.photoUrl) ? "<img src=\"" + escapeStorePageHtml(buildStorePageImageUrl(item.photoUrl, 300)) + "\" alt=\"" + escapeStorePageHtml(fillLabel(labels.menuPhotoAlt, { name: item.name, n: "" })) + "\" loading=\"lazy\" decoding=\"async\">" : "") +
-            "<div class=\"item\"><div class=\"head\"><p class=\"name\">" + escapeStorePageHtml(item.name) + "</p>" +
-            (readText(item.priceText) !== "" ? "<p class=\"price\">" + escapeStorePageHtml(item.priceText) + "</p>" : "") + "</div>" +
-            (readText(item.description) !== "" ? "<p class=\"desc\">" + escapeStorePageHtml(item.description) + "</p>" : "") +
-            "</div>" +
-          "</li>"
-        );
-      }).join("") +
-      "</ul>"
+      "<ul class=\"menu\"" + jaAttribute + ">" + menuHtml + "</ul>" +
+      (anyAllergens ? "<p class=\"note\">" + escapeStorePageHtml(labels.menuAllergyNote) + "</p>" : "")
     ));
   }
 
@@ -1139,7 +1182,7 @@ export async function readPublicStorePage(database, storeId, deps) {
     return null;
   }
 
-  const store = await readPublicStoreProfileForShare(database, storeId, { includeContact: true, includeDescriptionTranslations: ["en", "zh-TW"] });
+  const store = await readPublicStoreProfileForShare(database, storeId, { includeContact: true, includeDescriptionTranslations: ["en", "zh-TW"], includeMenuTranslations: ["en", "zh-TW"] });
 
   if (!store) {
     return null;
