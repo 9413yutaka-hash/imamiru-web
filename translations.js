@@ -2604,6 +2604,167 @@ const MACHINAU_TRANSLATIONS = {
     en: "Contact & Feedback | Machinau",
     "zh-TW": "聯絡・意見回饋｜Machinau"
   },
+  // 広告専用フォーム(ad-contact.html)の固定の文言(2026-11-21追加)。
+  ad_contact_doc_title: {
+    ja: "広告掲載のお問い合わせ｜マチナウ",
+    en: "Advertise with us | Machinau",
+    "zh-TW": "廣告刊登聯絡｜Machinau"
+  },
+  ad_contact_hero_label: {
+    ja: "広告掲載について",
+    en: "Advertising",
+    "zh-TW": "關於廣告刊登"
+  },
+  ad_contact_heading: {
+    ja: "広告掲載のお問い合わせ",
+    en: "Advertise with us",
+    "zh-TW": "廣告刊登聯絡"
+  },
+  ad_contact_badge: {
+    ja: "広告枠は都道府県ごとに最大3社まで。同業種は1社だけ、先着順です。",
+    en: "Up to 3 advertisers per prefecture, one per industry, first come first served.",
+    "zh-TW": "每個都道府縣最多 3 家，同一業種僅限 1 家，先到先得。"
+  },
+  ad_contact_form_heading: {
+    ja: "広告掲載フォーム",
+    en: "Advertising inquiry form",
+    "zh-TW": "廣告刊登表單"
+  },
+  ad_contact_form_lead: {
+    ja: "マチナウへの広告掲載のご相談はこちらからお送りください。料金・期間は、お問い合わせの内容を確認してからご案内します。",
+    en: "Send us your advertising inquiry here. We will reply with pricing and period details after reviewing your message.",
+    "zh-TW": "廣告刊登的諮詢請從這裡送出。我們確認內容後，會回覆費用與期間的說明。"
+  },
+  ad_contact_label_company: {
+    ja: "会社名",
+    en: "Company name",
+    "zh-TW": "公司名稱"
+  },
+  ad_contact_label_name: {
+    ja: "担当者名",
+    en: "Contact person",
+    "zh-TW": "聯絡人姓名"
+  },
+  ad_contact_label_email: {
+    ja: "返信先メールアドレス",
+    en: "Reply email address",
+    "zh-TW": "回覆用電子郵件"
+  },
+  ad_contact_email_hint: {
+    ja: "料金・期間のご案内は、このアドレスへお送りします。",
+    en: "We will send pricing and period details to this address.",
+    "zh-TW": "費用與期間的說明會寄到這個信箱。"
+  },
+  ad_contact_label_phone: {
+    ja: "電話番号",
+    en: "Phone number",
+    "zh-TW": "電話號碼"
+  },
+  ad_contact_label_industry: {
+    ja: "業種",
+    en: "Industry",
+    "zh-TW": "業種"
+  },
+  ad_contact_industry_hint: {
+    ja: "広告枠は同業種1社までのため、確認に使います。",
+    en: "Slots are limited to one advertiser per industry, so we use this to check.",
+    "zh-TW": "廣告名額同一業種僅限 1 家，因此用於確認。"
+  },
+  ad_contact_industry_placeholder: {
+    ja: "例：ホテル・旅館",
+    en: "e.g. Hotels and inns",
+    "zh-TW": "例：飯店・旅館"
+  },
+  ad_contact_label_area: {
+    ja: "掲載希望エリア",
+    en: "Preferred area",
+    "zh-TW": "希望刊登的地區"
+  },
+  ad_contact_area_hint: {
+    ja: "広告枠は都道府県ごとです。",
+    en: "Slots are per prefecture.",
+    "zh-TW": "廣告名額以都道府縣為單位。"
+  },
+  ad_contact_area_placeholder: {
+    ja: "例：沖縄県",
+    en: "e.g. Okinawa",
+    "zh-TW": "例：沖繩縣"
+  },
+  ad_contact_message_hint: {
+    ja: "掲載したい内容や時期など、分かる範囲でご記入ください。",
+    en: "Tell us what you would like to advertise and your timing, as far as you know.",
+    "zh-TW": "請填寫想刊登的內容與時期等已知資訊。"
+  },
+  ad_contact_privacy_note: {
+    ja: "ご記入いただいた会社名・担当者名・メールアドレス・お問い合わせ内容は、広告掲載への対応のためにのみ使用し、公開されることはありません。",
+    en: "Your company name, contact person, email address and message are used only to respond to your advertising inquiry and are never made public.",
+    "zh-TW": "您填寫的公司名稱、聯絡人、電子郵件與內容僅用於回覆廣告刊登事宜，不會公開。"
+  },
+  ad_contact_done_heading: {
+    ja: "お問い合わせを受け付けました。",
+    en: "Thank you, we received your inquiry.",
+    "zh-TW": "已收到您的聯絡。"
+  },
+  ad_contact_done_text: {
+    ja: "マチナウ運営へ届きました。ありがとうございます。内容を確認して、料金・期間のご案内をメールでお送りします。",
+    en: "Your inquiry has reached the Machinau team. We will review it and email you the pricing and period details.",
+    "zh-TW": "已送達 Machinau 營運團隊。我們確認內容後，會以電子郵件寄送費用與期間的說明。"
+  },
+  ad_contact_error_company: {
+    ja: "会社名を入力してください。",
+    en: "Please enter your company name.",
+    "zh-TW": "請輸入公司名稱。"
+  },
+  ad_contact_error_name: {
+    ja: "担当者名を入力してください。",
+    en: "Please enter the contact person's name.",
+    "zh-TW": "請輸入聯絡人姓名。"
+  },
+  ad_contact_error_email_required: {
+    ja: "メールアドレスを入力してください。",
+    en: "Please enter your email address.",
+    "zh-TW": "請輸入電子郵件。"
+  },
+  ad_contact_error_industry: {
+    ja: "業種を入力してください。",
+    en: "Please enter your industry.",
+    "zh-TW": "請輸入業種。"
+  },
+  ad_contact_error_area: {
+    ja: "掲載希望エリアを入力してください。",
+    en: "Please enter your preferred area.",
+    "zh-TW": "請輸入希望刊登的地區。"
+  },
+  ad_contact_error_message: {
+    ja: "お問い合わせ内容を入力してください。",
+    en: "Please enter your message.",
+    "zh-TW": "請輸入聯絡內容。"
+  },
+  ad_contact_field_name: {
+    ja: "担当者名",
+    en: "Contact person",
+    "zh-TW": "聯絡人姓名"
+  },
+  ad_contact_field_company: {
+    ja: "会社名",
+    en: "Company name",
+    "zh-TW": "公司名稱"
+  },
+  ad_contact_field_phone: {
+    ja: "電話番号",
+    en: "Phone number",
+    "zh-TW": "電話號碼"
+  },
+  ad_contact_field_industry: {
+    ja: "業種",
+    en: "Industry",
+    "zh-TW": "業種"
+  },
+  ad_contact_field_area: {
+    ja: "掲載希望エリア",
+    en: "Preferred area",
+    "zh-TW": "希望刊登的地區"
+  },
   // サイト全体改善 第4弾｜post.html の固定の文言(英語の TOP から移っても日本語に戻らない)。
   post_brand_caption: {
     ja: "街の「今」がわかる案内所",

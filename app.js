@@ -180,6 +180,18 @@ function refreshAdSlotAreaTexts() {
 function updateAdSlotAreaTexts(language) {
   const areaName = adSlotCurrentAreaName;
 
+  // 広告専用フォームへ表示中のエリアを引き継ぐ(掲載希望エリアの初期値になる)。
+  const adButtonElement =
+    document.querySelector(
+      '#adSlotBody .ad-slot-button'
+    );
+
+  if (adButtonElement) {
+    adButtonElement.href = areaName
+      ? "ad-contact.html?area=" + encodeURIComponent(areaName)
+      : "ad-contact.html";
+  }
+
   if (!areaName || areaName === "沖縄県") {
     return;
   }
@@ -25932,8 +25944,10 @@ Object.keys(HERO_ACTION_ANALYTICS_ACTIONS).forEach(function(elementId) {
 // 店舗の掲載順位には一切関わらない。
 // 2026-11-19 代表決定：この枠は地元の大きな会社向けに都道府県単位で売る枠とし、
 // 文言を企業向け(「沖縄県内、3枠だけ。先着順です。」)に変更。最大3社のスライド表示で同業種は1社だけ。
-// ボタンは店舗向け案内(shop.html)ではなく広告掲載のお問い合わせ(contact.html)へ。地域単位の小枠は作らない。
-// スライド表示・料金・申込み・広告の配信・課金の仕組みはまだ無い(広告主が決まった時に作る)。
+// ボタンは店舗向け案内(shop.html)ではなく広告掲載のお問い合わせへ。地域単位の小枠は作らない。
+// 2026-11-21 代表決定：行き先は広告専用フォーム(ad-contact.html)に変更(一般の
+// お問い合わせフォームには広告の種別が無かったため)。表示中のエリアは ?area= で引き継ぐ。
+// スライド表示・料金・広告の配信・課金の仕組みはまだ無い(広告主が決まった時に作る)。
 
 // ============================================================
 // 今日のフィード(03)｜トップページ改修(モカ案ブレンド) 2026-11-14
