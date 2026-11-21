@@ -13307,8 +13307,7 @@ const REGION_TODAY_INFO_SOURCE_LANGUAGE =
 const REGION_TODAY_INFO_SUPPORTED_LANGUAGES =
   [
     "ja",
-    "en",
-    "zh-TW"
+    "en"
   ];
 
 // 単純翻訳にはweb_search・高度な推論は不要なため、既存コード内で最も
@@ -24745,8 +24744,7 @@ function buildColumnArticleSummaryTranslationPrompt(
 ) {
   const targetLanguageNamesByCode =
     {
-      en: "English",
-      "zh-TW": "Traditional Chinese (Taiwan)"
+      en: "English"
     };
 
   const targetLanguageName =
@@ -24779,14 +24777,9 @@ function buildColumnArticleSummaryTranslationPrompt(
     "exactly one entry per input item, with the same \"id\" value. " +
     "\n- Never change or invent numbers, dates, place names, or facts — " +
     "translate the wording only, never the underlying fact. " +
-    (targetLanguage === "zh-TW"
-      ? "\n- Place names must be written in the standard Traditional " +
-        "Chinese characters used in Taiwan (for example \u6c96\u7e69 for \u6c96\u7e1d " +
-        "and \u90a3\u9738 for \u90a3\u8987). Never use Simplified Chinese " +
-        "characters and do not romanize place names. "
-      : "\n- Place names must NOT be translated by meaning into a " +
-        "different-sounding name; use the standard, widely-recognized " +
-        "English romanization instead of inventing one. ") +
+    "\n- Place names must NOT be translated by meaning into a " +
+    "different-sounding name; use the standard, widely-recognized " +
+    "English romanization instead of inventing one. " +
 
     "\n\nOUTPUT: respond with a JSON object of exactly this form: " +
     "{\"items\":[{\"id\":\"...\",\"title\":\"...\"," +
@@ -25329,8 +25322,7 @@ function buildColumnArticleContentTranslationPrompt(
 ) {
   const targetLanguageNamesByCode =
     {
-      en: "English",
-      "zh-TW": "Traditional Chinese (Taiwan)"
+      en: "English"
     };
 
   const targetLanguageName =
@@ -25354,17 +25346,10 @@ function buildColumnArticleContentTranslationPrompt(
     "exact same paragraph structure: the number of paragraphs and their " +
     "order must match the original exactly, separated by a single " +
     "blank line between paragraphs (matching the input format). " +
-    (targetLanguage === "zh-TW"
-      ? "\n- Never change or invent numbers, dates, historical facts, " +
-        "or place names. Place names must be written in the standard " +
-        "Traditional Chinese characters used in Taiwan (for example " +
-        "\u6c96\u7e69 for \u6c96\u7e1d and \u90a3\u9738 for \u90a3\u8987). Never use " +
-        "Simplified Chinese characters and do not romanize place " +
-        "names. "
-      : "\n- Never change or invent numbers, dates, historical facts, or " +
-        "place names. Place names must use standard, widely-recognized " +
-        "English romanization rather than an invented or meaning-based " +
-        "translation. ") +
+    "\n- Never change or invent numbers, dates, historical facts, or " +
+    "place names. Place names must use standard, widely-recognized " +
+    "English romanization rather than an invented or meaning-based " +
+    "translation. " +
     "\n- Do not invent URLs or web links that are not in the original " +
     "text. " +
     "\n- The text may contain placeholders of the form [[MACHINAU_URL_1]], " +
