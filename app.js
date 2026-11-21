@@ -3902,6 +3902,18 @@ const STORE_PROFILE_CUSTOM_LINK_TYPES = [
 const STORE_PROFILE_CUSTOM_PHOTO_PREFIX =
   "https://res.cloudinary.com/cdhyctnp/image/upload/";
 
+// アレルギー表示(特定原材料8品目)。サーバーの STORE_CUSTOM_ALLERGEN_CODES と一致させる。
+const STORE_PROFILE_CUSTOM_ALLERGEN_CODES = [
+  "shrimp",
+  "crab",
+  "walnut",
+  "wheat",
+  "buckwheat",
+  "egg",
+  "milk",
+  "peanut"
+];
+
 function readStoreProfileCustom(custom) {
   if (!custom || typeof custom !== "object") {
     return null;
@@ -3919,7 +3931,9 @@ function readStoreProfileCustom(custom) {
         name: item ? readText(item.name) : "",
         description: item ? readText(item.description) : "",
         priceText: item ? readText(item.priceText) : "",
-        photoUrl: photoUrl.indexOf(STORE_PROFILE_CUSTOM_PHOTO_PREFIX) === 0 ? photoUrl : ""
+        photoUrl: photoUrl.indexOf(STORE_PROFILE_CUSTOM_PHOTO_PREFIX) === 0 ? photoUrl : "",
+        allergens: (item && Array.isArray(item.allergens) ? item.allergens : [])
+          .filter(function(code) { return STORE_PROFILE_CUSTOM_ALLERGEN_CODES.includes(code); })
       };
     })
     .filter(function(item) { return item.name !== ""; });
@@ -3964,6 +3978,7 @@ function buildStoreProfileCustomHtml(custom, language) {
   }
 
   if (custom.menuItems.length > 0) {
+    const anyAllergens = custom.menuItems.some(function(item) { return item.allergens.length > 0; });
     parts.push(
       '<section class="shop-custom-section">' +
         '<h3 class="shop-custom-heading">' + escapeHtml(getMachinauTranslation("shop_custom_menu_heading", language)) + "</h3>" +
@@ -3980,11 +3995,19 @@ function buildStoreProfileCustomHtml(custom, language) {
                   (item.priceText !== "" ? '<span class="shop-custom-menu-price">' + escapeHtml(item.priceText) + "</span>" : "") +
                 "</div>" +
                 (item.description !== "" ? '<p class="shop-custom-text">' + escapeHtml(item.description) + "</p>" : "") +
+                (item.allergens.length > 0
+                  ? '<div class="shop-custom-allergens"><p class="shop-custom-allergens-label">' + escapeHtml(getMachinauTranslation("shop_custom_allergens_heading", language)) + '</p><div class="shop-custom-allergen-chips">' +
+                    item.allergens.map(function(code) {
+                      return '<span class="shop-custom-allergen-chip">' + escapeHtml(getMachinauTranslation("shop_allergen_" + code, language)) + "</span>";
+                    }).join("") +
+                    "</div></div>"
+                  : "") +
               "</div>" +
             "</li>"
           );
         }).join("") +
         "</ul>" +
+        (anyAllergens ? '<p class="shop-custom-allergy-note">' + escapeHtml(getMachinauTranslation("shop_custom_allergy_note", language)) + "</p>" : "") +
       "</section>"
     );
   }

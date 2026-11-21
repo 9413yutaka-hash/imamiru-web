@@ -6988,6 +6988,24 @@ const MACHINAU_TRANSLATIONS = {
     "zh-TW": "菜單・商品介紹"
   },
 
+  store_custom_menu_allergens_label: {
+    ja: "含まれる原材料（アレルギー）",
+    en: "Contains (allergens)",
+    "zh-TW": "含有原料（過敏原）"
+  },
+
+  store_custom_menu_allergens_hint: {
+    ja: "含まれるものだけを選んでください。分かる範囲で正確に。分からないものは選ばなくて大丈夫です。選ばなかったものが「含まれていない」という意味にはなりません。",
+    en: "Select only what the item contains, as accurately as you can. It is fine to leave items unselected when unsure; unselected items are not shown as 'not contained'.",
+    "zh-TW": "只需勾選有含的原料，請盡量正確。不確定可以不勾選；未勾選不代表「不含」。"
+  },
+
+  store_custom_err_allergens: {
+    ja: "{item}のアレルギーの選択が正しくありません。",
+    en: "The allergen selection for {item} is invalid.",
+    "zh-TW": "{item}的過敏原選擇不正確。"
+  },
+
   store_custom_menu_hint: {
     ja: "最大{max}件。商品名は必須、価格と説明は任意です（空欄の項目は表示しません）。写真は1商品に1枚、お店全体で{photos}枚までです（写真の無い商品も登録できます）。「↑前へ」「↓後へ」で商品の並び順を変えられます。公開ページではこの順番で表示され、一番上の商品は一覧のカードにも出ます。",
     en: "Up to {max} items. A name is required; price and description are optional (empty fields are not shown). One photo per item, up to {photos} photos for the whole shop (items without a photo are fine). Use the Earlier and Later buttons to change the order: your page shows items in this order, and the first item also appears on listing cards.",
@@ -7256,6 +7274,66 @@ const MACHINAU_TRANSLATIONS = {
     ja: "メニュー・商品",
     en: "Menu and products",
     "zh-TW": "菜單・商品"
+  },
+
+  shop_custom_allergens_heading: {
+    ja: "含まれる原材料（アレルギー）",
+    en: "Contains (allergens)",
+    "zh-TW": "含有原料（過敏原）"
+  },
+
+  shop_custom_allergy_note: {
+    ja: "原材料の一部を表示しています。詳しくはお店にご確認ください。",
+    en: "Only some ingredients are listed. Please ask the shop for details.",
+    "zh-TW": "僅標示部分原料，詳情請向店家確認。"
+  },
+
+  shop_allergen_shrimp: {
+    ja: "えび",
+    en: "Shrimp",
+    "zh-TW": "蝦"
+  },
+
+  shop_allergen_crab: {
+    ja: "かに",
+    en: "Crab",
+    "zh-TW": "蟹"
+  },
+
+  shop_allergen_walnut: {
+    ja: "くるみ",
+    en: "Walnut",
+    "zh-TW": "核桃"
+  },
+
+  shop_allergen_wheat: {
+    ja: "小麦",
+    en: "Wheat",
+    "zh-TW": "小麥"
+  },
+
+  shop_allergen_buckwheat: {
+    ja: "そば",
+    en: "Buckwheat",
+    "zh-TW": "蕎麥"
+  },
+
+  shop_allergen_egg: {
+    ja: "卵",
+    en: "Egg",
+    "zh-TW": "雞蛋"
+  },
+
+  shop_allergen_milk: {
+    ja: "乳",
+    en: "Milk",
+    "zh-TW": "牛奶"
+  },
+
+  shop_allergen_peanut: {
+    ja: "落花生",
+    en: "Peanut",
+    "zh-TW": "花生"
   },
 
   shop_custom_links_heading: {

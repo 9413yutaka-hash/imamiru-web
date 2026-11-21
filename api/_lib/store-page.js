@@ -724,8 +724,8 @@ const STORE_PAGE_STYLE = `
     .story { position: relative; padding: 18px 20px; background: var(--surface); border-radius: var(--radius-card); box-shadow: var(--shadow-card); }
     .story .text { font-size: 15px; }
     .note { color: var(--sub); font-size: 13px; margin: 10px 0 0; overflow-wrap: anywhere; }
-    .gallery { display: flex; align-items: flex-start; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; margin: 0 -16px; padding: 0 16px 6px; -webkit-overflow-scrolling: touch; }
-    .gallery img { flex: none; width: 78%; max-width: 440px; height: auto; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--radius-inner); scroll-snap-align: start; background: #dfe7ef; display: block; }
+    .gallery { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .gallery img { width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--radius-inner); background: #dfe7ef; display: block; }
     ul.menu { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
     ul.menu li { display: flex; gap: 14px; padding: 12px; background: var(--surface); border-radius: var(--radius-inner); box-shadow: var(--shadow-card); }
     ul.menu img { width: 96px; height: 96px; object-fit: cover; border-radius: 12px; flex: none; background: #dfe7ef; }
@@ -764,12 +764,7 @@ const STORE_PAGE_STYLE = `
       .hero .hero-text { padding: 0 28px 48px; }
       h1 { font-size: 34px; }
       nav.quick { margin: -26px 20px 0; }
-      .gallery { margin: 0; padding: 0 0 6px; }
-      .gallery img { width: 46%; }
       .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    }
-    @media (prefers-reduced-motion: no-preference) {
-      .gallery { scroll-behavior: smooth; }
     }
 `;
 
@@ -917,7 +912,7 @@ export function buildStorePageHtml(storeId, store, custom, languageValue, option
     sections.push(buildSectionHtml(labels.headingAbout, "<div class=\"panel\">" + bodyHtml + "</div>"));
   }
 
-  // ---- 写真(2枚目以降。横に送って見る) ----
+  // ---- 写真(2枚目以降。2列グリッド・横長4:3で一覧表示) ----
   if (photos.length > 1) {
     sections.push(buildSectionHtml(
       labels.headingPhotos,
