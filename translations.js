@@ -5875,6 +5875,11 @@ const MACHINAU_TRANSLATIONS = {
     en: "When you save, we check the address on the map (the country/region stays the same). If a shop with the same name is listed nearby, your shop may not be shown to travelers until this is resolved.",
     "zh-TW": "地址會在儲存時於地圖上確認位置（國家・地區不會變更）。若附近已刊登同名的店家，在確認完成前，可能不會顯示給旅客。"
   },
+  store_identity_mobile_note: {
+    ja: "主な活動エリアは、都道府県と市区町村で変更できます。住所を入力して保存すると、その住所で地図上の位置を確かめて、固定のお店として登録されます。",
+    en: "You can change your main activity area by prefecture and city. If you enter an address and save, we will check its location on the map and register your shop as a fixed-location shop.",
+    "zh-TW": "主要活動地區可依都道府縣與市區町村變更。若輸入地址並儲存，將於地圖上確認位置，並登記為固定店家。"
+  },
   store_identity_save_button: {
     ja: "変更を保存する",
     en: "Save changes",

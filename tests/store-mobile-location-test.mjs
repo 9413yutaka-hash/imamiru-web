@@ -152,5 +152,52 @@ async function storeStatus(m, d, storeId) {
   t("C5 固定店舗は postAddress を送っても正式所在地のまま", fixed.code === 200 && !!fixedPost && fixedPost.latitude === 26.21 && fixedPost.address === "沖縄県那覇市1-1" && fixedPost.locationSource === "storeAccount", { code: fixed.code, post: fixedPost });
 }
 
+// ---------- D. 店舗・施設名と所在地の変更(活動エリアの変更) ----------
+async function identityUpdate(m, body) {
+  const r = res();
+  await quiet(() => SS.handleStoreIdentityUpdate({ body, headers: {} }, r, selfServiceDeps(m)));
+  return r;
+}
+function seedMobileStore(m, city) {
+  m.seed("storeAccounts", "truck1", { storeName: "島タコス号", enabled: true, createdByType: "storeUser", createdByUid: "u1", registrationStatus: "active", locationMode: "mobile", countryCode: "JP", address: "", locationFormattedAddress: "", prefecture: "沖縄県", city: city, regionKey: "JP-47", locationSource: "storeSelfActivityArea" });
+  m.seed("storeMembers", "truck1_u1", { storeId: "truck1", uid: "u1", role: "owner", status: "active" });
+}
+{
+  const m = makeDb();
+  seedMobileStore(m, "糸満市");
+  const r = await identityUpdate(m, { storeId: "truck1", storeName: "島タコス号", address: "", activityPrefecture: "沖縄県", activityCity: "八重瀬町" });
+  const account = m.get("storeAccounts", "truck1");
+  t("D1 mobile の活動エリアを変更できる(mobile のまま・座標なし)", r.code === 200 && r.body.changed === true && account.city === "八重瀬町" && account.prefecture === "沖縄県" && account.regionKey === "JP-47" && account.locationMode === "mobile" && account.address === "" && !("latitude" in account) && account.locationSource === "storeSelfActivityArea", { code: r.code, body: r.body, account });
+  t("D1b 応答の location が新しいエリアを返す", !!r.body.location && r.body.location.city === "八重瀬町" && r.body.location.locationMode === "mobile", r.body);
+
+  const m2 = makeDb();
+  seedMobileStore(m2, "糸満市");
+  const r2 = await identityUpdate(m2, { storeId: "truck1", storeName: "島タコス号", address: "", activityPrefecture: "沖縄県", activityCity: "存在しない市" });
+  t("D2 マスタにない市区町村は 400 activityArea で変更しない", r2.code === 400 && r2.body.field === "activityArea" && m2.get("storeAccounts", "truck1").city === "糸満市", r2.body);
+
+  const m3 = makeDb();
+  seedMobileStore(m3, "糸満市");
+  const r3 = await identityUpdate(m3, { storeId: "truck1", storeName: "島タコス2号", address: "" });
+  t("D3 活動エリアを送らない店名だけの変更は従来通り(エリアはそのまま)", r3.code === 200 && r3.body.changed === true && m3.get("storeAccounts", "truck1").city === "糸満市" && m3.get("storeAccounts", "truck1").storeName === "島タコス2号", r3.body);
+
+  const m4 = makeDb();
+  seedMobileStore(m4, "糸満市");
+  const r4 = await identityUpdate(m4, { storeId: "truck1", storeName: "島タコス号", address: "", activityPrefecture: "沖縄県", activityCity: "糸満市" });
+  t("D4 同じエリア・同じ店名は changed:false", r4.code === 200 && r4.body.changed === false, r4.body);
+
+  const m5 = makeDb();
+  seedMobileStore(m5, "糸満市");
+  fetchResult = geoOk(26.316, 127.769);
+  const r5 = await identityUpdate(m5, { storeId: "truck1", storeName: "島タコス号", address: "沖縄県北谷町美浜9-1" });
+  const account5 = m5.get("storeAccounts", "truck1");
+  t("D5 mobile が住所を入れれば従来通り固定店舗へ移行する", r5.code === 200 && account5.locationMode === "fixed" && account5.latitude === 26.316 && account5.city === "北谷町", { code: r5.code, body: r5.body, account: account5 });
+
+  const m6 = makeDb();
+  m6.seed("storeAccounts", "fixed1", { storeName: "固定タコス", enabled: true, createdByType: "storeUser", createdByUid: "u1", registrationStatus: "active", countryCode: "JP", prefecture: "沖縄県", city: "那覇市", regionKey: "JP-47", address: "沖縄県那覇市1-1", locationFormattedAddress: "沖縄県那覇市1-1", latitude: 26.21, longitude: 127.68, locationSource: "storeSelfGeocode" });
+  m6.seed("storeMembers", "fixed1_u1", { storeId: "fixed1", uid: "u1", role: "owner", status: "active" });
+  const r6 = await identityUpdate(m6, { storeId: "fixed1", storeName: "固定タコス", address: "", activityPrefecture: "沖縄県", activityCity: "八重瀬町" });
+  t("D6 固定店舗は住所を空にできない(活動エリアを送っても従来通り 400 address)", r6.code === 400 && r6.body.field === "address" && m6.get("storeAccounts", "fixed1").city === "那覇市", r6.body);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

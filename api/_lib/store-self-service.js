@@ -943,7 +943,8 @@ export async function handleStoreMyStores(request, response, deps) {
 
 // ===== STEP 56｜店舗・施設名と所在地の変更(店主本人) =====
 // mode: storeIdentityUpdate (POST、メール確認済み店舗アカウントの有効な owner、編集できる店舗だけ)
-// { storeId, storeName, address }
+// { storeId, storeName, address, activityPrefecture?, activityCity? }
+// ・住所なし(mobile)の店舗は、住所が空で activityPrefecture/activityCity が来たら活動エリアの変更として扱う。
 // ・国は登録の時のまま(変えない)。住所は登録と同じく、サーバーで改めて Geocoding して確定する
 //   (クライアントの座標・地名は使わない)。住所が変わらなければ所在地は今のまま。
 // ・重複の疑いは登録と同じ判定で作り直す(自分の店舗は除く)。同じ店主の別の店舗と同じ名前で100m以内は 409。
@@ -975,7 +976,19 @@ function readStoreIdentityInput(body) {
     return { ok: false, field: "address" };
   }
 
-  return { ok: true, storeId: storeId, storeName: storeName, address: address };
+  // 2026-11-23｜住所なし(mobile)店舗の活動エリア変更用に、登録と同じ項目を任意で受ける。
+  // 使うかどうかは呼び出し側が店舗の状態(mobile・住所が空)で決める。読めない値は空として扱う。
+  const activityPrefecture = readSingleLineText(body.activityPrefecture, 20);
+  const activityCity = readSingleLineText(body.activityCity, 60);
+
+  return {
+    ok: true,
+    storeId: storeId,
+    storeName: storeName,
+    address: address,
+    activityPrefecture: activityPrefecture || "",
+    activityCity: activityCity || ""
+  };
 }
 
 function isActiveStoreOwner(memberData, uid, storeId) {
@@ -1042,7 +1055,24 @@ export async function handleStoreIdentityUpdate(request, response, deps) {
     const nameChanged = input.storeName !== readStoredText(before.storeName);
     const addressChanged = input.address !== readStoredText(before.address);
 
-    if (!nameChanged && !addressChanged) {
+    // 2026-11-23｜住所なし(mobile)の店舗は、住所を空のまま活動エリア(都道府県・市区町村)を
+    // 送れば、エリアだけを変更できる(登録時と同じ市区町村マスタで確かめる。座標は持たない)。
+    // 住所を入れて送れば、従来通り Geocoding して固定店舗へ移行する(下の addressChanged の経路)。
+    let activityArea = null;
+
+    if (before.locationMode === "mobile" && input.address === "" && (input.activityPrefecture !== "" || input.activityCity !== "")) {
+      const cities = input.activityPrefecture ? JAPAN_MUNICIPALITIES_BY_PREFECTURE[input.activityPrefecture] : null;
+
+      if (!input.activityPrefecture || !input.activityCity || !Array.isArray(cities) || !cities.includes(input.activityCity)) {
+        return sendError(response, 400, "invalid_input", { field: "activityArea" });
+      }
+
+      activityArea = { prefecture: input.activityPrefecture, city: input.activityCity };
+    }
+
+    const areaChanged = !!activityArea && (activityArea.prefecture !== readStoredText(before.prefecture) || activityArea.city !== readStoredText(before.city));
+
+    if (!nameChanged && !addressChanged && !areaChanged) {
       return response.status(200).json({ success: true, changed: false });
     }
 
@@ -1122,6 +1152,12 @@ export async function handleStoreIdentityUpdate(request, response, deps) {
         return;
       }
 
+      // 活動エリアの変更も、事前に読んだ後に別の操作で変わっていたら上書きしない。
+      if (areaChanged && (readStoredText(current.prefecture) !== readStoredText(before.prefecture) || readStoredText(current.city) !== readStoredText(before.city))) {
+        outcome = { status: 409, reason: "identity_conflict" };
+        return;
+      }
+
       const reviewFlags = Array.isArray(current.reviewFlags) ? current.reviewFlags.slice() : [];
 
       if (duplicates.length > 0 && !reviewFlags.includes("possible_duplicate")) {
@@ -1155,6 +1191,17 @@ export async function handleStoreIdentityUpdate(request, response, deps) {
         });
       }
 
+      if (!location && areaChanged) {
+        // 活動エリアの変更。locationMode は mobile のまま、座標は持たない(登録時と同じ形)。
+        Object.assign(update, {
+          prefecture: activityArea.prefecture,
+          city: activityArea.city,
+          regionKey: buildImadakeRegionKey(readCountryCode(current.countryCode) || "JP", activityArea.prefecture),
+          locationSource: "storeSelfActivityArea",
+          locationUpdatedAt: FieldValue.serverTimestamp()
+        });
+      }
+
       transaction.update(storeRef, update);
 
       if (snapshots[2].exists && nameChanged) {
@@ -1167,15 +1214,20 @@ export async function handleStoreIdentityUpdate(request, response, deps) {
         before: {
           storeName: readStoredText(current.storeName),
           address: readStoredText(current.address),
-          formattedAddress: readStoredText(current.locationFormattedAddress)
+          formattedAddress: readStoredText(current.locationFormattedAddress),
+          prefecture: readStoredText(current.prefecture),
+          city: readStoredText(current.city)
         },
         after: {
           storeName: input.storeName,
           address: location ? input.address : readStoredText(current.address),
-          formattedAddress: location ? location.formattedAddress : readStoredText(current.locationFormattedAddress)
+          formattedAddress: location ? location.formattedAddress : readStoredText(current.locationFormattedAddress),
+          prefecture: location ? location.prefecture : (areaChanged ? activityArea.prefecture : readStoredText(current.prefecture)),
+          city: location ? location.city : (areaChanged ? activityArea.city : readStoredText(current.city))
         },
         nameChanged: nameChanged,
         addressChanged: !!location,
+        areaChanged: areaChanged,
         duplicateCandidateCount: duplicates.length,
         createdAt: FieldValue.serverTimestamp()
       });
@@ -1193,12 +1245,21 @@ export async function handleStoreIdentityUpdate(request, response, deps) {
       storeName: input.storeName,
       location: location
         ? buildPublicLocation(location)
-        : {
-          formattedAddress: readStoredText(before.locationFormattedAddress) || readStoredText(before.address),
-          countryCode: readStoredText(before.countryCode),
-          prefecture: readStoredText(before.prefecture),
-          city: readStoredText(before.city)
-        },
+        : areaChanged
+          ? {
+            formattedAddress: "",
+            countryCode: readStoredText(before.countryCode),
+            prefecture: activityArea.prefecture,
+            city: activityArea.city,
+            regionKey: buildImadakeRegionKey(readCountryCode(before.countryCode) || "JP", activityArea.prefecture),
+            locationMode: "mobile"
+          }
+          : {
+            formattedAddress: readStoredText(before.locationFormattedAddress) || readStoredText(before.address),
+            countryCode: readStoredText(before.countryCode),
+            prefecture: readStoredText(before.prefecture),
+            city: readStoredText(before.city)
+          },
       possibleDuplicate: duplicates.length > 0
     });
   } catch (error) {
