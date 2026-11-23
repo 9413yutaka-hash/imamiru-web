@@ -282,16 +282,40 @@
     .field-label { display: block; margin-bottom: 6px; font-size: 13.5px; font-weight: 800; color: var(--navy); }
     .claim-withdraw { margin-top: 8px; }
 
+    /* 2026-11-24｜毎日使う「編集・申し込み」「今だけ投稿」を大きなボタンに(登録済みの店主が主に使うため)。 */
     .store-card-link {
-      display: inline-block;
-      margin-top: 8px;
-      padding: 8px 14px;
+      display: block;
+      margin-top: 10px;
+      padding: 14px;
       border-radius: 999px;
       background: var(--sky);
       color: var(--navy);
-      font-size: 13px;
+      font-size: 15px;
       font-weight: 800;
+      text-align: center;
       text-decoration: none;
+    }
+
+    .store-card-link-accent {
+      border: 2px solid var(--blue);
+    }
+
+    /* 2026-11-24｜「店舗・施設を登録する」は追加登録用なので小さくする。 */
+    .register-store-button {
+      display: block;
+      margin: 4px auto 0;
+      padding: 8px 18px;
+      border-radius: 999px;
+      border: 1.5px solid var(--blue);
+      background: transparent;
+      color: var(--blue);
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .register-store-button::before {
+      content: "＋ ";
     }
 
     .store-status, .claim-status {
@@ -559,7 +583,7 @@
         <p class="note" id="storeListEmpty" hidden data-i18n="store_account_stores_empty"></p>
         <ul class="store-list" id="storeList"></ul>
         <div id="storeMessage" class="message" role="status" aria-live="polite"></div>
-        <button type="button" class="primary-button" id="openStoreFormButton" data-i18n="store_account_store_open_form">店舗・施設を登録する</button>
+        <button type="button" class="register-store-button" id="openStoreFormButton" data-i18n="store_account_store_open_form">店舗・施設を登録する</button>
 
         <form id="storeForm" class="store-form" hidden novalidate>
           <h3 data-i18n="store_account_store_form_heading">店舗・施設の登録</h3>
@@ -1195,7 +1219,7 @@
             // ログインで操作する(ownerか・有効な店舗かの最終判定はサーバー)。審査待ち・停止中・
             // 却下の店舗には出さない。文言は既存の今だけ投稿の名前(imadake_heading)を使う。
             const imadakeLink = document.createElement("a");
-            imadakeLink.className = "store-card-link";
+            imadakeLink.className = "store-card-link store-card-link-accent";
             imadakeLink.href = "imadake-post.html?store=" + encodeURIComponent(store.storeId);
             imadakeLink.textContent = t("imadake_heading");
             item.appendChild(imadakeLink);
