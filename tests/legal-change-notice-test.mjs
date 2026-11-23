@@ -140,7 +140,7 @@ if (HAS_NOTICE) {
   t("L2 施行日（代表が決定）が設定され、訂正文の施行日（4か所・日英）と、利用規約・プライバシーポリシー・特商法の最終更新日が施行日（未決定の間は失敗＝Production へ出さない）", effOk, { launchEffective: LAUNCH_EFFECTIVE });
   const olCount = (h2) => { const i = T.indexOf("<h2>" + h2); const s = T.slice(i, T.indexOf("</ol>", i)); return (s.match(/<li>/g) || []).length; };
   // STEP 51-B｜15条に「引き継いだ店舗カードの公開には月額契約が必要」(5項目め)を追加。
-  t("L3 利用規約：12条は4項目・13条は11項目・14条は6項目・15条は5項目", olCount("12. ") === 4 && olCount("13. ") === 11 && olCount("14. ") === 6 && olCount("15. ") === 5, [olCount("12. "), olCount("13. "), olCount("14. "), olCount("15. ")]);
+  t("L3 利用規約：12条は4項目・13条は12項目・14条は6項目・15条は5項目", olCount("12. ") === 4 && olCount("13. ") === 12 && olCount("14. ") === 6 && olCount("15. ") === 5, [olCount("12. "), olCount("13. "), olCount("14. "), olCount("15. ")]);
   const terms = text(T), priv = text(P);
   const sec12 = terms.slice(terms.indexOf("12. 規約の変更"), terms.indexOf("13. 店舗アカウント"));
   t("L7 利用規約12：新しい文（548条の4・施行日の前に周知・個別の同意）に置き換わり、旧文（事前の通知なく・掲載された時点から）は残っていない", /民法第548条の4/.test(sec12) && /施行日より前の相当な期間に/.test(sec12) && /第2項による周知だけで同意を得たものとは扱わず/.test(sec12) && !/事前の通知なく本規約を変更|掲載された時点から効力/.test(terms));
