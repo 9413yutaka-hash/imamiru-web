@@ -335,11 +335,23 @@
             <label for="identityNameInput" data-i18n="store_account_store_name_label">店舗・施設名</label>
             <input type="text" id="identityNameInput" maxlength="60" autocomplete="organization">
           </div>
+          <!-- 住所なし(mobile)の店舗だけ出す活動エリアの変更欄(登録画面と同じ市区町村マスタ)。 -->
+          <div id="identityActivityFields" hidden>
+            <div class="field">
+              <label for="identityActivityPrefectureSelect" data-i18n="store_account_store_activity_prefecture_label">主な活動エリア（都道府県）</label>
+              <select id="identityActivityPrefectureSelect"></select>
+            </div>
+            <div class="field">
+              <label for="identityActivityCitySelect" data-i18n="store_account_store_activity_city_label">主な活動エリア（市区町村）</label>
+              <select id="identityActivityCitySelect"></select>
+            </div>
+          </div>
           <div class="field">
             <label for="identityAddressInput" data-i18n="store_identity_address_label">住所</label>
             <input type="text" id="identityAddressInput" maxlength="200" autocomplete="street-address">
           </div>
-          <p class="hint" data-i18n="store_identity_note"></p>
+          <p class="hint" id="identityAddressNote" data-i18n="store_identity_note"></p>
+          <p class="hint" id="identityMobileNote" data-i18n="store_identity_mobile_note" hidden></p>
           <button type="button" class="primary-button" id="identitySaveButton" data-i18n="store_identity_save_button">変更を保存する</button>
           <button type="button" class="secondary-button" id="identityCancelButton" data-i18n="store_identity_cancel_button">やめる</button>
         </div>
@@ -577,6 +589,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
   <script src="firebase.js"></script>
   <script src="translations.js"></script>
+  <script src="japan-municipalities.js"></script>
 
   <script>
     (function () {
@@ -626,6 +639,7 @@
         paymentMethodCodes: "store_account_err_generic",
         storeName: "store_account_store_err_name",
         address: "store_account_store_err_address",
+        activityArea: "store_account_store_err_activity_area",
         "businessHours.note": "store_profile_err_hours_note",
         photos: "store_profile_photos_err_upload"
       };
@@ -1333,6 +1347,35 @@
         document.getElementById("identityCancelButton").disabled = identitySaving;
       }
 
+      // 住所なし(mobile)の店舗の活動エリアの選択肢(登録画面と同じ市区町村マスタから作る)。
+      function populateIdentityActivityPrefectures() {
+        const select = document.getElementById("identityActivityPrefectureSelect");
+        if (!select || select.options.length > 0) return;
+        const data = typeof JAPAN_MUNICIPALITIES_BY_PREFECTURE !== "undefined" ? JAPAN_MUNICIPALITIES_BY_PREFECTURE : {};
+        Object.keys(data).forEach(function (prefecture) {
+          const option = document.createElement("option");
+          option.value = prefecture;
+          option.textContent = prefecture;
+          select.appendChild(option);
+        });
+        populateIdentityActivityCities();
+      }
+
+      function populateIdentityActivityCities() {
+        const prefectureSelect = document.getElementById("identityActivityPrefectureSelect");
+        const citySelect = document.getElementById("identityActivityCitySelect");
+        if (!prefectureSelect || !citySelect) return;
+        const data = typeof JAPAN_MUNICIPALITIES_BY_PREFECTURE !== "undefined" ? JAPAN_MUNICIPALITIES_BY_PREFECTURE : {};
+        const cities = data[prefectureSelect.value] || [];
+        citySelect.textContent = "";
+        cities.forEach(function (city) {
+          const option = document.createElement("option");
+          option.value = city;
+          option.textContent = city;
+          citySelect.appendChild(option);
+        });
+      }
+
       function openIdentityEditor() {
         if (!loaded || !editable) {
           return;
@@ -1340,6 +1383,23 @@
         clearIdentityMessage();
         document.getElementById("identityNameInput").value = loaded.storeName || "";
         document.getElementById("identityAddressInput").value = (loaded.location && loaded.location.address) || "";
+        // 住所なし(mobile)の店舗だけ、活動エリアの変更欄と専用の注意書きを出す。
+        const isMobileIdentity = !!(loaded.location && loaded.location.locationMode === "mobile");
+        document.getElementById("identityActivityFields").hidden = !isMobileIdentity;
+        document.getElementById("identityMobileNote").hidden = !isMobileIdentity;
+        document.getElementById("identityAddressNote").hidden = isMobileIdentity;
+        if (isMobileIdentity) {
+          populateIdentityActivityPrefectures();
+          const prefectureSelect = document.getElementById("identityActivityPrefectureSelect");
+          if (loaded.location.prefecture) {
+            prefectureSelect.value = loaded.location.prefecture;
+          }
+          populateIdentityActivityCities();
+          const citySelect = document.getElementById("identityActivityCitySelect");
+          if (loaded.location.city) {
+            citySelect.value = loaded.location.city;
+          }
+        }
         document.getElementById("identityEditor").hidden = false;
         renderIdentityEditor();
         document.getElementById("identityNameInput").focus();
@@ -1362,11 +1422,23 @@
         if (address === "" && !(loaded.location && loaded.location.locationMode === "mobile")) {
           return showIdentityMessage("store_account_store_err_address", "error");
         }
+        // 住所なし(mobile)の店舗が住所を空で保存する時は、活動エリアの変更として送る。
+        // 住所が入っていれば従来通り、固定店舗への移行として送る(活動エリアは送らない)。
+        const identityPayload = { mode: "storeIdentityUpdate", storeId: storeId, storeName: storeName, address: address };
+        if (loaded.location && loaded.location.locationMode === "mobile" && address === "") {
+          const activityPrefecture = document.getElementById("identityActivityPrefectureSelect").value || "";
+          const activityCity = document.getElementById("identityActivityCitySelect").value || "";
+          if (activityPrefecture === "" || activityCity === "") {
+            return showIdentityMessage("store_account_store_err_activity_area", "error");
+          }
+          identityPayload.activityPrefecture = activityPrefecture;
+          identityPayload.activityCity = activityCity;
+        }
         clearIdentityMessage();
         identitySaving = true;
         renderIdentityEditor();
         try {
-          const response = await callApi({ mode: "storeIdentityUpdate", storeId: storeId, storeName: storeName, address: address });
+          const response = await callApi(identityPayload);
           const result = response.result || {};
           if (response.status === 200 && result.success) {
             if (result.changed) {
@@ -3179,6 +3251,7 @@
           closeIdentityEditor();
         });
         document.getElementById("identitySaveButton").addEventListener("click", handleIdentitySave);
+        document.getElementById("identityActivityPrefectureSelect").addEventListener("change", populateIdentityActivityCities);
         document.getElementById("storePageCopyButton").addEventListener("click", copyStorePageUrl);
         bindCustomEvents();
         document.getElementById("unpublishButton").addEventListener("click", handleUnpublish);
