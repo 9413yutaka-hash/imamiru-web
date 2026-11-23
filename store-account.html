@@ -296,10 +296,6 @@
       text-decoration: none;
     }
 
-    .store-card-link-accent {
-      border: 2px solid var(--blue);
-    }
-
     /* 2026-11-24｜「店舗・施設を登録する」は追加登録用なので小さくする。 */
     .register-store-button {
       display: block;
@@ -1219,7 +1215,7 @@
             // ログインで操作する(ownerか・有効な店舗かの最終判定はサーバー)。審査待ち・停止中・
             // 却下の店舗には出さない。文言は既存の今だけ投稿の名前(imadake_heading)を使う。
             const imadakeLink = document.createElement("a");
-            imadakeLink.className = "store-card-link store-card-link-accent";
+            imadakeLink.className = "store-card-link";
             imadakeLink.href = "imadake-post.html?store=" + encodeURIComponent(store.storeId);
             imadakeLink.textContent = t("imadake_heading");
             item.appendChild(imadakeLink);
