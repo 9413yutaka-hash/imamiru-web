@@ -7,6 +7,9 @@ let shopListingsLoaded = false;
 let userLatitude = null;
 let userLongitude = null;
 let userAreaName = null;
+// 現在地の地域階層(都道府県・市区町村)。住所なし店舗を「現在地の街が活動エリアと
+// 同じなら近く一覧に出す」判定に使う。applyUserLocation の階層解決で入る。
+let currentUserLocationHierarchy = null;
 let selectedCategory = "すべて";
 // 2026-11-21追加｜形態タグ(軸2)の絞り込み。カテゴリーとは別の軸で、同時に有効なのは
 // カテゴリーか形態のどちらか1つだけ(チップを押した方に切り替わる)。
@@ -4182,6 +4185,28 @@ function isStoreProfileListShopInSelectedRegion(shop, region) {
   );
 }
 
+// 住所なし(座標なし)の正式店舗を、現在地の市区町村が活動エリアと一致する時に
+// 「近く」の一覧にも出すための判定。座標のある店舗は距離判定に任せる。
+function isStoreProfileListShopInCurrentArea(shop) {
+  if (Number.isFinite(shop.latitude) && Number.isFinite(shop.longitude)) {
+    return false;
+  }
+
+  const hierarchy = currentUserLocationHierarchy;
+
+  if (!hierarchy || hierarchy.countryCode !== "JP") {
+    return false;
+  }
+
+  const city = findOfficialMunicipalityName(hierarchy.prefecture, hierarchy.city);
+
+  return (
+    city !== "" &&
+    shop.locationPrefecture === hierarchy.prefecture &&
+    shop.locationCity === city
+  );
+}
+
 // 今の表示条件(カテゴリー・地域検索/現在地15km)に合う正式店舗(距離つき)。
 // Phase 2D STEP 4C-2｜正式店舗のお気に入り判定。sp_{storeId} か、その店舗に有効に紐付いた
 // 旧無料掲載のsubmission ID(linkedListingIds)のどれかが保存されていればお気に入り。
@@ -4257,7 +4282,8 @@ function getStoreProfileListShopsForCurrentView() {
         storeProfileShopMatchesSelectedCategory(shop) &&
         (selectedShopRegion
           ? isStoreProfileListShopInSelectedRegion(shop, selectedShopRegion)
-          : isShopWithinNearbyCardRadius(shop))
+          : isShopWithinNearbyCardRadius(shop) ||
+            isStoreProfileListShopInCurrentArea(shop))
       );
     });
 }
@@ -12307,6 +12333,12 @@ function applyUserLocation(
         if (!locationHierarchy) {
           return;
         }
+
+        // 住所なし店舗の「現在地の街＝活動エリア」判定用に保持し、一覧を描き直す。
+        currentUserLocationHierarchy =
+          locationHierarchy;
+
+        renderShops();
 
         // STEP 2-B 修正｜「この街の情報」に国コード・都道府県を添えるため(新しい Geocoder の呼び出しはしない)。
         if (
