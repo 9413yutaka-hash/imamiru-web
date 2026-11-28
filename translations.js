@@ -7783,6 +7783,11 @@ const MACHINAU_TRANSLATIONS = {
     en: "Conditions for publishing (checked against the saved content)",
     "zh-TW": "公開條件（依已儲存的內容判定）"
   },
+  store_profile_publish_why_save: {
+    ja: "なぜ保存がいるの？ 保存するときに、内容の自動チェック（不適切な内容がないかの確認）をします。チェック済みの内容だけを公開するため、上の条件は保存した内容で判定します。入力したら「下書きを保存する」を押してください。",
+    en: "Why do you need to save? Saving runs an automatic check on your content (to make sure nothing inappropriate is included). Only checked content can be published, so the conditions above are judged on what you have saved. After editing, press “Save draft”.",
+    "zh-TW": "為什麼需要儲存？儲存時會自動檢查內容（確認是否含有不適當的內容）。只有檢查過的內容才能公開，因此上方條件是以已儲存的內容判定。輸入後請按「儲存草稿」。"
+  },
 
   store_profile_publish_cond_photo: {
     ja: "写真が1枚以上保存されている",
