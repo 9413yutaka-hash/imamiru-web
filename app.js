@@ -4028,6 +4028,33 @@ function readStoreProfileCustom(custom) {
   return { menuItems: menuItems, links: links, story: story };
 }
 
+// 価格の表示整形：数字だけ（または数字の範囲）なら桁区切りと通貨記号を付ける。
+// 「500円」「時価」のように文字が含まれる場合は、店主の入力をそのまま出す。
+function formatShopMenuPriceText(priceText, language) {
+  const raw = typeof priceText === "string" ? priceText.trim() : "";
+  if (raw === "") {
+    return "";
+  }
+  const normalized = raw
+    .replace(/[０-９]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+    .replace(/，/g, ",")
+    .replace(/　/g, " ");
+  const parts = normalized.split(/\s*(?:〜|～|~|–|-)\s*/);
+  if (parts.length > 2) {
+    return raw;
+  }
+  const numbers = [];
+  for (const part of parts) {
+    const digits = part.replace(/[,\s]/g, "");
+    if (!/^\d+$/.test(digits)) {
+      return raw;
+    }
+    numbers.push(Number(digits).toLocaleString("en-US"));
+  }
+  const joined = numbers.join(language === "en" ? "–" : "〜");
+  return language === "ja" ? joined + "円" : "¥" + joined;
+}
+
 // 詳細表示の有料の内容(HTML)。登録の無い欄は見出しも出さない。文字はすべてエスケープする。
 // modal-message は white-space: pre-line のため、タグの間に改行を入れない。
 // menuTranslationItems は表示言語のメニューの訳(無ければ null)。日本語は主役のまま、
@@ -4075,7 +4102,7 @@ function buildStoreProfileCustomHtml(custom, language, menuTranslationItems) {
               '<div class="shop-custom-menu-body">' +
                 '<div class="shop-custom-menu-head">' +
                   '<span class="shop-custom-menu-name">' + escapeHtml(item.name) + "</span>" +
-                  (item.priceText !== "" ? '<span class="shop-custom-menu-price">' + escapeHtml(item.priceText) + "</span>" : "") +
+                  (item.priceText !== "" ? '<span class="shop-custom-menu-price">' + escapeHtml(formatShopMenuPriceText(item.priceText, language)) + "</span>" : "") +
                 "</div>" +
                 (item.description !== "" ? '<p class="shop-custom-text">' + escapeHtml(item.description) + "</p>" : "") +
                 (item.allergens.length > 0

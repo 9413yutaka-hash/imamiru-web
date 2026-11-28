@@ -2859,6 +2859,33 @@
         return labels;
       }
 
+      // 価格の表示整形：数字だけ（または数字の範囲）なら桁区切りと通貨記号を付ける。
+      // 「500円」「時価」のように文字が含まれる場合は、店主の入力をそのまま出す。
+      function formatMenuPriceText(priceText) {
+        const raw = String(priceText == null ? "" : priceText).trim();
+        if (raw === "") {
+          return "";
+        }
+        const normalized = raw
+          .replace(/[０-９]/g, function (ch) { return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0); })
+          .replace(/，/g, ",")
+          .replace(/　/g, " ");
+        const parts = normalized.split(/\s*(?:〜|～|~|–|-)\s*/);
+        if (parts.length > 2) {
+          return raw;
+        }
+        const numbers = [];
+        for (const part of parts) {
+          const digits = part.replace(/[,\s]/g, "");
+          if (!/^\d+$/.test(digits)) {
+            return raw;
+          }
+          numbers.push(Number(digits).toLocaleString("en-US"));
+        }
+        const joined = numbers.join(currentLanguage === "en" ? "–" : "〜");
+        return currentLanguage === "ja" ? joined + "円" : "¥" + joined;
+      }
+
       function renderStorePreview() {
         const container = document.getElementById("storePreview");
         if (!container) {
@@ -2963,7 +2990,7 @@
             if (item.priceText) {
               const price = document.createElement("p");
               price.className = "pv-menu-price";
-              price.textContent = item.priceText;
+              price.textContent = formatMenuPriceText(item.priceText);
               box.appendChild(price);
             }
             if (item.description) {
