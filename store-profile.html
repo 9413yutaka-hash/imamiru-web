@@ -2264,10 +2264,13 @@
           if (response.status === 200 && result.success) {
             // 同意は申込ごとに取り直す(次の申込で前のチェックを使い回さない)。
             document.getElementById("customPlanConsentCheck").checked = false;
+            const hasUntil = result.accessUntilMillis > 0;
             const date = formatCustomDate(result.accessUntilMillis);
             const key = mode === "storeCustomPlanCancel"
               ? (result.alreadyCanceled ? "store_custom_plan_already_canceled" : "store_custom_plan_canceled")
-              : (result.result === "reactivated" ? "store_custom_plan_reactivated" : "store_custom_plan_subscribed");
+              : (result.result === "reactivated"
+                ? (hasUntil ? "store_custom_plan_reactivated" : "store_custom_plan_reactivated_monthly")
+                : (hasUntil ? "store_custom_plan_subscribed" : "store_custom_plan_subscribed_monthly"));
             showPlanMessage(key, "success", "", { date: date });
           } else {
             showPlanMessage(PLAN_ERROR_KEYS[result.reason] || "store_account_err_generic", "error", result.reason || "http_" + response.status);
