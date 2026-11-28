@@ -2810,9 +2810,10 @@ body:has(#todayFeedSection) .hero-action-grid {
   gap: 22px;
   align-items: stretch;
   flex-wrap: wrap;
-  /* 表示範囲「半径15km」の面｜明るい海色の面にする(2026-11-17 代表指摘「バックが暗い」)。
-     海の色 #045a6e は曜日・距離の文字に使う。 */
-  background: #e9f7fa;
+  /* 表示範囲「半径15km」の面｜下の「明日」「週末」チップと同じ白＋薄グレーの縁に
+     合わせる(2026-11-28 代表指示)。海の色 #045a6e は曜日・距離の文字に使う。 */
+  background: var(--white);
+  border: 2px solid var(--border);
   color: var(--navy);
   border-radius: 24px;
   padding: 26px 28px;
