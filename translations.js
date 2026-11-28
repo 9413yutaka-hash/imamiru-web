@@ -6805,10 +6805,22 @@ const MACHINAU_TRANSLATIONS = {
     "zh-TW": "已完成申請。可使用至 {date}。"
   },
 
+  store_custom_plan_subscribed_monthly: {
+    ja: "申し込みました。解約するまで毎月自動で継続します。",
+    en: "Subscribed. It continues monthly until you cancel.",
+    "zh-TW": "已完成申請。在解約之前，每個月都會自動續約。"
+  },
+
   store_custom_plan_reactivated: {
     ja: "解約を取り消しました。{date}まで利用できます。",
     en: "Cancellation undone. Available until {date}.",
     "zh-TW": "已撤銷取消。可使用至 {date}。"
+  },
+
+  store_custom_plan_reactivated_monthly: {
+    ja: "解約を取り消しました。解約するまで毎月自動で継続します。",
+    en: "Cancellation undone. It continues monthly until you cancel.",
+    "zh-TW": "已撤銷取消。在解約之前，每個月都會自動續約。"
   },
 
   store_custom_plan_canceled: {
