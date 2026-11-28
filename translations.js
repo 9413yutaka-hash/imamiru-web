@@ -7318,9 +7318,9 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_custom_menu_price_placeholder: {
-    ja: "例：¥650",
-    en: "e.g. ¥650",
-    "zh-TW": "例：¥650"
+    ja: "例：650",
+    en: "e.g. 650",
+    "zh-TW": "例：650"
   },
 
   store_custom_menu_description: {

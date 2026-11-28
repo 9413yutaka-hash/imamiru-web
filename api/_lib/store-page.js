@@ -480,6 +480,33 @@ function readText(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+// 価格の表示整形：数字だけ（または数字の範囲）なら桁区切りと通貨記号を付ける。
+// 「500円」「時価」のように文字が含まれる場合は、店主の入力をそのまま出す。
+function formatStorePageMenuPrice(priceText, language) {
+  const raw = readText(priceText);
+  if (raw === "") {
+    return "";
+  }
+  const normalized = raw
+    .replace(/[０-９]/g, function (ch) { return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0); })
+    .replace(/，/g, ",")
+    .replace(/　/g, " ");
+  const parts = normalized.split(/\s*(?:〜|～|~|–|-)\s*/);
+  if (parts.length > 2) {
+    return raw;
+  }
+  const numbers = [];
+  for (const part of parts) {
+    const digits = part.replace(/[,\s]/g, "");
+    if (!/^\d+$/.test(digits)) {
+      return raw;
+    }
+    numbers.push(Number(digits).toLocaleString("en-US"));
+  }
+  const joined = numbers.join(language === "en" ? "–" : "〜");
+  return language === "ja" ? joined + "円" : "¥" + joined;
+}
+
 export function isStorePageId(value) {
   return typeof value === "string" && STORE_PAGE_ID_PATTERN.test(value);
 }
@@ -1008,7 +1035,7 @@ export function buildStorePageHtml(storeId, store, custom, languageValue, option
         "<li>" +
           (isSafeImageUrl(item.photoUrl) ? "<img src=\"" + escapeStorePageHtml(buildStorePageImageUrl(item.photoUrl, 300)) + "\" alt=\"" + escapeStorePageHtml(fillLabel(labels.menuPhotoAlt, { name: item.name, n: "" })) + "\" loading=\"lazy\" decoding=\"async\">" : "") +
           "<div class=\"item\"><div class=\"head\"><p class=\"name\">" + escapeStorePageHtml(item.name) + "</p>" +
-          (readText(item.priceText) !== "" ? "<p class=\"price\">" + escapeStorePageHtml(item.priceText) + "</p>" : "") + "</div>" +
+          (readText(item.priceText) !== "" ? "<p class=\"price\">" + escapeStorePageHtml(formatStorePageMenuPrice(item.priceText, language)) + "</p>" : "") + "</div>" +
           (readText(item.description) !== "" ? "<p class=\"desc\">" + escapeStorePageHtml(item.description) + "</p>" : "") +
           allergenHtml +
           translationHtml +
