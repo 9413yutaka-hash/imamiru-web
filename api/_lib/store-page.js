@@ -187,6 +187,9 @@ export const STORE_PAGE_LABELS = {
     shareNote: "このページのURLです。LINE・SNS・QRコードで共有できます。",
     shareLine: "LINEで送る",
     shareX: "Xでポスト",
+    shareNative: "共有する",
+    shareThreads: "Threadsでポスト",
+    shareCopied: "コピーしました",
     photoAlt: "{NAME}の写真{N}",
     menuPhotoAlt: "{NAME}の写真",
     allergensHeading: "含まれる原材料（アレルギー）",
@@ -321,6 +324,9 @@ export const STORE_PAGE_LABELS = {
     shareNote: "This is the page's URL. You can share it on LINE, social media or as a QR code.",
     shareLine: "Send on LINE",
     shareX: "Post on X",
+    shareNative: "Share",
+    shareThreads: "Post on Threads",
+    shareCopied: "Copied",
     photoAlt: "Photo {N} of {NAME}",
     menuPhotoAlt: "Photo of {NAME}",
     allergensHeading: "Contains (allergens)",
@@ -457,6 +463,9 @@ export const STORE_PAGE_LABELS = {
     shareNote: "這是本頁面的網址。可以用 LINE、社群媒體或 QR 碼分享。",
     shareLine: "用 LINE 傳送",
     shareX: "在 X 發文",
+    shareNative: "分享",
+    shareThreads: "在 Threads 發文",
+    shareCopied: "已複製",
     photoAlt: "{NAME}的照片{N}",
     menuPhotoAlt: "{NAME}的照片",
     allergensHeading: "含有原料（過敏原）",
@@ -815,8 +824,8 @@ const STORE_PAGE_STYLE = `
     .today-mark { display: inline-block; margin-left: 4px; padding: 0 8px; border-radius: 999px; background: var(--brand); color: #ffffff; font-size: 11px; line-height: 1.8; vertical-align: 1px; }
     .address-note { display: block; color: var(--sub); font-size: 13px; font-weight: 700; }
     .button-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-    a.button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 48px; padding: 10px 18px; border-radius: var(--radius-control); font-weight: 700; text-decoration: none; background: var(--surface); color: var(--brand-deep); border: 1px solid #bfdcee; }
-    a.button.primary { background: linear-gradient(135deg, var(--brand), #10a9d4); color: #ffffff; border: none; box-shadow: 0 8px 18px rgba(5, 144, 194, 0.18); }
+    a.button, button.button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 48px; padding: 10px 18px; border-radius: var(--radius-control); font-weight: 700; font: inherit; cursor: pointer; text-decoration: none; background: var(--surface); color: var(--brand-deep); border: 1px solid #bfdcee; }
+    a.button.primary, button.button.primary { background: linear-gradient(135deg, var(--brand), #10a9d4); color: #ffffff; border: none; box-shadow: 0 8px 18px rgba(5, 144, 194, 0.18); }
     .facts { display: grid; gap: 16px; }
     .facts h3 { font-size: 14px; color: var(--sub); margin: 0 0 6px; }
     ul.tags { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px; }
@@ -1164,7 +1173,9 @@ export function buildStorePageHtml(storeId, store, custom, languageValue, option
     "<div class=\"panel\"><p class=\"note\" style=\"margin-top:0\">" + escapeStorePageHtml(labels.shareNote) + "</p>" +
       "<code class=\"share-url\">" + escapeStorePageHtml(pageUrl) + "</code>" +
       "<div class=\"button-row\">" +
+        "<button type=\"button\" class=\"button primary\" data-share-native data-share-url=\"" + escapeStorePageHtml(pageUrl) + "\" data-share-text=\"" + escapeStorePageHtml(shareText) + "\" data-share-label=\"" + escapeStorePageHtml(labels.shareNative) + "\" data-share-copied=\"" + escapeStorePageHtml(labels.shareCopied) + "\">" + escapeStorePageHtml(labels.shareNative) + "</button>" +
         "<a class=\"button\" href=\"https://social-plugins.line.me/lineit/share?url=" + escapeStorePageHtml(encodeURIComponent(pageUrl)) + "\" target=\"_blank\" rel=\"noopener noreferrer\" data-share=\"line\">" + escapeStorePageHtml(labels.shareLine) + "</a>" +
+        "<a class=\"button\" href=\"https://www.threads.net/intent/post?text=" + escapeStorePageHtml(encodeURIComponent(shareText + " " + pageUrl)) + "\" target=\"_blank\" rel=\"noopener noreferrer\" data-share=\"threads\">" + escapeStorePageHtml(labels.shareThreads) + "</a>" +
         "<a class=\"button\" href=\"https://twitter.com/intent/tweet?url=" + escapeStorePageHtml(encodeURIComponent(pageUrl)) + "&amp;text=" + escapeStorePageHtml(encodeURIComponent(shareText)) + "\" target=\"_blank\" rel=\"noopener noreferrer\" data-share=\"x\">" + escapeStorePageHtml(labels.shareX) + "</a>" +
       "</div></div>",
     "share"
@@ -1211,6 +1222,28 @@ export function buildStorePageHtml(storeId, store, custom, languageValue, option
     </div>
   </main>
   ${buildFooterHtml(labels)}
+  <script>
+  (function () {
+    document.addEventListener("click", function (event) {
+      var target = event.target;
+      var button = target && target.closest ? target.closest("[data-share-native]") : null;
+      if (!button) { return; }
+      var url = button.getAttribute("data-share-url") || location.href;
+      var text = button.getAttribute("data-share-text") || document.title;
+      if (navigator.share) {
+        navigator.share({ title: document.title, text: text, url: url }).catch(function () {});
+        return;
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(function () {
+          var original = button.getAttribute("data-share-label") || button.textContent;
+          button.textContent = button.getAttribute("data-share-copied") || original;
+          setTimeout(function () { button.textContent = original; }, 2000);
+        }).catch(function () {});
+      }
+    });
+  })();
+  </script>
 </body>
 </html>
 `;
