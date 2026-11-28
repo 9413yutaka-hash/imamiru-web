@@ -6162,9 +6162,15 @@ const MACHINAU_TRANSLATIONS = {
   },
 
   store_profile_reservation_label: {
-    ja: "予約ページ",
-    en: "Reservation page",
-    "zh-TW": "預約頁面"
+    ja: "予約ページのURL（任意）",
+    en: "Reservation page URL (optional)",
+    "zh-TW": "預約頁面網址（選填）"
+  },
+
+  store_profile_reservation_hint: {
+    ja: "食べログや自店の予約フォームなど、予約できるページのURLです。マチナウに予約の機能はありません。なければ空欄でOKです。",
+    en: "The URL of a page where customers can make a reservation, such as a booking site or your own reservation form. Machinau itself has no reservation feature. Leave it blank if you don't have one.",
+    "zh-TW": "可以預約的頁面網址，例如訂位網站或您自家的預約表單。Machinau 本身沒有預約功能。沒有的話留空即可。"
   },
 
   store_profile_social_label: {
