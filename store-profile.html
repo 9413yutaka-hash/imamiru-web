@@ -484,12 +484,6 @@
             <input type="file" id="customPhotoInput" accept="image/jpeg,image/png,image/webp" hidden>
             <button type="button" class="small-button" id="customMenuAddButton" data-i18n="store_custom_menu_add">＋ 商品を追加</button>
           </div>
-          <div class="field">
-            <span class="field-label" data-i18n="store_custom_links_label">追加リンク</span>
-            <p class="hint" style="margin: 0 0 8px;" id="customLinksHint"></p>
-            <div id="customLinkRows"></div>
-            <button type="button" class="small-button" id="customLinkAddButton" data-i18n="store_custom_links_add">＋ リンクを追加</button>
-          </div>
           <div id="customMessage" class="message" role="status" aria-live="polite"></div>
           <p class="save-progress" id="customSaveProgress" role="status" aria-live="polite" hidden></p>
           <button type="submit" class="primary-button" id="customSaveButton" data-i18n="store_custom_save_button">下書きを保存する</button>
@@ -2402,6 +2396,7 @@
         const limits = customLimits();
         const locked = !customEditable || customSaving;
         const container = document.getElementById("customLinkRows");
+        if (!container) { renderStorePreview(); return; }
         container.textContent = "";
         const types = (customLoaded && customLoaded.linkTypes) || [];
         customLinks.forEach(function (link, index) {
@@ -2469,7 +2464,8 @@
         document.getElementById("customStoryHint").textContent = t("store_custom_story_hint").replace("{max}", limits.storyMaxLength || 2000);
         story.placeholder = t("store_custom_story_placeholder");
         document.getElementById("customMenuHint").textContent = t("store_custom_menu_hint").replace("{max}", limits.menuItemsMax || 20).replace("{photos}", limits.menuPhotosMax || 5);
-        document.getElementById("customLinksHint").textContent = t("store_custom_links_hint").replace("{max}", limits.linksMax || 5);
+        const linksHint = document.getElementById("customLinksHint");
+        if (linksHint) { linksHint.textContent = t("store_custom_links_hint").replace("{max}", limits.linksMax || 5); }
         const saveButton = document.getElementById("customSaveButton");
         saveButton.disabled = locked;
         saveButton.hidden = !customEditable;
@@ -2750,7 +2746,8 @@
             renderCustom();
           }
         });
-        document.getElementById("customLinkAddButton").addEventListener("click", function () {
+        const customLinkAddButtonElement = document.getElementById("customLinkAddButton");
+        if (customLinkAddButtonElement) customLinkAddButtonElement.addEventListener("click", function () {
           const types = (customLoaded && customLoaded.linkTypes) || [];
           if (customEditable && !customSaving && customLinks.length < (customLimits().linksMax || 5) && types.length > 0) {
             customLinks.push({ type: types[0], label: "", url: "" });
