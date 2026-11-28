@@ -3883,10 +3883,23 @@ function buildStoreProfileListShop(store) {
     store.id.indexOf("sp_") !== 0 ||
     typeof store.storeName !== "string" ||
     store.storeName.trim() === "" ||
-    !store.location ||
-    !Number.isFinite(store.location.latitude) ||
-    !Number.isFinite(store.location.longitude)
+    !store.location
   ) {
+    return null;
+  }
+
+  // 座標がある店舗はそのまま。住所なし(活動エリアのみ)の店舗は、都道府県・市区町村が
+  // あれば一覧に出す(座標は null。距離・現在地15km・地図ピンの対象にはならない)。
+  const hasCoordinates =
+    Number.isFinite(store.location.latitude) &&
+    Number.isFinite(store.location.longitude);
+  const hasActivityArea =
+    typeof store.location.prefecture === "string" &&
+    store.location.prefecture !== "" &&
+    typeof store.location.city === "string" &&
+    store.location.city !== "";
+
+  if (!hasCoordinates && !hasActivityArea) {
     return null;
   }
 
@@ -3923,8 +3936,13 @@ function buildStoreProfileListShop(store) {
           .map(function(photo) { return photo && typeof photo.url === "string" ? photo.url : ""; })
           .filter(function(url) { return url !== ""; })
       : [],
-    latitude: store.location.latitude,
-    longitude: store.location.longitude,
+    latitude: hasCoordinates ? store.location.latitude : null,
+    longitude: hasCoordinates ? store.location.longitude : null,
+    businessFormCodes: Array.isArray(store.businessFormCodes)
+      ? store.businessFormCodes.filter(function(code) {
+          return STORE_PROFILE_BUSINESS_FORM_CODES.includes(code);
+        })
+      : [],
     address: formatStoreProfileListAddress(store.location.formattedAddress),
     locationPrefecture: typeof store.location.prefecture === "string" ? store.location.prefecture : "",
     locationCity: typeof store.location.city === "string" ? store.location.city : "",
@@ -4219,7 +4237,12 @@ function getStoreProfileListShopsForCurrentView() {
       return shop !== null;
     })
     .map(function(shop) {
-      if (userLatitude !== null && userLongitude !== null) {
+      if (
+        userLatitude !== null &&
+        userLongitude !== null &&
+        Number.isFinite(shop.latitude) &&
+        Number.isFinite(shop.longitude)
+      ) {
         shop.distanceKm = calculateDistance(
           userLatitude,
           userLongitude,
