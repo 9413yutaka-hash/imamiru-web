@@ -389,6 +389,8 @@
           </div>
         </section>
 
+        <section class="panel" id="customStoryPanel" hidden></section>
+
         <section class="panel" id="customMenuPanel" hidden></section>
 
         <section class="panel">
@@ -471,7 +473,7 @@
            契約状態(利用権限)で判定する(この画面のボタンの表示は根拠にしない)。 -->
       <section class="panel" id="customSection" hidden>
         <form id="customForm" novalidate>
-          <div class="field">
+          <div class="field" id="customStoryField">
             <label for="customStoryInput" data-i18n="store_custom_story_label">お店のこだわり・ストーリー</label>
             <textarea id="customStoryInput"></textarea>
             <div class="counter" id="customStoryCounter"></div>
@@ -1098,6 +1100,9 @@
             return;
           }
           if (element.closest("#customMenuField")) {
+            return;
+          }
+          if (element.closest("#customStoryField")) {
             return;
           }
           element.disabled = !enabled;
@@ -2472,6 +2477,8 @@
         document.getElementById("customForm").hidden = false;
         const menuPanel = document.getElementById("customMenuPanel");
         if (menuPanel) { menuPanel.hidden = false; }
+        const storyPanel = document.getElementById("customStoryPanel");
+        if (storyPanel) { storyPanel.hidden = false; }
         document.getElementById("customStoryHint").textContent = t("store_custom_story_hint").replace("{max}", limits.storyMaxLength || 2000);
         story.placeholder = t("store_custom_story_placeholder");
         document.getElementById("customMenuHint").textContent = t("store_custom_menu_hint").replace("{max}", limits.menuItemsMax || 20).replace("{photos}", limits.menuPhotosMax || 5);
@@ -2725,6 +2732,13 @@
         const field = document.getElementById("customMenuField");
         if (panel && field) {
           panel.appendChild(field);
+        }
+        // ストーリーも店舗ページの流れ(紹介・写真→ストーリー→メニュー)に合わせ、
+        // メニューの直前のパネルへ移す。
+        const storyPanel = document.getElementById("customStoryPanel");
+        const storyField = document.getElementById("customStoryField");
+        if (storyPanel && storyField) {
+          storyPanel.appendChild(storyField);
         }
       }
 
