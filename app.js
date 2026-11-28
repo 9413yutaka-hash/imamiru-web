@@ -4185,6 +4185,23 @@ function isStoreProfileListShopInSelectedRegion(shop, region) {
   );
 }
 
+// 並び替え専用：その店が指定の都道府県・市区町村にあるかの判定（正式店舗は
+// locationPrefecture/locationCity、無料掲載は住所の先頭か area で見る）。
+function isShopInTownForSort(shop, prefecture, city) {
+  if (typeof shop.locationCity === "string" && shop.locationCity !== "") {
+    return shop.locationPrefecture === prefecture && shop.locationCity === city;
+  }
+
+  if (
+    typeof shop.address === "string" &&
+    shop.address.startsWith(prefecture + city)
+  ) {
+    return true;
+  }
+
+  return shop.area === city;
+}
+
 // 住所なし(座標なし)の正式店舗を、現在地の市区町村が活動エリアと一致する時に
 // 「近く」の一覧にも出すための判定。座標のある店舗は距離判定に任せる。
 function isStoreProfileListShopInCurrentArea(shop) {
@@ -4314,9 +4331,55 @@ function mergeStoreProfilesIntoShopCardList(cardShops) {
   if (userLatitude !== null && userLongitude !== null) {
     // 距離順(getVisibleShops()と同じ考え方。安定ソートなので、距離が同じ・距離なし同士は
     // 既存の並びを保つ)。地域検索中はこの後、既存処理で新しい順に並べ直される。
+    // 住所なし店舗(現在地の街=活動エリアで合流したもの)は表示上の距離を持たないが、
+    // 並び替え専用の距離として「同じ街の座標あり店舗の一番遠い店の直後」を与え、
+    // 街の外の店より後ろ・街の中の店の並びの末尾に差し込む。同じ街に座標あり店舗が
+    // 無い時は先頭(同じ街の店は上の方に出す)。
+    const sortDistanceByShop =
+      new Map();
+
+    const hierarchy =
+      currentUserLocationHierarchy;
+
+    const currentCity =
+      hierarchy && hierarchy.countryCode === "JP"
+        ? findOfficialMunicipalityName(hierarchy.prefecture, hierarchy.city)
+        : "";
+
+    let townMaxDistanceKm =
+      null;
+
+    if (currentCity !== "") {
+      merged.forEach(function(shop) {
+        if (
+          typeof shop.distanceKm === "number" &&
+          Number.isFinite(shop.distanceKm) &&
+          isShopInTownForSort(shop, hierarchy.prefecture, currentCity)
+        ) {
+          townMaxDistanceKm =
+            townMaxDistanceKm === null
+              ? shop.distanceKm
+              : Math.max(townMaxDistanceKm, shop.distanceKm);
+        }
+      });
+    }
+
+    merged.forEach(function(shop) {
+      if (typeof shop.distanceKm === "number" && Number.isFinite(shop.distanceKm)) {
+        sortDistanceByShop.set(shop, shop.distanceKm);
+      } else if (currentCity !== "" && isStoreProfileListShopInCurrentArea(shop)) {
+        sortDistanceByShop.set(
+          shop,
+          townMaxDistanceKm === null ? 0 : townMaxDistanceKm + 0.001
+        );
+      }
+    });
+
     merged.sort(function(firstShop, secondShop) {
-      const firstHasDistance = typeof firstShop.distanceKm === "number" && Number.isFinite(firstShop.distanceKm);
-      const secondHasDistance = typeof secondShop.distanceKm === "number" && Number.isFinite(secondShop.distanceKm);
+      const firstDistance = sortDistanceByShop.get(firstShop);
+      const secondDistance = sortDistanceByShop.get(secondShop);
+      const firstHasDistance = typeof firstDistance === "number" && Number.isFinite(firstDistance);
+      const secondHasDistance = typeof secondDistance === "number" && Number.isFinite(secondDistance);
 
       if (!firstHasDistance && !secondHasDistance) {
         return 0;
@@ -4328,7 +4391,7 @@ function mergeStoreProfilesIntoShopCardList(cardShops) {
         return -1;
       }
       // 距離が同じ時は新しい順 → ID の順(読み込みのたびに入れ替わらない)。
-      return firstShop.distanceKm - secondShop.distanceKm || compareShopsForStableTie(firstShop, secondShop);
+      return firstDistance - secondDistance || compareShopsForStableTie(firstShop, secondShop);
     });
   } else if (!selectedShopRegion) {
     // 現在地なし：既存どおり新しい順(同じ日時は ID の順)。
