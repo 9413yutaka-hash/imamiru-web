@@ -4540,7 +4540,7 @@ function getStoreProfileMenuHighlightHtml(shop, language) {
     firstItem.priceText
       ? " " +
         escapeHtml(
-          firstItem.priceText
+          formatShopMenuPriceText(firstItem.priceText, language)
         )
       : "";
 
