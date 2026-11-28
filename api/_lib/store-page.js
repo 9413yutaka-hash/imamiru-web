@@ -824,6 +824,7 @@ const STORE_PAGE_STYLE = `
     .today-mark { display: inline-block; margin-left: 4px; padding: 0 8px; border-radius: 999px; background: var(--brand); color: #ffffff; font-size: 11px; line-height: 1.8; vertical-align: 1px; }
     .address-note { display: block; color: var(--sub); font-size: 13px; font-weight: 700; }
     .button-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .button-row.share-buttons > * { flex: 1 1 40%; }
     a.button, button.button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 48px; padding: 10px 18px; border-radius: var(--radius-control); font-weight: 700; font: inherit; cursor: pointer; text-decoration: none; background: var(--surface); color: var(--brand-deep); border: 1px solid #bfdcee; }
     a.button.primary, button.button.primary { background: linear-gradient(135deg, var(--brand), #10a9d4); color: #ffffff; border: none; box-shadow: 0 8px 18px rgba(5, 144, 194, 0.18); }
     .facts { display: grid; gap: 16px; }
@@ -1172,7 +1173,7 @@ export function buildStorePageHtml(storeId, store, custom, languageValue, option
     labels.headingShare,
     "<div class=\"panel\"><p class=\"note\" style=\"margin-top:0\">" + escapeStorePageHtml(labels.shareNote) + "</p>" +
       "<code class=\"share-url\">" + escapeStorePageHtml(pageUrl) + "</code>" +
-      "<div class=\"button-row\">" +
+      "<div class=\"button-row share-buttons\">" +
         "<button type=\"button\" class=\"button primary\" data-share-native data-share-url=\"" + escapeStorePageHtml(pageUrl) + "\" data-share-text=\"" + escapeStorePageHtml(shareText) + "\" data-share-label=\"" + escapeStorePageHtml(labels.shareNative) + "\" data-share-copied=\"" + escapeStorePageHtml(labels.shareCopied) + "\">" + escapeStorePageHtml(labels.shareNative) + "</button>" +
         "<a class=\"button\" href=\"https://social-plugins.line.me/lineit/share?url=" + escapeStorePageHtml(encodeURIComponent(pageUrl)) + "\" target=\"_blank\" rel=\"noopener noreferrer\" data-share=\"line\">" + escapeStorePageHtml(labels.shareLine) + "</a>" +
         "<a class=\"button\" href=\"https://www.threads.net/intent/post?text=" + escapeStorePageHtml(encodeURIComponent(shareText + " " + pageUrl)) + "\" target=\"_blank\" rel=\"noopener noreferrer\" data-share=\"threads\">" + escapeStorePageHtml(labels.shareThreads) + "</a>" +
